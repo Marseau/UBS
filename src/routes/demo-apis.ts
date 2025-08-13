@@ -1454,7 +1454,7 @@ router.post('/create-fixed-tenant', async (req, res) => {
         businessName: DEMO_BUSINESS_NAME,
         professionalId: professionalData?.id,
         nextStep: 'Autorizar Google Calendar',
-        authUrl: `/api/demo/google-calendar/auth?tenant_id=${FIXED_TENANT_ID}&professional_id=${professionalData?.id}`
+        authUrl: `/api/demo/google-calendar/auth`
       }
     });
     
@@ -1680,18 +1680,13 @@ router.get('/google-calendar/callback', async (req, res) => {
 });
 
 /**
- * Gera URL de autorização do Google Calendar para um profissional
+ * Gera URL de autorização do Google Calendar - ROTA ÚNICA PARA DEMO
+ * Todos os tenants usam o mesmo calendar compartilhado
  */
-router.get('/google-calendar/auth/:professionalId', (req, res) => {
+router.get('/google-calendar/auth', (req, res) => {
   try {
-    const { professionalId } = req.params;
-    
-    if (!professionalId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Professional ID is required'
-      });
-    }
+    const FIXED_TENANT_ID = '00000000-0000-4000-8000-000000000001';
+    const FIXED_PROFESSIONAL_ID = '72a8459a-0017-424e-be85-58b0faf867b9';
     
     // Verificar se o Google Calendar Service está configurado
     if (!process.env.GOOGLE_CALENDAR_CLIENT_ID || !process.env.GOOGLE_CALENDAR_CLIENT_SECRET) {
@@ -1702,20 +1697,32 @@ router.get('/google-calendar/auth/:professionalId', (req, res) => {
           step1: 'Acesse https://console.cloud.google.com/',
           step2: 'Crie projeto e ative Google Calendar API',
           step3: 'Crie credenciais OAuth 2.0',
-          step4: 'Configure redirect URI: http://localhost:3000/api/demo/google-calendar/callback',
+          step4: 'Configure redirect URI: https://dev.ubs.app.br/api/demo/google-calendar/callback',
           step5: 'Adicione Client ID e Client Secret no arquivo .env'
         }
       });
     }
     
-    // Temporário: Gerar URL de autorização manual
-    const authUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${process.env.GOOGLE_CALENDAR_CLIENT_ID}&redirect_uri=${encodeURIComponent(process.env.GOOGLE_CALENDAR_REDIRECT_URI!)}&response_type=code&scope=${encodeURIComponent('https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events')}&state=${professionalId}&access_type=offline&prompt=consent`;
+    // Codificar state com IDs fixos para demo
+    const state = Buffer.from(JSON.stringify({
+      tenant_id: FIXED_TENANT_ID,
+      professional_id: FIXED_PROFESSIONAL_ID
+    })).toString('base64');
+    
+    // Gerar URL de autorização para calendar único compartilhado
+    const authUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${process.env.GOOGLE_CALENDAR_CLIENT_ID}&redirect_uri=${encodeURIComponent(process.env.GOOGLE_CALENDAR_REDIRECT_URI!)}&response_type=code&scope=${encodeURIComponent('https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events')}&state=${state}&access_type=offline&prompt=consent`;
     
     return res.json({
       success: true,
       authUrl,
-      message: 'Clique no link para autorizar acesso ao Google Calendar',
-      instructions: 'Após autorizar, você será redirecionado de volta e o calendário será conectado automaticamente.'
+      message: 'Clique no link para autorizar acesso ao Google Calendar DEMO',
+      instructions: 'TODOS os testes da demo usarão o mesmo calendar compartilhado.',
+      demoInfo: {
+        tenantId: FIXED_TENANT_ID,
+        professionalId: FIXED_PROFESSIONAL_ID,
+        sharedCalendar: true,
+        note: 'Todos os visitantes da demo agendarão no mesmo calendar'
+      }
     });
     
   } catch (error) {
@@ -1727,87 +1734,6 @@ router.get('/google-calendar/auth/:professionalId', (req, res) => {
   }
 });
 
-/**
- * Callback do OAuth - recebe o código de autorização do Google
- */
-router.get('/google-calendar/callback', async (req, res) => {
-  try {
-    const { code, state: professionalId, error } = req.query;
-    
-    if (error) {
-      return res.status(400).send(`
-        <html>
-          <head><title>Erro na Autorização</title></head>
-          <body style="font-family: Arial; text-align: center; padding: 50px;">
-            <h2>❌ Erro na Autorização</h2>
-            <p>Erro: ${error}</p>
-            <p>Tente novamente ou contate o suporte.</p>
-          </body>
-        </html>
-      `);
-    }
-    
-    if (!code || !professionalId) {
-      return res.status(400).send(`
-        <html>
-          <head><title>Parâmetros Inválidos</title></head>
-          <body style="font-family: Arial; text-align: center; padding: 50px;">
-            <h2>⚠️ Parâmetros Inválidos</h2>
-            <p>Código de autorização ou ID do profissional não encontrados.</p>
-          </body>
-        </html>
-      `);
-    }
-    
-    // Temporário: Simular processamento do callback
-    console.log(`✅ Simulando autorização para profissional ${professionalId} com código ${code}`);
-    
-    // Buscar dados do profissional para mostrar sucesso
-    const { data: professional } = await supabase
-      .from('professionals')
-      .select('name, tenant_id')
-      .eq('id', professionalId)
-      .single();
-      
-    return res.send(`
-      <html>
-        <head>
-          <title>Google Calendar Conectado</title>
-          <style>
-            body { font-family: Arial; text-align: center; padding: 50px; background: #f8f9fa; }
-            .success-box { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }
-            .success-icon { color: #28a745; font-size: 48px; margin-bottom: 20px; }
-            .btn { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; text-decoration: none; display: inline-block; margin-top: 20px; }
-          </style>
-        </head>
-        <body>
-          <div class="success-box">
-            <div class="success-icon">✅</div>
-            <h2>Google Calendar Conectado!</h2>
-            <p><strong>Profissional:</strong> ${professional?.name || 'Profissional'}</p>
-            <p>O calendário foi conectado com sucesso. Agora os agendamentos serão sincronizados automaticamente.</p>
-            <a href="/demo" class="btn">Voltar para Demo</a>
-          </div>
-        </body>
-      </html>
-    `);
-    
-  } catch (error) {
-    console.error('❌ Erro no callback do Google:', error);
-    
-    return res.status(500).send(`
-      <html>
-        <head><title>Erro no Callback</title></head>
-        <body style="font-family: Arial; text-align: center; padding: 50px;">
-          <h2>❌ Erro no Callback</h2>
-          <p>Erro: ${error instanceof Error ? error.message : 'Erro desconhecido'}</p>
-          <p>Tente configurar novamente ou contate o suporte.</p>
-          <a href="/demo">Voltar para Demo</a>
-        </body>
-      </html>
-    `);
-  }
-});
 
 /**
  * Verificar status da conexão do Google Calendar para um tenant
