@@ -1,0 +1,5255 @@
+[
+  {
+    "id": "0673be71-24b7-4489-b79a-ba97a7c432e2",
+    "tenant_id": "c3aa73f8-db80-40db-a9c4-73718a0fee34",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "c3aa73f8-db80-40db-a9c4-73718a0fee34",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "30d",
+      "period_start": "2025-07-10",
+      "average_value": 0,
+      "new_customers": 10,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 10,
+      "total_appointments": 10,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 10,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 9.345794392523365,
+      "appointments_platform_percentage": 4.926108374384237
+    },
+    "period": "30d",
+    "calculated_at": "2025-08-09T14:56:53.677+00:00",
+    "created_at": "2025-08-09T14:56:53.677+00:00",
+    "updated_at": "2025-08-09T14:56:53.677+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 56,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 51,
+        "total_potential_revenue": 6070
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 6070,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Aula Particular",
+          "Reforço Escolar",
+          "Preparação ENEM",
+          "Curso de Idiomas",
+          "Orientação de TCC",
+          "Aula em Grupo",
+          "Monitoria Online",
+          "Workshop Temático"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 30
+      },
+      "historical_6months_revenue": {
+        "month_0": 6070,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 49,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "c556dc7c-61cc-4eeb-a25b-97e04f064d27",
+    "tenant_id": "ae509773-6b9d-45f9-925c-dfa3edd0326a",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "ae509773-6b9d-45f9-925c-dfa3edd0326a",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "90d",
+      "period_start": "2025-05-11",
+      "average_value": 0,
+      "new_customers": 11,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 11,
+      "total_appointments": 12,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 12,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 10.2803738317757,
+      "appointments_platform_percentage": 3.0456852791878175
+    },
+    "period": "90d",
+    "calculated_at": "2025-08-09T14:56:53.787+00:00",
+    "created_at": "2025-08-09T14:56:53.787+00:00",
+    "updated_at": "2025-08-09T14:56:53.787+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 84,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 57,
+        "total_potential_revenue": 6968
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 6968,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Consulta Jurídica",
+          "Defesa Trabalhista",
+          "Ação Civil",
+          "Consultoria Empresarial",
+          "Mediação e Conciliação",
+          "Análise de Documentos",
+          "Acompanhamento Processual",
+          "Elaboração de Contrato"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 90
+      },
+      "historical_6months_revenue": {
+        "month_0": 6968,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 54,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "e737c6e2-9e67-4da3-b804-749e9d8d817a",
+    "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "7d",
+      "period_start": "2025-08-02",
+      "average_value": 0,
+      "new_customers": 13,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 13,
+      "total_appointments": 28,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 333.33333333333337,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 28,
+      "appointments_growth_rate": 600,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 18.055555555555554,
+      "appointments_platform_percentage": 19.444444444444446
+    },
+    "period": "7d",
+    "calculated_at": "2025-08-09T17:30:01.689+00:00",
+    "created_at": "2025-08-09T17:30:01.689+00:00",
+    "updated_at": "2025-08-09T17:30:01.689+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 0,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 0,
+        "total_potential_revenue": 0
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 0,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 24,
+          "informativos": 20
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 90,
+          "informativos": 117
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 204
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 891
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Consulta Psicológica",
+          "Psicoterapia Individual",
+          "Terapia de Casal",
+          "Avaliação Neuropsicológica",
+          "Orientação Vocacional",
+          "Terapia em Grupo",
+          "Consulta Psiquiátrica",
+          "Acompanhamento Terapêutico"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 7
+      },
+      "historical_6months_revenue": {
+        "month_0": 14462.72999999999,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 48,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "2671385d-5637-43cc-bf94-8ef87f7ec300",
+    "tenant_id": "7ae2807f-4a30-4b37-b11e-073b79a3b0c4",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "7ae2807f-4a30-4b37-b11e-073b79a3b0c4",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "90d",
+      "period_start": "2025-05-11",
+      "average_value": 0,
+      "new_customers": 8,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 8,
+      "total_appointments": 8,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 8,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 7.476635514018691,
+      "appointments_platform_percentage": 2.030456852791878
+    },
+    "period": "90d",
+    "calculated_at": "2025-08-09T14:56:53.792+00:00",
+    "created_at": "2025-08-09T14:56:53.792+00:00",
+    "updated_at": "2025-08-09T14:56:53.792+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 84,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 49,
+        "total_potential_revenue": 6001
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 6001,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Personal Training",
+          "Aula de Yoga",
+          "Avaliação Física",
+          "Consultoria Nutricional",
+          "Fisioterapia Esportiva",
+          "Treino Funcional",
+          "Pilates",
+          "Massagem Desportiva"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 90
+      },
+      "historical_6months_revenue": {
+        "month_0": 6001,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 44,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "4c44fb4f-0535-4c28-b7ce-c588b3143819",
+    "tenant_id": "85cee693-a2e2-444a-926a-19f69db13489",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "85cee693-a2e2-444a-926a-19f69db13489",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "7d",
+      "period_start": "2025-08-02",
+      "average_value": 0,
+      "new_customers": 8,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 8,
+      "total_appointments": 8,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 8,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 11.11111111111111,
+      "appointments_platform_percentage": 5.555555555555555
+    },
+    "period": "7d",
+    "calculated_at": "2025-08-09T17:30:01.448+00:00",
+    "created_at": "2025-08-09T17:30:01.448+00:00",
+    "updated_at": "2025-08-09T17:30:01.448+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 0,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 0,
+        "total_potential_revenue": 0
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 0,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Aula Particular",
+          "Reforço Escolar",
+          "Preparação ENEM",
+          "Curso de Idiomas",
+          "Orientação de TCC",
+          "Aula em Grupo",
+          "Monitoria Online",
+          "Workshop Temático"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 7
+      },
+      "historical_6months_revenue": {
+        "month_0": 5410,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 42,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "5e13ae97-5d31-4271-8a23-42d0690da107",
+    "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "7d",
+      "period_start": "2025-08-02",
+      "average_value": 0,
+      "new_customers": 8,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 8,
+      "total_appointments": 21,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": -11.11111111111111,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 21,
+      "appointments_growth_rate": 133.33333333333331,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 11.11111111111111,
+      "appointments_platform_percentage": 14.583333333333334
+    },
+    "period": "7d",
+    "calculated_at": "2025-08-09T17:30:01.482+00:00",
+    "created_at": "2025-08-09T17:30:01.482+00:00",
+    "updated_at": "2025-08-09T17:30:01.482+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 0,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 0,
+        "total_potential_revenue": 0
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 0,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 19,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 24,
+          "informativos": 18
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 63,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 69,
+          "informativos": 62
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 274
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 852
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Corte de Cabelo",
+          "Coloração",
+          "Manicure e Pedicure",
+          "Limpeza de Pele",
+          "Maquiagem",
+          "Hidratação Capilar",
+          "Massagem Relaxante",
+          "Design de Sobrancelhas"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 81
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 7
+      },
+      "historical_6months_revenue": {
+        "month_0": 8389.479999999998,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 42,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "1d92c514-ae6c-4ab6-b95f-225f10ae8dc9",
+    "tenant_id": "85cee693-a2e2-444a-926a-19f69db13489",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "85cee693-a2e2-444a-926a-19f69db13489",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "90d",
+      "period_start": "2025-05-11",
+      "average_value": 0,
+      "new_customers": 12,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 12,
+      "total_appointments": 12,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 12,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 11.214953271028037,
+      "appointments_platform_percentage": 3.0456852791878175
+    },
+    "period": "90d",
+    "calculated_at": "2025-08-09T14:56:53.614+00:00",
+    "created_at": "2025-08-09T14:56:53.614+00:00",
+    "updated_at": "2025-08-09T14:56:53.614+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 84,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 43,
+        "total_potential_revenue": 5410
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 5410,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Aula Particular",
+          "Reforço Escolar",
+          "Preparação ENEM",
+          "Curso de Idiomas",
+          "Orientação de TCC",
+          "Aula em Grupo",
+          "Monitoria Online",
+          "Workshop Temático"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 90
+      },
+      "historical_6months_revenue": {
+        "month_0": 5410,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 42,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "5fb1de61-80de-4c62-8b87-cd093034e336",
+    "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "7d",
+      "period_start": "2025-08-02",
+      "average_value": 0,
+      "new_customers": 16,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 16,
+      "total_appointments": 25,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 77.77777777777779,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 25,
+      "appointments_growth_rate": 150,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 22.22222222222222,
+      "appointments_platform_percentage": 17.36111111111111
+    },
+    "period": "7d",
+    "calculated_at": "2025-08-09T17:30:01.713+00:00",
+    "created_at": "2025-08-09T17:30:01.713+00:00",
+    "updated_at": "2025-08-09T17:30:01.713+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 0,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 0,
+        "total_potential_revenue": 0
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 0,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 14,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 22,
+          "informativos": 16
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 67,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 62,
+          "informativos": 61
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 236
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 823
+      },
+      "services_available": {
+        "count": 9,
+        "services": [
+          "Coloração",
+          "Manicure e Pedicure",
+          "Limpeza de Pele",
+          "Maquiagem",
+          "Design de Sobrancelhas",
+          "Hidratação Capilar",
+          "Massagem Relaxante",
+          "Teste",
+          "Corte de Cabelo"
+        ]
+      },
+      "total_professionals": {
+        "count": 5
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 7
+      },
+      "historical_6months_revenue": {
+        "month_0": 10605.170000000016,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 62,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "e0c321b7-d5f4-49fe-b05c-6e814e855932",
+    "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "7d",
+      "period_start": "2025-08-02",
+      "average_value": 0,
+      "new_customers": 11,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 11,
+      "total_appointments": 20,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 120,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 20,
+      "appointments_growth_rate": 150,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 15.277777777777779,
+      "appointments_platform_percentage": 13.88888888888889
+    },
+    "period": "7d",
+    "calculated_at": "2025-08-09T17:30:01.766+00:00",
+    "created_at": "2025-08-09T17:30:01.766+00:00",
+    "updated_at": "2025-08-09T17:30:01.766+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 0,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 0,
+        "total_potential_revenue": 0
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 0,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 14,
+          "informativos": 26
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 69,
+          "informativos": 87
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 162
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 675
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Consulta Psicológica",
+          "Psicoterapia Individual",
+          "Terapia de Casal",
+          "Orientação Vocacional",
+          "Terapia em Grupo",
+          "Consulta Psiquiátrica",
+          "Acompanhamento Terapêutico",
+          "Avaliação Neuropsicológica"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 7
+      },
+      "historical_6months_revenue": {
+        "month_0": 13567.590000000004,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 49,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "01dd24cf-e002-4c95-93b0-6e3934326e1c",
+    "tenant_id": "c3aa73f8-db80-40db-a9c4-73718a0fee34",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "c3aa73f8-db80-40db-a9c4-73718a0fee34",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "7d",
+      "period_start": "2025-08-02",
+      "average_value": 0,
+      "new_customers": 5,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 5,
+      "total_appointments": 5,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 0,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 5,
+      "appointments_growth_rate": 0,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 6.944444444444445,
+      "appointments_platform_percentage": 3.4722222222222223
+    },
+    "period": "7d",
+    "calculated_at": "2025-08-09T17:30:01.868+00:00",
+    "created_at": "2025-08-09T17:30:01.868+00:00",
+    "updated_at": "2025-08-09T17:30:01.868+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 0,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 0,
+        "total_potential_revenue": 0
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 0,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Aula Particular",
+          "Reforço Escolar",
+          "Preparação ENEM",
+          "Curso de Idiomas",
+          "Orientação de TCC",
+          "Aula em Grupo",
+          "Monitoria Online",
+          "Workshop Temático"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 7
+      },
+      "historical_6months_revenue": {
+        "month_0": 6070,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 49,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "2eaef17c-06e0-4585-a5f5-02ad592c6025",
+    "tenant_id": "ae509773-6b9d-45f9-925c-dfa3edd0326a",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "ae509773-6b9d-45f9-925c-dfa3edd0326a",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "30d",
+      "period_start": "2025-07-10",
+      "average_value": 0,
+      "new_customers": 11,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 11,
+      "total_appointments": 12,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 12,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 10.2803738317757,
+      "appointments_platform_percentage": 5.911330049261084
+    },
+    "period": "30d",
+    "calculated_at": "2025-08-09T14:56:53.762+00:00",
+    "created_at": "2025-08-09T14:56:53.762+00:00",
+    "updated_at": "2025-08-09T14:56:53.762+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 56,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 57,
+        "total_potential_revenue": 6968
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 6968,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Consulta Jurídica",
+          "Defesa Trabalhista",
+          "Ação Civil",
+          "Consultoria Empresarial",
+          "Mediação e Conciliação",
+          "Análise de Documentos",
+          "Acompanhamento Processual",
+          "Elaboração de Contrato"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 30
+      },
+      "historical_6months_revenue": {
+        "month_0": 6968,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 54,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "aae0eaa0-5d19-4046-9ea8-1d6d8013fca6",
+    "tenant_id": "c3aa73f8-db80-40db-a9c4-73718a0fee34",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "c3aa73f8-db80-40db-a9c4-73718a0fee34",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "90d",
+      "period_start": "2025-05-11",
+      "average_value": 0,
+      "new_customers": 10,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 10,
+      "total_appointments": 10,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 10,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 9.345794392523365,
+      "appointments_platform_percentage": 2.5380710659898478
+    },
+    "period": "90d",
+    "calculated_at": "2025-08-09T14:56:53.867+00:00",
+    "created_at": "2025-08-09T14:56:53.867+00:00",
+    "updated_at": "2025-08-09T14:56:53.867+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 84,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 51,
+        "total_potential_revenue": 6070
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 6070,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Aula Particular",
+          "Reforço Escolar",
+          "Preparação ENEM",
+          "Curso de Idiomas",
+          "Orientação de TCC",
+          "Aula em Grupo",
+          "Monitoria Online",
+          "Workshop Temático"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 90
+      },
+      "historical_6months_revenue": {
+        "month_0": 6070,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 49,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "41fd1e0c-2c89-482d-a10e-0148820bfeff",
+    "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "90d",
+      "period_start": "2025-05-11",
+      "average_value": 67.804,
+      "new_customers": 14,
+      "total_revenue": 2034.12,
+      "monthly_revenue": 2034.12,
+      "total_customers": 14,
+      "total_appointments": 71,
+      "returning_customers": 0,
+      "revenue_growth_rate": -0.9244557011348702,
+      "customer_growth_rate": 180,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 7,
+      "completed_appointments": 30,
+      "confirmed_appointments": 30,
+      "appointments_growth_rate": 136.66666666666666,
+      "revenue_platform_percentage": 18.583770035301598,
+      "customers_platform_percentage": 13.084112149532709,
+      "appointments_platform_percentage": 18.02030456852792
+    },
+    "period": "90d",
+    "calculated_at": "2025-08-09T14:56:53.532+00:00",
+    "created_at": "2025-08-09T14:56:53.532+00:00",
+    "updated_at": "2025-08-09T14:56:53.532+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 852
+      },
+      "new_customers": 81,
+      "no_show_impact": {
+        "lost_revenue": 135.42000000000002,
+        "no_show_count": 4,
+        "impact_percentage": 2.2988505747126435,
+        "total_appointments": 174,
+        "total_potential_revenue": 13105.449999999999
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 852,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 12476.699999999997,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 852,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 19,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 24,
+          "informativos": 18
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 63,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 69,
+          "informativos": 62
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0.9268708971553602,
+        "total_conversations": 457
+      },
+      "information_rate": {
+        "percentage": 7.276995305164319,
+        "info_conversations": 62,
+        "total_conversations": 852
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 7.394366197183098,
+        "total_conversations": 852,
+        "cancelled_conversations": 63
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 274
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 852
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Corte de Cabelo",
+          "Coloração",
+          "Manicure e Pedicure",
+          "Limpeza de Pele",
+          "Maquiagem",
+          "Hidratação Capilar",
+          "Massagem Relaxante",
+          "Design de Sobrancelhas"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 4.106620000000005,
+        "total_cost_usd": 4.534401000000005,
+        "processing_cost_usd": 0.42778100000000013,
+        "total_conversations": 852
+      },
+      "total_unique_customers": {
+        "count": 81
+      },
+      "appointment_success_rate": 35.56701030927835,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 116,
+        "period_days": 90
+      },
+      "historical_6months_revenue": {
+        "month_0": 8389.479999999998,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 42,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "ddad2a96-9764-42d1-a136-218351d2574c",
+    "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "90d",
+      "period_start": "2025-05-11",
+      "average_value": 101.10277777777777,
+      "new_customers": 14,
+      "total_revenue": 1819.85,
+      "monthly_revenue": 1819.85,
+      "total_customers": 14,
+      "total_appointments": 58,
+      "returning_customers": 0,
+      "revenue_growth_rate": -6.665264820674838,
+      "customer_growth_rate": 250,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 5,
+      "completed_appointments": 18,
+      "confirmed_appointments": 32,
+      "appointments_growth_rate": 262.5,
+      "revenue_platform_percentage": 16.626194078394395,
+      "customers_platform_percentage": 13.084112149532709,
+      "appointments_platform_percentage": 14.720812182741117
+    },
+    "period": "90d",
+    "calculated_at": "2025-08-09T14:56:53.945+00:00",
+    "created_at": "2025-08-09T14:56:53.945+00:00",
+    "updated_at": "2025-08-09T14:56:53.945+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 891
+      },
+      "new_customers": 84,
+      "no_show_impact": {
+        "lost_revenue": 125.09,
+        "no_show_count": 3,
+        "impact_percentage": 1.8181818181818181,
+        "total_appointments": 165,
+        "total_potential_revenue": 19005.319999999992
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 891,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 18232.389999999992,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 891,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 24,
+          "informativos": 20
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 90,
+          "informativos": 117
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0.899642857142856,
+        "total_conversations": 504
+      },
+      "information_rate": {
+        "percentage": 13.131313131313133,
+        "info_conversations": 117,
+        "total_conversations": 891
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 891,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 204
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 891
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Consulta Psicológica",
+          "Psicoterapia Individual",
+          "Terapia de Casal",
+          "Avaliação Neuropsicológica",
+          "Orientação Vocacional",
+          "Terapia em Grupo",
+          "Consulta Psiquiátrica",
+          "Acompanhamento Terapêutico"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 4.469009999999998,
+        "total_cost_usd": 4.903545999999999,
+        "processing_cost_usd": 0.43453600000000003,
+        "total_conversations": 891
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 43.47826086956522,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 290,
+        "period_days": 90
+      },
+      "historical_6months_revenue": {
+        "month_0": 14462.72999999999,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 48,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "4dc6fb97-daef-41a0-b67e-126092b21507",
+    "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "30d",
+      "period_start": "2025-07-10",
+      "average_value": 0,
+      "new_customers": 14,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 14,
+      "total_appointments": 30,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 30,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 13.084112149532709,
+      "appointments_platform_percentage": 14.77832512315271
+    },
+    "period": "30d",
+    "calculated_at": "2025-08-09T14:56:54.274+00:00",
+    "created_at": "2025-08-09T14:56:54.274+00:00",
+    "updated_at": "2025-08-09T14:56:54.274+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 274
+      },
+      "new_customers": 55,
+      "no_show_impact": {
+        "lost_revenue": 135.42000000000002,
+        "no_show_count": 4,
+        "impact_percentage": 2.2988505747126435,
+        "total_appointments": 174,
+        "total_potential_revenue": 13105.449999999999
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 274,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 12476.699999999997,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 274,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 19,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 24,
+          "informativos": 18
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 63,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 69,
+          "informativos": 62
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0.9264383561643831,
+        "total_conversations": 146
+      },
+      "information_rate": {
+        "percentage": 6.569343065693431,
+        "info_conversations": 18,
+        "total_conversations": 274
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 6.934306569343065,
+        "total_conversations": 274,
+        "cancelled_conversations": 19
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 274
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 852
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Corte de Cabelo",
+          "Coloração",
+          "Manicure e Pedicure",
+          "Limpeza de Pele",
+          "Maquiagem",
+          "Hidratação Capilar",
+          "Massagem Relaxante",
+          "Design de Sobrancelhas"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 1.3256999999999997,
+        "total_cost_usd": 1.4630489999999996,
+        "processing_cost_usd": 0.137349,
+        "total_conversations": 274
+      },
+      "total_unique_customers": {
+        "count": 81
+      },
+      "appointment_success_rate": 39.34426229508197,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 116,
+        "period_days": 30
+      },
+      "historical_6months_revenue": {
+        "month_0": 8389.479999999998,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 42,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "094c90c9-bbd5-4f54-8da4-97b29b9da8ca",
+    "tenant_id": "765b26dc-f8e3-4eb2-b1c6-a896d99d1c2a",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "765b26dc-f8e3-4eb2-b1c6-a896d99d1c2a",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "7d",
+      "period_start": "2025-08-02",
+      "average_value": 0,
+      "new_customers": 8,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 8,
+      "total_appointments": 8,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 166.66666666666669,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 8,
+      "appointments_growth_rate": 166.66666666666669,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 11.11111111111111,
+      "appointments_platform_percentage": 5.555555555555555
+    },
+    "period": "7d",
+    "calculated_at": "2025-08-09T17:30:01.986+00:00",
+    "created_at": "2025-08-09T17:30:01.986+00:00",
+    "updated_at": "2025-08-09T17:30:01.986+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 0,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 0,
+        "total_potential_revenue": 0
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 0,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Consulta Jurídica",
+          "Elaboração de Contrato",
+          "Defesa Trabalhista",
+          "Ação Civil",
+          "Consultoria Empresarial",
+          "Mediação e Conciliação",
+          "Análise de Documentos",
+          "Acompanhamento Processual"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 82
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 7
+      },
+      "historical_6months_revenue": {
+        "month_0": 5266,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 42,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "b5ca5aa6-d696-440a-b3e6-c5da539044e0",
+    "tenant_id": "765b26dc-f8e3-4eb2-b1c6-a896d99d1c2a",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "765b26dc-f8e3-4eb2-b1c6-a896d99d1c2a",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "90d",
+      "period_start": "2025-05-11",
+      "average_value": 0,
+      "new_customers": 11,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 11,
+      "total_appointments": 11,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 11,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 10.2803738317757,
+      "appointments_platform_percentage": 2.7918781725888326
+    },
+    "period": "90d",
+    "calculated_at": "2025-08-09T14:56:53.57+00:00",
+    "created_at": "2025-08-09T14:56:53.57+00:00",
+    "updated_at": "2025-08-09T14:56:53.57+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 82,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 42,
+        "total_potential_revenue": 5266
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 5266,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Consulta Jurídica",
+          "Elaboração de Contrato",
+          "Defesa Trabalhista",
+          "Ação Civil",
+          "Consultoria Empresarial",
+          "Mediação e Conciliação",
+          "Análise de Documentos",
+          "Acompanhamento Processual"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 82
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 90
+      },
+      "historical_6months_revenue": {
+        "month_0": 5266,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 42,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "cea1c053-64cc-4c08-9ca8-ec34cda80d52",
+    "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "90d",
+      "period_start": "2025-05-11",
+      "average_value": 98.98103448275862,
+      "new_customers": 13,
+      "total_revenue": 2870.45,
+      "monthly_revenue": 2870.45,
+      "total_customers": 13,
+      "total_appointments": 63,
+      "returning_customers": 0,
+      "revenue_growth_rate": -16.121689225518388,
+      "customer_growth_rate": 160,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 2,
+      "completed_appointments": 29,
+      "confirmed_appointments": 28,
+      "appointments_growth_rate": 90.9090909090909,
+      "revenue_platform_percentage": 26.224501355786025,
+      "customers_platform_percentage": 12.149532710280374,
+      "appointments_platform_percentage": 15.989847715736042
+    },
+    "period": "90d",
+    "calculated_at": "2025-08-09T14:56:53.772+00:00",
+    "created_at": "2025-08-09T14:56:53.772+00:00",
+    "updated_at": "2025-08-09T14:56:53.772+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 675
+      },
+      "new_customers": 84,
+      "no_show_impact": {
+        "lost_revenue": 146.72,
+        "no_show_count": 4,
+        "impact_percentage": 2.1621621621621623,
+        "total_appointments": 185,
+        "total_potential_revenue": 20136.46000000001
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 675,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 19860.200000000008,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 675,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 14,
+          "informativos": 26
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 69,
+          "informativos": 87
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0.8999212598425187,
+        "total_conversations": 381
+      },
+      "information_rate": {
+        "percentage": 12.88888888888889,
+        "info_conversations": 87,
+        "total_conversations": 675
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 675,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 162
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 675
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Consulta Psicológica",
+          "Psicoterapia Individual",
+          "Terapia de Casal",
+          "Orientação Vocacional",
+          "Terapia em Grupo",
+          "Consulta Psiquiátrica",
+          "Acompanhamento Terapêutico",
+          "Avaliação Neuropsicológica"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 3.2372799999999984,
+        "total_cost_usd": 3.5645969999999982,
+        "processing_cost_usd": 0.3273169999999999,
+        "total_conversations": 675
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 44.230769230769226,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 290,
+        "period_days": 90
+      },
+      "historical_6months_revenue": {
+        "month_0": 13567.590000000004,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 49,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "03281d22-f9fe-4a76-a6d5-890e236e7597",
+    "tenant_id": "85cee693-a2e2-444a-926a-19f69db13489",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "85cee693-a2e2-444a-926a-19f69db13489",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "30d",
+      "period_start": "2025-07-10",
+      "average_value": 0,
+      "new_customers": 12,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 12,
+      "total_appointments": 12,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 12,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 11.214953271028037,
+      "appointments_platform_percentage": 5.911330049261084
+    },
+    "period": "30d",
+    "calculated_at": "2025-08-09T14:56:53.458+00:00",
+    "created_at": "2025-08-09T14:56:53.458+00:00",
+    "updated_at": "2025-08-09T14:56:53.458+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 56,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 43,
+        "total_potential_revenue": 5410
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 5410,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Aula Particular",
+          "Reforço Escolar",
+          "Preparação ENEM",
+          "Curso de Idiomas",
+          "Orientação de TCC",
+          "Aula em Grupo",
+          "Monitoria Online",
+          "Workshop Temático"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 30
+      },
+      "historical_6months_revenue": {
+        "month_0": 5410,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 42,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "c4a84fbf-15ae-4349-802e-d73ab54e570d",
+    "tenant_id": "765b26dc-f8e3-4eb2-b1c6-a896d99d1c2a",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "765b26dc-f8e3-4eb2-b1c6-a896d99d1c2a",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "30d",
+      "period_start": "2025-07-10",
+      "average_value": 0,
+      "new_customers": 11,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 11,
+      "total_appointments": 11,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 11,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 10.2803738317757,
+      "appointments_platform_percentage": 5.41871921182266
+    },
+    "period": "30d",
+    "calculated_at": "2025-08-09T14:56:53.771+00:00",
+    "created_at": "2025-08-09T14:56:53.771+00:00",
+    "updated_at": "2025-08-09T14:56:53.771+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 55,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 42,
+        "total_potential_revenue": 5266
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 5266,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Consulta Jurídica",
+          "Elaboração de Contrato",
+          "Defesa Trabalhista",
+          "Ação Civil",
+          "Consultoria Empresarial",
+          "Mediação e Conciliação",
+          "Análise de Documentos",
+          "Acompanhamento Processual"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 82
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 30
+      },
+      "historical_6months_revenue": {
+        "month_0": 5266,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 42,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "935ddbb4-4f23-48f4-b77b-6c30ceac0c86",
+    "tenant_id": "ae509773-6b9d-45f9-925c-dfa3edd0326a",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "ae509773-6b9d-45f9-925c-dfa3edd0326a",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "7d",
+      "period_start": "2025-08-02",
+      "average_value": 0,
+      "new_customers": 7,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 7,
+      "total_appointments": 7,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 40,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 7,
+      "appointments_growth_rate": 40,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 9.722222222222223,
+      "appointments_platform_percentage": 4.861111111111112
+    },
+    "period": "7d",
+    "calculated_at": "2025-08-09T17:30:01.768+00:00",
+    "created_at": "2025-08-09T17:30:01.768+00:00",
+    "updated_at": "2025-08-09T17:30:01.768+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 0,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 0,
+        "total_potential_revenue": 0
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 0,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Consulta Jurídica",
+          "Defesa Trabalhista",
+          "Ação Civil",
+          "Consultoria Empresarial",
+          "Mediação e Conciliação",
+          "Análise de Documentos",
+          "Acompanhamento Processual",
+          "Elaboração de Contrato"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 7
+      },
+      "historical_6months_revenue": {
+        "month_0": 6968,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 54,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "753a741d-55fe-47ce-b919-01d76f1faecd",
+    "tenant_id": "7ae2807f-4a30-4b37-b11e-073b79a3b0c4",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "7ae2807f-4a30-4b37-b11e-073b79a3b0c4",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "30d",
+      "period_start": "2025-07-10",
+      "average_value": 0,
+      "new_customers": 8,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 8,
+      "total_appointments": 8,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 8,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 7.476635514018691,
+      "appointments_platform_percentage": 3.9408866995073892
+    },
+    "period": "30d",
+    "calculated_at": "2025-08-09T14:56:53.586+00:00",
+    "created_at": "2025-08-09T14:56:53.586+00:00",
+    "updated_at": "2025-08-09T14:56:53.586+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 56,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 49,
+        "total_potential_revenue": 6001
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 6001,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Personal Training",
+          "Aula de Yoga",
+          "Avaliação Física",
+          "Consultoria Nutricional",
+          "Fisioterapia Esportiva",
+          "Treino Funcional",
+          "Pilates",
+          "Massagem Desportiva"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 30
+      },
+      "historical_6months_revenue": {
+        "month_0": 6001,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 44,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "9fbda5e1-687a-47b2-82f4-c0c0f3e9b8b0",
+    "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "7d",
+      "period_start": "2025-08-02",
+      "average_value": 0,
+      "new_customers": 12,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 12,
+      "total_appointments": 18,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 18,
+      "appointments_growth_rate": 157.14285714285714,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 16.666666666666664,
+      "appointments_platform_percentage": 12.5
+    },
+    "period": "7d",
+    "calculated_at": "2025-08-09T17:30:01.511+00:00",
+    "created_at": "2025-08-09T17:30:01.511+00:00",
+    "updated_at": "2025-08-09T17:30:01.511+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 0,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 0,
+        "total_potential_revenue": 0
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 0,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 8,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 21,
+          "informativos": 10
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 50,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 73,
+          "informativos": 52
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 188
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 794
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Corte de Cabelo",
+          "Coloração",
+          "Manicure e Pedicure",
+          "Limpeza de Pele",
+          "Maquiagem",
+          "Design de Sobrancelhas",
+          "Hidratação Capilar",
+          "Massagem Relaxante"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 7
+      },
+      "historical_6months_revenue": {
+        "month_0": 10497.169999999996,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 55,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "36ce78ca-ff8a-4abc-99a2-78ae5871e4a3",
+    "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "90d",
+      "period_start": "2025-05-11",
+      "average_value": 62.977714285714285,
+      "new_customers": 16,
+      "total_revenue": 2204.22,
+      "monthly_revenue": 2204.22,
+      "total_customers": 16,
+      "total_appointments": 69,
+      "returning_customers": 0,
+      "revenue_growth_rate": 2.937921179091297,
+      "customer_growth_rate": 220.00000000000003,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 4,
+      "completed_appointments": 35,
+      "confirmed_appointments": 25,
+      "appointments_growth_rate": 91.66666666666666,
+      "revenue_platform_percentage": 20.137807792663402,
+      "customers_platform_percentage": 14.953271028037381,
+      "appointments_platform_percentage": 17.512690355329948
+    },
+    "period": "90d",
+    "calculated_at": "2025-08-09T14:56:53.746+00:00",
+    "created_at": "2025-08-09T14:56:53.746+00:00",
+    "updated_at": "2025-08-09T14:56:53.746+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 794
+      },
+      "new_customers": 84,
+      "no_show_impact": {
+        "lost_revenue": 213.21999999999997,
+        "no_show_count": 5,
+        "impact_percentage": 2.512562814070352,
+        "total_appointments": 199,
+        "total_potential_revenue": 15260.239999999994
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 794,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 14842.699999999995,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 794,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 8,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 21,
+          "informativos": 10
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 50,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 73,
+          "informativos": 52
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0.9259574468085094,
+        "total_conversations": 423
+      },
+      "information_rate": {
+        "percentage": 6.54911838790932,
+        "info_conversations": 52,
+        "total_conversations": 794
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 6.297229219143577,
+        "total_conversations": 794,
+        "cancelled_conversations": 50
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 188
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 794
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Corte de Cabelo",
+          "Coloração",
+          "Manicure e Pedicure",
+          "Limpeza de Pele",
+          "Maquiagem",
+          "Design de Sobrancelhas",
+          "Hidratação Capilar",
+          "Massagem Relaxante"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 3.846659999999999,
+        "total_cost_usd": 4.231058999999999,
+        "processing_cost_usd": 0.38439899999999977,
+        "total_conversations": 794
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 41.714285714285715,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 116,
+        "period_days": 90
+      },
+      "historical_6months_revenue": {
+        "month_0": 10497.169999999996,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 55,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "a6cc4415-a220-4018-b7b7-6fd95fe47bc5",
+    "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "30d",
+      "period_start": "2025-07-10",
+      "average_value": 0,
+      "new_customers": 14,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 14,
+      "total_appointments": 32,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 32,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 13.084112149532709,
+      "appointments_platform_percentage": 15.763546798029557
+    },
+    "period": "30d",
+    "calculated_at": "2025-08-09T14:56:53.514+00:00",
+    "created_at": "2025-08-09T14:56:53.514+00:00",
+    "updated_at": "2025-08-09T14:56:53.514+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 204
+      },
+      "new_customers": 56,
+      "no_show_impact": {
+        "lost_revenue": 125.09,
+        "no_show_count": 3,
+        "impact_percentage": 1.8181818181818181,
+        "total_appointments": 165,
+        "total_potential_revenue": 19005.319999999992
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 204,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 18232.389999999992,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 204,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 24,
+          "informativos": 20
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 90,
+          "informativos": 117
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0.9035714285714292,
+        "total_conversations": 112
+      },
+      "information_rate": {
+        "percentage": 9.803921568627452,
+        "info_conversations": 20,
+        "total_conversations": 204
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 204,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 204
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 891
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Consulta Psicológica",
+          "Psicoterapia Individual",
+          "Terapia de Casal",
+          "Avaliação Neuropsicológica",
+          "Orientação Vocacional",
+          "Terapia em Grupo",
+          "Consulta Psiquiátrica",
+          "Acompanhamento Terapêutico"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 1.0719,
+        "total_cost_usd": 1.1767910000000001,
+        "processing_cost_usd": 0.10489099999999997,
+        "total_conversations": 204
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 54.54545454545454,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 290,
+        "period_days": 30
+      },
+      "historical_6months_revenue": {
+        "month_0": 14462.72999999999,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 48,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "8f07dadf-f11f-4325-b806-7146984eb4a7",
+    "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "30d",
+      "period_start": "2025-07-10",
+      "average_value": 0,
+      "new_customers": 13,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 13,
+      "total_appointments": 28,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 28,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 12.149532710280374,
+      "appointments_platform_percentage": 13.793103448275861
+    },
+    "period": "30d",
+    "calculated_at": "2025-08-09T14:56:53.594+00:00",
+    "created_at": "2025-08-09T14:56:53.594+00:00",
+    "updated_at": "2025-08-09T14:56:53.594+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 162
+      },
+      "new_customers": 56,
+      "no_show_impact": {
+        "lost_revenue": 146.72,
+        "no_show_count": 4,
+        "impact_percentage": 2.1621621621621623,
+        "total_appointments": 185,
+        "total_potential_revenue": 20136.46000000001
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 162,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 19860.200000000008,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 162,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 14,
+          "informativos": 26
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 69,
+          "informativos": 87
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0.8963829787234052,
+        "total_conversations": 94
+      },
+      "information_rate": {
+        "percentage": 16.049382716049383,
+        "info_conversations": 26,
+        "total_conversations": 162
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 162,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 162
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 675
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Consulta Psicológica",
+          "Psicoterapia Individual",
+          "Terapia de Casal",
+          "Orientação Vocacional",
+          "Terapia em Grupo",
+          "Consulta Psiquiátrica",
+          "Acompanhamento Terapêutico",
+          "Avaliação Neuropsicológica"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0.8254999999999999,
+        "total_cost_usd": 0.9097179999999999,
+        "processing_cost_usd": 0.08421800000000002,
+        "total_conversations": 162
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 35,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 290,
+        "period_days": 30
+      },
+      "historical_6months_revenue": {
+        "month_0": 13567.590000000004,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 49,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "394f6c4e-954a-4152-b9c4-0331eee4b751",
+    "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "90d",
+      "period_start": "2025-05-11",
+      "average_value": 61.122424242424245,
+      "new_customers": 22,
+      "total_revenue": 2017.04,
+      "monthly_revenue": 2017.04,
+      "total_customers": 22,
+      "total_appointments": 80,
+      "returning_customers": 0,
+      "revenue_growth_rate": 36.82639604927551,
+      "customer_growth_rate": 340,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 5,
+      "completed_appointments": 33,
+      "confirmed_appointments": 35,
+      "appointments_growth_rate": 233.33333333333334,
+      "revenue_platform_percentage": 18.42772673785457,
+      "customers_platform_percentage": 20.5607476635514,
+      "appointments_platform_percentage": 20.304568527918782
+    },
+    "period": "90d",
+    "calculated_at": "2025-08-09T14:56:53.72+00:00",
+    "created_at": "2025-08-09T14:56:53.72+00:00",
+    "updated_at": "2025-08-09T14:56:53.72+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 823
+      },
+      "new_customers": 84,
+      "no_show_impact": {
+        "lost_revenue": 194.07999999999998,
+        "no_show_count": 7,
+        "impact_percentage": 3.804347826086957,
+        "total_appointments": 184,
+        "total_potential_revenue": 14642.100000000015
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 823,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 14096.370000000015,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 823,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 14,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 22,
+          "informativos": 16
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 67,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 62,
+          "informativos": 61
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0.9274434389140264,
+        "total_conversations": 442
+      },
+      "information_rate": {
+        "percentage": 7.411907654921021,
+        "info_conversations": 61,
+        "total_conversations": 823
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 8.140947752126367,
+        "total_conversations": 823,
+        "cancelled_conversations": 67
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 236
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 823
+      },
+      "services_available": {
+        "count": 9,
+        "services": [
+          "Coloração",
+          "Manicure e Pedicure",
+          "Limpeza de Pele",
+          "Maquiagem",
+          "Design de Sobrancelhas",
+          "Hidratação Capilar",
+          "Massagem Relaxante",
+          "Teste",
+          "Corte de Cabelo"
+        ]
+      },
+      "total_professionals": {
+        "count": 5
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 3.9771399999999995,
+        "total_cost_usd": 4.374785999999999,
+        "processing_cost_usd": 0.39764600000000005,
+        "total_conversations": 823
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 32.631578947368425,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 116,
+        "period_days": 90
+      },
+      "historical_6months_revenue": {
+        "month_0": 10605.170000000016,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 62,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "9fdf8465-d482-413a-91ce-f0cfcacfeffd",
+    "tenant_id": "7ae2807f-4a30-4b37-b11e-073b79a3b0c4",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "7ae2807f-4a30-4b37-b11e-073b79a3b0c4",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "7d",
+      "period_start": "2025-08-02",
+      "average_value": 0,
+      "new_customers": 4,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 4,
+      "total_appointments": 4,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 0,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 4,
+      "appointments_growth_rate": 0,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 5.555555555555555,
+      "appointments_platform_percentage": 2.7777777777777777
+    },
+    "period": "7d",
+    "calculated_at": "2025-08-09T17:30:01.509+00:00",
+    "created_at": "2025-08-09T17:30:01.509+00:00",
+    "updated_at": "2025-08-09T17:30:01.509+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 0
+      },
+      "new_customers": 0,
+      "no_show_impact": {
+        "lost_revenue": 0,
+        "no_show_count": 0,
+        "impact_percentage": 0,
+        "total_appointments": 0,
+        "total_potential_revenue": 0
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 0,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 0,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0,
+        "total_conversations": 0
+      },
+      "information_rate": {
+        "percentage": 0,
+        "info_conversations": 0,
+        "total_conversations": 0
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 0,
+        "total_conversations": 0,
+        "cancelled_conversations": 0
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 0
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 0
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Personal Training",
+          "Aula de Yoga",
+          "Avaliação Física",
+          "Consultoria Nutricional",
+          "Fisioterapia Esportiva",
+          "Treino Funcional",
+          "Pilates",
+          "Massagem Desportiva"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0,
+        "total_cost_usd": 0,
+        "processing_cost_usd": 0,
+        "total_conversations": 0
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 0,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 0,
+        "period_days": 7
+      },
+      "historical_6months_revenue": {
+        "month_0": 6001,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 44,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "a3cd854c-298d-4207-80ea-7cb980c87249",
+    "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "30d",
+      "period_start": "2025-07-10",
+      "average_value": 0,
+      "new_customers": 22,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 22,
+      "total_appointments": 35,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 35,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 20.5607476635514,
+      "appointments_platform_percentage": 17.24137931034483
+    },
+    "period": "30d",
+    "calculated_at": "2025-08-09T14:56:53.598+00:00",
+    "created_at": "2025-08-09T14:56:53.598+00:00",
+    "updated_at": "2025-08-09T14:56:53.598+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 236
+      },
+      "new_customers": 56,
+      "no_show_impact": {
+        "lost_revenue": 194.07999999999998,
+        "no_show_count": 7,
+        "impact_percentage": 3.804347826086957,
+        "total_appointments": 184,
+        "total_potential_revenue": 14642.100000000015
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 236,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 14096.370000000015,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 236,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 14,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 22,
+          "informativos": 16
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 67,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 62,
+          "informativos": 61
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0.9257142857142857,
+        "total_conversations": 126
+      },
+      "information_rate": {
+        "percentage": 6.779661016949152,
+        "info_conversations": 16,
+        "total_conversations": 236
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 5.932203389830509,
+        "total_conversations": 236,
+        "cancelled_conversations": 14
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 236
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 823
+      },
+      "services_available": {
+        "count": 9,
+        "services": [
+          "Coloração",
+          "Manicure e Pedicure",
+          "Limpeza de Pele",
+          "Maquiagem",
+          "Design de Sobrancelhas",
+          "Hidratação Capilar",
+          "Massagem Relaxante",
+          "Teste",
+          "Corte de Cabelo"
+        ]
+      },
+      "total_professionals": {
+        "count": 5
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 1.1333000000000002,
+        "total_cost_usd": 1.2458900000000002,
+        "processing_cost_usd": 0.11258999999999998,
+        "total_conversations": 236
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 42.30769230769231,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 116,
+        "period_days": 30
+      },
+      "historical_6months_revenue": {
+        "month_0": 10605.170000000016,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 62,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  },
+  {
+    "id": "ec30df22-b0af-4126-a702-749fd78f0855",
+    "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+    "metric_type": "comprehensive",
+    "metric_data": {
+      "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+      "period_end": "2025-08-09",
+      "risk_level": "Saudável",
+      "risk_score": 15,
+      "period_type": "30d",
+      "period_start": "2025-07-10",
+      "average_value": 0,
+      "new_customers": 16,
+      "total_revenue": 0,
+      "monthly_revenue": 0,
+      "total_customers": 16,
+      "total_appointments": 25,
+      "returning_customers": 0,
+      "revenue_growth_rate": 0,
+      "customer_growth_rate": 100,
+      "pending_appointments": 0,
+      "business_health_score": 75,
+      "cancelled_appointments": 0,
+      "completed_appointments": 0,
+      "confirmed_appointments": 25,
+      "appointments_growth_rate": 100,
+      "revenue_platform_percentage": 0,
+      "customers_platform_percentage": 14.953271028037381,
+      "appointments_platform_percentage": 12.31527093596059
+    },
+    "period": "30d",
+    "calculated_at": "2025-08-09T14:56:53.703+00:00",
+    "created_at": "2025-08-09T14:56:53.703+00:00",
+    "updated_at": "2025-08-09T14:56:53.703+00:00",
+    "metricas_validadas": {
+      "spam_rate": {
+        "percentage": 0,
+        "spam_conversations": 0,
+        "total_conversations": 188
+      },
+      "new_customers": 56,
+      "no_show_impact": {
+        "lost_revenue": 213.21999999999997,
+        "no_show_count": 5,
+        "impact_percentage": 2.512562814070352,
+        "total_appointments": 199,
+        "total_potential_revenue": 15260.239999999994
+      },
+      "ai_failure_rate": {
+        "failure_percentage": 0,
+        "total_conversations": 188,
+        "failed_conversations": 0
+      },
+      "monthly_revenue": 14842.699999999995,
+      "reschedule_rate": {
+        "percentage": 0,
+        "total_conversations": 188,
+        "reschedule_conversations": 0
+      },
+      "tenant_outcomes": {
+        "period_7d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 0,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 0,
+          "informativos": 0
+        },
+        "period_30d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 8,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 21,
+          "informativos": 10
+        },
+        "period_90d": {
+          "spam": 0,
+          "falhaIA": 0,
+          "cancelados": 50,
+          "remarcados": 0,
+          "modificados": 0,
+          "agendamentos": 73,
+          "informativos": 52
+        }
+      },
+      "confidence_score": {
+        "avg_confidence": 0.9242424242424241,
+        "total_conversations": 99
+      },
+      "information_rate": {
+        "percentage": 5.319148936170213,
+        "info_conversations": 10,
+        "total_conversations": 188
+      },
+      "ai_interaction_7d": {
+        "period_days": 7,
+        "system_messages_total": 0
+      },
+      "cancellation_rate": {
+        "percentage": 4.25531914893617,
+        "total_conversations": 188,
+        "cancelled_conversations": 8
+      },
+      "ai_interaction_30d": {
+        "period_days": 30,
+        "system_messages_total": 188
+      },
+      "ai_interaction_90d": {
+        "period_days": 90,
+        "system_messages_total": 794
+      },
+      "services_available": {
+        "count": 8,
+        "services": [
+          "Corte de Cabelo",
+          "Coloração",
+          "Manicure e Pedicure",
+          "Limpeza de Pele",
+          "Maquiagem",
+          "Design de Sobrancelhas",
+          "Hidratação Capilar",
+          "Massagem Relaxante"
+        ]
+      },
+      "total_professionals": {
+        "count": 4
+      },
+      "total_system_cost_usd": {
+        "api_cost_usd": 0.9637999999999995,
+        "total_cost_usd": 1.0538129999999994,
+        "processing_cost_usd": 0.09001299999999995,
+        "total_conversations": 188
+      },
+      "total_unique_customers": {
+        "count": 84
+      },
+      "appointment_success_rate": 53.84615384615385,
+      "monthly_platform_cost_brl": {
+        "cost_brl": 116,
+        "period_days": 30
+      },
+      "historical_6months_revenue": {
+        "month_0": 10497.169999999996,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "avg_minutes_per_conversation": {
+        "minutes": 0,
+        "total_minutes": 0,
+        "total_conversations": 0
+      },
+      "historical_6months_customers": {
+        "month_0": 55,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      },
+      "historical_6months_conversations": {
+        "month_0": 0,
+        "month_1": 0,
+        "month_2": 0,
+        "month_3": 0,
+        "month_4": 0,
+        "month_5": 0
+      }
+    }
+  }
+]

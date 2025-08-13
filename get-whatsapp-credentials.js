@@ -1,0 +1,45 @@
+#!/usr/bin/env node
+
+console.log('🔑 OBTER CREDENCIAIS WHATSAPP BUSINESS');
+console.log('=====================================');
+console.log('📱 Número: 11 91286-5400');
+console.log('');
+
+console.log('🎯 PASSO A PASSO:');
+console.log('');
+console.log('1. 🌐 Acesse: https://developers.facebook.com/');
+console.log('   → Faça login com sua conta Meta/Facebook');
+console.log('');
+console.log('2. 📱 Encontre seu App WhatsApp Business');
+console.log('   → Se não tiver, crie um novo app "Business"');
+console.log('   → Adicione o produto "WhatsApp"');
+console.log('');
+console.log('3. 🔍 Vá para "WhatsApp > API Setup"');
+console.log('   → Você deve ver o número 11 91286-5400 listado');
+console.log('');
+console.log('4. 📋 COPIE estas informações:');
+console.log('');
+console.log('   A) 🔑 ACCESS TOKEN:');
+console.log('      → Copie o "Temporary access token"');
+console.log('      → (Para produção, gere um permanente depois)');
+console.log('');
+console.log('   B) 📞 PHONE NUMBER ID:');
+console.log('      → Clique no número 11 91286-5400');
+console.log('      → Copie o "Phone number ID" (não é o número em si)');
+console.log('      → Exemplo: 123456789012345');
+console.log('');
+console.log('5. ⚙️ Execute a configuração:');
+console.log('   → node setup-whatsapp.js');
+console.log('   → Cole as informações copiadas');
+console.log('');
+console.log('🚨 IMPORTANTE:');
+console.log('   ✅ Use ACCESS TOKEN (não App Secret)');
+console.log('   ✅ Use PHONE NUMBER ID (não o número 11 91286-5400)');
+console.log('   ✅ Token temporário expira em 24h');
+console.log('');
+console.log('💡 DÚVIDAS?');
+console.log('   → Abra: WHATSAPP_SETUP_GUIDE.md');
+console.log('   → Ou execute: cat WHATSAPP_SETUP_GUIDE.md');
+console.log('');
+console.log('🎉 Após configurar, teste com:');
+console.log('   → node test-whatsapp-credentials.js'); 

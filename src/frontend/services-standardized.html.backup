@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Serviços - UBS</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- UBS Standard Styles -->
+    <link href="css/ubs-standard-styles.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    <link href="css/super-admin-dashboard.css" rel="stylesheet">
+    
+    <style>
+        /* LOGO GRANDE FORÇADO */
+        .sidebar .logo {
+            min-height: 180px !important;
+            padding: 20px 10px !important;
+        }
+        
+        .sidebar .logo img {
+            width: 90% !important;
+            max-width: 250px !important;
+            max-height: 150px !important;
+            height: auto !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+        <div class="logo">
+            <img src="assets/images/optimized/Logo_Int_Branco.webp" alt="UBS Logo">
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Dashboard</div>
+            <a class="nav-link" href="dashboard-tenant-admin.html">
+                <i class="fas fa-chart-line"></i>
+                <span>Visão Geral</span>
+            </a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Operações</div>
+            <a class="nav-link" href="appointments-standardized.html">
+                <i class="fas fa-calendar-check"></i>
+                <span>Agendamentos</span>
+            </a>
+            <a class="nav-link" href="customers-standardized.html">
+                <i class="fas fa-users"></i>
+                <span>Clientes</span>
+            </a>
+            <a class="nav-link active" href="services-standardized.html">
+                <i class="fas fa-concierge-bell"></i>
+                <span>Serviços</span>
+            </a>
+            <a class="nav-link" href="professionals-standardized.html">
+                <i class="fas fa-user-tie"></i>
+                <span>Profissionais</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Comunicação</div>
+            <a class="nav-link" href="conversations-standardized.html">
+                <i class="fab fa-whatsapp"></i>
+                <span>Conversas</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Financeiro</div>
+            <a class="nav-link" href="payments-standardized.html">
+                <i class="fas fa-credit-card"></i>
+                <span>Pagamentos</span>
+            </a>
+            <a class="nav-link" href="billing-standardized.html">
+                <i class="fas fa-file-invoice-dollar"></i>
+                <span>Faturamento</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Sistema</div>
+            <a class="nav-link" href="settings-standardized.html">
+                <i class="fas fa-cog"></i>
+                <span>Configurações</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+        <!-- Header -->
+        <div class="top-navbar">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-0">Gerenciamento de Serviços</h4>
+                    <small class="text-muted">Configure e monitore seus serviços</small>
+                </div>
+                <div class="user-menu d-flex flex-column align-items-end gap-1">
+                    <!-- User Menu -->
+                    <div class="dropdown">
+                        <button class="btn btn-link dropdown-toggle d-flex align-items-center compact-button" data-bs-toggle="dropdown">
+                            <div class="user-avatar me-2" id="userAvatar">B</div>
+                            <div class="d-none d-md-block text-start">
+                                <div class="fw-medium compact-text" id="userName">Salão Bella Vista</div>
+                                <small class="text-muted compact-small" id="userRole">Administrador</small>
+                            </div>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end compact-dropdown">
+                            <li><a class="dropdown-item compact-dropdown-item" href="settings-standardized.html"><i class="fas fa-user-cog me-2"></i>Perfil</a></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="exportData()"><i class="fas fa-download me-2"></i>Exportar Dados</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="refreshData()"><i class="fas fa-sync me-2"></i>Atualizar</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="container-fluid p-4">
+            <!-- Quick Actions -->
+            <div class="d-flex gap-2 mb-3">
+                <button class="btn btn-success" onclick="addService()">
+                    <i class="fas fa-plus me-2"></i>Novo Serviço
+                </button>
+            </div>
+            
+            <!-- KPIs -->            
+            <div class="row g-3 mb-4">
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value">18</div>
+                        <div class="metric-title">Total Serviços</div>
+                        <div class="metric-subtitle">Ativos</div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value">R$ 127</div>
+                        <div class="metric-title">Preço Médio</div>
+                        <div class="metric-subtitle">Por serviço</div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value">45min</div>
+                        <div class="metric-title">Duração Média</div>
+                        <div class="metric-subtitle">Tempo padrão</div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value">94%</div>
+                        <div class="metric-title">Popularidade</div>
+                        <div class="metric-subtitle">Taxa de uso</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tabela de Serviços -->
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>Serviço</th>
+                            <th>Preço</th>
+                            <th>Duração</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Corte Feminino</strong></td>
+                            <td class="fw-bold text-primary">R$ 85,00</td>
+                            <td>60 min</td>
+                            <td><span class="badge bg-success">Ativo</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewService(1, 'Corte Feminino', '85.00', '60', 'Ativo', 'Corte de cabelo feminino com acabamento profissional')" title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="editService(1, 'Corte Feminino', '85.00', '60', 'Ativo', 'Corte de cabelo feminino com acabamento profissional')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Corte Masculino</strong></td>
+                            <td class="fw-bold text-primary">R$ 45,00</td>
+                            <td>30 min</td>
+                            <td><span class="badge bg-success">Ativo</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewService(2, 'Corte Masculino', '45.00', '30', 'Ativo', 'Corte de cabelo masculino moderno e estiloso')" title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="editService(2, 'Corte Masculino', '45.00', '30', 'Ativo', 'Corte de cabelo masculino moderno e estiloso')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Limpeza de Pele</strong></td>
+                            <td class="fw-bold text-success">R$ 120,00</td>
+                            <td>90 min</td>
+                            <td><span class="badge bg-success">Ativo</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewService(3, 'Limpeza de Pele', '120.00', '90', 'Ativo', 'Procedimento de limpeza profunda da pele facial')" title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="editService(3, 'Limpeza de Pele', '120.00', '90', 'Ativo', 'Procedimento de limpeza profunda da pele facial')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Manicure</strong></td>
+                            <td class="fw-bold text-warning">R$ 25,00</td>
+                            <td>45 min</td>
+                            <td><span class="badge bg-success">Ativo</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewService(4, 'Manicure', '25.00', '45', 'Ativo', 'Tratamento completo das unhas das mãos')" title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="editService(4, 'Manicure', '25.00', '45', 'Ativo', 'Tratamento completo das unhas das mãos')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Escova</strong></td>
+                            <td class="fw-bold text-primary">R$ 35,00</td>
+                            <td>40 min</td>
+                            <td><span class="badge bg-warning">Inativo</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewService(5, 'Escova', '35.00', '40', 'Inativo', 'Escova modeladora com produtos profissionais')" title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="editService(5, 'Escova', '35.00', '40', 'Inativo', 'Escova modeladora com produtos profissionais')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal de Visualização -->
+    <div class="modal fade" id="viewServiceModal" tabindex="-1" aria-labelledby="viewServiceModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewServiceModalLabel">
+                        <i class="fas fa-concierge-bell me-2"></i>Detalhes do Serviço
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Nome do Serviço:</strong></label>
+                            <p id="viewServiceName" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Preço:</strong></label>
+                            <p id="viewServicePrice" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Duração:</strong></label>
+                            <p id="viewServiceDuration" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Status:</strong></label>
+                            <p id="viewServiceStatus" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label"><strong>Descrição:</strong></label>
+                            <p id="viewServiceDescription" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>ID do Serviço:</strong></label>
+                            <p id="viewServiceId" class="form-control-plaintext">-</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Fechar
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="editServiceFromView()">
+                        <i class="fas fa-edit me-2"></i>Editar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Edição/Novo Serviço -->
+    <div class="modal fade" id="editServiceModal" tabindex="-1" aria-labelledby="editServiceModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editServiceModalLabel">
+                        <i class="fas fa-edit me-2"></i>Editar Serviço
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editServiceForm">
+                        <input type="hidden" id="editServiceId" name="serviceId">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="editServiceName" class="form-label">Nome do Serviço</label>
+                                <input type="text" class="form-control" id="editServiceName" name="name" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editServicePrice" class="form-label">Preço (R$)</label>
+                                <input type="number" class="form-control" id="editServicePrice" name="price" step="0.01" min="0" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editServiceDuration" class="form-label">Duração (minutos)</label>
+                                <input type="number" class="form-control" id="editServiceDuration" name="duration" min="1" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editServiceStatus" class="form-label">Status</label>
+                                <select class="form-select" id="editServiceStatus" name="status" required>
+                                    <option value="">Selecione o status</option>
+                                    <option value="active">Ativo</option>
+                                    <option value="inactive">Inativo</option>
+                                    <option value="discontinued">Descontinuado</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label for="editServiceDescription" class="form-label">Descrição</label>
+                                <textarea class="form-control" id="editServiceDescription" name="description" rows="3" placeholder="Descrição detalhada do serviço..."></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label for="editServiceNotes" class="form-label">Observações</label>
+                                <textarea class="form-control" id="editServiceNotes" name="notes" rows="2" placeholder="Observações internas, equipamentos necessários, etc..."></textarea>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="saveService()">
+                        <i class="fas fa-save me-2"></i>Salvar Alterações
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/utils/secure-auth.js"></script>
+    <script src="js/utils/context-manager.js"></script>
+    <script>
+        // Variáveis globais para armazenar dados do serviço
+        let currentServiceData = {};
+        
+        // Função para visualizar serviço
+        function viewService(id, name, price, duration, status, description) {
+            currentServiceData = { id, name, price, duration, status, description };
+            
+            // Preenche o modal de visualização
+            document.getElementById('viewServiceName').textContent = name;
+            document.getElementById('viewServicePrice').textContent = `R$ ${parseFloat(price).toFixed(2)}`;
+            document.getElementById('viewServiceDuration').textContent = `${duration} minutos`;
+            document.getElementById('viewServiceStatus').innerHTML = getStatusBadge(status);
+            document.getElementById('viewServiceDescription').textContent = description;
+            document.getElementById('viewServiceId').textContent = id;
+            
+            // Abre o modal
+            const modal = new bootstrap.Modal(document.getElementById('viewServiceModal'));
+            modal.show();
+            
+            console.log('Visualizando serviço:', id);
+        }
+        
+        // Função para editar serviço
+        function editService(id, name, price, duration, status, description) {
+            currentServiceData = { id, name, price, duration, status, description };
+            
+            // Preenche o modal de edição
+            document.getElementById('editServiceId').value = id;
+            document.getElementById('editServiceName').value = name;
+            document.getElementById('editServicePrice').value = parseFloat(price).toFixed(2);
+            document.getElementById('editServiceDuration').value = duration;
+            document.getElementById('editServiceDescription').value = description;
+            
+            // Status
+            const statusValue = getStatusValue(status);
+            document.getElementById('editServiceStatus').value = statusValue;
+            
+            // Restaura título de edição
+            document.getElementById('editServiceModalLabel').innerHTML = 
+                '<i class="fas fa-edit me-2"></i>Editar Serviço';
+            
+            // Abre o modal
+            const modal = new bootstrap.Modal(document.getElementById('editServiceModal'));
+            modal.show();
+            
+            console.log('Editando serviço:', id);
+        }
+        
+        // Função para editar a partir do modal de visualização
+        function editServiceFromView() {
+            // Fecha modal de visualização
+            const viewModal = bootstrap.Modal.getInstance(document.getElementById('viewServiceModal'));
+            viewModal.hide();
+            
+            // Abre modal de edição com os dados atuais
+            setTimeout(() => {
+                const { id, name, price, duration, status, description } = currentServiceData;
+                editService(id, name, price, duration, status, description);
+            }, 300);
+        }
+        
+        // Função para novo serviço
+        function addService() {
+            // Limpa o formulário
+            document.getElementById('editServiceForm').reset();
+            document.getElementById('editServiceId').value = 'new';
+            
+            // Muda o título do modal
+            document.getElementById('editServiceModalLabel').innerHTML = 
+                '<i class="fas fa-plus me-2"></i>Novo Serviço';
+            
+            // Abre o modal
+            const modal = new bootstrap.Modal(document.getElementById('editServiceModal'));
+            modal.show();
+        }
+        
+        // Função para salvar alterações
+        async function saveService() {
+            const form = document.getElementById('editServiceForm');
+            const formData = new FormData(form);
+            
+            const serviceData = {
+                id: formData.get('serviceId'),
+                name: formData.get('name'),
+                price: parseFloat(formData.get('price')),
+                duration: parseInt(formData.get('duration')),
+                status: formData.get('status'),
+                description: formData.get('description'),
+                notes: formData.get('notes')
+            };
+            
+            try {
+                // Determine se é criação ou edição
+                const isNew = serviceData.id === 'new';
+                const url = isNew ? '/api/admin/services' : `/api/admin/services/${serviceData.id}`;
+                const method = isNew ? 'POST' : 'PUT';
+                
+                console.log('Salvando serviço:', serviceData);
+                
+                // Chamada para a API
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': getAuthToken()
+                    },
+                    body: JSON.stringify(serviceData)
+                });
+                
+                if (response.ok) {
+                    // Sucesso
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editServiceModal'));
+                    modal.hide();
+                    
+                    // Feedback de sucesso
+                    const action = isNew ? 'criado' : 'atualizado';
+                    showSuccessMessage(`Serviço ${action} com sucesso!`);
+                    
+                    // Atualizar a tabela
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Erro ao salvar serviço');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao salvar:', error);
+                showErrorMessage(`Erro ao salvar serviço: ${error.message}`);
+            }
+        }
+        
+        // Funções auxiliares
+        
+        function getStatusBadge(status) {
+            const badges = {
+                'Ativo': '<span class="badge bg-success">Ativo</span>',
+                'Inativo': '<span class="badge bg-warning">Inativo</span>',
+                'Descontinuado': '<span class="badge bg-danger">Descontinuado</span>'
+            };
+            return badges[status] || status;
+        }
+        
+        function getStatusValue(statusText) {
+            const statusMap = {
+                'Ativo': 'active',
+                'Inativo': 'inactive',
+                'Descontinuado': 'discontinued'
+            };
+            return statusMap[statusText] || 'active';
+        }
+        
+        function getAuthToken() {
+            if (window.secureAuth) {
+                return window.secureAuth.getAuthHeader();
+            }
+            return 'Bearer ' + (localStorage.getItem('ubs_token') || localStorage.getItem('adminToken'));
+        }
+        
+        function showSuccessMessage(message) {
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-success alert-dismissible fade show position-fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '9999';
+            alert.innerHTML = `
+                <i class="fas fa-check-circle me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 3000);
+        }
+        
+        function showErrorMessage(message) {
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '9999';
+            alert.innerHTML = `
+                <i class="fas fa-exclamation-circle me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+        
+        // Funções originais
+        function refreshServices() {
+            showSuccessMessage('Atualizando lista de serviços...');
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        }
+        
+        function exportServices() {
+            showSuccessMessage('Iniciando exportação...');
+            window.open('/api/admin/export/services', '_blank');
+        }
+        
+        // Funções do menu de usuário
+        function exportData() {
+            exportServices();
+        }
+        
+        function refreshData() {
+            refreshServices();
+        }
+        
+        function logout() {
+            if (confirm('Tem certeza que deseja sair?')) {
+                if (window.secureAuth) {
+                    window.secureAuth.logout();
+                } else {
+                    localStorage.removeItem('ubs_token');
+                    localStorage.removeItem('adminToken');
+                }
+                window.location.href = 'login.html';
+            }
+        }
+
+        // Inicializa contexto na página
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.contextManager) {
+                window.contextManager.refreshContext();
+            }
+        });
+    </script>
+</body>
+</html>

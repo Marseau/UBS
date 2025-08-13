@@ -1,0 +1,281 @@
+{
+  "7": {
+    "period": 7,
+    "calculations": {
+      "platform_mrr": {
+        "error": "column tenant_metrics.custo_plataforma does not exist"
+      },
+      "total_revenue": {
+        "error": "column tenant_metrics.revenue_tenant does not exist"
+      },
+      "active_tenants": {
+        "error": "column tenant_metrics.period_days does not exist"
+      },
+      "total_appointments": {
+        "calculated_value": 669,
+        "calculation_method": "COUNT(appointments) in period",
+        "data_points": 669
+      },
+      "total_conversations": {
+        "calculated_value": 36,
+        "calculation_method": "COUNT(conversation_history) in period",
+        "data_points": 36
+      },
+      "total_customers": {
+        "calculated_value": 0,
+        "calculation_method": "COUNT(DISTINCT user_tenants.user_id) in period",
+        "data_points": 0
+      },
+      "operational_efficiency": {
+        "error": "column tenant_metrics.comprehensive does not exist"
+      },
+      "revenue_usage_ratio": {
+        "error": "Erro ao calcular componentes do ratio"
+      }
+    },
+    "stored_values": {
+      "id": "c754d555-8e6e-4ce9-a032-fcbbc7fee2b7",
+      "calculation_date": "2025-08-06",
+      "period_days": 7,
+      "data_source": "tenant_aggregation",
+      "total_revenue": 14302.71,
+      "total_appointments": 138,
+      "total_customers": 96,
+      "total_ai_interactions": 0,
+      "active_tenants": 10,
+      "platform_mrr": 928,
+      "total_chat_minutes": 0,
+      "total_conversations": 0,
+      "total_valid_conversations": 0,
+      "total_spam_conversations": 0,
+      "receita_uso_ratio": 93,
+      "operational_efficiency_pct": 0,
+      "spam_rate_pct": 0,
+      "cancellation_rate_pct": 0,
+      "revenue_usage_distortion_index": 1,
+      "platform_health_score": 85,
+      "tenants_above_usage": 3,
+      "tenants_below_usage": 7,
+      "created_at": "2025-08-06T06:01:02.262",
+      "updated_at": "2025-08-06T06:01:02.262",
+      "revenue_tenant": 14302.71
+    },
+    "discrepancies": {
+      "total_appointments": {
+        "calculated": 669,
+        "stored": 138,
+        "difference": 531,
+        "percentage_diff": 384.78,
+        "status": "ERROR"
+      },
+      "total_conversations": {
+        "calculated": 36,
+        "stored": 0,
+        "difference": 36,
+        "percentage_diff": 100,
+        "status": "ERROR"
+      },
+      "total_customers": {
+        "calculated": 0,
+        "stored": 96,
+        "difference": 96,
+        "percentage_diff": 100,
+        "status": "ERROR"
+      }
+    },
+    "validation_status": {
+      "total_checks": 3,
+      "passed": 0,
+      "warnings": 0,
+      "errors": 3,
+      "overall_status": "FAIL",
+      "success_rate": 0
+    }
+  },
+  "30": {
+    "period": 30,
+    "calculations": {
+      "platform_mrr": {
+        "error": "column tenant_metrics.custo_plataforma does not exist"
+      },
+      "total_revenue": {
+        "error": "column tenant_metrics.revenue_tenant does not exist"
+      },
+      "active_tenants": {
+        "error": "column tenant_metrics.period_days does not exist"
+      },
+      "total_appointments": {
+        "calculated_value": 1000,
+        "calculation_method": "COUNT(appointments) in period",
+        "data_points": 1000
+      },
+      "total_conversations": {
+        "calculated_value": 1000,
+        "calculation_method": "COUNT(conversation_history) in period",
+        "data_points": 1000
+      },
+      "total_customers": {
+        "calculated_value": 616,
+        "calculation_method": "COUNT(DISTINCT user_tenants.user_id) in period",
+        "data_points": 616
+      },
+      "operational_efficiency": {
+        "error": "column tenant_metrics.comprehensive does not exist"
+      },
+      "revenue_usage_ratio": {
+        "error": "Erro ao calcular componentes do ratio"
+      }
+    },
+    "stored_values": {
+      "id": "9005220c-ae74-42b7-9356-54fa2f736795",
+      "calculation_date": "2025-08-06",
+      "period_days": 30,
+      "data_source": "cron_job",
+      "total_revenue": 799,
+      "total_appointments": 1149,
+      "total_customers": 840,
+      "total_ai_interactions": 4560,
+      "active_tenants": 10,
+      "platform_mrr": 799,
+      "total_chat_minutes": 0,
+      "total_conversations": 4560,
+      "total_valid_conversations": 4560,
+      "total_spam_conversations": 0,
+      "receita_uso_ratio": 0,
+      "operational_efficiency_pct": 0,
+      "spam_rate_pct": 0,
+      "cancellation_rate_pct": 0,
+      "revenue_usage_distortion_index": 0,
+      "platform_health_score": 85,
+      "tenants_above_usage": 0,
+      "tenants_below_usage": 0,
+      "created_at": "2025-08-06T17:25:02.359146",
+      "updated_at": "2025-08-06T17:25:02.359146",
+      "revenue_tenant": null
+    },
+    "discrepancies": {
+      "total_appointments": {
+        "calculated": 1000,
+        "stored": 1149,
+        "difference": 149,
+        "percentage_diff": 12.97,
+        "status": "WARNING"
+      },
+      "total_conversations": {
+        "calculated": 1000,
+        "stored": 4560,
+        "difference": 3560,
+        "percentage_diff": 78.07,
+        "status": "ERROR"
+      },
+      "total_customers": {
+        "calculated": 616,
+        "stored": 840,
+        "difference": 224,
+        "percentage_diff": 26.67,
+        "status": "ERROR"
+      }
+    },
+    "validation_status": {
+      "total_checks": 3,
+      "passed": 0,
+      "warnings": 1,
+      "errors": 2,
+      "overall_status": "FAIL",
+      "success_rate": 0
+    }
+  },
+  "90": {
+    "period": 90,
+    "calculations": {
+      "platform_mrr": {
+        "error": "column tenant_metrics.custo_plataforma does not exist"
+      },
+      "total_revenue": {
+        "error": "column tenant_metrics.revenue_tenant does not exist"
+      },
+      "active_tenants": {
+        "error": "column tenant_metrics.period_days does not exist"
+      },
+      "total_appointments": {
+        "calculated_value": 1000,
+        "calculation_method": "COUNT(appointments) in period",
+        "data_points": 1000
+      },
+      "total_conversations": {
+        "calculated_value": 1000,
+        "calculation_method": "COUNT(conversation_history) in period",
+        "data_points": 1000
+      },
+      "total_customers": {
+        "calculated_value": 835,
+        "calculation_method": "COUNT(DISTINCT user_tenants.user_id) in period",
+        "data_points": 835
+      },
+      "operational_efficiency": {
+        "error": "column tenant_metrics.comprehensive does not exist"
+      },
+      "revenue_usage_ratio": {
+        "error": "Erro ao calcular componentes do ratio"
+      }
+    },
+    "stored_values": {
+      "id": "61447014-f2b6-479b-8a6d-3a728f7929fd",
+      "calculation_date": "2025-08-06",
+      "period_days": 90,
+      "data_source": "tenant_aggregation",
+      "total_revenue": 30866.73,
+      "total_appointments": 354,
+      "total_customers": 98,
+      "total_ai_interactions": 0,
+      "active_tenants": 10,
+      "platform_mrr": 928,
+      "total_chat_minutes": 0,
+      "total_conversations": 0,
+      "total_valid_conversations": 0,
+      "total_spam_conversations": 0,
+      "receita_uso_ratio": 93,
+      "operational_efficiency_pct": 0,
+      "spam_rate_pct": 0,
+      "cancellation_rate_pct": 0,
+      "revenue_usage_distortion_index": 1,
+      "platform_health_score": 85,
+      "tenants_above_usage": 3,
+      "tenants_below_usage": 7,
+      "created_at": "2025-08-06T06:01:03.545",
+      "updated_at": "2025-08-06T06:01:03.545",
+      "revenue_tenant": 30866.73
+    },
+    "discrepancies": {
+      "total_appointments": {
+        "calculated": 1000,
+        "stored": 354,
+        "difference": 646,
+        "percentage_diff": 182.49,
+        "status": "ERROR"
+      },
+      "total_conversations": {
+        "calculated": 1000,
+        "stored": 0,
+        "difference": 1000,
+        "percentage_diff": 100,
+        "status": "ERROR"
+      },
+      "total_customers": {
+        "calculated": 835,
+        "stored": 98,
+        "difference": 737,
+        "percentage_diff": 752.04,
+        "status": "ERROR"
+      }
+    },
+    "validation_status": {
+      "total_checks": 3,
+      "passed": 0,
+      "warnings": 0,
+      "errors": 3,
+      "overall_status": "FAIL",
+      "success_rate": 0
+    }
+  }
+}

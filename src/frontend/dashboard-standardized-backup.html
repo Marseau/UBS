@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Super Admin - UBS Super Admin</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- UBS Standard Styles -->
+    <link href="css/ubs-standard-styles.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    <link href="css/super-admin-dashboard.css" rel="stylesheet">
+    <link href="css/standardized-widgets.css" rel="stylesheet">
+    <link href="css/error-handler.css" rel="stylesheet">
+    
+    <style>
+        /* LOGO GRANDE FORÇADO */
+        .sidebar .logo {
+            min-height: 180px !important;
+            padding: 20px 10px !important;
+        }
+        
+        .sidebar .logo img {
+            width: 90% !important;
+            max-width: 250px !important;
+            max-height: 150px !important;
+            height: auto !important;
+        }
+        
+        /* Disable dynamic navigation rendering to prevent duplication */
+        .nav-sections-container {
+            display: none !important;
+        }
+        
+        /* Dashboard specific styles */
+        .btn-action {
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+        }
+        
+        .compact-select {
+            font-size: 0.85rem;
+            padding: 0.375rem 2rem 0.375rem 0.75rem;
+            min-width: 100px;
+        }
+        
+        .compact-label {
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
+        
+        .compact-small {
+            font-size: 0.75rem;
+        }
+        
+        .content-section {
+            margin-bottom: 2rem;
+        }
+        
+        .content-section h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #2D5A9B;
+        }
+        
+        .metric-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #2D5A9B;
+            height: 100%;
+        }
+        
+        .metric-card-body {
+            display: flex;
+            align-items: center;
+        }
+        
+        .metric-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            font-size: 1.5rem;
+            color: white;
+        }
+        
+        .metric-icon-primary { background: #007bff; }
+        .metric-icon-success { background: #28a745; }
+        .metric-icon-warning { background: #ffc107; }
+        .metric-icon-danger { background: #dc3545; }
+        .metric-icon-info { background: #17a2b8; }
+        
+        .metric-content {
+            flex: 1;
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #2D5A9B;
+            line-height: 1;
+        }
+        
+        .metric-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #333;
+            margin-top: 0.5rem;
+        }
+        
+        .metric-subtitle {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-top: 0.25rem;
+        }
+        
+        .metric-trend {
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+        }
+        
+        .trend-positive { color: #28a745; }
+        .trend-negative { color: #dc3545; }
+        .trend-neutral { color: #6c757d; }
+        
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: 400px;
+        }
+        
+        .insights-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+        <div class="logo">
+            <img src="assets/images/optimized/Logo_Int_Branco.webp" alt="UBS Logo">
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Dashboard</div>
+            <a class="nav-link active" href="dashboard-standardized.html">
+                <i class="fas fa-chart-line"></i>
+                <span>Visão Geral</span>
+            </a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Analytics</div>
+            <a class="nav-link" href="services-standardized-admin.html">
+                <i class="fas fa-concierge-bell"></i>
+                <span>Serviços</span>
+            </a>
+            <a class="nav-link" href="customers-standardized-admin.html">
+                <i class="fas fa-users"></i>
+                <span>Clientes</span>
+            </a>
+            <a class="nav-link" href="appointments-standardized-admin.html">
+                <i class="fas fa-calendar-check"></i>
+                <span>Agendamentos</span>
+            </a>
+            <a class="nav-link" href="conversations-standardized-admin.html">
+                <i class="fab fa-whatsapp"></i>
+                <span>Conversas</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Financeiro</div>
+            <a class="nav-link" href="payments-standardized-admin.html">
+                <i class="fas fa-credit-card"></i>
+                <span>Pagamentos</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Sistema</div>
+            <a class="nav-link" href="settings-standardized-admin.html">
+                <i class="fas fa-cog"></i>
+                <span>Configurações</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+        <!-- Header -->
+        <div class="top-navbar">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-0">Dashboard Super Admin</h4>
+                    <small class="text-muted">Visão geral da plataforma</small>
+                </div>
+                <div class="user-menu d-flex flex-column align-items-end gap-1">
+                    <!-- User Menu -->
+                    <div class="dropdown">
+                        <button class="btn btn-link dropdown-toggle d-flex align-items-center compact-button" data-bs-toggle="dropdown">
+                            <div class="user-avatar me-2" id="userAvatar">U</div>
+                            <div class="d-none d-md-block text-start">
+                                <div class="fw-medium compact-text" id="userName">UBS Platform</div>
+                                <small class="text-muted compact-small" id="userRole">Super Administrador</small>
+                            </div>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end compact-dropdown">
+                            <li><a class="dropdown-item compact-dropdown-item" href="settings-standardized-admin.html"><i class="fas fa-user-cog me-2"></i>Perfil</a></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="exportData()"><i class="fas fa-download me-2"></i>Exportar Dados</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="refreshData()"><i class="fas fa-sync me-2"></i>Atualizar</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Container -->
+        <div class="container-fluid p-4">
+            <!-- Dashboard Controls -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-primary btn-action" onclick="refreshData()" aria-label="Atualizar dados do dashboard">
+                        <i class="fas fa-sync me-2"></i>Atualizar
+                    </button>
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="form-label mb-0 text-muted compact-label" for="globalPeriodSelector">
+                            <i class="fas fa-calendar-alt me-1"></i>Período:
+                        </label>
+                        <select class="form-select compact-select" id="globalPeriodSelector" onchange="changePeriod(this.value)">
+                            <option value="7">7 dias</option>
+                            <option value="30" selected>30 dias</option>
+                            <option value="90">90 dias</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-outline-primary btn-action" onclick="exportData()" aria-label="Exportar dados do dashboard">
+                        <i class="fas fa-download me-2"></i>Exportar
+                    </button>
+                    <div class="text-muted compact-small">
+                        <i class="fas fa-clock me-1"></i>
+                        <span id="lastUpdate">Carregando...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Content Container -->
+            <div id="contentContainer">
+                <!-- KPIs Estratégicos -->
+                <div class="content-section">
+                    <h3><i class="fas fa-tachometer-alt me-2"></i>KPIs Estratégicos</h3>
+                    <div class="row g-3 mb-3" id="metricsRow1">
+                        <!-- KPI 1: Receita/Uso -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-warning">
+                                        <i class="fas fa-balance-scale"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="receitaUsoRatio">--</div>
+                                        <div class="metric-title">Receita/Uso</div>
+                                        <div class="metric-subtitle">R$ por minuto de chat</div>
+                                        <div class="metric-trend trend-neutral" id="receitaUsoTrend">
+                                            <i class="fas fa-clock"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- KPI 2: MRR da Plataforma -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-success">
+                                        <i class="fas fa-dollar-sign"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="mrrPlatform">--</div>
+                                        <div class="metric-title">MRR</div>
+                                        <div class="metric-subtitle">Receita Recorrente Mensal</div>
+                                        <div class="metric-trend trend-positive" id="mrrTrend">
+                                            <i class="fas fa-arrow-up"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- KPI 3: Tenants Ativos -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-primary">
+                                        <i class="fas fa-building"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="activeTenants">--</div>
+                                        <div class="metric-title">Tenants Ativos</div>
+                                        <div class="metric-subtitle">Clientes pagantes</div>
+                                        <div class="metric-trend trend-positive" id="tenantsTrend">
+                                            <i class="fas fa-arrow-up"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- KPI 4: Eficiência Operacional -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-info">
+                                        <i class="fas fa-cogs"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="operationalEfficiency">--</div>
+                                        <div class="metric-title">Eficiência Operacional</div>
+                                        <div class="metric-subtitle">Agendamentos / Conversas</div>
+                                        <div class="metric-trend trend-neutral" id="efficiencyTrend">
+                                            <i class="fas fa-minus"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row g-3" id="metricsRow2">
+                        <!-- KPI 5: Spam Rate -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-danger">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="spamRate">--</div>
+                                        <div class="metric-title">Spam Rate</div>
+                                        <div class="metric-subtitle">% conversas sem cadastro</div>
+                                        <div class="metric-trend trend-negative" id="spamTrend">
+                                            <i class="fas fa-arrow-down"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- KPI 6: Taxa de Cancelamentos + Remarcações -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-warning">
+                                        <i class="fas fa-calendar-times"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="cancellationRate">--</div>
+                                        <div class="metric-title">Taxa Cancel + Remarc</div>
+                                        <div class="metric-subtitle">(Cancel + Remarc) / Total chats</div>
+                                        <div class="metric-trend trend-negative" id="cancellationTrend">
+                                            <i class="fas fa-arrow-down"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- KPI 7: Total de Agendamentos -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-primary">
+                                        <i class="fas fa-calendar-check"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="totalAppointments">--</div>
+                                        <div class="metric-title">Total Agendamentos</div>
+                                        <div class="metric-subtitle">Últimos 30 dias</div>
+                                        <div class="metric-trend trend-positive" id="appointmentsTrend">
+                                            <i class="fas fa-arrow-up"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- KPI 8: Interações com IA -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-info">
+                                        <i class="fas fa-robot"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="aiInteractions">--</div>
+                                        <div class="metric-title">Interações com IA</div>
+                                        <div class="metric-subtitle">Respostas automáticas</div>
+                                        <div class="metric-trend trend-positive" id="aiInteractionsTrend">
+                                            <i class="fas fa-arrow-up"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Performance e Análise de Distorções -->
+                <div class="content-section">
+                    <h3><i class="fas fa-chart-area me-2"></i>Performance e Análise de Distorções</h3>
+                    <div class="row g-4" id="chartsContainer">
+                        <!-- Revenue vs Usage Chart -->
+                        <div class="col-lg-8">
+                            <div class="chart-container">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-chart-scatter me-2"></i>
+                                    Receita vs Custo de Uso
+                                </h5>
+                                <canvas id="revenueUsageChart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- Appointment Status Chart -->
+                        <div class="col-lg-4">
+                            <div class="chart-container">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-chart-pie me-2"></i>
+                                    Status dos Agendamentos
+                                </h5>
+                                <canvas id="appointmentStatusChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Strategic Insights -->
+                <div class="content-section">
+                    <h3><i class="fas fa-lightbulb me-2"></i>Insights Estratégicos</h3>
+                    <div class="row g-4">
+                        <!-- Distortion Analysis -->
+                        <div class="col-lg-6">
+                            <div class="insights-card">
+                                <h5 class="mb-3 text-warning">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    Análise de Distorção
+                                </h5>
+                                <p class="text-muted">Tenants pagando mais do que usam (proteção de upsell)</p>
+                                <div id="distortionInsights">
+                                    <div class="text-center py-3">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Carregando...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Upsell Opportunities -->
+                        <div class="col-lg-6">
+                            <div class="insights-card">
+                                <h5 class="mb-3 text-success">
+                                    <i class="fas fa-arrow-up me-2"></i>
+                                    Oportunidades de Upsell
+                                </h5>
+                                <p class="text-muted">Tenants usando mais do que pagam (crescimento de receita)</p>
+                                <div id="upsellInsights">
+                                    <div class="text-center py-3">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Carregando...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/utils/secure-auth.js"></script>
+    
+    <!-- Dashboard JavaScript -->
+    <script>
+        // Global variables
+        let revenueUsageChart, appointmentStatusChart;
+        
+        // Template functions
+        function getAuthToken() {
+            if (window.secureAuth) {
+                return window.secureAuth.getAuthHeader();
+            }
+            return 'Bearer ' + (localStorage.getItem('ubs_token') || localStorage.getItem('adminToken'));
+        }
+        
+        function exportData() {
+            console.log('📥 Exporting dashboard data...');
+            try {
+                const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+                fetch('/api/super-admin/export', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error('Erro ao exportar dados');
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `dashboard-super-admin-${new Date().getTime()}.xlsx`;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    console.log('✅ Dados exportados com sucesso');
+                })
+                .catch(error => {
+                    console.error('❌ Erro ao exportar dados:', error);
+                    alert('Erro ao exportar dados. Tente novamente.');
+                });
+            } catch (error) {
+                console.error('❌ Erro ao exportar dados:', error);
+                alert('Erro ao exportar dados. Tente novamente.');
+            }
+        }
+        
+        function refreshData() {
+            location.reload();
+        }
+        
+        function logout() {
+            if (confirm('Tem certeza que deseja sair?')) {
+                localStorage.removeItem('ubs_token');
+                localStorage.removeItem('adminToken');
+                window.location.href = 'login.html';
+            }
+        }
+        
+        function changePeriod(days) {
+            console.log(`Changing period to ${days} days`);
+            loadDashboardData(days);
+        }
+        
+        // Load dashboard data
+        async function loadDashboardData(period = 30) {
+            try {
+                console.log('📊 Loading dashboard data...');
+                
+                // Load KPIs
+                await loadKPIs(period);
+                
+                // Load charts
+                await loadCharts(period);
+                
+                // Load insights
+                await loadInsights(period);
+                
+                // Update last update time
+                document.getElementById('lastUpdate').textContent = `Atualizado em ${new Date().toLocaleString('pt-BR')}`;
+                
+                console.log('✅ Dashboard data loaded successfully');
+            } catch (error) {
+                console.error('❌ Error loading dashboard:', error);
+            }
+        }
+        
+        // Load KPIs from API
+        async function loadKPIs(period) {
+            try {
+                const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+                const response = await fetch(`/api/super-admin/kpis?period=${period}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && result.data.kpis) {
+                        updateKPIs(result.data.kpis);
+                    }
+                } else {
+                    loadMockKPIs();
+                }
+            } catch (error) {
+                console.error('Error loading KPIs:', error);
+                loadMockKPIs();
+            }
+        }
+        
+        // Update KPI values
+        function updateKPIs(kpis) {
+            document.getElementById('receitaUsoRatio').textContent = kpis.receitaUsoRatio.formatted;
+            document.getElementById('mrrPlatform').textContent = kpis.mrrPlatform.formatted;
+            document.getElementById('activeTenants').textContent = kpis.activeTenants.formatted;
+            document.getElementById('operationalEfficiency').textContent = kpis.operationalEfficiency.formatted;
+            document.getElementById('spamRate').textContent = kpis.spamRate.formatted;
+            document.getElementById('cancellationRate').textContent = kpis.cancellationRate.formatted;
+            document.getElementById('totalAppointments').textContent = kpis.totalAppointments.formatted;
+            document.getElementById('aiInteractions').textContent = kpis.aiInteractions.formatted;
+        }
+        
+        // Load mock KPIs
+        function loadMockKPIs() {
+            const mockKPIs = {
+                receitaUsoRatio: { formatted: 'R$ 8,95' },
+                mrrPlatform: { formatted: 'R$ 25.300' },
+                activeTenants: { formatted: '47' },
+                operationalEfficiency: { formatted: '94.2%' },
+                spamRate: { formatted: '2.1%' },
+                cancellationRate: { formatted: '8.7%' },
+                totalAppointments: { formatted: '1.247' },
+                aiInteractions: { formatted: '18.934' }
+            };
+            updateKPIs(mockKPIs);
+        }
+        
+        // Load charts
+        async function loadCharts(period) {
+            try {
+                // Revenue vs Usage Chart
+                const revenueCtx = document.getElementById('revenueUsageChart').getContext('2d');
+                revenueUsageChart = new Chart(revenueCtx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: 'Tenants',
+                            data: [
+                                {x: 150, y: 2340, tenant: 'Salão Premium'},
+                                {x: 89, y: 1890, tenant: 'Clínica Saúde'},
+                                {x: 120, y: 1654, tenant: 'Estética Legal'},
+                                {x: 67, y: 1200, tenant: 'Beauty Center'},
+                                {x: 95, y: 890, tenant: 'Wellness Spa'}
+                            ],
+                            backgroundColor: '#36A2EB'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: { title: { display: true, text: 'Custo de Uso (R$)' } },
+                            y: { title: { display: true, text: 'Receita (R$)' } }
+                        }
+                    }
+                });
+                
+                // Appointment Status Chart
+                const statusCtx = document.getElementById('appointmentStatusChart').getContext('2d');
+                appointmentStatusChart = new Chart(statusCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Confirmados', 'Cancelados', 'Remarcados', 'Pendentes', 'Concluídos'],
+                        datasets: [{
+                            data: [45, 12, 8, 15, 67],
+                            backgroundColor: ['#17a2b8', '#dc3545', '#ffc107', '#6c757d', '#28a745']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading charts:', error);
+            }
+        }
+        
+        // Load insights
+        async function loadInsights(period) {
+            try {
+                // Mock distortion insights
+                document.getElementById('distortionInsights').innerHTML = `
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Salão Premium</strong><br>
+                                <small class="text-muted">Paga R$ 278, usa R$ 156 (-44%)</small>
+                            </div>
+                            <span class="badge bg-warning rounded-pill">-44%</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Clínica Legal</strong><br>
+                                <small class="text-muted">Paga R$ 111, usa R$ 67 (-40%)</small>
+                            </div>
+                            <span class="badge bg-warning rounded-pill">-40%</span>
+                        </div>
+                    </div>
+                `;
+                
+                // Mock upsell insights
+                document.getElementById('upsellInsights').innerHTML = `
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Dental Clinic</strong><br>
+                                <small class="text-muted">Paga R$ 111, usa R$ 245 (+121%)</small>
+                            </div>
+                            <span class="badge bg-success rounded-pill">+121%</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Fitness Center</strong><br>
+                                <small class="text-muted">Paga R$ 44, usa R$ 89 (+102%)</small>
+                            </div>
+                            <span class="badge bg-success rounded-pill">+102%</span>
+                        </div>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('Error loading insights:', error);
+            }
+        }
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Initializing Super Admin Dashboard...');
+            
+            // Set active menu
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === 'dashboard-standardized.html') {
+                    link.classList.add('active');
+                }
+            });
+            
+            // Load dashboard data
+            loadDashboardData();
+            
+            console.log('✅ Dashboard initialized successfully');
+        });
+    </script>
+</body>
+</html>

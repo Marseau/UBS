@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurações - UBS | Universal Booking System</title>
+    <meta name="description" content="Configure sua empresa e WhatsApp no UBS para automatizar agendamentos com IA.">
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- UBS Standard Styles -->
+    <link href="css/ubs-standard-styles.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    <link href="css/super-admin-dashboard.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #2D5A9B;
+            --primary-light: #4A7BC8;
+            --primary-dark: #1E3F6B;
+            --secondary-color: #F8F9FA;
+            --accent-color: #28A745;
+            --text-dark: #2C3E50;
+            --text-light: #6C757D;
+            --border-color: #E9ECEF;
+            --shadow: 0 2px 10px rgba(45, 90, 155, 0.1);
+            --shadow-lg: 0 5px 20px rgba(45, 90, 155, 0.15);
+        }
+
+        /* Logo discreto como original */
+        .sidebar .logo {
+            min-height: 90px !important;
+            padding: 10px !important;
+        }
+        
+        .sidebar .logo img {
+            width: 80% !important;
+            max-width: 180px !important;
+            max-height: 70px !important;
+            height: auto !important;
+        }
+
+        /* Container compacto */
+        .main-content {
+            padding: 1rem 0;
+        }
+
+        .settings-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+
+        .page-header {
+            background: white;
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1.25rem;
+            box-shadow: var(--shadow);
+        }
+
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 0.25rem;
+        }
+
+        .page-subtitle {
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        /* Settings Cards - Compactado */
+        .settings-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+        }
+
+        .settings-card:hover {
+            box-shadow: var(--shadow-lg);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--primary-color);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1rem;
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin: 0;
+        }
+
+        .card-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-light);
+            margin: 0;
+        }
+
+        /* Form Controls - Compactado */
+        .form-floating {
+            margin-bottom: 0.5rem;
+        }
+
+        .form-floating > .form-control,
+        .form-floating > .form-select {
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            height: calc(2.5rem + 2px);
+            font-size: 0.9rem;
+        }
+
+        .form-floating > .form-control:focus,
+        .form-floating > .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.25rem rgba(45, 90, 155, 0.1);
+        }
+
+        .form-floating > label {
+            padding: 0.75rem 0.75rem;
+            font-size: 0.95rem;
+            color: var(--text-light);
+        }
+
+        .form-check {
+            margin-bottom: 0.75rem;
+        }
+
+        .form-check-input:checked {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .form-check-input:focus {
+            box-shadow: 0 0 0 0.25rem rgba(45, 90, 155, 0.25);
+        }
+
+        /* Buttons - Compactado */
+        .btn {
+            padding: 0.5rem 1.25rem;
+            font-size: 0.9rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            border: none;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-success {
+            background: var(--accent-color);
+            border: none;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-outline-primary {
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        /* WhatsApp Status - Compactado */
+        .whatsapp-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 6px;
+            margin-bottom: 0.75rem;
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+
+        .whatsapp-status.connected {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--accent-color);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+        }
+
+        .whatsapp-status.disconnected {
+            background: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+            border: 1px solid rgba(220, 53, 69, 0.3);
+        }
+
+        .whatsapp-status.pending {
+            background: rgba(255, 193, 7, 0.1);
+            color: #ffc107;
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+
+        /* Business Hours - Compactado */
+        .business-hours {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .business-day-row {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+
+        .day-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .day-name {
+            margin: 0;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        .day-controls {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .business-slots-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .business-slot {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--secondary-color);
+            border-radius: 6px;
+        }
+
+        .slot-times {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex: 1;
+        }
+
+        .slot-times input[type="time"] {
+            max-width: 120px;
+        }
+
+        .slot-separator {
+            color: var(--text-light);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        /* Professional Management - Compactado */
+        .professional-card {
+            background: var(--secondary-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+            transition: all 0.3s ease;
+        }
+
+        .professional-card:hover {
+            box-shadow: var(--shadow);
+        }
+
+        .professional-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .professional-info h6 {
+            margin-bottom: 0.125rem;
+            color: var(--text-dark);
+            font-size: 0.9rem;
+        }
+
+        .professional-info small {
+            color: var(--text-light);
+            font-size: 0.75rem;
+        }
+
+        /* Alert Messages - Compactado */
+        .alert {
+            border-radius: 6px;
+            margin-bottom: 0.75rem;
+            border: none;
+            padding: 0.75rem;
+            font-size: 0.9rem;
+        }
+
+        /* Loading States */
+        .loading-spinner {
+            display: none;
+            margin-right: 0.25rem;
+        }
+
+        /* Status Badges */
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--accent-color);
+        }
+
+        .status-badge.inactive {
+            background: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+        }
+
+        /* Colors override for discrete pattern */
+        .text-primary {
+            color: var(--primary-color) !important;
+        }
+
+        /* Icons discretos */
+        .fa-lg {
+            font-size: 1rem !important;
+        }
+
+        /* Calendar Widget Styles */
+        .calendar-controls {
+            background: var(--secondary-color);
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: 80px repeat(7, 1fr);
+            gap: 1px;
+            background: var(--border-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .calendar-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem 0.5rem;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .calendar-time {
+            background: var(--secondary-color);
+            padding: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+            text-align: center;
+            color: var(--text-light);
+        }
+
+        .calendar-slot {
+            background: white;
+            padding: 0.25rem;
+            min-height: 40px;
+            border: 1px solid var(--border-color);
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .calendar-slot:hover {
+            background: var(--secondary-color);
+        }
+
+        .calendar-slot.available {
+            background: rgba(40, 167, 69, 0.1);
+            border-left: 3px solid var(--accent-color);
+        }
+
+        .calendar-slot.busy {
+            background: rgba(220, 53, 69, 0.1);
+            border-left: 3px solid #dc3545;
+        }
+
+        .calendar-slot.appointment {
+            background: rgba(45, 90, 155, 0.1);
+            border-left: 3px solid var(--primary-color);
+        }
+
+        .slot-content {
+            font-size: 0.75rem;
+            line-height: 1.2;
+        }
+
+        .slot-professional {
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        .slot-service {
+            color: var(--text-light);
+            margin-top: 2px;
+        }
+
+        .slot-time {
+            font-size: 0.7rem;
+            color: var(--text-light);
+        }
+
+        /* Legend */
+        .calendar-legend {
+            display: flex;
+            align-items: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            margin-right: 0.5rem;
+        }
+
+        .legend-color.available {
+            background: var(--accent-color);
+        }
+
+        .legend-color.busy {
+            background: #dc3545;
+        }
+
+        .legend-color.appointment {
+            background: var(--primary-color);
+        }
+
+        /* Professional filters */
+        .professional-filter-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            margin-right: 0.5rem;
+            margin-bottom: 0.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .professional-filter-badge.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .professional-filter-badge:not(.active) {
+            background: var(--secondary-color);
+            color: var(--text-light);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+            
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .settings-card {
+                padding: 1.5rem;
+            }
+
+            .settings-container {
+                padding: 0 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+        <div class="logo">
+            <img src="assets/images/optimized/Logo_Int_Branco.webp" alt="UBS Logo">
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Dashboard</div>
+            <a class="nav-link" href="dashboard-tenant-admin.html">
+                <i class="fas fa-chart-line"></i>
+                <span>Visão Geral</span>
+            </a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Operações</div>
+            <a class="nav-link" href="appointments-standardized.html">
+                <i class="fas fa-calendar-check"></i>
+                <span>Agendamentos</span>
+            </a>
+            <a class="nav-link" href="customers-standardized.html">
+                <i class="fas fa-users"></i>
+                <span>Clientes</span>
+            </a>
+            <a class="nav-link" href="services-standardized.html">
+                <i class="fas fa-concierge-bell"></i>
+                <span>Serviços</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Comunicação</div>
+            <a class="nav-link" href="conversations-standardized.html">
+                <i class="fab fa-whatsapp"></i>
+                <span>Conversas</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Financeiro</div>
+            <a class="nav-link" href="billing-standardized.html">
+                <i class="fas fa-file-invoice-dollar"></i>
+                <span>Faturamento</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Sistema</div>
+            <a class="nav-link active" href="settings-standardized.html">
+                <i class="fas fa-cog"></i>
+                <span>Configurações</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+        <div class="settings-container">
+            <!-- Page Header -->
+            <div class="page-header">
+                <h1 class="page-title">Configurações do Sistema</h1>
+                <p class="page-subtitle">Gerencie configurações e preferências</p>
+            </div>
+
+            <!-- Alert Container -->
+            <div id="alert-placeholder"></div>
+
+            <!-- Business Information -->
+            <div class="settings-card" id="business-info-card">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="fas fa-briefcase"></i>
+                    </div>
+                    <div>
+                        <h2 class="card-title">Informações da Empresa</h2>
+                        <p class="card-subtitle">Dados principais do seu negócio</p>
+                    </div>
+                </div>
+
+                <form id="businessForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="businessName" placeholder="Nome da empresa" required>
+                                <label for="businessName">Nome da Empresa</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-floating">
+                                <select class="form-select" id="businessDomain" required>
+                                    <option value="" disabled selected>Selecione...</option>
+                                    <option value="beauty">Beleza & Estética</option>
+                                    <option value="healthcare">Saúde & Bem-estar</option>
+                                    <option value="legal">Jurídico</option>
+                                    <option value="education">Educação</option>
+                                    <option value="sports">Esportes & Fitness</option>
+                                    <option value="consulting">Consultoria</option>
+                                    <option value="general">Geral</option>
+                                </select>
+                                <label for="businessDomain">Segmento</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-floating">
+                                <input type="tel" class="form-control" id="businessPhone" placeholder="(11) 99999-9999" maxlength="15">
+                                <label for="businessPhone">Telefone</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="email" class="form-control" id="businessEmail" placeholder="contato@empresa.com">
+                                <label for="businessEmail">Email Comercial</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="url" class="form-control" id="businessWebsite" placeholder="https://www.empresa.com">
+                                <label for="businessWebsite">Website</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Endereço com CEP -->
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="businessCep" placeholder="00000-000" maxlength="9">
+                                <label for="businessCep">CEP</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="businessStreet" placeholder="Nome da rua" readonly>
+                                <label for="businessStreet">Logradouro</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="businessNumber" placeholder="Número">
+                                <label for="businessNumber">Número</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="businessNeighborhood" placeholder="Bairro" readonly>
+                                <label for="businessNeighborhood">Bairro</label>
+                            </div>
+                        </div>
+                        <div class="col-md-5">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="businessCity" placeholder="Cidade" readonly>
+                                <label for="businessCity">Cidade</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="businessState" placeholder="UF" readonly>
+                                <label for="businessState">Estado</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-floating">
+                        <input type="text" class="form-control" id="businessComplement" placeholder="Apartamento, sala, andar, etc.">
+                        <label for="businessComplement">Complemento (opcional)</label>
+                    </div>
+
+                    <div class="form-floating">
+                        <textarea class="form-control" id="businessDescription" placeholder="Descrição do negócio" style="height: 70px"></textarea>
+                        <label for="businessDescription">Descrição do Negócio</label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="save-business-info">
+                        <i class="fas fa-save me-2"></i>Salvar Alterações
+                    </button>
+                </form>
+            </div>
+
+            <!-- WhatsApp Configuration -->
+            <div class="settings-card">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="fab fa-whatsapp"></i>
+                    </div>
+                    <div>
+                        <h3 class="card-title">WhatsApp Business</h3>
+                        <p class="card-subtitle">Configure o número do WhatsApp para receber agendamentos</p>
+                    </div>
+                </div>
+
+                <div class="whatsapp-status disconnected" id="whatsappStatus">
+                    <i class="fas fa-circle"></i>
+                    Não conectado
+                </div>
+
+                <form id="whatsappForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="tel" class="form-control" id="whatsappNumber" placeholder="(11) 99999-9999" required>
+                                <label for="whatsappNumber">Número do WhatsApp</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="whatsappBusinessId" placeholder="ID do WhatsApp Business">
+                                <label for="whatsappBusinessId">Business Account ID</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-floating">
+                        <input type="text" class="form-control" id="whatsappToken" placeholder="Token do WhatsApp Business API">
+                        <label for="whatsappToken">Access Token</label>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-spinner fa-spin loading-spinner" id="whatsappSpinner"></i>
+                            <i class="fab fa-whatsapp me-2"></i>
+                            Conectar WhatsApp
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" onclick="testWhatsapp()">
+                            <i class="fas fa-paper-plane me-2"></i>
+                            Testar Conexão
+                        </button>
+                    </div>
+                </form>
+
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Precisa de ajuda? <a href="#" class="text-primary">Veja nosso guia de configuração</a>
+                    </small>
+                </div>
+            </div>
+
+            <!-- Business Hours -->
+            <div class="settings-card">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div>
+                        <h3 class="card-title">Horário de Funcionamento</h3>
+                        <p class="card-subtitle">Configure os horários de atendimento</p>
+                    </div>
+                </div>
+
+                <div class="business-hours" id="businessHours">
+                    <!-- Days will be populated by JavaScript -->
+                </div>
+
+                <div class="d-flex gap-2 mt-3">
+                    <button type="button" class="btn btn-success me-2" onclick="connectGoogleCalendar()">
+                        <i class="fab fa-google me-2"></i>
+                        Conectar Google Calendar
+                    </button>
+                    
+                    <button type="button" class="btn btn-primary" id="saveBusinessHours" onclick="openCalendarWidget();">
+                        <i class="fas fa-calendar-alt me-2"></i>
+                        Ver Disponibilidade
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="testModal()">
+                        <i class="fas fa-bug me-2"></i>
+                        Teste Modal
+                    </button>
+                </div>
+            </div>
+
+            <!-- Save All -->
+            <div class="text-center mt-4">
+                <button type="button" class="btn btn-success btn-lg" onclick="saveAllSettings()">
+                    <i class="fas fa-check-double me-2"></i>
+                    Salvar Todas as Configurações
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Calendar Widget Popup -->\n    <div class=\"modal fade\" id=\"calendarModal\" tabindex=\"-1\" aria-labelledby=\"calendarModalLabel\" aria-hidden=\"true\">\n        <div class=\"modal-dialog modal-xl\">\n            <div class=\"modal-content\">\n                <div class=\"modal-header\">\n                    <h5 class=\"modal-title\" id=\"calendarModalLabel\">\n                        <i class=\"fas fa-calendar-alt me-2\"></i>\n                        Horários e Disponibilidade\n                    </h5>\n                    <button type=\"button\" class=\"btn-close\" data-bs-dismiss=\"modal\" aria-label=\"Close\"></button>\n                </div>\n                <div class=\"modal-body p-0\">\n                    <!-- Calendar Controls -->\n                    <div class=\"calendar-controls p-3 border-bottom\">\n                        <div class=\"row align-items-center\">\n                            <div class=\"col-md-3\">\n                                <select class=\"form-select form-select-sm\" id=\"professionalFilter\">\n                                    <option value=\"all\">Todos Profissionais</option>\n                                    <!-- Populated by JS -->\n                                </select>\n                            </div>\n                            <div class=\"col-md-3\">\n                                <input type=\"date\" class=\"form-control form-control-sm\" id=\"dateFilter\">\n                            </div>\n                            <div class=\"col-md-3\">\n                                <select class=\"form-select form-select-sm\" id=\"viewFilter\">\n                                    <option value=\"day\">Dia</option>\n                                    <option value=\"week\" selected>Semana</option>\n                                    <option value=\"month\">Mês</option>\n                                </select>\n                            </div>\n                            <div class=\"col-md-3 text-end\">\n                                <button class=\"btn btn-sm btn-primary\" onclick=\"refreshCalendar()\">\n                                    <i class=\"fas fa-sync-alt me-1\"></i>\n                                    Atualizar\n                                </button>\n                            </div>\n                        </div>\n                    </div>\n\n                    <!-- Calendar Grid -->\n                    <div class=\"calendar-container\" style=\"height: 600px; overflow-y: auto;\">\n                        <div id=\"calendarLoading\" class=\"text-center p-5\">\n                            <div class=\"spinner-border text-primary\" role=\"status\">\n                                <span class=\"visually-hidden\">Carregando...</span>\n                            </div>\n                            <p class=\"mt-2 text-muted\">Carregando disponibilidade...</p>\n                        </div>\n                        \n                        <div id=\"calendarGrid\" style=\"display: none;\">\n                            <!-- Calendar content will be populated by JS -->\n                        </div>\n                    </div>\n                </div>\n                <div class=\"modal-footer\">\n                    <div class=\"d-flex justify-content-between w-100\">\n                        <div class=\"calendar-legend\">\n                            <span class=\"legend-item\">\n                                <span class=\"legend-color available\"></span>\n                                Disponível\n                            </span>\n                            <span class=\"legend-item ms-3\">\n                                <span class=\"legend-color busy\"></span>\n                                Ocupado\n                            </span>\n                            <span class=\"legend-item ms-3\">\n                                <span class=\"legend-color appointment\"></span>\n                                Agendamento\n                            </span>\n                        </div>\n                        <button type=\"button\" class=\"btn btn-secondary\" data-bs-dismiss=\"modal\">Fechar</button>\n                    </div>\n                </div>\n            </div>\n        </div>\n    </div>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Teste se JavaScript está funcionando
+        console.log('✅ JavaScript carregado com sucesso!');
+        
+        // Função de teste simples
+        function openCalendarWidget() {
+            console.log('🔄 Abrindo Calendar Widget...');
+            const modal = new bootstrap.Modal(document.getElementById('calendarModal'));
+            modal.show();
+        }
+        
+        function connectGoogleCalendar() {
+            console.log('🔐 Conectando Google Calendar...');
+            const professionalId = 'prof-001';
+            window.location.href = `/api/google/auth/${professionalId}`;
+        }
+        
+        // Initialization
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize business hours
+            initializeBusinessHours();
+            
+            // Initialize context manager for user data
+            if (typeof ContextManager !== 'undefined') {
+                const contextManager = new ContextManager();
+                contextManager.loadContextData();
+            }
+        });
+
+        function initializeBusinessHours() {
+            const businessHours = document.getElementById('businessHours');
+            const days = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo'];
+            
+            days.forEach((day, index) => {
+                const dayRow = document.createElement('div');
+                dayRow.className = 'business-day-row';
+                dayRow.innerHTML = `
+                    <div class="day-header">
+                        <h6 class="day-name">${day}</h6>
+                        <div class="day-controls">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="day${index}" checked>
+                                <label class="form-check-label" for="day${index}">Ativo</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="business-slots-container" id="slots${index}">
+                        <div class="business-slot">
+                            <div class="slot-times">
+                                <input type="time" class="form-control" value="09:00">
+                                <span class="slot-separator">até</span>
+                                <input type="time" class="form-control" value="18:00">
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSlot(this)">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addSlot(${index})">
+                        <i class="fas fa-plus me-1"></i>Adicionar Horário
+                    </button>
+                `;
+                businessHours.appendChild(dayRow);
+            });
+        }
+
+        function addSlot(dayIndex) {
+            const container = document.getElementById(`slots${dayIndex}`);
+            const newSlot = document.createElement('div');
+            newSlot.className = 'business-slot';
+            newSlot.innerHTML = `
+                <div class="slot-times">
+                    <input type="time" class="form-control" value="14:00">
+                    <span class="slot-separator">até</span>
+                    <input type="time" class="form-control" value="17:00">
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSlot(this)">
+                    <i class="fas fa-minus"></i>
+                </button>
+            `;
+            container.appendChild(newSlot);
+        }
+
+        function removeSlot(button) {
+            button.parentElement.remove();
+        }
+
+        function saveAllSettings() {
+            // Show loading
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Salvando...';
+            button.disabled = true;
+
+            // Simulate save
+            setTimeout(() => {
+                button.innerHTML = '<i class="fas fa-check me-2"></i>Salvo com Sucesso!';
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }, 2000);
+            }, 1500);
+        }
+
+        function testWhatsapp() {
+            alert('Função de teste do WhatsApp será implementada em breve.');
+        }
+
+        // Função de teste simples
+        function testModal() {
+            try {
+                console.log('🧪 Testando modal...');
+                
+                // Teste 1: Verificar Bootstrap
+                if (typeof bootstrap === 'undefined') {
+                    alert('❌ Bootstrap não está carregado!');
+                    return;
+                }
+                console.log('✅ Bootstrap OK');
+                
+                // Teste 2: Verificar elemento
+                const modalElement = document.getElementById('calendarModal');
+                if (!modalElement) {
+                    alert('❌ Modal não encontrado!');
+                    return;
+                }
+                console.log('✅ Modal encontrado');
+                
+                // Teste 3: Tentar abrir modal
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+                console.log('✅ Modal aberto com sucesso!');
+                
+                alert('✅ Teste passou! Modal deveria estar visível.');
+                
+            } catch (error) {
+                console.error('❌ Erro no teste:', error);
+                alert(`❌ Erro no teste: ${error.message}`);
+            }
+        }
+
+        // Google Calendar Integration Functions
+        async function connectGoogleCalendar() {
+            try {
+                const button = event.target;
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Conectando...';
+                button.disabled = true;
+
+                // Redirecionar para OAuth do Google
+                // Assumindo que temos um professionalId fixo ou pegamos do contexto
+                const professionalId = 'current'; // Ou pegar do contexto do usuário logado
+                
+                window.location.href = `/api/google/auth/${professionalId}`;
+                
+            } catch (error) {
+                console.error('Erro ao conectar Google Calendar:', error);
+                alert('Erro ao conectar com Google Calendar. Tente novamente.');
+                
+                // Restaurar botão
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        async function disconnectGoogleCalendar() {
+            if (!confirm('Tem certeza que deseja desconectar o Google Calendar?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/google/disconnect', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    }
+                });
+
+                if (response.ok) {
+                    // Atualizar UI
+                    document.getElementById('calendarStatus').className = 'whatsapp-status disconnected';
+                    document.getElementById('calendarStatus').innerHTML = '<i class="fas fa-circle"></i> Não conectado';
+                    document.getElementById('calendarDisconnected').style.display = 'block';
+                    document.getElementById('calendarConnected').style.display = 'none';
+                    
+                    alert('Google Calendar desconectado com sucesso!');
+                } else {
+                    throw new Error('Falha ao desconectar');
+                }
+            } catch (error) {
+                console.error('Erro ao desconectar Google Calendar:', error);
+                alert('Erro ao desconectar Google Calendar. Tente novamente.');
+            }
+        }
+
+        async function testCalendarSync() {
+            try {
+                const button = event.target;
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Testando...';
+                button.disabled = true;
+
+                const response = await fetch('/api/google/test-sync', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(`Teste de sincronização bem-sucedido!\n\nDetalhes:\n- Calendários encontrados: ${result.calendarsCount || 0}\n- Última sincronização: ${result.lastSync || 'Nunca'}`);
+                } else {
+                    throw new Error(result.error || 'Falha no teste');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao testar sincronização:', error);
+                alert('Erro ao testar sincronização do Google Calendar.');
+            } finally {
+                // Restaurar botão
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        async function checkCalendarStatus() {
+            try {
+                const response = await fetch('/api/google/status', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                    }
+                });
+
+                if (response.ok) {
+                    const status = await response.json();
+                    
+                    if (status.connected) {
+                        // Mostrar como conectado
+                        document.getElementById('calendarStatus').className = 'whatsapp-status connected';
+                        document.getElementById('calendarStatus').innerHTML = '<i class="fas fa-circle"></i> Conectado';
+                        document.getElementById('calendarDisconnected').style.display = 'none';
+                        document.getElementById('calendarConnected').style.display = 'block';
+                        
+                        // Preencher calendário selecionado
+                        if (status.calendarId) {
+                            document.getElementById('calendarId').value = status.calendarId;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao verificar status do Google Calendar:', error);
+            }
+        }
+
+        // Calendar Widget Functions
+        function openCalendarWidget() {
+            try {
+                console.log('🔄 Abrindo Calendar Widget...');
+                
+                // Verificar se Bootstrap está disponível
+                if (typeof bootstrap === 'undefined') {
+                    console.error('❌ Bootstrap não está carregado!');
+                    alert('Erro: Bootstrap não carregado. Recarregue a página.');
+                    return;
+                }
+                
+                // Verificar se o modal existe
+                const modalElement = document.getElementById('calendarModal');
+                if (!modalElement) {
+                    console.error('❌ Modal calendarModal não encontrado!');
+                    alert('Erro: Modal não encontrado no DOM.');
+                    return;
+                }
+                
+                console.log('✅ Criando modal Bootstrap...');
+                const calendarModal = new bootstrap.Modal(modalElement);
+                calendarModal.show();
+                
+                // Set default date to today
+                console.log('📅 Definindo data padrão...');
+                const today = new Date().toISOString().split('T')[0];
+                const dateFilter = document.getElementById('dateFilter');
+                if (dateFilter) {
+                    dateFilter.value = today;
+                }
+                
+                // Load calendar data
+                console.log('📊 Carregando dados do calendário...');
+                loadCalendarData();
+                loadProfessionals();
+                
+                console.log('✅ Calendar Widget aberto com sucesso!');
+            } catch (error) {
+                console.error('❌ Erro ao abrir Calendar Widget:', error);
+                alert(`Erro ao abrir calendário: ${error.message}`);
+            }
+        }
+
+        async function loadProfessionals() {
+            try {
+                console.log('📋 Carregando profissionais (mock)...');
+                
+                // Mock data for testing
+                const mockProfessionals = [
+                    { id: 'maria', name: 'Maria (Manicure)' },
+                    { id: 'joao', name: 'João (Cabelo)' },
+                    { id: 'ana', name: 'Ana (Sobrancelha)' },
+                    { id: 'carlos', name: 'Carlos (Barba)' }
+                ];
+
+                const select = document.getElementById('professionalFilter');
+                
+                // Clear existing options except "All"
+                select.innerHTML = '<option value="all">Todos Profissionais</option>';
+                
+                mockProfessionals.forEach(prof => {
+                    const option = document.createElement('option');
+                    option.value = prof.id;
+                    option.textContent = prof.name;
+                    select.appendChild(option);
+                });
+                
+                console.log('✅ Profissionais carregados!');
+            } catch (error) {
+                console.error('Erro ao carregar profissionais:', error);
+            }
+        }
+
+        async function loadCalendarData() {
+            try {
+                console.log('📊 Iniciando carregamento dos dados...');
+                const loading = document.getElementById('calendarLoading');
+                const grid = document.getElementById('calendarGrid');
+            
+                if (!loading || !grid) {
+                    console.error('❌ Elementos do calendário não encontrados!');
+                    return;
+                }
+                
+                loading.style.display = 'block';
+                grid.style.display = 'none';
+                const date = document.getElementById('dateFilter').value;
+                const professional = document.getElementById('professionalFilter').value;
+                const view = document.getElementById('viewFilter').value;
+
+                // Mock data for testing
+                console.log('📊 Carregando dados mock...');
+                const mockData = {
+                    professionals: [
+                        { id: 'maria', name: 'Maria' },
+                        { id: 'joao', name: 'João' },
+                        { id: 'ana', name: 'Ana' }
+                    ],
+                    view: view,
+                    date: date
+                };
+                
+                renderCalendarGrid(mockData, view);
+
+            } catch (error) {
+                console.error('Erro ao carregar calendário:', error);
+                grid.innerHTML = `
+                    <div class="text-center p-5">
+                        <i class="fas fa-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                        <h5 class="mt-3">Erro ao carregar calendário</h5>
+                        <p class="text-muted">Tente novamente em alguns instantes</p>
+                        <button class="btn btn-primary" onclick="loadCalendarData()">
+                            <i class="fas fa-retry me-2"></i>Tentar Novamente
+                        </button>
+                    </div>
+                `;
+            } finally {
+                if (loading) loading.style.display = 'none';
+                if (grid) grid.style.display = 'block';
+            }
+            } catch (error) {
+                console.error('❌ Erro geral no loadCalendarData:', error);
+                alert(`Erro ao carregar dados: ${error.message}`);
+            }
+        }
+
+        function renderCalendarGrid(data, view) {
+            const grid = document.getElementById('calendarGrid');
+            
+            if (view === 'week') {
+                renderWeekView(data, grid);
+            } else if (view === 'day') {
+                renderDayView(data, grid);
+            } else if (view === 'month') {
+                renderMonthView(data, grid);
+            }
+        }
+
+        function renderWeekView(data, container) {
+            const timeSlots = generateTimeSlots();
+            const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+            
+            let html = `
+                <div class="calendar-grid">
+                    <!-- Header row -->
+                    <div class="calendar-header">Horário</div>
+                    ${weekDays.map(day => `<div class="calendar-header">${day}</div>`).join('')}
+            `;
+
+            // Generate time slots
+            timeSlots.forEach(time => {
+                html += `<div class="calendar-time">${time}</div>`;
+                
+                // Generate slots for each day
+                for (let day = 0; day < 7; day++) {
+                    const slot = getSlotData(data, day, time);
+                    html += `
+                        <div class="calendar-slot ${slot.status}" 
+                             data-day="${day}" 
+                             data-time="${time}"
+                             onclick="handleSlotClick('${day}', '${time}')">
+                            <div class="slot-content">
+                                ${slot.content}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function renderDayView(data, container) {
+            const timeSlots = generateTimeSlots();
+            const professionals = data.professionals || [];
+            
+            let html = `
+                <div class="calendar-grid" style="grid-template-columns: 80px ${professionals.map(() => '1fr').join(' ')};">
+                    <!-- Header row -->
+                    <div class="calendar-header">Horário</div>
+                    ${professionals.map(prof => `<div class="calendar-header">${prof.name}</div>`).join('')}
+            `;
+
+            // Generate time slots
+            timeSlots.forEach(time => {
+                html += `<div class="calendar-time">${time}</div>`;
+                
+                // Generate slots for each professional
+                professionals.forEach(prof => {
+                    const slot = getProfessionalSlotData(data, prof.id, time);
+                    html += `
+                        <div class="calendar-slot ${slot.status}" 
+                             data-professional="${prof.id}" 
+                             data-time="${time}"
+                             onclick="handleProfessionalSlotClick('${prof.id}', '${time}')">
+                            <div class="slot-content">
+                                ${slot.content}
+                            </div>
+                        </div>
+                    `;
+                });
+            });
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function renderMonthView(data, container) {
+            // Simplified month view - show daily summary
+            const days = data.days || [];
+            
+            let html = `
+                <div class="month-view">
+                    <div class="row">
+            `;
+
+            days.forEach((day, index) => {
+                if (index % 7 === 0 && index > 0) {
+                    html += '</div><div class="row">';
+                }
+
+                html += `
+                    <div class="col">
+                        <div class="day-card">
+                            <div class="day-number">${day.number}</div>
+                            <div class="day-summary">
+                                <small class="text-success">${day.available} livres</small><br>
+                                <small class="text-danger">${day.busy} ocupados</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div></div>';
+            container.innerHTML = html;
+        }
+
+        function generateTimeSlots() {
+            const slots = [];
+            for (let hour = 8; hour <= 18; hour++) {
+                slots.push(`${hour.toString().padStart(2, '0')}:00`);
+                if (hour < 18) {
+                    slots.push(`${hour.toString().padStart(2, '0')}:30`);
+                }
+            }
+            return slots;
+        }
+
+        function getSlotData(data, day, time) {
+            // Mock data for now - will be replaced with actual API data
+            const random = Math.random();
+            if (random < 0.3) {
+                return {
+                    status: 'available',
+                    content: '<div class="slot-professional">Disponível</div>'
+                };
+            } else if (random < 0.7) {
+                return {
+                    status: 'busy',
+                    content: '<div class="slot-professional">Maria</div><div class="slot-service">Ocupado</div>'
+                };
+            } else {
+                return {
+                    status: 'appointment',
+                    content: '<div class="slot-professional">João</div><div class="slot-service">Corte - Ana Silva</div>'
+                };
+            }
+        }
+
+        function getProfessionalSlotData(data, professionalId, time) {
+            // Mock data for now - will be replaced with actual API data
+            const random = Math.random();
+            if (random < 0.4) {
+                return {
+                    status: 'available',
+                    content: '<div class="slot-time">Livre</div>'
+                };
+            } else if (random < 0.7) {
+                return {
+                    status: 'busy',
+                    content: '<div class="slot-service">Ocupado</div>'
+                };
+            } else {
+                return {
+                    status: 'appointment',
+                    content: '<div class="slot-service">Agendamento</div><div class="slot-time">Cliente X</div>'
+                };
+            }
+        }
+
+        function handleSlotClick(day, time) {
+            console.log(`Slot clicked: Day ${day}, Time ${time}`);
+            // Future: Open appointment modal
+        }
+
+        function handleProfessionalSlotClick(professionalId, time) {
+            console.log(`Professional slot clicked: ${professionalId}, Time ${time}`);
+            // Future: Open appointment modal for specific professional
+        }
+
+        function refreshCalendar() {
+            loadCalendarData();
+        }
+
+        // Add event listeners for filters
+        document.addEventListener('DOMContentLoaded', function() {
+            // ... código existente ...
+            
+            // Calendar filter event listeners
+            document.getElementById('dateFilter')?.addEventListener('change', loadCalendarData);
+            document.getElementById('professionalFilter')?.addEventListener('change', loadCalendarData);
+            document.getElementById('viewFilter')?.addEventListener('change', loadCalendarData);
+        });
+
+        // Verificar status do Google Calendar ao carregar a página
+        document.addEventListener('DOMContentLoaded', function() {
+            // ... código existente ...
+            checkCalendarStatus();
+        });
+    </script>
+</body>
+</html>

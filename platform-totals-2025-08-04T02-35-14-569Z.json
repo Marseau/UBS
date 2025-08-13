@@ -1,0 +1,380 @@
+{
+  "7 DIAS": {
+    "period": "7 DIAS",
+    "days": 7,
+    "totalAppointments": 100,
+    "totalInternos": 46,
+    "totalExternos": 54,
+    "totalWhatsAppIA": 46,
+    "totalCompleted": 0,
+    "totalRevenue": 10469.49,
+    "activeTenants": 10,
+    "platformSuccessRate": 0,
+    "internosPercentage": 46,
+    "externosPercentage": 54,
+    "tenantResults": [
+      {
+        "name": "Bella Vista Spa & Salon",
+        "domain": "beauty",
+        "total": 16,
+        "internos": 7,
+        "externos": 9,
+        "whatsapp_ia": 7,
+        "completed": 0,
+        "revenue": 1523.1399999999999,
+        "success_rate": 0
+      },
+      {
+        "name": "Studio Glamour Rio",
+        "domain": "beauty",
+        "total": 16,
+        "internos": 9,
+        "externos": 7,
+        "whatsapp_ia": 9,
+        "completed": 0,
+        "revenue": 1372.32,
+        "success_rate": 0
+      },
+      {
+        "name": "Clínica Mente Sã",
+        "domain": "healthcare",
+        "total": 16,
+        "internos": 15,
+        "externos": 1,
+        "whatsapp_ia": 15,
+        "completed": 0,
+        "revenue": 1779.49,
+        "success_rate": 0
+      },
+      {
+        "name": "Charme Total BH",
+        "domain": "beauty",
+        "total": 14,
+        "internos": 8,
+        "externos": 6,
+        "whatsapp_ia": 8,
+        "completed": 0,
+        "revenue": 1207.2300000000002,
+        "success_rate": 0
+      },
+      {
+        "name": "Centro Terapêutico Equilíbrio",
+        "domain": "healthcare",
+        "total": 12,
+        "internos": 7,
+        "externos": 5,
+        "whatsapp_ia": 7,
+        "completed": 0,
+        "revenue": 1334.31,
+        "success_rate": 0
+      },
+      {
+        "name": "Arena Fitness Pro",
+        "domain": "sports",
+        "total": 6,
+        "internos": 0,
+        "externos": 6,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 763,
+        "success_rate": 0
+      },
+      {
+        "name": "Centro Educacional Futuro",
+        "domain": "education",
+        "total": 6,
+        "internos": 0,
+        "externos": 6,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 713,
+        "success_rate": 0
+      },
+      {
+        "name": "Advocacia Silva & Associados",
+        "domain": "legal",
+        "total": 5,
+        "internos": 0,
+        "externos": 5,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 623,
+        "success_rate": 0
+      },
+      {
+        "name": "Academia do Saber",
+        "domain": "education",
+        "total": 5,
+        "internos": 0,
+        "externos": 5,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 627,
+        "success_rate": 0
+      },
+      {
+        "name": "Escritório Jurídico Costa",
+        "domain": "legal",
+        "total": 4,
+        "internos": 0,
+        "externos": 4,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 527,
+        "success_rate": 0
+      }
+    ]
+  },
+  "30 DIAS": {
+    "period": "30 DIAS",
+    "days": 30,
+    "totalAppointments": 100,
+    "totalInternos": 46,
+    "totalExternos": 54,
+    "totalWhatsAppIA": 46,
+    "totalCompleted": 0,
+    "totalRevenue": 10469.49,
+    "activeTenants": 10,
+    "platformSuccessRate": 0,
+    "internosPercentage": 46,
+    "externosPercentage": 54,
+    "tenantResults": [
+      {
+        "name": "Bella Vista Spa & Salon",
+        "domain": "beauty",
+        "total": 16,
+        "internos": 7,
+        "externos": 9,
+        "whatsapp_ia": 7,
+        "completed": 0,
+        "revenue": 1523.1399999999999,
+        "success_rate": 0
+      },
+      {
+        "name": "Studio Glamour Rio",
+        "domain": "beauty",
+        "total": 16,
+        "internos": 9,
+        "externos": 7,
+        "whatsapp_ia": 9,
+        "completed": 0,
+        "revenue": 1372.32,
+        "success_rate": 0
+      },
+      {
+        "name": "Clínica Mente Sã",
+        "domain": "healthcare",
+        "total": 16,
+        "internos": 15,
+        "externos": 1,
+        "whatsapp_ia": 15,
+        "completed": 0,
+        "revenue": 1779.49,
+        "success_rate": 0
+      },
+      {
+        "name": "Charme Total BH",
+        "domain": "beauty",
+        "total": 14,
+        "internos": 8,
+        "externos": 6,
+        "whatsapp_ia": 8,
+        "completed": 0,
+        "revenue": 1207.2300000000002,
+        "success_rate": 0
+      },
+      {
+        "name": "Centro Terapêutico Equilíbrio",
+        "domain": "healthcare",
+        "total": 12,
+        "internos": 7,
+        "externos": 5,
+        "whatsapp_ia": 7,
+        "completed": 0,
+        "revenue": 1334.31,
+        "success_rate": 0
+      },
+      {
+        "name": "Arena Fitness Pro",
+        "domain": "sports",
+        "total": 6,
+        "internos": 0,
+        "externos": 6,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 763,
+        "success_rate": 0
+      },
+      {
+        "name": "Centro Educacional Futuro",
+        "domain": "education",
+        "total": 6,
+        "internos": 0,
+        "externos": 6,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 713,
+        "success_rate": 0
+      },
+      {
+        "name": "Advocacia Silva & Associados",
+        "domain": "legal",
+        "total": 5,
+        "internos": 0,
+        "externos": 5,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 623,
+        "success_rate": 0
+      },
+      {
+        "name": "Academia do Saber",
+        "domain": "education",
+        "total": 5,
+        "internos": 0,
+        "externos": 5,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 627,
+        "success_rate": 0
+      },
+      {
+        "name": "Escritório Jurídico Costa",
+        "domain": "legal",
+        "total": 4,
+        "internos": 0,
+        "externos": 4,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 527,
+        "success_rate": 0
+      }
+    ]
+  },
+  "90 DIAS": {
+    "period": "90 DIAS",
+    "days": 90,
+    "totalAppointments": 406,
+    "totalInternos": 352,
+    "totalExternos": 54,
+    "totalWhatsAppIA": 352,
+    "totalCompleted": 260,
+    "totalRevenue": 30730.140000000007,
+    "activeTenants": 10,
+    "platformSuccessRate": 64.03940886699507,
+    "internosPercentage": 86.69950738916256,
+    "externosPercentage": 13.30049261083744,
+    "tenantResults": [
+      {
+        "name": "Charme Total BH",
+        "domain": "beauty",
+        "total": 85,
+        "internos": 79,
+        "externos": 6,
+        "whatsapp_ia": 79,
+        "completed": 62,
+        "revenue": 5010.799999999999,
+        "success_rate": 72.94117647058823
+      },
+      {
+        "name": "Bella Vista Spa & Salon",
+        "domain": "beauty",
+        "total": 82,
+        "internos": 73,
+        "externos": 9,
+        "whatsapp_ia": 73,
+        "completed": 54,
+        "revenue": 4889.240000000001,
+        "success_rate": 65.85365853658537
+      },
+      {
+        "name": "Clínica Mente Sã",
+        "domain": "healthcare",
+        "total": 82,
+        "internos": 81,
+        "externos": 1,
+        "whatsapp_ia": 81,
+        "completed": 60,
+        "revenue": 7921.720000000003,
+        "success_rate": 73.17073170731707
+      },
+      {
+        "name": "Studio Glamour Rio",
+        "domain": "beauty",
+        "total": 80,
+        "internos": 73,
+        "externos": 7,
+        "whatsapp_ia": 73,
+        "completed": 53,
+        "revenue": 4981.91,
+        "success_rate": 66.25
+      },
+      {
+        "name": "Centro Terapêutico Equilíbrio",
+        "domain": "healthcare",
+        "total": 51,
+        "internos": 46,
+        "externos": 5,
+        "whatsapp_ia": 46,
+        "completed": 31,
+        "revenue": 4673.47,
+        "success_rate": 60.78431372549019
+      },
+      {
+        "name": "Arena Fitness Pro",
+        "domain": "sports",
+        "total": 6,
+        "internos": 0,
+        "externos": 6,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 763,
+        "success_rate": 0
+      },
+      {
+        "name": "Centro Educacional Futuro",
+        "domain": "education",
+        "total": 6,
+        "internos": 0,
+        "externos": 6,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 713,
+        "success_rate": 0
+      },
+      {
+        "name": "Advocacia Silva & Associados",
+        "domain": "legal",
+        "total": 5,
+        "internos": 0,
+        "externos": 5,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 623,
+        "success_rate": 0
+      },
+      {
+        "name": "Academia do Saber",
+        "domain": "education",
+        "total": 5,
+        "internos": 0,
+        "externos": 5,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 627,
+        "success_rate": 0
+      },
+      {
+        "name": "Escritório Jurídico Costa",
+        "domain": "legal",
+        "total": 4,
+        "internos": 0,
+        "externos": 4,
+        "whatsapp_ia": 0,
+        "completed": 0,
+        "revenue": 527,
+        "success_rate": 0
+      }
+    ]
+  }
+}

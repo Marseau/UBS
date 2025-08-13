@@ -1,0 +1,2721 @@
+{
+  "timestamp": "2025-07-29T23:06:10.441Z",
+  "filesToRemove": [
+    {
+      "path": ".claude/settings.local.json",
+      "size": 4101
+    },
+    {
+      "path": "ANALISE-COMPARATIVA-DASHBOARDS.md",
+      "size": 6820
+    },
+    {
+      "path": "ANALISE-DASHBOARD-TENANT-ADMIN.md",
+      "size": 5384
+    },
+    {
+      "path": "ANALISE_METRICAS_COMPLETA.md",
+      "size": 9541
+    },
+    {
+      "path": "ANALISE_MODELO_COBRANCA_POR_CONVERSA.md",
+      "size": 9381
+    },
+    {
+      "path": "ANALISE_SISTEMAS_AGENDAMENTO_AVANCADOS.md",
+      "size": 13327
+    },
+    {
+      "path": "ANALISE_USABILIDADE_NOSSO_SISTEMA.md",
+      "size": 9924
+    },
+    {
+      "path": "COMPREHENSIVE-FINAL-VALIDATION-REPORT.md",
+      "size": 13948
+    },
+    {
+      "path": "COMPREHENSIVE_ADMIN_AUTH_FINDINGS.md",
+      "size": 9529
+    },
+    {
+      "path": "COMPREHENSIVE_AUTHENTICATION_AUDIT_REPORT.md",
+      "size": 10713
+    },
+    {
+      "path": "DASHBOARD_ANALYSIS.md",
+      "size": 9198
+    },
+    {
+      "path": "DASHBOARD_FIX_COMPLETE.md",
+      "size": 3226
+    },
+    {
+      "path": "DASHBOARD_REFACTOR_TODO.md",
+      "size": 3801
+    },
+    {
+      "path": "DATABASE_OPTIMIZATION_SUMMARY.md",
+      "size": 8445
+    },
+    {
+      "path": "DATABASE_PERFORMANCE_OPTIMIZATION_REPORT.md",
+      "size": 7185
+    },
+    {
+      "path": "DATABASE_POPULATION_ANALYSIS.md",
+      "size": 7443
+    },
+    {
+      "path": "FINAL-SQL-EXECUTION.md",
+      "size": 1389
+    },
+    {
+      "path": "FINAL_110_OPTIMIZATION_REPORT.md",
+      "size": 9195
+    },
+    {
+      "path": "FINAL_DATABASE_ANALYSIS.md",
+      "size": 8168
+    },
+    {
+      "path": "FINAL_ERROR_FIXES.md",
+      "size": 5012
+    },
+    {
+      "path": "FRONTEND_BACKEND_COMPATIBILITY_AUDIT.md",
+      "size": 22161
+    },
+    {
+      "path": "FRONTEND_BACKEND_INTEGRATION_PART2_TENANT_PLATFORM.md",
+      "size": 26933
+    },
+    {
+      "path": "FRONTEND_INTEGRATION_SUMMARY.md",
+      "size": 3803
+    },
+    {
+      "path": "FRONTEND_INTEGRITY_ASSURANCE_SYSTEM.md",
+      "size": 43002
+    },
+    {
+      "path": "FRONTEND_INTEGRITY_CHECKSUMS.json",
+      "size": 4126
+    },
+    {
+      "path": "IMPLEMENTATION_SUMMARY.md",
+      "size": 8233
+    },
+    {
+      "path": "INITIAL-FRONTEND-DATABASE-VALIDATION-COMPLETE.md",
+      "size": 63679
+    },
+    {
+      "path": "METRICS_TABLES_ANALYSIS.md",
+      "size": 5180
+    },
+    {
+      "path": "OPTIMIZATION_SUMMARY.md",
+      "size": 5563
+    },
+    {
+      "path": "P2-FINAL-COMPLETION-REPORT.md",
+      "size": 9013
+    },
+    {
+      "path": "PROJETO-COMPLETADO.md",
+      "size": 7372
+    },
+    {
+      "path": "REAL_PAGES_MAPPING_REPORT.json",
+      "size": 25513
+    },
+    {
+      "path": "RELATORIO-FINAL-TESTES-MODELO-CONVERSA.md",
+      "size": 9277
+    },
+    {
+      "path": "RELATORIO-INSPECAO-SISTEMATICA.md",
+      "size": 5583
+    },
+    {
+      "path": "RESULTADO-FINAL.md",
+      "size": 3795
+    },
+    {
+      "path": "RESUMO-FUNCIONALIDADES-DASHBOARD.md",
+      "size": 7802
+    },
+    {
+      "path": "SECURITY_FIXES_SUMMARY.md",
+      "size": 4991
+    },
+    {
+      "path": "SISTEMA-MULTI-AGENTE-COLABORATIVO.md",
+      "size": 10690
+    },
+    {
+      "path": "SOLUTION_CURRENT_STATUS.md",
+      "size": 2883
+    },
+    {
+      "path": "SOLUTION_SUMMARY.md",
+      "size": 3850
+    },
+    {
+      "path": "T014-FINAL-VALIDATION-SUMMARY.md",
+      "size": 11925
+    },
+    {
+      "path": "TENANT_API_DEBUG_FINDINGS.md",
+      "size": 3429
+    },
+    {
+      "path": "TENANT_API_FIXES_SUMMARY.md",
+      "size": 4095
+    },
+    {
+      "path": "TENANT_METRICS_CATALOG.md",
+      "size": 8608
+    },
+    {
+      "path": "TEST_INSTRUCTIONS.md",
+      "size": 6492
+    },
+    {
+      "path": "UBS_BP_Proj_Tenant.csv",
+      "size": 5621
+    },
+    {
+      "path": "UBS_Business_Plan.md",
+      "size": 12807
+    },
+    {
+      "path": "UBS_Cursor_Business_Plan.md",
+      "size": 180813
+    },
+    {
+      "path": "UBS_Regra_Popular.csv",
+      "size": 1251
+    },
+    {
+      "path": "UBS_Resumo_Totalizacao_M0.json",
+      "size": 495
+    },
+    {
+      "path": "UBS_Totalizacao_M0.csv",
+      "size": 1223
+    },
+    {
+      "path": "VALIDATION_SUMMARY.md",
+      "size": 4763
+    },
+    {
+      "path": "WHATSAPP_COMPLIANCE_VALIDATION_REPORT.md",
+      "size": 20176
+    },
+    {
+      "path": "add-conversation-outcome-field.sql",
+      "size": 1605
+    },
+    {
+      "path": "add-google-calendar-columns.sql",
+      "size": 854
+    },
+    {
+      "path": "add-platform-usage-cost-metrics.sql",
+      "size": 12526
+    },
+    {
+      "path": "analytics-data",
+      "size": 128
+    },
+    {
+      "path": "analyze-chart-errors.js",
+      "size": 3856
+    },
+    {
+      "path": "analyze-chat-duration.js",
+      "size": 7339
+    },
+    {
+      "path": "analyze-core-tables.js",
+      "size": 3879
+    },
+    {
+      "path": "analyze-data.js",
+      "size": 3380
+    },
+    {
+      "path": "analyze-database-performance.js",
+      "size": 11337
+    },
+    {
+      "path": "analyze-database-schema.js",
+      "size": 6006
+    },
+    {
+      "path": "analyze-existing-tables.js",
+      "size": 3917
+    },
+    {
+      "path": "analyze-metrics-relationships.js",
+      "size": 22065
+    },
+    {
+      "path": "analyze-missing-professionals.js",
+      "size": 6128
+    },
+    {
+      "path": "analyze-mrr-breakdown.py",
+      "size": 7492
+    },
+    {
+      "path": "analyze-page-selectors.js",
+      "size": 15053
+    },
+    {
+      "path": "analyze-platform-metrics.js",
+      "size": 10913
+    },
+    {
+      "path": "analyze-platform-usage-cost.py",
+      "size": 8245
+    },
+    {
+      "path": "analyze-schema.js",
+      "size": 6441
+    },
+    {
+      "path": "analyze-tenant-id-logic.js",
+      "size": 8968
+    },
+    {
+      "path": "analyze-tenant-metrics-data.js",
+      "size": 4512
+    },
+    {
+      "path": "analyze_correct_january.py",
+      "size": 5629
+    },
+    {
+      "path": "analyze_january_metrics.py",
+      "size": 6109
+    },
+    {
+      "path": "api-audit-report.json",
+      "size": 6761
+    },
+    {
+      "path": "apply-abandoned-status.js",
+      "size": 5538
+    },
+    {
+      "path": "apply-function.js",
+      "size": 1733
+    },
+    {
+      "path": "apply-migration-direct.js",
+      "size": 3514
+    },
+    {
+      "path": "apply-migration.js",
+      "size": 3126
+    },
+    {
+      "path": "apply-performance-optimizations.js",
+      "size": 11709
+    },
+    {
+      "path": "apply-real-minutes-fix.js",
+      "size": 5050
+    },
+    {
+      "path": "apply-sql-directly.js",
+      "size": 13466
+    },
+    {
+      "path": "appointments_export.csv",
+      "size": 196954
+    },
+    {
+      "path": "archive/old-pricing-model/ANALISE_PRECOS_SISTEMAS_SIMILARES.md",
+      "size": 8624
+    },
+    {
+      "path": "audit-reports",
+      "size": 448
+    },
+    {
+      "path": "auto-commit.log",
+      "size": 754706
+    },
+    {
+      "path": "backup-data",
+      "size": 192
+    },
+    {
+      "path": "backup-metrics-tables.js",
+      "size": 18961
+    },
+    {
+      "path": "backups",
+      "size": 96
+    },
+    {
+      "path": "business_plan_M0_conservador.csv",
+      "size": 1768
+    },
+    {
+      "path": "business_plan_M0_conservador_completo.csv",
+      "size": 1707
+    },
+    {
+      "path": "business_plan_M0_exact.csv",
+      "size": 1713
+    },
+    {
+      "path": "business_plan_M1_FINAL.csv",
+      "size": 2180
+    },
+    {
+      "path": "business_plan_M1_conservador_completo.csv",
+      "size": 2178
+    },
+    {
+      "path": "business_plan_M1_exact.csv",
+      "size": 2505
+    },
+    {
+      "path": "business_plan_M2_conservador_completo.csv",
+      "size": 2201
+    },
+    {
+      "path": "business_plan_M3_conservador_completo.csv",
+      "size": 2243
+    },
+    {
+      "path": "business_plan_M4_conservador_completo.csv",
+      "size": 2270
+    },
+    {
+      "path": "business_plan_M5_FINAL.csv",
+      "size": 2394
+    },
+    {
+      "path": "business_plan_M5_conservador_completo.csv",
+      "size": 2278
+    },
+    {
+      "path": "business_plan_M5_exact.csv",
+      "size": 2456
+    },
+    {
+      "path": "business_plan_M6_FINAL.csv",
+      "size": 2432
+    },
+    {
+      "path": "business_plan_M6_conservador_completo.csv",
+      "size": 2310
+    },
+    {
+      "path": "business_plan_M6_exact.csv",
+      "size": 2438
+    },
+    {
+      "path": "business_plan_m0_ajustado.csv",
+      "size": 1675
+    },
+    {
+      "path": "business_plan_m0_com_esportes.csv",
+      "size": 1684
+    },
+    {
+      "path": "business_plan_m0_corrected.csv",
+      "size": 1443
+    },
+    {
+      "path": "business_plan_m0_final.csv",
+      "size": 1707
+    },
+    {
+      "path": "business_plan_m0_profissionais_5.csv",
+      "size": 1962
+    },
+    {
+      "path": "business_plan_m0_profissionais_5_CORRECTED.csv",
+      "size": 1701
+    },
+    {
+      "path": "business_plan_table.csv",
+      "size": 1257
+    },
+    {
+      "path": "business_plan_table_corrected.csv",
+      "size": 1340
+    },
+    {
+      "path": "business_plan_table_excel.csv",
+      "size": 1340
+    },
+    {
+      "path": "calculate-chat-minutes-fixed.js",
+      "size": 8200
+    },
+    {
+      "path": "calculate-chat-minutes.js",
+      "size": 5687
+    },
+    {
+      "path": "calculate-conversations-30days.js",
+      "size": 11693
+    },
+    {
+      "path": "calculate-correct-metrics.js",
+      "size": 5503
+    },
+    {
+      "path": "calculate-correct-totals-and-generate-users.js",
+      "size": 10533
+    },
+    {
+      "path": "calculate-january-revenue.py",
+      "size": 5590
+    },
+    {
+      "path": "calculate-platform-usage-cost-sum.js",
+      "size": 11088
+    },
+    {
+      "path": "calculate-rescheduled-30days.js",
+      "size": 10194
+    },
+    {
+      "path": "calculate-total-conversation-minutes.js",
+      "size": 5897
+    },
+    {
+      "path": "calculate_mrr_correct.py",
+      "size": 414
+    },
+    {
+      "path": "chart-debug.png",
+      "size": 448733
+    },
+    {
+      "path": "charts-standardization-test.png",
+      "size": 374184
+    },
+    {
+      "path": "check-actual-functions.js",
+      "size": 4353
+    },
+    {
+      "path": "check-appointment-schema.js",
+      "size": 1457
+    },
+    {
+      "path": "check-appointments-structure-simple.js",
+      "size": 1656
+    },
+    {
+      "path": "check-appointments-structure.js",
+      "size": 4581
+    },
+    {
+      "path": "check-base-tables.js",
+      "size": 2560
+    },
+    {
+      "path": "check-conversation-dates.js",
+      "size": 3572
+    },
+    {
+      "path": "check-conversation-history-schema.js",
+      "size": 2798
+    },
+    {
+      "path": "check-csv-totals.js",
+      "size": 2751
+    },
+    {
+      "path": "check-dashboard-data-sources.js",
+      "size": 7693
+    },
+    {
+      "path": "check-database-schema.js",
+      "size": 2557
+    },
+    {
+      "path": "check-database-structure.js",
+      "size": 2839
+    },
+    {
+      "path": "check-emergency-backup.js",
+      "size": 6670
+    },
+    {
+      "path": "check-function-status.js",
+      "size": 3366
+    },
+    {
+      "path": "check-highest-phone.js",
+      "size": 1435
+    },
+    {
+      "path": "check-latest-data-in-table.js",
+      "size": 3805
+    },
+    {
+      "path": "check-metrics-tables-structure.js",
+      "size": 3969
+    },
+    {
+      "path": "check-metrics-tables.js",
+      "size": 2878
+    },
+    {
+      "path": "check-new-data.js",
+      "size": 6155
+    },
+    {
+      "path": "check-other-tables.js",
+      "size": 7661
+    },
+    {
+      "path": "check-periods-ubs-metrics.js",
+      "size": 5396
+    },
+    {
+      "path": "check-platform-data.js",
+      "size": 5590
+    },
+    {
+      "path": "check-platform-functions.js",
+      "size": 2756
+    },
+    {
+      "path": "check-platform-metrics-data.js",
+      "size": 2021
+    },
+    {
+      "path": "check-populated-data.js",
+      "size": 2197
+    },
+    {
+      "path": "check-professional-tenant-link.js",
+      "size": 3862
+    },
+    {
+      "path": "check-real-schema.js",
+      "size": 3965
+    },
+    {
+      "path": "check-sql-functions-status.js",
+      "size": 5617
+    },
+    {
+      "path": "check-table-data.js",
+      "size": 1655
+    },
+    {
+      "path": "check-table-schemas.js",
+      "size": 1346
+    },
+    {
+      "path": "check-table-structure.js",
+      "size": 5338
+    },
+    {
+      "path": "check-tenant-conversations.js",
+      "size": 4980
+    },
+    {
+      "path": "check-tenant-metrics-structure.js",
+      "size": 3201
+    },
+    {
+      "path": "check-tenant-platform-table-simple.js",
+      "size": 8318
+    },
+    {
+      "path": "check-tenant-platform-table.js",
+      "size": 7568
+    },
+    {
+      "path": "check-usage-costs-schema.js",
+      "size": 1309
+    },
+    {
+      "path": "check_appointment_prices.py",
+      "size": 1894
+    },
+    {
+      "path": "chromewebdata_2025-07-03_10-37-30.report.html",
+      "size": 552273
+    },
+    {
+      "path": "clean-slate-phase1.sql",
+      "size": 8942
+    },
+    {
+      "path": "clean-slate-phase2.sql",
+      "size": 9212
+    },
+    {
+      "path": "clean-slate-phase3-final.sql",
+      "size": 16116
+    },
+    {
+      "path": "clean-slate-phase3-fixed.sql",
+      "size": 16119
+    },
+    {
+      "path": "clean-slate-phase3.sql",
+      "size": 17501
+    },
+    {
+      "path": "cleanup-duplicates.js",
+      "size": 2883
+    },
+    {
+      "path": "cleanup-hardcoded-credentials.js",
+      "size": 5938
+    },
+    {
+      "path": "combined.log",
+      "size": 24233
+    },
+    {
+      "path": "compact-analysis-report.json",
+      "size": 3889
+    },
+    {
+      "path": "comprehensive-auth-test-report.json",
+      "size": 443
+    },
+    {
+      "path": "consolidation-complete-script.sql",
+      "size": 24203
+    },
+    {
+      "path": "consolidation-drop-functions.sql",
+      "size": 16651
+    },
+    {
+      "path": "consolidation-final-script.sql",
+      "size": 22854
+    },
+    {
+      "path": "consolidation-safe-script.sql",
+      "size": 16955
+    },
+    {
+      "path": "create-abandoned-status.sql",
+      "size": 706
+    },
+    {
+      "path": "create-calculate-ubs-metrics-function.sql",
+      "size": 13755
+    },
+    {
+      "path": "create-conversation-outcome-field.sql",
+      "size": 2946
+    },
+    {
+      "path": "create-corrected-function.js",
+      "size": 12599
+    },
+    {
+      "path": "create-final-corrected-function.sql",
+      "size": 9460
+    },
+    {
+      "path": "create-realistic-platform-data.js",
+      "size": 13141
+    },
+    {
+      "path": "create-sample-appointments.js",
+      "size": 4129
+    },
+    {
+      "path": "create-simple-exact-function.sql",
+      "size": 1864
+    },
+    {
+      "path": "create-simple-test-function.sql",
+      "size": 2361
+    },
+    {
+      "path": "create-synthetic-conversations.js",
+      "size": 19469
+    },
+    {
+      "path": "create-tables-direct.sql",
+      "size": 5840
+    },
+    {
+      "path": "create-tables-simple.js",
+      "size": 2084
+    },
+    {
+      "path": "create-tenant-platform-metrics-table.sql",
+      "size": 13487
+    },
+    {
+      "path": "create-ubs-table.sql",
+      "size": 3224
+    },
+    {
+      "path": "create-users-fast.js",
+      "size": 2102
+    },
+    {
+      "path": "create-variable-cost-approximation.js",
+      "size": 17382
+    },
+    {
+      "path": "cron-analytics.log",
+      "size": 2727
+    },
+    {
+      "path": "customers_export_all.csv",
+      "size": 37150
+    },
+    {
+      "path": "customers_export_test.csv",
+      "size": 58
+    },
+    {
+      "path": "dashboard-error-fix-test.png",
+      "size": 392996
+    },
+    {
+      "path": "dashboard-response.json",
+      "size": 1774
+    },
+    {
+      "path": "dashboard-setup-report.json",
+      "size": 2411
+    },
+    {
+      "path": "dashboard-standardized-structure-2025-07-26T21-36-38-011Z.png",
+      "size": 341270
+    },
+    {
+      "path": "dashboard-tenant-admin-structure-2025-07-26T21-36-55-303Z.png",
+      "size": 313257
+    },
+    {
+      "path": "dashboard-test-simple.png",
+      "size": 428756
+    },
+    {
+      "path": "dashboard_export.csv",
+      "size": 247
+    },
+    {
+      "path": "debug-api-logic.js",
+      "size": 2530
+    },
+    {
+      "path": "debug-api-query.js",
+      "size": 7496
+    },
+    {
+      "path": "debug-api-responses.js",
+      "size": 8246
+    },
+    {
+      "path": "debug-auth-simple.js",
+      "size": 2731
+    },
+    {
+      "path": "debug-chart-data.js",
+      "size": 7742
+    },
+    {
+      "path": "debug-chart-errors.js",
+      "size": 3398
+    },
+    {
+      "path": "debug-chat-duration-detailed.js",
+      "size": 8331
+    },
+    {
+      "path": "debug-columns.js",
+      "size": 943
+    },
+    {
+      "path": "debug-conversation-counting.js",
+      "size": 4085
+    },
+    {
+      "path": "debug-conversation-history-structure.js",
+      "size": 1407
+    },
+    {
+      "path": "debug-conversation-schema.js",
+      "size": 2104
+    },
+    {
+      "path": "debug-dashboard-elements.js",
+      "size": 1921
+    },
+    {
+      "path": "debug-dashboard.html",
+      "size": 4391
+    },
+    {
+      "path": "debug-database-service.js",
+      "size": 2584
+    },
+    {
+      "path": "debug-database.js",
+      "size": 2661
+    },
+    {
+      "path": "debug-date-filter.js",
+      "size": 7266
+    },
+    {
+      "path": "debug-direct-api.js",
+      "size": 2469
+    },
+    {
+      "path": "debug-fitlife-overflow.js",
+      "size": 5441
+    },
+    {
+      "path": "debug-function-cache.js",
+      "size": 8837
+    },
+    {
+      "path": "debug-function-calculation.js",
+      "size": 4041
+    },
+    {
+      "path": "debug-kpis.js",
+      "size": 1399
+    },
+    {
+      "path": "debug-login.js",
+      "size": 2019
+    },
+    {
+      "path": "debug-metrics-query.js",
+      "size": 1818
+    },
+    {
+      "path": "debug-platform-metrics-structure.js",
+      "size": 1425
+    },
+    {
+      "path": "debug-super-admin-login.js",
+      "size": 4011
+    },
+    {
+      "path": "debug-tenant-count.js",
+      "size": 2083
+    },
+    {
+      "path": "debug-tenant-metrics-query.js",
+      "size": 6485
+    },
+    {
+      "path": "debug-tenants-columns.js",
+      "size": 969
+    },
+    {
+      "path": "debug-tenants-table.js",
+      "size": 3280
+    },
+    {
+      "path": "debug-usage-costs-structure.js",
+      "size": 1353
+    },
+    {
+      "path": "debug-working-function.js",
+      "size": 5782
+    },
+    {
+      "path": "deploy-1-1-super-optimized-test.js",
+      "size": 11914
+    },
+    {
+      "path": "deploy-2-unified-metrics-test.js",
+      "size": 9999
+    },
+    {
+      "path": "deploy-3-memory-optimizer-test.js",
+      "size": 9746
+    },
+    {
+      "path": "deploy-4-unified-cron-test.js",
+      "size": 12544
+    },
+    {
+      "path": "deploy-corrected-function.js",
+      "size": 16857
+    },
+    {
+      "path": "deploy-database-function-test.js",
+      "size": 5341
+    },
+    {
+      "path": "deploy-database-functions.js",
+      "size": 10981
+    },
+    {
+      "path": "deploy-enhanced-function.js",
+      "size": 2001
+    },
+    {
+      "path": "deploy-optimized-function.js",
+      "size": 10140
+    },
+    {
+      "path": "deploy-ubs-table.js",
+      "size": 3861
+    },
+    {
+      "path": "dev.log",
+      "size": 0
+    },
+    {
+      "path": "dev.pid",
+      "size": 3
+    },
+    {
+      "path": "dev_alt.log",
+      "size": 8488
+    },
+    {
+      "path": "dev_alt.pid",
+      "size": 6
+    },
+    {
+      "path": "direct-optimization-report.json",
+      "size": 2023
+    },
+    {
+      "path": "domain-validation-report.json",
+      "size": 1183
+    },
+    {
+      "path": "error.log",
+      "size": 7570
+    },
+    {
+      "path": "execute-cached-metrics.js",
+      "size": 1324
+    },
+    {
+      "path": "execute-corrected-function.js",
+      "size": 2904
+    },
+    {
+      "path": "execute-direct-enriched.js",
+      "size": 700
+    },
+    {
+      "path": "execute-enriched-metrics.js",
+      "size": 4040
+    },
+    {
+      "path": "execute-final-corrected-function.js",
+      "size": 5036
+    },
+    {
+      "path": "execute-function-deployment.js",
+      "size": 6405
+    },
+    {
+      "path": "execute-new-tables.js",
+      "size": 7273
+    },
+    {
+      "path": "execute-platform-usage-cost-direct.js",
+      "size": 10379
+    },
+    {
+      "path": "execute-platform-usage-cost.js",
+      "size": 10880
+    },
+    {
+      "path": "execute-simple-test.js",
+      "size": 6489
+    },
+    {
+      "path": "execute-sql-direct.js",
+      "size": 6254
+    },
+    {
+      "path": "execute-sql-directly.js",
+      "size": 2379
+    },
+    {
+      "path": "execute-sql-fixes.js",
+      "size": 5935
+    },
+    {
+      "path": "execute-table-creation.js",
+      "size": 4691
+    },
+    {
+      "path": "execute-usage-costs-linking.js",
+      "size": 11488
+    },
+    {
+      "path": "execute-via-supabase-function.js",
+      "size": 14686
+    },
+    {
+      "path": "expand-conversation-outcomes.sql",
+      "size": 2012
+    },
+    {
+      "path": "file-dashboard-test-report-1752798617136.json",
+      "size": 6997
+    },
+    {
+      "path": "final-admin-authentication-test.js",
+      "size": 24091
+    },
+    {
+      "path": "final-data-integrity-report.js",
+      "size": 10181
+    },
+    {
+      "path": "final-integration-screenshots",
+      "size": 128
+    },
+    {
+      "path": "final-integration-test-report-1752798308251.json",
+      "size": 11587
+    },
+    {
+      "path": "final-mcp-optimization-report.json",
+      "size": 1753
+    },
+    {
+      "path": "final-mcp-optimization.js",
+      "size": 23113
+    },
+    {
+      "path": "final-optimization-report.json",
+      "size": 1310
+    },
+    {
+      "path": "final-production-report.js",
+      "size": 8960
+    },
+    {
+      "path": "final-sql-7-30-90-periods.sql",
+      "size": 7256
+    },
+    {
+      "path": "final-system-fix.js",
+      "size": 5953
+    },
+    {
+      "path": "final-test-analytics.js",
+      "size": 7724
+    },
+    {
+      "path": "final-validation.js",
+      "size": 5912
+    },
+    {
+      "path": "final-verification-usage-cost.js",
+      "size": 6784
+    },
+    {
+      "path": "fix-all-numeric-fields.sql",
+      "size": 5491
+    },
+    {
+      "path": "fix-all-passwords.js",
+      "size": 1271
+    },
+    {
+      "path": "fix-and-complete-population-optimized.js",
+      "size": 25839
+    },
+    {
+      "path": "fix-and-complete-population.js",
+      "size": 23243
+    },
+    {
+      "path": "fix-appointment-coherence.js",
+      "size": 9560
+    },
+    {
+      "path": "fix-appointments-data.js",
+      "size": 9901
+    },
+    {
+      "path": "fix-avatar-mock-data.js",
+      "size": 5402
+    },
+    {
+      "path": "fix-calculate-ubs-metrics-function.sql",
+      "size": 12816
+    },
+    {
+      "path": "fix-cancellation-rate-simple.js",
+      "size": 5189
+    },
+    {
+      "path": "fix-cancellation-rate.js",
+      "size": 7968
+    },
+    {
+      "path": "fix-chat-duration-data.js",
+      "size": 5664
+    },
+    {
+      "path": "fix-chat-minutes-function.sql",
+      "size": 3630
+    },
+    {
+      "path": "fix-conversations-count.js",
+      "size": 3683
+    },
+    {
+      "path": "fix-conversations-schema.js",
+      "size": 2675
+    },
+    {
+      "path": "fix-conversations-simple.js",
+      "size": 3299
+    },
+    {
+      "path": "fix-create-professionals-services.js",
+      "size": 5726
+    },
+    {
+      "path": "fix-cron-with-correct-logic.js",
+      "size": 4756
+    },
+    {
+      "path": "fix-function-clean.sql",
+      "size": 10066
+    },
+    {
+      "path": "fix-function-date-filter-correct.sql",
+      "size": 10787
+    },
+    {
+      "path": "fix-function-final-correct-fixed.sql",
+      "size": 11188
+    },
+    {
+      "path": "fix-function-final-correct.sql",
+      "size": 11513
+    },
+    {
+      "path": "fix-function-for-jsonb.sql",
+      "size": 16582
+    },
+    {
+      "path": "fix-function-use-start-time.sql",
+      "size": 11054
+    },
+    {
+      "path": "fix-function-with-correct-logic.js",
+      "size": 16034
+    },
+    {
+      "path": "fix-function-with-real-schema.js",
+      "size": 12377
+    },
+    {
+      "path": "fix-metrics-function.sql",
+      "size": 17712
+    },
+    {
+      "path": "fix-minutes-direct.js",
+      "size": 6124
+    },
+    {
+      "path": "fix-missing-ranking-function.sql",
+      "size": 1813
+    },
+    {
+      "path": "fix-numeric-overflow.js",
+      "size": 5406
+    },
+    {
+      "path": "fix-numeric-precision.sql",
+      "size": 1551
+    },
+    {
+      "path": "fix-original-function.js",
+      "size": 13345
+    },
+    {
+      "path": "fix-original-function.sql",
+      "size": 10976
+    },
+    {
+      "path": "fix-platform-metrics-timezone.js",
+      "size": 20125
+    },
+    {
+      "path": "fix-ranking-function-corrected.sql",
+      "size": 2003
+    },
+    {
+      "path": "fix-ranking-function-final.sql",
+      "size": 1726
+    },
+    {
+      "path": "fix-ranking-function-simple.sql",
+      "size": 1760
+    },
+    {
+      "path": "fix-revenue-calculations-only.js",
+      "size": 9236
+    },
+    {
+      "path": "fix-sql-calculations-correct.sql",
+      "size": 12231
+    },
+    {
+      "path": "fix-sql-function.js",
+      "size": 15504
+    },
+    {
+      "path": "fix-table-and-function.sql",
+      "size": 11940
+    },
+    {
+      "path": "fix-temporal-logic.sql",
+      "size": 16707
+    },
+    {
+      "path": "fix-tenant-api-endpoint.js",
+      "size": 2988
+    },
+    {
+      "path": "fix-tenant-metrics-table.js",
+      "size": 2782
+    },
+    {
+      "path": "fix-usage-cost-architecture.sql",
+      "size": 5499
+    },
+    {
+      "path": "fix-user-tenant-relationships.js",
+      "size": 16046
+    },
+    {
+      "path": "fix-users-calculation.js",
+      "size": 9468
+    },
+    {
+      "path": "fix-users-direct.js",
+      "size": 5836
+    },
+    {
+      "path": "fix-users-final.js",
+      "size": 5762
+    },
+    {
+      "path": "fix-validation-report.json",
+      "size": 7547
+    },
+    {
+      "path": "frontend-validation-report.json",
+      "size": 7518
+    },
+    {
+      "path": "generate-appointments-from-conversations.js",
+      "size": 22778
+    },
+    {
+      "path": "generate-february-data.py",
+      "size": 43232
+    },
+    {
+      "path": "generate-hash.js",
+      "size": 273
+    },
+    {
+      "path": "generate-january-only.py",
+      "size": 24747
+    },
+    {
+      "path": "generate-month-by-month.py",
+      "size": 18763
+    },
+    {
+      "path": "generate-realistic-appointments.js",
+      "size": 18899
+    },
+    {
+      "path": "generate-sample-dashboard-data.js",
+      "size": 25289
+    },
+    {
+      "path": "generate-totalization-csv.js",
+      "size": 7793
+    },
+    {
+      "path": "generate-ubs-business-data-temporal.py",
+      "size": 26741
+    },
+    {
+      "path": "generate-ubs-business-data.py",
+      "size": 15806
+    },
+    {
+      "path": "generate_business_plan_table.py",
+      "size": 11574
+    },
+    {
+      "path": "generate_business_plan_table_corrected.py",
+      "size": 10718
+    },
+    {
+      "path": "generate_conservador_completo.py",
+      "size": 16178
+    },
+    {
+      "path": "generate_final_csv_direct.py",
+      "size": 11897
+    },
+    {
+      "path": "generate_from_csv_direct.py",
+      "size": 2704
+    },
+    {
+      "path": "generate_january_correct_from_business_plan.py",
+      "size": 24967
+    },
+    {
+      "path": "generate_m0_ajustado.py",
+      "size": 11335
+    },
+    {
+      "path": "generate_m0_com_esportes.py",
+      "size": 10633
+    },
+    {
+      "path": "generate_m0_conservador.py",
+      "size": 11914
+    },
+    {
+      "path": "generate_m0_corrected.py",
+      "size": 9891
+    },
+    {
+      "path": "generate_m0_final_corrected.py",
+      "size": 10295
+    },
+    {
+      "path": "generate_m0_m1_exact_table.py",
+      "size": 13545
+    },
+    {
+      "path": "generate_m0_profissionais_5.py",
+      "size": 11502
+    },
+    {
+      "path": "generated-test-actions.json",
+      "size": 8344
+    },
+    {
+      "path": "htmls-7-7",
+      "size": 1056
+    },
+    {
+      "path": "implement-conversation-timeout.js",
+      "size": 13119
+    },
+    {
+      "path": "implement-correct-billing-model.js",
+      "size": 13306
+    },
+    {
+      "path": "investigate-appointment-date-fields.js",
+      "size": 7902
+    },
+    {
+      "path": "investigate-appointment-status.js",
+      "size": 7619
+    },
+    {
+      "path": "investigate-conversation-structure.js",
+      "size": 4700
+    },
+    {
+      "path": "investigate-cron-calculation-issue.js",
+      "size": 16465
+    },
+    {
+      "path": "investigate-date-and-revenue-issues.js",
+      "size": 9920
+    },
+    {
+      "path": "investigate-duplication-issue.js",
+      "size": 9089
+    },
+    {
+      "path": "investigate-function-deeply.js",
+      "size": 6917
+    },
+    {
+      "path": "investigate-function-query.js",
+      "size": 3676
+    },
+    {
+      "path": "investigate-function-source.js",
+      "size": 5778
+    },
+    {
+      "path": "investigate-kpi-data-fixed.js",
+      "size": 12988
+    },
+    {
+      "path": "investigate-kpi-data.js",
+      "size": 11417
+    },
+    {
+      "path": "investigate-platform-mrr.js",
+      "size": 8622
+    },
+    {
+      "path": "investigate-real-data.js",
+      "size": 10959
+    },
+    {
+      "path": "investigate-revenue-difference.js",
+      "size": 5541
+    },
+    {
+      "path": "memory-usage-monitor.js",
+      "size": 10496
+    },
+    {
+      "path": "multi-tenant-stress-test-report.json",
+      "size": 1568
+    },
+    {
+      "path": "optimize-db-with-mcp-approach.js",
+      "size": 28346
+    },
+    {
+      "path": "optimize-images-sharp.js",
+      "size": 4441
+    },
+    {
+      "path": "optimize-images.js",
+      "size": 3505
+    },
+    {
+      "path": "p1-002-api-auth-audit.js",
+      "size": 16223
+    },
+    {
+      "path": "p1-003-complete-with-existing-data.js",
+      "size": 14537
+    },
+    {
+      "path": "p1-003-data-population.js",
+      "size": 18315
+    },
+    {
+      "path": "p1-003-simple-data-population.js",
+      "size": 12759
+    },
+    {
+      "path": "p1-004-memory-optimization.js",
+      "size": 11752
+    },
+    {
+      "path": "page-analysis-report.json",
+      "size": 148152
+    },
+    {
+      "path": "payments_export.csv",
+      "size": 1802
+    },
+    {
+      "path": "populate-appointments-conversations-m0.js",
+      "size": 12086
+    },
+    {
+      "path": "populate-correct-data.js",
+      "size": 8857
+    },
+    {
+      "path": "populate-dashboard-test-data.js",
+      "size": 9889
+    },
+    {
+      "path": "populate-democratic-data.js",
+      "size": 12201
+    },
+    {
+      "path": "populate-enriched-metrics-direct.js",
+      "size": 8100
+    },
+    {
+      "path": "populate-exato-do-csv.js",
+      "size": 11379
+    },
+    {
+      "path": "populate-final-2000-chats.js",
+      "size": 9621
+    },
+    {
+      "path": "populate-m0-resumo.json",
+      "size": 22100
+    },
+    {
+      "path": "populate-m1-diferenca.js",
+      "size": 19101
+    },
+    {
+      "path": "populate-m2-diferenca.js",
+      "size": 18588
+    },
+    {
+      "path": "populate-m3-diferenca.js",
+      "size": 18656
+    },
+    {
+      "path": "populate-metrics-final.js",
+      "size": 8689
+    },
+    {
+      "path": "populate-metrics-tables.py",
+      "size": 14579
+    },
+    {
+      "path": "populate-real-data.js",
+      "size": 8252
+    },
+    {
+      "path": "populate-realistic-conversations-appointments.js",
+      "size": 14520
+    },
+    {
+      "path": "populate-realistic-conversations.js",
+      "size": 11231
+    },
+    {
+      "path": "populate-realistic-data.js",
+      "size": 4867
+    },
+    {
+      "path": "populate-realistic-database.js",
+      "size": 36732
+    },
+    {
+      "path": "populate-regra-conservadora-resumo.json",
+      "size": 23098
+    },
+    {
+      "path": "populate-stripe-customers-batch2.js",
+      "size": 6569
+    },
+    {
+      "path": "populate-stripe-customers-real.js",
+      "size": 13853
+    },
+    {
+      "path": "populate-temporal-data-janeiro.js",
+      "size": 14725
+    },
+    {
+      "path": "populate-temporal-janeiro-resumo.json",
+      "size": 347
+    },
+    {
+      "path": "populate-tenant-metrics-fast.js",
+      "size": 6096
+    },
+    {
+      "path": "populate-tenant-metrics-jsonb.js",
+      "size": 10216
+    },
+    {
+      "path": "populate-tenant-platform-metrics.js",
+      "size": 9048
+    },
+    {
+      "path": "populate-test-data-for-apis.js",
+      "size": 8244
+    },
+    {
+      "path": "populate-ubs-conservative-m0-fast.js",
+      "size": 12676
+    },
+    {
+      "path": "populate-ubs-conservative-m0-fixed.js",
+      "size": 14061
+    },
+    {
+      "path": "populate-ubs-conservative-m0.js",
+      "size": 10425
+    },
+    {
+      "path": "populate-ubs-regra-conservadora.js",
+      "size": 14808
+    },
+    {
+      "path": "populate-whatsapp-conversations-realistic.js",
+      "size": 20873
+    },
+    {
+      "path": "quick-login-test.js",
+      "size": 1897
+    },
+    {
+      "path": "quick-validation-test.js",
+      "size": 1545
+    },
+    {
+      "path": "recalculate-from-csv.js",
+      "size": 6894
+    },
+    {
+      "path": "recalculate-platform-metrics-correct-model.js",
+      "size": 10550
+    },
+    {
+      "path": "recalculate-usage-costs-phase3.js",
+      "size": 19196
+    },
+    {
+      "path": "reset-and-populate-task1-complete.js",
+      "size": 6228
+    },
+    {
+      "path": "reset-and-populate-task1-correct.js",
+      "size": 5537
+    },
+    {
+      "path": "reset-and-populate-task1-final-correct.js",
+      "size": 6183
+    },
+    {
+      "path": "reset-and-populate-task1-final.js",
+      "size": 8776
+    },
+    {
+      "path": "reset-and-populate-task1-minimal.js",
+      "size": 3737
+    },
+    {
+      "path": "reset-and-populate-task1-simple.js",
+      "size": 5819
+    },
+    {
+      "path": "reset-and-populate-task1-v2.js",
+      "size": 9218
+    },
+    {
+      "path": "reset-and-populate-task1.js",
+      "size": 8260
+    },
+    {
+      "path": "reset-and-repopulate-complete.js",
+      "size": 22041
+    },
+    {
+      "path": "response.txt",
+      "size": 4537
+    },
+    {
+      "path": "responsiveness-test-report.json",
+      "size": 4880
+    },
+    {
+      "path": "restore-conversation-outcome-field.sql",
+      "size": 1853
+    },
+    {
+      "path": "restore-super-admin.js",
+      "size": 4140
+    },
+    {
+      "path": "run-analytics-aggregation.js",
+      "size": 12520
+    },
+    {
+      "path": "run-historical-metrics-setup.js",
+      "size": 7515
+    },
+    {
+      "path": "run-tenant-metrics-cron.js",
+      "size": 3336
+    },
+    {
+      "path": "run-unified-metrics-test.js",
+      "size": 7567
+    },
+    {
+      "path": "screenshot-appointments.png",
+      "size": 9476
+    },
+    {
+      "path": "screenshot-conversations.png",
+      "size": 9649
+    },
+    {
+      "path": "screenshot-customers.png",
+      "size": 9073
+    },
+    {
+      "path": "screenshot-professionals.png",
+      "size": 9608
+    },
+    {
+      "path": "screenshot-services.png",
+      "size": 9241
+    },
+    {
+      "path": "screenshot-settings.png",
+      "size": 9122
+    },
+    {
+      "path": "screenshots",
+      "size": 2112
+    },
+    {
+      "path": "security-tests",
+      "size": 704
+    },
+    {
+      "path": "server.log",
+      "size": 361522
+    },
+    {
+      "path": "services_export.csv",
+      "size": 10795
+    },
+    {
+      "path": "setup-complete-dashboard-system.js",
+      "size": 14239
+    },
+    {
+      "path": "setup-complete-report.json",
+      "size": 703
+    },
+    {
+      "path": "setup-production.js",
+      "size": 3944
+    },
+    {
+      "path": "setup-whatsapp.js",
+      "size": 3813
+    },
+    {
+      "path": "simple-create-payments-table.js",
+      "size": 6299
+    },
+    {
+      "path": "simple-memory-test.js",
+      "size": 11090
+    },
+    {
+      "path": "simple-populate.js",
+      "size": 3872
+    },
+    {
+      "path": "simple-population.js",
+      "size": 3539
+    },
+    {
+      "path": "simple-server-test.js",
+      "size": 1386
+    },
+    {
+      "path": "simple-test.js",
+      "size": 1096
+    },
+    {
+      "path": "simulate-correct-metrics.js",
+      "size": 7010
+    },
+    {
+      "path": "smart-database-population.js",
+      "size": 25458
+    },
+    {
+      "path": "smart-population.js",
+      "size": 8682
+    },
+    {
+      "path": "stress-test-api-endpoints.js",
+      "size": 2061
+    },
+    {
+      "path": "stress-test-build-optimization.js",
+      "size": 3315
+    },
+    {
+      "path": "stress-test-cron-performance.js",
+      "size": 6776
+    },
+    {
+      "path": "stress-test-dashboard.js",
+      "size": 1900
+    },
+    {
+      "path": "stress-test-database-functions.js",
+      "size": 2340
+    },
+    {
+      "path": "stress-test-memory-efficiency.js",
+      "size": 2703
+    },
+    {
+      "path": "stress-test-memory-final.js",
+      "size": 5238
+    },
+    {
+      "path": "stress-test-multi-tenant-fixed.js",
+      "size": 15273
+    },
+    {
+      "path": "stress-test-multi-tenant.js",
+      "size": 15316
+    },
+    {
+      "path": "super-admin-dashboard-test.png",
+      "size": 133263
+    },
+    {
+      "path": "t014-charts-validation-report-2025-07-18.json",
+      "size": 2889
+    },
+    {
+      "path": "t014-simple-validation-2025-07-18.json",
+      "size": 1088
+    },
+    {
+      "path": "t014-validation-screenshots",
+      "size": 384
+    },
+    {
+      "path": "tarefa1-limpar-criar-tenants.js",
+      "size": 7598
+    },
+    {
+      "path": "tenants-criados.json",
+      "size": 14902
+    },
+    {
+      "path": "test-24h-window-real.js",
+      "size": 6084
+    },
+    {
+      "path": "test-admin-authentication-comprehensive.js",
+      "size": 29468
+    },
+    {
+      "path": "test-advanced-performance.js",
+      "size": 17815
+    },
+    {
+      "path": "test-api-endpoints.js",
+      "size": 8341
+    },
+    {
+      "path": "test-api-user-info.js",
+      "size": 2798
+    },
+    {
+      "path": "test-auth-flow.js",
+      "size": 3639
+    },
+    {
+      "path": "test-avatar-with-real-login.js",
+      "size": 8531
+    },
+    {
+      "path": "test-browser-visual.js",
+      "size": 6184
+    },
+    {
+      "path": "test-chart-debug.js",
+      "size": 3700
+    },
+    {
+      "path": "test-charts-standardization.js",
+      "size": 9315
+    },
+    {
+      "path": "test-complete-page.js",
+      "size": 7509
+    },
+    {
+      "path": "test-console-errors-fixed.js",
+      "size": 2405
+    },
+    {
+      "path": "test-controls-position.js",
+      "size": 5203
+    },
+    {
+      "path": "test-conversation-billing-model.js",
+      "size": 13916
+    },
+    {
+      "path": "test-conversation-data.js",
+      "size": 2978
+    },
+    {
+      "path": "test-conversation-model-simple.js",
+      "size": 9719
+    },
+    {
+      "path": "test-conversation-outcome-integration.js",
+      "size": 10792
+    },
+    {
+      "path": "test-conversations-api.js",
+      "size": 3974
+    },
+    {
+      "path": "test-corrected-function.js",
+      "size": 7796
+    },
+    {
+      "path": "test-critical-functionality.js",
+      "size": 16224
+    },
+    {
+      "path": "test-cron-complete.js",
+      "size": 13358
+    },
+    {
+      "path": "test-cron-function-simple.js",
+      "size": 7570
+    },
+    {
+      "path": "test-cron-functionality.js",
+      "size": 6828
+    },
+    {
+      "path": "test-current-performance.js",
+      "size": 3775
+    },
+    {
+      "path": "test-customization-modal.js",
+      "size": 11180
+    },
+    {
+      "path": "test-dashboard-complete-final.js",
+      "size": 6804
+    },
+    {
+      "path": "test-dashboard-complete.js",
+      "size": 7457
+    },
+    {
+      "path": "test-dashboard-debug.js",
+      "size": 2496
+    },
+    {
+      "path": "test-dashboard-error-fix.js",
+      "size": 5507
+    },
+    {
+      "path": "test-dashboard-file-based.js",
+      "size": 33876
+    },
+    {
+      "path": "test-dashboard-final.js",
+      "size": 6450
+    },
+    {
+      "path": "test-dashboard-frontend.js",
+      "size": 4725
+    },
+    {
+      "path": "test-dashboard-integration.js",
+      "size": 5259
+    },
+    {
+      "path": "test-dashboard-kpis.html",
+      "size": 3265
+    },
+    {
+      "path": "test-dashboard-real.js",
+      "size": 10265
+    },
+    {
+      "path": "test-dashboard-responsiveness.js",
+      "size": 17820
+    },
+    {
+      "path": "test-dashboard-simple.js",
+      "size": 4894
+    },
+    {
+      "path": "test-dashboard-standardized.js",
+      "size": 7359
+    },
+    {
+      "path": "test-dashboard-tenant-admin.js",
+      "size": 5916
+    },
+    {
+      "path": "test-dashboard-validation.js",
+      "size": 9537
+    },
+    {
+      "path": "test-dashboard-with-existing-data.js",
+      "size": 6818
+    },
+    {
+      "path": "test-database-deployment.js",
+      "size": 10741
+    },
+    {
+      "path": "test-database-directly.js",
+      "size": 9022
+    },
+    {
+      "path": "test-date-corrected-function.js",
+      "size": 9085
+    },
+    {
+      "path": "test-direct-login.js",
+      "size": 3071
+    },
+    {
+      "path": "test-dropdown-debug.js",
+      "size": 3495
+    },
+    {
+      "path": "test-dropdown-final.js",
+      "size": 5074
+    },
+    {
+      "path": "test-dropdown-simple.js",
+      "size": 3522
+    },
+    {
+      "path": "test-dropdown-with-auth.js",
+      "size": 4679
+    },
+    {
+      "path": "test-dynamic-sidebar.js",
+      "size": 4988
+    },
+    {
+      "path": "test-enhanced-function.js",
+      "size": 1470
+    },
+    {
+      "path": "test-error-handling.js",
+      "size": 13846
+    },
+    {
+      "path": "test-exact-fitlife-data.js",
+      "size": 6570
+    },
+    {
+      "path": "test-export-modal.js",
+      "size": 9363
+    },
+    {
+      "path": "test-fab-system.js",
+      "size": 6360
+    },
+    {
+      "path": "test-final-110-optimization.js",
+      "size": 15713
+    },
+    {
+      "path": "test-final-compliance-validation.js",
+      "size": 9166
+    },
+    {
+      "path": "test-final-corrections.js",
+      "size": 6847
+    },
+    {
+      "path": "test-final-dashboard-validation.js",
+      "size": 8663
+    },
+    {
+      "path": "test-final-integration-complete.js",
+      "size": 52520
+    },
+    {
+      "path": "test-fixed-function.js",
+      "size": 4594
+    },
+    {
+      "path": "test-frontend-api.js",
+      "size": 1513
+    },
+    {
+      "path": "test-frontend-auth.html",
+      "size": 5215
+    },
+    {
+      "path": "test-frontend-final.html",
+      "size": 5056
+    },
+    {
+      "path": "test-frontend-puppeteer.js",
+      "size": 16082
+    },
+    {
+      "path": "test-frontend-simple.html",
+      "size": 5795
+    },
+    {
+      "path": "test-function-after-fix.js",
+      "size": 3684
+    },
+    {
+      "path": "test-function-fixed.js",
+      "size": 7826
+    },
+    {
+      "path": "test-functions.js",
+      "size": 910
+    },
+    {
+      "path": "test-google-calendar-real.js",
+      "size": 13108
+    },
+    {
+      "path": "test-guide-simple.html",
+      "size": 19707
+    },
+    {
+      "path": "test-html-syntax-validation.js",
+      "size": 13879
+    },
+    {
+      "path": "test-individual-cards.js",
+      "size": 3594
+    },
+    {
+      "path": "test-insert-fitlife.js",
+      "size": 4785
+    },
+    {
+      "path": "test-kpis-updated.js",
+      "size": 1776
+    },
+    {
+      "path": "test-kpis-validation.js",
+      "size": 3428
+    },
+    {
+      "path": "test-layout-changes.js",
+      "size": 10535
+    },
+    {
+      "path": "test-login-direct.html",
+      "size": 2117
+    },
+    {
+      "path": "test-login-simple.js",
+      "size": 3529
+    },
+    {
+      "path": "test-login-simples.js",
+      "size": 2221
+    },
+    {
+      "path": "test-logo-size.html",
+      "size": 5771
+    },
+    {
+      "path": "test-memory-optimization.js",
+      "size": 9279
+    },
+    {
+      "path": "test-metrics-validation.js",
+      "size": 14888
+    },
+    {
+      "path": "test-migration-safely.js",
+      "size": 7665
+    },
+    {
+      "path": "test-mobile-quick.js",
+      "size": 4448
+    },
+    {
+      "path": "test-new-apis.js",
+      "size": 5985
+    },
+    {
+      "path": "test-new-metrics-system.js",
+      "size": 7565
+    },
+    {
+      "path": "test-outcome-service-simple.js",
+      "size": 4353
+    },
+    {
+      "path": "test-p1-002-auth-enhancement.js",
+      "size": 9845
+    },
+    {
+      "path": "test-p2-004-final-validation.js",
+      "size": 11252
+    },
+    {
+      "path": "test-p2-final-complete.js",
+      "size": 11932
+    },
+    {
+      "path": "test-p3-001-caching.js",
+      "size": 15184
+    },
+    {
+      "path": "test-p3-002-websocket.js",
+      "size": 18289
+    },
+    {
+      "path": "test-p3-003-analytics.js",
+      "size": 25006
+    },
+    {
+      "path": "test-p3-004-n8n.js",
+      "size": 12260
+    },
+    {
+      "path": "test-pages-simple.js",
+      "size": 9606
+    },
+    {
+      "path": "test-professionals-page.js",
+      "size": 9116
+    },
+    {
+      "path": "test-ranking-function.js",
+      "size": 3086
+    },
+    {
+      "path": "test-rankings-api-direct.js",
+      "size": 3335
+    },
+    {
+      "path": "test-rate-limiting-real.js",
+      "size": 9955
+    },
+    {
+      "path": "test-real-conversation-flow.js",
+      "size": 6991
+    },
+    {
+      "path": "test-real-integration.js",
+      "size": 8326
+    },
+    {
+      "path": "test-real-login-sidebar.js",
+      "size": 7883
+    },
+    {
+      "path": "test-real-tenant-avatar.js",
+      "size": 7828
+    },
+    {
+      "path": "test-real-tenant-avatar.png",
+      "size": 214828
+    },
+    {
+      "path": "test-real-tenant-pages.js",
+      "size": 12197
+    },
+    {
+      "path": "test-real-validation.js",
+      "size": 9980
+    },
+    {
+      "path": "test-responsive.js",
+      "size": 6980
+    },
+    {
+      "path": "test-responsiveness-manual.js",
+      "size": 7893
+    },
+    {
+      "path": "test-schema-fix.js",
+      "size": 5026
+    },
+    {
+      "path": "test-screenshot-landing.png",
+      "size": 1007476
+    },
+    {
+      "path": "test-screenshot-mobile.png",
+      "size": 794283
+    },
+    {
+      "path": "test-security-validation.js",
+      "size": 7543
+    },
+    {
+      "path": "test-select-dropdown.js",
+      "size": 4848
+    },
+    {
+      "path": "test-server.js",
+      "size": 1508
+    },
+    {
+      "path": "test-simple-database-function.js",
+      "size": 4069
+    },
+    {
+      "path": "test-simple-integration.js",
+      "size": 2401
+    },
+    {
+      "path": "test-simple-page.js",
+      "size": 2808
+    },
+    {
+      "path": "test-spam-prevention-real.js",
+      "size": 9245
+    },
+    {
+      "path": "test-start-time-function.js",
+      "size": 10165
+    },
+    {
+      "path": "test-super-admin-apis-final.js",
+      "size": 5603
+    },
+    {
+      "path": "test-super-admin-dashboard-complete.js",
+      "size": 10471
+    },
+    {
+      "path": "test-super-admin-dashboard.js",
+      "size": 25552
+    },
+    {
+      "path": "test-super-admin-final.js",
+      "size": 8319
+    },
+    {
+      "path": "test-super-admin-puppeteer.js",
+      "size": 10963
+    },
+    {
+      "path": "test-t013-cards-integration.js",
+      "size": 17035
+    },
+    {
+      "path": "test-t014-charts-simple.js",
+      "size": 16190
+    },
+    {
+      "path": "test-t014-visual-validation.js",
+      "size": 12445
+    },
+    {
+      "path": "test-template-avatar.js",
+      "size": 3394
+    },
+    {
+      "path": "test-temporal-logic-fix.js",
+      "size": 5835
+    },
+    {
+      "path": "test-tenant-admin-dashboard-features.js",
+      "size": 11903
+    },
+    {
+      "path": "test-tenant-admin-standardized.html",
+      "size": 15379
+    },
+    {
+      "path": "test-tenant-analytics-standardized.html",
+      "size": 13489
+    },
+    {
+      "path": "test-tenant-api.js",
+      "size": 2659
+    },
+    {
+      "path": "test-tenant-avatar-fix.js",
+      "size": 6515
+    },
+    {
+      "path": "test-tenant-business-analytics.js",
+      "size": 10656
+    },
+    {
+      "path": "test-tenant-dropdown-api.js",
+      "size": 3138
+    },
+    {
+      "path": "test-tenant-endpoint-real.js",
+      "size": 2817
+    },
+    {
+      "path": "test-tenant-page-corrected.js",
+      "size": 6879
+    },
+    {
+      "path": "test-tenant-page-puppeteer.js",
+      "size": 6161
+    },
+    {
+      "path": "test-tenant-redirect.html",
+      "size": 8665
+    },
+    {
+      "path": "test-tenant-structure.js",
+      "size": 1345
+    },
+    {
+      "path": "test-timeout.js",
+      "size": 951
+    },
+    {
+      "path": "test-unified-cron.js",
+      "size": 7396
+    },
+    {
+      "path": "test-unified-dashboard-system.js",
+      "size": 23704
+    },
+    {
+      "path": "test-updated-apis.js",
+      "size": 7306
+    },
+    {
+      "path": "test-updated-super-admin-apis.js",
+      "size": 8625
+    },
+    {
+      "path": "test-ux-settings-validation.js",
+      "size": 11587
+    },
+    {
+      "path": "test-ux-static-validation.js",
+      "size": 13560
+    },
+    {
+      "path": "test-view-button-detailed.js",
+      "size": 6381
+    },
+    {
+      "path": "test-view-button.js",
+      "size": 4323
+    },
+    {
+      "path": "test-webhook-security-real.js",
+      "size": 18365
+    },
+    {
+      "path": "test-whatsapp-guide.html",
+      "size": 10177
+    },
+    {
+      "path": "test-working-function.js",
+      "size": 3822
+    },
+    {
+      "path": "test-working-functionality.js",
+      "size": 7481
+    },
+    {
+      "path": "test_appointments.csv",
+      "size": 196954
+    },
+    {
+      "path": "test_customers.csv",
+      "size": 37166
+    },
+    {
+      "path": "test_dashboard.csv",
+      "size": 247
+    },
+    {
+      "path": "test_payments.csv",
+      "size": 1802
+    },
+    {
+      "path": "test_services.csv",
+      "size": 10795
+    },
+    {
+      "path": "teste-bootstrap-simples.html",
+      "size": 2660
+    },
+    {
+      "path": "teste-modal-final.html",
+      "size": 9480
+    },
+    {
+      "path": "tests",
+      "size": 256
+    },
+    {
+      "path": "totais-corretos-csv-direto.json",
+      "size": 5467
+    },
+    {
+      "path": "totais-corretos-m0.json",
+      "size": 1031
+    },
+    {
+      "path": "trace.json",
+      "size": 6696258
+    },
+    {
+      "path": "ubs_business_data",
+      "size": 192
+    },
+    {
+      "path": "ubs_business_data_temporal",
+      "size": 256
+    },
+    {
+      "path": "ubs_february_data",
+      "size": 288
+    },
+    {
+      "path": "ubs_january_data",
+      "size": 256
+    },
+    {
+      "path": "ubs_january_data_correct",
+      "size": 256
+    },
+    {
+      "path": "ultra-aggressive-optimization.js",
+      "size": 24229
+    },
+    {
+      "path": "ultra-optimization-report.json",
+      "size": 2526
+    },
+    {
+      "path": "update-metrics-function-real-minutes.sql",
+      "size": 20489
+    },
+    {
+      "path": "update-platform-functions.sql",
+      "size": 8281
+    },
+    {
+      "path": "validate-all-fixes.js",
+      "size": 21964
+    },
+    {
+      "path": "validate-all-metrics-complete.js",
+      "size": 18595
+    },
+    {
+      "path": "validate-backup-data.js",
+      "size": 10453
+    },
+    {
+      "path": "validate-business-domains.js",
+      "size": 19252
+    },
+    {
+      "path": "validate-conversation-appointment-linking.js",
+      "size": 9131
+    },
+    {
+      "path": "validate-conversation-model.js",
+      "size": 13238
+    },
+    {
+      "path": "validate-corrected-function.js",
+      "size": 9920
+    },
+    {
+      "path": "validate-cron-job.js",
+      "size": 8472
+    },
+    {
+      "path": "validate-cron-metrics-accuracy.js",
+      "size": 10701
+    },
+    {
+      "path": "validate-cron-metrics.js",
+      "size": 11736
+    },
+    {
+      "path": "validate-cron-vs-calculation.js",
+      "size": 8811
+    },
+    {
+      "path": "validate-dashboard-fix.js",
+      "size": 6176
+    },
+    {
+      "path": "validate-dashboard-metrics.js",
+      "size": 9767
+    },
+    {
+      "path": "validate-dashboard-system.js",
+      "size": 12398
+    },
+    {
+      "path": "validate-data-integrity.js",
+      "size": 18096
+    },
+    {
+      "path": "validate-database-columns.js",
+      "size": 8067
+    },
+    {
+      "path": "validate-final-corrected-values.js",
+      "size": 8674
+    },
+    {
+      "path": "validate-january-data.py",
+      "size": 6914
+    },
+    {
+      "path": "validate-metrics-tables.py",
+      "size": 6247
+    },
+    {
+      "path": "validate-metrics-vs-database.js",
+      "size": 12898
+    },
+    {
+      "path": "validate-metrics.js",
+      "size": 7897
+    },
+    {
+      "path": "validate-sql-function.js",
+      "size": 8254
+    },
+    {
+      "path": "validate-t013-cards.js",
+      "size": 14373
+    },
+    {
+      "path": "validate-t014-charts-enhancement.js",
+      "size": 35159
+    },
+    {
+      "path": "validate-ubs-metrics-system-fixed.js",
+      "size": 8850
+    },
+    {
+      "path": "validate-ubs-metrics-system.js",
+      "size": 18540
+    },
+    {
+      "path": "validation-screenshots",
+      "size": 416
+    }
+  ]
+}

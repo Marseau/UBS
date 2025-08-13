@@ -1,0 +1,153 @@
+{
+  "timestamp": "2025-07-27T14:40:59.341Z",
+  "summary": {
+    "totalIssues": 12,
+    "highSeverity": 9,
+    "mediumSeverity": 3,
+    "lowSeverity": 0,
+    "recommendations": 1
+  },
+  "issues": [
+    {
+      "title": "JavaScript Error",
+      "description": "❌ Token não encontrado. Tentando recuperar contexto...",
+      "severity": "high",
+      "recommendation": "Fix JavaScript error in browser console"
+    },
+    {
+      "title": "JavaScript Error",
+      "description": "❌ Nenhum contexto válido encontrado. Redirecionando...",
+      "severity": "high",
+      "recommendation": "Fix JavaScript error in browser console"
+    },
+    {
+      "title": "Authentication Redirect",
+      "description": "Settings page redirects to login even with mock tokens",
+      "severity": "high",
+      "recommendation": "Fix authentication detection logic in settings-standardized.html"
+    },
+    {
+      "title": "LocalStorage Not Persisting",
+      "description": "Authentication tokens not persisting in localStorage",
+      "severity": "medium",
+      "recommendation": "Ensure localStorage is properly set before page loads"
+    },
+    {
+      "title": "Modal Not Showing",
+      "description": "Modal exists but not visible after button click",
+      "severity": "medium",
+      "recommendation": "Check Bootstrap modal initialization and show() function"
+    },
+    {
+      "title": "Missing Function: addCustomer",
+      "description": "Function addCustomer is not defined globally",
+      "severity": "high",
+      "recommendation": "Define addCustomer function in appropriate JavaScript file"
+    },
+    {
+      "title": "Missing Function: updateProfile",
+      "description": "Function updateProfile is not defined globally",
+      "severity": "medium",
+      "recommendation": "Define updateProfile function in appropriate JavaScript file"
+    },
+    {
+      "title": "JavaScript Error",
+      "description": "❌ Token não encontrado. Tentando recuperar contexto...",
+      "severity": "high",
+      "recommendation": "Fix JavaScript error in browser console"
+    },
+    {
+      "title": "JavaScript Error",
+      "description": "❌ Nenhum contexto válido encontrado. Redirecionando...",
+      "severity": "high",
+      "recommendation": "Fix JavaScript error in browser console"
+    },
+    {
+      "title": "Missing Avatar Elements",
+      "description": "User avatar wrapper not found in settings page",
+      "severity": "high",
+      "recommendation": "Add user avatar and dropdown elements to settings-standardized.html"
+    },
+    {
+      "title": "JavaScript Error",
+      "description": "❌ Token não encontrado. Tentando recuperar contexto...",
+      "severity": "high",
+      "recommendation": "Fix JavaScript error in browser console"
+    },
+    {
+      "title": "JavaScript Error",
+      "description": "❌ Nenhum contexto válido encontrado. Redirecionando...",
+      "severity": "high",
+      "recommendation": "Fix JavaScript error in browser console"
+    }
+  ],
+  "recommendations": [
+    {
+      "title": "Improve Auth Detection",
+      "description": "Modify auth.js to properly detect mock/test tokens",
+      "priority": "high"
+    }
+  ],
+  "findings": [
+    {
+      "timestamp": "2025-07-27T14:40:35.882Z",
+      "type": "error",
+      "message": "❌ ISSUE: JavaScript Error - ❌ Token não encontrado. Tentando recuperar contexto..."
+    },
+    {
+      "timestamp": "2025-07-27T14:40:35.883Z",
+      "type": "error",
+      "message": "❌ ISSUE: JavaScript Error - ❌ Nenhum contexto válido encontrado. Redirecionando..."
+    },
+    {
+      "timestamp": "2025-07-27T14:40:42.226Z",
+      "type": "error",
+      "message": "❌ ISSUE: Authentication Redirect - Settings page redirects to login even with mock tokens"
+    },
+    {
+      "timestamp": "2025-07-27T14:40:42.232Z",
+      "type": "error",
+      "message": "❌ ISSUE: LocalStorage Not Persisting - Authentication tokens not persisting in localStorage"
+    },
+    {
+      "timestamp": "2025-07-27T14:40:45.801Z",
+      "type": "error",
+      "message": "❌ ISSUE: Modal Not Showing - Modal exists but not visible after button click"
+    },
+    {
+      "timestamp": "2025-07-27T14:40:51.603Z",
+      "type": "error",
+      "message": "❌ ISSUE: Missing Function: addCustomer - Function addCustomer is not defined globally"
+    },
+    {
+      "timestamp": "2025-07-27T14:40:51.603Z",
+      "type": "error",
+      "message": "❌ ISSUE: Missing Function: updateProfile - Function updateProfile is not defined globally"
+    },
+    {
+      "timestamp": "2025-07-27T14:40:51.681Z",
+      "type": "error",
+      "message": "❌ ISSUE: JavaScript Error - ❌ Token não encontrado. Tentando recuperar contexto..."
+    },
+    {
+      "timestamp": "2025-07-27T14:40:51.681Z",
+      "type": "error",
+      "message": "❌ ISSUE: JavaScript Error - ❌ Nenhum contexto válido encontrado. Redirecionando..."
+    },
+    {
+      "timestamp": "2025-07-27T14:40:53.477Z",
+      "type": "error",
+      "message": "❌ ISSUE: Missing Avatar Elements - User avatar wrapper not found in settings page"
+    },
+    {
+      "timestamp": "2025-07-27T14:40:57.033Z",
+      "type": "error",
+      "message": "❌ ISSUE: JavaScript Error - ❌ Token não encontrado. Tentando recuperar contexto..."
+    },
+    {
+      "timestamp": "2025-07-27T14:40:57.033Z",
+      "type": "error",
+      "message": "❌ ISSUE: JavaScript Error - ❌ Nenhum contexto válido encontrado. Redirecionando..."
+    }
+  ]
+}

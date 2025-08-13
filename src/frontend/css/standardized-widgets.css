@@ -1,0 +1,367 @@
+/* ==========================================
+   STANDARDIZED WIDGET SYSTEM STYLES
+   ========================================== */
+
+/* Widget Base Styles */
+.ubs-widget {
+    background: var(--ubs-bg-card, #ffffff);
+    border-radius: var(--ubs-border-radius, 10px);
+    box-shadow: var(--ubs-shadow-card, 0 1px 8px rgba(45,90,155,0.07));
+    margin-bottom: 1.5rem;
+    padding: 0;
+    transition: var(--ubs-transition, all 0.3s ease);
+    border: 1px solid var(--ubs-border-light, #e9ecef);
+}
+
+.ubs-widget:hover,
+.ubs-widget.widget-hover {
+    box-shadow: var(--ubs-shadow-card-hover, 0 4px 16px rgba(45,90,155,0.12));
+    transform: translateY(-2px);
+}
+
+/* Widget Header */
+.widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--ubs-border-light, #e9ecef);
+    background: var(--ubs-bg-secondary, #f8f9fa);
+    border-radius: var(--ubs-border-radius, 10px) var(--ubs-border-radius, 10px) 0 0;
+}
+
+.widget-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--ubs-primary, #2D5A9B);
+}
+
+.widget-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.widget-refresh-btn {
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    transition: var(--ubs-transition, all 0.3s ease);
+}
+
+.widget-refresh-btn:hover {
+    background: var(--ubs-primary, #2D5A9B);
+    color: white;
+}
+
+.widget-refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Widget Status Indicator */
+.widget-status {
+    display: flex;
+    align-items: center;
+}
+
+.widget-status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ubs-secondary, #6c757d);
+    transition: var(--ubs-transition, all 0.3s ease);
+}
+
+.widget-status-indicator.status-idle {
+    background: var(--ubs-secondary, #6c757d);
+}
+
+.widget-status-indicator.status-loading {
+    background: var(--ubs-info, #17a2b8);
+    animation: pulse 1.5s infinite;
+}
+
+.widget-status-indicator.status-success {
+    background: var(--ubs-success, #28a745);
+}
+
+.widget-status-indicator.status-error {
+    background: var(--ubs-danger, #dc3545);
+    animation: pulse 1.5s infinite;
+}
+
+.widget-status-indicator.status-empty {
+    background: var(--ubs-warning, #ffc107);
+}
+
+/* Widget Body */
+.widget-body {
+    padding: 1.5rem;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Widget State Classes */
+.ubs-widget.widget-loading {
+    opacity: 0.8;
+}
+
+.ubs-widget.widget-error {
+    border-left: 4px solid var(--ubs-danger, #dc3545);
+}
+
+.ubs-widget.widget-empty {
+    border-left: 4px solid var(--ubs-warning, #ffc107);
+}
+
+.ubs-widget.widget-success {
+    border-left: 4px solid var(--ubs-success, #28a745);
+}
+
+/* Loading State */
+.widget-loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    text-align: center;
+}
+
+.loading-skeleton {
+    width: 100%;
+    max-width: 300px;
+    margin-bottom: 1rem;
+}
+
+.loading-bar {
+    height: 12px;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading-shimmer 1.5s infinite;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+}
+
+.loading-bar-lg {
+    height: 16px;
+    width: 100%;
+}
+
+.loading-bar-md {
+    height: 12px;
+    width: 75%;
+}
+
+.loading-bar-sm {
+    height: 10px;
+    width: 50%;
+}
+
+@keyframes loading-shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* Error State */
+.widget-error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    text-align: center;
+}
+
+.error-icon {
+    font-size: 3rem;
+    color: var(--ubs-danger, #dc3545);
+    margin-bottom: 1rem;
+    opacity: 0.7;
+}
+
+.widget-error-state h6 {
+    color: var(--ubs-danger, #dc3545);
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.widget-error-state p {
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    max-width: 300px;
+}
+
+/* Empty State */
+.widget-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    text-align: center;
+}
+
+.empty-icon {
+    font-size: 3rem;
+    color: var(--ubs-warning, #ffc107);
+    margin-bottom: 1rem;
+    opacity: 0.7;
+}
+
+.widget-empty-state h6 {
+    color: var(--ubs-warning, #ffc107);
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.widget-empty-state p {
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    max-width: 300px;
+}
+
+/* Retry Button */
+.widget-retry-btn {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    transition: var(--ubs-transition, all 0.3s ease);
+}
+
+.widget-retry-btn:hover {
+    background: var(--ubs-primary, #2D5A9B);
+    color: white;
+    transform: translateY(-1px);
+}
+
+/* Pulse Animation */
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+/* Widget Type Specific Styles */
+.ubs-widget-chart {
+    min-height: 340px;
+}
+
+.ubs-widget-table {
+    min-height: 300px;
+}
+
+.ubs-widget-kpi {
+    min-height: 120px;
+}
+
+.ubs-widget-insight {
+    min-height: 150px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .widget-header {
+        padding: 0.75rem 1rem;
+    }
+    
+    .widget-body {
+        padding: 1rem;
+        min-height: 150px;
+    }
+    
+    .widget-title {
+        font-size: 1rem;
+    }
+    
+    .widget-loading-state,
+    .widget-error-state,
+    .widget-empty-state {
+        min-height: 150px;
+    }
+    
+    .error-icon,
+    .empty-icon {
+        font-size: 2rem;
+    }
+    
+    .ubs-widget-chart {
+        min-height: 280px;
+    }
+    
+    .ubs-widget-table {
+        min-height: 250px;
+    }
+}
+
+@media (max-width: 480px) {
+    .widget-header {
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.5rem;
+    }
+    
+    .widget-controls {
+        align-self: stretch;
+        justify-content: space-between;
+    }
+    
+    .widget-body {
+        padding: 0.75rem;
+    }
+    
+    .ubs-widget {
+        margin-bottom: 1rem;
+    }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    .ubs-widget {
+        background: var(--ubs-bg-card-dark, #1a1a1a);
+        border-color: var(--ubs-border-dark, #404040);
+    }
+    
+    .widget-header {
+        background: var(--ubs-bg-secondary-dark, #2d2d2d);
+        border-color: var(--ubs-border-dark, #404040);
+    }
+    
+    .widget-title {
+        color: var(--ubs-text-primary-dark, #ffffff);
+    }
+    
+    .loading-bar {
+        background: linear-gradient(90deg, #2d2d2d 25%, #3d3d3d 50%, #2d2d2d 75%);
+    }
+}
+
+/* Print Styles */
+@media print {
+    .ubs-widget {
+        break-inside: avoid;
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+    
+    .widget-controls {
+        display: none;
+    }
+    
+    .widget-loading-state,
+    .widget-error-state {
+        display: none;
+    }
+}

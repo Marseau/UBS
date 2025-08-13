@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - UBS | Universal Booking System</title>
+    <meta name="description" content="Analytics e métricas detalhadas do seu negócio no UBS.">
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --ubs-primary: #2D5A9B;
+            --ubs-primary-light: #4A7BC8;
+            --ubs-primary-dark: #1E3F6B;
+            --ubs-secondary: #F8F9FA;
+            --ubs-accent: #28A745;
+            --ubs-warning: #ffc107;
+            --ubs-danger: #dc3545;
+            --ubs-info: #17a2b8;
+            --ubs-text-dark: #2C3E50;
+            --ubs-text-light: #6C757D;
+            --ubs-border: #E9ECEF;
+            --ubs-shadow: 0 4px 20px rgba(45, 90, 155, 0.15);
+            --ubs-shadow-lg: 0 10px 40px rgba(45, 90, 155, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--ubs-secondary);
+            color: var(--ubs-text-dark);
+            overflow-x: hidden;
+        }
+
+        /* Top Navbar */
+        .top-navbar {
+            background: white;
+            border-bottom: 1px solid var(--ubs-border);
+            padding: 0.75rem 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1030;
+            box-shadow: var(--ubs-shadow);
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--ubs-primary) !important;
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--ubs-primary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--ubs-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 70px;
+            left: 0;
+            width: 280px;
+            height: calc(100vh - 70px);
+            background: linear-gradient(180deg, var(--ubs-primary) 0%, var(--ubs-primary-dark) 100%);
+            padding: 2rem 0;
+            z-index: 1020;
+            overflow-y: auto;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar-menu li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 2rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-left-color: white;
+        }
+
+        .sidebar-menu i {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            margin-top: 70px;
+            padding: 2rem;
+            min-height: calc(100vh - 70px);
+        }
+
+        /* UBS Section */
+        .ubs-section {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--ubs-shadow);
+            border: 1px solid var(--ubs-border);
+        }
+
+        .ubs-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--ubs-border);
+        }
+
+        .ubs-section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--ubs-text-dark);
+            margin: 0;
+        }
+
+        /* Period Selector */
+        .period-selector {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .period-btn {
+            background: white;
+            border: 2px solid var(--ubs-border);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .period-btn.active {
+            background: var(--ubs-primary);
+            color: white;
+            border-color: var(--ubs-primary);
+        }
+
+        .period-btn:hover {
+            border-color: var(--ubs-primary-light);
+            transform: translateY(-2px);
+        }
+
+        /* Metric Cards */
+        .metric-card {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: var(--ubs-shadow);
+            border: 1px solid var(--ubs-border);
+            text-align: center;
+            height: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .metric-card:hover {
+            box-shadow: var(--ubs-shadow-lg);
+            transform: translateY(-5px);
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-label {
+            color: var(--ubs-text-light);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .metric-change {
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+        }
+
+        .metric-change.positive {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--ubs-accent);
+        }
+
+        .metric-change.negative {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--ubs-danger);
+        }
+
+        /* Chart Container */
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 1rem 0;
+        }
+
+        .chart-small {
+            height: 250px;
+        }
+
+        /* Analytics Card */
+        .analytics-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: var(--ubs-shadow);
+            margin-bottom: 2rem;
+            border: 1px solid var(--ubs-border);
+            transition: all 0.3s ease;
+        }
+
+        .analytics-card:hover {
+            box-shadow: var(--ubs-shadow-lg);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--ubs-text-dark);
+            margin-bottom: 1rem;
+        }
+
+        /* Table */
+        .table-analytics {
+            font-size: 0.9rem;
+        }
+
+        .table-analytics th {
+            background: var(--ubs-secondary);
+            font-weight: 600;
+            border: none;
+            color: var(--ubs-text-dark);
+        }
+
+        .table-analytics td {
+            border-color: var(--ubs-border);
+        }
+
+        /* Loading Spinner */
+        .loading-spinner {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+        }
+
+        /* Progress Ring */
+        .progress-ring {
+            transform: rotate(-90deg);
+        }
+
+        .progress-ring-circle {
+            transition: stroke-dashoffset 0.35s;
+            transform-origin: 50% 50%;
+        }
+
+        /* Export Section */
+        .export-section {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: var(--ubs-shadow);
+            margin-top: 2rem;
+            border: 1px solid var(--ubs-border);
+        }
+
+        /* Buttons */
+        .btn-primary {
+            background: var(--ubs-primary);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: var(--ubs-primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--ubs-shadow);
+        }
+
+        .btn-outline-primary {
+            color: var(--ubs-primary);
+            border: 2px solid var(--ubs-primary);
+            background: transparent;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--ubs-primary);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        /* Notifications */
+        .ubs-notification {
+            position: fixed;
+            top: 90px;
+            right: 20px;
+            background: white;
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            box-shadow: var(--ubs-shadow-lg);
+            border-left: 4px solid var(--ubs-accent);
+            z-index: 1040;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+
+        .ubs-notification.show {
+            transform: translateX(0);
+        }
+
+        .ubs-notification.error {
+            border-left-color: var(--ubs-danger);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .period-selector {
+                flex-wrap: wrap;
+            }
+            
+            .metric-value {
+                font-size: 2rem;
+            }
+            
+            .chart-container {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Top Navbar -->
+    <nav class="top-navbar">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <a class="navbar-brand" href="/dashboard-standardized.html">
+                    <div class="logo-icon">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                    UBS
+                </a>
+                
+                <div class="user-info">
+                    <span class="d-none d-md-inline text-muted">Olá, <span id="userName">Usuário</span></span>
+                    <div class="user-avatar" id="userAvatar">U</div>
+                    <div class="dropdown">
+                        <button class="btn btn-link p-0" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-chevron-down text-muted"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/dashboard-standardized.html">Dashboard</a></li>
+                            <li><a class="dropdown-item" href="/settings-standardized.html">Configurações</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="logout()">Sair</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <ul class="sidebar-menu">
+            <li><a href="/dashboard-standardized.html"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+            <li><a href="/appointments-standardized.html"><i class="fas fa-calendar-alt"></i> Agendamentos</a></li>
+            <li><a href="/customers-standardized.html"><i class="fas fa-users"></i> Clientes</a></li>
+            <li><a href="/services-standardized.html"><i class="fas fa-concierge-bell"></i> Serviços</a></li>
+            <li><a href="/payments-standardized.html"><i class="fas fa-credit-card"></i> Pagamentos</a></li>
+            <li><a href="/analytics-standardized.html" class="active"><i class="fas fa-chart-line"></i> Analytics</a></li>
+            <li><a href="/conversations-standardized.html"><i class="fas fa-comments"></i> Conversas</a></li>
+            <li><a href="/settings-standardized.html"><i class="fas fa-cog"></i> Configurações</a></li>
+        </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Page Header -->
+        <div class="ubs-section">
+            <div class="ubs-section-header">
+                <div>
+                    <h1 class="ubs-section-title">
+                        <i class="fas fa-chart-line me-2 text-primary"></i>
+                        Analytics & Evolução do Negócio
+                    </h1>
+                    <p class="text-muted mb-0">Métricas detalhadas e insights de performance</p>
+                </div>
+                <div>
+                    <button class="btn btn-outline-primary me-2" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i> Atualizar
+                    </button>
+                    <button class="btn btn-primary" onclick="exportReport()">
+                        <i class="fas fa-download"></i> Exportar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Period Selector -->
+            <div class="period-selector">
+                <button class="period-btn" data-period="7d">7 dias</button>
+                <button class="period-btn active" data-period="30d">30 dias</button>
+                <button class="period-btn" data-period="90d">90 dias</button>
+                <button class="period-btn" data-period="1y">1 ano</button>
+                <button class="period-btn" data-period="custom">Personalizado</button>
+            </div>
+        </div>
+
+        <!-- Key Metrics -->
+        <div class="row mb-4">
+            <div class="col-md-3 mb-3">
+                <div class="metric-card">
+                    <div class="metric-value text-primary" id="totalRevenue">R$ 0</div>
+                    <div class="metric-label">Receita Total</div>
+                    <div class="metric-change positive" id="revenueChange">+0%</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-card">
+                    <div class="metric-value" style="color: var(--ubs-accent);" id="totalAppointments">0</div>
+                    <div class="metric-label">Agendamentos</div>
+                    <div class="metric-change positive" id="appointmentsChange">+0%</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-card">
+                    <div class="metric-value" style="color: var(--ubs-info);" id="newCustomers">0</div>
+                    <div class="metric-label">Novos Clientes</div>
+                    <div class="metric-change positive" id="customersChange">+0%</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-card">
+                    <div class="metric-value" style="color: var(--ubs-warning);" id="conversionRate">0%</div>
+                    <div class="metric-label">Taxa de Conversão</div>
+                    <div class="metric-change positive" id="conversionChange">+0%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="row">
+            <div class="col-lg-8 mb-4">
+                <div class="analytics-card">
+                    <h5 class="card-title">
+                        <i class="fas fa-chart-line text-primary me-2"></i>
+                        Tendência de Receita e Agendamentos
+                    </h5>
+                    <div class="chart-container">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 mb-4">
+                <div class="analytics-card">
+                    <h5 class="card-title">
+                        <i class="fas fa-chart-pie me-2" style="color: var(--ubs-accent);"></i>
+                        Status dos Agendamentos
+                    </h5>
+                    <div class="chart-container chart-small">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 2 -->
+        <div class="row">
+            <div class="col-lg-6 mb-4">
+                <div class="analytics-card">
+                    <h5 class="card-title">
+                        <i class="fas fa-users me-2" style="color: var(--ubs-info);"></i>
+                        Aquisição de Clientes
+                    </h5>
+                    <div class="chart-container chart-small">
+                        <canvas id="customersChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6 mb-4">
+                <div class="analytics-card">
+                    <h5 class="card-title">
+                        <i class="fas fa-brain me-2" style="color: var(--ubs-warning);"></i>
+                        Performance da IA
+                    </h5>
+                    <div class="chart-container chart-small">
+                        <canvas id="aiChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Services Performance -->
+        <div class="row">
+            <div class="col-lg-8 mb-4">
+                <div class="analytics-card">
+                    <h5 class="card-title">
+                        <i class="fas fa-star me-2" style="color: var(--ubs-warning);"></i>
+                        Performance dos Serviços
+                    </h5>
+                    <div class="table-responsive">
+                        <table class="table table-analytics">
+                            <thead>
+                                <tr>
+                                    <th>Serviço</th>
+                                    <th>Agendamentos</th>
+                                    <th>Receita</th>
+                                    <th>Taxa Conclusão</th>
+                                    <th>Ticket Médio</th>
+                                </tr>
+                            </thead>
+                            <tbody id="servicesTable">
+                                <tr>
+                                    <td colspan="5" class="text-center">
+                                        <div class="loading-spinner">
+                                            <div class="spinner-border text-primary" role="status"></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 mb-4">
+                <div class="analytics-card">
+                    <h5 class="card-title">
+                        <i class="fas fa-funnel-dollar text-primary me-2"></i>
+                        Funil de Conversão
+                    </h5>
+                    <div id="conversionFunnel">
+                        <!-- Conversion funnel will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Business Health Score -->
+        <div class="row">
+            <div class="col-lg-4 mb-4">
+                <div class="analytics-card text-center">
+                    <h5 class="card-title">
+                        <i class="fas fa-heartbeat me-2" style="color: var(--ubs-danger);"></i>
+                        Health Score do Negócio
+                    </h5>
+                    <div class="position-relative d-inline-block">
+                        <svg width="120" height="120" class="progress-ring">
+                            <circle class="progress-ring-circle" 
+                                    stroke="#e9ecef" 
+                                    stroke-width="8" 
+                                    fill="transparent" 
+                                    r="52" 
+                                    cx="60" 
+                                    cy="60"/>
+                            <circle class="progress-ring-circle" 
+                                    id="healthCircle"
+                                    stroke="#28a745" 
+                                    stroke-width="8" 
+                                    fill="transparent" 
+                                    r="52" 
+                                    cx="60" 
+                                    cy="60"
+                                    stroke-dasharray="326.73" 
+                                    stroke-dashoffset="326.73"/>
+                        </svg>
+                        <div class="position-absolute top-50 start-50 translate-middle">
+                            <div class="h2 mb-0" id="healthScore">0</div>
+                            <small class="text-muted">Health Score</small>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <small class="text-muted" id="healthDescription">Calculando...</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-8 mb-4">
+                <div class="analytics-card">
+                    <h5 class="card-title">
+                        <i class="fas fa-chart-bar me-2" style="color: var(--ubs-info);"></i>
+                        Comparação com Período Anterior
+                    </h5>
+                    <div class="chart-container chart-small">
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Section -->
+        <div class="export-section">
+            <h5><i class="fas fa-download me-2"></i>Exportar Relatórios</h5>
+            <p class="text-muted mb-3">Baixe relatórios detalhados em diferentes formatos</p>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-primary" onclick="exportPDF()">
+                            <i class="fas fa-file-pdf me-2"></i>Relatório PDF
+                        </button>
+                        <button class="btn btn-outline-success" onclick="exportExcel()">
+                            <i class="fas fa-file-excel me-2"></i>Planilha Excel
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-info" onclick="exportCSV()">
+                            <i class="fas fa-file-csv me-2"></i>Dados CSV
+                        </button>
+                        <button class="btn btn-outline-warning" onclick="scheduleReport()">
+                            <i class="fas fa-clock me-2"></i>Agendar Relatório
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.min.js"></script>
+    <script>
+        // Global variables
+        let currentPeriod = '30d';
+        let analyticsData = null;
+        let charts = {};
+        let isInitialized = false;
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeUserSafe();
+        });
+
+        // Safe user initialization to prevent loops
+        function initializeUserSafe() {
+            if (isInitialized) return;
+            isInitialized = true;
+
+            try {
+                checkAuthenticationStatus();
+                initializePeriodSelector();
+                loadAnalyticsData();
+            } catch (error) {
+                console.error('Error initializing analytics page:', error);
+                showNotification('Erro ao inicializar página', 'error');
+            }
+        }
+
+        // Check authentication status
+        function checkAuthenticationStatus() {
+            const token = localStorage.getItem('ubs_token');
+            const userData = localStorage.getItem('ubs_user_data');
+
+            if (!token || !userData) {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            try {
+                const user = JSON.parse(userData);
+                updateUserInfo(user);
+            } catch (error) {
+                console.error('Error parsing user data:', error);
+                localStorage.removeItem('ubs_user_data');
+                window.location.href = '/login.html';
+            }
+        }
+
+        // Update user info in UI
+        function updateUserInfo(user) {
+            const userName = document.getElementById('userName');
+            const userAvatar = document.getElementById('userAvatar');
+
+            if (userName && user.nome) {
+                userName.textContent = user.nome;
+            }
+
+            if (userAvatar && user.nome) {
+                userAvatar.textContent = user.nome.charAt(0).toUpperCase();
+            }
+        }
+
+        // Period selector
+        function initializePeriodSelector() {
+            document.querySelectorAll('.period-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    currentPeriod = this.dataset.period;
+                    loadAnalyticsData();
+                });
+            });
+        }
+
+        // Load analytics data
+        async function loadAnalyticsData() {
+            try {
+                showLoading();
+                
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch(`/api/analytics?period=${currentPeriod}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        handleAuthError();
+                        return;
+                    }
+                    throw new Error('Failed to load analytics');
+                }
+                
+                analyticsData = await response.json();
+                updateDashboard();
+                
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+                showNotification('Erro ao carregar dados de analytics. Usando dados de demonstração.', 'error');
+                loadFallbackData();
+            }
+        }
+
+        // Load fallback data for demonstration
+        function loadFallbackData() {
+            analyticsData = {
+                revenue: { total: 15000, growthRate: 12.5 },
+                appointments: { total: 127, growthRate: 8.3, dailyStats: [], statusDistribution: {} },
+                customers: { new: 23, growthRate: 15.2 },
+                conversion: { rate: 78.5, growthRate: 5.1 }
+            };
+            updateDashboard();
+        }
+
+        // Update dashboard with new data
+        function updateDashboard() {
+            if (!analyticsData) return;
+
+            updateMetrics();
+            updateCharts();
+            updateServicesTable();
+            updateConversionFunnel();
+            updateHealthScore();
+            hideLoading();
+        }
+
+        // Update key metrics
+        function updateMetrics() {
+            const { revenue, appointments, customers, conversion } = analyticsData;
+
+            document.getElementById('totalRevenue').textContent = 
+                new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+                .format(revenue.total || 0);
+            
+            document.getElementById('totalAppointments').textContent = appointments.total || 0;
+            document.getElementById('newCustomers').textContent = customers.new || 0;
+            document.getElementById('conversionRate').textContent = `${(conversion.rate || 0).toFixed(1)}%`;
+
+            // Update change indicators
+            updateChangeIndicator('revenueChange', revenue.growthRate || 0);
+            updateChangeIndicator('appointmentsChange', appointments.growthRate || 0);
+            updateChangeIndicator('customersChange', customers.growthRate || 0);
+            updateChangeIndicator('conversionChange', conversion.growthRate || 0);
+        }
+
+        // Update change indicator
+        function updateChangeIndicator(elementId, value) {
+            const element = document.getElementById(elementId);
+            const formattedValue = `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+            element.textContent = formattedValue;
+            element.className = `metric-change ${value >= 0 ? 'positive' : 'negative'}`;
+        }
+
+        // Update charts
+        function updateCharts() {
+            updateRevenueChart();
+            updateStatusChart();
+            updateCustomersChart();
+            updateAIChart();
+            updateComparisonChart();
+        }
+
+        // Revenue and appointments chart
+        function updateRevenueChart() {
+            const ctx = document.getElementById('revenueChart').getContext('2d');
+            
+            if (charts.revenue) {
+                charts.revenue.destroy();
+            }
+
+            const dailyStats = analyticsData.appointments.dailyStats || generateMockDailyStats();
+            const labels = dailyStats.map(d => new Date(d.date).toLocaleDateString('pt-BR'));
+            
+            charts.revenue = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Receita (R$)',
+                        data: dailyStats.map(d => d.revenue || 0),
+                        borderColor: 'var(--ubs-primary)',
+                        backgroundColor: 'rgba(45, 90, 155, 0.1)',
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    }, {
+                        label: 'Agendamentos',
+                        data: dailyStats.map(d => d.appointments || 0),
+                        borderColor: 'var(--ubs-accent)',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        tension: 0.4,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Receita (R$)'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Agendamentos'
+                            },
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                        }
+                    }
+                }
+            });
+        }
+
+        // Status distribution chart
+        function updateStatusChart() {
+            const ctx = document.getElementById('statusChart').getContext('2d');
+            
+            if (charts.status) {
+                charts.status.destroy();
+            }
+
+            const statusData = analyticsData.appointments.statusDistribution || {
+                confirmed: 45, completed: 38, cancelled: 8, no_show: 5, pending: 12
+            };
+            
+            charts.status = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Confirmados', 'Completados', 'Cancelados', 'Não Compareceu', 'Pendentes'],
+                    datasets: [{
+                        data: [
+                            statusData.confirmed || 0,
+                            statusData.completed || 0,
+                            statusData.cancelled || 0,
+                            statusData.no_show || 0,
+                            statusData.pending || 0
+                        ],
+                        backgroundColor: [
+                            'var(--ubs-info)',
+                            'var(--ubs-accent)',
+                            'var(--ubs-danger)',
+                            'var(--ubs-warning)',
+                            '#6c757d'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Customers chart
+        function updateCustomersChart() {
+            const ctx = document.getElementById('customersChart').getContext('2d');
+            
+            if (charts.customers) {
+                charts.customers.destroy();
+            }
+
+            const mockData = generateMockCustomerData();
+            
+            charts.customers = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: mockData.labels,
+                    datasets: [{
+                        label: 'Novos Clientes',
+                        data: mockData.data,
+                        backgroundColor: 'var(--ubs-info)',
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // AI Performance chart
+        function updateAIChart() {
+            const ctx = document.getElementById('aiChart').getContext('2d');
+            
+            if (charts.ai) {
+                charts.ai.destroy();
+            }
+
+            const mockData = generateMockAIData();
+            
+            charts.ai = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: mockData.labels,
+                    datasets: [{
+                        label: 'Taxa de Sucesso (%)',
+                        data: mockData.data,
+                        borderColor: 'var(--ubs-warning)',
+                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+        }
+
+        // Comparison chart
+        function updateComparisonChart() {
+            const ctx = document.getElementById('comparisonChart').getContext('2d');
+            
+            if (charts.comparison) {
+                charts.comparison.destroy();
+            }
+
+            const mockData = generateMockComparisonData();
+            
+            charts.comparison = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Receita', 'Agendamentos', 'Clientes', 'Conversão'],
+                    datasets: [{
+                        label: 'Período Atual',
+                        data: mockData.current,
+                        backgroundColor: 'var(--ubs-primary)',
+                        borderRadius: 8
+                    }, {
+                        label: 'Período Anterior',
+                        data: mockData.previous,
+                        backgroundColor: 'var(--ubs-border)',
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update services table
+        function updateServicesTable() {
+            const tableBody = document.getElementById('servicesTable');
+            const mockServices = [
+                { name: 'Corte de Cabelo', appointments: 45, revenue: 2250, completion: 95, average: 50 },
+                { name: 'Manicure', appointments: 38, revenue: 1140, completion: 98, average: 30 },
+                { name: 'Massagem', appointments: 22, revenue: 1760, completion: 92, average: 80 },
+                { name: 'Limpeza de Pele', appointments: 15, revenue: 1125, completion: 90, average: 75 }
+            ];
+
+            tableBody.innerHTML = mockServices.map(service => `
+                <tr>
+                    <td><strong>${service.name}</strong></td>
+                    <td>${service.appointments}</td>
+                    <td>${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.revenue)}</td>
+                    <td><span class="badge bg-success">${service.completion}%</span></td>
+                    <td>${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.average)}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Update conversion funnel
+        function updateConversionFunnel() {
+            const funnelContainer = document.getElementById('conversionFunnel');
+            const funnelSteps = [
+                { label: 'Visitantes', value: 1000, percentage: 100 },
+                { label: 'Interessados', value: 450, percentage: 45 },
+                { label: 'Agendamentos', value: 180, percentage: 18 },
+                { label: 'Confirmados', value: 150, percentage: 15 },
+                { label: 'Concluídos', value: 127, percentage: 12.7 }
+            ];
+
+            funnelContainer.innerHTML = funnelSteps.map((step, index) => `
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fw-bold">${step.label}</span>
+                        <span class="text-muted">${step.value}</span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar" style="width: ${step.percentage}%; background: var(--ubs-primary);"></div>
+                    </div>
+                    <small class="text-muted">${step.percentage.toFixed(1)}%</small>
+                </div>
+            `).join('');
+        }
+
+        // Update health score
+        function updateHealthScore() {
+            const healthScore = 85; // Mock health score
+            const healthElement = document.getElementById('healthScore');
+            const healthCircle = document.getElementById('healthCircle');
+            const healthDescription = document.getElementById('healthDescription');
+
+            healthElement.textContent = healthScore;
+            
+            const circumference = 2 * Math.PI * 52;
+            const offset = circumference - (healthScore / 100) * circumference;
+            healthCircle.style.strokeDashoffset = offset;
+
+            let description = '';
+            let color = '';
+            
+            if (healthScore >= 80) {
+                description = 'Excelente saúde do negócio';
+                color = '#28a745';
+            } else if (healthScore >= 60) {
+                description = 'Boa saúde do negócio';
+                color = '#ffc107';
+            } else {
+                description = 'Precisa de atenção';
+                color = '#dc3545';
+            }
+            
+            healthCircle.style.stroke = color;
+            healthDescription.textContent = description;
+        }
+
+        // Mock data generators
+        function generateMockDailyStats() {
+            const stats = [];
+            for (let i = 29; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                stats.push({
+                    date: date.toISOString(),
+                    revenue: Math.floor(Math.random() * 1000) + 200,
+                    appointments: Math.floor(Math.random() * 10) + 2
+                });
+            }
+            return stats;
+        }
+
+        function generateMockCustomerData() {
+            const labels = [];
+            const data = [];
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                labels.push(date.toLocaleDateString('pt-BR', { weekday: 'short' }));
+                data.push(Math.floor(Math.random() * 8) + 2);
+            }
+            return { labels, data };
+        }
+
+        function generateMockAIData() {
+            const labels = [];
+            const data = [];
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                labels.push(date.toLocaleDateString('pt-BR', { weekday: 'short' }));
+                data.push(Math.floor(Math.random() * 20) + 75);
+            }
+            return { labels, data };
+        }
+
+        function generateMockComparisonData() {
+            return {
+                current: [15000, 127, 23, 78.5],
+                previous: [13500, 115, 19, 72.3]
+            };
+        }
+
+        // Utility functions
+        function showLoading() {
+            // Show loading indicators
+        }
+
+        function hideLoading() {
+            // Hide loading indicators
+        }
+
+        function showNotification(message, type = 'success') {
+            const container = document.getElementById('notificationContainer');
+            const notification = document.createElement('div');
+            notification.className = `ubs-notification ${type}`;
+            notification.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            container.appendChild(notification);
+            setTimeout(() => notification.classList.add('show'), 100);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => container.removeChild(notification), 300);
+            }, 5000);
+        }
+
+        function handleAuthError() {
+            localStorage.removeItem('ubs_token');
+            localStorage.removeItem('ubs_user_data');
+            showNotification('Sessão expirada. Redirecionando...', 'error');
+            setTimeout(() => window.location.href = '/login.html', 2000);
+        }
+
+        // Export functions
+        function refreshData() {
+            loadAnalyticsData();
+            showNotification('Dados atualizados com sucesso!');
+        }
+
+        function exportReport() {
+            showNotification('Exportando relatório...', 'success');
+            // Implementation for export
+        }
+
+        function exportPDF() {
+            showNotification('Gerando PDF...', 'success');
+        }
+
+        function exportExcel() {
+            showNotification('Gerando Excel...', 'success');
+        }
+
+        function exportCSV() {
+            showNotification('Gerando CSV...', 'success');
+        }
+
+        function scheduleReport() {
+            showNotification('Configurando agendamento...', 'success');
+        }
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('ubs_token');
+            localStorage.removeItem('ubs_user_data');
+            showNotification('Logout realizado com sucesso!');
+            setTimeout(() => window.location.href = '/login.html', 1000);
+        }
+    </script>
+</body>
+</html> 

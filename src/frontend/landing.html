@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UBS | Automatize seus Agendamentos com IA</title>
+    <meta name="description" content="Sistema universal de agendamentos com IA para WhatsApp. Automatize seu negócio com nossa plataforma completa para salões, clínicas, consultorias e mais.">
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Google Translate Widget -->
+    <script type="text/javascript">
+    function googleTranslateElementInit() {
+        new google.translate.TranslateElement({pageLanguage: 'pt'}, 'google_translate_element');
+    }
+    </script>
+    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    
+    <style>
+        :root {
+            --primary-color: #2D5A9B;
+            --primary-light: #4A7BC8;
+            --primary-dark: #1E3F6B;
+            --secondary-color: #F8F9FA;
+            --accent-color: #28A745;
+            --text-dark: #2C3E50;
+            --text-light: #6C757D;
+            --border-color: #E9ECEF;
+            --shadow: 0 4px 20px rgba(45, 90, 155, 0.15);
+            --shadow-lg: 0 10px 40px rgba(45, 90, 155, 0.2);
+        }
+
+        /* Google Translate Styling */
+        .goog-te-banner-frame { display: none !important; }
+        body { top: 0 !important; }
+        .goog-te-gadget { font-family: inherit !important; }
+        .goog-te-gadget .goog-te-combo { 
+            margin: 0 !important; 
+            border-radius: 4px !important;
+            border: 1px solid #ddd !important;
+            padding: 4px 8px !important;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text-dark);
+            overflow-x: hidden;
+        }
+
+        /* Header */
+        .navbar {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 0;
+            transition: all 0.3s ease;
+        }
+
+        .navbar.scrolled {
+            box-shadow: var(--shadow);
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary-color) !important;
+            text-decoration: none;
+        }
+
+        .logo-image {
+            width: 120px;
+            height: 120px;
+            border-radius: 8px;
+            object-fit: contain;
+            margin-right: 0.75rem;
+            background: transparent;
+            /* Melhora a qualidade da imagem */
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+        }
+
+        .logo-image-large {
+            width: 160px;
+            height: 80px;
+            border-radius: 8px;
+            object-fit: contain;
+            background: transparent;
+            /* Melhora a qualidade da imagem */
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+        }
+
+        /* Responsivo para logo na navbar */
+        @media (max-width: 768px) {
+            .logo-image-large {
+                width: 120px;
+                height: 60px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .logo-image-large {
+                width: 80px;
+                height: 40px;
+            }
+        }
+
+        /* Navegação melhorada */
+        html {
+            scroll-behavior: smooth;
+            scroll-padding-top: 80px;
+        }
+
+        .navbar.scrolled {
+            background-color: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Mobile menu improvements */
+        @media (max-width: 991px) {
+            .navbar-collapse {
+                background-color: white;
+                border-radius: 10px;
+                margin-top: 10px;
+                padding: 20px;
+                box-shadow: 0 5px 30px rgba(0, 0, 0, 0.1);
+            }
+            
+            .navbar-nav .nav-link {
+                padding: 10px 0;
+                text-align: center;
+                border-bottom: 1px solid #f0f0f0;
+            }
+            
+            .navbar-nav .nav-link:last-child {
+                border-bottom: none;
+            }
+        }
+
+        .nav-link {
+            font-weight: 500;
+            color: var(--text-dark) !important;
+            margin: 0 0.5rem;
+            transition: color 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--primary-color) !important;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-outline-primary {
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-outline-light {
+            border-radius: 8px !important;
+        }
+
+        .btn-lg {
+            border-radius: 8px !important;
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 240px 0 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100%" height="100%" fill="url(%23grid)"/></svg>');
+            opacity: 0.3;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            line-height: 1.2;
+        }
+
+        .hero .lead {
+            font-size: 1.25rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        .hero-image {
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-image img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 20px;
+            box-shadow: var(--shadow-lg);
+        }
+
+        /* Features Section */
+        .features {
+            padding: 50px 0 50px;
+            background: var(--secondary-color);
+        }
+
+        .feature-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2.5rem;
+            text-align: center;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            border: none;
+            height: 100%;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-10px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .feature-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            color: white !important;
+            font-size: 2rem;
+        }
+
+        .feature-icon i {
+            color: white !important;
+            font-size: 2rem !important;
+            line-height: 1 !important;
+            display: inline-block !important;
+            font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands" !important;
+            font-weight: 900 !important;
+            text-rendering: auto !important;
+            -webkit-font-smoothing: antialiased !important;
+        }
+
+        .feature-card h4 {
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--text-dark);
+        }
+
+        .feature-card p {
+            color: var(--text-light);
+            line-height: 1.7;
+        }
+
+        /* Domains Section */
+        .domains {
+            padding: 50px 0;
+        }
+
+        .domain-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .domain-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+            cursor: pointer;
+        }
+
+        .domain-icon {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            font-size: 2rem;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            color: #6c757d;
+            border: 2px solid #dee2e6;
+            transition: all 0.3s ease;
+        }
+
+        .domain-card:hover .domain-icon {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            color: white;
+            border-color: var(--primary-color);
+            transform: scale(1.1);
+        }
+
+        .domain-card h5 {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-dark);
+        }
+
+        .domain-card p {
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        /* Pricing Section */
+        .pricing {
+            padding: 50px 0;
+            background: var(--secondary-color);
+        }
+
+        .pricing-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2.5rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            text-align: center;
+            position: relative;
+            height: 100%;
+        }
+
+        .pricing-card.featured {
+            transform: scale(1.05);
+            border: 2px solid var(--primary-color);
+        }
+
+        .pricing-card.featured::before {
+            content: 'Mais Popular';
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary-color);
+            color: white;
+            padding: 0.5rem 1.5rem;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .pricing-card:hover {
+            transform: translateY(-10px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .pricing-card.featured:hover {
+            transform: scale(1.05) translateY(-10px);
+        }
+
+        .pricing-card h4 {
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--text-dark);
+        }
+
+        .pricing-card .price {
+            font-size: 3rem;
+            font-weight: 800;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .pricing-card .price small {
+            font-size: 1rem;
+            color: var(--text-light);
+            font-weight: 400;
+        }
+
+        .pricing-card ul {
+            list-style: none;
+            padding: 0;
+            margin: 2rem 0;
+        }
+
+        .pricing-card ul li {
+            padding: 0.5rem 0;
+            color: var(--text-light);
+        }
+
+        .pricing-card ul li i {
+            color: var(--accent-color);
+            margin-right: 0.5rem;
+        }
+
+        /* CTA Section */
+        .cta {
+            padding: 50px 0;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            color: white;
+            text-align: center;
+        }
+
+        .cta h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .cta p {
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        .btn-white {
+            background: white;
+            color: var(--primary-color);
+            border: none;
+            padding: 1rem 2.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-white:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+            color: var(--primary-dark);
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--text-dark);
+            color: white;
+            padding: 60px 0 30px;
+        }
+
+        .footer h5 {
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .footer ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .footer ul li {
+            margin-bottom: 0.5rem;
+        }
+
+        .footer ul li a {
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer ul li a:hover {
+            color: white;
+        }
+
+        .footer-bottom {
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin-top: 2rem;
+            padding-top: 2rem;
+            text-align: center;
+            color: rgba(255,255,255,0.6);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-on-scroll {
+            opacity: 0;
+            animation: fadeInUp 0.8s ease forwards;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero {
+                padding: 80px 0 30px;
+                text-align: center;
+            }
+
+            .pricing-card.featured {
+                transform: none;
+                margin-bottom: 2rem;
+            }
+
+            .navbar-nav {
+                text-align: center;
+                margin-top: 1rem;
+            }
+
+            .btn-primary,
+            .btn-outline-primary {
+                padding: 0.75rem 1.5rem;
+                font-size: 0.9rem;
+            }
+
+            .features {
+                padding: 25px 0 40px;
+            }
+
+            .domains {
+                padding: 40px 0;
+            }
+
+            .pricing {
+                padding: 40px 0;
+            }
+
+            .cta {
+                padding: 30px 0;
+            }
+
+            .logo-image {
+                width: 80px;
+                height: 80px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="#home">
+                <picture>
+                    <source srcset="assets/images/optimized/UBS_Nac.webp" type="image/webp">
+                    <img src="assets/images/UBS_Nac.png" alt="UBS - Sistema Universal de Agendamentos" class="logo-image-large">
+                </picture>
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#features">Recursos</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#domains">Segmentos</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#pricing">Preços</a>
+                    </li>
+                </ul>
+                
+                <div class="navbar-nav">
+                    <div id="google_translate_element" style="margin-right: 15px;"></div>
+                    <a href="/login" class="btn btn-outline-primary">Entrar</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-6 hero-content">
+                    <h1 class="animate-on-scroll">Automatize seus Agendamentos com <strong>IA</strong></h1>
+                    <p class="lead animate-on-scroll">Sistema universal de agendamentos via WhatsApp com inteligência artificial. Perfeito para salões, clínicas, consultorias e muito mais.</p>
+                    
+                    <div class="d-flex flex-wrap gap-3 animate-on-scroll">
+                        <a href="/register" class="btn btn-white btn-lg">
+                            <i class="fas fa-rocket me-2"></i>
+                            Começar Grátis
+                        </a>
+                        <a href="/demo" class="btn btn-outline-light btn-lg">
+                            <i class="fas fa-robot me-2"></i>
+                            Testar IA Agora
+                        </a>
+                    </div>
+                    
+                    <div class="mt-4 animate-on-scroll">
+                        <small class="opacity-75">
+                            <i class="fas fa-check-circle me-1"></i> 15 dias grátis
+                            <i class="fas fa-check-circle me-1 ms-3"></i> Sem cartão de crédito
+                            <i class="fas fa-check-circle me-1 ms-3"></i> Suporte incluído
+                        </small>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6 hero-image mt-5 mt-lg-0">
+                    <div class="text-center animate-on-scroll">
+                        <div style="background: rgba(255,255,255,0.1); padding: 2rem; border-radius: 20px; backdrop-filter: blur(10px);">
+                            <i class="fas fa-mobile-alt" style="font-size: 8rem; opacity: 0.8;"></i>
+                            <h4 class="mt-3">WhatsApp Business API</h4>
+                            <p>Integração completa com IA avançada</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto text-center mb-5">
+                    <h2 class="display-5 fw-bold mb-3">Por que escolher o UBS?</h2>
+                    <p class="lead text-muted">Nossa plataforma combina IA avançada com WhatsApp Business para criar a solução de agendamento mais eficiente do mercado.</p>
+                </div>
+            </div>
+            
+            <div class="row g-4">
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-card animate-on-scroll">
+                        <div class="feature-icon">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <h4>IA Especializada</h4>
+                        <p>7 agentes de IA especializados por segmento: saúde, beleza, educação, jurídico, esportes, consultoria e geral.</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-card animate-on-scroll">
+                        <div class="feature-icon">
+                            <i class="fab fa-whatsapp"></i>
+                        </div>
+                        <h4>WhatsApp Business</h4>
+                        <p>Integração nativa com WhatsApp Business API. Seus clientes agendam diretamente pelo WhatsApp.</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-card animate-on-scroll">
+                        <div class="feature-icon">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <h4>Google Calendar</h4>
+                        <p>Sincronização automática com Google Calendar. Nunca mais perca um agendamento ou tenha conflitos.</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-card animate-on-scroll">
+                        <div class="feature-icon">
+                            <i class="fas fa-paper-plane"></i>
+                        </div>
+                        <h4>Email Automático</h4>
+                        <p>Confirmações, lembretes e notificações automáticas via email. Reduza no-shows em até 80%.</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-card animate-on-scroll">
+                        <div class="feature-icon">
+                            <i class="fas fa-chart-bar"></i>
+                        </div>
+                        <h4>Analytics Avançado</h4>
+                        <p>Dashboard completo com métricas de negócio, performance da IA e insights para crescimento.</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-card animate-on-scroll">
+                        <div class="feature-icon">
+                            <i class="fas fa-layer-group"></i>
+                        </div>
+                        <h4>Multi-modal</h4>
+                        <p>Processa texto, imagens, áudio e documentos. IA que entende fotos, áudios e PDFs.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Domains Section -->
+    <section id="domains" class="domains">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto text-center mb-5">
+                    <h2 class="display-5 fw-bold mb-3">Especialistas em cada Segmento</h2>
+                    <p class="lead text-muted">Nossa IA é treinada especificamente para diferentes áreas de negócio, garantindo atendimento especializado.</p>
+                </div>
+            </div>
+            
+            <div class="row g-4">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <div class="domain-card animate-on-scroll" data-bs-toggle="modal" data-bs-target="#beautyModal" style="cursor: pointer;">
+                        <div class="domain-icon">
+                            <i class="fas fa-cut"></i>
+                        </div>
+                        <h5>Beleza</h5>
+                        <p>Salões, estética, cabeleireiros</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <div class="domain-card animate-on-scroll" data-bs-toggle="modal" data-bs-target="#healthcareModal" style="cursor: pointer;">
+                        <div class="domain-icon">
+                            <i class="fas fa-heartbeat"></i>
+                        </div>
+                        <h5>Saúde</h5>
+                        <p>Clínicas, psicólogos, terapeutas</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <div class="domain-card animate-on-scroll" data-bs-toggle="modal" data-bs-target="#legalModal" style="cursor: pointer;">
+                        <div class="domain-icon">
+                            <i class="fas fa-balance-scale"></i>
+                        </div>
+                        <h5>Jurídico</h5>
+                        <p>Advogados, escritórios, consultoria</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <div class="domain-card animate-on-scroll" data-bs-toggle="modal" data-bs-target="#educationModal" style="cursor: pointer;">
+                        <div class="domain-icon">
+                            <i class="fas fa-graduation-cap"></i>
+                        </div>
+                        <h5>Educação</h5>
+                        <p>Professores, tutores, cursos</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <div class="domain-card animate-on-scroll" data-bs-toggle="modal" data-bs-target="#sportsModal" style="cursor: pointer;">
+                        <div class="domain-icon">
+                            <i class="fas fa-dumbbell"></i>
+                        </div>
+                        <h5>Esportes</h5>
+                        <p>Personal trainers, academias</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <div class="domain-card animate-on-scroll" data-bs-toggle="modal" data-bs-target="#consultingModal" style="cursor: pointer;">
+                        <div class="domain-icon">
+                            <i class="fas fa-briefcase"></i>
+                        </div>
+                        <h5>Consultoria</h5>
+                        <p>Consultores, coaching, negócios</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="pricing">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto text-center mb-5">
+                    <h2 class="display-5 fw-bold mb-3">Planos que Crescem com Você</h2>
+                    <p class="lead text-muted">Escolha o plano ideal para o seu negócio. Todos incluem IA, WhatsApp e suporte.</p>
+                </div>
+            </div>
+            
+            <div class="row g-4 justify-content-center">
+                <div class="col-lg-4 col-md-6">
+                    <div class="pricing-card animate-on-scroll">
+                        <h4>Básico</h4>
+                        <div class="price">R$ 58<small>/mês</small></div>
+                        <p class="text-muted">Perfeito para começar</p>
+                        <ul>
+                            <li><i class="fas fa-check"></i> <strong>Até 200 conversas/mês</strong></li>
+                            <li><i class="fas fa-check"></i> <strong>WhatsApp ilimitado</strong></li>
+                            <li><i class="fas fa-check"></i> <strong>Mensagens ilimitadas</strong></li>
+                            <li><i class="fas fa-check"></i> IA especializada (6 segmentos)</li>
+                            <li><i class="fas fa-check"></i> Google Calendar</li>
+                            <li><i class="fas fa-check"></i> Email automático</li>
+                            <li><i class="fas fa-check"></i> Dashboard básico</li>
+                        </ul>
+                        <a href="/register?plan=basico" class="btn btn-outline-primary w-100">Começar Agora</a>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="pricing-card featured animate-on-scroll">
+                        <h4>Profissional</h4>
+                        <div class="price">R$ 116<small>/mês</small></div>
+                        <p class="text-muted">Mais vendido</p>
+                        <ul>
+                            <li><i class="fas fa-check"></i> <strong>Até 400 conversas/mês</strong></li>
+                            <li><i class="fas fa-check"></i> <strong>WhatsApp ilimitado</strong></li>
+                            <li><i class="fas fa-check"></i> <strong>Mensagens ilimitadas</strong></li>
+                            <li><i class="fas fa-check"></i> IA especializada (6 segmentos)</li>
+                            <li><i class="fas fa-check"></i> Google Calendar</li>
+                            <li><i class="fas fa-check"></i> Email automático</li>
+                            <li><i class="fas fa-check"></i> Dashboard avançado</li>
+                            <li><i class="fas fa-check"></i> Analytics completo</li>
+                            <li><i class="fas fa-check"></i> Suporte prioritário</li>
+                        </ul>
+                        <a href="/register?plan=profissional" class="btn btn-primary w-100">Começar Agora</a>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="pricing-card animate-on-scroll">
+                        <h4>Enterprise</h4>
+                        <div class="price">R$ 290<small>/mês</small></div>
+                        <p class="text-muted">Para grandes negócios</p>
+                        <ul>
+                            <li><i class="fas fa-check"></i> <strong>Até 1250 conversas/mês</strong></li>
+                            <li><i class="fas fa-check"></i> <strong>WhatsApp ilimitado</strong></li>
+                            <li><i class="fas fa-check"></i> <strong>Mensagens ilimitadas</strong></li>
+                            <li><i class="fas fa-check"></i> IA especializada (6 segmentos)</li>
+                            <li><i class="fas fa-check"></i> Google Calendar</li>
+                            <li><i class="fas fa-check"></i> Email automático</li>
+                            <li><i class="fas fa-check"></i> Dashboard enterprise</li>
+                            <li><i class="fas fa-check"></i> Analytics avançado</li>
+                            <li><i class="fas fa-check"></i> API personalizada</li>
+                            <li><i class="fas fa-check"></i> Suporte dedicado</li>
+                            <li><i class="fas fa-plus text-success"></i> <strong>Excedentes: R$ 0,25/conversa</strong></li>
+                        </ul>
+                        <a href="/register?plan=enterprise" class="btn btn-outline-primary w-100">Falar com Vendas</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center mt-5">
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <i class="fas fa-comments text-primary me-2"></i>
+                            <small class="text-muted"><strong>Cobrança por conversa recebida</strong> - Transparência total</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <i class="fas fa-robot text-success me-2"></i>
+                            <small class="text-muted"><strong>IA em 6 segmentos:</strong> Saúde, Beleza, Educação, Jurídico, Esportes, Consultoria</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <i class="fas fa-arrow-up text-warning me-2"></i>
+                            <small class="text-muted"><strong>Upgrade automático</strong> - Cresce com seu negócio</small>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-muted">
+                    <i class="fas fa-shield-alt me-2"></i>
+                    Todos os planos incluem 15 dias grátis e podem ser cancelados a qualquer momento
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto text-center">
+                    <h2>Pronto para Automatizar seu Serviço de Agendamento?</h2>
+                    <p>Junte-se a empresas que já automatizaram seus agendamentos com nossa IA.</p>
+                    <div class="d-flex flex-wrap gap-3 justify-content-center">
+                        <a href="/register" class="btn btn-white btn-lg">
+                            <i class="fas fa-rocket me-2"></i>
+                            Começar Gratuitamente
+                        </a>
+                        <a href="/demo" class="btn btn-outline-light btn-lg">
+                            <i class="fas fa-robot me-2"></i>
+                            Teste a IA Grátis
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4">
+                    <div class="d-flex align-items-center mb-3">
+                        <picture>
+                            <source srcset="assets/images/optimized/UBS_Nac.webp" type="image/webp">
+                            <img src="assets/images/UBS_Nac.png" alt="UBS - Sistema Universal de Agendamentos" class="logo-image" style="width: 120px; height: 120px;">
+                        </picture>
+                    </div>
+                    <p class="text-muted">Automatize seu negócio e melhore a experiência dos seus clientes.</p>
+                </div>
+                
+                <div class="col-lg-2 col-md-3">
+                    <h5>Produto</h5>
+                    <ul>
+                        <li><a href="#features">Recursos</a></li>
+                        <li><a href="#pricing">Preços</a></li>
+                        <li><a href="#">API</a></li>
+                        <li><a href="#">Integrações</a></li>
+                    </ul>
+                </div>
+                
+                <div class="col-lg-2 col-md-3">
+                    <h5>Empresa</h5>
+                    <ul>
+                        <li><a href="#">Sobre</a></li>
+                        <li><a href="#">Blog</a></li>
+                        <li><a href="#">Carreiras</a></li>
+                        <li><a href="#">Contato</a></li>
+                    </ul>
+                </div>
+                
+                <div class="col-lg-2 col-md-3">
+                    <h5>Suporte</h5>
+                    <ul>
+                        <li><a href="#">Central de Ajuda</a></li>
+                        <li><a href="#">Documentação</a></li>
+                        <li><a href="#">Status</a></li>
+                        <li><a href="#">Contato</a></li>
+                    </ul>
+                </div>
+                
+                <div class="col-lg-2 col-md-3">
+                    <h5>Legal</h5>
+                    <ul>
+                        <li><a href="#">Privacidade</a></li>
+                        <li><a href="#">Termos</a></li>
+                        <li><a href="#">Segurança</a></li>
+                        <li><a href="#">LGPD</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2025 UBS. Todos os direitos reservados.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Navbar scroll effect
+        window.addEventListener('scroll', function() {
+            const navbar = document.querySelector('.navbar');
+            if (window.scrollY > 50) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+
+        // Animate on scroll
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.animate-on-scroll').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Smooth scrolling for anchor links only (not external or route links)
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                const href = this.getAttribute('href');
+                // Only prevent default for internal anchor links
+                if (href && href.startsWith('#')) {
+                    e.preventDefault();
+                    const target = document.querySelector(href);
+                    if (target) {
+                        // Close mobile menu if open
+                        const navbarCollapse = document.querySelector('.navbar-collapse');
+                        if (navbarCollapse.classList.contains('show')) {
+                            bootstrap.Collapse.getInstance(navbarCollapse).hide();
+                        }
+                        
+                        // Smooth scroll with offset for fixed navbar
+                        const offsetTop = target.offsetTop - 80;
+                        window.scrollTo({
+                            top: offsetTop,
+                            behavior: 'smooth'
+                        });
+                    }
+                }
+            });
+        });
+
+        // Ensure pricing buttons work properly - allow normal navigation with query parameters
+        document.querySelectorAll('a[href*="/register"]').forEach(button => {
+            button.addEventListener('click', function(e) {
+                // Allow normal navigation for register links with query parameters
+                const href = this.getAttribute('href');
+                console.log('Navigating to:', href);
+                
+                // Let the browser handle navigation normally
+                // Don't prevent default - allow natural link behavior
+            });
+        });
+
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', function(e) {
+            const navbar = document.querySelector('.navbar-collapse');
+            const toggler = document.querySelector('.navbar-toggler');
+            
+            if (!navbar.contains(e.target) && !toggler.contains(e.target)) {
+                if (navbar.classList.contains('show')) {
+                    bootstrap.Collapse.getInstance(navbar).hide();
+                }
+            }
+        });
+
+        // Simple "Entrar" button - direct navigation to login
+        document.querySelector('a[href="/login"]').addEventListener('click', function(e) {
+            console.log('Navegando para página de login');
+            // Allow normal navigation - remove any complex logic that might fail
+            // Just let the browser handle the navigation naturally
+        });
+    </script>
+
+    <!-- Domain Modals -->
+    <!-- Beauty Modal -->
+    <div class="modal fade" id="beautyModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-cut me-2"></i>Beleza & Estética</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>Como nossa IA ajuda salões e estéticas:</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Agenda cortes, coloração, manicure e tratamentos</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Entende tempo de cada procedimento</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Pergunta sobre preferência de profissional</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Lembra histórico de cores e produtos</li>
+                    </ul>
+                    <div class="bg-light p-3 rounded mt-3">
+                        <strong>Exemplo:</strong> "Oi! Gostaria de agendar um corte com a Maria para sexta-feira à tarde"
+                        <br><small class="text-muted">→ IA sugere horários disponíveis da Maria e confirma o agendamento</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <a href="/register?domain=beauty" class="btn btn-primary">Começar com Beleza</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Healthcare Modal -->
+    <div class="modal fade" id="healthcareModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-heartbeat me-2"></i>Saúde & Bem-estar</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>Como nossa IA ajuda clínicas e terapeutas:</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Agenda consultas, sessões de terapia e exames</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Identifica urgência (não emergência) para priorizar</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Pergunta sobre tipo de consulta ou especialidade</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Lembra retornos e acompanhamentos</li>
+                    </ul>
+                    <div class="bg-light p-3 rounded mt-3">
+                        <strong>Exemplo:</strong> "Preciso agendar uma consulta de nutrição para próxima semana"
+                        <br><small class="text-muted">→ IA mostra horários da nutricionista e agenda conforme disponibilidade</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <a href="/register?domain=healthcare" class="btn btn-primary">Começar com Saúde</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legal Modal -->
+    <div class="modal fade" id="legalModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-balance-scale me-2"></i>Jurídico & Advocacia</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>Como nossa IA ajuda escritórios e advogados:</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Agenda consultas iniciais e acompanhamentos</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Identifica área do direito (trabalhista, civil, etc.)</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Coleta informações básicas antes da consulta</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Organiza documentos necessários</li>
+                    </ul>
+                    <div class="bg-light p-3 rounded mt-3">
+                        <strong>Exemplo:</strong> "Preciso de uma consulta sobre questões trabalhistas"
+                        <br><small class="text-muted">→ IA agenda com advogado especialista em direito do trabalho</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <a href="/register?domain=legal" class="btn btn-primary">Começar com Jurídico</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Education Modal -->
+    <div class="modal fade" id="educationModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-graduation-cap me-2"></i>Educação & Ensino</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>Como nossa IA ajuda professores e tutores:</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Agenda aulas particulares e reforço escolar</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Identifica matéria e nível do aluno</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Organiza horários de grupo ou individual</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Lembra materiais necessários para cada aula</li>
+                    </ul>
+                    <div class="bg-light p-3 rounded mt-3">
+                        <strong>Exemplo:</strong> "Quero aulas de matemática para meu filho no ensino médio"
+                        <br><small class="text-muted">→ IA agenda com professor de matemática e define plano de estudos</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <a href="/register?domain=education" class="btn btn-primary">Começar com Educação</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sports Modal -->
+    <div class="modal fade" id="sportsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-dumbbell me-2"></i>Esportes & Fitness</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>Como nossa IA ajuda personal trainers e academias:</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Agenda treinos e avaliações físicas</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Identifica objetivos (emagrecimento, ganho de massa, etc.)</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Organiza horários de acordo com disponibilidade</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Lembra equipamentos e local de treino</li>
+                    </ul>
+                    <div class="bg-light p-3 rounded mt-3">
+                        <strong>Exemplo:</strong> "Quero treinar para perder peso, pode agendar com personal?"
+                        <br><small class="text-muted">→ IA agenda avaliação e primeiros treinos focados em emagrecimento</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <a href="/register?domain=sports" class="btn btn-primary">Começar com Esportes</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Consulting Modal -->
+    <div class="modal fade" id="consultingModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-briefcase me-2"></i>Consultoria & Negócios</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>Como nossa IA ajuda consultores e coaches:</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Agenda reuniões e sessões de mentoria</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Identifica tipo de consultoria (marketing, vendas, etc.)</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Organiza pré-reunião e levantamento de necessidades</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Programa follow-ups e acompanhamentos</li>
+                    </ul>
+                    <div class="bg-light p-3 rounded mt-3">
+                        <strong>Exemplo:</strong> "Preciso de consultoria para melhorar as vendas da empresa"
+                        <br><small class="text-muted">→ IA agenda com consultor especialista em vendas e solicita dados básicos</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <a href="/register?domain=consulting" class="btn btn-primary">Começar com Consultoria</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

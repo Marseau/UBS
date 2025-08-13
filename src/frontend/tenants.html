@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Empresas - UBS Dashboard</title>
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- UBS Standard Styles -->
+    <link href="css/ubs-standard-styles.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    
+    <style>
+        /* Use UBS standard variables - inherits from ubs-standard-styles.css */
+        :root {
+            /* Legacy support - these now point to UBS variables */
+            --primary-color: var(--ubs-primary);
+            --secondary-color: var(--ubs-secondary);
+            --success-color: var(--ubs-success);
+            --warning-color: var(--ubs-warning);
+            --danger-color: var(--ubs-danger);
+            --info-color: var(--ubs-info);
+            --text-dark: var(--ubs-text-dark);
+            --text-light: var(--ubs-text-light);
+            --border-color: var(--ubs-border-color);
+            --shadow: var(--ubs-shadow);
+        }
+
+        body {
+            font-family: var(--ubs-font-family);
+            background: var(--secondary-color);
+            color: var(--text-dark);
+        }
+
+        .top-header {
+            background: white;
+            padding: 1.5rem 0;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+
+        .stats-cards {
+            margin-bottom: 1rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: var(--shadow);
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-1px);
+        }
+
+        .stat-number {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+        }
+
+        .tenants-table {
+            background: white;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .table-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 1rem;
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .tenant-card {
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.75rem 1rem;
+            transition: background-color 0.2s;
+        }
+
+        .tenant-card:hover {
+            background-color: #f8f9fa;
+        }
+
+        .tenant-card:last-child {
+            border-bottom: none;
+        }
+
+        .tenant-info {
+            flex: 1;
+        }
+
+        .tenant-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .tenant-domain {
+            color: var(--text-light);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .tenant-contact {
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+
+        .tenant-stats {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-weight: 600;
+            font-size: 1.2rem;
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .tenant-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-active {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--success-color);
+        }
+
+        .status-inactive {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--danger-color);
+        }
+
+        .status-trial {
+            background: rgba(255, 193, 7, 0.1);
+            color: #856404;
+        }
+
+        .status-blocked {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--danger-color);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+        }
+
+        .domain-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            margin-right: 1rem;
+        }
+
+        .domain-beauty {
+            background: rgba(233, 30, 99, 0.1);
+            color: #e91e63;
+        }
+
+        .domain-healthcare {
+            background: rgba(76, 175, 80, 0.1);
+            color: #4caf50;
+        }
+
+        .domain-legal {
+            background: rgba(63, 81, 181, 0.1);
+            color: #3f51b5;
+        }
+
+        .domain-education {
+            background: rgba(255, 152, 0, 0.1);
+            color: #ff9800;
+        }
+
+        .domain-sports {
+            background: rgba(244, 67, 54, 0.1);
+            color: #f44336;
+        }
+
+        .domain-consulting {
+            background: rgba(156, 39, 176, 0.1);
+            color: #9c27b0;
+        }
+
+        .filter-controls {
+            background: white;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .tenant-stats {
+                gap: 1rem;
+                flex-wrap: wrap;
+            }
+            
+            .tenant-actions {
+                flex-direction: column;
+                gap: 0.25rem;
+            }
+        }
+    </style>
+</head>
+<body class="ubs-standardized-page ubs-enhanced-tenants">
+    <!-- Header -->
+    <div class="top-header">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0">
+                        <i class="fas fa-building text-primary me-2"></i>
+                        Empresas
+                    </h1>
+                    <p class="text-muted mb-0">Gerenciamento de tenants do sistema</p>
+                </div>
+                <div class="d-flex gap-3">
+                    <button class="btn btn-success" onclick="createNewTenant()">
+                        <i class="fas fa-plus me-1"></i>
+                        Nova Empresa
+                    </button>
+                    <a href="/admin" class="btn btn-primary">
+                        <i class="fas fa-arrow-left me-1"></i>
+                        Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid">
+        <!-- Stats Cards - UBS Standard -->
+        <div class="row ubs-metrics-section" id="tenants-metrics-container">
+            <!-- UBS MetricCard widgets will be inserted here -->
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-controls">
+            <div class="row align-items-center">
+                <div class="col-md-3">
+                    <label class="form-label">Buscar</label>
+                    <input type="text" class="form-control" id="searchInput" placeholder="Nome, email, telefone ou CNPJ..." onkeyup="filterTenants()">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" id="statusFilter" onchange="filterTenants()">
+                        <option value="">Todos</option>
+                        <option value="active">Ativo</option>
+                        <option value="trial">Teste</option>
+                        <option value="inactive">Inativo</option>
+                        <option value="blocked">Bloqueado</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Domínio</label>
+                    <select class="form-select" id="domainFilter" onchange="filterTenants()">
+                        <option value="">Todos</option>
+                        <option value="beauty">Beleza</option>
+                        <option value="healthcare">Saúde</option>
+                        <option value="legal">Advocacia</option>
+                        <option value="education">Educação</option>
+                        <option value="sports">Esportes</option>
+                        <option value="consulting">Consultoria</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Ordenar por</label>
+                    <select class="form-select" id="sortBy" onchange="sortTenants()">
+                        <option value="name">Nome</option>
+                        <option value="created">Data de Criação</option>
+                        <option value="revenue">Receita</option>
+                        <option value="users">Usuários</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-outline-secondary w-100" onclick="resetFilters()">
+                        <i class="fas fa-times me-1"></i>
+                        Limpar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tenants Table -->
+        <div class="tenants-table">
+            <div class="table-header">
+                <h4 class="mb-0">Lista de Empresas</h4>
+            </div>
+            
+            <div id="tenantsContainer">
+                <!-- Content will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/utils/logger.js"></script>
+    <script src="js/utils/secure-auth.js"></script>
+    
+    <!-- UBS Widget System -->
+    <script src="js/widgets/dashboard-widget-system.js"></script>
+    <script src="js/ubs-template-standardizer.js"></script>
+    
+    <script>
+        let allTenants = [];
+        let filteredTenants = [];
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Initializing UBS Enhanced Tenants page...');
+            
+            // Initialize UBS enhancement system (temporarily disabled for debugging)
+            // if (typeof window.UBSPageEnhancer !== 'undefined' && typeof window.UBSPageEnhancer.enhanceTenantsPage === 'function') {
+            //     console.log('✅ UBS Enhancement system available');
+            //     window.UBSPageEnhancer.enhanceTenantsPage();
+            // } else {
+            //     console.log('ℹ️ UBS Enhancement system not available or enhanceTenantsPage not implemented');
+            // }
+            
+            // Initialize metric widgets
+            initializeMetricWidgets();
+            
+            // Load tenant data
+            loadTenants();
+        });
+
+        // Initialize UBS metric widgets
+        function initializeMetricWidgets() {
+            const container = document.getElementById('tenants-metrics-container');
+            if (!container) return;
+
+            // Configuration for metric widgets
+            const metricsConfig = [
+                {
+                    id: 'total-tenants',
+                    title: 'Total de Empresas',
+                    value: 0,
+                    icon: 'fas fa-building',
+                    color: 'primary',
+                    format: 'number',
+                    columnClass: 'col-lg-3 col-md-6 mb-3'
+                },
+                {
+                    id: 'active-tenants',
+                    title: 'Ativas',
+                    value: 0,
+                    icon: 'fas fa-check-circle',
+                    color: 'success',
+                    format: 'number',
+                    columnClass: 'col-lg-3 col-md-6 mb-3'
+                },
+                {
+                    id: 'trial-tenants',
+                    title: 'Em Teste',
+                    value: 0,
+                    icon: 'fas fa-clock',
+                    color: 'warning',
+                    format: 'number',
+                    columnClass: 'col-lg-3 col-md-6 mb-3'
+                },
+                {
+                    id: 'total-revenue',
+                    title: 'Total Agendamentos (30d)',
+                    value: 0,
+                    icon: 'fas fa-calendar-check',
+                    color: 'info',
+                    format: 'number',
+                    columnClass: 'col-lg-3 col-md-6 mb-3'
+                }
+            ];
+
+            // Always create fallback HTML first to ensure cards are visible
+            container.innerHTML = metricsConfig.map(config => `
+                <div class="${config.columnClass}">
+                    <div class="metric-card">
+                        <div class="metric-card-body">
+                            <div class="metric-icon metric-icon-${config.color}">
+                                <i class="${config.icon}"></i>
+                            </div>
+                            <div class="metric-content">
+                                <div class="metric-value" id="${config.id}-value">${config.value}</div>
+                                <div class="metric-title">${config.title}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Try to enhance with UBS widgets if available
+            if (typeof window.UBSWidgets !== 'undefined' && window.UBSWidgets.MetricCard) {
+                console.log('🎨 Enhancing with UBS widgets...');
+                window.tenantMetricWidgets = {};
+                
+                metricsConfig.forEach(config => {
+                    const existingCard = document.getElementById(`${config.id}-value`);
+                    if (existingCard) {
+                        const cardContainer = existingCard.closest('.metric-card').parentElement;
+                        cardContainer.innerHTML = ''; // Clear existing content
+                        
+                        const metricWidget = new window.UBSWidgets.MetricCard(cardContainer, {
+                            title: config.title,
+                            value: config.value,
+                            icon: config.icon,
+                            color: config.color,
+                            format: config.format
+                        });
+                        
+                        metricWidget.render();
+                        window.tenantMetricWidgets[config.id] = metricWidget;
+                    }
+                });
+                
+                console.log('✅ UBS metric widgets enhanced successfully');
+            } else {
+                console.warn('⚠️ UBS Widgets not available, using fallback HTML');
+            }
+        }
+
+        async function loadTenants() {
+            try {
+                // Get authentication token
+                const token = localStorage.getItem('ubs_token');
+                console.log('🔑 Token found:', token ? 'Yes' : 'No');
+                console.log('🔑 Token value:', token ? token.substring(0, 50) + '...' : 'null');
+                
+                if (!token) {
+                    console.log('❌ No token found');
+                    console.log('🔧 Loading sample data for development (no redirect)...');
+                    loadSampleData();
+                    return;
+                }
+
+                console.log('📡 Making API request to /api/admin/tenants...');
+                
+                // Load real tenant data from API
+                const response = await fetch('/api/admin/tenants', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                console.log('📡 API Response status:', response.status);
+                console.log('📡 API Response headers:', response.headers);
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('📊 Raw API response:', result);
+                    
+                    // Handle different possible response structures
+                    if (Array.isArray(result)) {
+                        allTenants = result;
+                    } else if (result && Array.isArray(result.tenants)) {
+                        allTenants = result.tenants;
+                    } else if (result && Array.isArray(result.data)) {
+                        allTenants = result.data;
+                    } else {
+                        console.warn('⚠️ Unexpected API response structure:', result);
+                        allTenants = [];
+                    }
+                    
+                    console.log('✅ Loaded tenants:', allTenants.length, allTenants);
+                    
+                    filteredTenants = [...allTenants];
+                    updateStats();
+                    renderTenants();
+                    
+                    // Ensure filters are properly initialized
+                    console.log('🔧 Initializing filters...');
+                    filterTenants();
+                } else {
+                    console.error('❌ Failed to load tenants:', response.status, response.statusText);
+                    
+                    if (response.status === 401) {
+                        showErrorMessage('Sessão expirada. Por favor, faça login novamente.');
+                        setTimeout(() => window.location.href = '/login', 2000);
+                    } else if (response.status === 403) {
+                        showErrorMessage('Acesso negado. Apenas super administradores podem ver esta página.');
+                    } else {
+                        showErrorMessage(`Erro ao carregar empresas: ${response.status} ${response.statusText}`);
+                        // Load sample data for development
+                        console.log('🔧 Loading sample data due to API error...');
+                        loadSampleData();
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error loading tenants:', error);
+                // For development: Load sample data if API fails
+                console.log('🔧 Loading sample data for development...');
+                loadSampleData();
+            }
+        }
+
+        // Debug function - use in console: setDebugToken()
+        window.setDebugToken = function() {
+            const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjIyOGVmOGU1LTUyNzUtNDZhYS1iOWNkLTI2ODRhMDhlMTc5OCIsImVtYWlsIjoiYWRtaW5AdW5pdmVyc2FsYm9va2luZy5jb20iLCJyb2xlIjoic3VwZXJfYWRtaW4iLCJ0ZW5hbnRfaWQiOm51bGwsImlhdCI6MTc1MTY3NTkzMiwiZXhwIjoxNzUxNzYyMzMyfQ.nHtAGoxqtuI6fDj7NhkujyRCIn7IX363goFsjZ35Yls';
+            localStorage.setItem('ubs_token', token);
+            console.log('✅ Debug token set! Reloading page...');
+            location.reload();
+        };
+
+        // Debug function - use in console: clearToken()
+        window.clearToken = function() {
+            localStorage.removeItem('ubs_token');
+            console.log('✅ Token cleared! Reloading page...');
+            location.reload();
+        };
+
+        // Sample data for development/debugging
+        function loadSampleData() {
+            allTenants = [
+                {
+                    id: '1',
+                    business_name: 'Salão Bella Vista',
+                    slug: 'salao-bella-vista',
+                    domain: 'beauty',
+                    email: 'contato@bellavista.com.br',
+                    phone: '(11) 99999-1234',
+                    status: 'active',
+                    subscription_plan: 'premium',
+                    created_at: '2024-01-15T10:00:00Z',
+                    whatsapp_settings: { phone: '5511999991234' },
+                    stats: {
+                        totalUsers: 15,
+                        appointmentsLast30Days: 89,
+                        confirmedAppointments: 67
+                    }
+                },
+                {
+                    id: '2',
+                    business_name: 'Clínica Mental Health Pro',
+                    slug: 'mental-health-pro',
+                    domain: 'healthcare',
+                    email: 'admin@mentalhealthpro.com.br',
+                    phone: '(11) 88888-5678',
+                    status: 'active',
+                    subscription_plan: 'basic',
+                    created_at: '2024-02-10T14:30:00Z',
+                    whatsapp_settings: { phone: '5511888885678' },
+                    stats: {
+                        totalUsers: 8,
+                        appointmentsLast30Days: 45,
+                        confirmedAppointments: 38
+                    }
+                },
+                {
+                    id: '3',
+                    business_name: 'Lima & Associados Advocacia',
+                    slug: 'lima-associados',
+                    domain: 'legal',
+                    email: 'contato@limaassociados.adv.br',
+                    phone: '(11) 77777-9012',
+                    status: 'trial',
+                    subscription_plan: 'trial',
+                    created_at: '2024-03-05T09:15:00Z',
+                    whatsapp_settings: null,
+                    stats: {
+                        totalUsers: 5,
+                        appointmentsLast30Days: 23,
+                        confirmedAppointments: 18
+                    }
+                }
+            ];
+            
+            filteredTenants = [...allTenants];
+            updateStats();
+            renderTenants();
+            filterTenants();
+            console.log('✅ Sample data loaded');
+        }
+
+        // Demo function removed - now using real API data
+
+        function updateStats() {
+            const active = allTenants.filter(t => t.status === 'active').length;
+            const trial = allTenants.filter(t => t.status === 'trial').length;
+            const inactive = allTenants.filter(t => t.status === 'inactive' || t.status === 'blocked').length;
+            
+            // Calculate total users and appointments from all tenants
+            const totalUsers = allTenants.reduce((sum, t) => sum + (t.stats?.totalUsers || 0), 0);
+            const totalAppointments = allTenants.reduce((sum, t) => sum + (t.stats?.appointmentsLast30Days || 0), 0);
+
+            // Update UBS widgets if available
+            if (window.tenantMetricWidgets) {
+                window.tenantMetricWidgets['total-tenants']?.update({ value: allTenants.length });
+                window.tenantMetricWidgets['active-tenants']?.update({ value: active });
+                window.tenantMetricWidgets['trial-tenants']?.update({ value: trial });
+                window.tenantMetricWidgets['total-revenue']?.update({ value: totalAppointments }); // Using appointments as revenue proxy
+            } else {
+                // Fallback to direct DOM update
+                const totalEl = document.getElementById('total-tenants-value');
+                const activeEl = document.getElementById('active-tenants-value');
+                const trialEl = document.getElementById('trial-tenants-value');
+                const revenueEl = document.getElementById('total-revenue-value');
+                
+                if (totalEl) totalEl.textContent = allTenants.length;
+                if (activeEl) activeEl.textContent = active;
+                if (trialEl) trialEl.textContent = trial;
+                if (revenueEl) revenueEl.textContent = totalAppointments.toLocaleString('pt-BR');
+            }
+        }
+
+        function renderTenants() {
+            const container = document.getElementById('tenantsContainer');
+            
+            console.log('🎨 Rendering tenants:', filteredTenants.length);
+            
+            if (filteredTenants.length === 0) {
+                const message = allTenants.length === 0 
+                    ? 'Nenhuma empresa cadastrada no sistema' 
+                    : 'Nenhuma empresa encontrada com os filtros aplicados';
+                    
+                container.innerHTML = `
+                    <div class="text-center p-5">
+                        <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                        <h5>${message}</h5>
+                        <p class="text-muted">
+                            ${allTenants.length === 0 
+                                ? 'Crie uma nova empresa para começar' 
+                                : 'Tente ajustar os filtros ou limpar a busca'
+                            }
+                        </p>
+                        ${allTenants.length > 0 ? `
+                            <button class="btn btn-outline-primary" onclick="resetFilters()">
+                                <i class="fas fa-times me-1"></i> Limpar Filtros
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filteredTenants.map(tenant => `
+                <div class="tenant-card">
+                    <div class="d-flex align-items-center">
+                        <div class="domain-icon domain-${tenant.domain}">
+                            ${getDomainIcon(tenant.domain)}
+                        </div>
+                        
+                        <div class="tenant-info">
+                            <div class="tenant-name">${tenant.business_name || tenant.name}</div>
+                            <div class="tenant-domain">${getDomainName(tenant.domain)}</div>
+                            <div class="tenant-contact">
+                                <i class="fas fa-envelope me-1"></i> ${tenant.email} |
+                                <i class="fas fa-phone me-1"></i> ${tenant.phone || 'N/A'}
+                                ${tenant.slug ? `| <i class="fas fa-link me-1"></i> ${tenant.slug}` : ''}
+                            </div>
+                            <div class="tenant-whatsapp mt-1">
+                                ${renderWhatsAppStatus(tenant.whatsapp_settings?.phone)}
+                            </div>
+                        </div>
+                        
+                        <div class="tenant-stats">
+                            <div class="stat-item">
+                                <div class="stat-value text-primary">${tenant.stats?.totalUsers || 0}</div>
+                                <div class="stat-label">Usuários</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value text-info">${tenant.stats?.appointmentsLast30Days || 0}</div>
+                                <div class="stat-label">Agendamentos (30d)</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value text-success">${tenant.stats?.confirmedAppointments || 0}</div>
+                                <div class="stat-label">Confirmados</div>
+                            </div>
+                        </div>
+                        
+                        <div class="tenant-actions">
+                            <span class="status-badge status-${tenant.status}">
+                                ${getStatusLabel(tenant.status)}
+                            </span>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="viewTenant('${tenant.id}')" title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="editTenant('${tenant.id}')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-outline-info" onclick="manageWhatsApp('${tenant.id}')" title="Gerenciar WhatsApp">
+                                    <i class="fab fa-whatsapp"></i>
+                                </button>
+                                <button class="btn btn-outline-${tenant.status === 'active' ? 'warning' : 'success'}" 
+                                        onclick="toggleTenantStatus('${tenant.id}', '${tenant.status}')" 
+                                        title="${tenant.status === 'active' ? 'Bloquear' : 'Ativar'}">
+                                    <i class="fas fa-${tenant.status === 'active' ? 'ban' : 'check'}"></i>
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="deleteTenant('${tenant.id}')" title="Excluir">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getDomainIcon(domain) {
+            const icons = {
+                beauty: '<i class="fas fa-cut"></i>',
+                healthcare: '<i class="fas fa-heartbeat"></i>',
+                legal: '<i class="fas fa-balance-scale"></i>',
+                education: '<i class="fas fa-graduation-cap"></i>',
+                sports: '<i class="fas fa-dumbbell"></i>',
+                consulting: '<i class="fas fa-briefcase"></i>'
+            };
+            return icons[domain] || '<i class="fas fa-building"></i>';
+        }
+
+        function getDomainName(domain) {
+            const names = {
+                beauty: 'Beleza & Estética',
+                healthcare: 'Saúde & Bem-estar',
+                legal: 'Advocacia & Jurídico',
+                education: 'Educação & Ensino',
+                sports: 'Esportes & Fitness',
+                consulting: 'Consultoria & Negócios'
+            };
+            return names[domain] || domain;
+        }
+
+        function getStatusLabel(status) {
+            const labels = {
+                active: 'Ativo',
+                trial: 'Teste',
+                inactive: 'Inativo',
+                blocked: 'Bloqueado'
+            };
+            return labels[status] || status;
+        }
+
+        function renderWhatsAppStatus(whatsappPhone) {
+            if (!whatsappPhone || whatsappPhone === '' || whatsappPhone === null) {
+                return '<span class="badge bg-secondary"><i class="fab fa-whatsapp me-1"></i>Não configurado</span>';
+            }
+            return `<span class="badge bg-success"><i class="fab fa-whatsapp me-1"></i>${whatsappPhone}</span>`;
+        }
+
+        function filterTenants() {
+            const search = document.getElementById('searchInput').value.toLowerCase().trim();
+            const status = document.getElementById('statusFilter').value;
+            const domain = document.getElementById('domainFilter').value;
+
+            console.log('🔍 Filtering tenants:', { search, status, domain, totalTenants: allTenants.length });
+
+            // If no filters are applied, show all tenants
+            if (!search && !status && !domain) {
+                filteredTenants = [...allTenants];
+                console.log('✅ No filters applied, showing all tenants:', filteredTenants.length);
+                renderTenants();
+                return;
+            }
+
+            filteredTenants = allTenants.filter(tenant => {
+                const matchesSearch = !search || 
+                    (tenant.business_name && tenant.business_name.toLowerCase().includes(search)) ||
+                    (tenant.name && tenant.name.toLowerCase().includes(search)) ||
+                    (tenant.email && tenant.email.toLowerCase().includes(search)) ||
+                    (tenant.phone && tenant.phone.toLowerCase().includes(search)) ||
+                    (tenant.slug && tenant.slug.toLowerCase().includes(search)) ||
+                    (tenant.whatsapp_settings?.phone && tenant.whatsapp_settings.phone.toLowerCase().includes(search));
+                
+                const matchesStatus = !status || tenant.status === status;
+                const matchesDomain = !domain || tenant.domain === domain;
+
+                return matchesSearch && matchesStatus && matchesDomain;
+            });
+
+            console.log('✅ Filtered tenants:', filteredTenants.length);
+            renderTenants();
+        }
+
+        function sortTenants() {
+            const sortBy = document.getElementById('sortBy').value;
+            
+            filteredTenants.sort((a, b) => {
+                switch (sortBy) {
+                    case 'name':
+                        const nameA = a.business_name || a.name || '';
+                        const nameB = b.business_name || b.name || '';
+                        return nameA.localeCompare(nameB);
+                    case 'created':
+                        return new Date(b.created_at) - new Date(a.created_at);
+                    case 'revenue':
+                        return (b.stats?.appointmentsLast30Days || 0) - (a.stats?.appointmentsLast30Days || 0);
+                    case 'users':
+                        return (b.stats?.totalUsers || 0) - (a.stats?.totalUsers || 0);
+                    default:
+                        return 0;
+                }
+            });
+
+            renderTenants();
+        }
+
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('statusFilter').value = '';
+            document.getElementById('domainFilter').value = '';
+            document.getElementById('sortBy').value = 'name';
+            
+            filteredTenants = [...allTenants];
+            renderTenants();
+        }
+
+        async function createNewTenant() {
+            // Redirect to tenant registration page
+            window.location.href = '/register';
+        }
+
+        async function manageWhatsApp(tenantId) {
+            const tenant = allTenants.find(t => t.id == tenantId);
+            if (!tenant) return;
+
+            const currentPhone = tenant.whatsapp_phone || '';
+            const newPhone = prompt(`Gerenciar WhatsApp para ${tenant.name}\n\nNúmero atual: ${currentPhone || 'Não configurado'}\n\nDigite o novo número (ou deixe vazio para remover):`, currentPhone);
+            
+            if (newPhone === null) return; // Cancelled
+
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch(`/api/admin/tenants/${tenantId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        whatsapp_phone: newPhone.trim() || null
+                    })
+                });
+
+                if (response.ok) {
+                    alert('WhatsApp atualizado com sucesso!');
+                    loadTenants(); // Reload data
+                } else {
+                    alert('Erro ao atualizar WhatsApp');
+                }
+            } catch (error) {
+                console.error('Error updating WhatsApp:', error);
+                alert('Erro ao atualizar WhatsApp');
+            }
+        }
+
+        async function toggleTenantStatus(tenantId, currentStatus) {
+            const tenant = allTenants.find(t => t.id == tenantId);
+            if (!tenant) return;
+
+            const newStatus = currentStatus === 'active' ? 'blocked' : 'active';
+            const action = newStatus === 'active' ? 'ativar' : 'bloquear';
+
+            if (!confirm(`Tem certeza que deseja ${action} a empresa "${tenant.name}"?`)) {
+                return;
+            }
+
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch(`/api/admin/tenants/${tenantId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        status: newStatus
+                    })
+                });
+
+                if (response.ok) {
+                    alert(`Empresa ${action === 'ativar' ? 'ativada' : 'bloqueada'} com sucesso!`);
+                    loadTenants(); // Reload data
+                } else {
+                    alert(`Erro ao ${action} empresa`);
+                }
+            } catch (error) {
+                console.error(`Error updating tenant status:`, error);
+                alert(`Erro ao ${action} empresa`);
+            }
+        }
+
+        function viewTenant(id) {
+            const tenant = allTenants.find(t => t.id == id);
+            if (!tenant) return;
+
+            const details = `
+Detalhes da Empresa: ${tenant.business_name || tenant.name}
+
+• Nome do Negócio: ${tenant.business_name || 'N/A'}
+• Slug: ${tenant.slug || 'N/A'}
+• Domínio: ${getDomainName(tenant.domain)}
+• Email: ${tenant.email}
+• Telefone: ${tenant.phone || 'N/A'}
+• WhatsApp: ${tenant.whatsapp_settings?.phone || 'Não configurado'}
+• Status: ${getStatusLabel(tenant.status)}
+• Plano: ${tenant.subscription_plan || 'N/A'}
+• Usuários: ${tenant.stats?.totalUsers || 0}
+• Agendamentos (30d): ${tenant.stats?.appointmentsLast30Days || 0}
+• Confirmados: ${tenant.stats?.confirmedAppointments || 0}
+• Criado em: ${tenant.created_at ? new Date(tenant.created_at).toLocaleDateString('pt-BR') : 'N/A'}
+            `;
+
+            alert(details);
+        }
+
+        function editTenant(id) {
+            const tenant = allTenants.find(t => t.id == id);
+            if (!tenant) return;
+
+            // For now, we'll show basic editing options
+            // In a real implementation, this would open a modal or redirect to an edit page
+            const currentName = tenant.business_name || tenant.name;
+            const newName = prompt(`Editar nome da empresa:\n\nNome atual: ${currentName}`, currentName);
+            if (!newName || newName === currentName) return;
+
+            updateTenantField(id, 'business_name', newName);
+        }
+
+        async function updateTenantField(tenantId, field, value) {
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch(`/api/admin/tenants/${tenantId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        [field]: value
+                    })
+                });
+
+                if (response.ok) {
+                    alert('Empresa atualizada com sucesso!');
+                    loadTenants(); // Reload data
+                } else {
+                    alert('Erro ao atualizar empresa');
+                }
+            } catch (error) {
+                console.error('Error updating tenant:', error);
+                alert('Erro ao atualizar empresa');
+            }
+        }
+
+        async function deleteTenant(id) {
+            const tenant = allTenants.find(t => t.id == id);
+            if (!tenant) return;
+
+            const confirmMessage = `⚠️ ATENÇÃO: Esta ação não pode ser desfeita!\n\nVocê está prestes a excluir a empresa:\n"${tenant.name}"\n\nTodos os dados relacionados (usuários, agendamentos, conversas) serão permanentemente removidos.\n\nDigite "CONFIRMAR" para prosseguir:`;
+            
+            const confirmation = prompt(confirmMessage);
+            if (confirmation !== 'CONFIRMAR') {
+                alert('Exclusão cancelada.');
+                return;
+            }
+
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch(`/api/admin/tenants/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    alert('Empresa excluída com sucesso!');
+                    loadTenants(); // Reload data
+                } else {
+                    alert('Erro ao excluir empresa');
+                }
+            } catch (error) {
+                console.error('Error deleting tenant:', error);
+                alert('Erro ao excluir empresa');
+            }
+        }
+
+        function showErrorMessage(message) {
+            const container = document.getElementById('tenantsContainer');
+            container.innerHTML = `
+                <div class="alert alert-danger m-3" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${message}
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

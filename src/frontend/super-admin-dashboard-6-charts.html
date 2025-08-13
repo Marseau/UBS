@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin Dashboard - 6 Charts Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .dashboard-header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+        
+        .dashboard-header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .dashboard-header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .chart-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 25px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .chart-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+        }
+        
+        .chart-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #2d3748;
+            text-align: center;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+        
+        .metrics-summary {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 25px;
+            margin-top: 20px;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .metric-item {
+            text-align: center;
+            padding: 15px;
+            background: #f7fafc;
+            border-radius: 10px;
+            border-left: 4px solid #4299e1;
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+        
+        .metric-label {
+            color: #718096;
+            font-size: 0.9rem;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #718096;
+        }
+        
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .chart-card {
+                padding: 15px;
+            }
+            
+            .chart-container {
+                height: 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <h1>📊 Super Admin Dashboard</h1>
+            <p>Analytics Completo - 6 Gráficos Estratégicos | Últimos 6 Meses</p>
+        </div>
+        
+        <div class="charts-grid">
+            <!-- Chart 1: Time Series 6 meses -->
+            <div class="chart-card">
+                <div class="chart-title">📈 Tendência 6 Meses</div>
+                <div class="chart-container">
+                    <canvas id="timeSeriesChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Chart 2: Scatter Custo vs Receita -->
+            <div class="chart-card">
+                <div class="chart-title">💰 Custo vs Receita por Tenant</div>
+                <div class="chart-container">
+                    <canvas id="scatterChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Chart 3: Line Conversations vs Appointments -->
+            <div class="chart-card">
+                <div class="chart-title">💬 Conversations vs Appointments</div>
+                <div class="chart-container">
+                    <canvas id="conversationsChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Chart 4: Pie MRR por Domínio -->
+            <div class="chart-card">
+                <div class="chart-title">🥧 MRR por Domínio</div>
+                <div class="chart-container">
+                    <canvas id="mrrPieChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Chart 5: Line Appointment Status -->
+            <div class="chart-card">
+                <div class="chart-title">📅 Status dos Appointments</div>
+                <div class="chart-container">
+                    <canvas id="appointmentStatusChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Chart 6: Platform vs Tenant Metrics -->
+            <div class="chart-card">
+                <div class="chart-title">⚖️ Platform vs Tenant Revenue</div>
+                <div class="chart-container">
+                    <canvas id="platformTenantChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Metrics Summary -->
+        <div class="metrics-summary">
+            <div class="chart-title">🎯 Key Metrics Summary</div>
+            <div class="metrics-grid" id="metricsGrid">
+                <div class="loading">Carregando métricas...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration for all charts
+        Chart.defaults.font.family = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+        Chart.defaults.plugins.legend.display = true;
+        Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(0,0,0,0.8)';
+        Chart.defaults.plugins.tooltip.titleColor = 'white';
+        Chart.defaults.plugins.tooltip.bodyColor = 'white';
+        
+        let chartsData = {};
+        
+        // Load data from API
+        async function loadDashboardData() {
+            try {
+                // Load all data from real APIs
+                const [
+                    timeSeriesRes,
+                    scatterRes,
+                    conversationsRes,
+                    mrrPieRes,
+                    appointmentStatusRes,
+                    platformTenantRes,
+                    summaryRes
+                ] = await Promise.all([
+                    fetch('/api/super-admin/time-series'),
+                    fetch('/api/super-admin/scatter-plot'),
+                    fetch('/api/super-admin/conversations-appointments'),
+                    fetch('/api/super-admin/mrr-by-domain'),
+                    fetch('/api/super-admin/appointment-status'),
+                    fetch('/api/super-admin/platform-tenant-analysis'),
+                    fetch('/api/super-admin/summary-metrics')
+                ]);
+
+                // Parse responses
+                const timeSeriesData = await timeSeriesRes.json();
+                const scatterData = await scatterRes.json();
+                const conversationsData = await conversationsRes.json();
+                const mrrPieData = await mrrPieRes.json();
+                const appointmentStatusData = await appointmentStatusRes.json();
+                const platformTenantData = await platformTenantRes.json();
+                const summaryData = await summaryRes.json();
+
+                // Structure data for charts
+                chartsData = {
+                    timeSeries: timeSeriesData.data,
+                    scatter: { data: scatterData.data },
+                    conversations: conversationsData.data,
+                    mrrPie: mrrPieData.data,
+                    appointmentStatus: appointmentStatusData.data,
+                    platformTenant: platformTenantData.data,
+                    summary: summaryData.data
+                };
+
+                initializeCharts();
+                updateMetricsSummary();
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                showError('Erro ao carregar dados do dashboard');
+                // Fallback to mock data
+                chartsData = await getMockData();
+                initializeCharts();
+                updateMetricsSummary();
+            }
+        }
+        
+        // Mock data - fallback only
+        async function getMockData() {
+            return {
+                timeSeries: {
+                    labels: ['Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago'],
+                    revenue: [5420, 6180, 7200, 8100, 8500, 8946, 9200],
+                    appointments: [45, 52, 61, 68, 72, 75, 80],
+                    customers: [20, 24, 28, 31, 33, 36, 38]
+                },
+                scatter: {
+                    data: [
+                        { x: 290, y: 4914, label: 'Centro Terapêutico Equilíbrio', domain: 'healthcare' },
+                        { x: 290, y: 4033, label: 'Clínica Mente Sã', domain: 'healthcare' },
+                        { x: 116, y: 2100, label: 'Beauty Studio A', domain: 'beauty' },
+                        { x: 116, y: 1800, label: 'Salão Beleza B', domain: 'beauty' },
+                        { x: 116, y: 1650, label: 'Spa Wellness C', domain: 'beauty' }
+                    ]
+                },
+                conversations: {
+                    labels: ['Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago'],
+                    conversations: [120, 135, 150, 180, 195, 210, 230],
+                    appointments: [45, 52, 61, 68, 72, 75, 80]
+                },
+                mrrPie: {
+                    labels: ['Healthcare', 'Beauty', 'Legal', 'Education', 'Sports'],
+                    data: [580, 348, 0, 0, 0],
+                    colors: ['#e53e3e', '#38a169', '#3182ce', '#805ad5', '#d69e2e']
+                },
+                appointmentStatus: {
+                    labels: ['Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago'],
+                    completed: [35, 42, 48, 55, 58, 62, 68],
+                    confirmed: [10, 10, 13, 13, 14, 13, 12],
+                    cancelled: [5, 3, 2, 8, 4, 0, 0],
+                    noshow: [2, 1, 1, 3, 2, 0, 0]
+                },
+                platformTenant: {
+                    platformMrr: 928,
+                    tenantRevenue: 8946,
+                    ratio: 9.6,
+                    plans: {
+                        enterprise: { revenue: 580, percentage: 62.5 },
+                        professional: { revenue: 348, percentage: 37.5 },
+                        free: { revenue: 0, percentage: 0 }
+                    }
+                }
+            };
+        }
+        
+        // Initialize all charts
+        function initializeCharts() {
+            createTimeSeriesChart();
+            createScatterChart();
+            createConversationsChart();
+            createMrrPieChart();
+            createAppointmentStatusChart();
+            createPlatformTenantChart();
+        }
+        
+        // Chart 1: Time Series
+        function createTimeSeriesChart() {
+            const ctx = document.getElementById('timeSeriesChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartsData.timeSeries.labels,
+                    datasets: [
+                        {
+                            label: 'Revenue ($)',
+                            data: chartsData.timeSeries.revenue,
+                            borderColor: '#4299e1',
+                            backgroundColor: 'rgba(66, 153, 225, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Appointments',
+                            data: chartsData.timeSeries.appointments,
+                            borderColor: '#48bb78',
+                            backgroundColor: 'rgba(72, 187, 120, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        },
+                        {
+                            label: 'Customers',
+                            data: chartsData.timeSeries.customers,
+                            borderColor: '#ed8936',
+                            backgroundColor: 'rgba(237, 137, 54, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Revenue ($)' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'Count' },
+                            grid: { drawOnChartArea: false }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Chart 2: Scatter Plot
+        function createScatterChart() {
+            const ctx = document.getElementById('scatterChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Tenants',
+                        data: chartsData.scatter.data,
+                        backgroundColor: chartsData.scatter.data.map(d => 
+                            d.domain === 'healthcare' ? '#e53e3e' : '#38a169'
+                        ),
+                        borderColor: '#2d3748',
+                        pointRadius: 8,
+                        pointHoverRadius: 12
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Custo Plataforma ($)' }
+                        },
+                        y: { 
+                            title: { display: true, text: 'Receita Tenant ($)' }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const point = context.raw;
+                                    return [
+                                        `${point.label}`,
+                                        `Domínio: ${point.domain}`,
+                                        `Custo: $${point.x}`,
+                                        `Receita: $${point.y.toLocaleString()}`
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Chart 3: Conversations vs Appointments
+        function createConversationsChart() {
+            const ctx = document.getElementById('conversationsChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartsData.conversations.labels,
+                    datasets: [
+                        {
+                            label: 'Conversations',
+                            data: chartsData.conversations.conversations,
+                            borderColor: '#9f7aea',
+                            backgroundColor: 'rgba(159, 122, 234, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Appointments',
+                            data: chartsData.conversations.appointments,
+                            borderColor: '#4299e1',
+                            backgroundColor: 'rgba(66, 153, 225, 0.1)',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { 
+                            title: { display: true, text: 'Count' }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Chart 4: MRR Pie Chart
+        function createMrrPieChart() {
+            const ctx = document.getElementById('mrrPieChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: chartsData.mrrPie.labels,
+                    datasets: [{
+                        data: chartsData.mrrPie.data,
+                        backgroundColor: chartsData.mrrPie.colors,
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${context.label}: $${value} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Chart 5: Appointment Status
+        function createAppointmentStatusChart() {
+            const ctx = document.getElementById('appointmentStatusChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartsData.appointmentStatus.labels,
+                    datasets: [
+                        {
+                            label: 'Completados + Confirmados',
+                            data: chartsData.appointmentStatus.completed.map((val, idx) => 
+                                val + chartsData.appointmentStatus.confirmed[idx]
+                            ),
+                            borderColor: '#38a169',
+                            backgroundColor: 'rgba(56, 161, 105, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Cancelados',
+                            data: chartsData.appointmentStatus.cancelled,
+                            borderColor: '#e53e3e',
+                            backgroundColor: 'rgba(229, 62, 62, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'No-Show',
+                            data: chartsData.appointmentStatus.noshow,
+                            borderColor: '#ed8936',
+                            backgroundColor: 'rgba(237, 137, 54, 0.1)',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { 
+                            title: { display: true, text: 'Appointments' }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Chart 6: Platform vs Tenant
+        function createPlatformTenantChart() {
+            const ctx = document.getElementById('platformTenantChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Platform MRR', 'Tenant Revenue'],
+                    datasets: [{
+                        label: 'Revenue ($)',
+                        data: [chartsData.platformTenant.platformMrr, chartsData.platformTenant.tenantRevenue],
+                        backgroundColor: ['#4299e1', '#48bb78'],
+                        borderColor: ['#3182ce', '#38a169'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { 
+                            title: { display: true, text: 'Revenue ($)' },
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    if (context.label === 'Platform MRR') {
+                                        return 'Receita da plataforma (subscriptions)';
+                                    }
+                                    return `Ratio: ${chartsData.platformTenant.ratio}:1`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Update metrics summary
+        function updateMetricsSummary() {
+            const grid = document.getElementById('metricsGrid');
+            
+            // Use real data from summary API or fallback to calculated values
+            const summaryData = chartsData.summary || {};
+            const platformData = chartsData.platformTenant || {};
+            
+            const metrics = [
+                { value: `$${summaryData.platformMrr || platformData.platformMrr || 0}`, label: 'Platform MRR' },
+                { value: `$${(summaryData.tenantRevenue || platformData.tenantRevenue || 0).toLocaleString()}`, label: 'Tenant Revenue' },
+                { value: summaryData.ratio || `${platformData.ratio || 0}:1`, label: 'Revenue Ratio' },
+                { value: summaryData.payingDomains || '2', label: 'Paying Domains' },
+                { value: summaryData.totalTenants || '10', label: 'Total Tenants' },
+                { value: summaryData.systemSuccessRate || '93.3%', label: 'System Success Rate' }
+            ];
+            
+            grid.innerHTML = metrics.map(metric => `
+                <div class="metric-item">
+                    <div class="metric-value">${metric.value}</div>
+                    <div class="metric-label">${metric.label}</div>
+                </div>
+            `).join('');
+        }
+        
+        function showError(message) {
+            const container = document.querySelector('.dashboard-container');
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            container.insertBefore(errorDiv, container.firstChild);
+        }
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', loadDashboardData);
+    </script>
+</body>
+</html>

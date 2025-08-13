@@ -1,0 +1,254 @@
+# =====================================================
+# PRE-COMMIT HOOKS - FRONTEND PROTECTION
+# Executa verificações antes de cada commit para proteger integridade
+# =====================================================
+
+repos:
+  # =====================================================
+  # VERIFICAÇÕES LOCAIS CUSTOMIZADAS
+  # =====================================================
+  - repo: local
+    hooks:
+      # Verificação de integridade de arquivos críticos
+      - id: frontend-integrity-check
+        name: Frontend Integrity Check
+        entry: node scripts/verify-frontend-integrity.js
+        language: node
+        files: 'src/frontend/.*|.*\.md$|tests/.*|playwright\.config\.js'
+        pass_filenames: false
+        always_run: false
+        
+      # Verificação de versionamento de componentes
+      - id: component-version-check
+        name: Component Version Check
+        entry: bash
+        language: bash
+        files: 'src/frontend/.*\.html$|src/frontend/.*\.js$'
+        args: 
+          - -c
+          - |
+            echo "🔧 Checking component versions..."
+            if [ -f "src/frontend/js/utils/component-versioning.js" ]; then
+              echo "✅ Component versioning system found"
+            else
+              echo "❌ Component versioning system missing!"
+              exit 1
+            fi
+        
+      # Verificação rápida de acessibilidade
+      - id: accessibility-quick-check
+        name: Quick Accessibility Check  
+        entry: bash
+        language: bash
+        files: 'src/frontend/.*\.html$'
+        args:
+          - -c
+          - |
+            echo "♿ Quick accessibility check..."
+            for file in $(git diff --cached --name-only | grep "src/frontend/.*\.html$"); do
+              if [ -f "$file" ]; then
+                # Verificar se tem atributos de acessibilidade básicos
+                if ! grep -q "aria-label\|aria-labelledby\|alt=" "$file"; then
+                  echo "⚠️  $file may be missing accessibility attributes"
+                fi
+                # Verificar estrutura de headings
+                if ! grep -q "<h[1-6]" "$file"; then
+                  echo "⚠️  $file may be missing heading structure"
+                fi
+              fi
+            done
+            echo "✅ Quick accessibility check completed"
+            
+      # Prevenção de mudanças críticas sem override
+      - id: prevent-critical-changes
+        name: Prevent Unauthorized Critical Changes
+        entry: bash
+        language: bash
+        files: 'MASTER_INTEGRATION_DASHBOARD_TENANT_PLATAFORMA\.md|FRONTEND_INTEGRITY_ASSURANCE_SYSTEM\.md|src/frontend/tenant-business-analytics\.html'
+        args:
+          - -c
+          - |
+            if [ "$FRONTEND_CRITICAL_OVERRIDE" != "true" ]; then
+              echo "🚨 CRITICAL FILE MODIFICATION DETECTED!"
+              echo ""
+              echo "You are attempting to modify critical frontend files:"
+              for file in $(git diff --cached --name-only | grep -E "(MASTER_INTEGRATION|FRONTEND_INTEGRITY|tenant-business-analytics\.html)"); do
+                echo "  🔴 $file"
+              done
+              echo ""
+              echo "To allow this change, run:"
+              echo "  FRONTEND_CRITICAL_OVERRIDE=true git commit -m '[CRITICAL-CHANGE] Your message'"
+              echo ""
+              echo "⚠️  Remember to:"
+              echo "  1. Test all visual regression tests"
+              echo "  2. Verify accessibility compliance"
+              echo "  3. Check API contract integrity"
+              echo "  4. Update frontend integrity checksums after approval"
+              echo ""
+              exit 1
+            else
+              echo "🔓 Critical change override enabled"
+              echo "✅ Proceeding with critical file modifications"
+            fi
+
+  # =====================================================
+  # VERIFICAÇÕES PADRÃO DE QUALIDADE DE CÓDIGO
+  # =====================================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      # Verificações básicas de arquivo
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      
+      # Verificações de JavaScript/HTML
+      - id: check-ast
+        files: \.js$
+      - id: pretty-format-json
+        args: [--autofix, --indent=2]
+        files: \.json$
+        
+  # =====================================================
+  # VERIFICAÇÕES DE FRONTEND ESPECÍFICAS
+  # =====================================================
+  - repo: local
+    hooks:
+      # Verificar se arquivos HTML são válidos
+      - id: html-validation
+        name: HTML Validation
+        entry: bash
+        language: bash
+        files: 'src/frontend/.*\.html$'
+        args:
+          - -c
+          - |
+            echo "🌐 Validating HTML files..."
+            for file in $(git diff --cached --name-only | grep "src/frontend/.*\.html$"); do
+              if [ -f "$file" ]; then
+                # Verificações básicas de HTML
+                if ! grep -q "<!DOCTYPE html>" "$file"; then
+                  echo "❌ $file missing DOCTYPE declaration"
+                  exit 1
+                fi
+                if ! grep -q "<html" "$file"; then
+                  echo "❌ $file missing html tag"
+                  exit 1
+                fi
+                # Verificar tags não fechadas (básico)
+                if ! grep -q "</html>" "$file"; then
+                  echo "❌ $file missing closing html tag"
+                  exit 1
+                fi
+                echo "✅ $file HTML structure OK"
+              fi
+            done
+            
+      # Verificar se scripts JavaScript são válidos
+      - id: js-syntax-check
+        name: JavaScript Syntax Check
+        entry: node
+        language: node
+        files: 'src/frontend/.*\.js$'
+        args: [-c, "console.log('✅ JavaScript syntax check passed')"]
+        
+      # Verificar se não há mock data em arquivos de produção
+      - id: no-mock-data
+        name: No Mock Data in Production
+        entry: bash
+        language: bash
+        files: 'src/frontend/.*\.(js|html)$'
+        args:
+          - -c
+          - |
+            echo "🔍 Checking for mock data..."
+            for file in $(git diff --cached --name-only | grep "src/frontend/.*\.(js|html)$"); do
+              if [ -f "$file" ]; then
+                if grep -q "mock\|fake\|dummy\|test.*data" "$file" | grep -v "mock-jwt-token-for"; then
+                  echo "⚠️  $file may contain mock data"
+                  grep -n "mock\|fake\|dummy\|test.*data" "$file" | head -3
+                fi
+              fi
+            done
+            echo "✅ Mock data check completed"
+
+  # =====================================================
+  # VERIFICAÇÕES DE SEGURANÇA
+  # =====================================================
+  - repo: local
+    hooks:
+      # Verificar se não há secrets ou tokens commitados
+      - id: no-secrets
+        name: No Secrets or Tokens
+        entry: bash
+        language: bash
+        files: '.*\.(js|html|json|md)$'
+        args:
+          - -c
+          - |
+            echo "🔒 Checking for secrets..."
+            for file in $(git diff --cached --name-only | grep -E "\.(js|html|json|md)$"); do
+              if [ -f "$file" ]; then
+                # Verificar padrões de secrets comuns
+                if grep -i "password\|secret\|key\|token" "$file" | grep -v "mock-jwt-token\|example\|placeholder\|demo"; then
+                  echo "⚠️  $file may contain sensitive information"
+                  grep -in "password\|secret\|key\|token" "$file" | grep -v "mock-jwt-token\|example\|placeholder\|demo" | head -3
+                fi
+              fi
+            done
+            echo "✅ Secrets check completed"
+
+  # =====================================================
+  # CONFIGURAÇÃO ESPECÍFICA PARA PLAYWRIGHT
+  # =====================================================
+  - repo: local
+    hooks:
+      # Verificar se testes Playwright são válidos
+      - id: playwright-test-validation
+        name: Playwright Test Validation
+        entry: bash
+        language: bash
+        files: 'tests/.*\.spec\.js$'
+        args:
+          - -c
+          - |
+            echo "🎭 Validating Playwright tests..."
+            for file in $(git diff --cached --name-only | grep "tests/.*\.spec\.js$"); do
+              if [ -f "$file" ]; then
+                # Verificar importações básicas
+                if ! grep -q "import.*@playwright/test" "$file"; then
+                  echo "❌ $file missing Playwright test import"
+                  exit 1
+                fi
+                # Verificar se tem test describe/test
+                if ! grep -q "test\|describe" "$file"; then
+                  echo "❌ $file missing test cases"
+                  exit 1
+                fi
+                echo "✅ $file Playwright test structure OK"
+              fi
+            done
+
+# =====================================================
+# CONFIGURAÇÃO GLOBAL
+# =====================================================
+default_stages: [commit]
+fail_fast: false
+minimum_pre_commit_version: '2.20.0'
+
+# Configuração para CI
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false

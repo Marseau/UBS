@@ -1,0 +1,1763 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurações - UBS | Universal Booking System</title>
+    <meta name="description" content="Configure sua empresa e WhatsApp no UBS para automatizar agendamentos com IA.">
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- UBS Standard Styles -->
+    <link href="css/ubs-standard-styles.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    <link href="css/super-admin-dashboard.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #2D5A9B;
+            --primary-light: #4A7BC8;
+            --primary-dark: #1E3F6B;
+            --secondary-color: #F8F9FA;
+            --accent-color: #28A745;
+            --text-dark: #2C3E50;
+            --text-light: #6C757D;
+            --border-color: #E9ECEF;
+            --shadow: 0 2px 10px rgba(45, 90, 155, 0.1);
+            --shadow-lg: 0 5px 20px rgba(45, 90, 155, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--secondary-color);
+            color: var(--text-dark);
+        }
+
+        /* Main Container - Compactado */
+        .main-content {
+            padding: 1rem 0;
+        }
+
+        .settings-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .page-header {
+            background: white;
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1.25rem;
+            box-shadow: var(--shadow);
+        }
+
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 0.25rem;
+        }
+
+        .page-subtitle {
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        /* Settings Cards - Compactado */
+        .settings-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+        }
+
+        .settings-card:hover {
+            box-shadow: var(--shadow-lg);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .card-subtitle {
+            font-size: 0.8rem;
+        }
+
+        /* Form Controls - Compactado */
+        .form-floating {
+            margin-bottom: 0.5rem;
+        }
+
+        .form-floating > .form-control,
+        .form-floating > .form-select {
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            height: calc(2.5rem + 2px);
+            font-size: 0.9rem;
+            font-size: 0.95rem;
+        }
+
+        .form-floating > .form-control:focus,
+        .form-floating > .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.25rem rgba(45, 90, 155, 0.1);
+        }
+
+        .form-floating > label {
+            padding: 0.75rem 0.75rem;
+            font-size: 0.95rem;
+        }
+
+        .form-check {
+            margin-bottom: 0.75rem;
+        }
+
+        .form-check-input:checked {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .form-check-input:focus {
+            box-shadow: 0 0 0 0.25rem rgba(45, 90, 155, 0.25);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1.25rem;
+            font-size: 0.9rem;
+            border-radius: 8px;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            border: none;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-success {
+            background: var(--accent-color);
+            border: none;
+            transition: all 0.3s ease;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-outline-primary {
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        /* WhatsApp Connection Status - Compactado */
+        .whatsapp-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 6px;
+            margin-bottom: 0.75rem;
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+
+        .whatsapp-status.connected {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--accent-color);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+        }
+
+        .whatsapp-status.disconnected {
+            background: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+            border: 1px solid rgba(220, 53, 69, 0.3);
+        }
+
+        .whatsapp-status.pending {
+            background: rgba(255, 193, 7, 0.1);
+            color: #ffc107;
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+
+        /* Business Hours - Flexível e Compactado */
+        .business-hours {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .business-day-row {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+
+        .day-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .day-name {
+            margin: 0;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        .day-controls {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .business-slots-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .business-slot {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--secondary-color);
+            border-radius: 6px;
+        }
+
+        .slot-times {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex: 1;
+        }
+
+        .slot-times input[type="time"] {
+            max-width: 120px;
+        }
+
+        .slot-separator {
+            color: var(--text-light);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .business-day-row small.text-muted {
+            display: block;
+            text-align: center;
+            padding: 1rem;
+            font-style: italic;
+        }
+
+        /* Old day-row styles removed - using new flexible business hours styles */
+
+        /* Alert Messages - Compactado */
+        .alert {
+            border-radius: 6px;
+            margin-bottom: 0.75rem;
+            border: none;
+            padding: 0.75rem;
+            font-size: 0.9rem;
+        }
+
+        /* Loading States */
+        .loading-spinner {
+            display: none;
+            margin-right: 0.25rem;
+        }
+
+        /* Domain Selection - Compactado */
+        .domain-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .domain-option {
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .domain-option:hover {
+            border-color: var(--primary-light);
+            box-shadow: var(--shadow);
+        }
+
+        .domain-option.selected {
+            border-color: var(--primary-color);
+            background: rgba(45, 90, 155, 0.05);
+        }
+
+        .domain-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .domain-name {
+            font-weight: 600;
+            color: var(--text-dark);
+            font-size: 0.9rem;
+        }
+
+        /* Professional Management Styles - Compactado */
+        .professional-card {
+            background: var(--secondary-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+            transition: all 0.3s ease;
+        }
+
+        .professional-card:hover {
+            box-shadow: var(--shadow);
+        }
+
+        .professional-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .professional-info h6 {
+            margin-bottom: 0.125rem;
+            color: var(--text-dark);
+            font-size: 0.9rem;
+        }
+
+        .professional-info small {
+            color: var(--text-light);
+            font-size: 0.75rem;
+        }
+
+        .working-hours-grid {
+            display: grid;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .working-hours-day {
+            display: grid;
+            grid-template-columns: 1fr 2fr 2fr auto;
+            gap: 0.75rem;
+            align-items: center;
+            padding: 0.5rem;
+            background: var(--secondary-color);
+            border-radius: 8px;
+        }
+
+        .working-hours-day.disabled {
+            opacity: 0.6;
+        }
+
+        .working-hours-day .day-name {
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        .time-slot-group {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .time-slot-group input[type="time"] {
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .add-slot-btn, .remove-slot-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+        }
+
+        /* Service Association Styles */
+        .service-association-badge {
+            background: rgba(45, 90, 155, 0.1);
+            color: var(--primary-color);
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            margin: 0.25rem;
+            display: inline-block;
+        }
+
+        .service-association-badge.custom-price {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--accent-color);
+        }
+
+        /* Exception Styles */
+        .exception-item {
+            background: rgba(255, 193, 7, 0.1);
+            border-left: 4px solid #ffc107;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .exception-item.all-day {
+            border-left-color: #dc3545;
+            background: rgba(220, 53, 69, 0.1);
+        }
+
+        /* Modal Enhancements */
+        .modal-xl {
+            max-width: 1200px;
+        }
+
+        .nav-tabs .nav-link {
+            border: none;
+            color: var(--text-light);
+            font-weight: 500;
+        }
+
+        .nav-tabs .nav-link:hover {
+            color: var(--primary-color);
+            border: none;
+        }
+
+        .nav-tabs .nav-link.active {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+        }
+
+        .table-sm th {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--text-dark);
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .table-sm td {
+            font-size: 0.9rem;
+            vertical-align: middle;
+        }
+
+        /* Status Badges */
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--accent-color);
+        }
+
+        .status-badge.inactive {
+            background: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+        }
+
+        /* Top Navigation */
+        .top-nav {
+            background: white;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--shadow);
+            border-radius: 8px;
+        }
+
+        .user-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .compact-button {
+            border: none !important;
+            padding: 0.25rem !important;
+            text-decoration: none !important;
+        }
+
+        .compact-text {
+            font-size: 0.9rem;
+            line-height: 1.2;
+        }
+
+        .compact-small {
+            font-size: 0.75rem;
+            line-height: 1;
+        }
+
+        .dropdown-menu {
+            border-radius: 8px;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border-color);
+        }
+
+        .dropdown-item {
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+
+        .dropdown-item:hover {
+            background: var(--secondary-color);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 1rem;
+            }
+
+            .settings-card {
+                padding: 1.5rem;
+            }
+
+            .day-row {
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
+            }
+
+            .domain-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .working-hours-day {
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
+            }
+
+            .modal-xl {
+                max-width: 95%;
+                margin: 1rem auto;
+            }
+
+            .nav-tabs .nav-link {
+                font-size: 0.85rem;
+                padding: 0.5rem 0.75rem;
+            }
+
+            .user-avatar {
+                width: 32px;
+                height: 32px;
+                font-size: 0.8rem;
+            }
+
+            .top-nav {
+                padding: 0.75rem 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+        <div class="logo">
+            <img src="assets/images/optimized/Logo_Int_Branco.webp" alt="UBS Logo">
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Dashboard</div>
+            <a class="nav-link" href="dashboard-tenant-admin.html">
+                <i class="fas fa-chart-line"></i>
+                <span>Visão Geral</span>
+            </a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Operações</div>
+            <a class="nav-link" href="appointments-standardized.html">
+                <i class="fas fa-calendar-check"></i>
+                <span>Agendamentos</span>
+            </a>
+            <a class="nav-link" href="customers-standardized.html">
+                <i class="fas fa-users"></i>
+                <span>Clientes</span>
+            </a>
+            <a class="nav-link" href="services-standardized.html">
+                <i class="fas fa-concierge-bell"></i>
+                <span>Serviços</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Comunicação</div>
+            <a class="nav-link" href="conversations-standardized.html">
+                <i class="fab fa-whatsapp"></i>
+                <span>Conversas</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Financeiro</div>
+            <a class="nav-link" href="billing-standardized.html">
+                <i class="fas fa-file-invoice-dollar"></i>
+                <span>Faturamento</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Sistema</div>
+            <a class="nav-link active" href="settings-standardized.html">
+                <i class="fas fa-cog"></i>
+                <span>Configurações</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="main-content">
+        <!-- Top Navigation Bar -->
+        <div class="top-nav">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <div class="d-flex align-items-center">
+                    <h1 class="page-title mb-0">Configurações</h1>
+                </div>
+                <div class="dropdown">
+                    <button class="btn btn-link dropdown-toggle d-flex align-items-center compact-button p-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <div class="user-avatar me-2" id="userAvatar">B</div>
+                        <div class="d-none d-md-block text-start">
+                            <div class="fw-medium compact-text" id="userName">Bella Vista M3.03</div>
+                            <small class="text-muted compact-small" id="userRole">Administrador</small>
+                        </div>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>Perfil</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Configurações</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="container">
+            <div class="settings-container">
+                <!-- Page Subtitle -->
+                <div class="page-header">
+                    <p class="page-subtitle mb-0">Gerencie as informações da sua empresa e personalize a experiência.</p>
+                </div>
+
+                <!-- Alert Container -->
+                <div id="alert-placeholder"></div>
+
+                <!-- Business Information -->
+                <div class="settings-card" id="business-info-card">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-briefcase"></i>
+                        </div>
+                        <div>
+                            <h2 class="card-title">Informações da Empresa</h2>
+                            <p class="card-subtitle">Dados principais do seu negócio.</p>
+                        </div>
+                    </div>
+
+                    <form id="businessForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="businessName" placeholder="Nome da empresa" required>
+                                    <label for="businessName">Nome da Empresa</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-floating">
+                                    <select class="form-select" id="businessDomain" required>
+                                        <option value="" disabled selected>Selecione...</option>
+                                        <option value="beauty">Beleza & Estética</option>
+                                        <option value="healthcare">Saúde & Bem-estar</option>
+                                        <option value="legal">Jurídico</option>
+                                        <option value="education">Educação</option>
+                                        <option value="sports">Esportes & Fitness</option>
+                                        <option value="consulting">Consultoria</option>
+                                        <option value="general">Geral</option>
+                                    </select>
+                                    <label for="businessDomain">Segmento</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-floating">
+                                    <input type="tel" class="form-control" id="businessPhone" placeholder="(11) 99999-9999" maxlength="15">
+                                    <label for="businessPhone">Telefone</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="email" class="form-control" id="businessEmail" placeholder="contato@empresa.com">
+                                    <label for="businessEmail">Email Comercial</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="url" class="form-control" id="businessWebsite" placeholder="https://www.empresa.com">
+                                    <label for="businessWebsite">Website</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Endereço com CEP -->
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="businessCep" placeholder="00000-000" maxlength="9">
+                                    <label for="businessCep">CEP</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="businessStreet" placeholder="Nome da rua" readonly>
+                                    <label for="businessStreet">Logradouro</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="businessNumber" placeholder="Número">
+                                    <label for="businessNumber">Número</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="businessNeighborhood" placeholder="Bairro" readonly>
+                                    <label for="businessNeighborhood">Bairro</label>
+                                </div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="businessCity" placeholder="Cidade" readonly>
+                                    <label for="businessCity">Cidade</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="businessState" placeholder="UF" readonly>
+                                    <label for="businessState">Estado</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-floating">
+                            <input type="text" class="form-control" id="businessComplement" placeholder="Apartamento, sala, andar, etc.">
+                            <label for="businessComplement">Complemento (opcional)</label>
+                        </div>
+
+                        <div class="form-floating">
+                            <textarea class="form-control" id="businessDescription" placeholder="Descrição do negócio" style="height: 70px"></textarea>
+                            <label for="businessDescription">Descrição do Negócio</label>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" id="save-business-info">
+                            <i class="fas fa-save me-2"></i>Salvar Alterações
+                        </button>
+                    </form>
+                </div>
+
+                <!-- WhatsApp Configuration -->
+                <div class="settings-card">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fab fa-whatsapp"></i>
+                        </div>
+                        <div>
+                            <h3 class="card-title">WhatsApp Business</h3>
+                            <p class="card-subtitle">Configure o número do WhatsApp para receber agendamentos</p>
+                        </div>
+                    </div>
+
+                    <div class="whatsapp-status disconnected" id="whatsappStatus">
+                        <i class="fas fa-circle"></i>
+                        Não conectado
+                    </div>
+
+                    <form id="whatsappForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="tel" class="form-control" id="whatsappNumber" placeholder="(11) 99999-9999" required>
+                                    <label for="whatsappNumber">Número do WhatsApp</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="whatsappBusinessId" placeholder="ID do WhatsApp Business">
+                                    <label for="whatsappBusinessId">Business Account ID</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-floating">
+                            <input type="text" class="form-control" id="whatsappToken" placeholder="Token do WhatsApp Business API">
+                            <label for="whatsappToken">Access Token</label>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-spinner fa-spin loading-spinner" id="whatsappSpinner"></i>
+                                <i class="fab fa-whatsapp me-2"></i>
+                                Conectar WhatsApp
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" onclick="testWhatsapp()">
+                                <i class="fas fa-paper-plane me-2"></i>
+                                Testar Conexão
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Precisa de ajuda? <a href="#" class="text-primary">Veja nosso guia de configuração</a>
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Business Hours -->
+                <div class="settings-card">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div>
+                            <h3 class="card-title">Horário de Funcionamento</h3>
+                            <p class="card-subtitle">Configure os horários de atendimento</p>
+                        </div>
+                    </div>
+
+                    <div class="business-hours" id="businessHours">
+                        <!-- Days will be populated by JavaScript -->
+                    </div>
+
+                    <button type="button" class="btn btn-primary mt-3" id="saveBusinessHours">
+                        <i class="fas fa-clock me-2"></i>
+                        Salvar Horários
+                    </button>
+                </div>
+
+                <!-- Email Integration -->
+                <div class="settings-card">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-envelope"></i>
+                        </div>
+                        <div>
+                            <h3 class="card-title">Integração de Email</h3>
+                            <p class="card-subtitle">Configure emails automáticos para confirmações e lembretes</p>
+                        </div>
+                    </div>
+
+                    <form id="emailForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="email" class="form-control" id="emailFrom" placeholder="noreply@empresa.com">
+                                    <label for="emailFrom">Email de Envio</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="emailFromName" placeholder="Nome da Empresa">
+                                    <label for="emailFromName">Nome do Remetente</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="emailConfirmation" checked>
+                            <label class="form-check-label" for="emailConfirmation">
+                                Enviar email de confirmação de agendamento
+                            </label>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="emailReminder" checked>
+                            <label class="form-check-label" for="emailReminder">
+                                Enviar lembretes por email (24h e 1h antes)
+                            </label>
+                        </div>
+
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="emailCancellation" checked>
+                            <label class="form-check-label" for="emailCancellation">
+                                Enviar notificação de cancelamento
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-spinner fa-spin loading-spinner" id="emailSpinner"></i>
+                            <i class="fas fa-envelope me-2"></i>
+                            Salvar Configurações
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Seção de Equipe e Disponibilidade (Avançada) -->
+                <div class="settings-card">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div>
+                            <h2 class="card-title">Equipe e Disponibilidade</h2>
+                            <p class="card-subtitle">Gerencie seus profissionais, horários de trabalho, serviços e exceções de agenda.</p>
+                        </div>
+                    </div>
+
+                    <!-- Explicação da funcionalidade -->
+                    <div class="alert alert-info" role="alert">
+                        <div class="d-flex">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-info-circle fa-lg"></i>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <h6 class="alert-heading">Como funciona o gerenciamento de equipe</h6>
+                                <p class="mb-2">
+                                    <strong>1. Adicione profissionais:</strong> Cadastre os membros da sua equipe<br>
+                                    <strong>2. Configure serviços:</strong> Defina quais serviços cada profissional oferece e preços personalizados<br>
+                                    <strong>3. Horários de trabalho:</strong> Configure horários detalhados para cada dia da semana<br>
+                                    <strong>4. Exceções de agenda:</strong> Marque férias, folgas e outras indisponibilidades
+                                </p>
+                                <small class="text-muted">
+                                    <i class="fas fa-lightbulb me-1"></i>
+                                    <strong>Dica:</strong> Use o botão "Gerenciar Completo" para acessar todas as configurações avançadas de cada profissional.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="professionals-container">
+                        <!-- Formulário para Adicionar/Editar Profissional -->
+                        <div class="mb-4 p-4 border rounded-3 bg-light position-relative">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <h5 id="professionalFormTitle">
+                                        <i class="fas fa-user-plus me-2 text-primary"></i>
+                                        Adicionar Novo Profissional
+                                    </h5>
+                                    <small class="text-muted">Preencha as informações básicas. Configurações avançadas podem ser feitas após salvar.</small>
+                                </div>
+                                <div id="loading-professionals" class="d-none">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">Carregando...</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <form id="professionalForm" novalidate>
+                                <input type="hidden" id="professionalId">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="form-floating">
+                                            <input type="text" class="form-control" id="professionalName" placeholder="Nome do Profissional" required>
+                                            <label for="professionalName">
+                                                <i class="fas fa-user me-1"></i>Nome do Profissional *
+                                            </label>
+                                            <div class="invalid-feedback">
+                                                Por favor, informe o nome do profissional.
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Nome completo que aparecerá para os clientes
+                                        </small>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-floating">
+                                            <input type="email" class="form-control" id="professionalEmail" placeholder="Email (opcional)">
+                                            <label for="professionalEmail">
+                                                <i class="fas fa-envelope me-1"></i>Email (opcional)
+                                            </label>
+                                            <div class="invalid-feedback">
+                                                Por favor, informe um email válido.
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Para notificações de agendamentos
+                                        </small>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-floating">
+                                            <textarea class="form-control" id="professionalBio" placeholder="Biografia/Especialidades (opcional)" style="height: 100px" maxlength="500"></textarea>
+                                            <label for="professionalBio">
+                                                <i class="fas fa-file-text me-1"></i>Biografia/Especialidades (opcional)
+                                            </label>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <small class="text-muted">
+                                                <i class="fas fa-info-circle me-1"></i>
+                                                Descreva as especialidades e experiência do profissional
+                                            </small>
+                                            <small class="text-muted">
+                                                <span id="bioCharCount">0</span>/500 caracteres
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4 d-flex gap-2">
+                                    <button type="submit" class="btn btn-primary" id="saveProfessionalBtn">
+                                        <i class="fas fa-save me-2"></i>
+                                        <span class="btn-text">Salvar Profissional</span>
+                                    </button>
+                                    <button type="button" id="cancelProfessionalEditBtn" class="btn btn-outline-secondary d-none" onclick="clearProfessionalForm()">
+                                        <i class="fas fa-times me-2"></i>Cancelar Edição
+                                    </button>
+                                </div>
+                                
+                                <!-- Progress indicator -->
+                                <div class="progress mt-3 d-none" id="saveProgress" style="height: 4px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Lista de Profissionais -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h5 class="mb-1">
+                                    <i class="fas fa-users me-2 text-primary"></i>Profissionais Cadastrados
+                                </h5>
+                                <small class="text-muted">Clique em "Gerenciar Completo" para configurar horários, serviços e exceções</small>
+                            </div>
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-outline-primary btn-sm" onclick="window.settingsManager.loadInitialData()" title="Atualizar lista">
+                                    <i class="fas fa-sync-alt me-1"></i>Atualizar
+                                </button>
+                                <button class="btn btn-outline-success btn-sm" onclick="document.getElementById('professionalName').focus()" title="Adicionar novo profissional">
+                                    <i class="fas fa-plus me-1"></i>Novo
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Loading State -->
+                        <div id="professionals-loading" class="text-center py-4 d-none">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Carregando profissionais...</span>
+                            </div>
+                            <p class="mt-2 text-muted">Carregando sua equipe...</p>
+                        </div>
+                        
+                        <!-- Empty State -->
+                        <div id="professionals-empty" class="text-center py-5 d-none">
+                            <div class="mb-4">
+                                <i class="fas fa-user-friends fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">Sua equipe ainda está vazia</h5>
+                                <p class="text-muted mb-4">
+                                    Adicione o primeiro membro da sua equipe para começar a receber agendamentos.<br>
+                                    Você pode configurar horários, serviços e preços personalizados para cada profissional.
+                                </p>
+                                <button class="btn btn-primary" onclick="document.getElementById('professionalName').focus()">
+                                    <i class="fas fa-user-plus me-2"></i>Adicionar Primeiro Profissional
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Professionals List -->
+                        <div class="accordion" id="professionals-accordion">
+                            <!-- Profissionais serão carregados via JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seção de Serviços e Preços -->
+                <div class="settings-card">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-concierge-bell"></i>
+                        </div>
+                        <div>
+                            <h2 class="card-title">Serviços e Preços</h2>
+                            <p class="card-subtitle">Gerencie os serviços oferecidos, suas durações e valores.</p>
+                        </div>
+                    </div>
+                
+                    <div id="services-container">
+                        <!-- Formulário para adicionar/editar serviço -->
+                        <form id="serviceForm" class="mb-4 p-3 border rounded-3 bg-light">
+                            <input type="hidden" id="serviceId">
+                            <h5 id="serviceFormTitle">Adicionar Novo Serviço</h5>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="serviceName" placeholder="Nome do Serviço" required>
+                                        <label for="serviceName">Nome do Serviço</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="serviceDescription" placeholder="Descrição (opcional)">
+                                        <label for="serviceDescription">Descrição (opcional)</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <input type="number" class="form-control" id="serviceDuration" placeholder="Duração (minutos)" required min="5">
+                                        <label for="serviceDuration">Duração (minutos)</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <input type="number" class="form-control" id="servicePrice" placeholder="Preço (R$)" required min="0" step="0.01">
+                                        <label for="servicePrice">Preço (R$)</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <button type="submit" class="btn btn-primary">Salvar Serviço</button>
+                                <button type="button" id="cancelEditBtn" class="btn btn-outline-secondary d-none">Cancelar Edição</button>
+                            </div>
+                        </form>
+                
+                        <!-- Tabela de serviços existentes -->
+                        <h5>Serviços Cadastrados</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>Duração</th>
+                                        <th>Preço</th>
+                                        <th class="text-end">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="servicesList">
+                                    <!-- Exemplo de item de serviço (será populado via JS) -->
+                                    <tr>
+                                        <td>Corte de Cabelo</td>
+                                        <td>45 min</td>
+                                        <td>R$ 50,00</td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
+                                            <button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save All -->
+                <div class="text-center mt-4">
+                    <button type="button" class="btn btn-success btn-lg" onclick="saveAllSettings()">
+                        <i class="fas fa-check-double me-2"></i>
+                        Salvar Todas as Configurações
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Gerenciamento Completo de Profissional -->
+    <div class="modal fade" id="professionalModal" tabindex="-1" aria-labelledby="professionalModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <div>
+                        <h5 class="modal-title mb-1" id="professionalModalLabel">
+                            <i class="fas fa-user-cog me-2 text-primary"></i>
+                            Gerenciar Profissional
+                        </h5>
+                        <small class="text-muted">Configure todas as informações e disponibilidades do profissional</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <!-- Nav tabs -->
+                    <ul class="nav nav-tabs px-3 pt-3" id="professionalTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active d-flex align-items-center" id="basic-info-tab" data-bs-toggle="tab" data-bs-target="#basic-info" type="button" role="tab" title="Nome, email e biografia do profissional">
+                                <i class="fas fa-user me-2"></i>
+                                <div class="text-start">
+                                    <div>Informações Básicas</div>
+                                    <small class="text-muted d-block">Nome, email e bio</small>
+                                </div>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link d-flex align-items-center" id="working-hours-tab" data-bs-toggle="tab" data-bs-target="#working-hours" type="button" role="tab" title="Configure os horários de trabalho por dia da semana">
+                                <i class="fas fa-clock me-2"></i>
+                                <div class="text-start">
+                                    <div>Horários de Trabalho</div>
+                                    <small class="text-muted d-block">Agenda semanal</small>
+                                </div>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link d-flex align-items-center" id="services-tab" data-bs-toggle="tab" data-bs-target="#services" type="button" role="tab" title="Defina quais serviços este profissional oferece">
+                                <i class="fas fa-concierge-bell me-2"></i>
+                                <div class="text-start">
+                                    <div>Serviços</div>
+                                    <small class="text-muted d-block">Preços personalizados</small>
+                                </div>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link d-flex align-items-center" id="exceptions-tab" data-bs-toggle="tab" data-bs-target="#exceptions" type="button" role="tab" title="Marque férias, folgas e outras indisponibilidades">
+                                <i class="fas fa-calendar-times me-2"></i>
+                                <div class="text-start">
+                                    <div>Exceções de Agenda</div>
+                                    <small class="text-muted d-block">Férias e folgas</small>
+                                </div>
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- Tab panes -->
+                    <div class="tab-content mt-3" id="professionalTabContent">
+                        <!-- Aba de Informações Básicas -->
+                        <div class="tab-pane fade show active px-4 py-3" id="basic-info" role="tabpanel">
+                            <div class="alert alert-light border" role="alert">
+                                <div class="d-flex">
+                                    <i class="fas fa-info-circle text-primary me-3 mt-1"></i>
+                                    <div>
+                                        <h6 class="alert-heading">Informações Básicas do Profissional</h6>
+                                        <p class="mb-0 small">
+                                            Essas informações aparecerão para os clientes durante o agendamento. 
+                                            Certifique-se de que o nome esteja correto e a biografia seja atrativa.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <form id="professionalModalForm">
+                                <input type="hidden" id="modalProfessionalId">
+                                <div class="row g-4">
+                                    <div class="col-md-6">
+                                        <div class="form-floating">
+                                            <input type="text" class="form-control" id="modalProfessionalName" placeholder="Nome" required>
+                                            <label for="modalProfessionalName">
+                                                <i class="fas fa-user me-1"></i>Nome Completo *
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">
+                                            <i class="fas fa-eye me-1"></i>
+                                            Este nome será exibido para os clientes
+                                        </small>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-floating">
+                                            <input type="email" class="form-control" id="modalProfessionalEmail" placeholder="Email">
+                                            <label for="modalProfessionalEmail">
+                                                <i class="fas fa-envelope me-1"></i>Email para Notificações
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">
+                                            <i class="fas fa-bell me-1"></i>
+                                            Receber notificações de novos agendamentos
+                                        </small>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-floating">
+                                            <textarea class="form-control" id="modalProfessionalBio" placeholder="Biografia" style="height: 120px" maxlength="500"></textarea>
+                                            <label for="modalProfessionalBio">
+                                                <i class="fas fa-file-text me-1"></i>Biografia e Especialidades
+                                            </label>
+                                        </div>
+                                        <div class="d-flex justify-content-between mt-1">
+                                            <small class="text-muted">
+                                                <i class="fas fa-lightbulb me-1"></i>
+                                                Mencione formação, especialidades e experiência
+                                            </small>
+                                            <small class="text-muted">
+                                                <span id="modalBioCharCount">0</span>/500 caracteres
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Aba de Horários de Trabalho -->
+                        <div class="tab-pane fade px-4 py-3" id="working-hours" role="tabpanel">
+                            <div class="alert alert-light border" role="alert">
+                                <div class="d-flex">
+                                    <i class="fas fa-clock text-primary me-3 mt-1"></i>
+                                    <div>
+                                        <h6 class="alert-heading">Configuração de Horários</h6>
+                                        <p class="mb-2 small">
+                                            Configure os horários de trabalho para cada dia da semana. 
+                                            Você pode adicionar múltiplos turnos por dia e definir horários de pausa.
+                                        </p>
+                                        <div class="row g-2 small">
+                                            <div class="col-md-6">
+                                                <span class="badge bg-primary me-2">💡</span>
+                                                <strong>Múltiplos turnos:</strong> Use o botão + para adicionar turnos
+                                            </div>
+                                            <div class="col-md-6">
+                                                <span class="badge bg-success me-2">⏰</span>
+                                                <strong>Pausas:</strong> Configure intervalos de almoço
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Status e controles -->
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-calendar-week me-2"></i>Agenda Semanal
+                                </h6>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyMondayToWeekdays()">
+                                        <i class="fas fa-copy me-1"></i>Copiar Seg-Sex
+                                    </button>
+                                    <button type="button" class="btn btn-outline-warning btn-sm" onclick="clearAllSchedules()">
+                                        <i class="fas fa-eraser me-1"></i>Limpar Tudo
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div id="workingHoursEditor">
+                                <!-- Horários serão preenchidos via JavaScript -->
+                            </div>
+                            
+                            <!-- Dicas de uso -->
+                            <div class="mt-3 p-3 bg-light rounded">
+                                <h6 class="text-primary mb-2">
+                                    <i class="fas fa-lightbulb me-2"></i>Dicas de Configuração
+                                </h6>
+                                <div class="row g-2 small">
+                                    <div class="col-md-6">
+                                        • <strong>Desmarque o dia</strong> se não trabalha nele<br>
+                                        • <strong>Use + e -</strong> para adicionar/remover turnos<br>
+                                        • <strong>Turnos flexíveis:</strong> Ex: 9h-12h e 14h-18h
+                                    </div>
+                                    <div class="col-md-6">
+                                        • <strong>Horário de almoço:</strong> Defina pausas automáticas<br>
+                                        • <strong>Duração do slot:</strong> Tempo padrão por agendamento<br>
+                                        • <strong>Exceções:</strong> Use a aba "Exceções" para feriados
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Aba de Serviços -->
+                        <div class="tab-pane fade px-4 py-3" id="services" role="tabpanel">
+                            <div class="alert alert-light border" role="alert">
+                                <div class="d-flex">
+                                    <i class="fas fa-concierge-bell text-primary me-3 mt-1"></i>
+                                    <div>
+                                        <h6 class="alert-heading">Serviços do Profissional</h6>
+                                        <p class="mb-2 small">
+                                            Defina quais serviços este profissional pode realizar. 
+                                            Você pode personalizar preços e durações específicas para este profissional.
+                                        </p>
+                                        <div class="row g-2 small">
+                                            <div class="col-md-6">
+                                                <span class="badge bg-success me-2">💰</span>
+                                                <strong>Preços personalizados:</strong> Sobrescreve o preço padrão
+                                            </div>
+                                            <div class="col-md-6">
+                                                <span class="badge bg-info me-2">⏱️</span>
+                                                <strong>Duração específica:</strong> Tempo personalizado por profissional
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-list me-2"></i>Serviços Oferecidos
+                                </h6>
+                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addServiceToProfessionalModal">
+                                    <i class="fas fa-plus me-2"></i>Associar Novo Serviço
+                                </button>
+                            </div>
+                            
+                            <!-- Empty state for services -->
+                            <div id="services-empty-state" class="text-center py-4 d-none">
+                                <i class="fas fa-concierge-bell fa-2x text-muted mb-3"></i>
+                                <h6 class="text-muted">Nenhum serviço associado</h6>
+                                <p class="text-muted mb-3">
+                                    Este profissional ainda não tem serviços associados.<br>
+                                    Clique no botão acima para começar.
+                                </p>
+                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addServiceToProfessionalModal">
+                                    <i class="fas fa-plus me-2"></i>Associar Primeiro Serviço
+                                </button>
+                            </div>
+                            
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>
+                                                <i class="fas fa-concierge-bell me-1"></i>Serviço
+                                            </th>
+                                            <th>
+                                                <i class="fas fa-dollar-sign me-1"></i>Preço
+                                            </th>
+                                            <th>
+                                                <i class="fas fa-clock me-1"></i>Duração
+                                            </th>
+                                            <th width="100" class="text-center">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="professionalServicesTableBody">
+                                        <!-- Serviços do profissional serão preenchidos via JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Legenda -->
+                            <div class="mt-3 p-2 bg-light rounded small">
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <span class="badge bg-success me-2">Personalizado</span> = Preço/duração específicos deste profissional
+                                    </div>
+                                    <div class="col-md-6">
+                                        <span class="badge bg-secondary me-2">Padrão</span> = Usando configuração padrão do serviço
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Aba de Exceções de Agenda -->
+                        <div class="tab-pane fade px-4 py-3" id="exceptions" role="tabpanel">
+                            <div class="alert alert-light border" role="alert">
+                                <div class="d-flex">
+                                    <i class="fas fa-calendar-times text-primary me-3 mt-1"></i>
+                                    <div>
+                                        <h6 class="alert-heading">Exceções de Agenda</h6>
+                                        <p class="mb-2 small">
+                                            Configure períodos em que o profissional não estará disponível para agendamentos.
+                                            Ideal para férias, folgas, treinamentos ou ausências temporárias.
+                                        </p>
+                                        <div class="row g-2 small">
+                                            <div class="col-md-6">
+                                                <span class="badge bg-warning me-2">📅</span>
+                                                <strong>Dia inteiro:</strong> Bloqueia todo o dia
+                                            </div>
+                                            <div class="col-md-6">
+                                                <span class="badge bg-info me-2">🕐</span>
+                                                <strong>Período específico:</strong> Horários exatos de indisponibilidade
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-ban me-2"></i>Períodos de Indisponibilidade
+                                </h6>
+                                <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#addExceptionModal">
+                                    <i class="fas fa-calendar-plus me-2"></i>Nova Exceção
+                                </button>
+                            </div>
+                            
+                            <!-- Empty state for exceptions -->
+                            <div id="exceptions-empty-state" class="text-center py-4 d-none">
+                                <i class="fas fa-calendar-check fa-2x text-muted mb-3"></i>
+                                <h6 class="text-muted">Nenhuma exceção configurada</h6>
+                                <p class="text-muted mb-3">
+                                    Este profissional não tem períodos de indisponibilidade configurados.<br>
+                                    Adicione férias, folgas ou outras exceções conforme necessário.
+                                </p>
+                                <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#addExceptionModal">
+                                    <i class="fas fa-calendar-plus me-2"></i>Adicionar Primeira Exceção
+                                </button>
+                            </div>
+                            
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>
+                                                <i class="fas fa-tag me-1"></i>Motivo
+                                            </th>
+                                            <th>
+                                                <i class="fas fa-calendar-day me-1"></i>Data Início
+                                            </th>
+                                            <th>
+                                                <i class="fas fa-calendar-day me-1"></i>Data Fim
+                                            </th>
+                                            <th>
+                                                <i class="fas fa-clock me-1"></i>Tipo
+                                            </th>
+                                            <th width="100" class="text-center">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="availabilityExceptionsTableBody">
+                                        <!-- Exceções serão preenchidas via JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Dicas -->
+                            <div class="mt-3 p-3 bg-light rounded">
+                                <h6 class="text-primary mb-2">
+                                    <i class="fas fa-lightbulb me-2"></i>Exemplos de Uso
+                                </h6>
+                                <div class="row g-2 small">
+                                    <div class="col-md-4">
+                                        <strong>🏖️ Férias:</strong><br>
+                                        Período completo de ausência<br>
+                                        <em>Ex: 15/12 a 02/01</em>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>🏥 Consulta médica:</strong><br>
+                                        Horário específico<br>
+                                        <em>Ex: 25/11 das 14h às 16h</em>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>📚 Treinamento:</strong><br>
+                                        Eventos profissionais<br>
+                                        <em>Ex: 10/12 das 9h às 17h</em>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-primary" onclick="saveProfessional()">
+                        <i class="fas fa-save me-2"></i>Salvar Alterações
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Associar Serviço ao Profissional -->
+    <div class="modal fade" id="addServiceToProfessionalModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Associar Serviço ao Profissional</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="associateServiceForm">
+                        <div class="form-floating mb-3">
+                            <select class="form-select" id="serviceSelect" required>
+                                <option value="">Selecione um serviço...</option>
+                            </select>
+                            <label for="serviceSelect">Serviço</label>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="number" class="form-control" id="customPrice" placeholder="Preço personalizado" step="0.01" min="0">
+                                    <label for="customPrice">Preço Personalizado (R$)</label>
+                                </div>
+                                <small class="text-muted">Deixe vazio para usar o preço padrão do serviço</small>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="number" class="form-control" id="customDuration" placeholder="Duração personalizada" min="5">
+                                    <label for="customDuration">Duração Personalizada (min)</label>
+                                </div>
+                                <small class="text-muted">Deixe vazio para usar a duração padrão</small>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="associateServiceForm" class="btn btn-primary">
+                        <i class="fas fa-link me-2"></i>Associar Serviço
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Adicionar Exceção de Agenda -->
+    <div class="modal fade" id="addExceptionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Adicionar Exceção de Agenda</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="exceptionForm">
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="exceptionReason" placeholder="Motivo" required>
+                            <label for="exceptionReason">Motivo da Exceção</label>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="date" class="form-control" id="exceptionStartDate" required>
+                                    <label for="exceptionStartDate">Data de Início</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="date" class="form-control" id="exceptionEndDate" required>
+                                    <label for="exceptionEndDate">Data de Fim</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="isAllDay" id="allDayException" value="true" checked>
+                            <label class="form-check-label" for="allDayException">
+                                Dia inteiro
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="isAllDay" id="partialDayException" value="false">
+                            <label class="form-check-label" for="partialDayException">
+                                Período específico
+                            </label>
+                        </div>
+                        <div id="timeRangeInputs" class="row g-3 mt-2" style="display: none;">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="time" class="form-control" id="exceptionStartTime">
+                                    <label for="exceptionStartTime">Hora de Início</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="time" class="form-control" id="exceptionEndTime">
+                                    <label for="exceptionEndTime">Hora de Fim</label>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="exceptionForm" class="btn btn-warning">
+                        <i class="fas fa-calendar-times me-2"></i>Adicionar Exceção
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/settings.js"></script>
+    <script src="js/utils/context-manager.js"></script>
+
+    <script>
+        // Mostrar/ocultar campos de horário nas exceções
+        document.addEventListener('DOMContentLoaded', function() {
+            const allDayRadio = document.getElementById('allDayException');
+            const partialDayRadio = document.getElementById('partialDayException');
+            const timeRangeInputs = document.getElementById('timeRangeInputs');
+            
+            function toggleTimeInputs() {
+                if (partialDayRadio.checked) {
+                    timeRangeInputs.style.display = 'block';
+                } else {
+                    timeRangeInputs.style.display = 'none';
+                }
+            }
+            
+            allDayRadio.addEventListener('change', toggleTimeInputs);
+            partialDayRadio.addEventListener('change', toggleTimeInputs);
+            
+            // Business hours are now initialized by SettingsManager class
+        });
+
+        function goBackToDashboard() {
+            window.location.href = 'dashboard-tenant-admin.html';
+        }
+
+        function testWhatsapp() {
+            alert('Função de teste do WhatsApp será implementada em breve.');
+        }
+
+        function saveAllSettings() {
+            // Show loading
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Salvando...';
+            button.disabled = true;
+
+            // Simulate save
+            setTimeout(() => {
+                button.innerHTML = '<i class="fas fa-check me-2"></i>Salvo com Sucesso!';
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }, 2000);
+            }, 1500);
+        }
+    </script>
+</body>
+</html>

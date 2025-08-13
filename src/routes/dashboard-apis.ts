@@ -1,0 +1,661 @@
+/**
+ * Complete Dashboard APIs for all 3 dashboards
+ * Provides all endpoints needed for frontend integration
+ *
+ * Dashboard Types:
+ * 1. Sistema Dashboard (Super Admin)
+ * 2. Tenant Dashboard (Individual Tenant)
+ * 3. Tenant-Platform Dashboard (Tenant Participation)
+ */
+
+import { Router } from "express";
+import { getAdminClient, withTenantContext } from "../config/database";
+import { AnalyticsService } from "../services/analytics.service";
+import { QueryCacheService } from "../services/query-cache.service";
+
+const router = Router();
+const analyticsService = new AnalyticsService();
+
+// =====================================================
+// SISTEMA DASHBOARD APIs (Super Admin)
+// =====================================================
+
+/**
+ * GET /api/dashboard/sistema/overview
+ * Main SaaS metrics for Super Admin dashboard
+ */
+router.get("/sistema/overview", async (req, res): Promise<any> => {
+  try {
+    const { period = "30d", start_date, end_date } = req.query;
+    const cacheKey = `sistema_overview_${period}_${start_date}_${end_date}`;
+
+    // Try cache first
+    const cachedData = await QueryCacheService.get(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
+    }
+
+    const client = getAdminClient();
+
+    // Get SaaS metrics using any type to bypass TypeScript checks
+    const { data: saasMetrics, error: saasError } = await (client as any).rpc(
+      "get_saas_metrics",
+      {
+        start_date: start_date as string,
+        end_date: end_date as string,
+      },
+    );
+
+    if (saasError) {
+      console.error("Error fetching SaaS metrics:", saasError);
+      return res.status(500).json({ error: "Failed to fetch SaaS metrics" });
+    }
+
+    // Get from cached table if available
+    const { data: cachedSaas } = await (client as any)
+      .from("saas_metrics")
+      .select("*")
+      .eq("id", "current")
+      .single();
+
+    const metrics = saasMetrics?.[0] || cachedSaas || {};
+
+    const responseData = {
+      success: true,
+      data: {
+        overview: {
+          active_tenants: metrics.active_tenants || 0,
+          total_tenants: metrics.total_tenants || 0,
+          mrr: metrics.mrr || 0,
+          arr: metrics.arr || 0,
+          churn_rate: metrics.churn_rate || 0,
+          conversion_rate: metrics.conversion_rate || 0,
+          total_appointments: metrics.total_appointments || 0,
+          total_revenue: metrics.total_revenue || 0,
+          ai_interactions: metrics.ai_interactions || 0,
+          avg_response_time: metrics.avg_response_time || 0,
+          platform_health_score: metrics.platform_health_score || 0,
+        },
+        period: period,
+        last_updated: metrics.calculated_at || new Date().toISOString(),
+      },
+    };
+
+    // Cache the response
+    await QueryCacheService.set(cacheKey, responseData, { ttl: 2 * 60 * 1000 });
+
+    return res.json(responseData);
+  } catch (error) {
+    console.error("Sistema overview error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/dashboard/sistema/top-tenants
+ * Top performing tenants ranking
+ */
+router.get("/sistema/top-tenants", async (req, res) => {
+  try {
+    const { period = "30", limit = "10" } = req.query;
+
+    const client = getAdminClient();
+
+    // Get from function
+    const { data: topTenants, error: topError } = await (client as any).rpc(
+      "get_top_tenants",
+      {
+        period_days: parseInt(period as string),
+        limit_count: parseInt(limit as string),
+      },
+    );
+
+    // Get from cached table as fallback
+    const { data: cachedTenants } = await (client as any)
+      .from("top_tenants")
+      .select("*")
+      .eq("period_days", parseInt(period as string))
+      .order("ranking_position", { ascending: true })
+      .limit(parseInt(limit as string));
+
+    const tenants = topTenants || cachedTenants || [];
+
+    res.json({
+      success: true,
+      data: {
+        tenants: tenants,
+        period_days: parseInt(period as string),
+        total_count: tenants.length,
+      },
+    });
+  } catch (error) {
+    console.error("Top tenants error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/dashboard/sistema/domain-distribution
+ * Tenant distribution by business domain
+ */
+router.get("/sistema/domain-distribution", async (req, res) => {
+  try {
+    const client = getAdminClient();
+
+    // Get from function
+    const { data: distribution, error: distError } = await (client as any).rpc(
+      "get_tenant_distribution",
+    );
+
+    // Get from cached table as fallback
+    const { data: cachedDistribution } = await (client as any)
+      .from("tenant_distribution")
+      .select("*")
+      .order("tenant_count", { ascending: false });
+
+    const domainData = distribution || cachedDistribution || [];
+
+    res.json({
+      success: true,
+      data: {
+        distribution: domainData,
+        total_domains: domainData.length,
+      },
+    });
+  } catch (error) {
+    console.error("Domain distribution error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/dashboard/sistema/growth-metrics
+ * Platform growth metrics over time
+ */
+router.get("/sistema/growth-metrics", async (req, res) => {
+  try {
+    const { months = "6" } = req.query;
+
+    const client = getAdminClient();
+
+    const { data: growthData, error: growthError } = await (client as any)
+      .from("growth_metrics")
+      .select("*")
+      .order("period_start", { ascending: false })
+      .limit(parseInt(months as string));
+
+    res.json({
+      success: true,
+      data: {
+        growth_metrics: growthData || [],
+        months_requested: parseInt(months as string),
+      },
+    });
+  } catch (error) {
+    console.error("Growth metrics error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/dashboard/sistema/risk-tenants
+ * Tenants at risk (high risk scores)
+ */
+router.get("/sistema/risk-tenants", async (req, res) => {
+  try {
+    const { min_risk = "60" } = req.query;
+
+    const client = getAdminClient();
+
+    const { data: riskTenants, error: riskError } = await (client as any)
+      .from("tenant_risk_scores")
+      .select("*")
+      .gte("risk_score", parseInt(min_risk as string))
+      .order("risk_score", { ascending: false });
+
+    res.json({
+      success: true,
+      data: {
+        risk_tenants: riskTenants || [],
+        min_risk_threshold: parseInt(min_risk as string),
+      },
+    });
+  } catch (error) {
+    console.error("Risk tenants error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// =====================================================
+// TENANT DASHBOARD APIs (Individual Tenant)
+// =====================================================
+
+/**
+ * GET /api/dashboard/tenant/:tenantId/overview
+ * Complete tenant metrics overview WITH RLS ISOLATION
+ */
+router.get("/tenant/:tenantId/overview", async (req, res): Promise<any> => {
+  try {
+    const { tenantId } = req.params;
+    const { period = "30d" } = req.query;
+
+    // Verificar autorização - usuário deve ser do tenant ou super admin
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      try {
+        const base64Url = token.split('.')[1];
+        if (!base64Url) {
+          return res.status(401).json({ 
+            success: false, 
+            error: "Token malformado" 
+          });
+        }
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        
+        const decoded = JSON.parse(jsonPayload);
+        
+        // Verificar se é super admin OU do mesmo tenant
+        if (decoded.role !== 'super_admin' && decoded.tenant_id !== tenantId) {
+          return res.status(403).json({ 
+            success: false, 
+            error: "Acesso negado - dados de outro tenant" 
+          });
+        }
+      } catch (error) {
+        return res.status(401).json({ 
+          success: false, 
+          error: "Token inválido" 
+        });
+      }
+    }
+
+    // Get date range based on period
+    const dateRange = getDateRangeFromPeriod(period as string);
+
+    // Usar contexto do tenant para garantir isolamento RLS
+    const result = await withTenantContext(tenantId, async (client) => {
+      // Get tenant metrics
+      const { data: tenantMetrics, error: metricsError } = await (
+        client as any
+      ).rpc("get_tenant_metrics_for_period", {
+        tenant_id: tenantId,
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+      });
+
+      if (metricsError) {
+        console.error("Error fetching tenant metrics:", metricsError);
+        throw new Error("Failed to fetch tenant metrics");
+      }
+
+      const metrics = tenantMetrics?.[0] || {};
+
+      // Get business health score
+      const { data: healthScore } = await (client as any).rpc(
+        "calculate_business_health_score",
+        {
+          p_tenant_id: tenantId,
+          p_period_type: period,
+        },
+      );
+
+      // Get risk score
+      const { data: riskScore } = await (client as any).rpc(
+        "calculate_risk_score",
+        {
+          p_tenant_id: tenantId,
+          p_period_type: period,
+        },
+      );
+
+      return { metrics, healthScore, riskScore };
+    }, true); // useServiceRole = true
+
+    if (!result) {
+      return res.status(500).json({ 
+        success: false, 
+        error: "Failed to fetch tenant metrics" 
+      });
+    }
+
+    const { metrics, healthScore, riskScore } = result;
+
+    // Get tenant info with RLS context
+    const tenantInfo = await withTenantContext(tenantId, async (client) => {
+      const { data, error } = await client
+        .from("tenants")
+        .select("business_name, domain, subscription_plan, created_at")
+        .eq("id", tenantId)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    }, true);
+
+    res.json({
+      success: true,
+      data: {
+        tenant_info: tenantInfo,
+        overview: {
+          // Appointment metrics
+          appointments: {
+            total: metrics.total_appointments || 0,
+            confirmed: metrics.confirmed_appointments || 0,
+            cancelled: metrics.cancelled_appointments || 0,
+            completed: metrics.completed_appointments || 0,
+            pending: metrics.pending_appointments || 0,
+          },
+          // Revenue metrics
+          revenue: {
+            total: metrics.total_revenue || 0,
+            average_value: metrics.average_value || 0,
+          },
+          // Customer metrics
+          customers: {
+            total: metrics.total_customers || 0,
+            new: metrics.new_customers || 0,
+            returning: metrics.returning_customers || 0,
+          },
+          // Service metrics
+          services: {
+            total: metrics.total_services || 0,
+            most_popular: metrics.most_popular_service || "N/A",
+            utilization_rate: metrics.service_utilization_rate || 0,
+          },
+          // AI metrics
+          ai: {
+            total_conversations: metrics.total_conversations || 0,
+            success_rate: metrics.ai_success_rate || 0,
+            avg_response_time: metrics.avg_response_time || 0,
+          },
+          // Conversion metrics
+          conversion: {
+            rate: metrics.conversion_rate || 0,
+            booking_rate: metrics.booking_conversion_rate || 0,
+          },
+          // Health & Risk
+          business_health_score: Array.isArray(healthScore)
+            ? healthScore[0]
+            : healthScore || 0,
+          risk_score: Array.isArray(riskScore) ? riskScore[0] : riskScore || 0,
+        },
+        period: period,
+        date_range: dateRange,
+      },
+    });
+  } catch (error) {
+    console.error("Tenant overview error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/dashboard/tenant/:tenantId/charts
+ * Chart data for tenant dashboard
+ */
+router.get("/tenant/:tenantId/charts", async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const { period = "30" } = req.query;
+
+    const client = getAdminClient();
+
+    // Get time series data for different metrics
+    const [revenueData, appointmentData, customerData] = await Promise.all([
+      (client as any).rpc("get_time_series_data", {
+        p_tenant_id: tenantId,
+        p_metric_type: "revenue",
+        p_period_days: parseInt(period as string),
+      }),
+      (client as any).rpc("get_time_series_data", {
+        p_tenant_id: tenantId,
+        p_metric_type: "appointments",
+        p_period_days: parseInt(period as string),
+      }),
+      (client as any).rpc("get_time_series_data", {
+        p_tenant_id: tenantId,
+        p_metric_type: "customers",
+        p_period_days: parseInt(period as string),
+      }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        charts: {
+          revenue_trend: revenueData.data || [],
+          appointment_trend: appointmentData.data || [],
+          customer_trend: customerData.data || [],
+        },
+        period_days: parseInt(period as string),
+      },
+    });
+  } catch (error) {
+    console.error("Tenant charts error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// =====================================================
+// TENANT-PLATFORM DASHBOARD APIs (Participation View)
+// =====================================================
+
+/**
+ * GET /api/dashboard/tenant-platform/:tenantId
+ * Tenant participation in platform metrics
+ */
+router.get("/tenant-platform/:tenantId", async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const { period = "30d" } = req.query;
+
+    // Use existing analytics service method
+    const platformView = await analyticsService.getTenantPlatformView(
+      tenantId,
+      period as string,
+    );
+
+    res.json({
+      success: true,
+      data: platformView,
+    });
+  } catch (error) {
+    console.error("Tenant platform view error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/dashboard/tenant-platform/:tenantId/participation
+ * Detailed participation metrics
+ */
+router.get("/tenant-platform/:tenantId/participation", async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const { period = "30d" } = req.query;
+
+    const dateRange = getDateRangeFromPeriod(period as string);
+    const client = getAdminClient();
+
+    // Get tenant participation using real-only functions
+    const { data: participation, error: partError } = await (client as any).rpc(
+      "get_tenant_participation_real_only",
+      {
+        p_tenant_id: tenantId,
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+      },
+    );
+
+    // Get platform totals
+    const { data: platformTotals, error: platformError } = await (
+      client as any
+    ).rpc("get_platform_totals_real_only", {
+      start_date: dateRange.start,
+      end_date: dateRange.end,
+    });
+
+    const participationData = participation?.[0] || {};
+    const platformData = platformTotals?.[0] || {};
+
+    res.json({
+      success: true,
+      data: {
+        participation: {
+          revenue: {
+            percentage: participationData.revenue_participation,
+            tenant_amount: participationData.tenant_revenue,
+            platform_total: participationData.platform_revenue,
+            status: participationData.data_status,
+          },
+          has_sufficient_data: participationData.has_sufficient_data,
+        },
+        platform_context: {
+          total_tenants: platformData.total_tenants || 0,
+          active_tenants: platformData.active_tenants || 0,
+          total_revenue: platformData.total_revenue,
+          total_appointments: platformData.total_appointments || 0,
+          total_customers: platformData.total_customers || 0,
+          has_payment_data: platformData.has_payment_data,
+        },
+        period: period,
+        date_range: dateRange,
+      },
+    });
+  } catch (error) {
+    console.error("Tenant participation error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// =====================================================
+// SHARED UTILITY APIs
+// =====================================================
+
+/**
+ * GET /api/dashboard/status
+ * Overall dashboard system status
+ */
+router.get("/status", async (req, res) => {
+  try {
+    const client = getAdminClient();
+
+    const { data: metricsStatus } = await (client as any).rpc(
+      "get_metrics_calculation_status",
+    );
+
+    // Check table row counts
+    const [saasCount, tenantCount, riskCount] = await Promise.all([
+      (client as any)
+        .from("saas_metrics")
+        .select("count(*)", { count: "exact" }),
+      (client as any)
+        .from("tenant_platform_metrics")
+        .select("count(*)", { count: "exact" }),
+      (client as any)
+        .from("tenant_risk_scores")
+        .select("count(*)", { count: "exact" }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        status: "operational",
+        last_calculations: metricsStatus || [],
+        data_availability: {
+          saas_metrics: saasCount.count || 0,
+          tenant_platform_metrics: tenantCount.count || 0,
+          risk_scores: riskCount.count || 0,
+        },
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("Dashboard status error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * POST /api/dashboard/trigger-calculation
+ * Manual trigger for metric calculations (admin only)
+ */
+router.post("/trigger-calculation", async (req, res): Promise<any> => {
+  try {
+    const { metric_type } = req.body;
+
+    // Import and use the enhanced cron service
+    const { MetricsCronEnhancedService } = await import(
+      "../services/metrics-cron-enhanced.service"
+    );
+    const cronService = new MetricsCronEnhancedService();
+
+    switch (metric_type) {
+      case "saas":
+        await cronService.triggerSaasMetrics();
+        break;
+      case "tenants":
+        await cronService.triggerTopTenants();
+        break;
+      case "growth":
+        await cronService.triggerGrowthMetrics();
+        break;
+      case "risk":
+        await cronService.triggerRiskScores();
+        break;
+      case "distribution":
+        await cronService.triggerDomainDistribution();
+        break;
+      case "all":
+        await cronService.runAllCalculations();
+        break;
+      default:
+        return res.status(400).json({ error: "Invalid metric type" });
+    }
+
+    res.json({
+      success: true,
+      message: `${metric_type} calculation triggered successfully`,
+    });
+  } catch (error) {
+    console.error("Trigger calculation error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// =====================================================
+// UTILITY FUNCTIONS
+// =====================================================
+
+function getDateRangeFromPeriod(period: string) {
+  const end = new Date();
+  const start = new Date();
+
+  switch (period) {
+    case "7d":
+      start.setDate(end.getDate() - 7);
+      break;
+    case "30d":
+      start.setDate(end.getDate() - 30);
+      break;
+    case "90d":
+      start.setDate(end.getDate() - 90);
+      break;
+    case "1y":
+      start.setFullYear(end.getFullYear() - 1);
+      break;
+    default:
+      start.setDate(end.getDate() - 30);
+  }
+
+  return {
+    start: start.toISOString().split("T")[0],
+    end: end.toISOString().split("T")[0],
+  };
+}
+
+export default router;

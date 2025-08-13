@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenants - UBS | Universal Booking System</title>
+    <meta name="description" content="Gerencie empresas e tenants do sistema UBS.">
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --ubs-primary: #2D5A9B;
+            --ubs-primary-light: #4A7BC8;
+            --ubs-primary-dark: #1E3F6B;
+            --ubs-secondary: #F8F9FA;
+            --ubs-accent: #28A745;
+            --ubs-warning: #ffc107;
+            --ubs-danger: #dc3545;
+            --ubs-info: #17a2b8;
+            --ubs-text-dark: #2C3E50;
+            --ubs-text-light: #6C757D;
+            --ubs-border: #E9ECEF;
+            --ubs-shadow: 0 4px 20px rgba(45, 90, 155, 0.15);
+            --ubs-shadow-lg: 0 10px 40px rgba(45, 90, 155, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--ubs-secondary);
+            color: var(--ubs-text-dark);
+            overflow-x: hidden;
+        }
+
+        /* Top Navbar */
+        .top-navbar {
+            background: white;
+            border-bottom: 1px solid var(--ubs-border);
+            padding: 0.75rem 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1030;
+            box-shadow: var(--ubs-shadow);
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--ubs-primary) !important;
+            text-decoration: none;
+        }
+
+        .logo-image {
+            height: 40px;
+            width: auto;
+            object-fit: contain;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--ubs-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 70px;
+            left: 0;
+            width: 280px;
+            height: calc(100vh - 70px);
+            background: linear-gradient(180deg, var(--ubs-primary) 0%, var(--ubs-primary-dark) 100%);
+            padding: 2rem 0;
+            z-index: 1020;
+            overflow-y: auto;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar-menu li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 2rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-left-color: white;
+        }
+
+        .sidebar-menu i {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            margin-top: 70px;
+            padding: 2rem;
+            min-height: calc(100vh - 70px);
+        }
+
+        /* UBS Section */
+        .ubs-section {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--ubs-shadow);
+            border: 1px solid var(--ubs-border);
+            transition: all 0.3s ease;
+        }
+
+        .ubs-section:hover {
+            box-shadow: var(--ubs-shadow-lg);
+        }
+
+        .ubs-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--ubs-border);
+        }
+
+        .ubs-section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--ubs-text-dark);
+            margin: 0;
+        }
+
+        /* Stats Cards */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: var(--ubs-shadow);
+            border: 1px solid var(--ubs-border);
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            box-shadow: var(--ubs-shadow-lg);
+            transform: translateY(-5px);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--ubs-text-light);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        /* Filters */
+        .filters-section {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--ubs-shadow);
+            border: 1px solid var(--ubs-border);
+        }
+
+        /* Tenant Cards */
+        .tenant-card {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--ubs-shadow);
+            border: 1px solid var(--ubs-border);
+            transition: all 0.3s ease;
+        }
+
+        .tenant-card:hover {
+            box-shadow: var(--ubs-shadow-lg);
+            transform: translateY(-2px);
+        }
+
+        .tenant-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .tenant-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .tenant-info {
+            flex: 1;
+        }
+
+        .tenant-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--ubs-text-dark);
+            margin-bottom: 0.25rem;
+        }
+
+        .tenant-domain {
+            color: var(--ubs-text-light);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .tenant-contact {
+            font-size: 0.85rem;
+            color: var(--ubs-text-light);
+        }
+
+        .tenant-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-active {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--ubs-accent);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+        }
+
+        .status-trial {
+            background: rgba(255, 193, 7, 0.1);
+            color: var(--ubs-warning);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+
+        .status-inactive {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--ubs-danger);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+        }
+
+        .tenant-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--ubs-border);
+        }
+
+        .tenant-stat {
+            text-align: center;
+        }
+
+        .tenant-stat-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--ubs-primary);
+        }
+
+        .tenant-stat-label {
+            font-size: 0.8rem;
+            color: var(--ubs-text-light);
+            text-transform: uppercase;
+        }
+
+        .tenant-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        /* Domain Colors */
+        .domain-beauty { background: linear-gradient(135deg, #e91e63, #f06292); }
+        .domain-healthcare { background: linear-gradient(135deg, #4caf50, #81c784); }
+        .domain-legal { background: linear-gradient(135deg, #3f51b5, #7986cb); }
+        .domain-education { background: linear-gradient(135deg, #ff9800, #ffb74d); }
+        .domain-sports { background: linear-gradient(135deg, #f44336, #ef5350); }
+        .domain-consulting { background: linear-gradient(135deg, #9c27b0, #ba68c8); }
+        .domain-default { background: linear-gradient(135deg, var(--ubs-primary), var(--ubs-primary-light)); }
+
+        /* Buttons */
+        .btn-primary {
+            background: var(--ubs-primary);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: var(--ubs-primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--ubs-shadow);
+        }
+
+        .btn-outline-primary {
+            color: var(--ubs-primary);
+            border: 2px solid var(--ubs-primary);
+            background: transparent;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--ubs-primary);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        /* Form Controls */
+        .form-control,
+        .form-select {
+            border: 1px solid var(--ubs-border);
+            border-radius: 8px;
+            padding: 0.75rem;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--ubs-primary);
+            box-shadow: 0 0 0 0.25rem rgba(45, 90, 155, 0.1);
+        }
+
+        /* Notifications */
+        .ubs-notification {
+            position: fixed;
+            top: 90px;
+            right: 20px;
+            background: white;
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            box-shadow: var(--ubs-shadow-lg);
+            border-left: 4px solid var(--ubs-accent);
+            z-index: 1040;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+
+        .ubs-notification.show {
+            transform: translateX(0);
+        }
+
+        .ubs-notification.error {
+            border-left-color: var(--ubs-danger);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: var(--ubs-text-light);
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .ubs-section-header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            .tenant-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .tenant-actions {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Top Navbar -->
+    <nav class="top-navbar">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <a class="navbar-brand" href="/dashboard-standardized.html">
+                    <picture>
+                        <source srcset="assets/images/optimized/UBS_Nac.webp" type="image/webp">
+                        <img src="assets/images/UBS_Nac.png" alt="UBS - Universal Booking System" class="logo-image">
+                    </picture>
+                </a>
+                
+                <div class="user-info">
+                    <span class="d-none d-md-inline text-muted">Olá, <span id="userName">Usuário</span></span>
+                    <div class="user-avatar" id="userAvatar">U</div>
+                    <div class="dropdown">
+                        <button class="btn btn-link p-0" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-chevron-down text-muted"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/dashboard-standardized.html">Dashboard</a></li>
+                            <li><a class="dropdown-item" href="/settings-standardized.html">Configurações</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="logout()">Sair</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <ul class="sidebar-menu">
+            <li><a href="/dashboard-standardized.html"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+            <li><a href="/appointments-standardized.html"><i class="fas fa-calendar-alt"></i> Agendamentos</a></li>
+            <li><a href="/customers-standardized.html"><i class="fas fa-users"></i> Clientes</a></li>
+            <li><a href="/services-standardized.html"><i class="fas fa-concierge-bell"></i> Serviços</a></li>
+            <li><a href="/payments-standardized.html"><i class="fas fa-credit-card"></i> Pagamentos</a></li>
+            <li><a href="/analytics-standardized.html"><i class="fas fa-chart-line"></i> Analytics</a></li>
+            <li><a href="/billing-standardized.html"><i class="fas fa-file-invoice-dollar"></i> Billing</a></li>
+            <li><a href="/conversations-standardized.html"><i class="fas fa-comments"></i> Conversas</a></li>
+            <li><a href="/tenants-standardized.html" class="active"><i class="fas fa-building"></i> Tenants</a></li>
+            <li><a href="/settings-standardized.html"><i class="fas fa-cog"></i> Configurações</a></li>
+        </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Page Header -->
+        <div class="ubs-section">
+            <div class="ubs-section-header">
+                <div>
+                    <h1 class="ubs-section-title">
+                        <i class="fas fa-building me-2 text-primary"></i>
+                        Gestão de Tenants
+                    </h1>
+                    <p class="text-muted mb-0">Gerencie empresas e organizações do sistema</p>
+                </div>
+                <div>
+                    <button class="btn btn-outline-primary me-2" onclick="refreshTenants()">
+                        <i class="fas fa-sync-alt"></i> Atualizar
+                    </button>
+                    <button class="btn btn-primary" onclick="createNewTenant()">
+                        <i class="fas fa-plus"></i> Nova Empresa
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--ubs-primary);" id="totalTenants">0</div>
+                <div class="stat-label">Total de Empresas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--ubs-accent);" id="activeTenants">0</div>
+                <div class="stat-label">Ativas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--ubs-warning);" id="trialTenants">0</div>
+                <div class="stat-label">Em Teste</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--ubs-info);" id="totalRevenue">R$ 0</div>
+                <div class="stat-label">Receita Total</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters-section">
+            <div class="row align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Buscar</label>
+                    <input type="text" class="form-control" id="searchInput" placeholder="Nome, email ou domínio..." onkeyup="filterTenants()">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" id="statusFilter" onchange="filterTenants()">
+                        <option value="">Todos</option>
+                        <option value="active">Ativo</option>
+                        <option value="trial">Teste</option>
+                        <option value="inactive">Inativo</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Domínio</label>
+                    <select class="form-select" id="domainFilter" onchange="filterTenants()">
+                        <option value="">Todos</option>
+                        <option value="beauty">Beleza</option>
+                        <option value="healthcare">Saúde</option>
+                        <option value="legal">Advocacia</option>
+                        <option value="education">Educação</option>
+                        <option value="sports">Esportes</option>
+                        <option value="consulting">Consultoria</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Ordenar por</label>
+                    <select class="form-select" id="sortBy" onchange="sortTenants()">
+                        <option value="name">Nome</option>
+                        <option value="created">Data de Criação</option>
+                        <option value="revenue">Receita</option>
+                        <option value="users">Usuários</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-outline-secondary w-100" onclick="resetFilters()">
+                        <i class="fas fa-times me-1"></i>
+                        Limpar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tenants List -->
+        <div id="tenantsContainer">
+            <!-- Tenants will be populated here -->
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Carregando tenants...</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Create Tenant Modal -->
+    <div class="modal fade" id="createTenantModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nova Empresa</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createTenantForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="tenantName" class="form-label">Nome da Empresa</label>
+                                    <input type="text" class="form-control" id="tenantName" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="tenantEmail" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="tenantEmail" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="tenantPhone" class="form-label">Telefone</label>
+                                    <input type="text" class="form-control" id="tenantPhone">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="tenantDomain" class="form-label">Domínio</label>
+                                    <select class="form-select" id="tenantDomain" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="beauty">Beleza</option>
+                                        <option value="healthcare">Saúde</option>
+                                        <option value="legal">Advocacia</option>
+                                        <option value="education">Educação</option>
+                                        <option value="sports">Esportes</option>
+                                        <option value="consulting">Consultoria</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="tenantAddress" class="form-label">Endereço</label>
+                            <input type="text" class="form-control" id="tenantAddress">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="saveTenant()">Criar Empresa</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let isInitialized = false;
+        let allTenants = [];
+        let filteredTenants = [];
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeUserSafe();
+        });
+
+        // Safe user initialization to prevent loops
+        function initializeUserSafe() {
+            if (isInitialized) return;
+            isInitialized = true;
+
+            try {
+                checkAuthenticationStatus();
+                loadTenants();
+            } catch (error) {
+                console.error('Error initializing tenants page:', error);
+                showNotification('Erro ao inicializar página', 'error');
+            }
+        }
+
+        // Check authentication status
+        function checkAuthenticationStatus() {
+            const token = localStorage.getItem('ubs_token');
+            const userData = localStorage.getItem('ubs_user_data');
+
+            if (!token || !userData) {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            try {
+                const user = JSON.parse(userData);
+                updateUserInfo(user);
+            } catch (error) {
+                console.error('Error parsing user data:', error);
+                localStorage.removeItem('ubs_user_data');
+                window.location.href = '/login.html';
+            }
+        }
+
+        // Update user info in UI
+        function updateUserInfo(user) {
+            const userName = document.getElementById('userName');
+            const userAvatar = document.getElementById('userAvatar');
+
+            if (userName && user.nome) {
+                userName.textContent = user.nome;
+            }
+
+            if (userAvatar && user.nome) {
+                userAvatar.textContent = user.nome.charAt(0).toUpperCase();
+            }
+        }
+
+        // Load tenants
+        async function loadTenants() {
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/admin/tenants', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        handleAuthError();
+                        return;
+                    }
+                    throw new Error('Failed to load tenants');
+                }
+                
+                const data = await response.json();
+                allTenants = data.tenants || data || [];
+                updateStats(data.stats);
+                renderTenants();
+                
+            } catch (error) {
+                console.error('Error loading tenants:', error);
+                showNotification('Erro ao carregar tenants. Usando dados de demonstração.', 'error');
+                loadMockTenants();
+            }
+        }
+
+        // Load mock tenants for demonstration
+        function loadMockTenants() {
+            const mockTenants = [
+                {
+                    id: '1',
+                    name: 'Salão Beleza Total',
+                    email: 'contato@belezatotal.com',
+                    phone: '(11) 99999-9999',
+                    domain: 'beauty',
+                    status: 'active',
+                    users: 5,
+                    appointments: 127,
+                    revenue: 8500,
+                    created: '2024-01-15'
+                },
+                {
+                    id: '2',
+                    name: 'Clínica Dr. Silva',
+                    email: 'admin@clinicasilva.com',
+                    phone: '(11) 88888-8888',
+                    domain: 'healthcare',
+                    status: 'active',
+                    users: 12,
+                    appointments: 89,
+                    revenue: 15000,
+                    created: '2024-02-20'
+                },
+                {
+                    id: '3',
+                    name: 'Escritório Advocacia Santos',
+                    email: 'contato@advocaciasantos.com',
+                    phone: '(11) 77777-7777',
+                    domain: 'legal',
+                    status: 'trial',
+                    users: 3,
+                    appointments: 23,
+                    revenue: 2800,
+                    created: '2024-03-10'
+                }
+            ];
+
+            allTenants = mockTenants;
+            updateStats({
+                total: mockTenants.length,
+                active: mockTenants.filter(t => t.status === 'active').length,
+                trial: mockTenants.filter(t => t.status === 'trial').length,
+                revenue: mockTenants.reduce((sum, t) => sum + t.revenue, 0)
+            });
+            renderTenants();
+        }
+
+        // Update stats
+        function updateStats(stats) {
+            document.getElementById('totalTenants').textContent = stats?.total || allTenants.length;
+            document.getElementById('activeTenants').textContent = stats?.active || allTenants.filter(t => t.status === 'active').length;
+            document.getElementById('trialTenants').textContent = stats?.trial || allTenants.filter(t => t.status === 'trial').length;
+            document.getElementById('totalRevenue').textContent = new Intl.NumberFormat('pt-BR', { 
+                style: 'currency', 
+                currency: 'BRL' 
+            }).format(stats?.revenue || allTenants.reduce((sum, t) => sum + (t.revenue || 0), 0));
+        }
+
+        // Render tenants
+        function renderTenants() {
+            const container = document.getElementById('tenantsContainer');
+            filteredTenants = allTenants;
+
+            if (filteredTenants.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-building"></i>
+                        <h4>Nenhuma empresa encontrada</h4>
+                        <p>Comece criando sua primeira empresa no sistema</p>
+                        <button class="btn btn-primary" onclick="createNewTenant()">
+                            <i class="fas fa-plus me-2"></i>Nova Empresa
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filteredTenants.map(tenant => `
+                <div class="tenant-card">
+                    <div class="tenant-header">
+                        <div class="tenant-avatar domain-${tenant.domain || 'default'}">
+                            ${tenant.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="tenant-info">
+                            <div class="tenant-name">${tenant.name}</div>
+                            <div class="tenant-domain">${getDomainName(tenant.domain)}</div>
+                            <div class="tenant-contact">
+                                <i class="fas fa-envelope me-1"></i>${tenant.email}
+                                ${tenant.phone ? `<span class="ms-3"><i class="fas fa-phone me-1"></i>${tenant.phone}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="tenant-status">
+                            <span class="status-badge status-${tenant.status}">${getStatusName(tenant.status)}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="tenant-stats">
+                        <div class="tenant-stat">
+                            <div class="tenant-stat-value">${tenant.users || 0}</div>
+                            <div class="tenant-stat-label">Usuários</div>
+                        </div>
+                        <div class="tenant-stat">
+                            <div class="tenant-stat-value">${tenant.appointments || 0}</div>
+                            <div class="tenant-stat-label">Agendamentos</div>
+                        </div>
+                        <div class="tenant-stat">
+                            <div class="tenant-stat-value">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tenant.revenue || 0)}</div>
+                            <div class="tenant-stat-label">Receita</div>
+                        </div>
+                        <div class="tenant-stat">
+                            <div class="tenant-stat-value">${new Date(tenant.created).toLocaleDateString('pt-BR')}</div>
+                            <div class="tenant-stat-label">Criado em</div>
+                        </div>
+                    </div>
+                    
+                    <div class="tenant-actions">
+                        <button class="btn btn-outline-primary btn-sm" onclick="viewTenant('${tenant.id}')">
+                            <i class="fas fa-eye me-1"></i>Visualizar
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="editTenant('${tenant.id}')">
+                            <i class="fas fa-edit me-1"></i>Editar
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" onclick="manageTenant('${tenant.id}')">
+                            <i class="fas fa-cog me-1"></i>Gerenciar
+                        </button>
+                        ${tenant.status === 'active' ? 
+                            `<button class="btn btn-outline-danger btn-sm" onclick="suspendTenant('${tenant.id}')">
+                                <i class="fas fa-pause me-1"></i>Suspender
+                            </button>` :
+                            `<button class="btn btn-outline-success btn-sm" onclick="activateTenant('${tenant.id}')">
+                                <i class="fas fa-play me-1"></i>Ativar
+                            </button>`
+                        }
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Filter tenants
+        function filterTenants() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const status = document.getElementById('statusFilter').value;
+            const domain = document.getElementById('domainFilter').value;
+
+            filteredTenants = allTenants.filter(tenant => {
+                const matchesSearch = !search || 
+                    tenant.name.toLowerCase().includes(search) ||
+                    tenant.email.toLowerCase().includes(search) ||
+                    (tenant.domain && tenant.domain.toLowerCase().includes(search));
+                
+                const matchesStatus = !status || tenant.status === status;
+                const matchesDomain = !domain || tenant.domain === domain;
+                
+                return matchesSearch && matchesStatus && matchesDomain;
+            });
+
+            renderTenants();
+        }
+
+        // Sort tenants
+        function sortTenants() {
+            const sortBy = document.getElementById('sortBy').value;
+            
+            filteredTenants.sort((a, b) => {
+                switch (sortBy) {
+                    case 'name':
+                        return a.name.localeCompare(b.name);
+                    case 'created':
+                        return new Date(b.created) - new Date(a.created);
+                    case 'revenue':
+                        return (b.revenue || 0) - (a.revenue || 0);
+                    case 'users':
+                        return (b.users || 0) - (a.users || 0);
+                    default:
+                        return 0;
+                }
+            });
+
+            renderTenants();
+        }
+
+        // Reset filters
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('statusFilter').value = '';
+            document.getElementById('domainFilter').value = '';
+            document.getElementById('sortBy').value = 'name';
+            filterTenants();
+        }
+
+        // Utility functions
+        function getDomainName(domain) {
+            const domains = {
+                beauty: 'Beleza e Estética',
+                healthcare: 'Saúde',
+                legal: 'Advocacia',
+                education: 'Educação',
+                sports: 'Esportes',
+                consulting: 'Consultoria'
+            };
+            return domains[domain] || 'Geral';
+        }
+
+        function getStatusName(status) {
+            const statuses = {
+                active: 'Ativo',
+                trial: 'Teste',
+                inactive: 'Inativo',
+                suspended: 'Suspenso'
+            };
+            return statuses[status] || status;
+        }
+
+        // Tenant actions
+        function createNewTenant() {
+            const modal = new bootstrap.Modal(document.getElementById('createTenantModal'));
+            modal.show();
+        }
+
+        function saveTenant() {
+            const form = document.getElementById('createTenantForm');
+            const formData = new FormData(form);
+            
+            // Mock save for demonstration
+            showNotification('Empresa criada com sucesso!');
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createTenantModal'));
+            modal.hide();
+            form.reset();
+        }
+
+        function viewTenant(id) {
+            showNotification(`Visualizando tenant ${id}`);
+        }
+
+        function editTenant(id) {
+            showNotification(`Editando tenant ${id}`);
+        }
+
+        function manageTenant(id) {
+            showNotification(`Gerenciando tenant ${id}`);
+        }
+
+        function suspendTenant(id) {
+            showNotification(`Tenant ${id} suspenso`);
+        }
+
+        function activateTenant(id) {
+            showNotification(`Tenant ${id} ativado`);
+        }
+
+        function refreshTenants() {
+            loadTenants();
+            showNotification('Lista de tenants atualizada!');
+        }
+
+        // Utility functions
+        function showNotification(message, type = 'success') {
+            const container = document.getElementById('notificationContainer');
+            const notification = document.createElement('div');
+            notification.className = `ubs-notification ${type}`;
+            notification.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            container.appendChild(notification);
+            setTimeout(() => notification.classList.add('show'), 100);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => container.removeChild(notification), 300);
+            }, 5000);
+        }
+
+        function handleAuthError() {
+            localStorage.removeItem('ubs_token');
+            localStorage.removeItem('ubs_user_data');
+            showNotification('Sessão expirada. Redirecionando...', 'error');
+            setTimeout(() => window.location.href = '/login.html', 2000);
+        }
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('ubs_token');
+            localStorage.removeItem('ubs_user_data');
+            showNotification('Logout realizado com sucesso!');
+            setTimeout(() => window.location.href = '/login.html', 1000);
+        }
+    </script>
+</body>
+</html> 

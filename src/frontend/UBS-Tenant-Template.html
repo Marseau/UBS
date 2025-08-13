@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{PAGE_TITLE}} - UBS</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- UBS Standard Styles -->
+    <link href="css/ubs-standard-styles.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    <link href="css/super-admin-dashboard.css" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        /* LOGO GRANDE FORÇADO */
+        .sidebar .logo {
+            min-height: 180px !important;
+            padding: 20px 10px !important;
+        }
+        
+        .sidebar .logo img {
+            width: 90% !important;
+            max-width: 250px !important;
+            max-height: 150px !important;
+            height: auto !important;
+        }
+        
+        /* CUSTOM PAGE STYLES - Placeholder for page-specific styles */
+        {{CUSTOM_STYLES}}
+    </style>
+</head>
+<body>
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+        <div class="logo">
+            <img src="assets/images/optimized/Logo_Int_Branco.webp" alt="UBS Logo">
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Dashboard</div>
+            <a class="nav-link" href="dashboard-tenant-admin.html">
+                <i class="fas fa-chart-line"></i>
+                <span>Visão Geral</span>
+            </a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Operações</div>
+            <a class="nav-link" href="appointments-standardized.html">
+                <i class="fas fa-calendar-check"></i>
+                <span>Agendamentos</span>
+            </a>
+            <a class="nav-link" href="customers-standardized.html">
+                <i class="fas fa-users"></i>
+                <span>Clientes</span>
+            </a>
+            <a class="nav-link" href="services-standardized.html">
+                <i class="fas fa-concierge-bell"></i>
+                <span>Serviços</span>
+            </a>
+            <a class="nav-link" href="professionals-standardized.html">
+                <i class="fas fa-user-tie"></i>
+                <span>Profissionais</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Comunicação</div>
+            <a class="nav-link" href="conversations-standardized.html">
+                <i class="fab fa-whatsapp"></i>
+                <span>Conversas</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Financeiro</div>
+            <a class="nav-link" href="billing-standardized.html">
+                <i class="fas fa-file-invoice-dollar"></i>
+                <span>Faturamento</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Sistema</div>
+            <a class="nav-link" href="settings-standardized.html">
+                <i class="fas fa-cog"></i>
+                <span>Configurações</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+        <!-- Header -->
+        <div class="top-navbar">
+            <div class="container-fluid">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="d-none d-md-block">
+                            <h5 class="mb-0">{{PAGE_HEADER_TITLE}}</h5>
+                            <small class="text-muted">{{PAGE_HEADER_SUBTITLE}}</small>
+                        </div>
+                    </div>
+                    <div class="user-menu d-flex flex-column align-items-end gap-1">
+                        <!-- User Menu -->
+                        <div class="dropdown">
+                            <button class="btn btn-link dropdown-toggle d-flex align-items-center compact-button" data-bs-toggle="dropdown">
+                                <div class="user-avatar me-2" id="userAvatar">--</div>
+                                <div class="d-none d-md-block text-start">
+                                    <div class="fw-medium compact-text" id="userName">--</div>
+                                    <small class="text-muted compact-small" id="userRole">--</small>
+                                </div>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end compact-dropdown">
+                                <li><a class="dropdown-item compact-dropdown-item" href="settings-standardized.html"><i class="fas fa-user-cog me-2"></i>Perfil</a></li>
+                                <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="exportData()"><i class="fas fa-download me-2"></i>Exportar Dados</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="refreshData()"><i class="fas fa-sync me-2"></i>Atualizar</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="container-fluid p-3">
+            {{PAGE_CONTENT}}
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/utils/secure-auth.js"></script>
+    
+    <!-- Template JavaScript Functions -->
+    <script>
+        // Funções auxiliares do template
+        function getAuthToken() {
+            if (window.secureAuth) {
+                return window.secureAuth.getAuthHeader();
+            }
+            return 'Bearer ' + (localStorage.getItem('ubs_token') || localStorage.getItem('adminToken'));
+        }
+        
+        function exportData() {
+            // Implementação específica da página pode sobrescrever esta função
+            console.log('Export function - to be implemented by page');
+        }
+        
+        function refreshData() {
+            location.reload();
+        }
+        
+        function logout() {
+            if (confirm('Tem certeza que deseja sair?')) {
+                localStorage.removeItem('ubs_token');
+                localStorage.removeItem('adminToken');
+                window.location.href = 'login.html';
+            }
+        }
+        
+        // Função para destacar o menu ativo
+        function setActiveMenu(pageUrl) {
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === pageUrl) {
+                    link.classList.add('active');
+                }
+            });
+        }
+        
+        // Carregar dados do tenant para avatar
+        async function loadTenantData() {
+            try {
+                const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+                
+                // Primeiro, tenta obter o tenant_id do usuário logado
+                const userResponse = await fetch('/api/admin/profile', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                let tenantId = null;
+                if (userResponse.ok) {
+                    const userResult = await userResponse.json();
+                    tenantId = userResult.data?.tenant_id;
+                }
+                
+                // Se não conseguir o tenant_id do perfil, usa um tenant padrão ou busca na lista
+                if (!tenantId) {
+                    const tenantsResponse = await fetch('/api/admin/tenants', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    if (tenantsResponse.ok) {
+                        const tenantsResult = await tenantsResponse.json();
+                        const tenants = tenantsResult.data || [];
+                        if (tenants.length > 0) {
+                            tenantId = tenants[0].id; // Usa o primeiro tenant da lista
+                        }
+                    }
+                }
+                
+                // Agora busca os dados do tenant específico
+                if (tenantId) {
+                    const response = await fetch(`/api/admin/tenants/${tenantId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        if (result.success && result.data) {
+                            const tenant = result.data;
+                            
+                            // Atualizar avatar com dados reais do tenant
+                            const avatarElement = document.getElementById('userAvatar');
+                            const nameElement = document.getElementById('userName');
+                            const roleElement = document.getElementById('userRole');
+                            
+                            const businessName = tenant.business_name || tenant.name;
+                            
+                            if (avatarElement && businessName) {
+                                avatarElement.textContent = businessName.substring(0, 2).toUpperCase();
+                            }
+                            
+                            if (nameElement && businessName) {
+                                nameElement.textContent = businessName;
+                            }
+                            
+                            if (roleElement && tenant.domain) {
+                                const domainLabels = {
+                                    'beauty': 'Salão de Beleza',
+                                    'healthcare': 'Clínica de Saúde',
+                                    'legal': 'Escritório Jurídico',
+                                    'education': 'Educação',
+                                    'sports': 'Academia/Esportes',
+                                    'consulting': 'Consultoria'
+                                };
+                                roleElement.textContent = domainLabels[tenant.domain] || 'Administrador';
+                            }
+                            
+                            console.log('✅ Dados do tenant carregados:', tenant.business_name);
+                            return;
+                        }
+                    }
+                }
+                
+                // Se não conseguir carregar dados do tenant, redireciona para login
+                console.warn('⚠️ Não foi possível carregar dados do tenant - redirecionando para login');
+                localStorage.removeItem('ubs_token');
+                localStorage.removeItem('adminToken');
+                window.location.href = 'login.html';
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar dados do tenant:', error);
+                
+                // Em caso de erro, redireciona para login
+                localStorage.removeItem('ubs_token');
+                localStorage.removeItem('adminToken');
+                window.location.href = 'login.html';
+            }
+        }
+        
+        // Auto-detectar página atual e destacar menu + carregar dados do tenant
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPage = window.location.pathname.split('/').pop();
+            setActiveMenu(currentPage);
+            
+            // Carregar dados do tenant para o avatar
+            loadTenantData();
+        });
+    </script>
+    
+    <!-- Page-specific JavaScript -->
+    {{PAGE_SCRIPTS}}
+</body>
+</html>

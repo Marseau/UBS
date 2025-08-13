@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billing - UBS | Universal Booking System</title>
+    <meta name="description" content="Gerencie sua assinatura, visualize uso e histórico de pagamentos no UBS.">
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #2D5A9B;
+            --primary-light: #4A7BC8;
+            --primary-dark: #1E3F6B;
+            --secondary-color: #F8F9FA;
+            --accent-color: #28A745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --text-dark: #2C3E50;
+            --text-light: #6C757D;
+            --border-color: #E9ECEF;
+            --shadow: 0 4px 20px rgba(45, 90, 155, 0.15);
+            --shadow-lg: 0 10px 40px rgba(45, 90, 155, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--secondary-color);
+            color: var(--text-dark);
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: var(--shadow);
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary-color) !important;
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-color);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        /* Main Container */
+        .main-container {
+            padding: 2rem 0;
+            min-height: calc(100vh - 80px);
+        }
+
+        .billing-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .page-header {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .page-subtitle {
+            color: var(--text-light);
+            font-size: 1.1rem;
+        }
+
+        /* Cards */
+        .billing-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+        }
+
+        .billing-card:hover {
+            box-shadow: var(--shadow-lg);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .card-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin: 0;
+        }
+
+        /* Status badges */
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-badge.active {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--accent-color);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+        }
+
+        .status-badge.trialing {
+            background: rgba(255, 193, 7, 0.1);
+            color: var(--warning-color);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+
+        .status-badge.past_due {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--danger-color);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+        }
+
+        .status-badge.canceled {
+            background: rgba(108, 117, 125, 0.1);
+            color: var(--text-light);
+            border: 1px solid rgba(108, 117, 125, 0.3);
+        }
+
+        /* Plan display */
+        .current-plan {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .plan-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+        }
+
+        .plan-details h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 0.25rem;
+        }
+
+        .plan-price {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        /* Usage bars */
+        .usage-item {
+            margin-bottom: 1.5rem;
+        }
+
+        .usage-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .usage-label {
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        .usage-stats {
+            font-size: 0.9rem;
+            color: var(--text-light);
+        }
+
+        .usage-bar {
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .usage-progress {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-color), #20c997);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .usage-progress.warning {
+            background: linear-gradient(90deg, var(--warning-color), #ff8c00);
+        }
+
+        .usage-progress.danger {
+            background: linear-gradient(90deg, var(--danger-color), #b02a37);
+        }
+
+        /* Buttons */
+        .btn-primary {
+            background: var(--primary-color);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-outline-primary {
+            color: var(--primary-color);
+            border: 2px solid var(--primary-color);
+            background: transparent;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-danger:hover {
+            background: #b02a37;
+            transform: translateY(-2px);
+        }
+
+        /* Payment history table */
+        .payment-table {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .payment-table table {
+            margin: 0;
+        }
+
+        .payment-table th {
+            background: var(--secondary-color);
+            border: none;
+            font-weight: 600;
+            color: var(--text-dark);
+            padding: 1rem;
+        }
+
+        .payment-table td {
+            border: none;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .payment-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Trial notice */
+        .trial-notice {
+            background: rgba(255, 193, 7, 0.1);
+            border: 2px solid rgba(255, 193, 7, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .trial-notice h4 {
+            color: var(--warning-color);
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .trial-notice p {
+            color: var(--text-dark);
+            margin: 0;
+            font-weight: 500;
+        }
+
+        /* Cancellation notice */
+        .cancellation-notice {
+            background: rgba(220, 53, 69, 0.1);
+            border: 2px solid rgba(220, 53, 69, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .cancellation-notice h4 {
+            color: var(--danger-color);
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        /* Loading states */
+        .loading-spinner {
+            display: none;
+            margin-right: 0.5rem;
+        }
+
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 4px;
+        }
+
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 1rem;
+            }
+
+            .billing-card {
+                padding: 1.5rem;
+            }
+
+            .current-plan {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .card-header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .payment-table {
+                overflow-x: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <a class="navbar-brand" href="/dashboard">
+                    <div class="logo-icon">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                    UBS
+                </a>
+                
+                <div class="user-menu">
+                    <span class="text-muted">Olá, <span id="userName">Usuário</span></span>
+                    <div class="user-avatar" id="userAvatar">U</div>
+                    <div class="dropdown">
+                        <button class="btn btn-link p-0" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-chevron-down text-muted"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/dashboard">Dashboard</a></li>
+                            <li><a class="dropdown-item" href="/settings">Configurações</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="logout()">Sair</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <div class="container">
+            <div class="billing-container">
+                <!-- Page Header -->
+                <div class="page-header">
+                    <h1 class="page-title">Assinatura e Billing</h1>
+                    <p class="page-subtitle">Gerencie sua assinatura, visualize uso e histórico de pagamentos</p>
+                </div>
+
+                <!-- Alert Container -->
+                <div id="alertContainer"></div>
+
+                <!-- Trial Notice -->
+                <div class="trial-notice" id="trialNotice" style="display: none;">
+                    <h4><i class="fas fa-gift me-2"></i>Período de Teste Ativo</h4>
+                    <p>Você ainda tem <strong id="trialDaysRemaining">X dias</strong> restantes no seu teste gratuito. Aproveite para explorar todas as funcionalidades!</p>
+                </div>
+
+                <!-- Cancellation Notice -->
+                <div class="cancellation-notice" id="cancellationNotice" style="display: none;">
+                    <h4><i class="fas fa-exclamation-triangle me-2"></i>Assinatura Cancelada</h4>
+                    <p>Sua assinatura será cancelada em <strong id="cancellationDate">X</strong>. Você pode reativar a qualquer momento até essa data.</p>
+                    <button class="btn btn-primary mt-2" onclick="reactivateSubscription()">
+                        <i class="fas fa-undo me-2"></i>Reativar Assinatura
+                    </button>
+                </div>
+
+                <div class="row">
+                    <!-- Current Plan -->
+                    <div class="col-lg-8">
+                        <div class="billing-card">
+                            <div class="card-header">
+                                <h3 class="card-title">Plano Atual</h3>
+                                <div class="status-badge" id="subscriptionStatus">Carregando...</div>
+                            </div>
+
+                            <div class="current-plan">
+                                <div class="plan-icon">
+                                    <i class="fas fa-star"></i>
+                                </div>
+                                <div class="plan-details">
+                                    <h3 id="planName">Carregando...</h3>
+                                    <div class="plan-price" id="planPrice">R$ --/mês</div>
+                                </div>
+                            </div>
+
+                            <div class="plan-features" id="planFeatures">
+                                <!-- Features will be loaded here -->
+                            </div>
+
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="btn btn-outline-primary" onclick="openBillingPortal()">
+                                    <i class="fas fa-credit-card me-2"></i>
+                                    Gerenciar Pagamento
+                                </button>
+                                <button class="btn btn-primary" onclick="showChangePlanModal()">
+                                    <i class="fas fa-arrow-up me-2"></i>
+                                    Alterar Plano
+                                </button>
+                                <button class="btn btn-danger" onclick="showCancelModal()" id="cancelBtn">
+                                    <i class="fas fa-times me-2"></i>
+                                    Cancelar Plano
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Usage Statistics -->
+                        <div class="billing-card">
+                            <div class="card-header">
+                                <h3 class="card-title">Uso Atual</h3>
+                                <small class="text-muted" id="usagePeriod">Período: --</small>
+                            </div>
+
+                            <div id="usageStats">
+                                <!-- Usage stats will be loaded here -->
+                                <div class="usage-item">
+                                    <div class="skeleton" style="height: 20px; margin-bottom: 0.5rem;"></div>
+                                    <div class="skeleton" style="height: 8px;"></div>
+                                </div>
+                                <div class="usage-item">
+                                    <div class="skeleton" style="height: 20px; margin-bottom: 0.5rem;"></div>
+                                    <div class="skeleton" style="height: 8px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Billing Summary -->
+                    <div class="col-lg-4">
+                        <div class="billing-card">
+                            <div class="card-header">
+                                <h3 class="card-title">Próximo Pagamento</h3>
+                            </div>
+
+                            <div id="nextPayment">
+                                <div class="text-center">
+                                    <div class="h2 text-primary mb-2" id="nextPaymentAmount">R$ --</div>
+                                    <div class="text-muted" id="nextPaymentDate">--</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="billing-card">
+                            <div class="card-header">
+                                <h3 class="card-title">Informações</h3>
+                            </div>
+
+                            <div class="list-group list-group-flush">
+                                <div class="list-group-item d-flex justify-content-between">
+                                    <span>Customer ID</span>
+                                    <small class="text-muted" id="customerId">--</small>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between">
+                                    <span>Subscription ID</span>
+                                    <small class="text-muted" id="subscriptionId">--</small>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between">
+                                    <span>Próxima Renovação</span>
+                                    <small class="text-muted" id="renewalDate">--</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment History -->
+                <div class="billing-card">
+                    <div class="card-header">
+                        <h3 class="card-title">Histórico de Pagamentos</h3>
+                        <button class="btn btn-outline-primary btn-sm" onclick="downloadInvoices()">
+                            <i class="fas fa-download me-2"></i>
+                            Baixar Faturas
+                        </button>
+                    </div>
+
+                    <div class="payment-table">
+                        <table class="table" id="paymentTable">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Descrição</th>
+                                    <th>Valor</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="paymentTableBody">
+                                <tr>
+                                    <td colspan="5" class="text-center">Carregando histórico...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Plan Modal -->
+    <div class="modal fade" id="changePlanModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Alterar Plano</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="planOptions">
+                        <!-- Plan options will be loaded here -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="changePlan()" id="changePlanBtn">
+                        <i class="fas fa-spinner fa-spin loading-spinner" id="changePlanSpinner"></i>
+                        Alterar Plano
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cancel Subscription Modal -->
+    <div class="modal fade" id="cancelModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Cancelar Assinatura</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Tem certeza que deseja cancelar sua assinatura? Você perderá acesso a todas as funcionalidades premium.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="cancellationReason" class="form-label">Por que está cancelando? (opcional)</label>
+                        <select class="form-select" id="cancellationReason">
+                            <option value="">Selecione um motivo</option>
+                            <option value="too_expensive">Muito caro</option>
+                            <option value="not_using">Não estou usando</option>
+                            <option value="missing_features">Faltam funcionalidades</option>
+                            <option value="technical_issues">Problemas técnicos</option>
+                            <option value="switching_provider">Mudando para outro fornecedor</option>
+                            <option value="business_closed">Negócio fechado</option>
+                            <option value="other">Outro</option>
+                        </select>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="cancelImmediately">
+                        <label class="form-check-label" for="cancelImmediately">
+                            Cancelar imediatamente (ao invés de no final do período)
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Manter Assinatura</button>
+                    <button type="button" class="btn btn-danger" onclick="cancelSubscription()" id="confirmCancelBtn">
+                        <i class="fas fa-spinner fa-spin loading-spinner" id="cancelSpinner"></i>
+                        Confirmar Cancelamento
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentSubscription = null;
+        let selectedNewPlan = null;
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuth();
+            loadBillingData();
+        });
+
+        // Check authentication
+        function checkAuth() {
+            const token = localStorage.getItem('ubs_token');
+            const user = localStorage.getItem('ubs_user');
+            
+            if (!token || !user) {
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            // Set user info
+            const userData = JSON.parse(user);
+            document.getElementById('userName').textContent = userData.name || userData.email;
+            document.getElementById('userAvatar').textContent = (userData.name || userData.email).charAt(0).toUpperCase();
+        }
+
+        // Load billing data
+        async function loadBillingData() {
+            await Promise.all([
+                loadSubscription(),
+                loadUsageStats(),
+                loadPaymentHistory()
+            ]);
+        }
+
+        // Load subscription data
+        async function loadSubscription() {
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/billing/subscription', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentSubscription = data;
+                    updateSubscriptionDisplay(data);
+                } else {
+                    showAlert('Erro ao carregar dados da assinatura.', 'danger');
+                }
+            } catch (error) {
+                console.error('Error loading subscription:', error);
+                showAlert('Erro de conexão.', 'danger');
+            }
+        }
+
+        // Update subscription display
+        function updateSubscriptionDisplay(data) {
+            const { tenant, subscription, plan } = data;
+
+            // Update plan info
+            if (plan) {
+                document.getElementById('planName').textContent = plan.name;
+                document.getElementById('planPrice').textContent = `R$ ${(plan.price / 100).toFixed(0)}/mês`;
+                
+                const featuresContainer = document.getElementById('planFeatures');
+                featuresContainer.innerHTML = plan.features.map(feature => 
+                    `<div class="d-flex align-items-center mb-2">
+                        <i class="fas fa-check text-success me-2"></i>
+                        <span>${feature}</span>
+                    </div>`
+                ).join('');
+            }
+
+            // Update status
+            const statusBadge = document.getElementById('subscriptionStatus');
+            if (tenant?.subscription_status) {
+                statusBadge.textContent = getStatusText(tenant.subscription_status);
+                statusBadge.className = `status-badge ${tenant.subscription_status}`;
+            }
+
+            // Show trial notice
+            if (tenant?.subscription_status === 'trialing' && subscription?.trial_end) {
+                const trialEnd = new Date(subscription.trial_end * 1000);
+                const now = new Date();
+                const daysRemaining = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+                
+                if (daysRemaining > 0) {
+                    document.getElementById('trialDaysRemaining').textContent = `${daysRemaining} dias`;
+                    document.getElementById('trialNotice').style.display = 'block';
+                }
+            }
+
+            // Show cancellation notice
+            if (tenant?.cancel_at_period_end && subscription?.current_period_end) {
+                const endDate = new Date(subscription.current_period_end * 1000);
+                document.getElementById('cancellationDate').textContent = endDate.toLocaleDateString('pt-BR');
+                document.getElementById('cancellationNotice').style.display = 'block';
+                
+                // Change cancel button to reactivate
+                const cancelBtn = document.getElementById('cancelBtn');
+                cancelBtn.innerHTML = '<i class="fas fa-undo me-2"></i>Reativar';
+                cancelBtn.className = 'btn btn-success';
+                cancelBtn.onclick = reactivateSubscription;
+            }
+
+            // Update billing info
+            if (tenant?.stripe_customer_id) {
+                document.getElementById('customerId').textContent = tenant.stripe_customer_id;
+            }
+            if (tenant?.subscription_id) {
+                document.getElementById('subscriptionId').textContent = tenant.subscription_id;
+            }
+            if (subscription?.current_period_end) {
+                const renewalDate = new Date(subscription.current_period_end * 1000);
+                document.getElementById('renewalDate').textContent = renewalDate.toLocaleDateString('pt-BR');
+                
+                // Update next payment
+                if (plan && !tenant?.cancel_at_period_end) {
+                    document.getElementById('nextPaymentAmount').textContent = `R$ ${(plan.price / 100).toFixed(0)}`;
+                    document.getElementById('nextPaymentDate').textContent = renewalDate.toLocaleDateString('pt-BR');
+                } else {
+                    document.getElementById('nextPaymentAmount').textContent = 'N/A';
+                    document.getElementById('nextPaymentDate').textContent = 'Cancelado';
+                }
+            }
+        }
+
+        // Get status text in Portuguese
+        function getStatusText(status) {
+            const statusMap = {
+                'trialing': 'Teste Grátis',
+                'active': 'Ativo',
+                'past_due': 'Pagamento Atrasado',
+                'canceled': 'Cancelado',
+                'incomplete': 'Incompleto',
+                'unpaid': 'Não Pago'
+            };
+            return statusMap[status] || status;
+        }
+
+        // Load usage statistics
+        async function loadUsageStats() {
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/usage/current', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateUsageDisplay(data.usage);
+                }
+            } catch (error) {
+                console.error('Error loading usage stats:', error);
+            }
+        }
+
+        // Update usage display
+        function updateUsageDisplay(usage) {
+            const container = document.getElementById('usageStats');
+            
+            if (!usage) {
+                container.innerHTML = '<p class="text-muted">Dados de uso não disponíveis</p>';
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="usage-item">
+                    <div class="d-flex justify-content-between usage-header">
+                        <span class="usage-label">Mensagens</span>
+                        <span class="usage-stats">${usage.messages?.current || 0} / ${usage.messages?.limit === -1 ? '∞' : usage.messages?.limit || 0}</span>
+                    </div>
+                    <div class="usage-bar">
+                        <div class="usage-progress ${getUsageClass(usage.messages?.percentage || 0)}" 
+                             style="width: ${Math.min(usage.messages?.percentage || 0, 100)}%"></div>
+                    </div>
+                </div>
+                
+                <div class="usage-item">
+                    <div class="d-flex justify-content-between usage-header">
+                        <span class="usage-label">Números WhatsApp</span>
+                        <span class="usage-stats">${usage.numbers?.current || 0} / ${usage.numbers?.limit === -1 ? '∞' : usage.numbers?.limit || 0}</span>
+                    </div>
+                    <div class="usage-bar">
+                        <div class="usage-progress ${getUsageClass(usage.numbers?.percentage || 0)}" 
+                             style="width: ${Math.min(usage.numbers?.percentage || 0, 100)}%"></div>
+                    </div>
+                </div>
+            `;
+
+            // Update period
+            if (usage.period) {
+                const start = new Date(usage.period.start).toLocaleDateString('pt-BR');
+                const end = new Date(usage.period.end).toLocaleDateString('pt-BR');
+                document.getElementById('usagePeriod').textContent = `Período: ${start} - ${end}`;
+            }
+        }
+
+        // Get usage class for styling
+        function getUsageClass(percentage) {
+            if (percentage >= 90) return 'danger';
+            if (percentage >= 75) return 'warning';
+            return '';
+        }
+
+        // Load payment history
+        async function loadPaymentHistory() {
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/billing/payment-history', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    updatePaymentHistoryDisplay(data.payments || []);
+                }
+            } catch (error) {
+                console.error('Error loading payment history:', error);
+            }
+        }
+
+        // Update payment history display
+        function updatePaymentHistoryDisplay(payments) {
+            const tbody = document.getElementById('paymentTableBody');
+            
+            if (payments.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Nenhum pagamento encontrado</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = payments.map(payment => `
+                <tr>
+                    <td>${new Date(payment.created_at).toLocaleDateString('pt-BR')}</td>
+                    <td>${payment.description || 'Assinatura UBS'}</td>
+                    <td>R$ ${(payment.amount / 100).toFixed(2)}</td>
+                    <td>
+                        <span class="status-badge ${payment.status}">
+                            ${getPaymentStatusText(payment.status)}
+                        </span>
+                    </td>
+                    <td>
+                        ${payment.hosted_invoice_url ? 
+                            `<a href="${payment.hosted_invoice_url}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-external-link-alt"></i>
+                            </a>` : 
+                            '-'
+                        }
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Get payment status text
+        function getPaymentStatusText(status) {
+            const statusMap = {
+                'succeeded': 'Pago',
+                'pending': 'Pendente',
+                'failed': 'Falhou',
+                'canceled': 'Cancelado',
+                'refunded': 'Reembolsado'
+            };
+            return statusMap[status] || status;
+        }
+
+        // Open Stripe billing portal
+        async function openBillingPortal() {
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/billing/create-portal', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        returnUrl: window.location.href
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.url) {
+                    window.open(data.url, '_blank');
+                } else {
+                    showAlert('Erro ao abrir portal de pagamento.', 'danger');
+                }
+            } catch (error) {
+                console.error('Error opening billing portal:', error);
+                showAlert('Erro de conexão.', 'danger');
+            }
+        }
+
+        // Show change plan modal
+        function showChangePlanModal() {
+            // Load available plans
+            loadAvailablePlans();
+            new bootstrap.Modal(document.getElementById('changePlanModal')).show();
+        }
+
+        // Load available plans
+        async function loadAvailablePlans() {
+            try {
+                const response = await fetch('/api/billing/plans');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const container = document.getElementById('planOptions');
+                    const currentPlanId = currentSubscription?.plan?.id;
+                    
+                    container.innerHTML = data.plans.map(plan => `
+                        <div class="plan-option ${plan.id === currentPlanId ? 'disabled' : ''}" 
+                             data-plan="${plan.id}" 
+                             style="border: 2px solid var(--border-color); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; cursor: ${plan.id === currentPlanId ? 'not-allowed' : 'pointer'}; opacity: ${plan.id === currentPlanId ? '0.5' : '1'};">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5>${plan.name} ${plan.id === currentPlanId ? '(Atual)' : ''}</h5>
+                                    <div class="text-primary h4">R$ ${(plan.price / 100).toFixed(0)}/mês</div>
+                                </div>
+                                <div>
+                                    <input type="radio" name="newPlan" value="${plan.id}" 
+                                           ${plan.id === currentPlanId ? 'disabled' : ''}>
+                                </div>
+                            </div>
+                            <ul class="list-unstyled mt-2">
+                                ${plan.features.map(feature => `<li><i class="fas fa-check text-success me-2"></i>${feature}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `).join('');
+                    
+                    // Add click handlers
+                    container.querySelectorAll('.plan-option:not(.disabled)').forEach(option => {
+                        option.addEventListener('click', function() {
+                            container.querySelectorAll('.plan-option').forEach(p => p.style.borderColor = 'var(--border-color)');
+                            this.style.borderColor = 'var(--primary-color)';
+                            this.querySelector('input[type="radio"]').checked = true;
+                            selectedNewPlan = this.dataset.plan;
+                        });
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading plans:', error);
+            }
+        }
+
+        // Change plan
+        async function changePlan() {
+            if (!selectedNewPlan) {
+                showAlert('Selecione um novo plano.', 'warning');
+                return;
+            }
+
+            const btn = document.getElementById('changePlanBtn');
+            const spinner = document.getElementById('changePlanSpinner');
+            
+            btn.disabled = true;
+            spinner.style.display = 'inline-block';
+
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/billing/change-plan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        newPlanId: selectedNewPlan
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('Plano alterado com sucesso!', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('changePlanModal')).hide();
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showAlert(data.message || 'Erro ao alterar plano.', 'danger');
+                }
+            } catch (error) {
+                console.error('Error changing plan:', error);
+                showAlert('Erro de conexão.', 'danger');
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+            }
+        }
+
+        // Show cancel modal
+        function showCancelModal() {
+            new bootstrap.Modal(document.getElementById('cancelModal')).show();
+        }
+
+        // Cancel subscription
+        async function cancelSubscription() {
+            const reason = document.getElementById('cancellationReason').value;
+            const immediately = document.getElementById('cancelImmediately').checked;
+            
+            const btn = document.getElementById('confirmCancelBtn');
+            const spinner = document.getElementById('cancelSpinner');
+            
+            btn.disabled = true;
+            spinner.style.display = 'inline-block';
+
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/billing/cancel-subscription', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        reason,
+                        immediately
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(immediately ? 'Assinatura cancelada imediatamente.' : 'Assinatura será cancelada ao final do período.', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('cancelModal')).hide();
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showAlert(data.message || 'Erro ao cancelar assinatura.', 'danger');
+                }
+            } catch (error) {
+                console.error('Error canceling subscription:', error);
+                showAlert('Erro de conexão.', 'danger');
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+            }
+        }
+
+        // Reactivate subscription
+        async function reactivateSubscription() {
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/billing/reactivate-subscription', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('Assinatura reativada com sucesso!', 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showAlert(data.message || 'Erro ao reativar assinatura.', 'danger');
+                }
+            } catch (error) {
+                console.error('Error reactivating subscription:', error);
+                showAlert('Erro de conexão.', 'danger');
+            }
+        }
+
+        // Download invoices (placeholder)
+        function downloadInvoices() {
+            showAlert('Funcionalidade em desenvolvimento.', 'info');
+        }
+
+        // Utility functions
+        function showAlert(message, type = 'info') {
+            const alertContainer = document.getElementById('alertContainer');
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            alertContainer.appendChild(alertDiv);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+
+        function logout() {
+            localStorage.removeItem('ubs_token');
+            localStorage.removeItem('ubs_user');
+            window.location.href = '/login.html';
+        }
+    </script>
+</body>
+</html>

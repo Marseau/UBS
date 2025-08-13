@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar Conta - UBS | Universal Booking System</title>
+    <meta name="description" content="Crie sua conta no UBS e automatize seus agendamentos com IA para WhatsApp em minutos.">
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --ubs-primary: #2D5A9B;
+            --ubs-primary-light: #4A7BC8;
+            --ubs-primary-dark: #1E3F6B;
+            --ubs-secondary: #F8F9FA;
+            --ubs-accent: #28A745;
+            --ubs-warning: #ffc107;
+            --ubs-danger: #dc3545;
+            --ubs-info: #17a2b8;
+            --ubs-text-dark: #2C3E50;
+            --ubs-text-light: #6C757D;
+            --ubs-border: #E9ECEF;
+            --ubs-shadow: 0 4px 20px rgba(45, 90, 155, 0.15);
+            --ubs-shadow-lg: 0 10px 40px rgba(45, 90, 155, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--ubs-primary) 0%, var(--ubs-primary-light) 100%);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Background Pattern */
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+                              radial-gradient(circle at 75% 75%, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .register-container {
+            max-width: 700px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .register-card {
+            background: white;
+            border-radius: 24px;
+            padding: 3rem;
+            box-shadow: var(--ubs-shadow-lg);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .register-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: linear-gradient(90deg, var(--ubs-primary), var(--ubs-primary-light), var(--ubs-accent));
+        }
+
+        /* Logo Section */
+        .logo-section {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .logo-image-large {
+            height: 80px;
+            width: auto;
+            object-fit: contain;
+        }
+
+        .logo-subtitle {
+            color: var(--ubs-text-light);
+            font-size: 1rem;
+            font-weight: 500;
+            margin-top: 0.5rem;
+        }
+
+        /* Step Indicator */
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 2.5rem;
+            position: relative;
+        }
+
+        .step-indicator::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 20%;
+            right: 20%;
+            height: 2px;
+            background: var(--ubs-border);
+            z-index: 1;
+        }
+
+        .step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+            background: white;
+            padding: 0 1rem;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--ubs-border);
+            color: var(--ubs-text-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            transition: all 0.3s ease;
+            border: 3px solid white;
+            box-shadow: var(--ubs-shadow);
+        }
+
+        .step.active .step-circle {
+            background: var(--ubs-primary);
+            color: white;
+        }
+
+        .step.completed .step-circle {
+            background: var(--ubs-accent);
+            color: white;
+        }
+
+        .step-text {
+            font-size: 0.9rem;
+            color: var(--ubs-text-light);
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .step.active .step-text {
+            color: var(--ubs-primary);
+        }
+
+        .step.completed .step-text {
+            color: var(--ubs-accent);
+        }
+
+        /* Form Steps */
+        .form-step {
+            display: none;
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .form-step.active {
+            display: block;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Form Controls */
+        .form-floating {
+            margin-bottom: 1.5rem;
+            position: relative;
+        }
+
+        .form-floating > .form-control,
+        .form-floating > .form-select {
+            border: 2px solid var(--ubs-border);
+            border-radius: 16px;
+            padding: 1.25rem 1rem;
+            height: auto;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: rgba(248, 249, 250, 0.5);
+        }
+
+        .form-floating > .form-control:focus,
+        .form-floating > .form-select:focus {
+            border-color: var(--ubs-primary);
+            box-shadow: 0 0 0 0.25rem rgba(45, 90, 155, 0.1);
+            background: white;
+        }
+
+        .form-floating > label {
+            padding: 1.25rem 1rem;
+            color: var(--ubs-text-light);
+            font-weight: 500;
+        }
+
+        .form-floating > .form-control:focus ~ label,
+        .form-floating > .form-control:not(:placeholder-shown) ~ label {
+            color: var(--ubs-primary);
+        }
+
+        /* Buttons */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--ubs-primary), var(--ubs-primary-light));
+            border: none;
+            padding: 1.25rem 2rem;
+            border-radius: 16px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            width: 100%;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--ubs-primary-dark), var(--ubs-primary));
+            transform: translateY(-3px);
+            box-shadow: var(--ubs-shadow-lg);
+        }
+
+        .btn-primary:disabled {
+            background: linear-gradient(135deg, var(--ubs-text-light), #95a5a6);
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: var(--ubs-border);
+            color: var(--ubs-text-dark);
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            background: #dee2e6;
+            color: var(--ubs-text-dark);
+            transform: translateY(-2px);
+        }
+
+        /* Plan Selection */
+        .plan-selection {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .plan-card {
+            border: 2px solid var(--ubs-border);
+            border-radius: 20px;
+            padding: 2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            background: white;
+        }
+
+        .plan-card:hover {
+            border-color: var(--ubs-primary-light);
+            box-shadow: var(--ubs-shadow);
+            transform: translateY(-5px);
+        }
+
+        .plan-card.selected {
+            border-color: var(--ubs-primary);
+            background: linear-gradient(135deg, rgba(45, 90, 155, 0.05), rgba(74, 123, 200, 0.05));
+            transform: translateY(-5px);
+            box-shadow: var(--ubs-shadow-lg);
+        }
+
+        .plan-card.popular {
+            border-color: var(--ubs-accent);
+        }
+
+        .plan-badge {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, var(--ubs-accent), #20c997);
+            color: white;
+            padding: 0.5rem 1.5rem;
+            border-radius: 25px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: var(--ubs-shadow);
+        }
+
+        .plan-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .plan-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--ubs-text-dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .plan-price {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--ubs-primary), var(--ubs-primary-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .plan-price small {
+            font-size: 1rem;
+            color: var(--ubs-text-light);
+            font-weight: 500;
+        }
+
+        .plan-features {
+            list-style: none;
+            padding: 0;
+        }
+
+        .plan-features li {
+            padding: 0.75rem 0;
+            color: var(--ubs-text-light);
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .plan-features li i {
+            color: var(--ubs-accent);
+            font-size: 1.1rem;
+        }
+
+        /* Domain Selection */
+        .domain-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .domain-option {
+            border: 2px solid var(--ubs-border);
+            border-radius: 16px;
+            padding: 1.5rem 1rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            background: white;
+        }
+
+        .domain-option:hover {
+            border-color: var(--ubs-primary-light);
+            box-shadow: var(--ubs-shadow);
+            transform: translateY(-3px);
+        }
+
+        .domain-option.selected {
+            border-color: var(--ubs-primary);
+            background: linear-gradient(135deg, rgba(45, 90, 155, 0.05), rgba(74, 123, 200, 0.05));
+            transform: translateY(-3px);
+        }
+
+        .domain-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--ubs-primary);
+        }
+
+        .domain-name {
+            font-weight: 700;
+            color: var(--ubs-text-dark);
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .domain-description {
+            font-size: 0.8rem;
+            color: var(--ubs-text-light);
+            line-height: 1.4;
+        }
+
+        /* Trial Notice */
+        .trial-notice {
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.1), rgba(40, 167, 69, 0.05));
+            border: 2px solid rgba(40, 167, 69, 0.3);
+            color: var(--ubs-accent);
+            padding: 1.5rem;
+            border-radius: 16px;
+            text-align: center;
+            font-weight: 600;
+            margin-bottom: 2rem;
+        }
+
+        .trial-notice i {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        /* Alerts */
+        .alert {
+            border-radius: 16px;
+            margin-bottom: 1.5rem;
+            border: none;
+            padding: 1rem 1.5rem;
+            font-weight: 500;
+        }
+
+        .alert-danger {
+            background: linear-gradient(135deg, rgba(220, 53, 69, 0.1), rgba(220, 53, 69, 0.05));
+            color: var(--ubs-danger);
+            border-left: 4px solid var(--ubs-danger);
+        }
+
+        .alert-success {
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.1), rgba(40, 167, 69, 0.05));
+            color: var(--ubs-accent);
+            border-left: 4px solid var(--ubs-accent);
+        }
+
+        /* Login Link */
+        .login-section {
+            text-align: center;
+            padding: 2rem;
+            background: linear-gradient(135deg, rgba(45, 90, 155, 0.05), rgba(74, 123, 200, 0.05));
+            border-radius: 16px;
+            margin-top: 2rem;
+            border: 1px solid rgba(45, 90, 155, 0.1);
+        }
+
+        .login-section p {
+            margin: 0 0 1rem 0;
+            color: var(--ubs-text-light);
+            font-weight: 500;
+        }
+
+        .login-section a {
+            color: var(--ubs-primary);
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            display: inline-block;
+        }
+
+        .login-section a:hover {
+            color: white;
+            background: var(--ubs-primary);
+            transform: translateY(-2px);
+        }
+
+        /* Navigation Buttons */
+        .step-navigation {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .step-navigation .btn {
+            flex: 1;
+        }
+
+        /* Loading States */
+        .loading-spinner {
+            display: none;
+            margin-right: 0.5rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem 0.5rem;
+            }
+
+            .register-card {
+                padding: 2rem 1.5rem;
+                border-radius: 20px;
+            }
+
+            .logo-image-large {
+                height: 60px;
+            }
+
+            .step-indicator {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .step-indicator::before {
+                display: none;
+            }
+
+            .step {
+                flex-direction: row;
+                justify-content: center;
+                gap: 1rem;
+            }
+
+            .plan-selection {
+                grid-template-columns: 1fr;
+            }
+
+            .domain-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .step-navigation {
+                flex-direction: column;
+            }
+        }
+
+        /* Accessibility */
+        .form-control:focus,
+        .btn:focus,
+        a:focus {
+            outline: 2px solid var(--ubs-primary);
+            outline-offset: 2px;
+        }
+
+        /* High Contrast Support */
+        @media (prefers-contrast: high) {
+            .register-card {
+                border: 2px solid var(--ubs-primary);
+            }
+            
+            .form-floating > .form-control {
+                border-width: 3px;
+            }
+        }
+
+        /* Reduced Motion Support */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="register-container">
+        <div class="register-card">
+            <!-- Logo Section -->
+            <div class="logo-section">
+                <div class="logo-container">
+                    <picture>
+                        <source srcset="assets/images/optimized/UBS_Nac.webp" type="image/webp">
+                        <img src="assets/images/UBS_Nac.png" alt="UBS - Universal Booking System" class="logo-image-large">
+                    </picture>
+                </div>
+                <div class="logo-subtitle">Universal Booking System</div>
+            </div>
+
+            <!-- Step Indicator -->
+            <div class="step-indicator">
+                <div class="step active" id="step1">
+                    <div class="step-circle">1</div>
+                    <div class="step-text">Dados Pessoais</div>
+                </div>
+                <div class="step" id="step2">
+                    <div class="step-circle">2</div>
+                    <div class="step-text">Empresa</div>
+                </div>
+                <div class="step" id="step3">
+                    <div class="step-circle">3</div>
+                    <div class="step-text">Plano</div>
+                </div>
+            </div>
+
+            <!-- Alert Messages -->
+            <div id="alert-placeholder"></div>
+
+            <!-- Registration Form -->
+            <form id="register-form" novalidate>
+                <!-- Step 1: Personal Data -->
+                <div class="form-step active" id="form-step-1">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="firstName" placeholder="Nome" required>
+                                <label for="firstName">
+                                    <i class="fas fa-user me-2"></i>Nome
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="lastName" placeholder="Sobrenome" required>
+                                <label for="lastName">
+                                    <i class="fas fa-user me-2"></i>Sobrenome
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-floating">
+                        <input type="email" class="form-control" id="email" placeholder="Email" required>
+                        <label for="email">
+                            <i class="fas fa-envelope me-2"></i>Email
+                        </label>
+                    </div>
+
+                    <div class="form-floating">
+                        <input type="tel" class="form-control" id="phone" placeholder="Telefone" required>
+                        <label for="phone">
+                            <i class="fas fa-phone me-2"></i>Telefone
+                        </label>
+                    </div>
+
+                    <div class="form-floating">
+                        <input type="password" class="form-control" id="password" placeholder="Senha" required>
+                        <label for="password">
+                            <i class="fas fa-lock me-2"></i>Senha
+                        </label>
+                    </div>
+
+                    <div class="form-floating">
+                        <input type="password" class="form-control" id="confirmPassword" placeholder="Confirmar Senha" required>
+                        <label for="confirmPassword">
+                            <i class="fas fa-lock me-2"></i>Confirmar Senha
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Step 2: Company Data -->
+                <div class="form-step" id="form-step-2">
+                    <div class="form-floating">
+                        <input type="text" class="form-control" id="companyName" placeholder="Nome da Empresa" required>
+                        <label for="companyName">
+                            <i class="fas fa-building me-2"></i>Nome da Empresa
+                        </label>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="cnpj" placeholder="CNPJ">
+                                <label for="cnpj">
+                                    <i class="fas fa-id-card me-2"></i>CNPJ (opcional)
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="companyPhone" placeholder="Telefone da Empresa">
+                                <label for="companyPhone">
+                                    <i class="fas fa-phone me-2"></i>Telefone da Empresa
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-floating">
+                        <input type="text" class="form-control" id="address" placeholder="Endereço">
+                        <label for="address">
+                            <i class="fas fa-map-marker-alt me-2"></i>Endereço
+                        </label>
+                    </div>
+
+                    <!-- Domain Selection -->
+                    <h5 class="mb-3">Selecione o segmento da sua empresa:</h5>
+                    <div class="domain-grid">
+                        <div class="domain-option" data-domain="beauty">
+                            <div class="domain-icon">💄</div>
+                            <div class="domain-name">Beleza</div>
+                            <div class="domain-description">Salões, Estética</div>
+                        </div>
+                        <div class="domain-option" data-domain="healthcare">
+                            <div class="domain-icon">🏥</div>
+                            <div class="domain-name">Saúde</div>
+                            <div class="domain-description">Clínicas, Consultórios</div>
+                        </div>
+                        <div class="domain-option" data-domain="legal">
+                            <div class="domain-icon">⚖️</div>
+                            <div class="domain-name">Advocacia</div>
+                            <div class="domain-description">Escritórios de Advocacia</div>
+                        </div>
+                        <div class="domain-option" data-domain="education">
+                            <div class="domain-icon">📚</div>
+                            <div class="domain-name">Educação</div>
+                            <div class="domain-description">Escolas, Cursos</div>
+                        </div>
+                        <div class="domain-option" data-domain="sports">
+                            <div class="domain-icon">🏃</div>
+                            <div class="domain-name">Esportes</div>
+                            <div class="domain-description">Academias, Personal</div>
+                        </div>
+                        <div class="domain-option" data-domain="consulting">
+                            <div class="domain-icon">💼</div>
+                            <div class="domain-name">Consultoria</div>
+                            <div class="domain-description">Consultorias Diversas</div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="selectedDomain" required>
+                </div>
+
+                <!-- Step 3: Plan Selection -->
+                <div class="form-step" id="form-step-3">
+                    <div class="trial-notice">
+                        <i class="fas fa-gift"></i>
+                        <strong>7 dias grátis!</strong> Teste todas as funcionalidades sem compromisso
+                    </div>
+
+                    <div class="plan-selection">
+                        <div class="plan-card" data-plan="starter">
+                            <div class="plan-header">
+                                <div class="plan-name">Starter</div>
+                                <div class="plan-price">R$ 49<small>/mês</small></div>
+                            </div>
+                            <ul class="plan-features">
+                                <li><i class="fas fa-check"></i> Até 100 agendamentos/mês</li>
+                                <li><i class="fas fa-check"></i> WhatsApp integrado</li>
+                                <li><i class="fas fa-check"></i> IA básica</li>
+                                <li><i class="fas fa-check"></i> Suporte por email</li>
+                                <li><i class="fas fa-check"></i> 1 usuário</li>
+                            </ul>
+                        </div>
+
+                        <div class="plan-card popular" data-plan="professional">
+                            <div class="plan-badge">Mais Popular</div>
+                            <div class="plan-header">
+                                <div class="plan-name">Professional</div>
+                                <div class="plan-price">R$ 99<small>/mês</small></div>
+                            </div>
+                            <ul class="plan-features">
+                                <li><i class="fas fa-check"></i> Agendamentos ilimitados</li>
+                                <li><i class="fas fa-check"></i> WhatsApp + SMS</li>
+                                <li><i class="fas fa-check"></i> IA avançada</li>
+                                <li><i class="fas fa-check"></i> Analytics completo</li>
+                                <li><i class="fas fa-check"></i> Até 5 usuários</li>
+                                <li><i class="fas fa-check"></i> Suporte prioritário</li>
+                            </ul>
+                        </div>
+
+                        <div class="plan-card" data-plan="enterprise">
+                            <div class="plan-header">
+                                <div class="plan-name">Enterprise</div>
+                                <div class="plan-price">R$ 199<small>/mês</small></div>
+                            </div>
+                            <ul class="plan-features">
+                                <li><i class="fas fa-check"></i> Recursos ilimitados</li>
+                                <li><i class="fas fa-check"></i> Multi-filiais</li>
+                                <li><i class="fas fa-check"></i> IA personalizada</li>
+                                <li><i class="fas fa-check"></i> API completa</li>
+                                <li><i class="fas fa-check"></i> Usuários ilimitados</li>
+                                <li><i class="fas fa-check"></i> Suporte 24/7</li>
+                                <li><i class="fas fa-check"></i> Gerente dedicado</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <input type="hidden" id="selectedPlan" required>
+                </div>
+
+                <!-- Navigation Buttons -->
+                <div class="step-navigation">
+                    <button type="button" class="btn btn-secondary" id="prevBtn" onclick="previousStep()" style="display: none;">
+                        <i class="fas fa-arrow-left me-2"></i>Anterior
+                    </button>
+                    <button type="button" class="btn btn-primary" id="nextBtn" onclick="nextStep()">
+                        Próximo<i class="fas fa-arrow-right ms-2"></i>
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn" style="display: none;">
+                        <i class="fas fa-spinner fa-spin loading-spinner" id="loadingSpinner"></i>
+                        <i class="fas fa-rocket me-2"></i>Criar Conta
+                    </button>
+                </div>
+            </form>
+
+            <!-- Login Section -->
+            <div class="login-section">
+                <p><i class="fas fa-sign-in-alt me-2"></i>Já tem uma conta?</p>
+                <a href="/login-standardized.html">
+                    <i class="fas fa-arrow-right me-2"></i>Fazer Login
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentStep = 1;
+        let selectedDomain = '';
+        let selectedPlan = '';
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeDomainSelection();
+            initializePlanSelection();
+            initializeForm();
+        });
+
+        // Initialize domain selection
+        function initializeDomainSelection() {
+            document.querySelectorAll('.domain-option').forEach(option => {
+                option.addEventListener('click', function() {
+                    document.querySelectorAll('.domain-option').forEach(opt => opt.classList.remove('selected'));
+                    this.classList.add('selected');
+                    selectedDomain = this.dataset.domain;
+                    document.getElementById('selectedDomain').value = selectedDomain;
+                });
+            });
+        }
+
+        // Initialize plan selection
+        function initializePlanSelection() {
+            document.querySelectorAll('.plan-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
+                    this.classList.add('selected');
+                    selectedPlan = this.dataset.plan;
+                    document.getElementById('selectedPlan').value = selectedPlan;
+                });
+            });
+        }
+
+        // Initialize form
+        function initializeForm() {
+            const form = document.getElementById('register-form');
+            form.addEventListener('submit', handleSubmit);
+        }
+
+        // Navigate to next step
+        function nextStep() {
+            if (validateCurrentStep()) {
+                if (currentStep < 3) {
+                    currentStep++;
+                    updateStepDisplay();
+                }
+            }
+        }
+
+        // Navigate to previous step
+        function previousStep() {
+            if (currentStep > 1) {
+                currentStep--;
+                updateStepDisplay();
+            }
+        }
+
+        // Update step display
+        function updateStepDisplay() {
+            // Update step indicator
+            document.querySelectorAll('.step').forEach((step, index) => {
+                step.classList.remove('active', 'completed');
+                if (index + 1 < currentStep) {
+                    step.classList.add('completed');
+                } else if (index + 1 === currentStep) {
+                    step.classList.add('active');
+                }
+            });
+
+            // Update form steps
+            document.querySelectorAll('.form-step').forEach((step, index) => {
+                step.classList.remove('active');
+                if (index + 1 === currentStep) {
+                    step.classList.add('active');
+                }
+            });
+
+            // Update navigation buttons
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const submitBtn = document.getElementById('submitBtn');
+
+            prevBtn.style.display = currentStep > 1 ? 'block' : 'none';
+            
+            if (currentStep === 3) {
+                nextBtn.style.display = 'none';
+                submitBtn.style.display = 'block';
+            } else {
+                nextBtn.style.display = 'block';
+                submitBtn.style.display = 'none';
+            }
+        }
+
+        // Validate current step
+        function validateCurrentStep() {
+            const currentStepElement = document.getElementById(`form-step-${currentStep}`);
+            const requiredFields = currentStepElement.querySelectorAll('input[required]');
+            let isValid = true;
+
+            requiredFields.forEach(field => {
+                if (!field.value.trim()) {
+                    field.classList.add('is-invalid');
+                    isValid = false;
+                } else {
+                    field.classList.remove('is-invalid');
+                }
+            });
+
+            // Additional validations
+            if (currentStep === 1) {
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                const confirmPassword = document.getElementById('confirmPassword').value;
+
+                if (!isValidEmail(email)) {
+                    showAlert('Por favor, insira um email válido', 'danger');
+                    return false;
+                }
+
+                if (password.length < 6) {
+                    showAlert('A senha deve ter pelo menos 6 caracteres', 'danger');
+                    return false;
+                }
+
+                if (password !== confirmPassword) {
+                    showAlert('As senhas não coincidem', 'danger');
+                    return false;
+                }
+            }
+
+            if (currentStep === 2 && !selectedDomain) {
+                showAlert('Por favor, selecione o segmento da sua empresa', 'danger');
+                return false;
+            }
+
+            if (currentStep === 3 && !selectedPlan) {
+                showAlert('Por favor, selecione um plano', 'danger');
+                return false;
+            }
+
+            if (!isValid) {
+                showAlert('Por favor, preencha todos os campos obrigatórios', 'danger');
+            }
+
+            return isValid;
+        }
+
+        // Handle form submission
+        async function handleSubmit(event) {
+            event.preventDefault();
+
+            if (!validateCurrentStep()) {
+                return;
+            }
+
+            const submitBtn = document.getElementById('submitBtn');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+
+            // Disable button and show loading
+            submitBtn.disabled = true;
+            loadingSpinner.style.display = 'inline-block';
+
+            try {
+                const formData = {
+                    firstName: document.getElementById('firstName').value,
+                    lastName: document.getElementById('lastName').value,
+                    email: document.getElementById('email').value,
+                    phone: document.getElementById('phone').value,
+                    password: document.getElementById('password').value,
+                    companyName: document.getElementById('companyName').value,
+                    cnpj: document.getElementById('cnpj').value,
+                    companyPhone: document.getElementById('companyPhone').value,
+                    address: document.getElementById('address').value,
+                    domain: selectedDomain,
+                    plan: selectedPlan
+                };
+
+                console.log('🚀 Enviando dados de registro:', formData);
+
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showAlert('Conta criada com sucesso! Redirecionando...', 'success');
+                    
+                    // Save token if provided
+                    if (data.token) {
+                        localStorage.setItem('ubs_token', data.token);
+                        localStorage.setItem('adminToken', data.token);
+                        
+                        if (data.user) {
+                            localStorage.setItem('ubs_user_data', JSON.stringify(data.user));
+                        }
+                    }
+
+                    // Redirect after success
+                    setTimeout(() => {
+                        window.location.href = '/dashboard-standardized.html';
+                    }, 2000);
+
+                } else {
+                    const errorMessage = data.message || data.error || 'Erro ao criar conta';
+                    showAlert(errorMessage, 'danger');
+                }
+
+            } catch (error) {
+                console.error('❌ Erro no registro:', error);
+                showAlert('Erro ao criar conta. Tente novamente.', 'danger');
+            } finally {
+                // Re-enable button
+                submitBtn.disabled = false;
+                loadingSpinner.style.display = 'none';
+            }
+        }
+
+        // Show alert
+        function showAlert(message, type) {
+            const alertPlaceholder = document.getElementById('alert-placeholder');
+            const alertId = 'alert-' + Date.now();
+            
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = [
+                `<div class="alert alert-${type} alert-dismissible fade show" id="${alertId}" role="alert">`,
+                `   <div><i class="fas fa-${getAlertIcon(type)} me-2"></i>${message}</div>`,
+                '   <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>',
+                '</div>'
+            ].join('');
+            
+            alertPlaceholder.appendChild(wrapper);
+            
+            // Auto-dismiss success messages
+            if (type === 'success') {
+                setTimeout(() => {
+                    const alert = document.getElementById(alertId);
+                    if (alert) {
+                        const bsAlert = new bootstrap.Alert(alert);
+                        bsAlert.close();
+                    }
+                }, 3000);
+            }
+        }
+
+        // Get alert icon
+        function getAlertIcon(type) {
+            const icons = {
+                success: 'check-circle',
+                danger: 'exclamation-triangle',
+                warning: 'exclamation-triangle',
+                info: 'info-circle'
+            };
+            return icons[type] || 'info-circle';
+        }
+
+        // Validate email
+        function isValidEmail(email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return emailRegex.test(email);
+        }
+
+        // Initialize with first step
+        updateStepDisplay();
+    </script>
+</body>
+</html> 

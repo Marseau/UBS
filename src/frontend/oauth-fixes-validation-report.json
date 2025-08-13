@@ -1,0 +1,373 @@
+{
+  "timestamp": "2025-07-27T14:37:39.617Z",
+  "summary": {
+    "totalTests": 5,
+    "passed": 2,
+    "failed": 3,
+    "successRate": "40.00"
+  },
+  "errors": [
+    "Settings Standardized: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.user-avatar-wrapper') to be visible\u001b[22m\n",
+    "Appointments Standardized: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.btn-primary') to be visible\u001b[22m\n\u001b[2m    25 × locator resolved to 2 elements. Proceeding with the first one: <button type=\"button\" class=\"btn btn-primary\" onclick=\"editAppointmentFromView()\">…</button>\u001b[22m\n",
+    "Customers Standardized: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.btn-primary') to be visible\u001b[22m\n\u001b[2m    25 × locator resolved to 2 elements. Proceeding with the first one: <button type=\"button\" class=\"btn btn-primary\" onclick=\"editCustomerFromView()\">…</button>\u001b[22m\n"
+  ],
+  "consoleMessages": [
+    {
+      "timestamp": "2025-07-27T14:36:56.427Z",
+      "type": "console",
+      "message": "CONSOLE [log]: 🟢 Detectado: TENANT ADMIN (via URL)"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:56.427Z",
+      "type": "console",
+      "message": "CONSOLE [warning]: ⚠️ Token não encontrado, usando dados padrão"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:56.471Z",
+      "type": "console",
+      "message": "CONSOLE [log]: 🟢 Detectado: TENANT ADMIN (via URL)"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:56.471Z",
+      "type": "console",
+      "message": "CONSOLE [warning]: ⚠️ Token não encontrado, usando dados padrão"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.742Z",
+      "type": "console",
+      "message": "CONSOLE [log]: 🟢 Detectado: TENANT ADMIN (via URL)"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.743Z",
+      "type": "console",
+      "message": "CONSOLE [warning]: ⚠️ Token não encontrado, usando dados padrão"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.865Z",
+      "type": "console",
+      "message": "CONSOLE [log]: ✅ Event listener para \"Salvar Horários\" conectado"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.888Z",
+      "type": "console",
+      "message": "CONSOLE [verbose]: [DOM] Input elements should have autocomplete attributes (suggested: \"current-password\"): (More info: https://goo.gl/9p2vKq) %o"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:13.114Z",
+      "type": "console",
+      "message": "CONSOLE [log]: 🟢 Detectado: TENANT ADMIN (via URL)"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:13.115Z",
+      "type": "console",
+      "message": "CONSOLE [warning]: ⚠️ Token não encontrado, usando dados padrão"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:13.116Z",
+      "type": "console",
+      "message": "CONSOLE [log]: 🟢 Detectado: TENANT ADMIN (via URL)"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:13.116Z",
+      "type": "console",
+      "message": "CONSOLE [warning]: ⚠️ Token não encontrado, usando dados padrão"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:26.502Z",
+      "type": "console",
+      "message": "CONSOLE [log]: 🟢 Detectado: TENANT ADMIN (via URL)"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:26.502Z",
+      "type": "console",
+      "message": "CONSOLE [warning]: ⚠️ Token não encontrado, usando dados padrão"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:26.503Z",
+      "type": "console",
+      "message": "CONSOLE [log]: 🟢 Detectado: TENANT ADMIN (via URL)"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:26.503Z",
+      "type": "console",
+      "message": "CONSOLE [warning]: ⚠️ Token não encontrado, usando dados padrão"
+    }
+  ],
+  "detailedResults": [
+    {
+      "timestamp": "2025-07-27T14:36:42.511Z",
+      "type": "info",
+      "message": "🚀 Iniciando validação REAL dos fixes OAuth2..."
+    },
+    {
+      "timestamp": "2025-07-27T14:36:44.425Z",
+      "type": "info",
+      "message": "\n📄 Testando página: Authentication Flow"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:44.425Z",
+      "type": "info",
+      "message": "🔗 URL: http://localhost:3000/login-standardized.html"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:54.285Z",
+      "type": "info",
+      "message": "🔍 Testando fluxo de autenticação..."
+    },
+    {
+      "timestamp": "2025-07-27T14:36:54.290Z",
+      "type": "info",
+      "message": "✅ Campos de login encontrados"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:56.332Z",
+      "type": "info",
+      "message": "✅ Campos preenchidos para teste"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:56.332Z",
+      "type": "success",
+      "message": "✅ Authentication Flow - PASSOU"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:56.332Z",
+      "type": "info",
+      "message": "\n📄 Testando página: Dashboard Tenant Admin"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:56.333Z",
+      "type": "info",
+      "message": "🔗 URL: http://localhost:3000/dashboard-tenant-admin.html"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:56.427Z",
+      "type": "console",
+      "message": "CONSOLE [log]: 🟢 Detectado: TENANT ADMIN (via URL)"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:56.427Z",
+      "type": "console",
+      "message": "CONSOLE [warning]: ⚠️ Token não encontrado, usando dados padrão"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:56.471Z",
+      "type": "console",
+      "message": "CONSOLE [log]: 🟢 Detectado: TENANT ADMIN (via URL)"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:56.471Z",
+      "type": "console",
+      "message": "CONSOLE [warning]: ⚠️ Token não encontrado, usando dados padrão"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.670Z",
+      "type": "info",
+      "message": "🔍 Verificando dashboard principal..."
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.675Z",
+      "type": "info",
+      "message": "🎯 Verificando widgets do dashboard..."
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.685Z",
+      "type": "info",
+      "message": "📊 Encontrados 2 widgets"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.685Z",
+      "type": "info",
+      "message": "🎯 Testando menu de navegação..."
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.687Z",
+      "type": "info",
+      "message": "📊 Encontrados 10 itens de navegação"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.691Z",
+      "type": "info",
+      "message": "✅ Link de navegação: Visão Geral -> dashboard-tenant-admin.html"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.693Z",
+      "type": "info",
+      "message": "✅ Link de navegação: Agendamentos -> appointments-standardized.html"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.694Z",
+      "type": "info",
+      "message": "✅ Link de navegação: Clientes -> customers-standardized.html"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.694Z",
+      "type": "success",
+      "message": "✅ Dashboard Tenant Admin - PASSOU"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.694Z",
+      "type": "info",
+      "message": "\n📄 Testando página: Settings Standardized"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.695Z",
+      "type": "info",
+      "message": "🔗 URL: http://localhost:3000/settings-standardized.html"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.742Z",
+      "type": "console",
+      "message": "CONSOLE [log]: 🟢 Detectado: TENANT ADMIN (via URL)"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.743Z",
+      "type": "console",
+      "message": "CONSOLE [warning]: ⚠️ Token não encontrado, usando dados padrão"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.769Z",
+      "type": "error",
+      "message": "CONSOLE [error]: ❌ Token não encontrado. Tentando recuperar contexto..."
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.769Z",
+      "type": "error",
+      "message": "CONSOLE [error]: ❌ Nenhum contexto válido encontrado. Redirecionando..."
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.865Z",
+      "type": "console",
+      "message": "CONSOLE [log]: ✅ Event listener para \"Salvar Horários\" conectado"
+    },
+    {
+      "timestamp": "2025-07-27T14:36:59.888Z",
+      "type": "console",
+      "message": "CONSOLE [verbose]: [DOM] Input elements should have autocomplete attributes (suggested: \"current-password\"): (More info: https://goo.gl/9p2vKq) %o"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:03.038Z",
+      "type": "info",
+      "message": "🔍 Verificando elementos da página de configurações..."
+    },
+    {
+      "timestamp": "2025-07-27T14:37:03.039Z",
+      "type": "info",
+      "message": "Título da página: Login - UBS | Universal Booking System"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:13.043Z",
+      "type": "error",
+      "message": "❌ Settings Standardized - FALHOU: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.user-avatar-wrapper') to be visible\u001b[22m\n"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:13.043Z",
+      "type": "info",
+      "message": "\n📄 Testando página: Appointments Standardized"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:13.043Z",
+      "type": "info",
+      "message": "🔗 URL: http://localhost:3000/appointments-standardized.html"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:13.114Z",
+      "type": "console",
+      "message": "CONSOLE [log]: 🟢 Detectado: TENANT ADMIN (via URL)"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:13.115Z",
+      "type": "console",
+      "message": "CONSOLE [warning]: ⚠️ Token não encontrado, usando dados padrão"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:13.116Z",
+      "type": "console",
+      "message": "CONSOLE [log]: 🟢 Detectado: TENANT ADMIN (via URL)"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:13.116Z",
+      "type": "console",
+      "message": "CONSOLE [warning]: ⚠️ Token não encontrado, usando dados padrão"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:16.434Z",
+      "type": "info",
+      "message": "🔍 Verificando página de agendamentos..."
+    },
+    {
+      "timestamp": "2025-07-27T14:37:26.434Z",
+      "type": "error",
+      "message": "❌ Appointments Standardized - FALHOU: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.btn-primary') to be visible\u001b[22m\n\u001b[2m    25 × locator resolved to 2 elements. Proceeding with the first one: <button type=\"button\" class=\"btn btn-primary\" onclick=\"editAppointmentFromView()\">…</button>\u001b[22m\n"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:26.434Z",
+      "type": "info",
+      "message": "\n📄 Testando página: Customers Standardized"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:26.434Z",
+      "type": "info",
+      "message": "🔗 URL: http://localhost:3000/customers-standardized.html"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:26.502Z",
+      "type": "console",
+      "message": "CONSOLE [log]: 🟢 Detectado: TENANT ADMIN (via URL)"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:26.502Z",
+      "type": "console",
+      "message": "CONSOLE [warning]: ⚠️ Token não encontrado, usando dados padrão"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:26.503Z",
+      "type": "console",
+      "message": "CONSOLE [log]: 🟢 Detectado: TENANT ADMIN (via URL)"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:26.503Z",
+      "type": "console",
+      "message": "CONSOLE [warning]: ⚠️ Token não encontrado, usando dados padrão"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:29.616Z",
+      "type": "info",
+      "message": "🔍 Verificando página de clientes..."
+    },
+    {
+      "timestamp": "2025-07-27T14:37:39.617Z",
+      "type": "error",
+      "message": "❌ Customers Standardized - FALHOU: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.btn-primary') to be visible\u001b[22m\n\u001b[2m    25 × locator resolved to 2 elements. Proceeding with the first one: <button type=\"button\" class=\"btn btn-primary\" onclick=\"editCustomerFromView()\">…</button>\u001b[22m\n"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:39.617Z",
+      "type": "info",
+      "message": "\n🔍 Verificando erros de console..."
+    },
+    {
+      "timestamp": "2025-07-27T14:37:39.617Z",
+      "type": "error",
+      "message": "❌ Encontrados 3 erros:"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:39.617Z",
+      "type": "error",
+      "message": "1. Settings Standardized: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.user-avatar-wrapper') to be visible\u001b[22m\n"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:39.617Z",
+      "type": "error",
+      "message": "2. Appointments Standardized: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.btn-primary') to be visible\u001b[22m\n\u001b[2m    25 × locator resolved to 2 elements. Proceeding with the first one: <button type=\"button\" class=\"btn btn-primary\" onclick=\"editAppointmentFromView()\">…</button>\u001b[22m\n"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:39.617Z",
+      "type": "error",
+      "message": "3. Customers Standardized: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.btn-primary') to be visible\u001b[22m\n\u001b[2m    25 × locator resolved to 2 elements. Proceeding with the first one: <button type=\"button\" class=\"btn btn-primary\" onclick=\"editCustomerFromView()\">…</button>\u001b[22m\n"
+    },
+    {
+      "timestamp": "2025-07-27T14:37:39.617Z",
+      "type": "info",
+      "message": "\n📊 Gerando relatório final..."
+    }
+  ]
+}

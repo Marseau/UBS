@@ -1,0 +1,68 @@
+# Monitoring Configuration for Production
+
+# Health Check Endpoint
+/health:
+  - Response time < 500ms
+  - Status code: 200
+  - Memory usage < 80%
+  - CPU usage < 80%
+
+# Critical Endpoints to Monitor
+/api/admin/dashboard:
+  - Response time < 2s
+  - Error rate < 1%
+
+/api/whatsapp/webhook:
+  - Response time < 1s
+  - Error rate < 0.1%
+
+/api/appointments:
+  - Response time < 1s
+  - Error rate < 1%
+
+# Database Monitoring
+Database:
+  - Connection pool utilization < 80%
+  - Query response time < 500ms
+  - Failed connections < 1%
+
+# Security Monitoring
+Security:
+  - Failed authentication attempts
+  - Rate limit violations
+  - Suspicious API usage patterns
+  - SSL certificate expiration
+
+# Performance Metrics
+Performance:
+  - Average response time
+  - 95th percentile response time
+  - Request throughput
+  - Error rates by endpoint
+
+# Alerts Configuration
+Alerts:
+  Critical:
+    - Service down for > 1 minute
+    - Error rate > 5% for > 5 minutes
+    - Response time > 5s for > 2 minutes
+    - Database connection failures
+    
+  Warning:
+    - Error rate > 1% for > 10 minutes
+    - Response time > 2s for > 5 minutes
+    - Memory usage > 80% for > 10 minutes
+    - CPU usage > 80% for > 10 minutes
+
+# Log Aggregation
+Logs:
+  - Application logs (INFO, WARN, ERROR)
+  - Access logs with IP filtering
+  - Security logs (authentication, authorization)
+  - Performance logs (slow queries, high memory usage)
+  
+# Notification Channels
+Notifications:
+  - Email: admin@yourdomain.com
+  - Slack: #alerts channel
+  - SMS: +1234567890 (critical only)

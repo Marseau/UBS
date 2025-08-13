@@ -1,0 +1,1416 @@
+openapi: 3.0.3
+info:
+  title: Unified Metrics API
+  description: |
+    Consolidated API for all dashboard metrics in the Universal Booking System.
+    
+    This API provides unified access to platform-wide metrics, tenant-specific analytics,
+    comparison data, and chart information through a single, consistent interface.
+    
+    ## Features
+    - **Platform Metrics**: Get comprehensive platform-wide analytics
+    - **Tenant Analytics**: Access individual tenant performance data
+    - **Comparison Tools**: Compare tenant performance against platform averages
+    - **Chart Data**: Retrieve formatted data for dashboard visualizations
+    - **Caching**: Built-in intelligent caching with configurable TTL
+    - **Rate Limiting**: 100 requests per minute per IP
+    - **Real-time Updates**: Sub-second response times with cache optimization
+
+  version: 1.0.0
+  contact:
+    name: Universal Booking System
+    url: https://github.com/Marseau/universal-booking-system
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.universalbooking.com/api/metrics
+    description: Production server
+  - url: http://localhost:3000/api/metrics
+    description: Development server
+
+paths:
+  /platform/all:
+    get:
+      summary: Get Platform Metrics
+      description: |
+        Retrieve comprehensive platform-wide metrics including MRR, active tenants,
+        revenue, appointments, and operational efficiency indicators.
+      tags:
+        - Platform Metrics
+      parameters:
+        - $ref: '#/components/parameters/PeriodQuery'
+        - $ref: '#/components/parameters/StartDateQuery'
+        - $ref: '#/components/parameters/EndDateQuery'
+        - $ref: '#/components/parameters/IncludeChartsQuery'
+        - $ref: '#/components/parameters/IncludeBreakdownQuery'
+        - $ref: '#/components/parameters/ForceRefreshQuery'
+      responses:
+        '200':
+          description: Platform metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformMetricsResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /platform/kpis:
+    get:
+      summary: Get Platform KPIs
+      description: |
+        Retrieve strategic Key Performance Indicators for super admin dashboard.
+        Includes advanced analytics, business intelligence, and risk assessment.
+      tags:
+        - Platform Metrics
+      parameters:
+        - $ref: '#/components/parameters/PeriodQuery'
+        - $ref: '#/components/parameters/StartDateQuery'
+        - $ref: '#/components/parameters/EndDateQuery'
+        - $ref: '#/components/parameters/IncludeInsightsQuery'
+        - $ref: '#/components/parameters/IncludeRiskAssessmentQuery'
+        - $ref: '#/components/parameters/ForceRefreshQuery'
+      responses:
+        '200':
+          description: Platform KPIs retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformKPIsResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /tenant/{tenantId}/metrics:
+    get:
+      summary: Get Tenant Metrics
+      description: |
+        Retrieve comprehensive metrics for a specific tenant including revenue,
+        appointments, customers, AI interactions, and business intelligence.
+      tags:
+        - Tenant Metrics
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/PeriodQuery'
+        - $ref: '#/components/parameters/StartDateQuery'
+        - $ref: '#/components/parameters/EndDateQuery'
+        - $ref: '#/components/parameters/IncludeChartsQuery'
+        - $ref: '#/components/parameters/IncludeAIMetricsQuery'
+        - $ref: '#/components/parameters/IncludeBusinessIntelligenceQuery'
+        - $ref: '#/components/parameters/ForceRefreshQuery'
+      responses:
+        '200':
+          description: Tenant metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantMetricsResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/TenantNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /tenant/{tenantId}/participation:
+    get:
+      summary: Get Tenant Participation
+      description: |
+        Retrieve tenant participation metrics showing the tenant's percentage
+        and absolute contribution to platform totals.
+      tags:
+        - Tenant Metrics
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/PeriodQuery'
+        - $ref: '#/components/parameters/StartDateQuery'
+        - $ref: '#/components/parameters/EndDateQuery'
+        - $ref: '#/components/parameters/ComparisonTypeQuery'
+        - $ref: '#/components/parameters/IncludeRankingQuery'
+        - $ref: '#/components/parameters/ForceRefreshQuery'
+      responses:
+        '200':
+          description: Tenant participation metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantParticipationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/TenantNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /comparison/{tenantId}:
+    get:
+      summary: Get Comparison Data
+      description: |
+        Compare tenant performance against platform averages and benchmarks.
+        Provides detailed analysis and recommendations.
+      tags:
+        - Comparison
+      parameters:
+        - $ref: '#/components/parameters/TenantIdPath'
+        - $ref: '#/components/parameters/PeriodQuery'
+        - $ref: '#/components/parameters/StartDateQuery'
+        - $ref: '#/components/parameters/EndDateQuery'
+        - $ref: '#/components/parameters/MetricsQuery'
+        - $ref: '#/components/parameters/IncludeAnalysisQuery'
+        - $ref: '#/components/parameters/ForceRefreshQuery'
+      responses:
+        '200':
+          description: Comparison data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/TenantNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /charts/{chartType}:
+    get:
+      summary: Get Chart Data
+      description: |
+        Retrieve formatted data for dashboard charts and visualizations.
+        Supports multiple chart types with customizable configurations.
+      tags:
+        - Charts
+      parameters:
+        - $ref: '#/components/parameters/ChartTypePath'
+        - $ref: '#/components/parameters/PeriodQuery'
+        - $ref: '#/components/parameters/StartDateQuery'
+        - $ref: '#/components/parameters/EndDateQuery'
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/ChartOptionsQuery'
+        - $ref: '#/components/parameters/ForceRefreshQuery'
+      responses:
+        '200':
+          description: Chart data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChartDataResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /calculation/trigger:
+    post:
+      summary: Trigger Metrics Calculation
+      description: |
+        Manually trigger recalculation of metrics data. Useful for updating
+        cached data or forcing fresh calculations.
+      tags:
+        - Administration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CalculationRequest'
+      responses:
+        '200':
+          description: Calculation triggered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /status:
+    get:
+      summary: Get System Status
+      description: |
+        Retrieve comprehensive system health and status information including
+        service availability, performance metrics, and cache statistics.
+      tags:
+        - Administration
+      parameters:
+        - $ref: '#/components/parameters/IncludeCacheStatsQuery'
+        - $ref: '#/components/parameters/IncludePerformanceMetricsQuery'
+      responses:
+        '200':
+          description: System status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /cache/clear:
+    delete:
+      summary: Clear Cache
+      description: |
+        Clear cached metrics data. Can clear all cache or specific patterns.
+      tags:
+        - Administration
+      parameters:
+        - $ref: '#/components/parameters/CachePatternQuery'
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Cache cleared successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CacheClearResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+components:
+  schemas:
+    KPIValue:
+      type: object
+      properties:
+        value:
+          type: number
+          description: Current numerical value
+        display_value:
+          type: string
+          description: Formatted display value
+        previous_value:
+          type: number
+          description: Previous period value for comparison
+        change_percentage:
+          type: number
+          description: Percentage change from previous period
+        trend:
+          type: string
+          enum: [up, down, stable]
+          description: Trend direction
+        unit:
+          type: string
+          description: Unit of measurement
+        last_updated:
+          type: string
+          format: date-time
+          description: Timestamp of last calculation
+
+    TenantInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Tenant unique identifier
+        name:
+          type: string
+          description: Tenant display name
+        domain:
+          type: string
+          enum: [healthcare, beauty, legal, education, sports, consulting, other]
+          description: Business domain
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+          description: Tenant status
+        created_at:
+          type: string
+          format: date-time
+          description: Creation date
+        last_activity:
+          type: string
+          format: date-time
+          description: Last activity date
+
+    PlatformMetricsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            platform_metrics:
+              type: object
+              properties:
+                mrr:
+                  $ref: '#/components/schemas/KPIValue'
+                active_tenants:
+                  $ref: '#/components/schemas/KPIValue'
+                total_revenue:
+                  $ref: '#/components/schemas/KPIValue'
+                total_appointments:
+                  $ref: '#/components/schemas/KPIValue'
+                total_customers:
+                  $ref: '#/components/schemas/KPIValue'
+                revenue_usage_ratio:
+                  $ref: '#/components/schemas/KPIValue'
+                operational_efficiency:
+                  $ref: '#/components/schemas/KPIValue'
+                spam_rate:
+                  $ref: '#/components/schemas/KPIValue'
+                cancellation_rate:
+                  $ref: '#/components/schemas/KPIValue'
+                ai_interactions:
+                  $ref: '#/components/schemas/KPIValue'
+            period_comparison:
+              type: object
+              properties:
+                mrr_growth:
+                  type: number
+                tenants_growth:
+                  type: number
+                revenue_growth:
+                  type: number
+                appointments_growth:
+                  type: number
+            charts_data:
+              type: object
+              properties:
+                revenue_trend:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ChartData'
+                tenant_growth:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ChartData'
+                domain_distribution:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ChartData'
+            metadata:
+              type: object
+              properties:
+                period:
+                  type: string
+                last_updated:
+                  type: string
+                  format: date-time
+                data_quality:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+
+    PlatformKPIsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            kpis:
+              type: object
+              properties:
+                mrr:
+                  $ref: '#/components/schemas/KPIValue'
+                active_tenants:
+                  $ref: '#/components/schemas/KPIValue'
+                revenue_usage_ratio:
+                  $ref: '#/components/schemas/KPIValue'
+                operational_efficiency:
+                  $ref: '#/components/schemas/KPIValue'
+                spam_rate:
+                  $ref: '#/components/schemas/KPIValue'
+                total_appointments:
+                  $ref: '#/components/schemas/KPIValue'
+                ai_interactions:
+                  $ref: '#/components/schemas/KPIValue'
+                cancellation_rate:
+                  $ref: '#/components/schemas/KPIValue'
+                usage_cost:
+                  $ref: '#/components/schemas/KPIValue'
+            insights:
+              type: object
+              properties:
+                distortion_analysis:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DistortionInsight'
+                upsell_opportunities:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/UpsellOpportunity'
+                risk_assessment:
+                  $ref: '#/components/schemas/RiskAssessment'
+            metadata:
+              type: object
+              properties:
+                calculated_at:
+                  type: string
+                  format: date-time
+                data_freshness:
+                  type: number
+                  description: Data freshness in minutes
+                calculation_time_ms:
+                  type: number
+                  description: Calculation time in milliseconds
+
+    TenantMetricsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            tenant_info:
+              $ref: '#/components/schemas/TenantInfo'
+            metrics:
+              type: object
+              properties:
+                revenue:
+                  $ref: '#/components/schemas/KPIValue'
+                appointments:
+                  $ref: '#/components/schemas/KPIValue'
+                customers:
+                  $ref: '#/components/schemas/KPIValue'
+                ai_interactions:
+                  $ref: '#/components/schemas/KPIValue'
+                chat_duration_avg:
+                  $ref: '#/components/schemas/KPIValue'
+                cancellation_rate:
+                  $ref: '#/components/schemas/KPIValue'
+                spam_detection_score:
+                  $ref: '#/components/schemas/KPIValue'
+                conversion_rate:
+                  $ref: '#/components/schemas/KPIValue'
+            charts_data:
+              type: object
+              properties:
+                revenue_trend:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ChartData'
+                appointment_status:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ChartData'
+                customer_growth:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ChartData'
+                ai_performance:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ChartData'
+            business_intelligence:
+              type: object
+              properties:
+                health_score:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                risk_level:
+                  type: string
+                  enum: [low, medium, high]
+                efficiency_score:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                growth_trend:
+                  type: string
+                  enum: [growing, stable, declining]
+            metadata:
+              type: object
+              properties:
+                period:
+                  type: string
+                last_updated:
+                  type: string
+                  format: date-time
+                data_completeness:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+
+    TenantParticipationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            tenant_info:
+              $ref: '#/components/schemas/TenantInfo'
+            participation:
+              type: object
+              properties:
+                revenue:
+                  $ref: '#/components/schemas/ParticipationMetric'
+                appointments:
+                  $ref: '#/components/schemas/ParticipationMetric'
+                customers:
+                  $ref: '#/components/schemas/ParticipationMetric'
+                ai_interactions:
+                  $ref: '#/components/schemas/ParticipationMetric'
+            business_intelligence:
+              type: object
+              properties:
+                risk_score:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                efficiency_score:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                growth_score:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+            ranking:
+              type: object
+              properties:
+                position:
+                  type: integer
+                  minimum: 1
+                total_tenants:
+                  type: integer
+                  minimum: 1
+                percentile:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                category:
+                  type: string
+                position_change:
+                  type: integer
+            metadata:
+              type: object
+              properties:
+                period:
+                  type: string
+                last_updated:
+                  type: string
+                  format: date-time
+                platform_totals:
+                  type: object
+                  additionalProperties:
+                    type: number
+
+    ComparisonResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            tenant_data:
+              type: object
+              additionalProperties:
+                $ref: '#/components/schemas/KPIValue'
+            platform_data:
+              type: object
+              properties:
+                avg_revenue_per_tenant:
+                  type: number
+                avg_appointments_per_tenant:
+                  type: number
+                avg_customers_per_tenant:
+                  type: number
+                platform_conversion_rate:
+                  type: number
+            comparison_scores:
+              type: object
+              properties:
+                revenue_performance:
+                  type: number
+                  description: Performance vs platform average (percentage)
+                efficiency_score:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                growth_rate:
+                  type: number
+                risk_level:
+                  type: string
+                  enum: [low, medium, high]
+            rankings:
+              type: object
+              properties:
+                revenue_rank:
+                  type: integer
+                  minimum: 1
+                efficiency_rank:
+                  type: integer
+                  minimum: 1
+                growth_rank:
+                  type: integer
+                  minimum: 1
+                total_tenants:
+                  type: integer
+                  minimum: 1
+            analysis:
+              type: object
+              properties:
+                strengths:
+                  type: array
+                  items:
+                    type: string
+                improvements:
+                  type: array
+                  items:
+                    type: string
+                recommendations:
+                  type: array
+                  items:
+                    type: string
+
+    ChartData:
+      type: object
+      properties:
+        x:
+          oneOf:
+            - type: string
+            - type: number
+          description: X-axis value (date or category)
+        y:
+          type: number
+          description: Y-axis value
+        label:
+          type: string
+          description: Data point label
+        color:
+          type: string
+          description: Color for the data point
+      additionalProperties: true
+
+    ChartDataResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            chart_type:
+              type: string
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ChartData'
+            chart_config:
+              type: object
+              properties:
+                title:
+                  type: string
+                x_axis:
+                  type: string
+                y_axis:
+                  type: string
+                type:
+                  type: string
+                  enum: [line, bar, pie, doughnut, scatter]
+                colors:
+                  type: array
+                  items:
+                    type: string
+                options:
+                  type: object
+                  additionalProperties: true
+            metadata:
+              type: object
+              properties:
+                total_points:
+                  type: integer
+                  minimum: 0
+                date_range:
+                  type: object
+                  properties:
+                    start:
+                      type: string
+                      format: date
+                    end:
+                      type: string
+                      format: date
+                last_updated:
+                  type: string
+                  format: date-time
+                data_quality:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+
+    CalculationRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [platform, tenant, all]
+          description: Type of calculation to perform
+        tenant_id:
+          type: string
+          format: uuid
+          description: Tenant ID (required if type is 'tenant')
+        force_recalculation:
+          type: boolean
+          description: Force full recalculation
+        include_cache_refresh:
+          type: boolean
+          description: Refresh cache after calculation
+        priority:
+          type: string
+          enum: [low, normal, high]
+          description: Calculation priority
+      required:
+        - type
+
+    CalculationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            success:
+              type: boolean
+            message:
+              type: string
+            calculation_id:
+              type: string
+            estimated_completion:
+              type: string
+              format: date-time
+            results:
+              type: object
+              properties:
+                platform_metrics:
+                  type: boolean
+                tenant_metrics:
+                  type: boolean
+                cache_refreshed:
+                  type: boolean
+                calculation_time_ms:
+                  type: number
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                message:
+                  type: string
+                details:
+                  type: object
+
+    StatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [healthy, degraded, unhealthy]
+            timestamp:
+              type: string
+              format: date-time
+            services:
+              type: object
+              properties:
+                database:
+                  $ref: '#/components/schemas/ServiceStatus'
+                cache:
+                  $ref: '#/components/schemas/ServiceStatus'
+                cron_jobs:
+                  $ref: '#/components/schemas/ServiceStatus'
+                analytics:
+                  $ref: '#/components/schemas/ServiceStatus'
+            metrics:
+              type: object
+              properties:
+                response_time:
+                  type: number
+                  description: Average response time in ms
+                last_calculation:
+                  type: string
+                  format: date-time
+                cache_hit_rate:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                active_connections:
+                  type: integer
+                  minimum: 0
+            system_info:
+              type: object
+              properties:
+                version:
+                  type: string
+                environment:
+                  type: string
+                uptime:
+                  type: number
+                  description: Uptime in seconds
+                memory_usage:
+                  type: object
+                  properties:
+                    used:
+                      type: number
+                      description: Used memory in MB
+                    total:
+                      type: number
+                      description: Total memory in MB
+                    percentage:
+                      type: number
+                      minimum: 0
+                      maximum: 100
+
+    ServiceStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        response_time:
+          type: number
+          description: Response time in ms
+        last_check:
+          type: string
+          format: date-time
+        error:
+          type: string
+          description: Error message if unhealthy
+
+    ParticipationMetric:
+      type: object
+      properties:
+        value:
+          type: number
+          description: Absolute value
+        percentage:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Percentage of platform total
+        platform_total:
+          type: number
+          description: Platform total for reference
+        display_value:
+          type: string
+          description: Formatted display value
+        trend:
+          type: string
+          enum: [up, down, stable]
+          description: Trend vs previous period
+
+    DistortionInsight:
+      type: object
+      properties:
+        tenant_id:
+          type: string
+          format: uuid
+        tenant_name:
+          type: string
+        type:
+          type: string
+          enum: [over_paying, under_paying, balanced]
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+        revenue_paid:
+          type: number
+        usage_cost:
+          type: number
+        ratio:
+          type: number
+        recommendations:
+          type: array
+          items:
+            type: string
+
+    UpsellOpportunity:
+      type: object
+      properties:
+        tenant_id:
+          type: string
+          format: uuid
+        tenant_name:
+          type: string
+        type:
+          type: string
+          enum: [usage_exceeds_plan, growth_potential, feature_adoption]
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+        current_revenue:
+          type: number
+        potential_revenue:
+          type: number
+        revenue_increase:
+          type: number
+        recommendations:
+          type: array
+          items:
+            type: string
+        next_action:
+          type: string
+
+    RiskAssessment:
+      type: object
+      properties:
+        overall_risk_score:
+          type: number
+          minimum: 0
+          maximum: 100
+        risk_level:
+          type: string
+          enum: [low, medium, high]
+        risk_factors:
+          type: object
+          properties:
+            churn_risk:
+              type: number
+              minimum: 0
+              maximum: 100
+            payment_risk:
+              type: number
+              minimum: 0
+              maximum: 100
+            usage_decline_risk:
+              type: number
+              minimum: 0
+              maximum: 100
+            technical_risk:
+              type: number
+              minimum: 0
+              maximum: 100
+        high_risk_tenants:
+          type: array
+          items:
+            type: object
+            properties:
+              tenant_id:
+                type: string
+                format: uuid
+              tenant_name:
+                type: string
+              risk_score:
+                type: number
+                minimum: 0
+                maximum: 100
+              primary_risk:
+                type: string
+              actions:
+                type: array
+                items:
+                  type: string
+        recommendations:
+          type: array
+          items:
+            type: string
+
+    CacheClearResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            success:
+              type: boolean
+            message:
+              type: string
+            removed_count:
+              oneOf:
+                - type: integer
+                - type: string
+                  enum: [all]
+            pattern:
+              type: string
+            tenant_id:
+              type: string
+            timestamp:
+              type: string
+              format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: boolean
+          example: true
+        message:
+          type: string
+          description: Error message
+        code:
+          type: string
+          description: Error code
+        details:
+          type: object
+          description: Additional error details
+        timestamp:
+          type: string
+          format: date-time
+          description: Error timestamp
+        request_id:
+          type: string
+          description: Request ID for tracking
+
+    ValidationError:
+      type: object
+      properties:
+        error:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Validation failed"
+        code:
+          type: string
+          example: "VALIDATION_001"
+        details:
+          type: object
+          properties:
+            validation_errors:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+                  received:
+                    type: string
+                  expected:
+                    type: string
+            total_errors:
+              type: integer
+        timestamp:
+          type: string
+          format: date-time
+        request_id:
+          type: string
+
+  parameters:
+    TenantIdPath:
+      name: tenantId
+      in: path
+      required: true
+      description: Tenant unique identifier
+      schema:
+        type: string
+        format: uuid
+      example: "123e4567-e89b-12d3-a456-426614174000"
+
+    ChartTypePath:
+      name: chartType
+      in: path
+      required: true
+      description: Type of chart data to retrieve
+      schema:
+        type: string
+        enum: [platform, tenant, comparison, revenue_trend, domain_distribution, appointment_status, customer_growth, ai_performance, tenant_growth]
+      example: "revenue_trend"
+
+    PeriodQuery:
+      name: period
+      in: query
+      description: Time period for metrics calculation
+      schema:
+        type: string
+        enum: [7d, 30d, 90d, 1y]
+        default: 30d
+      example: "30d"
+
+    StartDateQuery:
+      name: start_date
+      in: query
+      description: Custom start date (YYYY-MM-DD)
+      schema:
+        type: string
+        format: date
+      example: "2024-01-01"
+
+    EndDateQuery:
+      name: end_date
+      in: query
+      description: Custom end date (YYYY-MM-DD)
+      schema:
+        type: string
+        format: date
+      example: "2024-01-31"
+
+    ForceRefreshQuery:
+      name: force_refresh
+      in: query
+      description: Force cache refresh
+      schema:
+        type: boolean
+        default: false
+      example: false
+
+    IncludeChartsQuery:
+      name: include_charts
+      in: query
+      description: Include chart data in response
+      schema:
+        type: boolean
+        default: false
+      example: true
+
+    IncludeBreakdownQuery:
+      name: include_breakdown
+      in: query
+      description: Include detailed breakdown
+      schema:
+        type: boolean
+        default: false
+      example: true
+
+    IncludeInsightsQuery:
+      name: include_insights
+      in: query
+      description: Include business insights
+      schema:
+        type: boolean
+        default: false
+      example: true
+
+    IncludeRiskAssessmentQuery:
+      name: include_risk_assessment
+      in: query
+      description: Include risk assessment
+      schema:
+        type: boolean
+        default: false
+      example: true
+
+    IncludeAIMetricsQuery:
+      name: include_ai_metrics
+      in: query
+      description: Include AI performance metrics
+      schema:
+        type: boolean
+        default: false
+      example: true
+
+    IncludeBusinessIntelligenceQuery:
+      name: include_business_intelligence
+      in: query
+      description: Include business intelligence analysis
+      schema:
+        type: boolean
+        default: false
+      example: true
+
+    ComparisonTypeQuery:
+      name: comparison_type
+      in: query
+      description: Type of comparison to perform
+      schema:
+        type: string
+        enum: [percentage, absolute, both]
+        default: both
+      example: "both"
+
+    IncludeRankingQuery:
+      name: include_ranking
+      in: query
+      description: Include ranking information
+      schema:
+        type: boolean
+        default: false
+      example: true
+
+    MetricsQuery:
+      name: metrics
+      in: query
+      description: Specific metrics to compare (comma-separated)
+      schema:
+        type: string
+      example: "revenue,appointments,customers"
+
+    IncludeAnalysisQuery:
+      name: include_analysis
+      in: query
+      description: Include detailed analysis
+      schema:
+        type: boolean
+        default: false
+      example: true
+
+    TenantIdQuery:
+      name: tenant_id
+      in: query
+      description: Tenant ID for tenant-specific charts
+      schema:
+        type: string
+        format: uuid
+      example: "123e4567-e89b-12d3-a456-426614174000"
+
+    ChartOptionsQuery:
+      name: chart_options
+      in: query
+      description: Custom chart configuration (JSON)
+      schema:
+        type: string
+      example: '{"title": "Custom Chart", "colors": ["#ff0000", "#00ff00"]}'
+
+    IncludeCacheStatsQuery:
+      name: include_cache_stats
+      in: query
+      description: Include cache statistics
+      schema:
+        type: boolean
+        default: false
+      example: true
+
+    IncludePerformanceMetricsQuery:
+      name: include_performance_metrics
+      in: query
+      description: Include performance metrics
+      schema:
+        type: boolean
+        default: false
+      example: true
+
+    CachePatternQuery:
+      name: pattern
+      in: query
+      description: Cache pattern to clear
+      schema:
+        type: string
+      example: "platform_metrics"
+
+  responses:
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+
+    Unauthorized:
+      description: Unauthorized access
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: true
+            message: "Unauthorized access"
+            code: "AUTH_001"
+            timestamp: "2025-01-17T10:00:00Z"
+            request_id: "req_1234567890"
+
+    TenantNotFound:
+      description: Tenant not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: true
+            message: "Tenant not found"
+            code: "TENANT_001"
+            timestamp: "2025-01-17T10:00:00Z"
+            request_id: "req_1234567890"
+
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: true
+            message: "Rate limit exceeded. Maximum 100 requests per minute."
+            code: "RATE_LIMIT_001"
+            details:
+              limit: 100
+              period: "1 minute"
+              retry_after: 60
+            timestamp: "2025-01-17T10:00:00Z"
+            request_id: "req_1234567890"
+
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: true
+            message: "Internal server error"
+            code: "SERVER_001"
+            timestamp: "2025-01-17T10:00:00Z"
+            request_id: "req_1234567890"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from authentication endpoint
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Platform Metrics
+    description: Platform-wide analytics and KPIs
+  - name: Tenant Metrics
+    description: Individual tenant performance metrics
+  - name: Comparison
+    description: Tenant vs platform comparison tools
+  - name: Charts
+    description: Chart data for dashboard visualizations
+  - name: Administration
+    description: System administration and maintenance

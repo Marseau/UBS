@@ -1,0 +1,26 @@
+{
+  "name": "ubs-analytics-cron",
+  "version": "1.0.0",
+  "description": "Scripts de cron job para analytics do UBS",
+  "main": "daily-analytics-cron.js",
+  "scripts": {
+    "cron:daily": "node daily-analytics-cron.js",
+    "cron:test": "node test-cron-job.js",
+    "cron:cleanup": "node cleanup-old-data.js",
+    "cron:status": "node check-cron-status.js",
+    "setup:schema": "node setup-analytics-schema.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.0",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "author": "UBS Team",
+  "license": "MIT"
+} 

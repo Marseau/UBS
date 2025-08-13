@@ -1,0 +1,222 @@
+{
+  "generated_at": "2025-08-06T13:01:05.176Z",
+  "total_tenants": 10,
+  "total_customers_platform": 835,
+  "averages": {
+    "d7": 0,
+    "d30": 62,
+    "d90": 84
+  },
+  "tenants": [
+    {
+      "id": "85cee693-a2e2-444a-926a-19f69db13489",
+      "name": "Academia do Saber",
+      "periods": {
+        "7d": {
+          "period_days": 7,
+          "new_customers_period": 0,
+          "total_customers": 84
+        },
+        "30d": {
+          "period_days": 30,
+          "new_customers_period": 62,
+          "total_customers": 84
+        },
+        "90d": {
+          "period_days": 90,
+          "new_customers_period": 84,
+          "total_customers": 84
+        }
+      }
+    },
+    {
+      "id": "ae509773-6b9d-45f9-925c-dfa3edd0326a",
+      "name": "Advocacia Silva",
+      "periods": {
+        "7d": {
+          "period_days": 7,
+          "new_customers_period": 0,
+          "total_customers": 84
+        },
+        "30d": {
+          "period_days": 30,
+          "new_customers_period": 62,
+          "total_customers": 84
+        },
+        "90d": {
+          "period_days": 90,
+          "new_customers_period": 84,
+          "total_customers": 84
+        }
+      }
+    },
+    {
+      "id": "7ae2807f-4a30-4b37-b11e-073b79a3b0c4",
+      "name": "Arena Fitness",
+      "periods": {
+        "7d": {
+          "period_days": 7,
+          "new_customers_period": 0,
+          "total_customers": 84
+        },
+        "30d": {
+          "period_days": 30,
+          "new_customers_period": 62,
+          "total_customers": 84
+        },
+        "90d": {
+          "period_days": 90,
+          "new_customers_period": 84,
+          "total_customers": 84
+        }
+      }
+    },
+    {
+      "id": "33b8c488-5aa9-4891-b335-701d10296681",
+      "name": "Bella Vista Spa",
+      "periods": {
+        "7d": {
+          "period_days": 7,
+          "new_customers_period": 0,
+          "total_customers": 84
+        },
+        "30d": {
+          "period_days": 30,
+          "new_customers_period": 62,
+          "total_customers": 84
+        },
+        "90d": {
+          "period_days": 90,
+          "new_customers_period": 84,
+          "total_customers": 84
+        }
+      }
+    },
+    {
+      "id": "c3aa73f8-db80-40db-a9c4-73718a0fee34",
+      "name": "Centro Educacional",
+      "periods": {
+        "7d": {
+          "period_days": 7,
+          "new_customers_period": 0,
+          "total_customers": 84
+        },
+        "30d": {
+          "period_days": 30,
+          "new_customers_period": 62,
+          "total_customers": 84
+        },
+        "90d": {
+          "period_days": 90,
+          "new_customers_period": 84,
+          "total_customers": 84
+        }
+      }
+    },
+    {
+      "id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+      "name": "Centro Terapêutico",
+      "periods": {
+        "7d": {
+          "period_days": 7,
+          "new_customers_period": 0,
+          "total_customers": 84
+        },
+        "30d": {
+          "period_days": 30,
+          "new_customers_period": 62,
+          "total_customers": 84
+        },
+        "90d": {
+          "period_days": 90,
+          "new_customers_period": 84,
+          "total_customers": 84
+        }
+      }
+    },
+    {
+      "id": "5bd592ee-8247-4a62-862e-7491fa499103",
+      "name": "Charme Total",
+      "periods": {
+        "7d": {
+          "period_days": 7,
+          "new_customers_period": 0,
+          "total_customers": 84
+        },
+        "30d": {
+          "period_days": 30,
+          "new_customers_period": 62,
+          "total_customers": 84
+        },
+        "90d": {
+          "period_days": 90,
+          "new_customers_period": 84,
+          "total_customers": 84
+        }
+      }
+    },
+    {
+      "id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+      "name": "Clínica Mente Sã",
+      "periods": {
+        "7d": {
+          "period_days": 7,
+          "new_customers_period": 0,
+          "total_customers": 84
+        },
+        "30d": {
+          "period_days": 30,
+          "new_customers_period": 62,
+          "total_customers": 84
+        },
+        "90d": {
+          "period_days": 90,
+          "new_customers_period": 84,
+          "total_customers": 84
+        }
+      }
+    },
+    {
+      "id": "765b26dc-f8e3-4eb2-b1c6-a896d99d1c2a",
+      "name": "Escritório Costa",
+      "periods": {
+        "7d": {
+          "period_days": 7,
+          "new_customers_period": 0,
+          "total_customers": 82
+        },
+        "30d": {
+          "period_days": 30,
+          "new_customers_period": 60,
+          "total_customers": 82
+        },
+        "90d": {
+          "period_days": 90,
+          "new_customers_period": 82,
+          "total_customers": 82
+        }
+      }
+    },
+    {
+      "id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+      "name": "Studio Glamour",
+      "periods": {
+        "7d": {
+          "period_days": 7,
+          "new_customers_period": 0,
+          "total_customers": 81
+        },
+        "30d": {
+          "period_days": 30,
+          "new_customers_period": 60,
+          "total_customers": 81
+        },
+        "90d": {
+          "period_days": 90,
+          "new_customers_period": 81,
+          "total_customers": 81
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+RELATÓRIO DE VALIDAÇÃO DAS MÉTRICAS DA PLATAFORMA
+Gerado em: 2025-08-08T16:52:42.353Z
+============================================================
+
+PERÍODO: 7 dias
+------------------------------
+Status Geral: undefined
+Taxa de Sucesso: undefined%
+Checks: undefined/undefined
+Warnings: undefined
+Errors: undefined
+
+DISCREPÂNCIAS DETALHADAS:
+
+PERÍODO: 30 dias
+------------------------------
+Status Geral: undefined
+Taxa de Sucesso: undefined%
+Checks: undefined/undefined
+Warnings: undefined
+Errors: undefined
+
+DISCREPÂNCIAS DETALHADAS:
+
+PERÍODO: 90 dias
+------------------------------
+Status Geral: undefined
+Taxa de Sucesso: undefined%
+Checks: undefined/undefined
+Warnings: undefined
+Errors: undefined
+
+DISCREPÂNCIAS DETALHADAS:
+

@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Serviços - UBS Dashboard</title>
+    
+    <!-- CSS Dependencies -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- UBS Standard Styles -->
+    <link href="css/ubs-standard-styles.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f8f9fa;
+        }
+        
+        /* Sidebar Design - Same as dashboard */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: 280px;
+            background: linear-gradient(135deg, #2D5A9B 0%, #4A7BC8 100%);
+            color: white;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            overflow-y: auto;
+            box-shadow: 4px 0 12px rgba(45, 90, 155, 0.15);
+        }
+        
+        .sidebar.collapsed {
+            width: 70px;
+        }
+        
+        .main-content {
+            margin-left: 280px;
+            transition: all 0.3s ease;
+            min-height: 100vh;
+        }
+        
+        .main-content.expanded {
+            margin-left: 70px;
+        }
+        
+        .sidebar .logo {
+            padding: 2rem 1.5rem;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .sidebar .logo h4 {
+            margin: 0;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        
+        .sidebar .nav-section {
+            padding: 1rem 0;
+        }
+        
+        .sidebar .nav-section-title {
+            padding: 0.5rem 1.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 0.5rem;
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 0.875rem 1.5rem;
+            border: none;
+            display: flex;
+            align-items: center;
+            transition: all 0.2s ease;
+            border-radius: 0;
+            font-weight: 500;
+        }
+        
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            color: white;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+        }
+        
+        .sidebar .nav-link i {
+            width: 20px;
+            margin-right: 0.875rem;
+            font-size: 1.1rem;
+        }
+        
+        .sidebar.collapsed .nav-link span,
+        .sidebar.collapsed .nav-section-title {
+            display: none;
+        }
+        
+        .sidebar.collapsed .nav-link {
+            justify-content: center;
+            padding: 0.875rem;
+        }
+        
+        .sidebar.collapsed .nav-link i {
+            margin-right: 0;
+        }
+        
+        /* Top Navigation */
+        .top-navbar {
+            background: white;
+            padding: 1rem 0;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .user-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #2D5A9B 0%, #4A7BC8 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .services-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        
+        .services-section h3 {
+            color: #2D5A9B;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 0.75rem;
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .btn-action {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+        
+        .service-card {
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 1.5rem;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            height: 100%;
+        }
+        
+        .service-card:hover {
+            border-color: #2D5A9B;
+            box-shadow: 0 4px 12px rgba(45, 90, 155, 0.15);
+            transform: translateY(-2px);
+        }
+        
+        .service-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #2D5A9B 0%, #4A7BC8 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .service-price {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #28a745;
+        }
+        
+        .service-duration {
+            color: #6c757d;
+            font-size: 0.875rem;
+        }
+        
+        .service-stats {
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+        
+        .category-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .category-hair { background: rgba(45, 90, 155, 0.1); color: #2D5A9B; }
+        .category-skin { background: rgba(40, 167, 69, 0.1); color: #28a745; }
+        .category-nails { background: rgba(255, 193, 7, 0.1); color: #ffc107; }
+        .category-massage { background: rgba(220, 53, 69, 0.1); color: #dc3545; }
+        .category-facial { background: rgba(23, 162, 184, 0.1); color: #17a2b8; }
+        
+        .popularity-bar {
+            height: 4px;
+            background: #e9ecef;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        
+        .popularity-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #20c997);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+        
+        .widget-container {
+            margin-bottom: 1.5rem;
+        }
+        
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 280px;
+                transform: translateX(-100%);
+            }
+            
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .sidebar-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 999;
+                display: none;
+            }
+            
+            .sidebar-overlay.show {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Mobile Sidebar Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="logo">
+            <h4 class="mb-0">
+                <i class="fas fa-cube me-2"></i>
+                <span>UBS</span>
+            </h4>
+            <small class="d-block mt-1 opacity-75">Universal Booking System</small>
+        </div>
+        
+        <!-- Navigation Sections -->
+        <div class="nav-section">
+            <div class="nav-section-title">Dashboard</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="dashboard-main.html">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Visão Geral</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Operações</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="appointments-standardized.html">
+                        <i class="fas fa-calendar-check"></i>
+                        <span>Agendamentos</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="customers-standardized.html">
+                        <i class="fas fa-users"></i>
+                        <span>Clientes</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="#services">
+                        <i class="fas fa-concierge-bell"></i>
+                        <span>Serviços</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Comunicação</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="conversations-standardized.html">
+                        <i class="fab fa-whatsapp"></i>
+                        <span>Conversas</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Financeiro</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="payments.html">
+                        <i class="fas fa-credit-card"></i>
+                        <span>Pagamentos</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Sistema</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="settings-standardized.html">
+                        <i class="fas fa-cog"></i>
+                        <span>Configurações</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content" id="mainContent">
+        <!-- Top Navigation -->
+        <div class="top-navbar">
+            <div class="container-fluid">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-3">
+                        <button class="btn btn-outline-primary btn-sm" id="sidebarToggle">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                        <div class="d-none d-md-block">
+                            <h5 class="mb-0">Serviços</h5>
+                            <small class="text-muted">Gestão e análise de serviços oferecidos</small>
+                        </div>
+                    </div>
+                    <div class="user-menu">
+                        <div class="dropdown">
+                            <button class="btn btn-link dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown">
+                                <div class="user-avatar me-2" id="userAvatar">A</div>
+                                <div class="d-none d-md-block text-start">
+                                    <div class="fw-medium" id="userName">Admin User</div>
+                                    <small class="text-muted" id="userRole">Tenant Admin</small>
+                                </div>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="settings-standardized.html"><i class="fas fa-user-cog me-2"></i>Perfil</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportServices()"><i class="fas fa-download me-2"></i>Exportar Dados</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="#" onclick="refreshServices()"><i class="fas fa-sync me-2"></i>Atualizar</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="login.html" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Services Content -->
+        <div class="container-fluid p-3">
+            <!-- Quick Actions -->
+            <div class="action-buttons">
+                <button class="btn btn-primary btn-action" onclick="refreshServices()">
+                    <i class="fas fa-sync me-2"></i>Atualizar
+                </button>
+                <button class="btn btn-outline-primary btn-action" onclick="exportServices()">
+                    <i class="fas fa-download me-2"></i>Exportar
+                </button>
+                <button class="btn btn-outline-success btn-action" onclick="showNewServiceModal()">
+                    <i class="fas fa-plus me-2"></i>Novo Serviço
+                </button>
+                <button class="btn btn-outline-info btn-action" onclick="showCategoryManager()">
+                    <i class="fas fa-tags me-2"></i>Categorias
+                </button>
+                <button class="btn btn-outline-warning btn-action" onclick="showPricingAnalysis()">
+                    <i class="fas fa-chart-line me-2"></i>Análise de Preços
+                </button>
+                <button class="btn btn-outline-secondary btn-action" onclick="toggleServiceView()">
+                    <i class="fas fa-th me-2"></i><span id="viewToggleText">Visualização Cards</span>
+                </button>
+            </div>
+            
+            <!-- Main Services Container -->
+            <div id="servicesContainer">
+                <!-- Services content will be generated dynamically -->
+                <div class="services-section">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando serviços...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Inicializando sistema de serviços...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- JavaScript Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- UBS Widget System -->
+    <script src="js/dashboard-widget-factory.js"></script>
+    
+    <script>
+        // Global variables
+        let currentUserRole = null;
+        let currentTenantId = null;
+        let servicesInstance = null;
+        let currentView = 'table'; // 'table' or 'cards'
+        
+        // Initialize services page
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🚀 Initializing UBS Services System...');
+            
+            try {
+                // Check authentication and get user info
+                await initializeUser();
+                
+                // Setup UI components
+                setupSidebarToggle();
+                setupMobileNavigation();
+                
+                // Initialize services view
+                await initializeServices();
+                
+                console.log('✅ Services initialization completed successfully');
+                
+            } catch (error) {
+                console.error('❌ Services initialization failed:', error);
+                showErrorState(error.message);
+            }
+        });
+        
+        // Initialize user authentication and role detection
+        async function initializeUser() {
+            const token = localStorage.getItem('ubs_token');
+            if (!token) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            try {
+                // Get user info from API
+                const response = await fetch('/api/admin/user-info', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const userInfo = await response.json();
+                    currentUserRole = userInfo.data.role;
+                    currentTenantId = userInfo.data.tenantId;
+                    updateUserInterface(userInfo.data);
+                } else {
+                    // Fallback to localStorage
+                    currentUserRole = localStorage.getItem('user_role') || 'tenant_admin';
+                    updateUserInterface({
+                        name: 'Admin User',
+                        role: currentUserRole,
+                        tenantId: currentTenantId
+                    });
+                }
+                
+            } catch (error) {
+                console.warn('Failed to get user info, using fallback:', error);
+                currentUserRole = 'tenant_admin';
+                updateUserInterface({
+                    name: 'Admin User',
+                    role: currentUserRole
+                });
+            }
+        }
+        
+        // Update UI elements with user information
+        function updateUserInterface(userInfo) {
+            const userName = document.getElementById('userName');
+            const userRole = document.getElementById('userRole');
+            const userAvatar = document.getElementById('userAvatar');
+            
+            if (userName) userName.textContent = userInfo.name || 'Admin User';
+            if (userAvatar) userAvatar.textContent = (userInfo.name || 'A').charAt(0).toUpperCase();
+            if (userRole) userRole.textContent = userInfo.role === 'super_admin' ? 'Super Admin' : 'Tenant Admin';
+        }
+        
+        // Initialize services view
+        async function initializeServices() {
+            const container = document.getElementById('servicesContainer');
+            
+            try {
+                const servicesConfig = {
+                    layout: 'services',
+                    sections: [
+                        {
+                            id: 'filters-section',
+                            title: 'Filtros de Serviços',
+                            widgets: [
+                                {
+                                    type: 'filters',
+                                    id: 'services-filters',
+                                    config: {
+                                        filters: [
+                                            {
+                                                type: 'select',
+                                                id: 'category',
+                                                label: 'Categoria',
+                                                options: [
+                                                    { value: 'all', label: 'Todas as categorias', selected: true },
+                                                    { value: 'hair', label: 'Cabelo' },
+                                                    { value: 'skin', label: 'Pele' },
+                                                    { value: 'nails', label: 'Unhas' },
+                                                    { value: 'massage', label: 'Massagem' },
+                                                    { value: 'facial', label: 'Facial' }
+                                                ]
+                                            },
+                                            {
+                                                type: 'select',
+                                                id: 'status',
+                                                label: 'Status',
+                                                options: [
+                                                    { value: 'all', label: 'Todos os status', selected: true },
+                                                    { value: 'active', label: 'Ativos' },
+                                                    { value: 'inactive', label: 'Inativos' },
+                                                    { value: 'popular', label: 'Populares' }
+                                                ]
+                                            },
+                                            {
+                                                type: 'select',
+                                                id: 'price_range',
+                                                label: 'Faixa de Preço',
+                                                options: [
+                                                    { value: 'all', label: 'Todas as faixas', selected: true },
+                                                    { value: '0-50', label: 'R$ 0 - 50' },
+                                                    { value: '51-100', label: 'R$ 51 - 100' },
+                                                    { value: '101-200', label: 'R$ 101 - 200' },
+                                                    { value: '200+', label: 'R$ 200+' }
+                                                ]
+                                            },
+                                            {
+                                                type: 'text',
+                                                id: 'search',
+                                                label: 'Buscar',
+                                                placeholder: 'Nome do serviço...'
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            id: 'metrics-section',
+                            title: 'Métricas de Serviços',
+                            widgets: [
+                                {
+                                    type: 'metric-card',
+                                    id: 'total-services',
+                                    config: {
+                                        title: 'Total de Serviços',
+                                        value: 0,
+                                        icon: 'fas fa-concierge-bell',
+                                        color: 'primary',
+                                        size: 'col-lg-3 col-md-6',
+                                        trend: { value: 0, direction: 'up' }
+                                    }
+                                },
+                                {
+                                    type: 'metric-card',
+                                    id: 'active-services',
+                                    config: {
+                                        title: 'Serviços Ativos',
+                                        value: 0,
+                                        icon: 'fas fa-check-circle',
+                                        color: 'success',
+                                        size: 'col-lg-3 col-md-6',
+                                        trend: { value: 0, direction: 'up' }
+                                    }
+                                },
+                                {
+                                    type: 'metric-card',
+                                    id: 'avg-price',
+                                    config: {
+                                        title: 'Preço Médio',
+                                        value: 0,
+                                        format: 'currency',
+                                        icon: 'fas fa-money-bill-wave',
+                                        color: 'info',
+                                        size: 'col-lg-3 col-md-6',
+                                        trend: { value: 0, direction: 'up' }
+                                    }
+                                },
+                                {
+                                    type: 'metric-card',
+                                    id: 'revenue-services',
+                                    config: {
+                                        title: 'Receita (Serviços)',
+                                        value: 0,
+                                        format: 'currency',
+                                        icon: 'fas fa-chart-line',
+                                        color: 'warning',
+                                        size: 'col-lg-3 col-md-6',
+                                        trend: { value: 0, direction: 'up' }
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            id: 'analytics-section',
+                            title: 'Análises de Serviços',
+                            widgets: [
+                                {
+                                    type: 'chart',
+                                    id: 'service-popularity',
+                                    config: {
+                                        title: 'Popularidade dos Serviços',
+                                        chartType: 'bar',
+                                        size: 'col-lg-6',
+                                        data: {
+                                            labels: [],
+                                            datasets: [{
+                                                label: 'Agendamentos',
+                                                data: [],
+                                                backgroundColor: 'rgba(45, 90, 155, 0.8)',
+                                                borderColor: '#2D5A9B',
+                                                borderWidth: 1
+                                            }]
+                                        }
+                                    }
+                                },
+                                {
+                                    type: 'chart',
+                                    id: 'category-distribution',
+                                    config: {
+                                        title: 'Distribuição por Categoria',
+                                        chartType: 'doughnut',
+                                        size: 'col-lg-6',
+                                        data: {
+                                            labels: [],
+                                            datasets: [{
+                                                data: [],
+                                                backgroundColor: [
+                                                    '#2D5A9B', '#28a745', '#ffc107', '#dc3545', '#17a2b8'
+                                                ]
+                                            }]
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            id: 'services-table-section',
+                            title: 'Lista de Serviços',
+                            widgets: [
+                                {
+                                    type: 'table',
+                                    id: 'services-table',
+                                    config: {
+                                        title: 'Serviços Cadastrados',
+                                        size: 'col-12',
+                                        columns: [
+                                            { key: 'icon', label: '', sortable: false },
+                                            { key: 'name', label: 'Nome', sortable: true },
+                                            { key: 'category', label: 'Categoria', sortable: true },
+                                            { key: 'price', label: 'Preço', format: 'currency', sortable: true },
+                                            { key: 'duration', label: 'Duração', sortable: true },
+                                            { key: 'bookings', label: 'Agendamentos', sortable: true },
+                                            { key: 'revenue', label: 'Receita', format: 'currency', sortable: true },
+                                            { key: 'popularity', label: 'Popularidade', sortable: true },
+                                            { key: 'status', label: 'Status', sortable: true },
+                                            { key: 'actions', label: 'Ações', sortable: false }
+                                        ],
+                                        data: []
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                };
+                
+                servicesInstance = await createServicesFromConfig(container, servicesConfig);
+                
+                // Load initial data
+                await loadServicesData();
+                
+            } catch (error) {
+                throw new Error(`Failed to initialize services: ${error.message}`);
+            }
+        }
+        
+        // Create services from configuration
+        async function createServicesFromConfig(container, config) {
+            const widgetSystem = new DashboardWidgetSystem();
+            
+            // Clear container
+            container.innerHTML = '';
+            
+            // Create sections
+            for (const section of config.sections) {
+                const sectionElement = document.createElement('div');
+                sectionElement.className = 'services-section widget-container';
+                sectionElement.id = section.id;
+                
+                if (section.title) {
+                    const titleElement = document.createElement('h3');
+                    titleElement.innerHTML = `<i class="fas fa-concierge-bell me-2"></i>${section.title}`;
+                    sectionElement.appendChild(titleElement);
+                }
+                
+                const widgetsRow = document.createElement('div');
+                widgetsRow.className = 'row g-3';
+                
+                // Create widgets for this section
+                for (const widgetConfig of section.widgets) {
+                    const widgetContainer = document.createElement('div');
+                    widgetContainer.className = widgetConfig.config.size || 'col-12';
+                    
+                    const widget = await widgetSystem.createWidget(widgetConfig.type, widgetConfig.id, widgetConfig.config);
+                    if (widget) {
+                        widgetContainer.appendChild(widget.element);
+                        widgetsRow.appendChild(widgetContainer);
+                    }
+                }
+                
+                sectionElement.appendChild(widgetsRow);
+                container.appendChild(sectionElement);
+            }
+            
+            return {
+                widgetSystem,
+                config,
+                updateMetric: (id, data) => widgetSystem.updateWidget(id, data),
+                updateChart: (id, data) => widgetSystem.updateWidget(id, data),
+                updateTable: (id, data) => widgetSystem.updateWidget(id, data)
+            };
+        }
+        
+        // Load services data from API
+        async function loadServicesData() {
+            try {
+                // Load mock data for now
+                const mockData = generateMockServicesData();
+                updateServicesWidgets(mockData);
+                
+            } catch (error) {
+                console.error('Failed to load services data:', error);
+                // Show error or load mock data
+                const mockData = generateMockServicesData();
+                updateServicesWidgets(mockData);
+            }
+        }
+        
+        // Generate mock services data
+        function generateMockServicesData() {
+            const services = [];
+            const serviceNames = [
+                'Corte Feminino', 'Corte Masculino', 'Coloração', 'Mechas', 'Escova Progressiva',
+                'Hidratação', 'Tratamento Capilar', 'Penteado', 'Manicure', 'Pedicure',
+                'Esmaltação em Gel', 'Unha Acrigel', 'Limpeza de Pele', 'Peeling', 'Massagem Relaxante',
+                'Massagem Terapêutica', 'Drenagem Linfática', 'Design de Sobrancelhas', 'Extensão de Cílios'
+            ];
+            
+            const categories = ['hair', 'skin', 'nails', 'massage', 'facial'];
+            const categoryLabels = ['Cabelo', 'Pele', 'Unhas', 'Massagem', 'Facial'];
+            const categoryIcons = ['fas fa-cut', 'fas fa-spa', 'fas fa-hand-paper', 'fas fa-hand-sparkles', 'fas fa-user'];
+            
+            for (let i = 0; i < serviceNames.length; i++) {
+                const categoryIndex = Math.floor(Math.random() * categories.length);
+                const category = categories[categoryIndex];
+                const price = Math.floor(Math.random() * 300) + 30;
+                const duration = [30, 45, 60, 90, 120][Math.floor(Math.random() * 5)];
+                const bookings = Math.floor(Math.random() * 100) + 5;
+                const popularity = Math.floor((bookings / 100) * 100);
+                
+                services.push({
+                    id: i + 1,
+                    icon: `<div class="service-icon"><i class="${categoryIcons[categoryIndex]}"></i></div>`,
+                    name: serviceNames[i],
+                    category: `<span class="category-badge category-${category}">${categoryLabels[categoryIndex]}</span>`,
+                    price: price,
+                    duration: `${duration} min`,
+                    bookings: bookings,
+                    revenue: price * bookings,
+                    popularity: `
+                        <div class="d-flex align-items-center">
+                            <small class="me-2">${popularity}%</small>
+                            <div class="popularity-bar flex-grow-1">
+                                <div class="popularity-fill" style="width: ${popularity}%"></div>
+                            </div>
+                        </div>
+                    `,
+                    status: popularity > 50 ? '<span class="badge bg-success">Ativo</span>' : '<span class="badge bg-warning">Baixa demanda</span>',
+                    actions: `
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary" onclick="editService(${i + 1})" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-info" onclick="viewServiceStats(${i + 1})" title="Estatísticas">
+                                <i class="fas fa-chart-bar"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-success" onclick="duplicateService(${i + 1})" title="Duplicar">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteService(${i + 1})" title="Excluir">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    `
+                });
+            }
+            
+            const totalServices = services.length;
+            const activeServices = services.filter(s => s.status.includes('success')).length;
+            const avgPrice = services.reduce((sum, s) => sum + s.price, 0) / totalServices;
+            const totalRevenue = services.reduce((sum, s) => sum + s.revenue, 0);
+            
+            // Generate chart data
+            const popularServices = services
+                .sort((a, b) => b.bookings - a.bookings)
+                .slice(0, 8);
+            
+            const servicePopularity = {
+                labels: popularServices.map(s => s.name.length > 12 ? s.name.substring(0, 12) + '...' : s.name),
+                datasets: [{
+                    label: 'Agendamentos',
+                    data: popularServices.map(s => s.bookings),
+                    backgroundColor: 'rgba(45, 90, 155, 0.8)',
+                    borderColor: '#2D5A9B',
+                    borderWidth: 1
+                }]
+            };
+            
+            const categoryDistribution = {
+                labels: categoryLabels,
+                datasets: [{
+                    data: categories.map(cat => services.filter(s => s.category.includes(cat)).length),
+                    backgroundColor: ['#2D5A9B', '#28a745', '#ffc107', '#dc3545', '#17a2b8']
+                }]
+            };
+            
+            return {
+                metrics: {
+                    totalServices,
+                    activeServices,
+                    avgPrice,
+                    totalRevenue
+                },
+                charts: {
+                    servicePopularity,
+                    categoryDistribution
+                },
+                services
+            };
+        }
+        
+        // Update services widgets with data
+        function updateServicesWidgets(data) {
+            if (servicesInstance) {
+                // Update metrics
+                servicesInstance.updateMetric('total-services', { 
+                    value: data.metrics.totalServices,
+                    trend: { value: 6.2, direction: 'up' }
+                });
+                servicesInstance.updateMetric('active-services', { 
+                    value: data.metrics.activeServices,
+                    trend: { value: 12.8, direction: 'up' }
+                });
+                servicesInstance.updateMetric('avg-price', { 
+                    value: data.metrics.avgPrice,
+                    trend: { value: 3.5, direction: 'up' }
+                });
+                servicesInstance.updateMetric('revenue-services', { 
+                    value: data.metrics.totalRevenue,
+                    trend: { value: 18.7, direction: 'up' }
+                });
+                
+                // Update charts
+                servicesInstance.updateChart('service-popularity', data.charts.servicePopularity);
+                servicesInstance.updateChart('category-distribution', data.charts.categoryDistribution);
+                
+                // Update table
+                servicesInstance.updateTable('services-table', data.services);
+            }
+        }
+        
+        // Setup sidebar toggle
+        function setupSidebarToggle() {
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.getElementById('mainContent');
+            
+            sidebarToggle?.addEventListener('click', function() {
+                sidebar.classList.toggle('collapsed');
+                mainContent.classList.toggle('expanded');
+            });
+        }
+        
+        // Setup mobile navigation
+        function setupMobileNavigation() {
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            
+            if (window.innerWidth <= 768) {
+                sidebarToggle?.addEventListener('click', function() {
+                    sidebar.classList.toggle('mobile-open');
+                    sidebarOverlay.classList.toggle('show');
+                });
+                
+                sidebarOverlay?.addEventListener('click', function() {
+                    sidebar.classList.remove('mobile-open');
+                    sidebarOverlay.classList.remove('show');
+                });
+            }
+        }
+        
+        // Show error state
+        function showErrorState(message) {
+            const container = document.getElementById('servicesContainer');
+            container.innerHTML = `
+                <div class="services-section">
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle fa-3x mb-3 text-warning"></i>
+                        <h4>Erro ao carregar serviços</h4>
+                        <p>${message}</p>
+                        <button class="btn btn-primary" onclick="location.reload()">
+                            <i class="fas fa-sync me-2"></i>Tentar Novamente
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Global functions
+        window.refreshServices = async function() {
+            console.log('🔄 Refreshing services...');
+            await loadServicesData();
+            showNotification('Serviços atualizados com sucesso!', 'success');
+        };
+        
+        window.exportServices = function() {
+            console.log('📊 Exporting services...');
+            showNotification('Exportação iniciada!', 'info');
+        };
+        
+        window.showNewServiceModal = function() {
+            console.log('🛎️ Opening new service modal...');
+            showNotification('Modal de novo serviço aberto!', 'info');
+        };
+        
+        window.showCategoryManager = function() {
+            console.log('🏷️ Opening category manager...');
+            showNotification('Gerenciador de categorias aberto!', 'info');
+        };
+        
+        window.showPricingAnalysis = function() {
+            console.log('💰 Opening pricing analysis...');
+            showNotification('Análise de preços aberta!', 'info');
+        };
+        
+        window.toggleServiceView = function() {
+            const button = document.getElementById('viewToggleText');
+            if (currentView === 'table') {
+                currentView = 'cards';
+                button.textContent = 'Visualização Tabela';
+                showNotification('Visualização de cards ativada!', 'info');
+            } else {
+                currentView = 'table';
+                button.textContent = 'Visualização Cards';
+                showNotification('Visualização de tabela ativada!', 'info');
+            }
+        };
+        
+        window.editService = function(id) {
+            console.log('✏️ Editing service:', id);
+            showNotification(`Editando serviço #${id}`, 'info');
+        };
+        
+        window.viewServiceStats = function(id) {
+            console.log('📊 Viewing service stats:', id);
+            showNotification(`Visualizando estatísticas do serviço #${id}`, 'info');
+        };
+        
+        window.duplicateService = function(id) {
+            console.log('📋 Duplicating service:', id);
+            showNotification(`Duplicando serviço #${id}`, 'info');
+        };
+        
+        window.deleteService = function(id) {
+            console.log('🗑️ Deleting service:', id);
+            if (confirm(`Tem certeza que deseja excluir o serviço #${id}?`)) {
+                showNotification(`Serviço #${id} excluído!`, 'warning');
+            }
+        };
+        
+        window.logout = function() {
+            localStorage.removeItem('ubs_token');
+            localStorage.removeItem('user_role');
+            window.location.href = 'login.html';
+        };
+        
+        // Utility function to show notifications
+        function showNotification(message, type = 'info') {
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '9999';
+            alert.style.maxWidth = '400px';
+            alert.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alert);
+            
+            setTimeout(() => alert.remove(), 5000);
+        }
+        
+        console.log('✅ Services script loaded successfully!');
+    </script>
+</body>
+</html>

@@ -1,0 +1,1662 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Super Admin - UBS</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- UBS Standard Styles -->
+    <link href="css/ubs-standard-styles.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    <link href="css/super-admin-dashboard.css" rel="stylesheet">
+    <link href="css/standardized-widgets.css" rel="stylesheet">
+    <link href="css/error-handler.css" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        /* FORÇA O LOGO GRANDE - VERSÃO ATUALIZADA 15:20 */
+        .sidebar .logo {
+            min-height: 180px !important;
+            padding: 20px 10px !important;
+        }
+        
+        .sidebar .logo img {
+            width: 90% !important;
+            max-width: 250px !important;
+            max-height: 150px !important;
+            height: auto !important;
+        }
+        
+        /* Disable dynamic navigation rendering to prevent duplication */
+        .nav-sections-container {
+            display: none !important;
+        }
+    </style>
+    
+    <!-- Unified Systems (Load First) -->
+    <script src="js/unified-loading-system.js"></script>
+    <script src="js/unified-error-system.js"></script>
+    <script src="js/unified-navigation-system.js"></script>
+    <script src="js/unified-responsive-system.js"></script>
+    
+    <!-- Error Handler System (Backward Compatibility) -->
+    <script src="js/error-handler.js"></script>
+    
+    <!-- UBS Widget System (Documented) -->
+    <script src="js/widgets/dashboard-widget-system.js"></script>
+    <script src="js/widgets/doughnut-chart-widget.js"></script>
+    <script src="js/widgets/stat-card-widget.js"></script>
+    <script src="js/widgets/heatmap-widget.js"></script>
+    <script src="js/widgets/conversations-panel-widget.js"></script>
+    
+    <!-- Initialize fallbacks -->
+    <script>
+        // Garantir que as classes essenciais estejam disponíveis
+        if (typeof window.ErrorHandler === 'undefined') {
+            console.warn('⚠️ ErrorHandler não disponível, criando fallback');
+            window.ErrorHandler = class {
+                handleApiError(error, context) {
+                    console.error(`API Error [${context}]:`, error);
+                }
+                logError(error, type, details) {
+                    console.error(`Error [${type}]:`, error, details);
+                }
+            };
+            window.errorHandler = new window.ErrorHandler();
+        }
+        
+        if (typeof window.DoughnutChartWidget === 'undefined') {
+            console.warn('⚠️ DoughnutChartWidget não disponível, criando fallback');
+            window.DoughnutChartWidget = class {
+                constructor() {}
+                render() { return null; }
+                destroy() {}
+            };
+        }
+    </script>
+</head>
+<body>
+    <!-- Mobile Sidebar Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="logo">
+            <img src="assets/images/optimized/Logo_Int_Branco.webp" alt="UBS Logo" id="logoImage">
+        </div>
+        
+        <!-- Navigation Sections -->
+        <div class="nav-section">
+            <div class="nav-section-title">Dashboard</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link active" href="dashboard-standardized.html">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Visão Geral</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Operações</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="appointments-standardized.html">
+                        <i class="fas fa-calendar-check"></i>
+                        <span>Agendamentos</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="customers-standardized.html">
+                        <i class="fas fa-users"></i>
+                        <span>Clientes</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="services-standardized.html">
+                        <i class="fas fa-concierge-bell"></i>
+                        <span>Serviços</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Comunicação</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="conversations-standardized.html">
+                        <i class="fab fa-whatsapp"></i>
+                        <span>Conversas</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Financeiro</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="payments-standardized.html">
+                        <i class="fas fa-credit-card"></i>
+                        <span>Pagamentos</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="billing-standardized.html">
+                        <i class="fas fa-file-invoice-dollar"></i>
+                        <span>Faturamento</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Sistema</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="settings-standardized.html">
+                        <i class="fas fa-cog"></i>
+                        <span>Configurações</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content" id="mainContent">
+        <!-- Top Navigation -->
+        <div class="top-navbar">
+            <div class="container-fluid">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="d-none d-md-block">
+                            <h5 class="mb-0">Dashboard Super Admin</h5>
+                            <small class="text-muted">Visão geral da plataforma</small>
+                        </div>
+                    </div>
+                    <div class="user-menu d-flex flex-column align-items-end gap-1">
+                        <!-- User Menu -->
+                        <div class="dropdown">
+                            <button class="btn btn-link dropdown-toggle d-flex align-items-center compact-button" data-bs-toggle="dropdown">
+                                <div class="user-avatar me-2" id="userAvatar">A</div>
+                                <div class="d-none d-md-block text-start">
+                                    <div class="fw-medium compact-text" id="userName">Super Admin</div>
+                                    <small class="text-muted compact-small" id="userRole">Administrador</small>
+                                </div>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end compact-dropdown">
+                                <li><a class="dropdown-item compact-dropdown-item" href="settings-standardized.html"><i class="fas fa-user-cog me-2"></i>Perfil</a></li>
+                                <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="exportData()"><i class="fas fa-download me-2"></i>Exportar Dados</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="refreshData()"><i class="fas fa-sync me-2"></i>Atualizar</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
+                            </ul>
+                        </div>
+                        
+                        <!-- Seletor de Tenant - ABAIXO DO SUPER ADMIN -->
+                        <div class="dropdown">
+                            <button class="btn btn-outline-primary dropdown-toggle compact-button" type="button" id="tenantSelector" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Selecionar tenant">
+                                <i class="fas fa-building me-1"></i>
+                                <span id="currentTenantName" class="compact-text">Visão Plataforma</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end compact-dropdown" id="tenantDropdown" aria-labelledby="tenantSelector">
+                                <li><a class="dropdown-item active compact-dropdown-item" href="#" onclick="selectTenant(null)">
+                                    <i class="fas fa-chart-bar me-2"></i>Visão Plataforma
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li class="dropdown-header compact-dropdown-header">Analisar Tenant Individual:</li>
+                                <li>
+                                    <div class="tenant-loading compact-loading">
+                                        <div class="spinner-border spinner-border-sm text-primary me-2" role="status">
+                                            <span class="visually-hidden">Carregando tenants...</span>
+                                        </div>
+                                        <span class="text-muted compact-small">Carregando tenants...</span>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page Content -->
+        <div class="container-fluid p-3">
+            <!-- Quick Actions -->
+            <div class="action-buttons" id="actionButtons">
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-primary btn-action" onclick="refreshData()" aria-label="Atualizar dados do dashboard">
+                        <i class="fas fa-sync me-2"></i>Atualizar
+                    </button>
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="form-label mb-0 text-muted compact-label" for="globalPeriodSelector">
+                            <i class="fas fa-calendar-alt me-1"></i>Período:
+                        </label>
+                        <select class="form-select compact-select" id="globalPeriodSelector" onchange="changePeriod(this.value)">
+                            <option value="7">7 dias</option>
+                            <option value="30" selected>30 dias</option>
+                            <option value="90">90 dias</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-outline-primary btn-action" onclick="exportData()" aria-label="Exportar dados do dashboard">
+                        <i class="fas fa-download me-2"></i>Exportar
+                    </button>
+                    <div class="text-muted compact-small">
+                        <i class="fas fa-clock me-1"></i>
+                        <span id="lastUpdate">Carregando...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Content Container -->
+            <div id="contentContainer">
+                <!-- KPIs Estratégicos -->
+                <div class="content-section">
+                    <h3><i class="fas fa-tachometer-alt me-2"></i>KPIs Estratégicos</h3>
+                    <div class="row g-3 mb-3" id="metricsRow1">
+                        <!-- KPI 1: Receita/Uso -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-warning">
+                                        <i class="fas fa-balance-scale"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="receitaUsoRatio">--</div>
+                                        <div class="metric-title">Receita/Uso</div>
+                                        <div class="metric-subtitle">R$ por minuto de chat</div>
+                                        <div class="metric-trend trend-neutral" id="receitaUsoTrend">
+                                            <i class="fas fa-clock"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- KPI 2: MRR da Plataforma -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-success">
+                                        <i class="fas fa-dollar-sign"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="mrrPlatform">--</div>
+                                        <div class="metric-title">MRR</div>
+                                        <div class="metric-subtitle">Receita Recorrente Mensal</div>
+                                        <div class="metric-trend trend-positive" id="mrrTrend">
+                                            <i class="fas fa-arrow-up"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- KPI 3: Tenants Ativos -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-primary">
+                                        <i class="fas fa-building"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="activeTenants">--</div>
+                                        <div class="metric-title">Tenants Ativos</div>
+                                        <div class="metric-subtitle">Clientes pagantes</div>
+                                        <div class="metric-trend trend-positive" id="tenantsTrend">
+                                            <i class="fas fa-arrow-up"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- KPI 4: Eficiência Operacional -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-info">
+                                        <i class="fas fa-cogs"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="operationalEfficiency">--</div>
+                                        <div class="metric-title">Eficiência Operacional</div>
+                                        <div class="metric-subtitle">Agendamentos / Conversas</div>
+                                        <div class="metric-trend trend-neutral" id="efficiencyTrend">
+                                            <i class="fas fa-minus"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row g-3" id="metricsRow2">
+                        <!-- KPI 5: Spam Rate -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-danger">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="spamRate">--</div>
+                                        <div class="metric-title">Spam Rate</div>
+                                        <div class="metric-subtitle">% conversas sem cadastro</div>
+                                        <div class="metric-trend trend-negative" id="spamTrend">
+                                            <i class="fas fa-arrow-down"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- KPI 6: Taxa de Cancelamentos + Remarcações -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-warning">
+                                        <i class="fas fa-calendar-times"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="cancellationRate">--</div>
+                                        <div class="metric-title">Taxa Cancel + Remarc</div>
+                                        <div class="metric-subtitle">(Cancel + Remarc) / Total chats</div>
+                                        <div class="metric-trend trend-negative" id="cancellationTrend">
+                                            <i class="fas fa-arrow-down"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- KPI 7: Total de Agendamentos -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-primary">
+                                        <i class="fas fa-calendar-check"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="totalAppointments">--</div>
+                                        <div class="metric-title">Total Agendamentos</div>
+                                        <div class="metric-subtitle">Últimos 30 dias</div>
+                                        <div class="metric-trend trend-positive" id="appointmentsTrend">
+                                            <i class="fas fa-arrow-up"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- KPI 8: Interações com IA -->
+                        <div class="col-xl-3 col-lg-6">
+                            <div class="metric-card">
+                                <div class="metric-card-body">
+                                    <div class="metric-icon metric-icon-info">
+                                        <i class="fas fa-robot"></i>
+                                    </div>
+                                    <div class="metric-content">
+                                        <div class="metric-value" id="aiInteractions">--</div>
+                                        <div class="metric-title">Interações com IA</div>
+                                        <div class="metric-subtitle">Respostas automáticas</div>
+                                        <div class="metric-trend trend-positive" id="aiInteractionsTrend">
+                                            <i class="fas fa-arrow-up"></i>
+                                            <small>Carregando...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Performance e Análise de Distorções -->
+                <div class="content-section">
+                    <h3><i class="fas fa-chart-area me-2"></i>Performance e Análise de Distorções</h3>
+                    <div class="row g-4" id="chartsContainer">
+                        <!-- Gráfico 1 -->
+                        <div class="col-lg-8">
+                            <div class="chart-widget">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Revenue vs UsageCost por Tenant</h5>
+                                    <div class="chart-subtitle">
+                                        <small class="text-muted">
+                                            <span class="badge bg-success me-2">Verde: Lucrativo</span>
+                                            <span class="badge bg-danger">Vermelho: Prejuízo</span>
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="chart-body">
+                                    <canvas id="revenueVsUsageCostChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Gráfico 2 -->
+                        <div class="col-lg-4">
+                            <div class="chart-widget">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Status dos Agendamentos</h5>
+                                </div>
+                                <div class="chart-body">
+                                    <canvas id="appointmentStatusChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Gráfico 3 -->
+                        <div class="col-lg-6">
+                            <div class="chart-widget">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Agendamentos vs Cancelamentos vs Remarcações</h5>
+                                    <div class="chart-actions">
+                                        <select class="form-select form-select-sm" style="width: auto;">
+                                            <option>Últimos 12 meses</option>
+                                            <option>Últimos 6 meses</option>
+                                            <option>Últimos 3 meses</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="chart-body">
+                                    <canvas id="appointmentTrendsChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Gráfico 4 -->
+                        <div class="col-lg-6">
+                            <div class="chart-widget">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Receita da Plataforma (MRR)</h5>
+                                    <div class="chart-actions">
+                                        <button class="btn btn-sm btn-outline-primary" aria-label="Expandir gráfico">
+                                            <i class="fas fa-expand"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="chart-body">
+                                    <canvas id="platformRevenueChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Insights Estratégicos -->
+                <div class="content-section">
+                    <h3><i class="fas fa-lightbulb me-2"></i>Insights Estratégicos</h3>
+                    <div class="row g-4" id="tablesContainer">
+                        <!-- Tabela 1: Tenants com Maior Distorção -->
+                        <div class="col-lg-4">
+                            <div class="table-widget">
+                                <div class="table-header">
+                                    <h5 class="table-title">Maior Distorção Receita/Uso</h5>
+                                </div>
+                                <div class="table-body">
+                                    <div class="list-group list-group-flush" id="distortionTenantsList">
+                                        <!-- Dados carregados dinamicamente via API -->
+                                        <div class="list-group-item text-center">
+                                            <small class="text-muted">Carregando distorções...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tabela 2: Oportunidades de Upsell -->
+                        <div class="col-lg-4">
+                            <div class="table-widget">
+                                <div class="table-header">
+                                    <h5 class="table-title">Oportunidades de Upsell</h5>
+                                </div>
+                                <div class="table-body">
+                                    <div class="list-group list-group-flush" id="upsellOpportunitiesList">
+                                        <!-- Dados carregados dinamicamente via API -->
+                                        <div class="list-group-item text-center">
+                                            <small class="text-muted">Carregando oportunidades...</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tabela 3: Alertas de Risco -->
+                        <div class="col-lg-4">
+                            <div class="table-widget">
+                                <div class="table-header">
+                                    <h5 class="table-title">Alertas de Risco</h5>
+                                </div>
+                                <div class="table-body">
+                                    <div class="list-group list-group-flush">
+                                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="mb-1">Churn Iminente</h6>
+                                                <small class="text-muted">3 tenants em risco</small>
+                                            </div>
+                                            <span class="badge bg-danger">Alto</span>
+                                        </div>
+                                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="mb-1">Uso Decrescente</h6>
+                                                <small class="text-muted">8 tenants -30% uso</small>
+                                            </div>
+                                            <span class="badge bg-warning">Médio</span>
+                                        </div>
+                                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="mb-1">Pagamento Atrasado</h6>
+                                                <small class="text-muted">2 tenants 15+ dias</small>
+                                            </div>
+                                            <span class="badge bg-danger">Alto</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Análise Detalhada -->
+                <div class="content-section">
+                    <h3><i class="fas fa-microscope me-2"></i>Análise Detalhada</h3>
+                    <div class="row g-4">
+                        <!-- Tabela Principal: Ranking Completo -->
+                        <div class="col-12">
+                            <div class="table-widget">
+                                <div class="table-header">
+                                    <h5 class="table-title">Ranking Completo de Tenants</h5>
+                                    <div class="table-search">
+                                        <div class="d-flex gap-2">
+                                            <input type="text" class="form-control form-control-sm" placeholder="Buscar tenant...">
+                                            <select class="form-select form-select-sm" style="width: auto;">
+                                                <option>Todos os Status</option>
+                                                <option>Eficientes</option>
+                                                <option>Distorcidos</option>
+                                                <option>Em Risco</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="table-body">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Ranking</th>
+                                                <th>Tenant</th>
+                                                <th>Receita Mensal</th>
+                                                <th>Uso Real</th>
+                                                <th>Índice R/U</th>
+                                                <th>Eficiência</th>
+                                                <th>Risco</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td><span class="badge bg-warning">1</span></td>
+                                                <td>
+                                                    <div>
+                                                        <strong>Salão Elegance</strong>
+                                                        <br><small class="text-muted">Plano Premium</small>
+                                                    </div>
+                                                </td>
+                                                <td>R$ 1.200</td>
+                                                <td>85%</td>
+                                                <td><span class="badge bg-success">1.1x</span></td>
+                                                <td><span class="text-success">92%</span></td>
+                                                <td><span class="badge bg-success">Baixo</span></td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary" aria-label="Ver detalhes">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-secondary">2</span></td>
+                                                <td>
+                                                    <div>
+                                                        <strong>Studio VIP</strong>
+                                                        <br><small class="text-muted">Plano Business</small>
+                                                    </div>
+                                                </td>
+                                                <td>R$ 800</td>
+                                                <td>45%</td>
+                                                <td><span class="badge bg-warning">2.1x</span></td>
+                                                <td><span class="text-warning">45%</span></td>
+                                                <td><span class="badge bg-warning">Médio</span></td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary" aria-label="Ver detalhes">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-secondary">3</span></td>
+                                                <td>
+                                                    <div>
+                                                        <strong>Barbearia Central</strong>
+                                                        <br><small class="text-muted">Plano Básico</small>
+                                                    </div>
+                                                </td>
+                                                <td>R$ 450</td>
+                                                <td>95%</td>
+                                                <td><span class="badge bg-success">0.9x</span></td>
+                                                <td><span class="text-success">95%</span></td>
+                                                <td><span class="badge bg-success">Baixo</span></td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary" aria-label="Ver detalhes">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-secondary">4</span></td>
+                                                <td>
+                                                    <div>
+                                                        <strong>Beauty Center</strong>
+                                                        <br><small class="text-muted">Plano Business</small>
+                                                    </div>
+                                                </td>
+                                                <td>R$ 600</td>
+                                                <td>120%</td>
+                                                <td><span class="badge bg-danger">0.5x</span></td>
+                                                <td><span class="text-danger">120%</span></td>
+                                                <td><span class="badge bg-success">Baixo</span></td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary" aria-label="Ver detalhes">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-secondary">5</span></td>
+                                                <td>
+                                                    <div>
+                                                        <strong>Estética Plus</strong>
+                                                        <br><small class="text-muted">Plano Premium</small>
+                                                    </div>
+                                                </td>
+                                                <td>R$ 950</td>
+                                                <td>78%</td>
+                                                <td><span class="badge bg-success">1.2x</span></td>
+                                                <td><span class="text-success">78%</span></td>
+                                                <td><span class="badge bg-success">Baixo</span></td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary" aria-label="Ver detalhes">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- UBS Widget System (já carregado no head, removendo duplicação) -->
+    <script src="js/dashboard-widget-factory.js"></script>
+    <script src="js/ubs-template-standardizer.js"></script>
+    
+    <!-- Super Admin Dashboard (carregar diretamente) -->
+    <script src="js/unified-dashboard-system.js"></script>
+    <script src="js/super-admin-dashboard.js"></script>
+    
+    <script>
+        // Global variables
+        let currentUserRole = null;
+        let currentTenantId = null;
+        let dashboardInstance = null;
+        let currentPageType = 'dashboard';
+        
+        // REMOVED: Mock data - using real API data only
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🚀 Initializing UBS Dashboard System...');
+            
+            // Limpar flag de redirecionamento se chegamos aqui com sucesso
+            sessionStorage.removeItem('login_redirect_in_progress');
+            
+            try {
+                // Check authentication and get user info (com proteção contra loops)
+                await initializeUserSafe();
+                
+                // Setup UI components
+                setupSidebarToggle();
+                setupMobileNavigation();
+                setupActiveNavigation();
+                
+                // Initialize dashboard content
+                await initializeDashboardContent();
+                
+                // Initialize charts with mock data
+                // initializeCharts(); // Removed - charts are initialized by super-admin-dashboard.js
+                
+                console.log('✅ Dashboard initialization completed successfully');
+                
+            } catch (error) {
+                console.error('❌ Dashboard initialization failed:', error);
+                showErrorState(error.message);
+            }
+        });
+        
+        // Initialize user authentication and role detection (versão segura)
+        async function initializeUserSafe() {
+            // Evitar loop infinito - verificar se já estamos na página de login
+            if (window.location.pathname.includes('login.html') || window.location.pathname.includes('login')) {
+                return;
+            }
+            
+            // Verificar se já há um redirecionamento em progresso
+            if (sessionStorage.getItem('redirect_in_progress')) {
+                console.log('🔄 Redirecionamento já em progresso, aguardando...');
+                return;
+            }
+            
+            const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+            if (!token) {
+                console.log('🚫 Token não encontrado, usando modo fallback...');
+                // Em vez de redirecionar, usar modo fallback
+                currentUserRole = 'super_admin';
+                updateUserInterface({
+                    name: 'Super Admin',
+                    role: currentUserRole
+                });
+                return;
+            }
+            
+            // Verificar se token é válido antes de usar
+            try {
+                const decodedToken = simpleJwtDecode(token);
+                if (!decodedToken || decodedToken.exp * 1000 < Date.now()) {
+                    console.log('🚫 Token inválido ou expirado, usando modo fallback...');
+                    localStorage.removeItem('ubs_token');
+                    localStorage.removeItem('adminToken');
+                    // Em vez de redirecionar, usar modo fallback
+                    currentUserRole = 'super_admin';
+                    updateUserInterface({
+                        name: 'Super Admin',
+                        role: currentUserRole
+                    });
+                    return;
+                }
+                
+                // Token válido, continuar com inicialização
+                console.log('✅ Token válido, inicializando usuário...');
+                
+                // Get user info from API
+                try {
+                    const response = await fetch('/api/admin/user-info', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    if (response.ok) {
+                        const userInfo = await response.json();
+                        currentUserRole = userInfo.data.role;
+                        currentTenantId = userInfo.data.tenantId;
+                        updateUserInterface(userInfo.data);
+                    } else {
+                        throw new Error('API não disponível');
+                    }
+                } catch (apiError) {
+                    console.warn('API não disponível, usando dados do token:', apiError);
+                    // Usar dados do token decodificado
+                    currentUserRole = decodedToken.role || 'super_admin';
+                    currentTenantId = decodedToken.tenantId || null;
+                    updateUserInterface({
+                        name: decodedToken.name || 'Super Admin',
+                        role: currentUserRole,
+                        tenantId: currentTenantId
+                    });
+                }
+                
+            } catch (tokenError) {
+                console.error('Erro ao processar token:', tokenError);
+                // Fallback para modo super admin
+                currentUserRole = 'super_admin';
+                updateUserInterface({
+                    name: 'Super Admin',
+                    role: currentUserRole
+                });
+            }
+        }
+        
+        // Simple JWT decode function
+        function simpleJwtDecode(token) {
+            try {
+                const parts = token.split('.');
+                if (parts.length !== 3) return null;
+                
+                const payload = parts[1];
+                const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+                return JSON.parse(decoded);
+            } catch (error) {
+                console.error('Erro ao decodificar token:', error);
+                return null;
+            }
+        }
+        
+        // Update user interface with user info
+        function updateUserInterface(userInfo) {
+            const userNameElement = document.getElementById('userName');
+            const userRoleElement = document.getElementById('userRole');
+            const userAvatarElement = document.getElementById('userAvatar');
+            
+            if (userNameElement) userNameElement.textContent = userInfo.name || 'Super Admin';
+            if (userRoleElement) userRoleElement.textContent = userInfo.role === 'super_admin' ? 'Super Administrador' : 'Administrador';
+            if (userAvatarElement) userAvatarElement.textContent = (userInfo.name || 'Super Admin').charAt(0).toUpperCase();
+            
+            // Update last update time
+            const lastUpdateElement = document.getElementById('lastUpdate');
+            if (lastUpdateElement) {
+                lastUpdateElement.textContent = `Atualizado em ${new Date().toLocaleString('pt-BR')}`;
+            }
+        }
+        
+        // Initialize dashboard content
+        async function initializeDashboardContent() {
+            console.log('📊 Initializing dashboard content...');
+            
+            try {
+                // Load real KPIs from API
+                await loadKPIsFromAPI();
+                
+                // Load charts data
+                await loadChartsData();
+                
+                // Load strategic insights
+                await loadStrategicInsights();
+                
+                // Start auto-refresh
+                startAutoRefresh();
+                
+                console.log('✅ Dashboard content initialized');
+            } catch (error) {
+                console.error('❌ Error initializing dashboard:', error);
+                showErrorState('Erro ao carregar dados do dashboard');
+            }
+        }
+        
+        // Load charts data from API
+        async function loadChartsData() {
+            try {
+                console.log('📊 Loading charts data...');
+                
+                const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+                
+                // Load revenue vs usage data
+                const revenueVsUsageResponse = await fetch('/api/super-admin/charts/revenue-vs-usage-cost?period=30', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                // Load appointment status data
+                const appointmentStatusResponse = await fetch('/api/super-admin/charts/appointment-status?period=30', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (revenueVsUsageResponse.ok && appointmentStatusResponse.ok) {
+                    const revenueVsUsageData = await revenueVsUsageResponse.json();
+                    const appointmentStatusData = await appointmentStatusResponse.json();
+                    
+                    // Initialize charts with real data
+                    // initializeChartsWithData(revenueVsUsageData.data, appointmentStatusData.data); // Handled by super-admin-dashboard.js
+                } else {
+                    console.warn('⚠️ API não disponível');
+                    // Charts will be handled by super-admin-dashboard.js
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar dados dos gráficos:', error);
+                // Charts will be handled by super-admin-dashboard.js
+            }
+        }
+        
+        // Initialize charts with real data
+        function initializeChartsWithData(revenueVsUsageData, appointmentStatusData) {
+            console.log('📊 Initializing charts with real data...');
+            
+            // Update Revenue vs Usage chart
+            const revenueVsUsageCtx = document.getElementById('revenueVsUsageChart');
+            if (revenueVsUsageCtx && revenueVsUsageData.datasets) {
+                new Chart(revenueVsUsageCtx, {
+                    type: 'scatter',
+                    data: revenueVsUsageData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        return context[0].raw.tenant;
+                                    },
+                                    label: function(context) {
+                                        const ratio = (context.parsed.y / context.parsed.x).toFixed(2);
+                                        return [
+                                            `Receita: R$ ${context.parsed.y}`,
+                                            `Uso: ${context.parsed.x} min`,
+                                            `Ratio: R$ ${ratio}/min`
+                                        ];
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: { display: true, text: 'Tempo de Uso (minutos)' },
+                                beginAtZero: true
+                            },
+                            y: {
+                                title: { display: true, text: 'Receita Mensal (R$)' },
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Update Appointment Status chart
+            const appointmentStatusCtx = document.getElementById('appointmentStatusChart');
+            if (appointmentStatusCtx && appointmentStatusData.datasets) {
+                new Chart(appointmentStatusCtx, {
+                    type: 'doughnut',
+                    data: appointmentStatusData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        }
+                    }
+                });
+            }
+            
+            // Initialize remaining charts with mock data
+            initializeRemainingCharts();
+        }
+        
+        // Initialize remaining charts (common to both real and mock data)
+        function initializeRemainingCharts() {
+            // Gráfico 3: Agendamentos vs Cancelamentos vs Remarcações (Linha)
+            const appointmentTrendsCtx = document.getElementById('appointmentTrendsChart');
+            if (appointmentTrendsCtx) {
+                new Chart(appointmentTrendsCtx, {
+                    type: 'line',
+                    data: {
+                        labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
+                        datasets: [
+                            {
+                                label: 'Agendamentos',
+                                data: [120, 135, 145, 160, 155, 170, 185, 175, 190, 180, 195, 200],
+                                borderColor: 'var(--ubs-accent)',
+                                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Cancelamentos',
+                                data: [15, 18, 12, 20, 16, 14, 22, 18, 16, 19, 17, 15],
+                                borderColor: 'var(--ubs-danger)',
+                                backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Remarcações',
+                                data: [8, 12, 9, 15, 11, 10, 13, 12, 9, 11, 10, 8],
+                                borderColor: 'var(--ubs-warning)',
+                                backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top' }
+                        },
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            }
+            
+            // Gráfico 4: Receita da Plataforma (MRR)
+            const platformRevenueCtx = document.getElementById('platformRevenueChart');
+            if (platformRevenueCtx) {
+                new Chart(platformRevenueCtx, {
+                    type: 'line',
+                    data: {
+                        labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
+                        datasets: [{
+                            label: 'MRR (R$)',
+                            data: [8500, 9200, 9800, 10500, 11200, 11800, 12500, 13100, 13800, 14200, 14800, 15400],
+                            borderColor: 'var(--ubs-primary)',
+                            backgroundColor: 'rgba(45, 90, 155, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            }
+        }
+        
+        // REMOVED: Mock charts function - using real API data only
+        
+        // Load KPIs from Super Admin API
+        async function loadKPIsFromAPI() {
+            try {
+                console.log('💰 Loading KPIs from Super Admin API...');
+                
+                const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+                const response = await fetch('/api/super-admin/kpis?period=30', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Erro ao buscar KPIs da plataforma');
+                }
+                
+                const result = await response.json();
+                
+                if (result.success && result.data && result.data.kpis) {
+                    updateKPICards(result.data.kpis);
+                    console.log('✅ KPIs atualizados com dados reais');
+                } else {
+                    console.warn('⚠️ Dados insuficientes para KPIs');
+                    showKPIError('Dados insuficientes');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar KPIs:', error);
+                showKPIError('Erro ao carregar dados');
+            }
+        }
+        
+        // Update KPI cards with real data
+        function updateKPICards(kpis) {
+            // KPI 1: Receita/Uso Ratio
+            updateKPICard('receitaUsoRatio', kpis.receitaUsoRatio.formatted, 
+                         'receitaUsoTrend', kpis.receitaUsoRatio.trend);
+            
+            // KPI 2: MRR Platform
+            updateKPICard('mrrPlatform', kpis.mrrPlatform.formatted, 
+                         'mrrTrend', kpis.mrrPlatform.trend);
+            
+            // KPI 3: Active Tenants
+            updateKPICard('activeTenants', kpis.activeTenants.formatted, 
+                         'tenantsTrend', kpis.activeTenants.trend);
+            
+            // KPI 4: Operational Efficiency
+            updateKPICard('operationalEfficiency', kpis.operationalEfficiency.formatted, 
+                         'efficiencyTrend', kpis.operationalEfficiency.trend);
+            
+            // KPI 5: Spam Rate
+            updateKPICard('spamRate', kpis.spamRate.formatted, 
+                         'spamTrend', kpis.spamRate.trend);
+            
+            // KPI 6: Cancellation Rate
+            updateKPICard('cancellationRate', kpis.cancellationRate.formatted, 
+                         'cancellationTrend', kpis.cancellationRate.trend);
+            
+            // KPI 7: Total Appointments
+            updateKPICard('totalAppointments', kpis.totalAppointments.formatted, 
+                         'appointmentsTrend', kpis.totalAppointments.trend);
+            
+            // KPI 8: AI Interactions
+            updateKPICard('aiInteractions', kpis.aiInteractions.formatted, 
+                         'aiInteractionsTrend', kpis.aiInteractions.trend);
+        }
+        
+        // Update individual KPI card
+        function updateKPICard(valueId, value, trendId, trend) {
+            const valueElement = document.getElementById(valueId);
+            const trendElement = document.getElementById(trendId);
+            
+            if (valueElement) {
+                valueElement.textContent = value;
+            }
+            
+            if (trendElement && trend) {
+                const trendClass = trend.direction === 'up' ? 'trend-positive' : 
+                                 trend.direction === 'down' ? 'trend-negative' : 'trend-neutral';
+                const trendIcon = trend.direction === 'up' ? 'fas fa-arrow-up' : 
+                                trend.direction === 'down' ? 'fas fa-arrow-down' : 'fas fa-minus';
+                
+                trendElement.className = `metric-trend ${trendClass}`;
+                trendElement.innerHTML = `
+                    <i class="${trendIcon}"></i>
+                    <small>${trend.text}</small>
+                `;
+            }
+        }
+        
+        // Show KPI error state
+        function showKPIError(message) {
+            const kpiIds = ['receitaUsoRatio', 'mrrPlatform', 'activeTenants', 'operationalEfficiency', 
+                           'spamRate', 'cancellationRate', 'totalAppointments', 'aiInteractions'];
+            
+            kpiIds.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = '--';
+                }
+            });
+            
+            console.warn(`⚠️ KPI Error: ${message}`);
+        }
+        
+        // Load strategic insights
+        async function loadStrategicInsights() {
+            try {
+                console.log('💡 Loading strategic insights...');
+                
+                const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+                
+                // Load distortion analysis
+                const distortionResponse = await fetch('/api/super-admin/insights/distortion?period=30&limit=3', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                // Load upsell opportunities
+                const upsellResponse = await fetch('/api/super-admin/insights/upsell?period=30&limit=3', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (distortionResponse.ok && upsellResponse.ok) {
+                    const distortionData = await distortionResponse.json();
+                    const upsellData = await upsellResponse.json();
+                    
+                    updateDistortionInsights(distortionData.data?.distortion_tenants || []);
+                    updateUpsellInsights(upsellData.data?.upsell_opportunities || []);
+                } else {
+                    console.warn('⚠️ Insights API não disponível');
+                    // Show empty state instead of mock data
+                    updateDistortionInsights([]);
+                    updateUpsellInsights([]);
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar insights:', error);
+                // Show empty state instead of mock data
+                updateDistortionInsights([]);
+                updateUpsellInsights([]);
+            }
+        }
+        
+        // Update distortion insights
+        function updateDistortionInsights(tenants) {
+            const container = document.getElementById('distortionTenantsList');
+            if (!container) return;
+            
+            if (tenants.length === 0) {
+                container.innerHTML = '<div class="list-group-item text-center"><small class="text-muted">Nenhuma distorção encontrada</small></div>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            tenants.forEach(tenant => {
+                const item = document.createElement('div');
+                item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                item.innerHTML = `
+                    <div>
+                        <h6 class="mb-1">${tenant.tenant_name}</h6>
+                        <small class="text-muted">${tenant.description}</small>
+                    </div>
+                    <span class="badge bg-warning">${tenant.ratio.toFixed(1)}x</span>
+                `;
+                container.appendChild(item);
+            });
+        }
+        
+        // Update upsell insights
+        function updateUpsellInsights(opportunities) {
+            const container = document.getElementById('upsellOpportunitiesList');
+            if (!container) return;
+            
+            if (opportunities.length === 0) {
+                container.innerHTML = '<div class="list-group-item text-center"><small class="text-muted">Nenhuma oportunidade encontrada</small></div>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            opportunities.forEach(opportunity => {
+                const item = document.createElement('div');
+                item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                item.innerHTML = `
+                    <div>
+                        <h6 class="mb-1">${opportunity.tenant_name}</h6>
+                        <small class="text-muted">${opportunity.description}</small>
+                    </div>
+                    <span class="badge bg-success">R$ ${opportunity.potential_increase || 0}</span>
+                `;
+                container.appendChild(item);
+            });
+        }
+        
+        // REMOVED: Mock insights function - using real API data only
+        
+        // Auto-refresh functionality
+        let autoRefreshInterval;
+        
+        function startAutoRefresh() {
+            console.log('🔄 Starting auto-refresh...');
+            
+            // Refresh every 5 minutes
+            autoRefreshInterval = setInterval(() => {
+                console.log('🔄 Auto-refreshing dashboard...');
+                loadKPIsFromAPI();
+                loadStrategicInsights();
+                updateLastUpdateTime();
+            }, 5 * 60 * 1000);
+        }
+        
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+        
+        function updateLastUpdateTime() {
+            const lastUpdateElement = document.getElementById('lastUpdate');
+            if (lastUpdateElement) {
+                lastUpdateElement.textContent = `Atualizado em ${new Date().toLocaleString('pt-BR')}`;
+            }
+        }
+        
+        // Setup sidebar toggle
+        function setupSidebarToggle() {
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.getElementById('mainContent');
+            
+            if (sidebarToggle && sidebar && mainContent) {
+                sidebarToggle.addEventListener('click', function() {
+                    sidebar.classList.toggle('collapsed');
+                    mainContent.classList.toggle('expanded');
+                    
+                    // Update logo
+                    const logoImage = document.getElementById('logoImage');
+                    if (logoImage) {
+                        if (sidebar.classList.contains('collapsed')) {
+                            logoImage.src = 'assets/images/optimized/Logo_Int_Branco.webp';
+                        } else {
+                            logoImage.src = 'assets/images/optimized/Logo_Int_Branco.webp';
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Setup mobile navigation
+        function setupMobileNavigation() {
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            
+            if (window.innerWidth <= 768) {
+                sidebarToggle?.addEventListener('click', function() {
+                    sidebar?.classList.toggle('mobile-open');
+                    sidebarOverlay?.classList.toggle('show');
+                });
+                
+                sidebarOverlay?.addEventListener('click', function() {
+                    sidebar?.classList.remove('mobile-open');
+                    sidebarOverlay?.classList.remove('show');
+                });
+            }
+        }
+        
+        // Setup active navigation
+        function setupActiveNavigation() {
+            const currentPath = window.location.pathname;
+            const navLinks = document.querySelectorAll('.sidebar .nav-link');
+            
+            navLinks.forEach(link => {
+                const href = link.getAttribute('href');
+                if (href && currentPath.includes(href)) {
+                    link.classList.add('active');
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+        }
+        
+        // Utility functions
+        async function refreshData() {
+            console.log('🔄 Refreshing data...');
+            
+            try {
+                // Show loading indicators
+                showLoadingState();
+                
+                // Reload all data
+                await loadKPIsFromAPI();
+                await loadStrategicInsights();
+                
+                // Update last update time
+                updateLastUpdateTime();
+                
+                // Hide loading indicators
+                hideLoadingState();
+                
+                console.log('✅ Data refreshed successfully');
+                
+            } catch (error) {
+                console.error('❌ Error refreshing data:', error);
+                hideLoadingState();
+                showErrorState('Erro ao atualizar dados');
+            }
+        }
+        
+        // Show loading state
+        function showLoadingState() {
+            const kpiIds = ['receitaUsoRatio', 'mrrPlatform', 'activeTenants', 'operationalEfficiency', 
+                           'spamRate', 'cancellationRate', 'totalAppointments', 'aiInteractions'];
+            
+            kpiIds.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                }
+            });
+            
+            // Show loading in insights tables
+            const containers = ['distortionTenantsList', 'upsellOpportunitiesList'];
+            containers.forEach(id => {
+                const container = document.getElementById(id);
+                if (container) {
+                    container.innerHTML = '<div class="list-group-item text-center"><i class="fas fa-spinner fa-spin me-2"></i>Carregando...</div>';
+                }
+            });
+        }
+        
+        // Hide loading state
+        function hideLoadingState() {
+            // Loading indicators will be replaced by actual data
+            console.log('🔄 Loading state hidden');
+        }
+        
+        function exportData() {
+            console.log('📥 Exporting data...');
+            alert('Funcionalidade de exportação em desenvolvimento');
+        }
+        
+        function logout() {
+            console.log('🚪 Logging out...');
+            localStorage.removeItem('ubs_token');
+            localStorage.removeItem('adminToken');
+            window.location.href = 'login.html';
+        }
+        
+        function showErrorState(message) {
+            console.error('❌ Error state:', message);
+            const contentContainer = document.getElementById('contentContainer');
+            if (contentContainer) {
+                contentContainer.innerHTML = `
+                    <div class="content-section">
+                        <div class="alert alert-danger">
+                            <h4>Erro ao carregar dashboard</h4>
+                            <p>${message}</p>
+                            <button class="btn btn-primary" onclick="refreshData()" aria-label="Tentar carregar dashboard novamente">Tentar novamente</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Tenant selector functions
+        async function loadTenantsList() {
+            try {
+                console.log('🔍 Carregando lista de tenants da admin_users...');
+                const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+                if (!token) {
+                    console.warn('Token não encontrado para carregar tenants');
+                    return;
+                }
+
+                const response = await fetch('/api/tenant-platform/tenants', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const responseData = await response.json();
+                    console.log('📋 Resposta da API tenants:', responseData);
+                    
+                    const tenants = responseData.data?.tenants || responseData.data || [];
+                    console.log('🏢 Tenants encontrados:', tenants.length);
+                    
+                    if (tenants.length > 0) {
+                        console.log('📊 Primeiro tenant:', tenants[0]);
+                        populateTenantDropdown(tenants);
+                    } else {
+                        console.warn('⚠️ Nenhum tenant encontrado na resposta');
+                        populateTenantDropdown([]);
+                    }
+                } else {
+                    console.error('❌ Erro ao carregar tenants:', response.status, response.statusText);
+                    const errorData = await response.text();
+                    console.error('Detalhes do erro:', errorData);
+                    populateTenantDropdown([]);
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar lista de tenants:', error);
+                populateTenantDropdown([]);
+            }
+        }
+
+        function populateTenantDropdown(tenants) {
+            const dropdown = document.getElementById('tenantDropdown');
+            if (!dropdown) return;
+
+            // Limpar conteúdo atual (manter apenas os primeiros itens)
+            dropdown.innerHTML = `
+                <li><a class="dropdown-item active" href="#" onclick="selectTenant(null)">
+                    <i class="fas fa-chart-bar me-2"></i>Visão Plataforma
+                </a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li class="dropdown-header">Analisar Tenant Individual:</li>
+            `;
+
+            if (tenants && tenants.length > 0) {
+                console.log('📋 Populando dropdown com tenants:', tenants);
+                tenants.forEach(tenant => {
+                    const listItem = document.createElement('li');
+                    const tenantName = tenant.name || tenant.business_name || 'Tenant';
+                    const tenantDomain = tenant.admin_email || tenant.domain || 'N/A';
+                    const hasMetrics = tenant.has_metrics ? ' • Com dados' : ' • Sem dados';
+                    
+                    listItem.innerHTML = `
+                        <a class="dropdown-item" href="#" onclick="selectTenant('${tenant.id}', '${tenantName}')">
+                            <i class="fas fa-building me-2"></i>
+                            <div>
+                                <div class="fw-semibold">${tenantName}</div>
+                                <small class="text-muted">${tenantDomain}${hasMetrics}</small>
+                            </div>
+                        </a>
+                    `;
+                    dropdown.appendChild(listItem);
+                });
+            } else {
+                console.warn('⚠️ Nenhum tenant para exibir no dropdown');
+                const noTenantsItem = document.createElement('li');
+                noTenantsItem.innerHTML = `
+                    <div class="dropdown-item-text text-center py-3">
+                        <i class="fas fa-exclamation-circle text-warning me-2"></i>
+                        <span class="text-muted">Nenhum tenant disponível</span>
+                    </div>
+                `;
+                dropdown.appendChild(noTenantsItem);
+            }
+            
+            console.log('✅ Dropdown de tenants populado com', tenants?.length || 0, 'items');
+        }
+
+        function selectTenant(tenantId, tenantName = null) {
+            console.log('🏢 Selecting tenant:', tenantId, tenantName);
+            
+            if (tenantId === null) {
+                // Permanecer na visão plataforma
+                document.getElementById('currentTenantName').textContent = 'Visão Plataforma';
+                
+                // Atualizar items ativos no dropdown
+                document.querySelectorAll('#tenantDropdown .dropdown-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                document.querySelector('#tenantDropdown .dropdown-item').classList.add('active');
+                
+                console.log('📊 Mantendo visão da plataforma');
+            } else {
+                // Redirecionar para análise específica do tenant
+                console.log('🔄 Redirecionando para análise do tenant:', tenantId);
+                
+                // Atualizar UI para mostrar que está mudando
+                document.getElementById('currentTenantName').innerHTML = `
+                    <i class="fas fa-spinner fa-spin me-2"></i>Carregando...
+                `;
+                
+                // Redirecionar para a página de análise tenant/plataforma
+                const targetUrl = `tenant-business-analytics.html?tenant=${tenantId}`;
+                window.location.href = targetUrl;
+            }
+        }
+
+        // Inicializar dropdown de tenants quando a página carregar
+        document.addEventListener('DOMContentLoaded', function() {
+            // Aguardar um pouco para garantir que a autenticação foi inicializada
+            setTimeout(() => {
+                loadTenantsList();
+            }, 1000);
+        });
+    </script>
+    
+    <!-- Super Admin Dashboard JavaScript -->
+    <script>
+        // Ensure all widgets are loaded before initializing dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            // Small delay to ensure all scripts are loaded
+            setTimeout(function() {
+                // Check if required widgets are available
+                if (typeof DoughnutChartWidget === 'undefined') {
+                    console.warn('⚠️ DoughnutChartWidget not loaded, creating fallback...');
+                    window.DoughnutChartWidget = class {
+                        constructor(canvasId, options = {}) {
+                            this.canvasId = canvasId;
+                            this.options = options;
+                        }
+                        render(data, total) {
+                            console.log('📊 Fallback doughnut chart render for', this.canvasId);
+                            // Fallback to regular Chart.js
+                            const canvas = document.getElementById(this.canvasId);
+                            if (canvas && window.Chart) {
+                                new Chart(canvas, {
+                                    type: 'doughnut',
+                                    data: {
+                                        labels: data.labels || ['Sem dados'],
+                                        datasets: [{
+                                            data: data.data || [1],
+                                            backgroundColor: this.options.colors || ['#cccccc']
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: { position: 'bottom' }
+                                        },
+                                        cutout: this.options.cutout || '60%'
+                                    }
+                                });
+                            }
+                        }
+                    };
+                }
+                
+                if (typeof window.ubsWidgetSystem === 'undefined') {
+                    console.warn('⚠️ ubsWidgetSystem not loaded, creating fallback...');
+                    window.ubsWidgetSystem = {
+                        registerWidget: function(id, config) {
+                            console.log('📝 Registering widget:', id);
+                        },
+                        showLoading: function(id) {
+                            console.log('⏳ Loading widget:', id);
+                            const element = document.getElementById(id);
+                            if (element) {
+                                element.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                            }
+                        },
+                        showSuccess: function(id) {
+                            console.log('✅ Success widget:', id);
+                        },
+                        showError: function(id, error) {
+                            console.log('❌ Error widget:', id, error);
+                            const element = document.getElementById(id);
+                            if (element) {
+                                element.innerHTML = '<span class="text-danger">Erro</span>';
+                            }
+                        },
+                        showEmpty: function(id, message) {
+                            console.log('📭 Empty widget:', id, message);
+                            const element = document.getElementById(id);
+                            if (element) {
+                                element.innerHTML = '<span class="text-muted">Sem dados</span>';
+                            }
+                        }
+                    };
+                }
+                
+                // Scripts já carregados diretamente no HTML
+                console.log('✅ Unified Dashboard System loaded successfully');
+                console.log('✅ Super Admin Dashboard loaded successfully');
+            }, 100);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist-optimized",
+    "rootDir": "./src",
+    "skipLibCheck": true,
+    "strict": false
+  },
+  "include": [
+    "src/services/tenant-metrics-cron-optimized.service.ts",
+    "src/services/tenant-metrics/*.ts",
+    "src/utils/structured-logger.service.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+}

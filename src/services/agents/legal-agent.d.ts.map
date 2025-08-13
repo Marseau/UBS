@@ -1,0 +1,1 @@
+{"version":3,"file":"legal-agent.d.ts","sourceRoot":"","sources":["../../../src/services/agents/legal-agent.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAmD,MAAM,sBAAsB,CAAA;AAa/F,qBAAa,UAAU;IACrB,OAAO,CAAC,KAAK,CAAS;;IAyBtB,QAAQ,IAAI,OAAO;IAInB,OAAO,CAAC,iBAAiB;IA0EzB,OAAO,CAAC,cAAc;YAqLR,iBAAiB;YAmGjB,sBAAsB;YAkFtB,qBAAqB;YAiGrB,oBAAoB;YAuFpB,yBAAyB;CAkExC"}

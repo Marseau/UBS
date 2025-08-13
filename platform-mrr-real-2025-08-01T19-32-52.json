@@ -1,0 +1,75 @@
+{
+  "calculation_date": "2025-08-01T19:32:52.577Z",
+  "total_active_tenants": 10,
+  "periods": {
+    "7d": {
+      "period_days": 7,
+      "total_mrr": 798.9999999999999,
+      "active_tenants": 10,
+      "average_mrr_per_tenant": 79.89999999999999,
+      "plan_breakdown": {
+        "profissional": {
+          "count": 5,
+          "mrr": 399.5,
+          "fee": 79.9
+        },
+        "enterprise": {
+          "count": 2,
+          "mrr": 159.8,
+          "fee": 79.9
+        },
+        "basico": {
+          "count": 3,
+          "mrr": 239.70000000000002,
+          "fee": 79.9
+        }
+      }
+    },
+    "30d": {
+      "period_days": 30,
+      "total_mrr": 798.9999999999999,
+      "active_tenants": 10,
+      "average_mrr_per_tenant": 79.89999999999999,
+      "plan_breakdown": {
+        "profissional": {
+          "count": 5,
+          "mrr": 399.5,
+          "fee": 79.9
+        },
+        "enterprise": {
+          "count": 2,
+          "mrr": 159.8,
+          "fee": 79.9
+        },
+        "basico": {
+          "count": 3,
+          "mrr": 239.70000000000002,
+          "fee": 79.9
+        }
+      }
+    },
+    "90d": {
+      "period_days": 90,
+      "total_mrr": 798.9999999999999,
+      "active_tenants": 10,
+      "average_mrr_per_tenant": 79.89999999999999,
+      "plan_breakdown": {
+        "profissional": {
+          "count": 5,
+          "mrr": 399.5,
+          "fee": 79.9
+        },
+        "enterprise": {
+          "count": 2,
+          "mrr": 159.8,
+          "fee": 79.9
+        },
+        "basico": {
+          "count": 3,
+          "mrr": 239.70000000000002,
+          "fee": 79.9
+        }
+      }
+    }
+  }
+}

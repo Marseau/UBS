@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Simples de Navegação</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .test-container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 30px;
+        }
+        .test-log {
+            background: #000;
+            color: #0f0;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .nav-test {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🔍 Teste Simples de Navegação</h1>
+        <p class="text-muted">Teste básico para identificar o problema de navegação</p>
+        
+        <div class="nav-test">
+            <h4>Teste 1: Links Diretos (sem JavaScript)</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <ul class="list-group">
+                        <li class="list-group-item">
+                            <a href="appointments-standardized.html" class="text-decoration-none">
+                                📅 Agendamentos (Link Direto)
+                            </a>
+                        </li>
+                        <li class="list-group-item">
+                            <a href="customers-standardized.html" class="text-decoration-none">
+                                👥 Clientes (Link Direto)
+                            </a>
+                        </li>
+                        <li class="list-group-item">
+                            <a href="services-standardized.html" class="text-decoration-none">
+                                🔧 Serviços (Link Direto)
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <ul class="list-group">
+                        <li class="list-group-item">
+                            <a href="conversations.html" class="text-decoration-none">
+                                💬 Conversas (Link Direto)
+                            </a>
+                        </li>
+                        <li class="list-group-item">
+                            <a href="payments-standardized.html" class="text-decoration-none">
+                                💳 Pagamentos (Link Direto)
+                            </a>
+                        </li>
+                        <li class="list-group-item">
+                            <a href="settings.html" class="text-decoration-none">
+                                ⚙️ Configurações (Link Direto)
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="nav-test">
+            <h4>Teste 2: Links com JavaScript</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <ul class="list-group">
+                        <li class="list-group-item">
+                            <a href="#" onclick="navigateTo('appointments-standardized.html')" class="text-decoration-none">
+                                📅 Agendamentos (JavaScript)
+                            </a>
+                        </li>
+                        <li class="list-group-item">
+                            <a href="#" onclick="navigateTo('customers-standardized.html')" class="text-decoration-none">
+                                👥 Clientes (JavaScript)
+                            </a>
+                        </li>
+                        <li class="list-group-item">
+                            <a href="#" onclick="navigateTo('services-standardized.html')" class="text-decoration-none">
+                                🔧 Serviços (JavaScript)
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <ul class="list-group">
+                        <li class="list-group-item">
+                            <a href="#" onclick="navigateTo('conversations.html')" class="text-decoration-none">
+                                💬 Conversas (JavaScript)
+                            </a>
+                        </li>
+                        <li class="list-group-item">
+                            <a href="#" onclick="navigateTo('payments-standardized.html')" class="text-decoration-none">
+                                💳 Pagamentos (JavaScript)
+                            </a>
+                        </li>
+                        <li class="list-group-item">
+                            <a href="#" onclick="navigateTo('settings.html')" class="text-decoration-none">
+                                ⚙️ Configurações (JavaScript)
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="nav-test">
+            <h4>Teste 3: Verificar Redirecionamentos</h4>
+            <div class="row">
+                <div class="col-md-4">
+                    <button class="btn btn-primary" onclick="checkTokens()">
+                        Verificar Tokens
+                    </button>
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-warning" onclick="clearAllStorage()">
+                        Limpar Storage
+                    </button>
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-success" onclick="testDashboard()">
+                        Testar Dashboard
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-log" id="testLog">
+            <div>🚀 Sistema de teste iniciado...</div>
+            <div>📍 URL atual: <span id="currentUrl"></span></div>
+            <div>⏰ Timestamp: <span id="timestamp"></span></div>
+        </div>
+    </div>
+
+    <script>
+        let logCounter = 0;
+        
+        function log(message, type = 'info') {
+            logCounter++;
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('testLog');
+            
+            const colors = {
+                info: '#0f0',
+                warning: '#ff0',
+                error: '#f00',
+                success: '#0f0'
+            };
+            
+            logDiv.innerHTML += `<div style="color: ${colors[type]}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            
+            console.log(`[${timestamp}] ${message}`);
+        }
+        
+        function navigateTo(url) {
+            log(`🖱️ Clique detectado: ${url}`, 'info');
+            
+            // Verificar se há redirecionamentos em andamento
+            setTimeout(() => {
+                log(`🔄 Navegando para: ${url}`, 'info');
+                window.location.href = url;
+            }, 500);
+        }
+        
+        function checkTokens() {
+            log('🔐 Verificando tokens...', 'info');
+            
+            const ubsToken = localStorage.getItem('ubs_token');
+            const adminToken = localStorage.getItem('adminToken');
+            const sessionData = Object.keys(sessionStorage).length;
+            
+            log(`   - ubs_token: ${ubsToken ? 'EXISTE' : 'NÃO EXISTE'}`, ubsToken ? 'success' : 'warning');
+            log(`   - adminToken: ${adminToken ? 'EXISTE' : 'NÃO EXISTE'}`, adminToken ? 'success' : 'warning');
+            log(`   - sessionStorage: ${sessionData} itens`, 'info');
+            
+            if (ubsToken || adminToken) {
+                log('⚠️ POSSÍVEL CAUSA: Tokens existem e podem estar causando redirecionamentos!', 'warning');
+            } else {
+                log('✅ Tokens limpos - não deveria haver redirecionamentos', 'success');
+            }
+        }
+        
+        function clearAllStorage() {
+            log('🧹 Limpando todo o storage...', 'info');
+            
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            log('✅ Storage limpo! Teste a navegação agora.', 'success');
+        }
+        
+        function testDashboard() {
+            log('🧪 Testando dashboard original...', 'info');
+            
+            setTimeout(() => {
+                log('🔄 Redirecionando para dashboard-standardized.html...', 'info');
+                window.location.href = 'dashboard-standardized.html';
+            }, 1000);
+        }
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            const now = new Date();
+            document.getElementById('currentUrl').textContent = window.location.href;
+            document.getElementById('timestamp').textContent = now.toLocaleTimeString();
+            
+            log('✅ Página de teste carregada', 'success');
+            
+            // Verificar tokens automaticamente
+            setTimeout(checkTokens, 1000);
+        });
+        
+        // Interceptar mudanças de URL
+        let lastUrl = window.location.href;
+        setInterval(() => {
+            if (window.location.href !== lastUrl) {
+                log(`🌐 URL MUDOU: ${lastUrl} → ${window.location.href}`, 'warning');
+                lastUrl = window.location.href;
+            }
+        }, 100);
+        
+        // Interceptar todos os cliques
+        document.addEventListener('click', function(event) {
+            if (event.target.tagName === 'A') {
+                const href = event.target.getAttribute('href');
+                if (href && href !== '#') {
+                    log(`🔍 Link clicado: ${href}`, 'info');
+                }
+            }
+        });
+    </script>
+</body>
+</html> 

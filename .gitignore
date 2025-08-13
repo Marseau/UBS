@@ -1,0 +1,12 @@
+node_modules
+node_modules/
+ubs_business_data_temporal/
+*.log
+.DS_Store
+
+# Large files to ignore
+ubs_business_data_temporal/
+node_modules/
+*.csv
+*.log
+dist/

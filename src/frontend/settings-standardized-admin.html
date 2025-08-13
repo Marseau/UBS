@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurações - UBS Super Admin</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- UBS Standard Styles -->
+    <link href="css/ubs-standard-styles.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    <link href="css/super-admin-dashboard.css" rel="stylesheet">
+    
+    <style>
+        /* LOGO GRANDE FORÇADO */
+        .sidebar .logo {
+            min-height: 180px !important;
+            padding: 20px 10px !important;
+        }
+        
+        .sidebar .logo img {
+            width: 90% !important;
+            max-width: 250px !important;
+            max-height: 150px !important;
+            height: auto !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+        <div class="logo">
+            <img src="assets/images/optimized/Logo_Int_Branco.webp" alt="UBS Logo">
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Dashboard</div>
+            <a class="nav-link" href="dashboard-standardized.html">
+                <i class="fas fa-chart-line"></i>
+                <span>Visão Geral</span>
+            </a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Analytics</div>
+            <a class="nav-link" href="services-standardized-admin.html">
+                <i class="fas fa-concierge-bell"></i>
+                <span>Serviços</span>
+            </a>
+            <a class="nav-link" href="customers-standardized-admin.html">
+                <i class="fas fa-users"></i>
+                <span>Clientes</span>
+            </a>
+            <a class="nav-link" href="appointments-standardized-admin.html">
+                <i class="fas fa-calendar-check"></i>
+                <span>Agendamentos</span>
+            </a>
+            <a class="nav-link" href="conversations-standardized-admin.html">
+                <i class="fab fa-whatsapp"></i>
+                <span>Conversas</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Financeiro</div>
+            <a class="nav-link" href="payments-standardized-admin.html">
+                <i class="fas fa-credit-card"></i>
+                <span>Pagamentos</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Sistema</div>
+            <a class="nav-link active" href="settings-standardized-admin.html">
+                <i class="fas fa-cog"></i>
+                <span>Configurações</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+        <!-- Header -->
+        <div class="top-navbar">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-0">Configurações do Sistema</h4>
+                    <small class="text-muted">Gerencie configurações gerais e preferências</small>
+                </div>
+                <div class="user-menu d-flex flex-column align-items-end gap-1">
+                    <!-- User Menu -->
+                    <div class="dropdown">
+                        <button class="btn btn-link dropdown-toggle d-flex align-items-center compact-button" data-bs-toggle="dropdown">
+                            <div class="user-avatar me-2" id="userAvatar">U</div>
+                            <div class="d-none d-md-block text-start">
+                                <div class="fw-medium compact-text" id="userName">UBS Platform</div>
+                                <small class="text-muted compact-small" id="userRole">Super Administrador</small>
+                            </div>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end compact-dropdown">
+                            <li><a class="dropdown-item compact-dropdown-item" href="settings-standardized-admin.html"><i class="fas fa-user-cog me-2"></i>Perfil</a></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="exportData()"><i class="fas fa-download me-2"></i>Exportar Dados</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="refreshData()"><i class="fas fa-sync me-2"></i>Atualizar</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Container -->
+        <div class="container-fluid p-4">
+            <div class="row">
+                <!-- Menu de Configurações -->
+                <div class="col-md-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-list-ul me-2"></i>Configurações</h5>
+                        </div>
+                        <div class="list-group list-group-flush">
+                            <a href="#profile" class="list-group-item list-group-item-action active" onclick="showSection('profile', this)">
+                                <i class="fas fa-user me-2"></i>Perfil do Usuário
+                            </a>
+                            <a href="#system" class="list-group-item list-group-item-action" onclick="showSection('system', this)">
+                                <i class="fas fa-cogs me-2"></i>Sistema Geral
+                            </a>
+                            <a href="#whatsapp" class="list-group-item list-group-item-action" onclick="showSection('whatsapp', this)">
+                                <i class="fab fa-whatsapp me-2"></i>WhatsApp API
+                            </a>
+                            <a href="#notifications" class="list-group-item list-group-item-action" onclick="showSection('notifications', this)">
+                                <i class="fas fa-bell me-2"></i>Notificações
+                            </a>
+                            <a href="#backup" class="list-group-item list-group-item-action" onclick="showSection('backup', this)">
+                                <i class="fas fa-database me-2"></i>Backup & Segurança
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Conteúdo das Configurações -->
+                <div class="col-md-9">
+                    <!-- Perfil do Usuário -->
+                    <div id="profile-section" class="settings-section">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-user me-2"></i>Perfil do Usuário</h5>
+                            </div>
+                            <div class="card-body">
+                                <form>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Nome Completo</label>
+                                            <input type="text" class="form-control" value="Super Administrador">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Email</label>
+                                            <input type="email" class="form-control" value="admin@ubs.com">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Telefone</label>
+                                            <input type="tel" class="form-control" value="(11) 99999-9999">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Cargo</label>
+                                            <input type="text" class="form-control" value="Super Administrador" readonly>
+                                        </div>
+                                        <div class="col-12">
+                                            <button type="button" class="btn btn-primary" onclick="saveProfile()">
+                                                <i class="fas fa-save me-2"></i>Salvar Alterações
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Sistema Geral -->
+                    <div id="system-section" class="settings-section" style="display: none;">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-cogs me-2"></i>Configurações do Sistema</h5>
+                            </div>
+                            <div class="card-body">
+                                <form>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Nome da Plataforma</label>
+                                            <input type="text" class="form-control" value="UBS - Universal Booking System">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Fuso Horário</label>
+                                            <select class="form-select">
+                                                <option selected>America/Sao_Paulo</option>
+                                                <option>America/New_York</option>
+                                                <option>Europe/London</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Idioma Padrão</label>
+                                            <select class="form-select">
+                                                <option selected>Português (BR)</option>
+                                                <option>English (US)</option>
+                                                <option>Español</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Moeda</label>
+                                            <select class="form-select">
+                                                <option selected>Real (BRL)</option>
+                                                <option>Dólar (USD)</option>
+                                                <option>Euro (EUR)</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-12">
+                                            <button type="button" class="btn btn-primary" onclick="saveSystem()">
+                                                <i class="fas fa-save me-2"></i>Salvar Configurações
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- WhatsApp API -->
+                    <div id="whatsapp-section" class="settings-section" style="display: none;">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fab fa-whatsapp me-2"></i>Configurações WhatsApp API</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Configure as credenciais do WhatsApp Business API
+                                </div>
+                                <form>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Token de Acesso</label>
+                                            <input type="password" class="form-control" placeholder="Insira o token da API">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Phone Number ID</label>
+                                            <input type="text" class="form-control" placeholder="ID do número de telefone">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Webhook URL</label>
+                                            <input type="url" class="form-control" placeholder="https://seu-dominio.com/webhook">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Verify Token</label>
+                                            <input type="password" class="form-control" placeholder="Token de verificação">
+                                        </div>
+                                        <div class="col-12">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="whatsappEnabled" checked>
+                                                <label class="form-check-label" for="whatsappEnabled">
+                                                    Habilitar integração WhatsApp
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-12">
+                                            <button type="button" class="btn btn-success me-2" onclick="testWhatsApp()">
+                                                <i class="fas fa-plug me-2"></i>Testar Conexão
+                                            </button>
+                                            <button type="button" class="btn btn-primary" onclick="saveWhatsApp()">
+                                                <i class="fas fa-save me-2"></i>Salvar Configurações
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Notificações -->
+                    <div id="notifications-section" class="settings-section" style="display: none;">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-bell me-2"></i>Configurações de Notificações</h5>
+                            </div>
+                            <div class="card-body">
+                                <form>
+                                    <div class="row g-3">
+                                        <div class="col-12">
+                                            <h6>Notificações por Email</h6>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="emailAppointments" checked>
+                                                <label class="form-check-label" for="emailAppointments">
+                                                    Novos agendamentos
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="emailCancellations" checked>
+                                                <label class="form-check-label" for="emailCancellations">
+                                                    Cancelamentos
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="emailPayments">
+                                                <label class="form-check-label" for="emailPayments">
+                                                    Pagamentos recebidos
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-12">
+                                            <h6>Notificações Push</h6>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="pushMessages" checked>
+                                                <label class="form-check-label" for="pushMessages">
+                                                    Novas mensagens WhatsApp
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="pushReminders">
+                                                <label class="form-check-label" for="pushReminders">
+                                                    Lembretes de agendamentos
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-12">
+                                            <button type="button" class="btn btn-primary" onclick="saveNotifications()">
+                                                <i class="fas fa-save me-2"></i>Salvar Preferências
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Backup & Segurança -->
+                    <div id="backup-section" class="settings-section" style="display: none;">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-database me-2"></i>Backup & Segurança</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <h6>Backup Automático</h6>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="autoBackup" checked>
+                                            <label class="form-check-label" for="autoBackup">
+                                                Habilitar backup automático diário
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">Último backup: 28/07/2024 03:00</small>
+                                    </div>
+                                    <div class="col-12">
+                                        <h6>Ações de Backup</h6>
+                                        <button type="button" class="btn btn-outline-primary me-2" onclick="createBackup()">
+                                            <i class="fas fa-download me-2"></i>Criar Backup Agora
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success" onclick="restoreBackup()">
+                                            <i class="fas fa-upload me-2"></i>Restaurar Backup
+                                        </button>
+                                    </div>
+                                    <div class="col-12">
+                                        <h6>Segurança</h6>
+                                        <button type="button" class="btn btn-warning" onclick="changePassword()">
+                                            <i class="fas fa-key me-2"></i>Alterar Senha
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/utils/secure-auth.js"></script>
+    
+    <!-- Template JavaScript Functions -->
+    <script>
+        // Funções auxiliares do template
+        function getAuthToken() {
+            if (window.secureAuth) {
+                return window.secureAuth.getAuthHeader();
+            }
+            return 'Bearer ' + (localStorage.getItem('ubs_token') || localStorage.getItem('adminToken'));
+        }
+        
+        function exportData() {
+            console.log('Export function - to be implemented by page');
+        }
+        
+        function refreshData() {
+            location.reload();
+        }
+        
+        function logout() {
+            if (confirm('Tem certeza que deseja sair?')) {
+                localStorage.removeItem('ubs_token');
+                localStorage.removeItem('adminToken');
+                window.location.href = 'login.html';
+            }
+        }
+        
+        // Função para destacar o menu ativo
+        function setActiveMenu(pageUrl) {
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === pageUrl) {
+                    link.classList.add('active');
+                }
+            });
+        }
+        
+        // Auto-detectar página atual e destacar menu
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPage = window.location.pathname.split('/').pop();
+            setActiveMenu(currentPage);
+        });
+        
+        // Funções específicas da página
+        function showSection(sectionId, element) {
+            // Esconder todas as seções
+            document.querySelectorAll('.settings-section').forEach(section => {
+                section.style.display = 'none';
+            });
+            
+            // Remover classe active de todos os links
+            document.querySelectorAll('.list-group-item').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            // Mostrar seção selecionada
+            document.getElementById(`${sectionId}-section`).style.display = 'block';
+            
+            // Adicionar classe active ao link clicado
+            element.classList.add('active');
+        }
+        
+        function saveProfile() {
+            alert('Perfil salvo com sucesso!');
+        }
+        
+        function saveSystem() {
+            alert('Configurações do sistema salvas!');
+        }
+        
+        function testWhatsApp() {
+            alert('Testando conexão WhatsApp... (Funcionalidade será implementada)');
+        }
+        
+        function saveWhatsApp() {
+            alert('Configurações WhatsApp salvas!');
+        }
+        
+        function saveNotifications() {
+            alert('Preferências de notificação salvas!');
+        }
+        
+        function createBackup() {
+            if (confirm('Criar backup agora? Este processo pode demorar alguns minutos.')) {
+                alert('Backup iniciado. Você receberá uma notificação quando concluído.');
+            }
+        }
+        
+        function restoreBackup() {
+            if (confirm('Tem certeza que deseja restaurar um backup? Esta ação irá sobrescrever os dados atuais.')) {
+                alert('Funcionalidade de restauração será implementada');
+            }
+        }
+        
+        function changePassword() {
+            const newPassword = prompt('Digite a nova senha:');
+            if (newPassword) {
+                const confirmPassword = prompt('Confirme a nova senha:');
+                if (newPassword === confirmPassword) {
+                    alert('Senha alterada com sucesso!');
+                } else {
+                    alert('Senhas não conferem!');
+                }
+            }
+        }
+    </script>
+</body>
+</html>

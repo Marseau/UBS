@@ -1,0 +1,415 @@
+# =====================================================
+# GITHUB ACTIONS - FRONTEND INTEGRITY PROTECTION
+# Bloqueia mudanças não autorizadas no frontend
+# =====================================================
+
+name: Frontend Integrity Protection
+
+on:
+  push:
+    paths:
+      - 'src/frontend/**'
+      - 'MASTER_INTEGRATION_DASHBOARD_TENANT_PLATAFORMA.md'
+      - 'FRONTEND_INTEGRITY_ASSURANCE_SYSTEM.md'
+      - 'tests/**'
+      - 'playwright.config.js'
+  pull_request:
+    paths:
+      - 'src/frontend/**'
+      - 'MASTER_INTEGRATION_DASHBOARD_TENANT_PLATAFORMA.md'
+      - 'FRONTEND_INTEGRITY_ASSURANCE_SYSTEM.md'
+      - 'tests/**'
+      - 'playwright.config.js'
+
+env:
+  NODE_VERSION: '18'
+  
+jobs:
+  # =====================================================
+  # VERIFICAÇÃO DE INTEGRIDADE DE ARQUIVOS
+  # =====================================================
+  integrity-check:
+    runs-on: ubuntu-latest
+    name: File Integrity Verification
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: |
+        npm ci
+        npm install --save-dev playwright @playwright/test @axe-core/playwright ajv ajv-formats
+        
+    - name: Setup Playwright
+      run: npx playwright install --with-deps chromium firefox webkit
+      
+    - name: Verify Frontend Integrity
+      id: integrity
+      run: |
+        echo "🔍 Verificando integridade dos arquivos..."
+        node scripts/verify-frontend-integrity.js
+      continue-on-error: true
+      
+    - name: Upload Integrity Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-integrity-report
+        path: |
+          frontend-integrity-report.json
+          FRONTEND_INTEGRITY_CHECKSUMS.json
+        retention-days: 30
+        
+    - name: Check Integrity Results
+      if: steps.integrity.outcome == 'failure'
+      run: |
+        echo "❌ Frontend integrity check failed!"
+        echo "Critical files were modified without proper approval."
+        echo "Review the integrity report for details."
+        exit 1
+
+  # =====================================================
+  # TESTES DE REGRESSÃO VISUAL
+  # =====================================================
+  visual-regression:
+    runs-on: ubuntu-latest
+    name: Visual Regression Testing
+    needs: integrity-check
+    
+    strategy:
+      matrix:
+        browser: [chromium, firefox, webkit]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: |
+        npm ci
+        npm install --save-dev playwright @playwright/test
+        
+    - name: Setup Playwright
+      run: npx playwright install --with-deps ${{ matrix.browser }}
+      
+    - name: Start development server
+      run: |
+        npm run dev &
+        sleep 10
+      env:
+        CI: true
+        
+    - name: Run Visual Regression Tests
+      run: npx playwright test tests/visual-regression/ --project=${{ matrix.browser }}
+      env:
+        CI: true
+        
+    - name: Upload Visual Test Results
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: visual-test-results-${{ matrix.browser }}
+        path: |
+          test-results/
+          playwright-report/
+        retention-days: 30
+
+  # =====================================================
+  # TESTES DE CONTRATO API
+  # =====================================================
+  contract-testing:
+    runs-on: ubuntu-latest
+    name: API Contract Testing
+    needs: integrity-check
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: |
+        npm ci
+        npm install --save-dev playwright @playwright/test ajv ajv-formats
+        
+    - name: Setup Playwright
+      run: npx playwright install --with-deps chromium
+      
+    - name: Start development server
+      run: |
+        npm run dev &
+        sleep 10
+      env:
+        CI: true
+        
+    - name: Run Contract Tests
+      run: npx playwright test tests/contract/
+      env:
+        CI: true
+        
+    - name: Upload Contract Test Results
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: contract-test-results
+        path: test-results/
+        retention-days: 30
+
+  # =====================================================
+  # TESTES DE ACESSIBILIDADE
+  # =====================================================
+  accessibility-testing:
+    runs-on: ubuntu-latest
+    name: Accessibility Testing
+    needs: integrity-check
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: |
+        npm ci
+        npm install --save-dev playwright @playwright/test @axe-core/playwright
+        
+    - name: Setup Playwright
+      run: npx playwright install --with-deps chromium
+      
+    - name: Start development server
+      run: |
+        npm run dev &
+        sleep 10
+      env:
+        CI: true
+        
+    - name: Run Accessibility Tests
+      run: npx playwright test tests/accessibility/
+      env:
+        CI: true
+        
+    - name: Upload Accessibility Report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: accessibility-report
+        path: test-results/
+        retention-days: 30
+
+  # =====================================================
+  # TESTES DE PERFORMANCE
+  # =====================================================
+  performance-testing:
+    runs-on: ubuntu-latest
+    name: Performance Testing
+    needs: integrity-check
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: |
+        npm ci
+        npm install --save-dev playwright @playwright/test
+        
+    - name: Setup Playwright
+      run: npx playwright install --with-deps chromium
+      
+    - name: Start development server
+      run: |
+        npm run dev &
+        sleep 10
+      env:
+        CI: true
+        
+    - name: Run Performance Tests
+      run: npx playwright test tests/performance/
+      env:
+        CI: true
+        
+    - name: Upload Performance Report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-report
+        path: test-results/
+        retention-days: 30
+
+  # =====================================================
+  # APROVAÇÃO MANUAL PARA MUDANÇAS CRÍTICAS
+  # =====================================================
+  critical-change-approval:
+    if: contains(github.event.head_commit.message, '[CRITICAL-CHANGE]') || contains(github.event.pull_request.title, '[CRITICAL-CHANGE]')
+    runs-on: ubuntu-latest
+    name: Critical Change Approval Required
+    environment: 
+      name: frontend-approval
+      
+    steps:
+    - name: Manual Approval Required
+      run: |
+        echo "🚨 CRITICAL FRONTEND CHANGE DETECTED!"
+        echo ""
+        echo "This change requires manual approval because:"
+        echo "- Critical frontend files were modified"
+        echo "- Changes may affect user experience"
+        echo "- Visual regression tests may show differences"
+        echo ""
+        echo "Reviewer must verify:"
+        echo "1. ✅ Visual regression tests pass or differences are acceptable"
+        echo "2. ✅ Accessibility standards maintained (WCAG 2.1 AA)"
+        echo "3. ✅ Performance benchmarks met"
+        echo "4. ✅ API contracts preserved"
+        echo "5. ✅ Component integrity maintained"
+        echo ""
+        echo "After review, approve this deployment manually."
+
+  # =====================================================
+  # PROTEÇÃO DE DOCUMENTAÇÃO
+  # =====================================================
+  documentation-protection:
+    runs-on: ubuntu-latest
+    name: Documentation Protection
+    if: contains(github.event.head_commit.modified, 'MASTER_INTEGRATION') || contains(github.event.head_commit.modified, 'FRONTEND_INTEGRITY')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 2  # Needed to compare with previous commit
+        
+    - name: Check Documentation Changes
+      run: |
+        echo "🔒 DOCUMENTATION CHANGES DETECTED"
+        echo ""
+        echo "Modified files:"
+        git diff --name-only HEAD^ HEAD | grep -E "(MASTER_INTEGRATION|FRONTEND_INTEGRITY)" || true
+        echo ""
+        echo "⚠️  Documentation changes require special attention:"
+        echo "1. Ensure all references to files are still valid"
+        echo "2. Verify that implementation steps are still accurate" 
+        echo "3. Check that frontend protection is not weakened"
+        echo "4. Confirm that system guarantees are maintained"
+        echo ""
+        
+    - name: Verify Documentation Integrity
+      run: |
+        if [ -f "scripts/verify-frontend-integrity.js" ]; then
+          node scripts/verify-frontend-integrity.js --stats
+        else
+          echo "⚠️  Frontend integrity script not found"
+        fi
+
+  # =====================================================
+  # CONSOLIDAÇÃO FINAL DOS RESULTADOS
+  # =====================================================
+  final-report:
+    runs-on: ubuntu-latest
+    name: Final Integrity Report
+    needs: [integrity-check, visual-regression, contract-testing, accessibility-testing, performance-testing]
+    if: always()
+    
+    steps:
+    - name: Download All Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: test-artifacts/
+        
+    - name: Generate Final Report
+      run: |
+        echo "📊 FRONTEND INTEGRITY FINAL REPORT"
+        echo "=================================="
+        echo ""
+        echo "🔍 File Integrity: ${{ needs.integrity-check.result }}"
+        echo "📸 Visual Regression: ${{ needs.visual-regression.result }}"
+        echo "📋 Contract Testing: ${{ needs.contract-testing.result }}"
+        echo "♿ Accessibility: ${{ needs.accessibility-testing.result }}"
+        echo "⚡ Performance: ${{ needs.performance-testing.result }}"
+        echo ""
+        
+        # Count total tests
+        total_jobs=5
+        passed_jobs=0
+        
+        for result in "${{ needs.integrity-check.result }}" "${{ needs.visual-regression.result }}" "${{ needs.contract-testing.result }}" "${{ needs.accessibility-testing.result }}" "${{ needs.performance-testing.result }}"; do
+          if [ "$result" = "success" ]; then
+            passed_jobs=$((passed_jobs + 1))
+          fi
+        done
+        
+        echo "📈 Success Rate: $passed_jobs/$total_jobs ($(( passed_jobs * 100 / total_jobs ))%)"
+        echo ""
+        
+        if [ $passed_jobs -eq $total_jobs ]; then
+          echo "✅ ALL FRONTEND INTEGRITY CHECKS PASSED!"
+          echo "🛡️  Frontend is protected and changes are validated."
+        else
+          echo "❌ SOME FRONTEND INTEGRITY CHECKS FAILED!"
+          echo "🚨 Review failed checks before proceeding."
+          exit 1
+        fi
+        
+    - name: Upload Final Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: final-integrity-report
+        path: test-artifacts/
+        retention-days: 90
+
+  # =====================================================
+  # BLOQUEIO DE DEPLOYMENT SE FALHAS DETECTADAS
+  # =====================================================
+  deployment-gate:
+    runs-on: ubuntu-latest
+    name: Deployment Gate
+    needs: [final-report]
+    if: always()
+    
+    steps:
+    - name: Check Deployment Readiness
+      run: |
+        if [ "${{ needs.final-report.result }}" != "success" ]; then
+          echo "🚫 DEPLOYMENT BLOCKED!"
+          echo ""
+          echo "Frontend integrity checks failed. Deployment is not allowed until:"
+          echo "1. All integrity issues are resolved"
+          echo "2. Critical changes are approved manually"
+          echo "3. All automated tests pass"
+          echo ""
+          echo "Review the test artifacts for detailed failure information."
+          exit 1
+        else
+          echo "✅ DEPLOYMENT APPROVED!"
+          echo "🛡️  All frontend integrity checks passed."
+          echo "🚀 System is ready for deployment."
+        fi
