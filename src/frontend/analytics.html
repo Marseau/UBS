@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - UBS Dashboard</title>
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #2D5A9B;
+            --secondary-color: #F8F9FA;
+            --success-color: #28A745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --info-color: #17a2b8;
+            --text-dark: #2C3E50;
+            --text-light: #6C757D;
+            --border-color: #E9ECEF;
+            --shadow: 0 4px 20px rgba(45, 90, 155, 0.15);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--secondary-color);
+            color: var(--text-dark);
+        }
+
+        .top-header {
+            background: white;
+            padding: 1.5rem 0;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+
+        .period-selector {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .period-btn {
+            background: white;
+            border: 2px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .period-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .analytics-card {
+            background: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+            border: none;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            border: none;
+            text-align: center;
+            height: 100%;
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-label {
+            color: var(--text-light);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .metric-change {
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+            border-radius: 2rem;
+        }
+
+        .metric-change.positive {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--success-color);
+        }
+
+        .metric-change.negative {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--danger-color);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 1rem 0;
+        }
+
+        .chart-small {
+            height: 250px;
+        }
+
+        .loading-spinner {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+        }
+
+        .table-analytics {
+            font-size: 0.9rem;
+        }
+
+        .table-analytics th {
+            background: var(--secondary-color);
+            font-weight: 600;
+            border: none;
+        }
+
+        .badge-status {
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+            border-radius: 2rem;
+        }
+
+        .export-section {
+            background: white;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            margin-top: 2rem;
+        }
+
+        .progress-ring {
+            transform: rotate(-90deg);
+        }
+
+        .progress-ring-circle {
+            transition: stroke-dashoffset 0.35s;
+            transform-origin: 50% 50%;
+        }
+
+        @media (max-width: 768px) {
+            .period-selector {
+                flex-wrap: wrap;
+            }
+            
+            .metric-value {
+                font-size: 2rem;
+            }
+            
+            .chart-container {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <div class="top-header">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0"><i class="fas fa-chart-line me-2"></i>Analytics & Evolução do Negócio</h1>
+                    <p class="text-muted mb-0">Métricas detalhadas e insights de performance</p>
+                </div>
+                <div>
+                    <button class="btn btn-outline-primary me-2" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i> Atualizar
+                    </button>
+                    <button class="btn btn-primary" onclick="exportReport()">
+                        <i class="fas fa-download"></i> Exportar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid">
+        <!-- Period Selector -->
+        <div class="period-selector">
+            <button class="period-btn" data-period="7d">7 dias</button>
+            <button class="period-btn active" data-period="30d">30 dias</button>
+            <button class="period-btn" data-period="90d">90 dias</button>
+            <button class="period-btn" data-period="1y">1 ano</button>
+            <button class="period-btn" data-period="custom">Personalizado</button>
+        </div>
+
+        <!-- Key Metrics -->
+        <div class="row mb-4">
+            <div class="col-md-3 mb-3">
+                <div class="metric-card">
+                    <div class="metric-value text-primary" id="totalRevenue">R$ 0</div>
+                    <div class="metric-label">Receita Total</div>
+                    <div class="metric-change positive" id="revenueChange">+0%</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-card">
+                    <div class="metric-value text-success" id="totalAppointments">0</div>
+                    <div class="metric-label">Agendamentos</div>
+                    <div class="metric-change positive" id="appointmentsChange">+0%</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-card">
+                    <div class="metric-value text-info" id="newCustomers">0</div>
+                    <div class="metric-label">Novos Clientes</div>
+                    <div class="metric-change positive" id="customersChange">+0%</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-card">
+                    <div class="metric-value text-warning" id="conversionRate">0%</div>
+                    <div class="metric-label">Taxa de Conversão</div>
+                    <div class="metric-change positive" id="conversionChange">+0%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="row">
+            <div class="col-lg-8 mb-4">
+                <div class="analytics-card">
+                    <h5 class="card-title mb-3">
+                        <i class="fas fa-chart-line text-primary me-2"></i>
+                        Tendência de Receita e Agendamentos
+                    </h5>
+                    <div class="chart-container">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 mb-4">
+                <div class="analytics-card">
+                    <h5 class="card-title mb-3">
+                        <i class="fas fa-chart-pie text-success me-2"></i>
+                        Status dos Agendamentos
+                    </h5>
+                    <div class="chart-container chart-small">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 2 -->
+        <div class="row">
+            <div class="col-lg-6 mb-4">
+                <div class="analytics-card">
+                    <h5 class="card-title mb-3">
+                        <i class="fas fa-users text-info me-2"></i>
+                        Aquisição de Clientes
+                    </h5>
+                    <div class="chart-container chart-small">
+                        <canvas id="customersChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6 mb-4">
+                <div class="analytics-card">
+                    <h5 class="card-title mb-3">
+                        <i class="fas fa-brain text-warning me-2"></i>
+                        Performance da IA
+                    </h5>
+                    <div class="chart-container chart-small">
+                        <canvas id="aiChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Services Performance -->
+        <div class="row">
+            <div class="col-lg-8 mb-4">
+                <div class="analytics-card">
+                    <h5 class="card-title mb-3">
+                        <i class="fas fa-star text-warning me-2"></i>
+                        Performance dos Serviços
+                    </h5>
+                    <div class="table-responsive">
+                        <table class="table table-analytics">
+                            <thead>
+                                <tr>
+                                    <th>Serviço</th>
+                                    <th>Agendamentos</th>
+                                    <th>Receita</th>
+                                    <th>Taxa Conclusão</th>
+                                    <th>Ticket Médio</th>
+                                </tr>
+                            </thead>
+                            <tbody id="servicesTable">
+                                <tr>
+                                    <td colspan="5" class="text-center">
+                                        <div class="loading-spinner">
+                                            <div class="spinner-border text-primary" role="status"></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 mb-4">
+                <div class="analytics-card">
+                    <h5 class="card-title mb-3">
+                        <i class="fas fa-funnel-dollar text-primary me-2"></i>
+                        Funil de Conversão
+                    </h5>
+                    <div id="conversionFunnel">
+                        <!-- Conversion funnel will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Business Health Score -->
+        <div class="row">
+            <div class="col-lg-4 mb-4">
+                <div class="analytics-card text-center">
+                    <h5 class="card-title mb-3">
+                        <i class="fas fa-heartbeat text-danger me-2"></i>
+                        Health Score do Negócio
+                    </h5>
+                    <div class="position-relative d-inline-block">
+                        <svg width="120" height="120" class="progress-ring">
+                            <circle class="progress-ring-circle" 
+                                    stroke="#e9ecef" 
+                                    stroke-width="8" 
+                                    fill="transparent" 
+                                    r="52" 
+                                    cx="60" 
+                                    cy="60"/>
+                            <circle class="progress-ring-circle" 
+                                    id="healthCircle"
+                                    stroke="#28a745" 
+                                    stroke-width="8" 
+                                    fill="transparent" 
+                                    r="52" 
+                                    cx="60" 
+                                    cy="60"
+                                    stroke-dasharray="326.73" 
+                                    stroke-dashoffset="326.73"/>
+                        </svg>
+                        <div class="position-absolute top-50 start-50 translate-middle">
+                            <div class="h2 mb-0" id="healthScore">0</div>
+                            <small class="text-muted">Health Score</small>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <small class="text-muted" id="healthDescription">Calculando...</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-8 mb-4">
+                <div class="analytics-card">
+                    <h5 class="card-title mb-3">
+                        <i class="fas fa-chart-bar text-info me-2"></i>
+                        Comparação com Período Anterior
+                    </h5>
+                    <div class="chart-container chart-small">
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Section -->
+        <div class="export-section">
+            <h5><i class="fas fa-download me-2"></i>Exportar Relatórios</h5>
+            <p class="text-muted mb-3">Baixe relatórios detalhados em diferentes formatos</p>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-primary" onclick="exportPDF()">
+                            <i class="fas fa-file-pdf me-2"></i>Relatório PDF
+                        </button>
+                        <button class="btn btn-outline-success" onclick="exportExcel()">
+                            <i class="fas fa-file-excel me-2"></i>Planilha Excel
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-info" onclick="exportCSV()">
+                            <i class="fas fa-file-csv me-2"></i>Dados CSV
+                        </button>
+                        <button class="btn btn-outline-warning" onclick="scheduleReport()">
+                            <i class="fas fa-clock me-2"></i>Agendar Relatório
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.min.js"></script>
+    <script>
+        // Global variables
+        let currentPeriod = '30d';
+        let analyticsData = null;
+        let charts = {};
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializePeriodSelector();
+            loadAnalyticsData();
+        });
+
+        // Period selector
+        function initializePeriodSelector() {
+            document.querySelectorAll('.period-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    currentPeriod = this.dataset.period;
+                    loadAnalyticsData();
+                });
+            });
+        }
+
+        // Load analytics data
+        async function loadAnalyticsData() {
+            try {
+                showLoading();
+                
+                const response = await fetch(`/api/analytics?period=${currentPeriod}`);
+                if (!response.ok) throw new Error('Failed to load analytics');
+                
+                analyticsData = await response.json();
+                updateDashboard();
+                
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+                showError('Erro ao carregar dados de analytics');
+            }
+        }
+
+        // Update dashboard with new data
+        function updateDashboard() {
+            if (!analyticsData) return;
+
+            updateMetrics();
+            updateCharts();
+            updateServicesTable();
+            updateConversionFunnel();
+            updateHealthScore();
+        }
+
+        // Update key metrics
+        function updateMetrics() {
+            const { revenue, appointments, customers, conversion } = analyticsData;
+
+            document.getElementById('totalRevenue').textContent = 
+                new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+                .format(revenue.total || 0);
+            
+            document.getElementById('totalAppointments').textContent = appointments.total || 0;
+            document.getElementById('newCustomers').textContent = customers.new || 0;
+            document.getElementById('conversionRate').textContent = `${(conversion.rate || 0).toFixed(1)}%`;
+
+            // Update change indicators
+            updateChangeIndicator('revenueChange', revenue.growthRate);
+            updateChangeIndicator('appointmentsChange', appointments.growthRate);
+            updateChangeIndicator('customersChange', customers.growthRate);
+            updateChangeIndicator('conversionChange', conversion.growthRate);
+        }
+
+        // Update change indicator
+        function updateChangeIndicator(elementId, value) {
+            const element = document.getElementById(elementId);
+            const formattedValue = `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+            element.textContent = formattedValue;
+            element.className = `metric-change ${value >= 0 ? 'positive' : 'negative'}`;
+        }
+
+        // Update charts
+        function updateCharts() {
+            updateRevenueChart();
+            updateStatusChart();
+            updateCustomersChart();
+            updateAIChart();
+            updateComparisonChart();
+        }
+
+        // Revenue and appointments chart
+        function updateRevenueChart() {
+            const ctx = document.getElementById('revenueChart').getContext('2d');
+            
+            if (charts.revenue) {
+                charts.revenue.destroy();
+            }
+
+            const dailyStats = analyticsData.appointments.dailyStats || [];
+            const labels = dailyStats.map(d => new Date(d.date).toLocaleDateString('pt-BR'));
+            
+            charts.revenue = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Receita (R$)',
+                        data: dailyStats.map(d => d.revenue || 0),
+                        borderColor: '#2D5A9B',
+                        backgroundColor: 'rgba(45, 90, 155, 0.1)',
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    }, {
+                        label: 'Agendamentos',
+                        data: dailyStats.map(d => d.appointments || 0),
+                        borderColor: '#28A745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        tension: 0.4,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Receita (R$)'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Agendamentos'
+                            },
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                        }
+                    }
+                }
+            });
+        }
+
+        // Status distribution chart
+        function updateStatusChart() {
+            const ctx = document.getElementById('statusChart').getContext('2d');
+            
+            if (charts.status) {
+                charts.status.destroy();
+            }
+
+            const statusData = analyticsData.appointments.statusDistribution || {};
+            
+            charts.status = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Confirmados', 'Completados', 'Cancelados', 'Não Compareceu', 'Pendentes'],
+                    datasets: [{
+                        data: [
+                            statusData.confirmed || 0,
+                            statusData.completed || 0,
+                            statusData.cancelled || 0,
+                            statusData.no_show || 0,
+                            statusData.pending || 0
+                        ],
+                        backgroundColor: [
+                            '#17a2b8',
+                            '#28a745',
+                            '#dc3545',
+                            '#ffc107',
+                            '#6c757d'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Customers acquisition chart
+        function updateCustomersChart() {
+            const ctx = document.getElementById('customersChart').getContext('2d');
+            
+            if (charts.customers) {
+                charts.customers.destroy();
+            }
+
+            // Mock data - replace with actual customer data
+            const customerStats = analyticsData.customers.dailyStats || [];
+            
+            charts.customers = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: customerStats.map(d => new Date(d.date).toLocaleDateString('pt-BR')),
+                    datasets: [{
+                        label: 'Novos Clientes',
+                        data: customerStats.map(d => d.new || 0),
+                        backgroundColor: '#17a2b8'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // AI performance chart
+        function updateAIChart() {
+            const ctx = document.getElementById('aiChart').getContext('2d');
+            
+            if (charts.ai) {
+                charts.ai.destroy();
+            }
+
+            const aiData = analyticsData.ai || {};
+            
+            charts.ai = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['Precisão', 'Cobertura', 'Resposta', 'Conversão', 'Satisfação'],
+                    datasets: [{
+                        label: 'Performance IA',
+                        data: [
+                            (aiData.accuracy || 0) * 100,
+                            (aiData.coverage || 0) * 100,
+                            (aiData.responseTime || 0) * 10,
+                            (aiData.conversionRate || 0) * 100,
+                            (aiData.satisfaction || 0) * 100
+                        ],
+                        backgroundColor: 'rgba(255, 193, 7, 0.2)',
+                        borderColor: '#ffc107',
+                        pointBackgroundColor: '#ffc107'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+        }
+
+        // Comparison chart
+        function updateComparisonChart() {
+            const ctx = document.getElementById('comparisonChart').getContext('2d');
+            
+            if (charts.comparison) {
+                charts.comparison.destroy();
+            }
+
+            // Mock comparison data
+            charts.comparison = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Receita', 'Agendamentos', 'Clientes', 'Conversão'],
+                    datasets: [{
+                        label: 'Período Anterior',
+                        data: [100, 85, 120, 15],
+                        backgroundColor: '#6c757d'
+                    }, {
+                        label: 'Período Atual',
+                        data: [125, 110, 145, 18],
+                        backgroundColor: '#2D5A9B'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update services table
+        function updateServicesTable() {
+            const tbody = document.getElementById('servicesTable');
+            const services = analyticsData.services.popular || [];
+            
+            tbody.innerHTML = services.map(service => `
+                <tr>
+                    <td><strong>${service.name}</strong></td>
+                    <td>${service.appointments || 0}</td>
+                    <td>${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.revenue || 0)}</td>
+                    <td>
+                        <span class="badge bg-success">${(service.completionRate || 0).toFixed(1)}%</span>
+                    </td>
+                    <td>${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.averageTicket || 0)}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Update conversion funnel
+        function updateConversionFunnel() {
+            const funnel = document.getElementById('conversionFunnel');
+            const conversionData = analyticsData.conversion.funnel || {};
+            
+            const steps = [
+                { label: 'Visitantes', value: conversionData.visitors || 0 },
+                { label: 'Interessados', value: conversionData.interested || 0 },
+                { label: 'Agendamentos', value: conversionData.appointments || 0 },
+                { label: 'Concluídos', value: conversionData.completed || 0 }
+            ];
+
+            funnel.innerHTML = steps.map((step, index) => {
+                const percentage = index === 0 ? 100 : ((step.value / steps[0].value) * 100);
+                return `
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="fw-medium">${step.label}</span>
+                            <span class="text-muted">${step.value}</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-primary" style="width: ${percentage}%"></div>
+                        </div>
+                        <small class="text-muted">${percentage.toFixed(1)}%</small>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Update health score
+        function updateHealthScore() {
+            const healthScore = analyticsData.summary.healthScore || 0;
+            const circle = document.getElementById('healthCircle');
+            const scoreElement = document.getElementById('healthScore');
+            const descElement = document.getElementById('healthDescription');
+
+            // Animate health score
+            const circumference = 2 * Math.PI * 52;
+            const offset = circumference - (healthScore / 100) * circumference;
+            
+            circle.style.strokeDashoffset = offset;
+            scoreElement.textContent = Math.round(healthScore);
+
+            // Update color and description
+            let color, description;
+            if (healthScore >= 80) {
+                color = '#28a745';
+                description = 'Excelente performance';
+            } else if (healthScore >= 60) {
+                color = '#ffc107';
+                description = 'Performance satisfatória';
+            } else {
+                color = '#dc3545';
+                description = 'Necessita melhorias';
+            }
+
+            circle.style.stroke = color;
+            descElement.textContent = description;
+        }
+
+        // Utility functions
+        function showLoading() {
+            // Show loading state
+            document.querySelectorAll('.chart-container canvas').forEach(canvas => {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            });
+        }
+
+        function showError(message) {
+            // Show error message
+            console.error(message);
+        }
+
+        // Export functions
+        async function refreshData() {
+            await loadAnalyticsData();
+        }
+
+        function exportReport() {
+            exportPDF();
+        }
+
+        function exportPDF() {
+            window.open(`/api/analytics/export?format=pdf&period=${currentPeriod}`, '_blank');
+        }
+
+        function exportExcel() {
+            window.open(`/api/analytics/export?format=excel&period=${currentPeriod}`, '_blank');
+        }
+
+        function exportCSV() {
+            window.open(`/api/analytics/export?format=csv&period=${currentPeriod}`, '_blank');
+        }
+
+        function scheduleReport() {
+            // Open modal for scheduling reports
+            alert('Funcionalidade de agendamento de relatórios em desenvolvimento');
+        }
+    </script>
+</body>
+</html>

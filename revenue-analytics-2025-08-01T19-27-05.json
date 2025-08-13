@@ -1,0 +1,373 @@
+{
+  "total_appointments": 284,
+  "periods": {
+    "90d": {
+      "period_days": 90,
+      "appointments_count": 284,
+      "tenant_revenue": [
+        {
+          "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+          "tenant_name": "Clínica Mente Sã",
+          "business_name": "Clínica Mente Sã",
+          "total_revenue": 6292.6100000000015,
+          "appointment_count": 62
+        },
+        {
+          "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+          "tenant_name": "Charme Total",
+          "business_name": "Charme Total BH",
+          "total_revenue": 4345.530000000002,
+          "appointment_count": 71
+        },
+        {
+          "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+          "tenant_name": "Studio Glamour",
+          "business_name": "Studio Glamour Rio",
+          "total_revenue": 4087.219999999999,
+          "appointment_count": 60
+        },
+        {
+          "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+          "tenant_name": "Centro Terapêutico",
+          "business_name": "Centro Terapêutico Equilíbrio",
+          "total_revenue": 3769.66,
+          "appointment_count": 34
+        },
+        {
+          "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+          "tenant_name": "Bella Vista Spa",
+          "business_name": "Bella Vista Spa & Salon",
+          "total_revenue": 3491.1999999999994,
+          "appointment_count": 57
+        }
+      ],
+      "total_revenue": 21986.220000000005
+    }
+  },
+  "services_revenue": [
+    {
+      "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+      "tenant_name": "Bella Vista Spa",
+      "service_name": "Service ID: 15df8115-f763-4deb-aa84-c8c2651d2c77",
+      "total_revenue": 1033.57,
+      "appointment_count": 10
+    },
+    {
+      "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+      "tenant_name": "Bella Vista Spa",
+      "service_name": "Service ID: 268c0806-752a-49b4-aa26-624ef4de070f",
+      "total_revenue": 708.61,
+      "appointment_count": 10
+    },
+    {
+      "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+      "tenant_name": "Bella Vista Spa",
+      "service_name": "Service ID: c9863615-8346-4830-8fc6-d7958a845dd9",
+      "total_revenue": 538.18,
+      "appointment_count": 7
+    },
+    {
+      "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+      "tenant_name": "Bella Vista Spa",
+      "service_name": "Service ID: 3dad28be-37eb-4e23-8166-49527991858e",
+      "total_revenue": 245.26000000000002,
+      "appointment_count": 7
+    },
+    {
+      "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+      "tenant_name": "Bella Vista Spa",
+      "service_name": "Service ID: 4db47e64-dfa8-4bdf-ad02-9c977bb730e6",
+      "total_revenue": 236.43,
+      "appointment_count": 6
+    },
+    {
+      "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+      "tenant_name": "Bella Vista Spa",
+      "service_name": "Service ID: 20917e76-258e-41a7-ae33-8c2da29e922a",
+      "total_revenue": 211.89000000000001,
+      "appointment_count": 4
+    },
+    {
+      "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+      "tenant_name": "Bella Vista Spa",
+      "service_name": "Service ID: 4e7bd9b8-325b-428a-a83d-9478da2ab518",
+      "total_revenue": 210.86,
+      "appointment_count": 5
+    },
+    {
+      "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+      "tenant_name": "Bella Vista Spa",
+      "service_name": "Service ID: 2125ac55-210b-4ac2-a509-731a5bb22d69",
+      "total_revenue": 179.42000000000002,
+      "appointment_count": 2
+    },
+    {
+      "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+      "tenant_name": "Bella Vista Spa",
+      "service_name": "Service ID: 76d67f03-f14f-4eaa-b341-bb00dfcb479d",
+      "total_revenue": 126.98000000000002,
+      "appointment_count": 6
+    },
+    {
+      "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+      "tenant_name": "Centro Terapêutico",
+      "service_name": "Service ID: 8647b461-43a9-437b-8f9d-4d4b57ca1eca",
+      "total_revenue": 871.94,
+      "appointment_count": 6
+    },
+    {
+      "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+      "tenant_name": "Centro Terapêutico",
+      "service_name": "Service ID: 79212ecc-dd90-4b54-ae0d-2f0bd33371ff",
+      "total_revenue": 614.8,
+      "appointment_count": 5
+    },
+    {
+      "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+      "tenant_name": "Centro Terapêutico",
+      "service_name": "Service ID: a1ea8853-27ff-44d9-a36c-c7e3e6300549",
+      "total_revenue": 610.86,
+      "appointment_count": 4
+    },
+    {
+      "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+      "tenant_name": "Centro Terapêutico",
+      "service_name": "Service ID: 3bbdaa21-74b5-4a23-9700-6e930e727fb0",
+      "total_revenue": 544.78,
+      "appointment_count": 4
+    },
+    {
+      "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+      "tenant_name": "Centro Terapêutico",
+      "service_name": "Service ID: 81bccc5c-44a9-42c2-9d23-b6863e2a439f",
+      "total_revenue": 494.89000000000004,
+      "appointment_count": 3
+    },
+    {
+      "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+      "tenant_name": "Centro Terapêutico",
+      "service_name": "Service ID: 26816e1f-d151-40ff-a3e0-f7ac2d9800bc",
+      "total_revenue": 343.36,
+      "appointment_count": 4
+    },
+    {
+      "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+      "tenant_name": "Centro Terapêutico",
+      "service_name": "Service ID: b6a3c895-90d5-4e56-8f9e-3fbb71d892fe",
+      "total_revenue": 149.36,
+      "appointment_count": 4
+    },
+    {
+      "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+      "tenant_name": "Centro Terapêutico",
+      "service_name": "Service ID: 79e9bc2a-e1bd-48d9-85dd-832cdb49952f",
+      "total_revenue": 139.67,
+      "appointment_count": 4
+    },
+    {
+      "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+      "tenant_name": "Charme Total",
+      "service_name": "Service ID: 337bd1f8-ae41-4a9b-ae84-3d2a06c76189",
+      "total_revenue": 1083.09,
+      "appointment_count": 16
+    },
+    {
+      "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+      "tenant_name": "Charme Total",
+      "service_name": "Service ID: ec9cd966-b22b-4fe8-84f6-e97f36eeb7bd",
+      "total_revenue": 808.57,
+      "appointment_count": 8
+    },
+    {
+      "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+      "tenant_name": "Charme Total",
+      "service_name": "Service ID: c3b98f5d-2672-4960-8848-ac496df23362",
+      "total_revenue": 619.8,
+      "appointment_count": 12
+    },
+    {
+      "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+      "tenant_name": "Charme Total",
+      "service_name": "Service ID: 4e33d728-a545-4f67-a5b2-81aa699009ec",
+      "total_revenue": 512.96,
+      "appointment_count": 10
+    },
+    {
+      "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+      "tenant_name": "Charme Total",
+      "service_name": "Service ID: 2e657a6c-8282-4e6f-acf7-4be72e7c5504",
+      "total_revenue": 493.64,
+      "appointment_count": 7
+    },
+    {
+      "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+      "tenant_name": "Charme Total",
+      "service_name": "Service ID: c198a7b7-52b4-4cbf-b0bc-f95d8be97640",
+      "total_revenue": 432.67,
+      "appointment_count": 4
+    },
+    {
+      "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+      "tenant_name": "Charme Total",
+      "service_name": "Service ID: f8ebaef5-46e2-4165-aef1-482b95228666",
+      "total_revenue": 228.82999999999998,
+      "appointment_count": 8
+    },
+    {
+      "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+      "tenant_name": "Charme Total",
+      "service_name": "Service ID: 214da4c5-9683-45b5-a909-612ece177b36",
+      "total_revenue": 165.97,
+      "appointment_count": 6
+    },
+    {
+      "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+      "tenant_name": "Clínica Mente Sã",
+      "service_name": "Service ID: aac1b301-7440-46da-bdb5-36347d080021",
+      "total_revenue": 1267.46,
+      "appointment_count": 9
+    },
+    {
+      "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+      "tenant_name": "Clínica Mente Sã",
+      "service_name": "Service ID: 0b36aeda-8ad4-4d35-b0ea-ce85f5222f60",
+      "total_revenue": 1190.06,
+      "appointment_count": 12
+    },
+    {
+      "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+      "tenant_name": "Clínica Mente Sã",
+      "service_name": "Service ID: 44b16e76-b403-4ceb-85f7-2fbf668b6c43",
+      "total_revenue": 1094.1000000000001,
+      "appointment_count": 8
+    },
+    {
+      "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+      "tenant_name": "Clínica Mente Sã",
+      "service_name": "Service ID: a3ca7638-bf05-44af-a9b3-0218a4b0d9d7",
+      "total_revenue": 718.36,
+      "appointment_count": 7
+    },
+    {
+      "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+      "tenant_name": "Clínica Mente Sã",
+      "service_name": "Service ID: ae15051e-0912-4b8d-8b8c-d88cd77a1c95",
+      "total_revenue": 693.9200000000001,
+      "appointment_count": 5
+    },
+    {
+      "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+      "tenant_name": "Clínica Mente Sã",
+      "service_name": "Service ID: e322c2b4-c8eb-402b-ada0-18de2e29c5d9",
+      "total_revenue": 691.66,
+      "appointment_count": 7
+    },
+    {
+      "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+      "tenant_name": "Clínica Mente Sã",
+      "service_name": "Service ID: 44c3524d-dea8-4535-9568-d5d1f9017c0b",
+      "total_revenue": 331.29999999999995,
+      "appointment_count": 7
+    },
+    {
+      "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+      "tenant_name": "Clínica Mente Sã",
+      "service_name": "Service ID: ca9a4b17-82a9-4a47-ba2e-26b51f679e78",
+      "total_revenue": 305.75000000000006,
+      "appointment_count": 7
+    },
+    {
+      "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+      "tenant_name": "Studio Glamour",
+      "service_name": "Service ID: 6526d329-64b1-44ec-a762-49d7e3f5ee5b",
+      "total_revenue": 1057.04,
+      "appointment_count": 11
+    },
+    {
+      "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+      "tenant_name": "Studio Glamour",
+      "service_name": "Service ID: ec9b5f8e-8910-4ac9-854f-5fcaec63120d",
+      "total_revenue": 935.41,
+      "appointment_count": 11
+    },
+    {
+      "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+      "tenant_name": "Studio Glamour",
+      "service_name": "Service ID: cde1897e-755e-452a-a361-297366b3869f",
+      "total_revenue": 808.21,
+      "appointment_count": 9
+    },
+    {
+      "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+      "tenant_name": "Studio Glamour",
+      "service_name": "Service ID: 2de75dee-5caf-4061-bc32-7c5b34ef3ad8",
+      "total_revenue": 470.56,
+      "appointment_count": 8
+    },
+    {
+      "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+      "tenant_name": "Studio Glamour",
+      "service_name": "Service ID: f54ee156-bcef-435c-90aa-4208f321144f",
+      "total_revenue": 266.3,
+      "appointment_count": 6
+    },
+    {
+      "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+      "tenant_name": "Studio Glamour",
+      "service_name": "Service ID: 77d163b2-8de3-4cee-8df8-9d9a7a38aef2",
+      "total_revenue": 221.23000000000002,
+      "appointment_count": 3
+    },
+    {
+      "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+      "tenant_name": "Studio Glamour",
+      "service_name": "Service ID: 7727804f-ff03-4aa2-b1a3-73694099d058",
+      "total_revenue": 196.45,
+      "appointment_count": 7
+    },
+    {
+      "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+      "tenant_name": "Studio Glamour",
+      "service_name": "Service ID: 4f4c093d-c818-4f68-8b88-15106ed8a640",
+      "total_revenue": 132.02,
+      "appointment_count": 5
+    }
+  ],
+  "professionals_revenue": [
+    {
+      "tenant_id": "33b8c488-5aa9-4891-b335-701d10296681",
+      "tenant_name": "Bella Vista Spa",
+      "professional_name": "Professional ID: null",
+      "total_revenue": 3491.1999999999994,
+      "appointment_count": 57
+    },
+    {
+      "tenant_id": "f34d8c94-f6cf-4dd7-82de-a3123b380cd8",
+      "tenant_name": "Centro Terapêutico",
+      "professional_name": "Professional ID: null",
+      "total_revenue": 3769.66,
+      "appointment_count": 34
+    },
+    {
+      "tenant_id": "5bd592ee-8247-4a62-862e-7491fa499103",
+      "tenant_name": "Charme Total",
+      "professional_name": "Professional ID: null",
+      "total_revenue": 4345.530000000002,
+      "appointment_count": 71
+    },
+    {
+      "tenant_id": "fe2fa876-05da-49b5-b266-8141bcd090fa",
+      "tenant_name": "Clínica Mente Sã",
+      "professional_name": "Professional ID: null",
+      "total_revenue": 6292.6100000000015,
+      "appointment_count": 62
+    },
+    {
+      "tenant_id": "fe1fbd26-16cf-4106-9be0-390bf8345304",
+      "tenant_name": "Studio Glamour",
+      "professional_name": "Professional ID: null",
+      "total_revenue": 4087.219999999999,
+      "appointment_count": 60
+    }
+  ]
+}

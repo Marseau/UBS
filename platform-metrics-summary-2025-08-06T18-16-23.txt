@@ -1,0 +1,70 @@
+RELATÓRIO DE VALIDAÇÃO DAS MÉTRICAS DA PLATAFORMA
+Gerado em: 2025-08-06T18:16:23.310Z
+============================================================
+
+PERÍODO: 7 dias
+------------------------------
+Status Geral: FAIL
+Taxa de Sucesso: 0%
+Checks: 0/3
+Warnings: 0
+Errors: 3
+
+DISCREPÂNCIAS DETALHADAS:
+  total_appointments: ERROR
+    Calculado: 669
+    Armazenado: 138
+    Diferença: 531 (384.78%)
+  total_conversations: ERROR
+    Calculado: 36
+    Armazenado: 0
+    Diferença: 36 (100%)
+  total_customers: ERROR
+    Calculado: 0
+    Armazenado: 96
+    Diferença: 96 (100%)
+
+PERÍODO: 30 dias
+------------------------------
+Status Geral: FAIL
+Taxa de Sucesso: 0%
+Checks: 0/3
+Warnings: 1
+Errors: 2
+
+DISCREPÂNCIAS DETALHADAS:
+  total_appointments: WARNING
+    Calculado: 1000
+    Armazenado: 1149
+    Diferença: 149 (12.97%)
+  total_conversations: ERROR
+    Calculado: 1000
+    Armazenado: 4560
+    Diferença: 3560 (78.07%)
+  total_customers: ERROR
+    Calculado: 616
+    Armazenado: 840
+    Diferença: 224 (26.67%)
+
+PERÍODO: 90 dias
+------------------------------
+Status Geral: FAIL
+Taxa de Sucesso: 0%
+Checks: 0/3
+Warnings: 0
+Errors: 3
+
+DISCREPÂNCIAS DETALHADAS:
+  total_appointments: ERROR
+    Calculado: 1000
+    Armazenado: 354
+    Diferença: 646 (182.49%)
+  total_conversations: ERROR
+    Calculado: 1000
+    Armazenado: 0
+    Diferença: 1000 (100%)
+  total_customers: ERROR
+    Calculado: 835
+    Armazenado: 98
+    Diferença: 737 (752.04%)
+

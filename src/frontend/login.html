@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - UBS | Universal Booking System</title>
+    <meta name="description" content="Acesse sua conta UBS para gerenciar seus agendamentos com IA para WhatsApp.">
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #2D5A9B;
+            --primary-light: #4A7BC8;
+            --primary-dark: #1E3F6B;
+            --secondary-color: #F8F9FA;
+            --accent-color: #28A745;
+            --text-dark: #2C3E50;
+            --text-light: #6C757D;
+            --border-color: #E9ECEF;
+            --shadow: 0 4px 20px rgba(45, 90, 155, 0.15);
+            --shadow-lg: 0 10px 40px rgba(45, 90, 155, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+        }
+
+        .login-container {
+            max-width: 450px;
+            width: 100%;
+        }
+
+        .login-card {
+            background: white;
+            border-radius: 20px;
+            padding: 3rem;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .login-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+        }
+
+        .logo-section {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .logo-image {
+            width: 300px;
+            height: 150px;
+            object-fit: contain;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            background: transparent;
+        }
+
+        /* Responsivo para mobile */
+        @media (max-width: 768px) {
+            .logo-image {
+                width: 200px;
+                height: 100px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .logo-image {
+                width: 150px;
+                height: 75px;
+            }
+        }
+
+        .logo-text {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .logo-subtitle {
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        .form-floating {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-floating > .form-control {
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem 0.75rem;
+            height: auto;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-floating > .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.25rem rgba(45, 90, 155, 0.1);
+        }
+
+        .form-floating > label {
+            padding: 1rem 0.75rem;
+            color: var(--text-light);
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            border: none;
+            padding: 1rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            width: 100%;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-primary:disabled {
+            background: var(--text-light);
+            transform: none;
+            box-shadow: none;
+        }
+
+        .forgot-password {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .forgot-password a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .forgot-password a:hover {
+            color: var(--primary-dark);
+        }
+
+        .divider {
+            text-align: center;
+            margin: 2rem 0;
+            position: relative;
+            color: var(--text-light);
+        }
+
+        .divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: var(--border-color);
+            z-index: 1;
+        }
+
+        .divider span {
+            background: white;
+            padding: 0 1rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        .register-link {
+            text-align: center;
+            padding: 1.5rem;
+            background: var(--secondary-color);
+            border-radius: 12px;
+            margin-top: 2rem;
+        }
+
+        .register-link p {
+            margin: 0;
+            color: var(--text-light);
+        }
+
+        .register-link a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s ease;
+        }
+
+        .register-link a:hover {
+            color: var(--primary-dark);
+        }
+
+        .alert {
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            border: none;
+        }
+
+        .alert-danger {
+            background-color: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+        }
+
+        .alert-success {
+            background-color: rgba(40, 167, 69, 0.1);
+            color: var(--accent-color);
+        }
+
+        .loading-spinner {
+            display: none;
+            margin-right: 0.5rem;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: var(--text-light);
+            z-index: 10;
+            background: white;
+            border: none;
+            padding: 0.5rem;
+        }
+
+        .password-toggle:hover {
+            color: var(--primary-color);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .login-card {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        /* Responsive */
+        @media (max-width: 576px) {
+            .login-card {
+                padding: 2rem 1.5rem;
+                margin: 1rem;
+            }
+
+            .logo-text {
+                font-size: 1.5rem;
+            }
+
+            .logo-icon {
+                width: 50px;
+                height: 50px;
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <!-- Logo Section -->
+            <div class="logo-section">
+                <picture>
+                    <source srcset="assets/images/optimized/UBS_Nac.webp" type="image/webp">
+                    <img src="assets/images/UBS_Nac.png" alt="UBS - Sistema Universal de Agendamentos" class="logo-image">
+                </picture>
+            </div>
+
+            <!-- Alert Messages -->
+            <div id="alert-placeholder"></div>
+
+            <!-- Login Form -->
+            <form id="login-form">
+                <div class="form-floating">
+                    <input type="email" class="form-control" id="email" placeholder="seu@email.com" required aria-describedby="emailHelp">
+                    <label for="email">
+                        <i class="fas fa-envelope me-2" aria-hidden="true"></i>Email *
+                    </label>
+                    <small id="emailHelp" class="visually-hidden">Digite seu endereço de email</small>
+                </div>
+
+                <div class="form-floating position-relative">
+                    <input type="password" class="form-control" id="password" placeholder="Sua senha" required aria-describedby="passwordHelp">
+                    <label for="password">
+                        <i class="fas fa-lock me-2" aria-hidden="true"></i>Senha *
+                    </label>
+                    <button type="button" class="password-toggle" onclick="togglePassword()" aria-label="Mostrar/ocultar senha">
+                        <i class="fas fa-eye" id="passwordToggleIcon" aria-hidden="true"></i>
+                    </button>
+                    <small id="passwordHelp" class="visually-hidden">Digite sua senha</small>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="loginBtn">
+                    <i class="fas fa-spinner fa-spin loading-spinner" id="loadingSpinner"></i>
+                    <i class="fas fa-sign-in-alt me-2"></i>
+                    Entrar
+                </button>
+            </form>
+
+            <!-- Forgot Password -->
+            <div class="forgot-password">
+                <a href="forgot-password.html" aria-describedby="forgotPasswordHelp">Esqueceu sua senha?</a>
+                <small id="forgotPasswordHelp" class="visually-hidden">Clique para recuperar sua senha por email</small>
+            </div>
+
+            <!-- Divider -->
+            <div class="divider">
+                <span>ou</span>
+            </div>
+
+            <!-- Register Link -->
+            <div class="register-link">
+                <p>Ainda não tem uma conta?</p>
+                <a href="/register">Criar conta grátis</a>
+            </div>
+
+            <!-- Back to Home -->
+            <div class="text-center mt-3">
+                <a href="/" class="text-muted text-decoration-none">
+                    <i class="fas fa-arrow-left me-2"></i>Voltar ao início
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Simple JWT decode function without external dependency
+        function simpleJwtDecode(token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                return JSON.parse(jsonPayload);
+            } catch (e) {
+                return null;
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            // Verificar se já estamos sendo redirecionados para evitar loop
+            if (sessionStorage.getItem('login_redirect_in_progress')) {
+                console.log('🚫 Redirecionamento já em progresso, evitando loop');
+                return;
+            }
+            
+            // Clean any old tokens first
+            localStorage.removeItem('token'); // Remove old token format
+            
+            // Tenta obter o token do localStorage
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('ubs_token');
+            if (token) {
+                try {
+                    const decodedToken = simpleJwtDecode(token);
+                    if (!decodedToken) {
+                        throw new Error('Invalid token format');
+                    }
+                    if (decodedToken.exp * 1000 < Date.now()) {
+                        console.error("Token expirado.");
+                        localStorage.removeItem('adminToken');
+                        localStorage.removeItem('ubs_token');
+                        return; // Não redireciona, permite que o usuário faça login novamente
+                    }
+                    
+                    // Marcar que redirecionamento está em progresso
+                    sessionStorage.setItem('login_redirect_in_progress', 'true');
+                    
+                    // Redireciona baseado no papel do usuário
+                    console.log('✅ Token válido encontrado, redirecionando...');
+                    if (decodedToken.role === 'super_admin') {
+                        window.location.href = '/dashboard-standardized.html';  // Super admin dashboard
+                    } else if (decodedToken.role === 'tenant_admin') {
+                        window.location.href = '/tenant-business-analytics.html';  // Tenant business analytics
+                    } else {
+                        window.location.href = '/dashboard-standardized.html';  // Fallback
+                    }
+
+                } catch (error) {
+                    console.error('Erro ao decodificar token, removendo token inválido:', error);
+                    localStorage.removeItem('adminToken');
+                    localStorage.removeItem('ubs_token');
+                }
+            }
+        });
+
+        const loginForm = document.getElementById('login-form');
+        const alertPlaceholder = document.getElementById('alert-placeholder');
+
+        const showAlert = (message, type) => {
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = [
+                `<div class="alert alert-${type} alert-dismissible fade show" role="alert">`,
+                `   <div>${message}</div>`,
+                '   <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>',
+                '</div>'
+            ].join('');
+            alertPlaceholder.append(wrapper);
+        };
+
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const submitButton = loginForm.querySelector('button[type="submit"]');
+
+            console.log('🚀 DEBUG: Iniciando login...');
+            console.log('📧 Email:', email);
+            console.log('🔑 Password length:', password.length);
+
+            // Desabilita o botão para evitar múltiplos envios
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Acessando...';
+
+            try {
+                console.log('📡 DEBUG: Enviando request...');
+                const response = await fetch('/api/admin/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password }),
+                });
+
+                console.log('📥 DEBUG: Response status:', response.status);
+                console.log('📥 DEBUG: Response ok:', response.ok);
+
+                const data = await response.json();
+                console.log('📥 DEBUG: Response data:', data);
+
+                if (response.ok) {
+                    const decodedToken = simpleJwtDecode(data.token);
+                    
+                    console.log("✅ Login bem-sucedido. Token:", data.token);
+                    console.log("✅ Token decodificado:", decodedToken);
+                    
+                    // CORREÇÃO: Usar o sistema secure-auth em vez de localStorage direto
+                    const userData = {
+                        id: decodedToken.id,
+                        email: decodedToken.email,
+                        role: decodedToken.role,
+                        tenantId: decodedToken.tenant_id,
+                        permissions: decodedToken.permissions
+                    };
+                    
+                    // Salvar token com força e aguardar sincronização
+                    localStorage.setItem('adminToken', data.token);
+                    localStorage.setItem('ubs_token', data.token); // Keep both for compatibility
+                    sessionStorage.setItem('adminToken', data.token); // Backup adicional
+                    sessionStorage.setItem('ubs_token', data.token);   // Backup adicional
+                    
+                    console.log("✅ Login bem-sucedido. Token:", data.token);
+                    console.log("✅ Token decodificado:", decodedToken);
+                    console.log("✅ Token salvo em localStorage e sessionStorage");
+
+                    // AGUARDAR para garantir que token foi persistido
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Verificar se token realmente foi salvo antes de redirecionar
+                    const savedToken = localStorage.getItem('adminToken');
+                    if (savedToken) {
+                        console.log("✅ Token confirmado no localStorage:", !!savedToken);
+                        
+                        // Marcar que redirecionamento está em progresso
+                        sessionStorage.setItem('login_redirect_in_progress', 'true');
+                        
+                        // Redirecionamento baseado no papel do usuário
+                        if (decodedToken.role === 'super_admin') {
+                            window.location.href = '/dashboard-standardized.html';  // Super admin dashboard
+                        } else if (decodedToken.role === 'tenant_admin') {
+                            window.location.href = '/dashboard-tenant-admin.html';  // Tenant admin dashboard
+                        } else {
+                            window.location.href = '/dashboard-standardized.html';  // Fallback
+                        }
+                    } else {
+                        console.error("❌ Token não foi salvo corretamente!");
+                        showAlert('Erro ao salvar sessão. Tente novamente.', 'danger');
+                    }
+                    
+                } else {
+                    console.log('❌ DEBUG: Login falhou:', data.message);
+                    showAlert(data.message || 'Erro desconhecido. Tente novamente.', 'danger');
+                }
+            } catch (error) {
+                console.error('💥 DEBUG: Erro na requisição de login:', error);
+                showAlert('Falha na comunicação com o servidor. Verifique sua conexão.', 'danger');
+            } finally {
+                // Habilita o botão novamente
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>Entrar';
+            }
+        });
+
+        // Password toggle functionality
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const toggleIcon = document.getElementById('passwordToggleIcon');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleIcon.classList.remove('fa-eye');
+                toggleIcon.classList.add('fa-eye-slash');
+            } else {
+                passwordInput.type = 'password';
+                toggleIcon.classList.remove('fa-eye-slash');
+                toggleIcon.classList.add('fa-eye');
+            }
+        }
+
+        // Forgot password handler
+        function forgotPassword() {
+            const email = document.getElementById('email').value.trim();
+            
+            if (!email) {
+                showAlert('Digite seu email primeiro e clique em "Esqueceu sua senha?"', 'danger');
+                document.getElementById('email').focus();
+                return;
+            }
+            
+            if (!isValidEmail(email)) {
+                showAlert('Por favor, insira um email válido.', 'danger');
+                return;
+            }
+            
+            // Send password reset email
+            fetch('/api/auth/forgot-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('Email de recuperação enviado! Verifique sua caixa de entrada.', 'success');
+                } else {
+                    showAlert(data.message || 'Erro ao enviar email de recuperação.', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Forgot password error:', error);
+                showAlert('Erro de conexão. Tente novamente.', 'danger');
+            });
+        }
+
+        // Utility functions
+        function isValidEmail(email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return emailRegex.test(email);
+        }
+
+        // Auto-focus on email field
+        document.getElementById('email').focus();
+
+        // Enter key handler
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('login-form').dispatchEvent(new Event('submit'));
+            }
+        });
+    </script>
+</body>
+</html>

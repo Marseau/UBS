@@ -1,0 +1,569 @@
+{
+  "meta": {
+    "instanceId": "n8n-business-analytics-001"
+  },
+  "createdAt": "2025-08-11T00:00:00.000Z",
+  "updatedAt": "2025-08-11T00:00:00.000Z",
+  "id": "business-analytics-metrics-collection",
+  "name": "Business Analytics & Metrics Collection (Multi-tenant)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "metrics-cron-trigger",
+      "name": "📊 Every 6 Hours",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// 🏢 TENANT METRICS COLLECTOR\n// Coleta métricas de todos os tenants para análise de performance\n\nconst now = new Date();\nconst last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);\nconst last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);\nconst last30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);\n\n// Lista de tenants para coletar métricas\nconst tenants = [\n  {\n    tenant_id: 'tenant_1_beleza',\n    name: 'Salão Elegância Premium',\n    domain: 'beauty'\n  },\n  {\n    tenant_id: 'tenant_2_saude',\n    name: 'Clínica Vida Saudável', \n    domain: 'healthcare'\n  },\n  {\n    tenant_id: 'tenant_3_juridico',\n    name: 'Advocacia Silva & Santos',\n    domain: 'legal'\n  },\n  {\n    tenant_id: 'tenant_4_educacao',\n    name: 'EduTech Cursos Personalizados',\n    domain: 'education'\n  },\n  {\n    tenant_id: 'tenant_5_esportes',\n    name: 'FitPro Academia & Personal',\n    domain: 'sports'\n  },\n  {\n    tenant_id: 'tenant_6_consultoria',\n    name: 'BizConsult Estratégia Empresarial',\n    domain: 'consulting'\n  }\n];\n\n// Gerar batch ID para esta coleta\nconst batchId = `metrics_${now.toISOString().split('T')[0]}_${now.getHours()}_${Math.random().toString(36).substr(2, 6)}`;\n\n// Preparar dados para coleta individual por tenant\nconst metricsCollection = tenants.map(tenant => ({\n  tenant_id: tenant.tenant_id,\n  tenant_name: tenant.name,\n  business_domain: tenant.domain,\n  collection_batch_id: batchId,\n  collection_started_at: now.toISOString(),\n  period_24h_start: last24h.toISOString(),\n  period_7d_start: last7d.toISOString(),\n  period_30d_start: last30d.toISOString(),\n  current_timestamp: now.toISOString()\n}));\n\nreturn metricsCollection.map(item => ({ json: item }));"
+      },
+      "id": "tenant-metrics-collector",
+      "name": "🏢 Tenant Collector",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "getAll",
+        "table": "appointments",
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "tenant_id",
+              "condition": "equals",
+              "keyValue": "={{ $json.tenant_id }}"
+            },
+            {
+              "keyName": "created_at",
+              "condition": "dateTimeAfter",
+              "keyValue": "={{ $json.period_30d_start }}"
+            }
+          ]
+        }
+      },
+      "id": "fetch-tenant-appointments",
+      "name": "📅 Fetch Appointments",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [600, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "getAll",
+        "table": "conversation_history",
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "tenant_id",
+              "condition": "equals",
+              "keyValue": "={{ $json.tenant_id }}"
+            },
+            {
+              "keyName": "created_at",
+              "condition": "dateTimeAfter",
+              "keyValue": "={{ $json.period_30d_start }}"
+            }
+          ]
+        }
+      },
+      "id": "fetch-tenant-conversations",
+      "name": "💬 Fetch Conversations",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [600, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "getAll",
+        "table": "usage_costs",
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "tenant_id",
+              "condition": "equals",
+              "keyValue": "={{ $json.tenant_id }}"
+            },
+            {
+              "keyName": "date",
+              "condition": "dateTimeAfter",
+              "keyValue": "={{ $json.period_30d_start }}"
+            }
+          ]
+        }
+      },
+      "id": "fetch-tenant-costs",
+      "name": "💰 Fetch Costs",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [600, 400],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// 📊 METRICS CALCULATOR\n// Calcula métricas de performance para cada tenant\n\nconst tenantData = $('🏢 Tenant Collector').item.json;\nconst appointments = $('📅 Fetch Appointments').all().map(item => item.json);\nconst conversations = $('💬 Fetch Conversations').all().map(item => item.json);\nconst costs = $('💰 Fetch Costs').all().map(item => item.json);\n\nconst now = new Date();\nconst last24h = new Date(tenantData.period_24h_start);\nconst last7d = new Date(tenantData.period_7d_start);\nconst last30d = new Date(tenantData.period_30d_start);\n\n// Função auxiliar para filtrar por período\nfunction filterByPeriod(items, dateField, periodStart) {\n  return items.filter(item => {\n    const itemDate = new Date(item[dateField]);\n    return itemDate >= periodStart;\n  });\n}\n\n// Métricas de agendamentos por período\nconst appointments24h = filterByPeriod(appointments, 'created_at', last24h);\nconst appointments7d = filterByPeriod(appointments, 'created_at', last7d);\nconst appointments30d = filterByPeriod(appointments, 'created_at', last30d);\n\n// Métricas de conversas por período\nconst conversations24h = filterByPeriod(conversations, 'created_at', last24h);\nconst conversations7d = filterByPeriod(conversations, 'created_at', last7d);\nconst conversations30d = filterByPeriod(conversations, 'created_at', last30d);\n\n// Métricas de custos por período\nconst costs24h = filterByPeriod(costs, 'created_at', last24h);\nconst costs7d = filterByPeriod(costs, 'created_at', last7d);\nconst costs30d = filterByPeriod(costs, 'created_at', last30d);\n\n// Calcular receita por período\nfunction calculateRevenue(appointmentsList) {\n  return appointmentsList\n    .filter(apt => ['confirmed', 'completed'].includes(apt.status))\n    .reduce((sum, apt) => sum + (apt.final_price || apt.quoted_price || 0), 0);\n}\n\nconst revenue24h = calculateRevenue(appointments24h);\nconst revenue7d = calculateRevenue(appointments7d);\nconst revenue30d = calculateRevenue(appointments30d);\n\n// Calcular custos de IA\nfunction calculateAICosts(costsList) {\n  return costsList.reduce((sum, cost) => sum + (cost.ai_cost_usd || 0), 0);\n}\n\nconst aiCosts24h = calculateAICosts(costs24h);\nconst aiCosts7d = calculateAICosts(costs7d);\nconst aiCosts30d = calculateAICosts(costs30d);\n\n// Métricas de conversão\nconst conversionRate24h = conversations24h.length > 0 ? \n  (appointments24h.length / conversations24h.length * 100) : 0;\nconst conversionRate7d = conversations7d.length > 0 ? \n  (appointments7d.length / conversations7d.length * 100) : 0;\nconst conversionRate30d = conversations30d.length > 0 ? \n  (appointments30d.length / conversations30d.length * 100) : 0;\n\n// Análise de status dos agendamentos\nfunction analyzeAppointmentStatus(appointmentsList) {\n  const statusCount = {};\n  appointmentsList.forEach(apt => {\n    const status = apt.status || 'unknown';\n    statusCount[status] = (statusCount[status] || 0) + 1;\n  });\n  return statusCount;\n}\n\nconst statusAnalysis24h = analyzeAppointmentStatus(appointments24h);\nconst statusAnalysis7d = analyzeAppointmentStatus(appointments7d);\nconst statusAnalysis30d = analyzeAppointmentStatus(appointments30d);\n\n// Métricas de engajamento\nconst avgMessagesPerConversation = conversations30d.length > 0 ?\n  conversations30d.length / new Set(conversations30d.map(c => c.user_id)).size : 0;\n\n// Análise de intents\nfunction analyzeIntents(conversationsList) {\n  const intentCount = {};\n  conversationsList.forEach(conv => {\n    const intent = conv.intent_detected || 'unknown';\n    intentCount[intent] = (intentCount[intent] || 0) + 1;\n  });\n  return intentCount;\n}\n\nconst intentAnalysis30d = analyzeIntents(conversations30d);\n\n// ROI (Return on Investment)\nconst roi24h = aiCosts24h > 0 ? ((revenue24h - aiCosts24h) / aiCosts24h * 100) : 0;\nconst roi7d = aiCosts7d > 0 ? ((revenue7d - aiCosts7d) / aiCosts7d * 100) : 0;\nconst roi30d = aiCosts30d > 0 ? ((revenue30d - aiCosts30d) / aiCosts30d * 100) : 0;\n\n// Preparar objeto de métricas completo\nconst calculatedMetrics = {\n  // Dados básicos\n  ...tenantData,\n  \n  // Métricas de volume - 24h\n  appointments_24h: appointments24h.length,\n  conversations_24h: conversations24h.length,\n  revenue_24h: revenue24h,\n  ai_costs_24h: aiCosts24h,\n  conversion_rate_24h: parseFloat(conversionRate24h.toFixed(2)),\n  roi_24h: parseFloat(roi24h.toFixed(2)),\n  \n  // Métricas de volume - 7d\n  appointments_7d: appointments7d.length,\n  conversations_7d: conversations7d.length,\n  revenue_7d: revenue7d,\n  ai_costs_7d: aiCosts7d,\n  conversion_rate_7d: parseFloat(conversionRate7d.toFixed(2)),\n  roi_7d: parseFloat(roi7d.toFixed(2)),\n  \n  // Métricas de volume - 30d\n  appointments_30d: appointments30d.length,\n  conversations_30d: conversations30d.length,\n  revenue_30d: revenue30d,\n  ai_costs_30d: aiCosts30d,\n  conversion_rate_30d: parseFloat(conversionRate30d.toFixed(2)),\n  roi_30d: parseFloat(roi30d.toFixed(2)),\n  \n  // Análises detalhadas\n  appointment_status_24h: statusAnalysis24h,\n  appointment_status_7d: statusAnalysis7d,\n  appointment_status_30d: statusAnalysis30d,\n  intent_distribution: intentAnalysis30d,\n  avg_messages_per_conversation: parseFloat(avgMessagesPerConversation.toFixed(2)),\n  \n  // Métricas derivadas\n  revenue_per_conversation_30d: conversations30d.length > 0 ? parseFloat((revenue30d / conversations30d.length).toFixed(2)) : 0,\n  cost_per_conversation_30d: conversations30d.length > 0 ? parseFloat((aiCosts30d / conversations30d.length).toFixed(4)) : 0,\n  profit_margin_30d: revenue30d > 0 ? parseFloat(((revenue30d - aiCosts30d) / revenue30d * 100).toFixed(2)) : 0,\n  \n  // KPIs de saúde do negócio\n  active_users_30d: new Set(conversations30d.map(c => c.user_id)).size,\n  repeat_customers_30d: new Set(appointments30d.filter(apt => \n    appointments30d.filter(a => a.user_id === apt.user_id).length > 1\n  ).map(apt => apt.user_id)).size,\n  \n  // Timestamp de cálculo\n  metrics_calculated_at: new Date().toISOString()\n};\n\nreturn [calculatedMetrics];"
+      },
+      "id": "metrics-calculator",
+      "name": "📊 Metrics Calculator",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "table": "tenant_business_metrics",
+        "columns": {
+          "values": [
+            {
+              "column": "tenant_id",
+              "value": "={{ $json.tenant_id }}"
+            },
+            {
+              "column": "business_domain",
+              "value": "={{ $json.business_domain }}"
+            },
+            {
+              "column": "collection_batch_id",
+              "value": "={{ $json.collection_batch_id }}"
+            },
+            {
+              "column": "collection_date",
+              "value": "={{ $json.current_timestamp.split('T')[0] }}"
+            },
+            {
+              "column": "appointments_24h",
+              "value": "={{ $json.appointments_24h }}"
+            },
+            {
+              "column": "appointments_7d",
+              "value": "={{ $json.appointments_7d }}"
+            },
+            {
+              "column": "appointments_30d",
+              "value": "={{ $json.appointments_30d }}"
+            },
+            {
+              "column": "conversations_24h",
+              "value": "={{ $json.conversations_24h }}"
+            },
+            {
+              "column": "conversations_7d",
+              "value": "={{ $json.conversations_7d }}"
+            },
+            {
+              "column": "conversations_30d",
+              "value": "={{ $json.conversations_30d }}"
+            },
+            {
+              "column": "revenue_24h",
+              "value": "={{ $json.revenue_24h }}"
+            },
+            {
+              "column": "revenue_7d",
+              "value": "={{ $json.revenue_7d }}"
+            },
+            {
+              "column": "revenue_30d",
+              "value": "={{ $json.revenue_30d }}"
+            },
+            {
+              "column": "ai_costs_24h",
+              "value": "={{ $json.ai_costs_24h }}"
+            },
+            {
+              "column": "ai_costs_7d",
+              "value": "={{ $json.ai_costs_7d }}"
+            },
+            {
+              "column": "ai_costs_30d",
+              "value": "={{ $json.ai_costs_30d }}"
+            },
+            {
+              "column": "conversion_rate_24h",
+              "value": "={{ $json.conversion_rate_24h }}"
+            },
+            {
+              "column": "conversion_rate_7d",
+              "value": "={{ $json.conversion_rate_7d }}"
+            },
+            {
+              "column": "conversion_rate_30d",
+              "value": "={{ $json.conversion_rate_30d }}"
+            },
+            {
+              "column": "roi_24h",
+              "value": "={{ $json.roi_24h }}"
+            },
+            {
+              "column": "roi_7d",
+              "value": "={{ $json.roi_7d }}"
+            },
+            {
+              "column": "roi_30d",
+              "value": "={{ $json.roi_30d }}"
+            },
+            {
+              "column": "active_users_30d",
+              "value": "={{ $json.active_users_30d }}"
+            },
+            {
+              "column": "repeat_customers_30d",
+              "value": "={{ $json.repeat_customers_30d }}"
+            },
+            {
+              "column": "detailed_analytics",
+              "value": "={{ JSON.stringify({ appointment_status_30d: $json.appointment_status_30d, intent_distribution: $json.intent_distribution, revenue_per_conversation: $json.revenue_per_conversation_30d, cost_per_conversation: $json.cost_per_conversation_30d, profit_margin: $json.profit_margin_30d }) }}"
+            },
+            {
+              "column": "metrics_calculated_at",
+              "value": "={{ $json.metrics_calculated_at }}"
+            }
+          ]
+        }
+      },
+      "id": "store-tenant-metrics",
+      "name": "💾 Store Metrics",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1000, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// 📈 PLATFORM AGGREGATOR\n// Agrega métricas de todos os tenants para dashboard super admin\n\nconst allTenantMetrics = $input.all();\n\n// Calcular totais da plataforma\nconst platformMetrics = allTenantMetrics.reduce((totals, tenant) => {\n  const tenantJson = tenant.json;\n  \n  return {\n    // Totais de volume\n    total_appointments_24h: (totals.total_appointments_24h || 0) + (tenantJson.appointments_24h || 0),\n    total_appointments_7d: (totals.total_appointments_7d || 0) + (tenantJson.appointments_7d || 0),\n    total_appointments_30d: (totals.total_appointments_30d || 0) + (tenantJson.appointments_30d || 0),\n    \n    total_conversations_24h: (totals.total_conversations_24h || 0) + (tenantJson.conversations_24h || 0),\n    total_conversations_7d: (totals.total_conversations_7d || 0) + (tenantJson.conversations_7d || 0),\n    total_conversations_30d: (totals.total_conversations_30d || 0) + (tenantJson.conversations_30d || 0),\n    \n    // Totais financeiros\n    total_revenue_24h: (totals.total_revenue_24h || 0) + (tenantJson.revenue_24h || 0),\n    total_revenue_7d: (totals.total_revenue_7d || 0) + (tenantJson.revenue_7d || 0),\n    total_revenue_30d: (totals.total_revenue_30d || 0) + (tenantJson.revenue_30d || 0),\n    \n    total_ai_costs_24h: (totals.total_ai_costs_24h || 0) + (tenantJson.ai_costs_24h || 0),\n    total_ai_costs_7d: (totals.total_ai_costs_7d || 0) + (tenantJson.ai_costs_7d || 0),\n    total_ai_costs_30d: (totals.total_ai_costs_30d || 0) + (tenantJson.ai_costs_30d || 0),\n    \n    // Totais de usuários\n    total_active_users_30d: (totals.total_active_users_30d || 0) + (tenantJson.active_users_30d || 0),\n    total_repeat_customers_30d: (totals.total_repeat_customers_30d || 0) + (tenantJson.repeat_customers_30d || 0),\n    \n    // Contadores\n    total_active_tenants: (totals.total_active_tenants || 0) + 1\n  };\n}, {});\n\n// Calcular médias da plataforma\nconst tenantCount = allTenantMetrics.length;\nconst avgConversionRate24h = tenantCount > 0 ? \n  allTenantMetrics.reduce((sum, t) => sum + (t.json.conversion_rate_24h || 0), 0) / tenantCount : 0;\nconst avgConversionRate7d = tenantCount > 0 ? \n  allTenantMetrics.reduce((sum, t) => sum + (t.json.conversion_rate_7d || 0), 0) / tenantCount : 0;\nconst avgConversionRate30d = tenantCount > 0 ? \n  allTenantMetrics.reduce((sum, t) => sum + (t.json.conversion_rate_30d || 0), 0) / tenantCount : 0;\n\nconst avgROI24h = tenantCount > 0 ? \n  allTenantMetrics.reduce((sum, t) => sum + (t.json.roi_24h || 0), 0) / tenantCount : 0;\nconst avgROI7d = tenantCount > 0 ? \n  allTenantMetrics.reduce((sum, t) => sum + (t.json.roi_7d || 0), 0) / tenantCount : 0;\nconst avgROI30d = tenantCount > 0 ? \n  allTenantMetrics.reduce((sum, t) => sum + (t.json.roi_30d || 0), 0) / tenantCount : 0;\n\n// Calcular métricas derivadas da plataforma\nconst platformConversionRate24h = platformMetrics.total_conversations_24h > 0 ?\n  (platformMetrics.total_appointments_24h / platformMetrics.total_conversations_24h * 100) : 0;\nconst platformConversionRate7d = platformMetrics.total_conversations_7d > 0 ?\n  (platformMetrics.total_appointments_7d / platformMetrics.total_conversations_7d * 100) : 0;\nconst platformConversionRate30d = platformMetrics.total_conversations_30d > 0 ?\n  (platformMetrics.total_appointments_30d / platformMetrics.total_conversations_30d * 100) : 0;\n\nconst platformROI24h = platformMetrics.total_ai_costs_24h > 0 ?\n  ((platformMetrics.total_revenue_24h - platformMetrics.total_ai_costs_24h) / platformMetrics.total_ai_costs_24h * 100) : 0;\nconst platformROI7d = platformMetrics.total_ai_costs_7d > 0 ?\n  ((platformMetrics.total_revenue_7d - platformMetrics.total_ai_costs_7d) / platformMetrics.total_ai_costs_7d * 100) : 0;\nconst platformROI30d = platformMetrics.total_ai_costs_30d > 0 ?\n  ((platformMetrics.total_revenue_30d - platformMetrics.total_ai_costs_30d) / platformMetrics.total_ai_costs_30d * 100) : 0;\n\n// Análise por domínio de negócio\nconst domainAnalysis = allTenantMetrics.reduce((domains, tenant) => {\n  const domain = tenant.json.business_domain;\n  if (!domains[domain]) {\n    domains[domain] = {\n      tenant_count: 0,\n      total_revenue_30d: 0,\n      total_appointments_30d: 0,\n      total_conversations_30d: 0,\n      avg_conversion_rate_30d: 0\n    };\n  }\n  \n  domains[domain].tenant_count++;\n  domains[domain].total_revenue_30d += tenant.json.revenue_30d || 0;\n  domains[domain].total_appointments_30d += tenant.json.appointments_30d || 0;\n  domains[domain].total_conversations_30d += tenant.json.conversations_30d || 0;\n  domains[domain].avg_conversion_rate_30d += tenant.json.conversion_rate_30d || 0;\n  \n  return domains;\n}, {});\n\n// Calcular médias por domínio\nObject.keys(domainAnalysis).forEach(domain => {\n  domainAnalysis[domain].avg_conversion_rate_30d /= domainAnalysis[domain].tenant_count;\n  domainAnalysis[domain].avg_conversion_rate_30d = parseFloat(domainAnalysis[domain].avg_conversion_rate_30d.toFixed(2));\n});\n\n// Identificar top performers\nconst topPerformers = {\n  highest_revenue: allTenantMetrics.reduce((max, current) => \n    (current.json.revenue_30d || 0) > (max.json?.revenue_30d || 0) ? current : max, { json: {} }),\n  highest_conversion: allTenantMetrics.reduce((max, current) => \n    (current.json.conversion_rate_30d || 0) > (max.json?.conversion_rate_30d || 0) ? current : max, { json: {} }),\n  highest_roi: allTenantMetrics.reduce((max, current) => \n    (current.json.roi_30d || 0) > (max.json?.roi_30d || 0) ? current : max, { json: {} }),\n  most_active: allTenantMetrics.reduce((max, current) => \n    (current.json.conversations_30d || 0) > (max.json?.conversations_30d || 0) ? current : max, { json: {} })\n};\n\n// Preparar dados agregados da plataforma\nconst aggregatedData = {\n  // Dados básicos\n  collection_batch_id: allTenantMetrics[0]?.json.collection_batch_id,\n  aggregation_timestamp: new Date().toISOString(),\n  total_tenants_processed: tenantCount,\n  \n  // Métricas agregadas\n  ...platformMetrics,\n  \n  // Conversion rates da plataforma\n  platform_conversion_rate_24h: parseFloat(platformConversionRate24h.toFixed(2)),\n  platform_conversion_rate_7d: parseFloat(platformConversionRate7d.toFixed(2)),\n  platform_conversion_rate_30d: parseFloat(platformConversionRate30d.toFixed(2)),\n  \n  // ROI da plataforma\n  platform_roi_24h: parseFloat(platformROI24h.toFixed(2)),\n  platform_roi_7d: parseFloat(platformROI7d.toFixed(2)),\n  platform_roi_30d: parseFloat(platformROI30d.toFixed(2)),\n  \n  // Médias entre tenants\n  avg_tenant_conversion_24h: parseFloat(avgConversionRate24h.toFixed(2)),\n  avg_tenant_conversion_7d: parseFloat(avgConversionRate7d.toFixed(2)),\n  avg_tenant_conversion_30d: parseFloat(avgConversionRate30d.toFixed(2)),\n  \n  avg_tenant_roi_24h: parseFloat(avgROI24h.toFixed(2)),\n  avg_tenant_roi_7d: parseFloat(avgROI7d.toFixed(2)),\n  avg_tenant_roi_30d: parseFloat(avgROI30d.toFixed(2)),\n  \n  // Análises especiais\n  domain_analysis: domainAnalysis,\n  top_performers: {\n    highest_revenue_tenant: topPerformers.highest_revenue.json.tenant_name,\n    highest_revenue_amount: topPerformers.highest_revenue.json.revenue_30d,\n    highest_conversion_tenant: topPerformers.highest_conversion.json.tenant_name,\n    highest_conversion_rate: topPerformers.highest_conversion.json.conversion_rate_30d,\n    highest_roi_tenant: topPerformers.highest_roi.json.tenant_name,\n    highest_roi_percentage: topPerformers.highest_roi.json.roi_30d,\n    most_active_tenant: topPerformers.most_active.json.tenant_name,\n    most_active_conversations: topPerformers.most_active.json.conversations_30d\n  }\n};\n\nreturn [aggregatedData];"
+      },
+      "id": "platform-aggregator",
+      "name": "📈 Platform Aggregator",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "table": "platform_analytics",
+        "columns": {
+          "values": [
+            {
+              "column": "collection_batch_id",
+              "value": "={{ $json.collection_batch_id }}"
+            },
+            {
+              "column": "aggregation_date",
+              "value": "={{ $json.aggregation_timestamp.split('T')[0] }}"
+            },
+            {
+              "column": "total_tenants",
+              "value": "={{ $json.total_tenants_processed }}"
+            },
+            {
+              "column": "total_appointments_24h",
+              "value": "={{ $json.total_appointments_24h }}"
+            },
+            {
+              "column": "total_appointments_7d",
+              "value": "={{ $json.total_appointments_7d }}"
+            },
+            {
+              "column": "total_appointments_30d",
+              "value": "={{ $json.total_appointments_30d }}"
+            },
+            {
+              "column": "total_conversations_24h",
+              "value": "={{ $json.total_conversations_24h }}"
+            },
+            {
+              "column": "total_conversations_7d",
+              "value": "={{ $json.total_conversations_7d }}"
+            },
+            {
+              "column": "total_conversations_30d",
+              "value": "={{ $json.total_conversations_30d }}"
+            },
+            {
+              "column": "total_revenue_24h",
+              "value": "={{ $json.total_revenue_24h }}"
+            },
+            {
+              "column": "total_revenue_7d",
+              "value": "={{ $json.total_revenue_7d }}"
+            },
+            {
+              "column": "total_revenue_30d",
+              "value": "={{ $json.total_revenue_30d }}"
+            },
+            {
+              "column": "total_ai_costs_24h",
+              "value": "={{ $json.total_ai_costs_24h }}"
+            },
+            {
+              "column": "total_ai_costs_7d",
+              "value": "={{ $json.total_ai_costs_7d }}"
+            },
+            {
+              "column": "total_ai_costs_30d",
+              "value": "={{ $json.total_ai_costs_30d }}"
+            },
+            {
+              "column": "platform_conversion_rate_30d",
+              "value": "={{ $json.platform_conversion_rate_30d }}"
+            },
+            {
+              "column": "platform_roi_30d",
+              "value": "={{ $json.platform_roi_30d }}"
+            },
+            {
+              "column": "total_active_users_30d",
+              "value": "={{ $json.total_active_users_30d }}"
+            },
+            {
+              "column": "domain_breakdown",
+              "value": "={{ JSON.stringify($json.domain_analysis) }}"
+            },
+            {
+              "column": "top_performers",
+              "value": "={{ JSON.stringify($json.top_performers) }}"
+            },
+            {
+              "column": "aggregated_at",
+              "value": "={{ $json.aggregation_timestamp }}"
+            }
+          ]
+        }
+      },
+      "id": "store-platform-analytics",
+      "name": "🏪 Store Platform Analytics",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1400, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "manual-analytics",
+        "options": {
+          "noResponseBody": false
+        }
+      },
+      "id": "manual-analytics-webhook",
+      "name": "🔧 Manual Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 600],
+      "webhookId": "manual-analytics"
+    },
+    {
+      "parameters": {
+        "functionCode": "// 📊 REAL-TIME ANALYTICS DASHBOARD\n// Gera snapshot em tempo real para dashboards\n\nconst requestData = $json;\nconst requestedMetrics = requestData.metrics || ['all'];\nconst tenantFilter = requestData.tenant_id || null;\nconst domainFilter = requestData.domain || null;\nconst periodFilter = requestData.period || '30d'; // 24h, 7d, 30d\n\n// Timestamp da solicitação\nconst requestTimestamp = new Date().toISOString();\n\n// Determinar período de filtro\nconst periodHours = {\n  '24h': 24,\n  '7d': 7 * 24,\n  '30d': 30 * 24\n};\n\nconst hoursBack = periodHours[periodFilter] || 720; // default 30d\nconst periodStart = new Date(Date.now() - hoursBack * 60 * 60 * 1000).toISOString();\n\nreturn [{\n  analytics_request: {\n    requested_metrics: requestedMetrics,\n    tenant_filter: tenantFilter,\n    domain_filter: domainFilter,\n    period_filter: periodFilter,\n    period_start: periodStart,\n    request_timestamp: requestTimestamp,\n    request_id: `analytics_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`\n  }\n}];"
+      },
+      "id": "analytics-request-processor",
+      "name": "📊 Request Processor",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [400, 600]
+    },
+    {
+      "parameters": {
+        "functionCode": "// ✅ ANALYTICS SUCCESS RESPONSE\n// Resposta de sucesso da coleta de analytics\n\nconst analyticsData = $input.all();\nconst isBatchProcessing = analyticsData.some(item => item.json.collection_batch_id);\nconst isManualRequest = analyticsData.some(item => item.json.analytics_request);\n\nif (isBatchProcessing) {\n  // Resposta da coleta automática\n  const platformData = analyticsData.find(item => item.json.total_tenants_processed);\n  const tenantMetrics = analyticsData.filter(item => item.json.tenant_id && item.json.metrics_calculated_at);\n  \n  return [{\n    status: 'analytics_collection_completed',\n    message: 'Business analytics collected successfully',\n    data: {\n      batch_id: platformData?.json.collection_batch_id,\n      tenants_processed: tenantMetrics.length,\n      platform_revenue_30d: platformData?.json.total_revenue_30d || 0,\n      platform_appointments_30d: platformData?.json.total_appointments_30d || 0,\n      platform_conversion_rate_30d: platformData?.json.platform_conversion_rate_30d || 0,\n      platform_roi_30d: platformData?.json.platform_roi_30d || 0,\n      top_revenue_tenant: platformData?.json.top_performers?.highest_revenue_tenant,\n      processing_completed_at: new Date().toISOString()\n    },\n    timestamp: new Date().toISOString()\n  }];\n} else if (isManualRequest) {\n  // Resposta da solicitação manual\n  const requestData = analyticsData.find(item => item.json.analytics_request);\n  \n  return [{\n    status: 'manual_analytics_processed',\n    message: 'Manual analytics request processed',\n    data: {\n      request_id: requestData?.json.analytics_request?.request_id,\n      metrics_provided: requestData?.json.analytics_request?.requested_metrics,\n      period_analyzed: requestData?.json.analytics_request?.period_filter,\n      processing_completed_at: new Date().toISOString()\n    },\n    timestamp: new Date().toISOString()\n  }];\n} else {\n  // Resposta genérica\n  return [{\n    status: 'analytics_processed',\n    message: 'Analytics processing completed',\n    data: {\n      items_processed: analyticsData.length,\n      processing_completed_at: new Date().toISOString()\n    },\n    timestamp: new Date().toISOString()\n  }];\n}"
+      },
+      "id": "analytics-success-response",
+      "name": "✅ Analytics Success",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1600, 400]
+    }
+  ],
+  "connections": {
+    "📊 Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "🏢 Tenant Collector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🏢 Tenant Collector": {
+      "main": [
+        [
+          {
+            "node": "📅 Fetch Appointments",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "💬 Fetch Conversations",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "💰 Fetch Costs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📅 Fetch Appointments": {
+      "main": [
+        [
+          {
+            "node": "📊 Metrics Calculator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💬 Fetch Conversations": {
+      "main": [
+        [
+          {
+            "node": "📊 Metrics Calculator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💰 Fetch Costs": {
+      "main": [
+        [
+          {
+            "node": "📊 Metrics Calculator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 Metrics Calculator": {
+      "main": [
+        [
+          {
+            "node": "💾 Store Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Store Metrics": {
+      "main": [
+        [
+          {
+            "node": "📈 Platform Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📈 Platform Aggregator": {
+      "main": [
+        [
+          {
+            "node": "🏪 Store Platform Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🏪 Store Platform Analytics": {
+      "main": [
+        [
+          {
+            "node": "✅ Analytics Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔧 Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "📊 Request Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 Request Processor": {
+      "main": [
+        [
+          {
+            "node": "✅ Analytics Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "hash": "business-analytics-hash-001",
+  "versionId": 1
+}

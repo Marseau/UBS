@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billing - UBS | Universal Booking System</title>
+    <meta name="description" content="Gerencie sua assinatura, visualize uso e histórico de pagamentos no UBS.">
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --ubs-primary: #2D5A9B;
+            --ubs-primary-light: #4A7BC8;
+            --ubs-primary-dark: #1E3F6B;
+            --ubs-secondary: #F8F9FA;
+            --ubs-accent: #28A745;
+            --ubs-warning: #ffc107;
+            --ubs-danger: #dc3545;
+            --ubs-info: #17a2b8;
+            --ubs-text-dark: #2C3E50;
+            --ubs-text-light: #6C757D;
+            --ubs-border: #E9ECEF;
+            --ubs-shadow: 0 4px 20px rgba(45, 90, 155, 0.15);
+            --ubs-shadow-lg: 0 10px 40px rgba(45, 90, 155, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--ubs-secondary);
+            color: var(--ubs-text-dark);
+            overflow-x: hidden;
+        }
+
+        /* Top Navbar */
+        .top-navbar {
+            background: white;
+            border-bottom: 1px solid var(--ubs-border);
+            padding: 0.75rem 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1030;
+            box-shadow: var(--ubs-shadow);
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--ubs-primary) !important;
+            text-decoration: none;
+        }
+
+        .logo-image {
+            height: 40px;
+            width: auto;
+            object-fit: contain;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--ubs-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 70px;
+            left: 0;
+            width: 280px;
+            height: calc(100vh - 70px);
+            background: linear-gradient(180deg, var(--ubs-primary) 0%, var(--ubs-primary-dark) 100%);
+            padding: 2rem 0;
+            z-index: 1020;
+            overflow-y: auto;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar-menu li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 2rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-left-color: white;
+        }
+
+        .sidebar-menu i {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            margin-top: 70px;
+            padding: 2rem;
+            min-height: calc(100vh - 70px);
+        }
+
+        /* UBS Section */
+        .ubs-section {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--ubs-shadow);
+            border: 1px solid var(--ubs-border);
+            transition: all 0.3s ease;
+        }
+
+        .ubs-section:hover {
+            box-shadow: var(--ubs-shadow-lg);
+        }
+
+        .ubs-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--ubs-border);
+        }
+
+        .ubs-section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--ubs-text-dark);
+            margin: 0;
+        }
+
+        /* Status badges */
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-badge.active {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--ubs-accent);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+        }
+
+        .status-badge.trialing {
+            background: rgba(255, 193, 7, 0.1);
+            color: var(--ubs-warning);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+
+        .status-badge.past_due {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--ubs-danger);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+        }
+
+        .status-badge.canceled {
+            background: rgba(108, 117, 125, 0.1);
+            color: var(--ubs-text-light);
+            border: 1px solid rgba(108, 117, 125, 0.3);
+        }
+
+        /* Plan display */
+        .current-plan {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .plan-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--ubs-primary), var(--ubs-primary-light));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+        }
+
+        .plan-details h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--ubs-text-dark);
+            margin-bottom: 0.25rem;
+        }
+
+        .plan-price {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--ubs-primary);
+        }
+
+        /* Usage bars */
+        .usage-item {
+            margin-bottom: 1.5rem;
+        }
+
+        .usage-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .usage-label {
+            font-weight: 600;
+            color: var(--ubs-text-dark);
+        }
+
+        .usage-stats {
+            font-size: 0.9rem;
+            color: var(--ubs-text-light);
+        }
+
+        .usage-bar {
+            height: 8px;
+            background: var(--ubs-border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .usage-progress {
+            height: 100%;
+            background: linear-gradient(90deg, var(--ubs-accent), #20c997);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .usage-progress.warning {
+            background: linear-gradient(90deg, var(--ubs-warning), #ff8c00);
+        }
+
+        .usage-progress.danger {
+            background: linear-gradient(90deg, var(--ubs-danger), #b02a37);
+        }
+
+        /* Buttons */
+        .btn-primary {
+            background: var(--ubs-primary);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: var(--ubs-primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--ubs-shadow);
+        }
+
+        .btn-outline-primary {
+            color: var(--ubs-primary);
+            border: 2px solid var(--ubs-primary);
+            background: transparent;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--ubs-primary);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: var(--ubs-danger);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-danger:hover {
+            background: #b02a37;
+            transform: translateY(-2px);
+        }
+
+        /* Payment history table */
+        .payment-table {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .payment-table table {
+            margin: 0;
+        }
+
+        .payment-table th {
+            background: var(--ubs-secondary);
+            border: none;
+            font-weight: 600;
+            color: var(--ubs-text-dark);
+            padding: 1rem;
+        }
+
+        .payment-table td {
+            border: none;
+            padding: 1rem;
+            border-bottom: 1px solid var(--ubs-border);
+        }
+
+        .payment-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Trial notice */
+        .trial-notice {
+            background: rgba(255, 193, 7, 0.1);
+            border: 2px solid rgba(255, 193, 7, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .trial-notice h4 {
+            color: var(--ubs-warning);
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .trial-notice p {
+            color: var(--ubs-text-dark);
+            margin: 0;
+            font-weight: 500;
+        }
+
+        /* Cancellation notice */
+        .cancellation-notice {
+            background: rgba(220, 53, 69, 0.1);
+            border: 2px solid rgba(220, 53, 69, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .cancellation-notice h4 {
+            color: var(--ubs-danger);
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        /* Loading states */
+        .loading-spinner {
+            display: none;
+            margin-right: 0.5rem;
+        }
+
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 4px;
+        }
+
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Notifications */
+        .ubs-notification {
+            position: fixed;
+            top: 90px;
+            right: 20px;
+            background: white;
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            box-shadow: var(--ubs-shadow-lg);
+            border-left: 4px solid var(--ubs-accent);
+            z-index: 1040;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+
+        .ubs-notification.show {
+            transform: translateX(0);
+        }
+
+        .ubs-notification.error {
+            border-left-color: var(--ubs-danger);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .current-plan {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .ubs-section-header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .payment-table {
+                overflow-x: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Top Navbar -->
+    <nav class="top-navbar">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <a class="navbar-brand" href="/dashboard-standardized.html">
+                    <picture>
+                        <source srcset="assets/images/optimized/UBS_Nac.webp" type="image/webp">
+                        <img src="assets/images/UBS_Nac.png" alt="UBS - Universal Booking System" class="logo-image">
+                    </picture>
+                </a>
+                
+                <div class="user-info">
+                    <span class="d-none d-md-inline text-muted">Olá, <span id="userName">Usuário</span></span>
+                    <div class="user-avatar" id="userAvatar">U</div>
+                    <div class="dropdown">
+                        <button class="btn btn-link p-0" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-chevron-down text-muted"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/dashboard-standardized.html">Dashboard</a></li>
+                            <li><a class="dropdown-item" href="/settings-standardized.html">Configurações</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="logout()">Sair</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <ul class="sidebar-menu">
+            <li><a href="/dashboard-standardized.html"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+            <li><a href="/appointments-standardized.html"><i class="fas fa-calendar-alt"></i> Agendamentos</a></li>
+            <li><a href="/customers-standardized.html"><i class="fas fa-users"></i> Clientes</a></li>
+            <li><a href="/services-standardized.html"><i class="fas fa-concierge-bell"></i> Serviços</a></li>
+            <li><a href="/payments-standardized.html"><i class="fas fa-credit-card"></i> Pagamentos</a></li>
+            <li><a href="/analytics-standardized.html"><i class="fas fa-chart-line"></i> Analytics</a></li>
+            <li><a href="/billing-standardized.html" class="active"><i class="fas fa-file-invoice-dollar"></i> Billing</a></li>
+            <li><a href="/conversations-standardized.html"><i class="fas fa-comments"></i> Conversas</a></li>
+            <li><a href="/settings-standardized.html"><i class="fas fa-cog"></i> Configurações</a></li>
+        </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Page Header -->
+        <div class="ubs-section">
+            <div class="ubs-section-header">
+                <div>
+                    <h1 class="ubs-section-title">
+                        <i class="fas fa-file-invoice-dollar me-2 text-primary"></i>
+                        Assinatura e Billing
+                    </h1>
+                    <p class="text-muted mb-0">Gerencie sua assinatura, visualize uso e histórico de pagamentos</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alert Container -->
+        <div id="alertContainer"></div>
+
+        <!-- Trial Notice -->
+        <div class="trial-notice" id="trialNotice" style="display: none;">
+            <h4><i class="fas fa-gift me-2"></i>Período de Teste Ativo</h4>
+            <p>Você ainda tem <strong id="trialDaysRemaining">X dias</strong> restantes no seu teste gratuito. Aproveite para explorar todas as funcionalidades!</p>
+        </div>
+
+        <!-- Cancellation Notice -->
+        <div class="cancellation-notice" id="cancellationNotice" style="display: none;">
+            <h4><i class="fas fa-exclamation-triangle me-2"></i>Assinatura Cancelada</h4>
+            <p>Sua assinatura será cancelada em <strong id="cancellationDate">X</strong>. Você pode reativar a qualquer momento até essa data.</p>
+            <button class="btn btn-primary mt-2" onclick="reactivateSubscription()">
+                <i class="fas fa-undo me-2"></i>Reativar Assinatura
+            </button>
+        </div>
+
+        <div class="row">
+            <!-- Current Plan -->
+            <div class="col-lg-8">
+                <div class="ubs-section">
+                    <div class="ubs-section-header">
+                        <h3 class="ubs-section-title">Plano Atual</h3>
+                        <div class="status-badge" id="subscriptionStatus">Carregando...</div>
+                    </div>
+
+                    <div class="current-plan">
+                        <div class="plan-icon">
+                            <i class="fas fa-star"></i>
+                        </div>
+                        <div class="plan-details">
+                            <h3 id="planName">Carregando...</h3>
+                            <div class="plan-price" id="planPrice">R$ --/mês</div>
+                        </div>
+                    </div>
+
+                    <div class="plan-features" id="planFeatures">
+                        <!-- Features will be loaded here -->
+                    </div>
+
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn btn-outline-primary" onclick="openBillingPortal()">
+                            <i class="fas fa-credit-card me-2"></i>
+                            Gerenciar Pagamento
+                        </button>
+                        <button class="btn btn-primary" onclick="showChangePlanModal()">
+                            <i class="fas fa-arrow-up me-2"></i>
+                            Alterar Plano
+                        </button>
+                        <button class="btn btn-danger" onclick="showCancelModal()" id="cancelBtn">
+                            <i class="fas fa-times me-2"></i>
+                            Cancelar Plano
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Usage Statistics -->
+                <div class="ubs-section">
+                    <div class="ubs-section-header">
+                        <h3 class="ubs-section-title">Uso Atual</h3>
+                        <small class="text-muted" id="usagePeriod">Período: --</small>
+                    </div>
+
+                    <div id="usageStats">
+                        <!-- Usage stats will be loaded here -->
+                        <div class="usage-item">
+                            <div class="skeleton" style="height: 20px; margin-bottom: 0.5rem;"></div>
+                            <div class="skeleton" style="height: 8px;"></div>
+                        </div>
+                        <div class="usage-item">
+                            <div class="skeleton" style="height: 20px; margin-bottom: 0.5rem;"></div>
+                            <div class="skeleton" style="height: 8px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Billing Summary -->
+            <div class="col-lg-4">
+                <div class="ubs-section">
+                    <div class="ubs-section-header">
+                        <h3 class="ubs-section-title">Próximo Pagamento</h3>
+                    </div>
+
+                    <div id="nextPayment">
+                        <div class="text-center">
+                            <div class="h2 text-primary mb-2" id="nextPaymentAmount">R$ --</div>
+                            <div class="text-muted" id="nextPaymentDate">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ubs-section">
+                    <div class="ubs-section-header">
+                        <h3 class="ubs-section-title">Informações</h3>
+                    </div>
+
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span>Customer ID</span>
+                            <small class="text-muted" id="customerId">--</small>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span>Subscription ID</span>
+                            <small class="text-muted" id="subscriptionId">--</small>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span>Próxima Renovação</span>
+                            <small class="text-muted" id="renewalDate">--</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment History -->
+        <div class="ubs-section">
+            <div class="ubs-section-header">
+                <h3 class="ubs-section-title">Histórico de Pagamentos</h3>
+                <button class="btn btn-outline-primary btn-sm" onclick="downloadInvoices()">
+                    <i class="fas fa-download me-2"></i>
+                    Baixar Faturas
+                </button>
+            </div>
+
+            <div class="payment-table">
+                <table class="table" id="paymentTable">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Descrição</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="paymentTableBody">
+                        <tr>
+                            <td colspan="5" class="text-center">Carregando histórico...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Change Plan Modal -->
+    <div class="modal fade" id="changePlanModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Alterar Plano</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="planOptions">
+                        <!-- Plan options will be loaded here -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="changePlan()" id="changePlanBtn">
+                        <i class="fas fa-spinner fa-spin loading-spinner" id="changePlanSpinner"></i>
+                        Alterar Plano
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cancel Subscription Modal -->
+    <div class="modal fade" id="cancelModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Cancelar Assinatura</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Tem certeza que deseja cancelar sua assinatura? Você perderá acesso a todas as funcionalidades premium.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="cancellationReason" class="form-label">Por que está cancelando? (opcional)</label>
+                        <select class="form-select" id="cancellationReason">
+                            <option value="">Selecione um motivo</option>
+                            <option value="too_expensive">Muito caro</option>
+                            <option value="not_using">Não estou usando</option>
+                            <option value="missing_features">Faltam funcionalidades</option>
+                            <option value="technical_issues">Problemas técnicos</option>
+                            <option value="switching_provider">Mudando para outro fornecedor</option>
+                            <option value="business_closed">Negócio fechado</option>
+                            <option value="other">Outro</option>
+                        </select>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="cancelImmediately">
+                        <label class="form-check-label" for="cancelImmediately">
+                            Cancelar imediatamente (ao invés de no final do período)
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Manter Assinatura</button>
+                    <button type="button" class="btn btn-danger" onclick="cancelSubscription()" id="confirmCancelBtn">
+                        <i class="fas fa-spinner fa-spin loading-spinner" id="cancelSpinner"></i>
+                        Confirmar Cancelamento
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer"></div>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentSubscription = null;
+        let selectedNewPlan = null;
+        let isInitialized = false;
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeUserSafe();
+        });
+
+        // Safe user initialization to prevent loops
+        function initializeUserSafe() {
+            if (isInitialized) return;
+            isInitialized = true;
+
+            try {
+                checkAuthenticationStatus();
+                loadBillingData();
+            } catch (error) {
+                console.error('Error initializing billing page:', error);
+                showNotification('Erro ao inicializar página', 'error');
+            }
+        }
+
+        // Check authentication status
+        function checkAuthenticationStatus() {
+            const token = localStorage.getItem('ubs_token');
+            const userData = localStorage.getItem('ubs_user_data');
+
+            if (!token || !userData) {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            try {
+                const user = JSON.parse(userData);
+                updateUserInfo(user);
+            } catch (error) {
+                console.error('Error parsing user data:', error);
+                localStorage.removeItem('ubs_user_data');
+                window.location.href = '/login.html';
+            }
+        }
+
+        // Update user info in UI
+        function updateUserInfo(user) {
+            const userName = document.getElementById('userName');
+            const userAvatar = document.getElementById('userAvatar');
+
+            if (userName && user.nome) {
+                userName.textContent = user.nome;
+            }
+
+            if (userAvatar && user.nome) {
+                userAvatar.textContent = user.nome.charAt(0).toUpperCase();
+            }
+        }
+
+        // Load billing data
+        async function loadBillingData() {
+            try {
+                showLoading();
+                
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/billing/subscription', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        handleAuthError();
+                        return;
+                    }
+                    throw new Error('Failed to load billing data');
+                }
+                
+                const billingData = await response.json();
+                updateBillingUI(billingData);
+                
+            } catch (error) {
+                console.error('Error loading billing data:', error);
+                showNotification('Erro ao carregar dados de billing. Usando dados de demonstração.', 'error');
+                loadFallbackBillingData();
+            }
+        }
+
+        // Load fallback data for demonstration
+        function loadFallbackBillingData() {
+            const mockBillingData = {
+                subscription: {
+                    status: 'active',
+                    plan: {
+                        name: 'Plano Professional',
+                        price: 99.90,
+                        currency: 'BRL',
+                        interval: 'month'
+                    },
+                    current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                    customer_id: 'cus_demo_123',
+                    subscription_id: 'sub_demo_456'
+                },
+                usage: {
+                    appointments: { used: 127, limit: 500 },
+                    customers: { used: 89, limit: 1000 },
+                    messages: { used: 2340, limit: 5000 }
+                },
+                payments: [
+                    {
+                        date: '2024-01-15',
+                        description: 'Plano Professional - Janeiro',
+                        amount: 99.90,
+                        status: 'paid'
+                    },
+                    {
+                        date: '2023-12-15',
+                        description: 'Plano Professional - Dezembro',
+                        amount: 99.90,
+                        status: 'paid'
+                    }
+                ]
+            };
+            updateBillingUI(mockBillingData);
+        }
+
+        // Update billing UI
+        function updateBillingUI(data) {
+            updateSubscriptionInfo(data.subscription);
+            updateUsageStats(data.usage);
+            updatePaymentHistory(data.payments);
+            hideLoading();
+        }
+
+        // Update subscription info
+        function updateSubscriptionInfo(subscription) {
+            document.getElementById('subscriptionStatus').textContent = getStatusText(subscription.status);
+            document.getElementById('subscriptionStatus').className = `status-badge ${subscription.status}`;
+            
+            document.getElementById('planName').textContent = subscription.plan.name;
+            document.getElementById('planPrice').textContent = 
+                new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+                .format(subscription.plan.price) + '/mês';
+
+            // Next payment
+            const nextPaymentDate = new Date(subscription.current_period_end);
+            document.getElementById('nextPaymentAmount').textContent = 
+                new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+                .format(subscription.plan.price);
+            document.getElementById('nextPaymentDate').textContent = 
+                nextPaymentDate.toLocaleDateString('pt-BR');
+
+            // Subscription details
+            document.getElementById('customerId').textContent = subscription.customer_id;
+            document.getElementById('subscriptionId').textContent = subscription.subscription_id;
+            document.getElementById('renewalDate').textContent = 
+                nextPaymentDate.toLocaleDateString('pt-BR');
+
+            // Plan features
+            const features = [
+                'Agendamentos ilimitados',
+                'WhatsApp integrado',
+                'IA conversacional',
+                'Analytics avançado',
+                'Suporte prioritário'
+            ];
+
+            document.getElementById('planFeatures').innerHTML = features.map(feature => 
+                `<div class="d-flex align-items-center mb-2">
+                    <i class="fas fa-check text-success me-2"></i>
+                    <span>${feature}</span>
+                </div>`
+            ).join('');
+        }
+
+        // Update usage stats
+        function updateUsageStats(usage) {
+            const usageContainer = document.getElementById('usageStats');
+            
+            const usageItems = [
+                { label: 'Agendamentos', used: usage.appointments.used, limit: usage.appointments.limit },
+                { label: 'Clientes', used: usage.customers.used, limit: usage.customers.limit },
+                { label: 'Mensagens', used: usage.messages.used, limit: usage.messages.limit }
+            ];
+
+            usageContainer.innerHTML = usageItems.map(item => {
+                const percentage = (item.used / item.limit) * 100;
+                const progressClass = percentage > 90 ? 'danger' : percentage > 75 ? 'warning' : '';
+                
+                return `
+                    <div class="usage-item">
+                        <div class="usage-header">
+                            <span class="usage-label">${item.label}</span>
+                            <span class="usage-stats">${item.used} / ${item.limit}</span>
+                        </div>
+                        <div class="usage-bar">
+                            <div class="usage-progress ${progressClass}" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Update usage period
+            const now = new Date();
+            const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            
+            document.getElementById('usagePeriod').textContent = 
+                `Período: ${periodStart.toLocaleDateString('pt-BR')} - ${periodEnd.toLocaleDateString('pt-BR')}`;
+        }
+
+        // Update payment history
+        function updatePaymentHistory(payments) {
+            const tableBody = document.getElementById('paymentTableBody');
+            
+            if (!payments || payments.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Nenhum pagamento encontrado</td></tr>';
+                return;
+            }
+
+            tableBody.innerHTML = payments.map(payment => `
+                <tr>
+                    <td>${new Date(payment.date).toLocaleDateString('pt-BR')}</td>
+                    <td>${payment.description}</td>
+                    <td>${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(payment.amount)}</td>
+                    <td><span class="badge bg-${getStatusColor(payment.status)}">${getStatusText(payment.status)}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="downloadInvoice('${payment.id}')">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Utility functions
+        function getStatusText(status) {
+            const statusMap = {
+                'active': 'Ativo',
+                'trialing': 'Teste',
+                'past_due': 'Vencido',
+                'canceled': 'Cancelado',
+                'paid': 'Pago',
+                'pending': 'Pendente',
+                'failed': 'Falhou'
+            };
+            return statusMap[status] || status;
+        }
+
+        function getStatusColor(status) {
+            const colorMap = {
+                'active': 'success',
+                'trialing': 'warning',
+                'past_due': 'danger',
+                'canceled': 'secondary',
+                'paid': 'success',
+                'pending': 'warning',
+                'failed': 'danger'
+            };
+            return colorMap[status] || 'secondary';
+        }
+
+        function showLoading() {
+            // Show loading indicators
+        }
+
+        function hideLoading() {
+            // Hide loading indicators
+        }
+
+        function showNotification(message, type = 'success') {
+            const container = document.getElementById('notificationContainer');
+            const notification = document.createElement('div');
+            notification.className = `ubs-notification ${type}`;
+            notification.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            container.appendChild(notification);
+            setTimeout(() => notification.classList.add('show'), 100);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => container.removeChild(notification), 300);
+            }, 5000);
+        }
+
+        function handleAuthError() {
+            localStorage.removeItem('ubs_token');
+            localStorage.removeItem('ubs_user_data');
+            showNotification('Sessão expirada. Redirecionando...', 'error');
+            setTimeout(() => window.location.href = '/login.html', 2000);
+        }
+
+        // Billing functions
+        function openBillingPortal() {
+            showNotification('Abrindo portal de pagamento...', 'success');
+            // Implementation for billing portal
+        }
+
+        function showChangePlanModal() {
+            const modal = new bootstrap.Modal(document.getElementById('changePlanModal'));
+            modal.show();
+        }
+
+        function showCancelModal() {
+            const modal = new bootstrap.Modal(document.getElementById('cancelModal'));
+            modal.show();
+        }
+
+        function changePlan() {
+            showNotification('Alterando plano...', 'success');
+            // Implementation for plan change
+        }
+
+        function cancelSubscription() {
+            showNotification('Cancelando assinatura...', 'success');
+            // Implementation for cancellation
+        }
+
+        function reactivateSubscription() {
+            showNotification('Reativando assinatura...', 'success');
+            // Implementation for reactivation
+        }
+
+        function downloadInvoices() {
+            showNotification('Baixando faturas...', 'success');
+            // Implementation for invoice download
+        }
+
+        function downloadInvoice(invoiceId) {
+            showNotification('Baixando fatura...', 'success');
+            // Implementation for single invoice download
+        }
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('ubs_token');
+            localStorage.removeItem('ubs_user_data');
+            showNotification('Logout realizado com sucesso!');
+            setTimeout(() => window.location.href = '/login.html', 1000);
+        }
+    </script>
+</body>
+</html> 

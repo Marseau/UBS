@@ -1,0 +1,309 @@
+<!-- src/frontend/dashboard-tenant-standardized.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Tenant Dashboard - UBS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Bootstrap e estilos padrão UBS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/ubs-standard-styles.css" rel="stylesheet">
+  <link href="css/dashboard-widgets.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <nav class="sidebar" id="sidebar">
+    <div class="logo">
+      <img src="assets/images/optimized/Logo_Int_Branco.webp" alt="UBS Logo" id="logoImage">
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-title">Meu Negócio</div>
+      <ul class="nav flex-column">
+        <li class="nav-item">
+          <a class="nav-link active" href="dashboard-tenant-standardized.html">
+            <i class="fas fa-chart-line"></i>
+            <span>Visão Geral</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="appointments-standardized.html">
+            <i class="fas fa-calendar-check"></i>
+            <span>Agendamentos</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="services-standardized.html">
+            <i class="fas fa-concierge-bell"></i>
+            <span>Serviços</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="main-content container-fluid py-4">
+    <h1 class="mb-4">Dashboard do Negócio</h1>
+    <!-- Cards de Métricas -->
+    <div class="row g-3 mb-4">
+      <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stat-card-widget metric-card ubs-widget">
+          <div class="metric-icon metric-icon-primary"><i class="fas fa-calendar-check"></i></div>
+          <div>
+            <div class="metric-value">128</div>
+            <div class="metric-label">Agendamentos</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stat-card-widget metric-card ubs-widget">
+          <div class="metric-icon metric-icon-danger"><i class="fas fa-ban"></i></div>
+          <div>
+            <div class="metric-value">12</div>
+            <div class="metric-label">Cancelamentos</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stat-card-widget metric-card ubs-widget">
+          <div class="metric-icon metric-icon-warning"><i class="fas fa-sync-alt"></i></div>
+          <div>
+            <div class="metric-value">7</div>
+            <div class="metric-label">Remarcações</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stat-card-widget metric-card ubs-widget">
+          <div class="metric-icon metric-icon-info"><i class="fab fa-whatsapp"></i></div>
+          <div>
+            <div class="metric-value">5</div>
+            <div class="metric-label">Spam WhatsApp</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stat-card-widget metric-card ubs-widget">
+          <div class="metric-icon metric-icon-success"><i class="fas fa-robot"></i></div>
+          <div>
+            <div class="metric-value">34</div>
+            <div class="metric-label">Interações IA</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stat-card-widget metric-card ubs-widget">
+          <div class="metric-icon metric-icon-primary"><i class="fas fa-concierge-bell"></i></div>
+          <div>
+            <div class="metric-value">8</div>
+            <div class="metric-label">Serviços Oferecidos</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stat-card-widget metric-card ubs-widget">
+          <div class="metric-icon metric-icon-success"><i class="fas fa-users"></i></div>
+          <div>
+            <div class="metric-value">6</div>
+            <div class="metric-label">Colaboradores</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stat-card-widget metric-card ubs-widget">
+          <div class="metric-icon metric-icon-warning"><i class="fas fa-coins"></i></div>
+          <div>
+            <div class="metric-value">R$ 12.350,00</div>
+            <div class="metric-label">Receita</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="row g-3 mb-4">
+      <div class="col-12 col-lg-6">
+        <div class="chart-widget ubs-widget">
+          <div class="chart-header">
+            <span class="chart-title">Evolução dos Agendamentos</span>
+          </div>
+          <div class="chart-body">
+            <canvas id="appointmentsChart"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-6">
+        <div class="chart-widget ubs-widget">
+          <div class="chart-header">
+            <span class="chart-title">Status dos Agendamentos</span>
+          </div>
+          <div class="chart-body">
+            <canvas id="statusChart"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-6">
+        <div class="chart-widget ubs-widget">
+          <div class="chart-header">
+            <span class="chart-title">Receita Mensal</span>
+          </div>
+          <div class="chart-body">
+            <canvas id="revenueChart"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-6">
+        <div class="chart-widget ubs-widget">
+          <div class="chart-header">
+            <span class="chart-title">Distribuição de Serviços</span>
+          </div>
+          <div class="chart-body">
+            <canvas id="servicesChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- List Views -->
+    <div class="row g-3">
+      <div class="col-12 col-lg-6">
+        <div class="table-widget ubs-widget">
+          <div class="table-header">
+            <span class="table-title">Próximos Agendamentos</span>
+          </div>
+          <div class="table-body">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Serviço</th>
+                  <th>Data</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Maria Silva</td>
+                  <td>Corte de Cabelo</td>
+                  <td>15/07/2025 14:00</td>
+                  <td><span class="badge bg-success">Confirmado</span></td>
+                </tr>
+                <tr>
+                  <td>João Souza</td>
+                  <td>Coloração</td>
+                  <td>15/07/2025 15:00</td>
+                  <td><span class="badge bg-warning">Pendente</span></td>
+                </tr>
+                <tr>
+                  <td>Paula Lima</td>
+                  <td>Manicure</td>
+                  <td>15/07/2025 16:00</td>
+                  <td><span class="badge bg-danger">Cancelado</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-6">
+        <div class="table-widget ubs-widget">
+          <div class="table-header">
+            <span class="table-title">Colaboradores</span>
+          </div>
+          <div class="table-body">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Função</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Fernanda Alves</td>
+                  <td>Manicure</td>
+                  <td><span class="badge bg-success">Ativo</span></td>
+                </tr>
+                <tr>
+                  <td>Lucas Pereira</td>
+                  <td>Cabeleireiro</td>
+                  <td><span class="badge bg-success">Ativo</span></td>
+                </tr>
+                <tr>
+                  <td>Juliana Costa</td>
+                  <td>Recepcionista</td>
+                  <td><span class="badge bg-warning">Férias</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Scripts de widgets e gráficos -->
+  <script>
+    // Gráfico de evolução dos agendamentos
+    new Chart(document.getElementById('appointmentsChart'), {
+      type: 'line',
+      data: {
+        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+        datasets: [{
+          label: 'Agendamentos',
+          data: [18, 22, 30, 28, 24, 26, 32],
+          borderColor: '#2D5A9B',
+          backgroundColor: 'rgba(45,90,155,0.1)',
+          fill: true,
+          tension: 0.4
+        }]
+      },
+      options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+
+    // Gráfico de status dos agendamentos
+    new Chart(document.getElementById('statusChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Confirmados', 'Cancelados', 'Remarcados'],
+        datasets: [{
+          data: [109, 12, 7],
+          backgroundColor: ['#28A745', '#DC3545', '#FFC107']
+        }]
+      },
+      options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    });
+
+    // Gráfico de receita mensal
+    new Chart(document.getElementById('revenueChart'), {
+      type: 'bar',
+      data: {
+        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+        datasets: [{
+          label: 'Receita (R$)',
+          data: [8000, 9500, 11000, 10500, 12000, 11500, 12350],
+          backgroundColor: '#2D5A9B'
+        }]
+      },
+      options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+
+    // Gráfico de distribuição de serviços
+    new Chart(document.getElementById('servicesChart'), {
+      type: 'pie',
+      data: {
+        labels: ['Corte', 'Coloração', 'Manicure', 'Pedicure', 'Sobrancelha', 'Depilação', 'Barba', 'Massagem'],
+        datasets: [{
+          data: [30, 18, 22, 10, 8, 12, 15, 13],
+          backgroundColor: [
+            '#2D5A9B', '#28A745', '#FFC107', '#DC3545',
+            '#17A2B8', '#6C757D', '#F8F9FA', '#343A40'
+          ]
+        }]
+      },
+      options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    });
+  </script>
+</body>
+</html>

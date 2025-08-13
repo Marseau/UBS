@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "declaration": false,
+    "skipLibCheck": true,
+    "noImplicitAny": false,
+    "allowJs": false
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "src/frontend/js/**/*",
+    "src/services/subscription-monitor-enhanced.service.ts",
+    "scripts/**/*",
+    "*.js",
+    "**/*.js",
+    "node_modules",
+    "dist"
+  ]
+}

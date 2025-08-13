@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Calendar Widget</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: 80px repeat(7, 1fr);
+            gap: 1px;
+            background: #dee2e6;
+            border: 1px solid #dee2e6;
+        }
+
+        .calendar-header {
+            background: #2D5A9B;
+            color: white;
+            padding: 0.75rem 0.5rem;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .calendar-time {
+            background: #f8f9fa;
+            padding: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+            text-align: center;
+            color: #6c757d;
+        }
+
+        .calendar-slot {
+            background: white;
+            padding: 0.25rem;
+            min-height: 40px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .calendar-slot:hover {
+            background: #f8f9fa;
+        }
+
+        .calendar-slot.available {
+            background: rgba(40, 167, 69, 0.1);
+            border-left: 3px solid #28a745;
+        }
+
+        .calendar-slot.busy {
+            background: rgba(220, 53, 69, 0.1);
+            border-left: 3px solid #dc3545;
+        }
+
+        .calendar-slot.appointment {
+            background: rgba(45, 90, 155, 0.1);
+            border-left: 3px solid #2D5A9B;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            margin-right: 0.5rem;
+            display: inline-block;
+        }
+
+        .legend-color.available { background: #28a745; }
+        .legend-color.busy { background: #dc3545; }
+        .legend-color.appointment { background: #2D5A9B; }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h2>Teste Calendar Widget</h2>
+        
+        <button class="btn btn-primary" onclick="openCalendarWidget()">
+            <i class="fas fa-calendar-alt me-2"></i>
+            Abrir Calendário
+        </button>
+    </div>
+
+    <!-- Calendar Modal -->
+    <div class="modal fade" id="calendarModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-calendar-alt me-2"></i>
+                        Horários e Disponibilidade
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <!-- Controls -->
+                    <div class="p-3 border-bottom bg-light">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <select class="form-select form-select-sm">
+                                    <option>Todos Profissionais</option>
+                                    <option>Maria (Manicure)</option>
+                                    <option>João (Cabelo)</option>
+                                    <option>Ana (Sobrancelha)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <input type="date" class="form-control form-control-sm" id="dateFilter">
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select form-select-sm">
+                                    <option value="day">Dia</option>
+                                    <option value="week" selected>Semana</option>
+                                    <option value="month">Mês</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 text-end">
+                                <button class="btn btn-sm btn-primary" onclick="loadMockData()">
+                                    <i class="fas fa-sync-alt me-1"></i>
+                                    Atualizar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Calendar Grid -->
+                    <div style="height: 600px; overflow-y: auto; padding: 1rem;">
+                        <div id="calendarGrid">
+                            <!-- Will be populated -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <div class="d-flex justify-content-between w-100">
+                        <div>
+                            <span class="me-3">
+                                <span class="legend-color available"></span>
+                                Disponível
+                            </span>
+                            <span class="me-3">
+                                <span class="legend-color busy"></span>
+                                Ocupado
+                            </span>
+                            <span class="me-3">
+                                <span class="legend-color appointment"></span>
+                                Agendamento
+                            </span>
+                        </div>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function openCalendarWidget() {
+            console.log('Abrindo calendar widget...');
+            
+            // Set today's date
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('dateFilter').value = today;
+            
+            // Load mock data
+            loadMockData();
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('calendarModal'));
+            modal.show();
+        }
+
+        function loadMockData() {
+            const grid = document.getElementById('calendarGrid');
+            const timeSlots = ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00'];
+            const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+            
+            let html = `
+                <div class="calendar-grid">
+                    <div class="calendar-header">Horário</div>
+                    ${weekDays.map(day => `<div class="calendar-header">${day}</div>`).join('')}
+            `;
+
+            timeSlots.forEach(time => {
+                html += `<div class="calendar-time">${time}</div>`;
+                
+                for (let day = 0; day < 7; day++) {
+                    const random = Math.random();
+                    let slotClass = 'available';
+                    let content = 'Livre';
+                    
+                    if (random < 0.3) {
+                        slotClass = 'busy';
+                        content = 'Ocupado';
+                    } else if (random < 0.5) {
+                        slotClass = 'appointment';
+                        content = 'Maria<br><small>Manicure</small>';
+                    }
+                    
+                    html += `
+                        <div class="calendar-slot ${slotClass}" onclick="handleSlotClick('${day}', '${time}')">
+                            <div style="font-size: 0.75rem; line-height: 1.2;">
+                                ${content}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+
+            html += '</div>';
+            grid.innerHTML = html;
+        }
+
+        function handleSlotClick(day, time) {
+            alert(`Clicou no slot: Dia ${day}, Horário ${time}`);
+        }
+
+        // Auto-load on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadMockData();
+        });
+    </script>
+</body>
+</html>

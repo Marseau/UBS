@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agendamentos - UBS</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- UBS Standard Styles -->
+    <link href="css/ubs-standard-styles.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    <link href="css/super-admin-dashboard.css" rel="stylesheet">
+    
+    <style>
+        /* LOGO GRANDE FORÇADO */
+        .sidebar .logo {
+            min-height: 180px !important;
+            padding: 20px 10px !important;
+        }
+        
+        .sidebar .logo img {
+            width: 90% !important;
+            max-width: 250px !important;
+            max-height: 150px !important;
+            height: auto !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+        <div class="logo">
+            <img src="assets/images/optimized/Logo_Int_Branco.webp" alt="UBS Logo">
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Dashboard</div>
+            <a class="nav-link" href="dashboard-tenant-admin.html">
+                <i class="fas fa-chart-line"></i>
+                <span>Visão Geral</span>
+            </a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Operações</div>
+            <a class="nav-link active" href="appointments-standardized.html">
+                <i class="fas fa-calendar-check"></i>
+                <span>Agendamentos</span>
+            </a>
+            <a class="nav-link" href="customers-standardized.html">
+                <i class="fas fa-users"></i>
+                <span>Clientes</span>
+            </a>
+            <a class="nav-link" href="services-standardized.html">
+                <i class="fas fa-concierge-bell"></i>
+                <span>Serviços</span>
+            </a>
+            <a class="nav-link" href="professionals-standardized.html">
+                <i class="fas fa-user-tie"></i>
+                <span>Profissionais</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Comunicação</div>
+            <a class="nav-link" href="conversations-standardized.html">
+                <i class="fab fa-whatsapp"></i>
+                <span>Conversas</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Financeiro</div>
+            <a class="nav-link" href="payments-standardized.html">
+                <i class="fas fa-credit-card"></i>
+                <span>Pagamentos</span>
+            </a>
+            <a class="nav-link" href="billing-standardized.html">
+                <i class="fas fa-file-invoice-dollar"></i>
+                <span>Faturamento</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Sistema</div>
+            <a class="nav-link" href="settings-standardized.html">
+                <i class="fas fa-cog"></i>
+                <span>Configurações</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+        <!-- Header -->
+        <div class="top-navbar">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-0">Gerenciamento de Agendamentos</h4>
+                    <small class="text-muted">Gerencie e monitore todos os agendamentos</small>
+                </div>
+                <div class="user-menu d-flex flex-column align-items-end gap-1">
+                    <!-- User Menu -->
+                    <div class="dropdown">
+                        <button class="btn btn-link dropdown-toggle d-flex align-items-center compact-button" data-bs-toggle="dropdown">
+                            <div class="user-avatar me-2" id="userAvatar">B</div>
+                            <div class="d-none d-md-block text-start">
+                                <div class="fw-medium compact-text" id="userName">Salão Bella Vista</div>
+                                <small class="text-muted compact-small" id="userRole">Administrador</small>
+                            </div>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end compact-dropdown">
+                            <li><a class="dropdown-item compact-dropdown-item" href="settings-standardized.html"><i class="fas fa-user-cog me-2"></i>Perfil</a></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="exportData()"><i class="fas fa-download me-2"></i>Exportar Dados</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="refreshData()"><i class="fas fa-sync me-2"></i>Atualizar</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="container-fluid p-4">
+            <!-- Quick Actions -->
+            <div class="d-flex gap-2 mb-3">
+                <button class="btn btn-success" onclick="newAppointment()">
+                    <i class="fas fa-plus me-2"></i>Novo Agendamento
+                </button>
+            </div>
+            
+            <!-- KPIs -->            
+            <div class="row g-3 mb-4">
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value">12</div>
+                        <div class="metric-title">Hoje</div>
+                        <div class="metric-subtitle">Agendamentos</div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value">89</div>
+                        <div class="metric-title">Confirmados</div>
+                        <div class="metric-subtitle">Esta semana</div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value">7</div>
+                        <div class="metric-title">Pendentes</div>
+                        <div class="metric-subtitle">Aguardando</div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value">94%</div>
+                        <div class="metric-title">Comparecimento</div>
+                        <div class="metric-subtitle">Taxa mensal</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tabela de Agendamentos -->
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Serviço</th>
+                            <th>Data/Hora</th>
+                            <th>Status</th>
+                            <th>Profissional</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <strong>Maria Silva</strong><br>
+                                <small class="text-muted"><i class="fas fa-phone"></i> (11) 99999-1234</small>
+                            </td>
+                            <td>Corte + Escova</td>
+                            <td>Hoje, 14:30</td>
+                            <td><span class="badge bg-success">Confirmado</span></td>
+                            <td>Ana Costa</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewAppointment(1, 'Maria Silva', '(11) 99999-1234', 'Corte + Escova', 'Hoje, 14:30', 'Confirmado', 'Ana Costa')" title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="editAppointment(1, 'Maria Silva', '(11) 99999-1234', 'Corte + Escova', 'Hoje, 14:30', 'Confirmado', 'Ana Costa')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <strong>João Santos</strong><br>
+                                <small class="text-muted"><i class="fas fa-phone"></i> (11) 98888-5678</small>
+                            </td>
+                            <td>Barba + Bigode</td>
+                            <td>Amanhã, 09:00</td>
+                            <td><span class="badge bg-warning">Pendente</span></td>
+                            <td>Bruno Lima</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewAppointment(2, 'João Santos', '(11) 98888-5678', 'Barba + Bigode', 'Amanhã, 09:00', 'Pendente', 'Bruno Lima')" title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="editAppointment(2, 'João Santos', '(11) 98888-5678', 'Barba + Bigode', 'Amanhã, 09:00', 'Pendente', 'Bruno Lima')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+        </div>
+    </main>
+
+    <!-- Modal de Visualização -->
+    <div class="modal fade" id="viewAppointmentModal" tabindex="-1" aria-labelledby="viewAppointmentModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewAppointmentModalLabel">
+                        <i class="fas fa-eye me-2"></i>Detalhes do Agendamento
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Cliente:</strong></label>
+                            <p id="viewClient" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Telefone:</strong></label>
+                            <p id="viewPhone" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Serviço:</strong></label>
+                            <p id="viewService" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Data/Hora:</strong></label>
+                            <p id="viewDateTime" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Status:</strong></label>
+                            <p id="viewStatus" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Profissional:</strong></label>
+                            <p id="viewProfessional" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>ID do Agendamento:</strong></label>
+                            <p id="viewAppointmentId" class="form-control-plaintext">-</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Fechar
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="editAppointmentFromView()">
+                        <i class="fas fa-edit me-2"></i>Editar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Edição -->
+    <div class="modal fade" id="editAppointmentModal" tabindex="-1" aria-labelledby="editAppointmentModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editAppointmentModalLabel">
+                        <i class="fas fa-edit me-2"></i>Editar Agendamento
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editAppointmentForm">
+                        <input type="hidden" id="editAppointmentId" name="appointmentId">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="editClient" class="form-label">Cliente</label>
+                                <select class="form-select" id="editClient" name="client" required>
+                                    <option value="">Carregando clientes...</option>
+                                </select>
+                                <div class="form-text">
+                                    <small><i class="fas fa-info-circle"></i> Lista ordenada por nome</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editService" class="form-label">Serviço</label>
+                                <select class="form-select" id="editService" name="service" required>
+                                    <option value="">Selecione o serviço</option>
+                                    <option value="Corte + Escova">Corte + Escova</option>
+                                    <option value="Barba + Bigode">Barba + Bigode</option>
+                                    <option value="Manicure">Manicure</option>
+                                    <option value="Pedicure">Pedicure</option>
+                                    <option value="Tratamento Capilar">Tratamento Capilar</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editDate" class="form-label">Data</label>
+                                <input type="date" class="form-control" id="editDate" name="date" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editTime" class="form-label">Horário</label>
+                                <input type="time" class="form-control" id="editTime" name="time" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editStatus" class="form-label">Status</label>
+                                <select class="form-select" id="editStatus" name="status" required>
+                                    <option value="">Selecione o status</option>
+                                    <option value="pending">Pendente</option>
+                                    <option value="confirmed">Confirmado</option>
+                                    <option value="completed">Concluído</option>
+                                    <option value="cancelled">Cancelado</option>
+                                    <option value="no_show">Não Compareceu</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editProfessional" class="form-label">Profissional</label>
+                                <select class="form-select" id="editProfessional" name="professional" required>
+                                    <option value="">Selecione o profissional</option>
+                                    <option value="Ana Costa">Ana Costa</option>
+                                    <option value="Bruno Lima">Bruno Lima</option>
+                                    <option value="Carla Santos">Carla Santos</option>
+                                    <option value="Diego Oliveira">Diego Oliveira</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label for="editNotes" class="form-label">Observações</label>
+                                <textarea class="form-control" id="editNotes" name="notes" rows="3" placeholder="Observações sobre o agendamento..."></textarea>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="saveAppointment()">
+                        <i class="fas fa-save me-2"></i>Salvar Alterações
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/utils/secure-auth.js"></script>
+    <script src="js/utils/context-manager.js"></script>
+    <script>
+        // Variáveis globais para armazenar dados do agendamento
+        let currentAppointmentData = {};
+        let customersData = []; // Cache da lista de clientes
+        
+        // Função para carregar lista de clientes
+        async function loadCustomers() {
+            try {
+                const response = await fetch('/api/admin/customers', {
+                    headers: {
+                        'Authorization': getAuthToken()
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    customersData = data.customers || [];
+                    
+                    // Ordena por nome
+                    customersData.sort((a, b) => a.name.localeCompare(b.name));
+                    
+                    // Popula o dropdown
+                    populateCustomersDropdown();
+                } else {
+                    console.error('Erro ao carregar clientes');
+                    customersData = [
+                        { id: 1, name: 'Maria Silva', phone: '(11) 99999-1234' },
+                        { id: 2, name: 'João Santos', phone: '(11) 98888-5678' },
+                        { id: 3, name: 'Ana Costa', phone: '(11) 97777-9012' },
+                        { id: 4, name: 'Carlos Oliveira', phone: '(11) 96666-3456' }
+                    ];
+                    populateCustomersDropdown();
+                }
+            } catch (error) {
+                console.error('Erro ao carregar clientes:', error);
+                // Fallback com dados simulados
+                customersData = [
+                    { id: 1, name: 'Maria Silva', phone: '(11) 99999-1234' },
+                    { id: 2, name: 'João Santos', phone: '(11) 98888-5678' },
+                    { id: 3, name: 'Ana Costa', phone: '(11) 97777-9012' },
+                    { id: 4, name: 'Carlos Oliveira', phone: '(11) 96666-3456' }
+                ];
+                populateCustomersDropdown();
+            }
+        }
+        
+        // Função para popular o dropdown de clientes
+        function populateCustomersDropdown() {
+            const dropdown = document.getElementById('editClient');
+            dropdown.innerHTML = '<option value="">Selecione o cliente</option>';
+            
+            customersData.forEach(customer => {
+                const option = document.createElement('option');
+                option.value = customer.id;
+                option.textContent = `${customer.name} - ${customer.phone}`;
+                option.dataset.name = customer.name;
+                option.dataset.phone = customer.phone;
+                dropdown.appendChild(option);
+            });
+        }
+        
+        // Função para visualizar agendamento
+        function viewAppointment(id, client, phone, service, dateTime, status, professional) {
+            currentAppointmentData = { id, client, phone, service, dateTime, status, professional };
+            
+            // Preenche o modal de visualização
+            document.getElementById('viewClient').textContent = client;
+            document.getElementById('viewPhone').textContent = phone;
+            document.getElementById('viewService').textContent = service;
+            document.getElementById('viewDateTime').textContent = dateTime;
+            document.getElementById('viewStatus').innerHTML = getStatusBadge(status);
+            document.getElementById('viewProfessional').textContent = professional;
+            document.getElementById('viewAppointmentId').textContent = id;
+            
+            // Abre o modal
+            const modal = new bootstrap.Modal(document.getElementById('viewAppointmentModal'));
+            modal.show();
+            
+            console.log('Visualizando agendamento:', id);
+        }
+        
+        // Função para editar agendamento
+        function editAppointment(id, client, phone, service, dateTime, status, professional) {
+            currentAppointmentData = { id, client, phone, service, dateTime, status, professional };
+            
+            // Preenche o modal de edição
+            document.getElementById('editAppointmentId').value = id;
+            
+            // Seleciona o cliente no dropdown
+            const clientDropdown = document.getElementById('editClient');
+            const clientOption = Array.from(clientDropdown.options).find(option => 
+                option.dataset.name === client && option.dataset.phone === phone
+            );
+            if (clientOption) {
+                clientDropdown.value = clientOption.value;
+            }
+            
+            document.getElementById('editService').value = service;
+            document.getElementById('editProfessional').value = professional;
+            
+            // Parse da data/hora para campos separados
+            const [datePart, timePart] = parseDateTimeString(dateTime);
+            document.getElementById('editDate').value = datePart;
+            document.getElementById('editTime').value = timePart;
+            
+            // Status
+            const statusValue = getStatusValue(status);
+            document.getElementById('editStatus').value = statusValue;
+            
+            // Abre o modal
+            const modal = new bootstrap.Modal(document.getElementById('editAppointmentModal'));
+            modal.show();
+            
+            console.log('Editando agendamento:', id);
+        }
+        
+        // Função para editar a partir do modal de visualização
+        function editAppointmentFromView() {
+            // Fecha modal de visualização
+            const viewModal = bootstrap.Modal.getInstance(document.getElementById('viewAppointmentModal'));
+            viewModal.hide();
+            
+            // Abre modal de edição com os dados atuais
+            setTimeout(() => {
+                const { id, client, phone, service, dateTime, status, professional } = currentAppointmentData;
+                editAppointment(id, client, phone, service, dateTime, status, professional);
+            }, 300);
+        }
+        
+        // Função para salvar alterações
+        async function saveAppointment() {
+            const form = document.getElementById('editAppointmentForm');
+            const formData = new FormData(form);
+            
+            const appointmentData = {
+                id: formData.get('appointmentId'),
+                client: formData.get('client'),
+                service: formData.get('service'),
+                date: formData.get('date'),
+                time: formData.get('time'),
+                status: formData.get('status'),
+                professional: formData.get('professional'),
+                notes: formData.get('notes')
+            };
+            
+            try {
+                // Simular salvamento (integrar com API real)
+                console.log('Salvando agendamento:', appointmentData);
+                
+                // Aqui você faria a chamada real para a API
+                const response = await fetch(`/api/admin/appointments/${appointmentData.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': getAuthToken()
+                    },
+                    body: JSON.stringify(appointmentData)
+                });
+                
+                if (response.ok) {
+                    // Sucesso
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editAppointmentModal'));
+                    modal.hide();
+                    
+                    // Feedback de sucesso
+                    showSuccessMessage('Agendamento atualizado com sucesso!');
+                    
+                    // Atualizar a tabela (recarregar página ou atualizar dinamicamente)
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    throw new Error('Erro ao salvar agendamento');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao salvar:', error);
+                showErrorMessage('Erro ao salvar agendamento. Tente novamente.');
+            }
+        }
+        
+        // Função para novo agendamento
+        function newAppointment() {
+            // Limpa o formulário
+            document.getElementById('editAppointmentForm').reset();
+            document.getElementById('editAppointmentId').value = 'new';
+            
+            // Muda o título do modal
+            document.getElementById('editAppointmentModalLabel').innerHTML = 
+                '<i class="fas fa-plus me-2"></i>Novo Agendamento';
+            
+            // Abre o modal
+            const modal = new bootstrap.Modal(document.getElementById('editAppointmentModal'));
+            modal.show();
+        }
+        
+        // Funções auxiliares
+        function getStatusBadge(status) {
+            const badges = {
+                'Confirmado': '<span class="badge bg-success">Confirmado</span>',
+                'Pendente': '<span class="badge bg-warning">Pendente</span>',
+                'Concluído': '<span class="badge bg-primary">Concluído</span>',
+                'Cancelado': '<span class="badge bg-danger">Cancelado</span>',
+                'Não Compareceu': '<span class="badge bg-secondary">Não Compareceu</span>'
+            };
+            return badges[status] || status;
+        }
+        
+        function getStatusValue(statusText) {
+            const statusMap = {
+                'Confirmado': 'confirmed',
+                'Pendente': 'pending',
+                'Concluído': 'completed',
+                'Cancelado': 'cancelled',
+                'Não Compareceu': 'no_show'
+            };
+            return statusMap[statusText] || 'pending';
+        }
+        
+        function parseDateTimeString(dateTimeStr) {
+            // Parse simples para o exemplo (melhorar para datas reais)
+            if (dateTimeStr.includes('Hoje')) {
+                const today = new Date();
+                const time = dateTimeStr.split(', ')[1];
+                return [today.toISOString().split('T')[0], time];
+            } else if (dateTimeStr.includes('Amanhã')) {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const time = dateTimeStr.split(', ')[1];
+                return [tomorrow.toISOString().split('T')[0], time];
+            }
+            return ['', ''];
+        }
+        
+        function getAuthToken() {
+            if (window.secureAuth) {
+                return window.secureAuth.getAuthHeader();
+            }
+            return 'Bearer ' + (localStorage.getItem('ubs_token') || localStorage.getItem('adminToken'));
+        }
+        
+        function showSuccessMessage(message) {
+            // Criar notificação de sucesso (implementar conforme seu sistema)
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-success alert-dismissible fade show position-fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '9999';
+            alert.innerHTML = `
+                <i class="fas fa-check-circle me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 3000);
+        }
+        
+        function showErrorMessage(message) {
+            // Criar notificação de erro
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '9999';
+            alert.innerHTML = `
+                <i class="fas fa-exclamation-circle me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+        
+        // Funções originais
+        function refreshAppointments() {
+            showSuccessMessage('Atualizando agendamentos...');
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        }
+        
+        function exportAppointments() {
+            showSuccessMessage('Iniciando exportação...');
+            // Implementar integração com endpoint de exportação
+            window.open('/api/admin/appointments/export', '_blank');
+        }
+        
+        // Funções do menu de usuário
+        function exportData() {
+            exportAppointments();
+        }
+        
+        function refreshData() {
+            refreshAppointments();
+        }
+        
+        function logout() {
+            if (confirm('Tem certeza que deseja sair?')) {
+                if (window.secureAuth) {
+                    window.secureAuth.logout();
+                } else {
+                    localStorage.removeItem('ubs_token');
+                    localStorage.removeItem('adminToken');
+                }
+                window.location.href = 'login.html';
+            }
+        }
+
+        // Inicializa contexto na página
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.contextManager) {
+                window.contextManager.refreshContext();
+            }
+            
+            // Carrega lista de clientes
+            loadCustomers();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversas - UBS | Universal Booking System</title>
+    <meta name="description" content="Monitore e gerencie conversas do WhatsApp em tempo real no UBS.">
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- UBS Standard Styles -->
+    <link href="css/ubs-standard-styles.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    <link href="css/super-admin-dashboard.css" rel="stylesheet">
+    <link href="css/standardized-widgets.css" rel="stylesheet">
+    <link href="css/error-handler.css" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --ubs-primary: #2D5A9B;
+            --ubs-primary-light: #4A7BC8;
+            --ubs-primary-dark: #1E3F6B;
+            --ubs-secondary: #F8F9FA;
+            --ubs-accent: #28A745;
+            --ubs-warning: #ffc107;
+            --ubs-danger: #dc3545;
+            --ubs-info: #17a2b8;
+            --ubs-text-dark: #2C3E50;
+            --ubs-text-light: #6C757D;
+            --ubs-border: #E9ECEF;
+            --ubs-shadow: 0 4px 20px rgba(45, 90, 155, 0.15);
+            --ubs-shadow-lg: 0 10px 40px rgba(45, 90, 155, 0.2);
+            --whatsapp-green: #25D366;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--ubs-secondary);
+            color: var(--ubs-text-dark);
+            overflow-x: hidden;
+        }
+
+        /* Top Navbar */
+        .top-navbar {
+            background: white;
+            border-bottom: 1px solid var(--ubs-border);
+            padding: 0.75rem 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1030;
+            box-shadow: var(--ubs-shadow);
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--ubs-primary) !important;
+            text-decoration: none;
+        }
+
+        .logo-image {
+            height: 40px;
+            width: auto;
+            object-fit: contain;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--ubs-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 70px;
+            left: 0;
+            width: 280px;
+            height: calc(100vh - 70px);
+            background: linear-gradient(180deg, var(--ubs-primary) 0%, var(--ubs-primary-dark) 100%);
+            padding: 2rem 0;
+            z-index: 1020;
+            overflow-y: auto;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar-menu li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 2rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-left-color: white;
+        }
+
+        .sidebar-menu i {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            margin-top: 70px;
+            padding: 2rem;
+            min-height: calc(100vh - 70px);
+        }
+
+        /* UBS Section */
+        .ubs-section {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--ubs-shadow);
+            border: 1px solid var(--ubs-border);
+            transition: all 0.3s ease;
+        }
+
+        .ubs-section:hover {
+            box-shadow: var(--ubs-shadow-lg);
+        }
+
+        .ubs-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--ubs-border);
+        }
+
+        .ubs-section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--ubs-text-dark);
+            margin: 0;
+        }
+
+        /* Conversations Layout */
+        .conversations-layout {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 1rem;
+            height: calc(100vh - 200px);
+        }
+
+        /* Conversations List */
+        .conversations-list {
+            background: white;
+            border-radius: 16px;
+            border: 1px solid var(--ubs-border);
+            box-shadow: var(--ubs-shadow);
+            overflow: hidden;
+        }
+
+        .conversations-header {
+            background: var(--whatsapp-green);
+            color: white;
+            padding: 1rem;
+            font-weight: 600;
+        }
+
+        .conversations-search {
+            padding: 1rem;
+            border-bottom: 1px solid var(--ubs-border);
+        }
+
+        .conversations-items {
+            height: calc(100% - 120px);
+            overflow-y: auto;
+        }
+
+        .conversation-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            border-bottom: 1px solid var(--ubs-border);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .conversation-item:hover {
+            background: var(--ubs-secondary);
+        }
+
+        .conversation-item.active {
+            background: rgba(45, 90, 155, 0.1);
+            border-left: 4px solid var(--ubs-primary);
+        }
+
+        .conversation-avatar {
+            width: 50px;
+            height: 50px;
+            background: var(--ubs-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 1.2rem;
+        }
+
+        .conversation-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .conversation-name {
+            font-weight: 600;
+            color: var(--ubs-text-dark);
+            margin-bottom: 0.25rem;
+        }
+
+        .conversation-preview {
+            color: var(--ubs-text-light);
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .conversation-meta {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.25rem;
+        }
+
+        .conversation-time {
+            color: var(--ubs-text-light);
+            font-size: 0.8rem;
+        }
+
+        .conversation-status {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--ubs-accent);
+        }
+
+        .conversation-status.pending {
+            background: var(--ubs-warning);
+        }
+
+        .conversation-status.offline {
+            background: var(--ubs-text-light);
+        }
+
+        /* Chat Area */
+        .chat-area {
+            background: white;
+            border-radius: 16px;
+            border: 1px solid var(--ubs-border);
+            box-shadow: var(--ubs-shadow);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: var(--whatsapp-green);
+            color: white;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .chat-customer-avatar {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .chat-customer-info h6 {
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .chat-customer-status {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            background: #f0f2f5;
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e9ecef' fill-opacity='0.3'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+
+        .message {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: flex-end;
+            gap: 0.5rem;
+        }
+
+        .message.outgoing {
+            flex-direction: row-reverse;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 0.75rem 1rem;
+            border-radius: 18px;
+            position: relative;
+        }
+
+        .message.incoming .message-bubble {
+            background: white;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .message.outgoing .message-bubble {
+            background: #dcf8c6;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message-text {
+            margin: 0;
+            line-height: 1.4;
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            color: var(--ubs-text-light);
+            margin-top: 0.25rem;
+            text-align: right;
+        }
+
+        .message.incoming .message-time {
+            text-align: left;
+        }
+
+        /* Chat Input */
+        .chat-input {
+            padding: 1rem;
+            border-top: 1px solid var(--ubs-border);
+            background: white;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .message-input {
+            flex: 1;
+            border: 1px solid var(--ubs-border);
+            border-radius: 25px;
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            outline: none;
+        }
+
+        .message-input:focus {
+            border-color: var(--ubs-primary);
+            box-shadow: 0 0 0 0.25rem rgba(45, 90, 155, 0.1);
+        }
+
+        .send-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--whatsapp-green);
+            color: white;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
+        }
+
+        .send-btn:hover {
+            background: #128c7e;
+            transform: scale(1.05);
+        }
+
+        /* Empty State */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--ubs-text-light);
+            text-align: center;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Stats Cards */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: var(--ubs-shadow);
+            border: 1px solid var(--ubs-border);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--ubs-text-light);
+            font-size: 0.9rem;
+        }
+
+        /* Notifications */
+        .ubs-notification {
+            position: fixed;
+            top: 90px;
+            right: 20px;
+            background: white;
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            box-shadow: var(--ubs-shadow-lg);
+            border-left: 4px solid var(--ubs-accent);
+            z-index: 1040;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+
+        .ubs-notification.show {
+            transform: translateX(0);
+        }
+
+        .ubs-notification.error {
+            border-left-color: var(--ubs-danger);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .conversations-layout {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+
+            .conversations-list {
+                height: 300px;
+            }
+
+            .chat-area {
+                height: 500px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Top Navbar -->
+    <nav class="top-navbar">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <a class="navbar-brand" href="/dashboard-standardized.html">
+                    <picture>
+                        <source srcset="assets/images/optimized/UBS_Nac.webp" type="image/webp">
+                        <img src="assets/images/UBS_Nac.png" alt="UBS - Universal Booking System" class="logo-image">
+                    </picture>
+                </a>
+                
+                <div class="user-info">
+                    <span class="d-none d-md-inline text-muted">Olá, <span id="userName">Usuário</span></span>
+                    <div class="user-avatar" id="userAvatar">U</div>
+                    <div class="dropdown">
+                        <button class="btn btn-link p-0" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-chevron-down text-muted"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/dashboard-standardized.html">Dashboard</a></li>
+                            <li><a class="dropdown-item" href="/settings-standardized.html">Configurações</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="logout()">Sair</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <ul class="sidebar-menu">
+            <li><a href="/dashboard-standardized.html"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+            <li><a href="/appointments-standardized.html"><i class="fas fa-calendar-alt"></i> Agendamentos</a></li>
+            <li><a href="/customers-standardized.html"><i class="fas fa-users"></i> Clientes</a></li>
+            <li><a href="/services-standardized.html"><i class="fas fa-concierge-bell"></i> Serviços</a></li>
+            <li><a href="/payments-standardized.html"><i class="fas fa-credit-card"></i> Pagamentos</a></li>
+            <li><a href="/analytics-standardized.html"><i class="fas fa-chart-line"></i> Analytics</a></li>
+            <li><a href="/billing-standardized.html"><i class="fas fa-file-invoice-dollar"></i> Billing</a></li>
+            <li><a href="/conversations-standardized.html" class="active"><i class="fas fa-comments"></i> Conversas</a></li>
+            <li><a href="/settings-standardized.html"><i class="fas fa-cog"></i> Configurações</a></li>
+        </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Page Header -->
+        <div class="ubs-section">
+            <div class="ubs-section-header">
+                <div>
+                    <h1 class="ubs-section-title">
+                        <i class="fab fa-whatsapp me-2" style="color: var(--whatsapp-green);"></i>
+                        Conversas do WhatsApp
+                    </h1>
+                    <p class="text-muted mb-0">Monitore e gerencie conversas em tempo real</p>
+                </div>
+                <div>
+                    <button class="btn btn-outline-primary me-2" onclick="refreshConversations()">
+                        <i class="fas fa-sync-alt"></i> Atualizar
+                    </button>
+                    <button class="btn btn-success" onclick="startNewConversation()">
+                        <i class="fas fa-plus"></i> Nova Conversa
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--whatsapp-green);" id="activeConversations">0</div>
+                <div class="stat-label">Conversas Ativas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--ubs-info);" id="totalMessages">0</div>
+                <div class="stat-label">Mensagens Hoje</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--ubs-warning);" id="pendingResponses">0</div>
+                <div class="stat-label">Respostas Pendentes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color: var(--ubs-accent);" id="responseTime">0s</div>
+                <div class="stat-label">Tempo Médio Resposta</div>
+            </div>
+        </div>
+
+        <!-- Conversations Layout -->
+        <div class="conversations-layout">
+            <!-- Conversations List -->
+            <div class="conversations-list">
+                <div class="conversations-header">
+                    <i class="fab fa-whatsapp me-2"></i>
+                    Conversas Ativas
+                </div>
+                
+                <div class="conversations-search">
+                    <input type="text" class="form-control" placeholder="Buscar conversas..." id="conversationSearch">
+                </div>
+                
+                <div class="conversations-items" id="conversationsList">
+                    <!-- Conversations will be populated here -->
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando conversas...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Area -->
+            <div class="chat-area" id="chatArea">
+                <div class="empty-state">
+                    <i class="fab fa-whatsapp"></i>
+                    <h4>Selecione uma conversa</h4>
+                    <p>Escolha uma conversa da lista para começar a visualizar as mensagens</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let isInitialized = false;
+        let currentConversation = null;
+        let conversations = [];
+        let refreshInterval = null;
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeUserSafe();
+        });
+
+        // Safe user initialization to prevent loops
+        function initializeUserSafe() {
+            if (isInitialized) return;
+            isInitialized = true;
+
+            try {
+                checkAuthenticationStatus();
+                loadConversations();
+                initializeRealTimeUpdates();
+                initializeSearch();
+            } catch (error) {
+                console.error('Error initializing conversations page:', error);
+                showNotification('Erro ao inicializar página', 'error');
+            }
+        }
+
+        // Check authentication status
+        function checkAuthenticationStatus() {
+            const token = localStorage.getItem('ubs_token');
+            const userData = localStorage.getItem('ubs_user_data');
+
+            if (!token || !userData) {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            try {
+                const user = JSON.parse(userData);
+                updateUserInfo(user);
+            } catch (error) {
+                console.error('Error parsing user data:', error);
+                localStorage.removeItem('ubs_user_data');
+                window.location.href = '/login.html';
+            }
+        }
+
+        // Update user info in UI
+        function updateUserInfo(user) {
+            const userName = document.getElementById('userName');
+            const userAvatar = document.getElementById('userAvatar');
+
+            if (userName && user.nome) {
+                userName.textContent = user.nome;
+            }
+
+            if (userAvatar && user.nome) {
+                userAvatar.textContent = user.nome.charAt(0).toUpperCase();
+            }
+        }
+
+        // Load conversations
+        async function loadConversations() {
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/conversations', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        handleAuthError();
+                        return;
+                    }
+                    throw new Error('Failed to load conversations');
+                }
+                
+                const data = await response.json();
+                conversations = data.conversations || [];
+                updateStats(data.stats);
+                renderConversations();
+                
+            } catch (error) {
+                console.error('Error loading conversations:', error);
+                showNotification('Erro ao carregar conversas. Usando dados de demonstração.', 'error');
+                loadMockConversations();
+            }
+        }
+
+        // Load mock conversations for demonstration
+        function loadMockConversations() {
+            const mockData = {
+                conversations: [
+                    {
+                        id: '1',
+                        customerName: 'Maria Silva',
+                        customerPhone: '+5511999999999',
+                        lastMessage: 'Gostaria de agendar um horário para amanhã',
+                        lastMessageTime: new Date(Date.now() - 5 * 60 * 1000),
+                        status: 'active',
+                        unreadCount: 2
+                    },
+                    {
+                        id: '2',
+                        customerName: 'João Santos',
+                        customerPhone: '+5511888888888',
+                        lastMessage: 'Obrigado pelo atendimento!',
+                        lastMessageTime: new Date(Date.now() - 15 * 60 * 1000),
+                        status: 'pending',
+                        unreadCount: 0
+                    },
+                    {
+                        id: '3',
+                        customerName: 'Ana Costa',
+                        customerPhone: '+5511777777777',
+                        lastMessage: 'Qual o valor do corte de cabelo?',
+                        lastMessageTime: new Date(Date.now() - 30 * 60 * 1000),
+                        status: 'active',
+                        unreadCount: 1
+                    }
+                ],
+                stats: {
+                    activeConversations: 3,
+                    totalMessages: 47,
+                    pendingResponses: 2,
+                    responseTime: 45
+                }
+            };
+
+            conversations = mockData.conversations;
+            updateStats(mockData.stats);
+            renderConversations();
+        }
+
+        // Update stats
+        function updateStats(stats) {
+            document.getElementById('activeConversations').textContent = stats.activeConversations || 0;
+            document.getElementById('totalMessages').textContent = stats.totalMessages || 0;
+            document.getElementById('pendingResponses').textContent = stats.pendingResponses || 0;
+            document.getElementById('responseTime').textContent = `${stats.responseTime || 0}s`;
+        }
+
+        // Render conversations list
+        function renderConversations() {
+            const container = document.getElementById('conversationsList');
+            
+            if (conversations.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fab fa-whatsapp text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-2">Nenhuma conversa encontrada</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = conversations.map(conversation => `
+                <div class="conversation-item" onclick="selectConversation('${conversation.id}')">
+                    <div class="conversation-avatar">
+                        ${conversation.customerName.charAt(0).toUpperCase()}
+                    </div>
+                    <div class="conversation-info">
+                        <div class="conversation-name">${conversation.customerName}</div>
+                        <div class="conversation-preview">${conversation.lastMessage}</div>
+                    </div>
+                    <div class="conversation-meta">
+                        <div class="conversation-time">${formatTime(conversation.lastMessageTime)}</div>
+                        <div class="conversation-status ${conversation.status}"></div>
+                        ${conversation.unreadCount > 0 ? `<span class="badge bg-primary">${conversation.unreadCount}</span>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Select conversation
+        function selectConversation(conversationId) {
+            currentConversation = conversations.find(c => c.id === conversationId);
+            
+            // Update active state
+            document.querySelectorAll('.conversation-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+            
+            loadChatMessages(conversationId);
+        }
+
+        // Load chat messages
+        async function loadChatMessages(conversationId) {
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch(`/api/conversations/${conversationId}/messages`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to load messages');
+                
+                const messages = await response.json();
+                renderChatArea(currentConversation, messages);
+                
+            } catch (error) {
+                console.error('Error loading messages:', error);
+                renderChatArea(currentConversation, getMockMessages());
+            }
+        }
+
+        // Get mock messages
+        function getMockMessages() {
+            return [
+                {
+                    id: '1',
+                    text: 'Olá! Gostaria de agendar um horário.',
+                    sender: 'customer',
+                    timestamp: new Date(Date.now() - 60 * 60 * 1000)
+                },
+                {
+                    id: '2',
+                    text: 'Olá! Claro, temos horários disponíveis. Que tipo de serviço você gostaria?',
+                    sender: 'business',
+                    timestamp: new Date(Date.now() - 58 * 60 * 1000)
+                },
+                {
+                    id: '3',
+                    text: 'Gostaria de fazer um corte de cabelo.',
+                    sender: 'customer',
+                    timestamp: new Date(Date.now() - 55 * 60 * 1000)
+                },
+                {
+                    id: '4',
+                    text: 'Perfeito! Temos disponibilidade para amanhã às 14h. Confirma?',
+                    sender: 'business',
+                    timestamp: new Date(Date.now() - 50 * 60 * 1000)
+                }
+            ];
+        }
+
+        // Render chat area
+        function renderChatArea(conversation, messages) {
+            const chatArea = document.getElementById('chatArea');
+            
+            chatArea.innerHTML = `
+                <div class="chat-header">
+                    <div class="chat-customer-avatar">
+                        ${conversation.customerName.charAt(0).toUpperCase()}
+                    </div>
+                    <div class="chat-customer-info">
+                        <h6>${conversation.customerName}</h6>
+                        <div class="chat-customer-status">
+                            <i class="fas fa-circle text-success"></i> Online
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="chat-messages" id="chatMessages">
+                    ${messages.map(message => `
+                        <div class="message ${message.sender === 'customer' ? 'incoming' : 'outgoing'}">
+                            <div class="message-bubble">
+                                <p class="message-text">${message.text}</p>
+                                <div class="message-time">${formatTime(message.timestamp)}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="chat-input">
+                    <div class="input-group">
+                        <input type="text" class="message-input" placeholder="Digite sua mensagem..." id="messageInput" onkeypress="handleKeyPress(event)">
+                        <button class="send-btn" onclick="sendMessage()">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            // Scroll to bottom
+            setTimeout(() => {
+                const messagesContainer = document.getElementById('chatMessages');
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }, 100);
+        }
+
+        // Handle key press in message input
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // Send message
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message || !currentConversation) return;
+            
+            // Add message to chat
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageElement = document.createElement('div');
+            messageElement.className = 'message outgoing';
+            messageElement.innerHTML = `
+                <div class="message-bubble">
+                    <p class="message-text">${message}</p>
+                    <div class="message-time">${formatTime(new Date())}</div>
+                </div>
+            `;
+            
+            messagesContainer.appendChild(messageElement);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            // Clear input
+            input.value = '';
+            
+            // Send to API (mock for now)
+            showNotification('Mensagem enviada com sucesso!');
+        }
+
+        // Initialize search
+        function initializeSearch() {
+            const searchInput = document.getElementById('conversationSearch');
+            searchInput.addEventListener('input', function() {
+                const query = this.value.toLowerCase();
+                const filteredConversations = conversations.filter(conversation =>
+                    conversation.customerName.toLowerCase().includes(query) ||
+                    conversation.lastMessage.toLowerCase().includes(query)
+                );
+                
+                // Temporarily update conversations for rendering
+                const originalConversations = conversations;
+                conversations = filteredConversations;
+                renderConversations();
+                conversations = originalConversations;
+            });
+        }
+
+        // Initialize real-time updates
+        function initializeRealTimeUpdates() {
+            // Refresh conversations every 30 seconds
+            refreshInterval = setInterval(() => {
+                loadConversations();
+            }, 30000);
+        }
+
+        // Format time
+        function formatTime(date) {
+            if (!date) return '';
+            const now = new Date();
+            const messageDate = new Date(date);
+            const diffInMinutes = Math.floor((now - messageDate) / (1000 * 60));
+            
+            if (diffInMinutes < 1) return 'agora';
+            if (diffInMinutes < 60) return `${diffInMinutes}m`;
+            if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h`;
+            return messageDate.toLocaleDateString('pt-BR');
+        }
+
+        // Utility functions
+        function refreshConversations() {
+            loadConversations();
+            showNotification('Conversas atualizadas!');
+        }
+
+        function startNewConversation() {
+            showNotification('Funcionalidade em desenvolvimento');
+        }
+
+        function showNotification(message, type = 'success') {
+            const container = document.getElementById('notificationContainer');
+            const notification = document.createElement('div');
+            notification.className = `ubs-notification ${type}`;
+            notification.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            container.appendChild(notification);
+            setTimeout(() => notification.classList.add('show'), 100);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => container.removeChild(notification), 300);
+            }, 5000);
+        }
+
+        function handleAuthError() {
+            localStorage.removeItem('ubs_token');
+            localStorage.removeItem('ubs_user_data');
+            showNotification('Sessão expirada. Redirecionando...', 'error');
+            setTimeout(() => window.location.href = '/login.html', 2000);
+        }
+
+        // Logout function
+        function logout() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+            localStorage.removeItem('ubs_token');
+            localStorage.removeItem('ubs_user_data');
+            showNotification('Logout realizado com sucesso!');
+            setTimeout(() => window.location.href = '/login.html', 1000);
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html> 

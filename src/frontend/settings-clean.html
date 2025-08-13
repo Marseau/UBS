@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurações - Calendar Widget</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-3 bg-light min-vh-100 p-4">
+                <h4 class="mb-4">
+                    <i class="fas fa-cogs me-2"></i>
+                    Configurações
+                </h4>
+                <nav class="nav flex-column">
+                    <a class="nav-link active" href="#calendar">
+                        <i class="fas fa-calendar-alt me-2"></i>
+                        Calendário Google
+                    </a>
+                </nav>
+            </div>
+            
+            <div class="col-md-9 p-4">
+                <h2 class="mb-4">Integração Google Calendar</h2>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-calendar-alt me-2"></i>
+                            Google Calendar Widget
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">
+                            Configure e visualize a disponibilidade dos profissionais através do Google Calendar.
+                        </p>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-success" onclick="connectGoogleCalendar()">
+                                <i class="fab fa-google me-2"></i>
+                                Conectar Google Calendar
+                            </button>
+                            
+                            <button type="button" class="btn btn-primary" onclick="openCalendarWidget()">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Ver Disponibilidade
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendar Modal -->
+    <div class="modal fade" id="calendarModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-calendar-alt me-2"></i>
+                        Google Calendar Widget
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-success">
+                        <h6>✅ Calendar Widget Funcionando!</h6>
+                        <p class="mb-0">A integração Google Calendar está pronta para ser configurada.</p>
+                    </div>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <h6>📋 Próximos Passos:</h6>
+                            <ul>
+                                <li>Configurar credenciais OAuth Google</li>
+                                <li>Conectar calendários dos profissionais</li>
+                                <li>Visualizar disponibilidade em tempo real</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>🔗 APIs Implementadas:</h6>
+                            <ul>
+                                <li>✅ /api/google/calendar/availability</li>
+                                <li>✅ /api/google/status</li>
+                                <li>✅ CalendarService</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-primary" onclick="setupOAuth()">
+                        Configurar OAuth Google
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        console.log('✅ JavaScript carregado - Página limpa!');
+        
+        function openCalendarWidget() {
+            console.log('🔄 Abrindo Calendar Widget...');
+            const modal = new bootstrap.Modal(document.getElementById('calendarModal'));
+            modal.show();
+            console.log('✅ Modal aberto com sucesso!');
+        }
+        
+        function connectGoogleCalendar() {
+            console.log('🔐 Conectando Google Calendar...');
+            
+            // Simular ID do profissional (você)
+            const professionalId = 'prof-001'; // TODO: Pegar ID real do profissional logado
+            
+            // Chamar API para gerar URL de autorização
+            fetch(`/api/google/auth/${professionalId}`)
+                .then(response => {
+                    if (response.redirected) {
+                        // Redirecionar para Google OAuth
+                        window.location.href = response.url;
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao conectar Google Calendar:', error);
+                    alert('Erro ao conectar. Verifique o console.');
+                });
+        }
+        
+        function setupOAuth() {
+            alert('🔐 OAuth Google implementado!\n\n✅ Clique em "Conectar Google Calendar"');
+        }
+        
+        // Test on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📄 Página carregada com sucesso!');
+        });
+    </script>
+</body>
+</html>

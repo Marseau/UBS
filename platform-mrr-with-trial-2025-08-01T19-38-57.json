@@ -1,0 +1,193 @@
+{
+  "calculation_date": "2025-08-01T19:38:57.235Z",
+  "trial_policy": "15 days free trial",
+  "total_tenants": 10,
+  "periods": {
+    "7d": {
+      "period_days": 7,
+      "total_mrr": 0,
+      "paying_tenants": 0,
+      "trialing_tenants": 10,
+      "total_active_tenants": 10,
+      "average_mrr_per_paying_tenant": 0,
+      "plan_breakdown": {},
+      "paying_tenant_details": [],
+      "trialing_tenant_details": [
+        {
+          "name": "Bella Vista Spa",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Studio Glamour",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Charme Total",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Clínica Mente Sã",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Centro Terapêutico",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Advocacia Silva",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Escritório Costa",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Centro Educacional",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Academia do Saber",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Arena Fitness",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        }
+      ]
+    },
+    "30d": {
+      "period_days": 30,
+      "total_mrr": 0,
+      "paying_tenants": 0,
+      "trialing_tenants": 10,
+      "total_active_tenants": 10,
+      "average_mrr_per_paying_tenant": 0,
+      "plan_breakdown": {},
+      "paying_tenant_details": [],
+      "trialing_tenant_details": [
+        {
+          "name": "Bella Vista Spa",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Studio Glamour",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Charme Total",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Clínica Mente Sã",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Centro Terapêutico",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Advocacia Silva",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Escritório Costa",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Centro Educacional",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Academia do Saber",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Arena Fitness",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        }
+      ]
+    },
+    "90d": {
+      "period_days": 90,
+      "total_mrr": 0,
+      "paying_tenants": 0,
+      "trialing_tenants": 10,
+      "total_active_tenants": 10,
+      "average_mrr_per_paying_tenant": 0,
+      "plan_breakdown": {},
+      "paying_tenant_details": [],
+      "trialing_tenant_details": [
+        {
+          "name": "Bella Vista Spa",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Studio Glamour",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Charme Total",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Clínica Mente Sã",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Centro Terapêutico",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Advocacia Silva",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Escritório Costa",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Centro Educacional",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Academia do Saber",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        },
+        {
+          "name": "Arena Fitness",
+          "trial_ends": "2025-08-13T00:00:00.000Z",
+          "days_left_in_trial": 12
+        }
+      ]
+    }
+  }
+}

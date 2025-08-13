@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UBS - Dashboard Super Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .sidebar {
+            width: 250px;
+            min-height: 100vh;
+            background: #2D5A9B;
+            position: fixed;
+            left: 0;
+            top: 0;
+            padding-top: 20px;
+        }
+        
+        .sidebar .nav-link {
+            color: #fff;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        
+        .sidebar .nav-link:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+        
+        .sidebar .nav-link.active {
+            background: rgba(255,255,255,0.2);
+            color: #fff;
+        }
+        
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+        }
+        
+        .debug-info {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .debug-log {
+            background: #000;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="text-center mb-4">
+            <img src="assets/images/logo.png" alt="UBS Logo" class="img-fluid" style="max-width: 80px;">
+            <h5 class="text-white mt-2">UBS Platform</h5>
+        </div>
+        
+        <ul class="nav flex-column">
+            <li class="nav-item">
+                <a class="nav-link active" href="#" onclick="debugClick('dashboard-standardized.html')">
+                    <i class="fas fa-chart-line me-2"></i>
+                    <span>Visão Geral</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" onclick="debugClick('appointments-standardized.html')">
+                    <i class="fas fa-calendar-check me-2"></i>
+                    <span>Agendamentos</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" onclick="debugClick('customers-standardized.html')">
+                    <i class="fas fa-users me-2"></i>
+                    <span>Clientes</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" onclick="debugClick('services-standardized.html')">
+                    <i class="fas fa-concierge-bell me-2"></i>
+                    <span>Serviços</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" onclick="debugClick('conversations.html')">
+                    <i class="fab fa-whatsapp me-2"></i>
+                    <span>Conversas</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" onclick="debugClick('payments-standardized.html')">
+                    <i class="fas fa-credit-card me-2"></i>
+                    <span>Pagamentos</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" onclick="debugClick('billing.html')">
+                    <i class="fas fa-file-invoice-dollar me-2"></i>
+                    <span>Faturamento</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" onclick="debugClick('settings.html')">
+                    <i class="fas fa-cog me-2"></i>
+                    <span>Configurações</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container-fluid">
+            <h1>🔍 Debug de Navegação</h1>
+            
+            <div class="debug-info">
+                <h4>Informações de Debug</h4>
+                <p><strong>Página Atual:</strong> <span id="currentPage">debug-navigation.html</span></p>
+                <p><strong>URL Completa:</strong> <span id="fullUrl">-</span></p>
+                <p><strong>Timestamp:</strong> <span id="timestamp">-</span></p>
+                
+                <div class="row mt-3">
+                    <div class="col-md-4">
+                        <h6>Testes de Navegação</h6>
+                        <button class="btn btn-primary btn-sm me-2" onclick="testDirectNavigation()">
+                            Navegação Direta
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="testWindowLocation()">
+                            window.location
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Tokens de Autenticação</h6>
+                        <button class="btn btn-info btn-sm me-2" onclick="checkTokens()">
+                            Verificar Tokens
+                        </button>
+                        <button class="btn btn-warning btn-sm" onclick="clearTokens()">
+                            Limpar Tokens
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Controles</h6>
+                        <button class="btn btn-success btn-sm me-2" onclick="clearLog()">
+                            Limpar Log
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="location.reload()">
+                            Recarregar
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="debug-log" id="debugLog">
+                    <div>🚀 Sistema de debug iniciado...</div>
+                    <div>📍 Página: debug-navigation.html</div>
+                    <div>⏰ Timestamp: <span id="initTime"></span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Debug functions
+        let logCounter = 0;
+        
+        function debugClick(targetFile) {
+            logCounter++;
+            const timestamp = new Date().toLocaleTimeString();
+            const log = document.getElementById('debugLog');
+            
+            log.innerHTML += `<div>🖱️  [${timestamp}] #${logCounter}: Clique em ${targetFile}</div>`;
+            log.scrollTop = log.scrollHeight;
+            
+            console.log(`🖱️ DEBUG CLICK: ${targetFile}`);
+            
+            // Simular navegação após 1 segundo
+            setTimeout(() => {
+                log.innerHTML += `<div>🔄 [${timestamp}] Simulando navegação para ${targetFile}...</div>`;
+                log.scrollTop = log.scrollHeight;
+                
+                // Aqui é onde normalmente aconteceria o redirecionamento
+                // Vamos apenas simular sem redirecionar
+                console.log(`🔄 SIMULATING NAVIGATION TO: ${targetFile}`);
+                
+                // Atualizar informações na tela
+                document.getElementById('currentPage').textContent = targetFile;
+                document.getElementById('fullUrl').textContent = window.location.href.replace('debug-navigation.html', targetFile);
+                document.getElementById('timestamp').textContent = timestamp;
+                
+                log.innerHTML += `<div style="color: #0f0;">✅ [${timestamp}] Navegação simulada com sucesso!</div>`;
+                log.scrollTop = log.scrollHeight;
+                
+            }, 1000);
+        }
+        
+        function testDirectNavigation() {
+            const log = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            log.innerHTML += `<div>🧪 [${timestamp}] Testando navegação direta...</div>`;
+            
+            // Tentar navegar diretamente
+            try {
+                window.location.href = 'appointments-standardized.html';
+                log.innerHTML += `<div style="color: #ff0;">⚠️  [${timestamp}] Navegação direta executada!</div>`;
+            } catch (e) {
+                log.innerHTML += `<div style="color: #f00;">❌ [${timestamp}] Erro na navegação: ${e.message}</div>`;
+            }
+            
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        function testWindowLocation() {
+            const log = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            log.innerHTML += `<div>🧪 [${timestamp}] Testando window.location...</div>`;
+            
+            setTimeout(() => {
+                try {
+                    window.location = 'customers-standardized.html';
+                    log.innerHTML += `<div style="color: #ff0;">⚠️  [${timestamp}] window.location executado!</div>`;
+                } catch (e) {
+                    log.innerHTML += `<div style="color: #f00;">❌ [${timestamp}] Erro: ${e.message}</div>`;
+                }
+                log.scrollTop = log.scrollHeight;
+            }, 2000);
+        }
+        
+        function checkTokens() {
+            const log = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const ubsToken = localStorage.getItem('ubs_token');
+            const adminToken = localStorage.getItem('adminToken');
+            
+            log.innerHTML += `<div>🔐 [${timestamp}] Verificando tokens...</div>`;
+            log.innerHTML += `<div>   - ubs_token: ${ubsToken ? 'EXISTE' : 'NÃO EXISTE'}</div>`;
+            log.innerHTML += `<div>   - adminToken: ${adminToken ? 'EXISTE' : 'NÃO EXISTE'}</div>`;
+            
+            if (ubsToken || adminToken) {
+                log.innerHTML += `<div style="color: #0f0;">✅ [${timestamp}] Tokens encontrados!</div>`;
+            } else {
+                log.innerHTML += `<div style="color: #ff0;">⚠️  [${timestamp}] Nenhum token encontrado!</div>`;
+            }
+            
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        function clearTokens() {
+            const log = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            localStorage.removeItem('ubs_token');
+            localStorage.removeItem('adminToken');
+            sessionStorage.clear();
+            
+            log.innerHTML += `<div>🧹 [${timestamp}] Tokens limpos!</div>`;
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('debugLog').innerHTML = '<div>🚀 Log limpo...</div>';
+            logCounter = 0;
+        }
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            const now = new Date();
+            document.getElementById('initTime').textContent = now.toLocaleTimeString();
+            document.getElementById('fullUrl').textContent = window.location.href;
+            document.getElementById('timestamp').textContent = now.toLocaleTimeString();
+            
+            const log = document.getElementById('debugLog');
+            log.innerHTML += `<div>✅ DOM carregado em ${now.toLocaleTimeString()}</div>`;
+            
+            // Verificar tokens automaticamente
+            setTimeout(checkTokens, 1000);
+        });
+        
+        // Interceptar mudanças de URL
+        let lastUrl = window.location.href;
+        setInterval(() => {
+            if (window.location.href !== lastUrl) {
+                const log = document.getElementById('debugLog');
+                const timestamp = new Date().toLocaleTimeString();
+                
+                log.innerHTML += `<div style="color: #ff0;">🌐 [${timestamp}] URL MUDOU!</div>`;
+                log.innerHTML += `<div>   DE: ${lastUrl}</div>`;
+                log.innerHTML += `<div>   PARA: ${window.location.href}</div>`;
+                
+                lastUrl = window.location.href;
+                log.scrollTop = log.scrollHeight;
+            }
+        }, 100);
+    </script>
+</body>
+</html> 

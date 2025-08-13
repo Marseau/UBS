@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UBS - Template Master - TESTE</title>
+    
+    <!-- Bootstrap 5 CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- UBS Standard Styles IMPORTADOS -->
+    <link href="css/ubs-standard-styles.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    <link href="css/super-admin-dashboard.css" rel="stylesheet">
+    
+    <style>
+        /* LOGO GRANDE FORÇADO */
+        .sidebar .logo {
+            min-height: 180px !important;
+            padding: 20px 10px !important;
+        }
+        
+        .sidebar .logo img {
+            width: 90% !important;
+            max-width: 250px !important;
+            max-height: 150px !important;
+            height: auto !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+        <div class="logo">
+            <img src="assets/images/optimized/Logo_Int_Branco.webp" alt="UBS Logo">
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Dashboard</div>
+            <a class="nav-link active" href="#" onclick="loadPage('dashboard')">
+                <i class="fas fa-chart-line"></i>
+                <span>Visão Geral</span>
+            </a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Operações</div>
+            <a class="nav-link" href="#" onclick="loadPage('appointments')">
+                <i class="fas fa-calendar-check"></i>
+                <span>Agendamentos</span>
+            </a>
+            <a class="nav-link" href="#" onclick="loadPage('customers')">
+                <i class="fas fa-users"></i>
+                <span>Clientes</span>
+            </a>
+            <a class="nav-link" href="#" onclick="loadPage('services')">
+                <i class="fas fa-concierge-bell"></i>
+                <span>Serviços</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+        <!-- Header -->
+        <div class="top-navbar">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-0" id="pageTitle">Dashboard Super Admin</h4>
+                    <small class="text-muted" id="pageSubtitle">Visão geral da plataforma</small>
+                </div>
+                <div>
+                    <span class="badge bg-primary">Super Admin</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="container-fluid p-4">
+            <div id="pageContent">
+                <!-- Dashboard Content -->
+                <div class="row g-3 mb-4">
+                    <div class="col-xl-3 col-md-6">
+                        <div class="metric-card">
+                            <div class="metric-value">R$ 31.320</div>
+                            <div class="metric-title">MRR</div>
+                            <div class="metric-subtitle">Receita Recorrente Mensal</div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="metric-card">
+                            <div class="metric-value">392</div>
+                            <div class="metric-title">Tenants Ativos</div>
+                            <div class="metric-subtitle">Clientes pagantes</div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="metric-card">
+                            <div class="metric-value">87%</div>
+                            <div class="metric-title">Eficiência Operacional</div>
+                            <div class="metric-subtitle">Agendamentos / Conversas</div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="metric-card">
+                            <div class="metric-value">15.847</div>
+                            <div class="metric-title">Total Agendamentos</div>
+                            <div class="metric-subtitle">Este mês</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-success">
+                    <h4><i class="fas fa-check-circle me-2"></i>Template Master Funcionando!</h4>
+                    <p class="mb-0">✅ Logo grande | ✅ Sidebar fixo | ✅ Header dinâmico | ✅ Navegação SPA</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function loadPage(page) {
+            const titles = {
+                dashboard: 'Dashboard Super Admin',
+                appointments: 'Gerenciamento de Agendamentos', 
+                customers: 'Gerenciamento de Clientes',
+                services: 'Gerenciamento de Serviços'
+            };
+            
+            const subtitles = {
+                dashboard: 'Visão geral da plataforma',
+                appointments: 'Gerencie todos os agendamentos',
+                customers: 'Visualize sua base de clientes',
+                services: 'Configure seus serviços'
+            };
+            
+            // Atualizar título
+            document.getElementById('pageTitle').textContent = titles[page];
+            document.getElementById('pageSubtitle').textContent = subtitles[page];
+            
+            // Atualizar navegação ativa
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            event.target.closest('.nav-link').classList.add('active');
+            
+            // Atualizar conteúdo
+            const content = document.getElementById('pageContent');
+            
+            if (page === 'dashboard') {
+                content.innerHTML = `
+                    <div class="row g-3 mb-4">
+                        <div class="col-xl-3 col-md-6">
+                            <div class="metric-card">
+                                <div class="metric-value">R$ 31.320</div>
+                                <div class="metric-title">MRR</div>
+                                <div class="metric-subtitle">Receita Recorrente Mensal</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-xl-3 col-md-6">
+                            <div class="metric-card">
+                                <div class="metric-value">392</div>
+                                <div class="metric-title">Tenants Ativos</div>
+                                <div class="metric-subtitle">Clientes pagantes</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-xl-3 col-md-6">
+                            <div class="metric-card">
+                                <div class="metric-value">87%</div>
+                                <div class="metric-title">Eficiência Operacional</div>
+                                <div class="metric-subtitle">Agendamentos / Conversas</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-xl-3 col-md-6">
+                            <div class="metric-card">
+                                <div class="metric-value">15.847</div>
+                                <div class="metric-title">Total Agendamentos</div>
+                                <div class="metric-subtitle">Este mês</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-success">
+                        <h4><i class="fas fa-check-circle me-2"></i>Dashboard Super Admin</h4>
+                        <p class="mb-0">✅ Logo grande ✅ KPIs funcionais ✅ Template Master OK</p>
+                    </div>
+                `;
+            } else {
+                content.innerHTML = `
+                    <div class="alert alert-info">
+                        <h4><i class="fas fa-construction me-2"></i>Página: ${titles[page]}</h4>
+                        <p class="mb-0">Conteúdo específico será implementado aqui.</p>
+                        <p class="mb-0"><strong>Template funcionando perfeitamente!</strong></p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strategic Appointments Analytics</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --primary-color: #2D5A9B;
+            --success-color: #198754;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --info-color: #0dcaf0;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            border: none;
+            transition: all 0.3s ease;
+            height: 100%;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+        }
+
+        .metric-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+            margin-bottom: 1rem;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-trend {
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .metric-trend.positive { color: var(--success-color); }
+        .metric-trend.negative { color: var(--danger-color); }
+        .metric-trend.neutral { color: var(--warning-color); }
+
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            margin-bottom: 2rem;
+        }
+
+        .ranking-table {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+
+        .ranking-table .table th {
+            background: #f8f9fa;
+            border: none;
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.9rem;
+        }
+
+        .ranking-table .table td {
+            border: none;
+            vertical-align: middle;
+            font-size: 0.9rem;
+        }
+
+        .tenant-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .filter-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            margin-bottom: 2rem;
+        }
+
+        .badge-trend {
+            font-size: 0.75rem;
+            padding: 0.4rem 0.6rem;
+        }
+
+        /* Loading states */
+        .loading-skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 4px;
+        }
+
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Strategic Appointments Analytics Section -->
+    <div class="container-fluid p-4" id="strategicAppointmentsSection">
+        <!-- Section Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="h3 fw-bold text-dark mb-1">Análise Estratégica de Agendamentos</h2>
+                <p class="text-muted mb-0">Visão macro e insights acionáveis para tomada de decisão</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary btn-sm" onclick="exportReport()">
+                    <i class="fas fa-download"></i> Exportar
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="refreshData()">
+                    <i class="fas fa-sync-alt"></i> Atualizar
+                </button>
+            </div>
+        </div>
+
+        <!-- Filters Section -->
+        <div class="filter-section">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">
+                        <i class="fas fa-calendar-alt text-primary me-1"></i>
+                        Período
+                    </label>
+                    <select class="form-select" id="periodFilter">
+                        <option value="7d">Últimos 7 dias</option>
+                        <option value="30d" selected>Últimos 30 dias</option>
+                        <option value="90d">Últimos 90 dias</option>
+                        <option value="custom">Personalizado</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">
+                        <i class="fas fa-tags text-success me-1"></i>
+                        Segmento
+                    </label>
+                    <select class="form-select" id="segmentFilter">
+                        <option value="all">Todos os Segmentos</option>
+                        <option value="beauty">Beleza</option>
+                        <option value="health">Saúde Mental</option>
+                        <option value="legal">Jurídico</option>
+                        <option value="education">Educação</option>
+                        <option value="fitness">Fitness</option>
+                        <option value="consulting">Consultoria</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">
+                        <i class="fas fa-building text-info me-1"></i>
+                        Tenant
+                    </label>
+                    <select class="form-select" id="tenantFilter">
+                        <option value="all">Todos os Tenants</option>
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">
+                        <i class="fas fa-user-tie text-warning me-1"></i>
+                        Profissional
+                    </label>
+                    <select class="form-select" id="professionalFilter">
+                        <option value="all">Todos os Profissionais</option>
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Metrics Cards -->
+        <div class="row g-4 mb-4">
+            <!-- Total Appointments -->
+            <div class="col-lg-2 col-md-4 col-sm-6">
+                <div class="metric-card">
+                    <div class="metric-icon" style="background: var(--primary-color);">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                    <div class="metric-value" id="totalAppointmentsMetric">0</div>
+                    <div class="metric-label">Total de Agendamentos</div>
+                    <div class="metric-trend" id="appointmentsTrend">
+                        <i class="fas fa-arrow-up"></i>
+                        <span>0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Growth Rate -->
+            <div class="col-lg-2 col-md-4 col-sm-6">
+                <div class="metric-card">
+                    <div class="metric-icon" style="background: var(--success-color);">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="metric-value" id="growthRateMetric">0%</div>
+                    <div class="metric-label">Crescimento</div>
+                    <div class="metric-trend" id="growthTrend">
+                        <i class="fas fa-arrow-up"></i>
+                        <span>vs período anterior</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cancellation Rate -->
+            <div class="col-lg-2 col-md-4 col-sm-6">
+                <div class="metric-card">
+                    <div class="metric-icon" style="background: var(--danger-color);">
+                        <i class="fas fa-times-circle"></i>
+                    </div>
+                    <div class="metric-value" id="cancellationRateMetric">0%</div>
+                    <div class="metric-label">Taxa de Cancelamento</div>
+                    <div class="metric-trend" id="cancellationTrend">
+                        <i class="fas fa-info-circle" data-bs-toggle="tooltip" title="Cancelamentos / Total de Agendamentos"></i>
+                        <span>Risk Level</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Show Rate -->
+            <div class="col-lg-2 col-md-4 col-sm-6">
+                <div class="metric-card">
+                    <div class="metric-icon" style="background: var(--info-color);">
+                        <i class="fas fa-user-check"></i>
+                    </div>
+                    <div class="metric-value" id="showRateMetric">0%</div>
+                    <div class="metric-label">Taxa de Comparecimento</div>
+                    <div class="metric-trend" id="showRateTrend">
+                        <i class="fas fa-arrow-up"></i>
+                        <span>Attendance</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Tenant -->
+            <div class="col-lg-2 col-md-4 col-sm-6">
+                <div class="metric-card">
+                    <div class="metric-icon" style="background: var(--warning-color);">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                    <div class="metric-value" id="topTenantVolume">0</div>
+                    <div class="metric-label" id="topTenantName">Top Tenant</div>
+                    <div class="metric-trend" id="topTenantTrend">
+                        <i class="fas fa-crown"></i>
+                        <span>Líder</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Revenue Impact -->
+            <div class="col-lg-2 col-md-4 col-sm-6">
+                <div class="metric-card">
+                    <div class="metric-icon" style="background: var(--success-color);">
+                        <i class="fas fa-dollar-sign"></i>
+                    </div>
+                    <div class="metric-value" id="revenueImpactMetric">R$ 0</div>
+                    <div class="metric-label">Impacto na Receita</div>
+                    <div class="metric-trend" id="revenueImpactTrend">
+                        <i class="fas fa-money-bill-wave"></i>
+                        <span>Período</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row g-4 mb-4">
+            <!-- Appointments Over Time -->
+            <div class="col-lg-8">
+                <div class="chart-container">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-semibold mb-0">
+                            <i class="fas fa-chart-line text-primary me-2"></i>
+                            Evolução de Agendamentos
+                        </h5>
+                        <select class="form-select form-select-sm" style="width: auto;" id="timelineSelect">
+                            <option value="6m" selected>Últimos 6 meses</option>
+                            <option value="12m">Últimos 12 meses</option>
+                            <option value="24m">Últimos 24 meses</option>
+                        </select>
+                    </div>
+                    <canvas id="appointmentsTimelineChart" height="100"></canvas>
+                </div>
+            </div>
+
+            <!-- Segment Distribution -->
+            <div class="col-lg-4">
+                <div class="chart-container">
+                    <h5 class="fw-semibold mb-3">
+                        <i class="fas fa-chart-pie text-success me-2"></i>
+                        Distribuição por Segmento
+                    </h5>
+                    <canvas id="segmentDistributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Second Charts Row -->
+        <div class="row g-4 mb-4">
+            <!-- Top Tenants Bar Chart -->
+            <div class="col-lg-6">
+                <div class="chart-container">
+                    <h5 class="fw-semibold mb-3">
+                        <i class="fas fa-chart-bar text-info me-2"></i>
+                        Top 5 Tenants por Volume
+                    </h5>
+                    <canvas id="topTenantsChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Status Distribution -->
+            <div class="col-lg-6">
+                <div class="chart-container">
+                    <h5 class="fw-semibold mb-3">
+                        <i class="fas fa-tasks text-warning me-2"></i>
+                        Distribuição de Status
+                    </h5>
+                    <canvas id="statusDistributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ranking Table -->
+        <div class="ranking-table">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th class="ps-4">
+                                <i class="fas fa-hashtag me-1"></i>
+                                Ranking
+                            </th>
+                            <th>
+                                <i class="fas fa-building me-1"></i>
+                                Tenant
+                            </th>
+                            <th>
+                                <i class="fas fa-calendar-check me-1"></i>
+                                Agendamentos
+                            </th>
+                            <th>
+                                <i class="fas fa-chart-line me-1"></i>
+                                Crescimento (%)
+                            </th>
+                            <th>
+                                <i class="fas fa-times-circle me-1"></i>
+                                Taxa Cancelamento (%)
+                            </th>
+                            <th class="pe-4">
+                                <i class="fas fa-user-check me-1"></i>
+                                Taxa Comparecimento (%)
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="rankingTableBody">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        /**
+         * Strategic Appointments Analytics Module
+         * 
+         * This module provides comprehensive analytics for appointment management
+         * including trends, metrics, and strategic insights for decision making.
+         */
+        class StrategicAppointmentsAnalytics {
+            constructor() {
+                this.apiBaseUrl = '/api/admin/analytics';
+                this.charts = {};
+                this.currentFilters = {
+                    period: '30d',
+                    segment: 'all',
+                    tenant: 'all',
+                    professional: 'all'
+                };
+                this.init();
+            }
+
+            /**
+             * Initialize the analytics module
+             */
+            async init() {
+                this.bindEventListeners();
+                this.initializeTooltips();
+                await this.loadInitialData();
+            }
+
+            /**
+             * Bind event listeners to filters and controls
+             */
+            bindEventListeners() {
+                // Filter change events
+                document.getElementById('periodFilter').addEventListener('change', (e) => {
+                    this.currentFilters.period = e.target.value;
+                    this.refreshAllData();
+                });
+
+                document.getElementById('segmentFilter').addEventListener('change', (e) => {
+                    this.currentFilters.segment = e.target.value;
+                    this.refreshAllData();
+                });
+
+                document.getElementById('tenantFilter').addEventListener('change', (e) => {
+                    this.currentFilters.tenant = e.target.value;
+                    this.refreshAllData();
+                });
+
+                document.getElementById('professionalFilter').addEventListener('change', (e) => {
+                    this.currentFilters.professional = e.target.value;
+                    this.refreshAllData();
+                });
+
+                // Timeline chart period selector
+                document.getElementById('timelineSelect').addEventListener('change', (e) => {
+                    this.renderTimelineChart(e.target.value);
+                });
+            }
+
+            /**
+             * Initialize Bootstrap tooltips
+             */
+            initializeTooltips() {
+                const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+                const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+            }
+
+            /**
+             * Load initial data and render all components
+             */
+            async loadInitialData() {
+                try {
+                    // Show loading states
+                    this.showLoadingStates();
+
+                    // Load data from API or use mock data
+                    const data = await this.fetchAppointmentOverview();
+                    
+                    // Update all components
+                    this.updateMetricCards(data.metrics);
+                    this.renderAllCharts(data);
+                    this.updateRankingTable(data.ranking);
+                    this.populateFilterOptions(data.filterOptions);
+
+                } catch (error) {
+                    console.error('Error loading initial data:', error);
+                    // Use mock data as fallback
+                    const mockData = this.getMockData();
+                    this.updateMetricCards(mockData.metrics);
+                    this.renderAllCharts(mockData);
+                    this.updateRankingTable(mockData.ranking);
+                    this.populateFilterOptions(mockData.filterOptions);
+                }
+            }
+
+            /**
+             * Fetch appointment overview data from API
+             */
+            async fetchAppointmentOverview() {
+                const params = new URLSearchParams(this.currentFilters);
+                const response = await fetch(`${this.apiBaseUrl}/appointments-overview?${params}`);
+                
+                if (!response.ok) {
+                    throw new Error('API request failed');
+                }
+                
+                return await response.json();
+            }
+
+            /**
+             * Update metric cards with new data
+             */
+            updateMetricCards(metrics) {
+                // Total Appointments
+                document.getElementById('totalAppointmentsMetric').textContent = 
+                    metrics.totalAppointments.toLocaleString();
+                this.updateTrend('appointmentsTrend', metrics.appointmentsGrowth);
+
+                // Growth Rate
+                document.getElementById('growthRateMetric').textContent = 
+                    `${metrics.growthRate >= 0 ? '+' : ''}${metrics.growthRate.toFixed(1)}%`;
+                this.updateTrend('growthTrend', metrics.growthRate);
+
+                // Cancellation Rate
+                document.getElementById('cancellationRateMetric').textContent = 
+                    `${metrics.cancellationRate.toFixed(1)}%`;
+                this.updateTrend('cancellationTrend', -metrics.cancellationRate, true);
+
+                // Show Rate
+                document.getElementById('showRateMetric').textContent = 
+                    `${metrics.showRate.toFixed(1)}%`;
+                this.updateTrend('showRateTrend', metrics.showRate);
+
+                // Top Tenant
+                document.getElementById('topTenantVolume').textContent = 
+                    metrics.topTenant.volume.toLocaleString();
+                document.getElementById('topTenantName').textContent = metrics.topTenant.name;
+                this.updateTrend('topTenantTrend', metrics.topTenant.growth);
+
+                // Revenue Impact
+                document.getElementById('revenueImpactMetric').textContent = 
+                    `R$ ${metrics.revenueImpact.toLocaleString()}`;
+                this.updateTrend('revenueImpactTrend', metrics.revenueGrowth);
+            }
+
+            /**
+             * Update trend indicators
+             */
+            updateTrend(elementId, value, inverse = false) {
+                const element = document.getElementById(elementId);
+                const icon = element.querySelector('i');
+                const span = element.querySelector('span');
+
+                let className = 'neutral';
+                let iconClass = 'fas fa-minus';
+
+                if (value > 0) {
+                    className = inverse ? 'negative' : 'positive';
+                    iconClass = inverse ? 'fas fa-arrow-down' : 'fas fa-arrow-up';
+                } else if (value < 0) {
+                    className = inverse ? 'positive' : 'negative';
+                    iconClass = inverse ? 'fas fa-arrow-up' : 'fas fa-arrow-down';
+                }
+
+                element.className = `metric-trend ${className}`;
+                icon.className = iconClass;
+
+                if (elementId.includes('Trend') && !elementId.includes('topTenant') && !elementId.includes('revenueImpact')) {
+                    span.textContent = `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+                }
+            }
+
+            /**
+             * Render all charts
+             */
+            renderAllCharts(data) {
+                this.renderTimelineChart('6m', data.timeline);
+                this.renderSegmentDistributionChart(data.segmentDistribution);
+                this.renderTopTenantsChart(data.topTenants);
+                this.renderStatusDistributionChart(data.statusDistribution);
+            }
+
+            /**
+             * Render appointments timeline chart
+             */
+            renderTimelineChart(period = '6m', data = null) {
+                const canvas = document.getElementById('appointmentsTimelineChart');
+                const ctx = canvas.getContext('2d');
+
+                // Destroy existing chart
+                if (this.charts.timeline) {
+                    this.charts.timeline.destroy();
+                }
+
+                const chartData = data || this.generateTimelineData(period);
+
+                this.charts.timeline = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: 'Agendamentos',
+                            data: chartData.appointments,
+                            borderColor: '#2D5A9B',
+                            backgroundColor: 'rgba(45, 90, 155, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }, {
+                            label: 'Cancelamentos',
+                            data: chartData.cancellations,
+                            borderColor: '#dc3545',
+                            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                            fill: false,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                align: 'start'
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return value.toLocaleString();
+                                    }
+                                }
+                            }
+                        },
+                        interaction: {
+                            mode: 'nearest',
+                            axis: 'x',
+                            intersect: false
+                        }
+                    }
+                });
+            }
+
+            /**
+             * Render segment distribution pie chart
+             */
+            renderSegmentDistributionChart(data = null) {
+                const canvas = document.getElementById('segmentDistributionChart');
+                const ctx = canvas.getContext('2d');
+
+                if (this.charts.segmentDistribution) {
+                    this.charts.segmentDistribution.destroy();
+                }
+
+                const chartData = data || {
+                    labels: ['Beleza', 'Saúde Mental', 'Jurídico', 'Educação', 'Fitness', 'Consultoria'],
+                    data: [2840, 2210, 1820, 1510, 980, 640]
+                };
+
+                this.charts.segmentDistribution = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            data: chartData.data,
+                            backgroundColor: [
+                                '#e91e63', '#2196f3', '#ff9800', 
+                                '#4caf50', '#9c27b0', '#607d8b'
+                            ],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '60%',
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    usePointStyle: true,
+                                    padding: 15,
+                                    font: {
+                                        size: 11
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                        return `${context.label}: ${context.parsed.toLocaleString()} (${percentage}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            /**
+             * Render top tenants bar chart
+             */
+            renderTopTenantsChart(data = null) {
+                const canvas = document.getElementById('topTenantsChart');
+                const ctx = canvas.getContext('2d');
+
+                if (this.charts.topTenants) {
+                    this.charts.topTenants.destroy();
+                }
+
+                const chartData = data || {
+                    labels: ['Salão Bella Vista', 'Mental Health Pro', 'Lima & Associados', 'EduMaster', 'FitLife Academy'],
+                    data: [892, 734, 612, 578, 489]
+                };
+
+                this.charts.topTenants = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: 'Agendamentos',
+                            data: chartData.data,
+                            backgroundColor: '#2D5A9B',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return value.toLocaleString();
+                                    }
+                                }
+                            },
+                            y: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            /**
+             * Render status distribution chart
+             */
+            renderStatusDistributionChart(data = null) {
+                const canvas = document.getElementById('statusDistributionChart');
+                const ctx = canvas.getContext('2d');
+
+                if (this.charts.statusDistribution) {
+                    this.charts.statusDistribution.destroy();
+                }
+
+                const chartData = data || {
+                    labels: ['Confirmados', 'Concluídos', 'Pendentes', 'Cancelados', 'Não Compareceu'],
+                    data: [4500, 3800, 800, 520, 300]
+                };
+
+                this.charts.statusDistribution = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            data: chartData.data,
+                            backgroundColor: [
+                                '#198754', '#0dcaf0', '#ffc107', '#dc3545', '#6c757d'
+                            ],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '50%',
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    usePointStyle: true,
+                                    padding: 15,
+                                    font: {
+                                        size: 11
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                        return `${context.label}: ${context.parsed.toLocaleString()} (${percentage}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            /**
+             * Update ranking table
+             */
+            updateRankingTable(data = null) {
+                const tbody = document.getElementById('rankingTableBody');
+                const rankingData = data || this.getMockRankingData();
+
+                const html = rankingData.map((item, index) => `
+                    <tr>
+                        <td class="ps-4">
+                            <span class="badge bg-primary badge-trend">#${index + 1}</span>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="me-2">
+                                    <i class="fas fa-building text-muted"></i>
+                                </div>
+                                <div>
+                                    <div class="tenant-name">${item.name}</div>
+                                    <small class="text-muted">${item.segment}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="fw-semibold">${item.appointments.toLocaleString()}</span>
+                        </td>
+                        <td>
+                            <span class="badge ${item.growth >= 0 ? 'bg-success' : 'bg-danger'} badge-trend">
+                                ${item.growth >= 0 ? '+' : ''}${item.growth.toFixed(1)}%
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge ${item.cancellationRate <= 5 ? 'bg-success' : item.cancellationRate <= 10 ? 'bg-warning' : 'bg-danger'} badge-trend">
+                                ${item.cancellationRate.toFixed(1)}%
+                            </span>
+                        </td>
+                        <td class="pe-4">
+                            <span class="badge ${item.showRate >= 90 ? 'bg-success' : item.showRate >= 80 ? 'bg-warning' : 'bg-danger'} badge-trend">
+                                ${item.showRate.toFixed(1)}%
+                            </span>
+                        </td>
+                    </tr>
+                `).join('');
+
+                tbody.innerHTML = html;
+            }
+
+            /**
+             * Populate filter options
+             */
+            populateFilterOptions(options = null) {
+                const mockOptions = options || {
+                    tenants: [
+                        'Salão Bella Vista',
+                        'Clínica Mental Health Pro',
+                        'Lima & Associados',
+                        'EduMaster Tutoring',
+                        'FitLife Academy'
+                    ],
+                    professionals: [
+                        'Dr. Ana Silva',
+                        'Psic. Carlos Santos',
+                        'Adv. Maria Oliveira',
+                        'Prof. João Costa',
+                        'Coach. Paula Lima'
+                    ]
+                };
+
+                // Populate tenant filter
+                const tenantSelect = document.getElementById('tenantFilter');
+                mockOptions.tenants.forEach(tenant => {
+                    const option = document.createElement('option');
+                    option.value = tenant.toLowerCase().replace(/\s+/g, '-');
+                    option.textContent = tenant;
+                    tenantSelect.appendChild(option);
+                });
+
+                // Populate professional filter
+                const professionalSelect = document.getElementById('professionalFilter');
+                mockOptions.professionals.forEach(professional => {
+                    const option = document.createElement('option');
+                    option.value = professional.toLowerCase().replace(/\s+/g, '-');
+                    option.textContent = professional;
+                    professionalSelect.appendChild(option);
+                });
+            }
+
+            /**
+             * Show loading states for all components
+             */
+            showLoadingStates() {
+                // Add loading skeleton classes to metric values
+                const metricValues = document.querySelectorAll('.metric-value');
+                metricValues.forEach(el => {
+                    el.classList.add('loading-skeleton');
+                    el.textContent = '';
+                });
+
+                // Show loading in table
+                document.getElementById('rankingTableBody').innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Carregando...</span>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+
+            /**
+             * Refresh all data with current filters
+             */
+            async refreshAllData() {
+                await this.loadInitialData();
+            }
+
+            /**
+             * Generate timeline data based on period
+             */
+            generateTimelineData(period) {
+                const periods = { '6m': 6, '12m': 12, '24m': 24 };
+                const months = periods[period] || 6;
+                
+                const labels = [];
+                const appointments = [];
+                const cancellations = [];
+
+                for (let i = months - 1; i >= 0; i--) {
+                    const date = new Date();
+                    date.setMonth(date.getMonth() - i);
+                    labels.push(date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }));
+                    
+                    const baseAppointments = 550 + Math.random() * 200;
+                    const baseCancellations = baseAppointments * (0.05 + Math.random() * 0.05);
+                    
+                    appointments.push(Math.floor(baseAppointments));
+                    cancellations.push(Math.floor(baseCancellations));
+                }
+
+                return { labels, appointments, cancellations };
+            }
+
+            /**
+             * Get mock data for development/fallback
+             */
+            getMockData() {
+                return {
+                    metrics: {
+                        totalAppointments: 9920,
+                        appointmentsGrowth: 24.5,
+                        growthRate: 24.5,
+                        cancellationRate: 5.2,
+                        showRate: 91.3,
+                        topTenant: {
+                            name: 'Salão Bella Vista',
+                            volume: 892,
+                            growth: 31.2
+                        },
+                        revenueImpact: 298500,
+                        revenueGrowth: 18.7
+                    },
+                    timeline: this.generateTimelineData('6m'),
+                    segmentDistribution: {
+                        labels: ['Beleza', 'Saúde Mental', 'Jurídico', 'Educação', 'Fitness', 'Consultoria'],
+                        data: [2840, 2210, 1820, 1510, 980, 640]
+                    },
+                    topTenants: {
+                        labels: ['Salão Bella Vista', 'Mental Health Pro', 'Lima & Associados', 'EduMaster', 'FitLife Academy'],
+                        data: [892, 734, 612, 578, 489]
+                    },
+                    statusDistribution: {
+                        labels: ['Confirmados', 'Concluídos', 'Pendentes', 'Cancelados', 'Não Compareceu'],
+                        data: [4500, 3800, 800, 520, 300]
+                    },
+                    ranking: this.getMockRankingData(),
+                    filterOptions: {
+                        tenants: ['Salão Bella Vista', 'Clínica Mental Health Pro', 'Lima & Associados', 'EduMaster Tutoring', 'FitLife Academy'],
+                        professionals: ['Dr. Ana Silva', 'Psic. Carlos Santos', 'Adv. Maria Oliveira', 'Prof. João Costa', 'Coach. Paula Lima']
+                    }
+                };
+            }
+
+            /**
+             * Get mock ranking data
+             */
+            getMockRankingData() {
+                return [
+                    { name: 'Salão Bella Vista', segment: 'Beleza', appointments: 892, growth: 31.2, cancellationRate: 3.1, showRate: 95.8 },
+                    { name: 'Mental Health Pro', segment: 'Saúde Mental', appointments: 734, growth: 28.7, cancellationRate: 4.2, showRate: 93.1 },
+                    { name: 'Lima & Associados', segment: 'Jurídico', appointments: 612, growth: 22.1, cancellationRate: 5.8, showRate: 91.2 },
+                    { name: 'EduMaster Tutoring', segment: 'Educação', appointments: 578, growth: 19.5, cancellationRate: 2.9, showRate: 96.3 },
+                    { name: 'FitLife Academy', segment: 'Fitness', appointments: 489, growth: 35.2, cancellationRate: 6.1, showRate: 89.4 },
+                    { name: 'ConsultPro', segment: 'Consultoria', appointments: 423, growth: 15.8, cancellationRate: 7.2, showRate: 87.9 },
+                    { name: 'Beauty Spa Elite', segment: 'Beleza', appointments: 387, growth: 12.3, cancellationRate: 4.5, showRate: 92.1 },
+                    { name: 'Psic. Bem-Estar', segment: 'Saúde Mental', appointments: 356, growth: 18.9, cancellationRate: 3.8, showRate: 94.2 },
+                    { name: 'Advocacia Santos', segment: 'Jurídico', appointments: 298, growth: 8.7, cancellationRate: 6.3, showRate: 88.5 },
+                    { name: 'Smart Learning', segment: 'Educação', appointments: 267, growth: 25.1, cancellationRate: 2.1, showRate: 97.8 }
+                ];
+            }
+        }
+
+        /**
+         * Global functions for UI interactions
+         */
+        function exportReport() {
+            // Implementation for exporting report
+            console.log('Exporting report...');
+            alert('Funcionalidade de exportação será implementada');
+        }
+
+        function refreshData() {
+            // Force refresh of all data
+            if (window.appointmentsAnalytics) {
+                window.appointmentsAnalytics.refreshAllData();
+            }
+        }
+
+        // Initialize the analytics module when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            window.appointmentsAnalytics = new StrategicAppointmentsAnalytics();
+        });
+    </script>
+</body>
+</html>

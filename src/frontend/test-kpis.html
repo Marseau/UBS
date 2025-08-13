@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test KPIs</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .kpi { border: 1px solid #ddd; padding: 10px; margin: 5px; display: inline-block; width: 200px; }
+        .kpi-value { font-size: 24px; font-weight: bold; color: #2D5A9B; }
+        .kpi-title { font-size: 14px; color: #666; }
+        .loading { color: #999; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Test KPIs Dashboard</h1>
+    
+    <div id="status" class="loading">Carregando...</div>
+    
+    <div class="kpi">
+        <div class="kpi-title">Receita/Uso Ratio</div>
+        <div class="kpi-value" id="receitaUsoRatio">--</div>
+    </div>
+    
+    <div class="kpi">
+        <div class="kpi-title">MRR Platform</div>
+        <div class="kpi-value" id="mrrPlatform">--</div>
+    </div>
+    
+    <div class="kpi">
+        <div class="kpi-title">Active Tenants</div>
+        <div class="kpi-value" id="activeTenants">--</div>
+    </div>
+    
+    <div class="kpi">
+        <div class="kpi-title">Operational Efficiency</div>
+        <div class="kpi-value" id="operationalEfficiency">--</div>
+    </div>
+    
+    <div class="kpi">
+        <div class="kpi-title">Spam Rate</div>
+        <div class="kpi-value" id="spamRate">--</div>
+    </div>
+    
+    <div class="kpi">
+        <div class="kpi-title">Cancellation Rate</div>
+        <div class="kpi-value" id="cancellationRate">--</div>
+    </div>
+    
+    <div class="kpi">
+        <div class="kpi-title">Total Appointments</div>
+        <div class="kpi-value" id="totalAppointments">--</div>
+    </div>
+    
+    <div class="kpi">
+        <div class="kpi-title">AI Interactions</div>
+        <div class="kpi-value" id="aiInteractions">--</div>
+    </div>
+
+    <script>
+        async function loadKPIs() {
+            try {
+                console.log('🔄 Loading KPIs...');
+                document.getElementById('status').textContent = 'Carregando KPIs...';
+                
+                const response = await fetch('/api/super-admin/kpis?period=30', {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                console.log('📡 Response status:', response.status);
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('📊 API Response:', result);
+                    
+                    if (result.success && result.data && result.data.kpis) {
+                        console.log('✅ Valid KPI data received');
+                        
+                        const kpis = result.data.kpis;
+                        
+                        // Update each KPI
+                        document.getElementById('receitaUsoRatio').textContent = kpis.receitaUsoRatio?.formatted || '--';
+                        document.getElementById('mrrPlatform').textContent = kpis.mrrPlatform?.formatted || '--';
+                        document.getElementById('activeTenants').textContent = kpis.activeTenants?.formatted || '--';
+                        document.getElementById('operationalEfficiency').textContent = kpis.operationalEfficiency?.formatted || '--';
+                        document.getElementById('spamRate').textContent = kpis.spamRate?.formatted || '--';
+                        document.getElementById('cancellationRate').textContent = kpis.cancellationRate?.formatted || '--';
+                        document.getElementById('totalAppointments').textContent = kpis.totalAppointments?.formatted || '--';
+                        document.getElementById('aiInteractions').textContent = kpis.aiInteractions?.formatted || '--';
+                        
+                        document.getElementById('status').textContent = 'KPIs carregados com sucesso!';
+                        document.getElementById('status').className = 'success';
+                    } else {
+                        console.error('❌ Invalid response structure');
+                        document.getElementById('status').textContent = 'Erro: estrutura de resposta inválida';
+                        document.getElementById('status').className = 'error';
+                    }
+                } else {
+                    console.error('❌ API request failed:', response.status);
+                    document.getElementById('status').textContent = `Erro: ${response.status}`;
+                    document.getElementById('status').className = 'error';
+                }
+            } catch (error) {
+                console.error('❌ Error loading KPIs:', error);
+                document.getElementById('status').textContent = `Erro: ${error.message}`;
+                document.getElementById('status').className = 'error';
+            }
+        }
+        
+        // Load KPIs when page loads
+        document.addEventListener('DOMContentLoaded', loadKPIs);
+    </script>
+</body>
+</html>

@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversas - UBS</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- UBS Standard Styles -->
+    <link href="css/ubs-standard-styles.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    <link href="css/super-admin-dashboard.css" rel="stylesheet">
+    
+    <style>
+        /* LOGO GRANDE FORÇADO */
+        .sidebar .logo {
+            min-height: 180px !important;
+            padding: 20px 10px !important;
+        }
+        
+        .sidebar .logo img {
+            width: 90% !important;
+            max-width: 250px !important;
+            max-height: 150px !important;
+            height: auto !important;
+        }
+        
+        .conversation-preview {
+            max-width: 300px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    </style>
+</head>
+<body>
+    <!-- SIDEBAR -->
+    <nav class="sidebar" id="dynamicSidebar">
+        <div class="logo">
+            <img src="assets/images/optimized/Logo_Int_Branco.webp" alt="UBS Logo">
+        </div>
+        
+        <!-- Sidebar content will be loaded dynamically based on user role -->
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+        <!-- Header -->
+        <div class="top-navbar">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-0">Monitoramento de Conversas</h4>
+                    <small class="text-muted">Acompanhe a performance da IA e audite conversas</small>
+                </div>
+                <div class="user-menu d-flex flex-column align-items-end gap-1">
+                    <!-- User Menu -->
+                    <div class="dropdown">
+                        <button class="btn btn-link dropdown-toggle d-flex align-items-center compact-button" data-bs-toggle="dropdown">
+                            <div class="user-avatar me-2" id="userAvatar">...</div>
+                            <div class="d-none d-md-block text-start">
+                                <div class="fw-medium compact-text" id="userName">Carregando...</div>
+                                <small class="text-muted compact-small" id="userRole">Carregando...</small>
+                            </div>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end compact-dropdown">
+                            <li><a class="dropdown-item compact-dropdown-item" href="settings-standardized.html"><i class="fas fa-user-cog me-2"></i>Perfil</a></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="exportData()"><i class="fas fa-download me-2"></i>Exportar Dados</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="refreshData()"><i class="fas fa-sync me-2"></i>Atualizar</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="container-fluid p-4">
+            <!-- Filtros -->
+            <div class="row mb-3">
+                <div class="col-md-2">
+                    <label for="filterDate" class="form-label">Período</label>
+                    <select class="form-select" id="filterDate">
+                        <option value="today">Hoje</option>
+                        <option value="week" selected>Esta semana</option>
+                        <option value="month">Este mês</option>
+                        <option value="custom">Personalizado</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="filterWhatsapp" class="form-label">Número WhatsApp</label>
+                    <select class="form-select" id="filterWhatsapp">
+                        <option value="all">Todos os números</option>
+                        <!-- Será populado com números do tenant -->
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="filterMessageType" class="form-label">Tipo Mensagem</label>
+                    <select class="form-select" id="filterMessageType">
+                        <option value="all">Todos</option>
+                        <option value="text">Texto</option>
+                        <option value="image">Imagem</option>
+                        <option value="audio">Áudio</option>
+                        <option value="document">Documento</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="filterResult" class="form-label">Resultado</label>
+                    <select class="form-select" id="filterResult">
+                        <option value="all">Todos</option>
+                        <option value="pending">Pendente</option>
+                        <option value="confirmed">Confirmado</option>
+                        <option value="completed">Concluído</option>
+                        <option value="cancelled">Cancelado</option>
+                        <option value="rescheduled">Remarcado</option>
+                        <option value="no_show">Não Compareceu</option>
+                        <option value="spam">Spam</option>
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end gap-2">
+                    <button class="btn btn-primary" onclick="applyFilters()">
+                        <i class="fas fa-filter me-2"></i>Filtrar
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="clearFilters()">
+                        <i class="fas fa-times me-2"></i>Limpar
+                    </button>
+                </div>
+            </div>
+            
+            <!-- KPIs de Conversas -->            
+            <div class="row g-3 mb-4">
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value" id="totalConversations">0</div>
+                        <div class="metric-title">Total Conversas</div>
+                        <div class="metric-subtitle">Período selecionado</div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value" id="totalMessages">0</div>
+                        <div class="metric-title">Total Mensagens</div>
+                        <div class="metric-subtitle">Enviadas e recebidas</div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value" id="conversionRate">0%</div>
+                        <div class="metric-title">Taxa Conversão</div>
+                        <div class="metric-subtitle">Conversas → Agendamentos</div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value" id="spamDetection">0%</div>
+                        <div class="metric-title">Qualidade</div>
+                        <div class="metric-subtitle">Conversas válidas</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tabela de Conversas -->
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>Usuário</th>
+                            <th>WhatsApp</th>
+                            <th>Data/Hora Inicial</th>
+                            <th>Última Interação</th>
+                            <th>Mensagens</th>
+                            <th>Tipo Principal</th>
+                            <th>Intent Detectado</th>
+                            <th>Resultado</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="conversationsTableBody">
+                        <!-- Dados carregados via JavaScript/API -->
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">
+                                <i class="fas fa-spinner fa-spin me-2"></i>Carregando conversas...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal de Visualização da Conversa -->
+    <div class="modal fade" id="viewConversationModal" tabindex="-1" aria-labelledby="viewConversationModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewConversationModalLabel">
+                        <i class="fab fa-whatsapp me-2"></i>Conversa Completa
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Informações da Conversa -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label class="form-label"><strong>Cliente:</strong></label>
+                            <p id="viewConvClient" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label"><strong>Telefone:</strong></label>
+                            <p id="viewConvPhone" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label"><strong>Data/Hora:</strong></label>
+                            <p id="viewConvDateTime" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label"><strong>Duração:</strong></label>
+                            <p id="viewConvDuration" class="form-control-plaintext">-</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Chat Interface -->
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0"><i class="fab fa-whatsapp me-2"></i>Histórico da Conversa</h6>
+                        </div>
+                        <div class="card-body" style="height: 400px; overflow-y: auto;" id="chatContainer">
+                            <!-- Mensagens carregadas via JavaScript/API -->
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-spinner fa-spin me-2"></i>Carregando mensagens...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Fechar
+                    </button>
+                    <button type="button" class="btn btn-success" onclick="exportConversation()">
+                        <i class="fas fa-download me-2"></i>Exportar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/utils/secure-auth.js"></script>
+    <script src="js/utils/tenant-avatar-loader.js"></script>
+    
+    <script>
+        // Variáveis globais
+        let currentConversationData = {};
+        let conversationsData = [];
+        let filteredConversations = [];
+        
+        // Inicializa página
+        document.addEventListener('DOMContentLoaded', function() {
+            loadConversationsData();
+            loadWhatsAppNumbers();
+            
+            if (window.contextManager) {
+                window.contextManager.refreshContext();
+            }
+        });
+        
+        // Carrega dados de conversas da API
+        async function loadConversationsData() {
+            try {
+                showLoadingState();
+                
+                // Busca conversas agrupadas por telefone
+                const response = await fetch('/api/admin/conversations/summary', {
+                    headers: { 'Authorization': getAuthToken() }
+                });
+                
+                if (!response.ok) throw new Error('Erro ao carregar conversas');
+                
+                const data = await response.json();
+                    console.log('📊 Dados do tenant recebidos:', data);
+                conversationsData = data.conversations || [];
+                filteredConversations = [...conversationsData];
+                
+                updateConversationsTable();
+                updateConversationsKPIs(data.stats || {});
+                
+            } catch (error) {
+                console.error('Erro ao carregar conversas:', error);
+                showErrorMessage('Erro ao carregar dados de conversas');
+            }
+        }
+        
+        // Carrega números WhatsApp do tenant
+        async function loadWhatsAppNumbers() {
+            try {
+                const response = await fetch('/api/admin/tenant/whatsapp-numbers', {
+                    headers: { 'Authorization': getAuthToken() }
+                });
+                
+                const data = await response.json();
+                    console.log('📊 Dados do tenant recebidos:', data);
+                const whatsappSelect = document.getElementById('filterWhatsapp');
+                
+                // Limpa opções existentes exceto "Todos"
+                whatsappSelect.innerHTML = '<option value="all">Todos os números</option>';
+                
+                // Adiciona números disponíveis
+                if (data.numbers) {
+                    data.numbers.forEach(number => {
+                        const option = document.createElement('option');
+                        option.value = number;
+                        option.textContent = number;
+                        whatsappSelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Erro ao carregar números WhatsApp:', error);
+            }
+        }
+        
+        // Atualiza tabela de conversas
+        function updateConversationsTable() {
+            const tbody = document.getElementById('conversationsTableBody');
+            
+            if (filteredConversations.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-4">
+                            <i class="fas fa-comments me-2"></i>Nenhuma conversa encontrada
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = filteredConversations.map(conv => `
+                <tr>
+                    <td>
+                        <div>
+                            <strong>${conv.user_name || 'Usuário não identificado'}</strong><br>
+                            <small class="text-muted">ID: ${conv.user_id || 'N/A'}</small>
+                        </div>
+                    </td>
+                    <td>
+                        <small class="text-muted">
+                            <i class="fab fa-whatsapp me-1"></i>${conv.phone_number}
+                        </small>
+                    </td>
+                    <td>
+                        <small>${formatDateTime(conv.first_interaction)}</small>
+                    </td>
+                    <td>
+                        <small>${formatDateTime(conv.last_interaction)}</small>
+                    </td>
+                    <td>
+                        <div class="text-center">
+                            <strong>${conv.total_messages}</strong><br>
+                            <small class="text-muted">
+                                ${conv.user_messages} usuário + ${conv.system_messages} sistema
+                            </small>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge bg-info">${conv.primary_message_type || 'text'}</span>
+                    </td>
+                    <td>
+                        <span class="badge ${getIntentBadgeClass(conv.primary_intent)}">
+                            ${conv.primary_intent || 'Não detectado'}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge ${getResultBadgeClass(conv.appointment_status)}">
+                            ${formatAppointmentStatus(conv.appointment_status)}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewConversation('${conv.phone_number}')" title="Ver Conversa">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        ${conv.appointment_id ? `
+                            <button class="btn btn-sm btn-outline-success" onclick="viewAppointment('${conv.appointment_id}')" title="Ver Agendamento">
+                                <i class="fas fa-calendar-check"></i>
+                            </button>
+                        ` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        // Atualiza KPIs
+        function updateConversationsKPIs(stats) {
+            document.getElementById('totalConversations').textContent = stats.total_conversations || 0;
+            document.getElementById('totalMessages').textContent = stats.total_messages || 0;
+            document.getElementById('conversionRate').textContent = `${stats.conversion_rate || 0}%`;
+            document.getElementById('spamDetection').textContent = `${stats.quality_score || 0}%`;
+        }
+        
+        // Visualiza conversa completa
+        async function viewConversation(phoneNumber) {
+            try {
+                const response = await fetch(`/api/admin/conversations/details/${encodeURIComponent(phoneNumber)}`, {
+                    headers: { 'Authorization': getAuthToken() }
+                });
+                
+                if (!response.ok) throw new Error('Erro ao carregar detalhes da conversa');
+                
+                const data = await response.json();
+                    console.log('📊 Dados do tenant recebidos:', data);
+                currentConversationData = data.conversation;
+                
+                // Preenche informações básicas
+                document.getElementById('viewConvClient').textContent = data.conversation.user_name || 'Usuário não identificado';
+                document.getElementById('viewConvPhone').textContent = phoneNumber;
+                document.getElementById('viewConvDateTime').textContent = formatDateTime(data.conversation.first_interaction);
+                document.getElementById('viewConvDuration').textContent = calculateDuration(data.conversation.first_interaction, data.conversation.last_interaction);
+                
+                // Atualiza título do modal
+                document.getElementById('viewConversationModalLabel').innerHTML = 
+                    `<i class="fab fa-whatsapp me-2"></i>Conversa com ${data.conversation.user_name || phoneNumber}`;
+                
+                // Carrega mensagens
+                loadConversationMessages(data.messages || []);
+                
+                // Abre modal
+                const modal = new bootstrap.Modal(document.getElementById('viewConversationModal'));
+                modal.show();
+                
+            } catch (error) {
+                console.error('Erro ao carregar conversa:', error);
+                showErrorMessage('Erro ao carregar detalhes da conversa');
+            }
+        }
+        
+        // Carrega mensagens da conversa no modal
+        function loadConversationMessages(messages) {
+            const chatContainer = document.getElementById('chatContainer');
+            
+            if (messages.length === 0) {
+                chatContainer.innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-comments me-2"></i>Nenhuma mensagem encontrada
+                    </div>
+                `;
+                return;
+            }
+            
+            chatContainer.innerHTML = messages.map(msg => {
+                const isFromUser = msg.is_from_user;
+                const alignClass = isFromUser ? 'flex-row-reverse' : '';
+                const bgClass = isFromUser ? 'bg-primary text-white' : 'bg-light';
+                const iconClass = isFromUser ? 'fas fa-user' : 'fas fa-robot';
+                const iconBg = isFromUser ? 'bg-success' : 'bg-primary';
+                const timeClass = isFromUser ? 'text-white-50' : 'text-muted';
+                
+                return `
+                    <div class="d-flex mb-3 ${alignClass}">
+                        <div class="${isFromUser ? 'ms-2' : 'me-2'}">
+                            <div class="${iconBg} text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                <i class="${iconClass}"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="${bgClass} p-3 rounded">
+                                <p class="mb-1">${msg.content}</p>
+                                <small class="${timeClass}">
+                                    ${formatTime(msg.created_at)} - ${isFromUser ? 'Cliente' : 'IA'}
+                                    ${msg.intent_detected ? ` | Intent: ${msg.intent_detected}` : ''}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Rola para o final
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        // Aplicar filtros
+        function applyFilters() {
+            const dateFilter = document.getElementById('filterDate').value;
+            const whatsappFilter = document.getElementById('filterWhatsapp').value;
+            const messageTypeFilter = document.getElementById('filterMessageType').value;
+            const resultFilter = document.getElementById('filterResult').value;
+            
+            filteredConversations = conversationsData.filter(conv => {
+                // Filtro por número WhatsApp
+                if (whatsappFilter !== 'all' && conv.phone_number !== whatsappFilter) {
+                    return false;
+                }
+                
+                // Filtro por tipo de mensagem
+                if (messageTypeFilter !== 'all' && conv.primary_message_type !== messageTypeFilter) {
+                    return false;
+                }
+                
+                // Filtro por resultado
+                if (resultFilter !== 'all' && conv.appointment_status !== resultFilter) {
+                    return false;
+                }
+                
+                // TODO: Implementar filtro por data
+                
+                return true;
+            });
+            
+            updateConversationsTable();
+            showSuccessMessage('Filtros aplicados com sucesso!');
+        }
+        
+        // Limpar filtros
+        function clearFilters() {
+            document.getElementById('filterDate').value = 'week';
+            document.getElementById('filterWhatsapp').value = 'all';
+            document.getElementById('filterMessageType').value = 'all';
+            document.getElementById('filterResult').value = 'all';
+            
+            filteredConversations = [...conversationsData];
+            updateConversationsTable();
+            showSuccessMessage('Filtros removidos');
+        }
+        
+        // Ver agendamento relacionado
+        function viewAppointment(appointmentId) {
+            window.location.href = `appointments-standardized.html?id=${appointmentId}`;
+        }
+        
+        // Exportar conversa
+        function exportConversation() {
+            const phoneNumber = currentConversationData.phone_number;
+            if (!phoneNumber) return;
+            
+            const url = `/api/admin/conversations/export/${encodeURIComponent(phoneNumber)}?format=csv`;
+            window.open(url, '_blank');
+            showSuccessMessage('Exportação iniciada');
+        }
+        
+        // Funções auxiliares
+        function getAuthToken() {
+            return localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+        }
+        
+        function formatDateTime(dateStr) {
+            if (!dateStr) return 'N/A';
+            const date = new Date(dateStr);
+            return date.toLocaleString('pt-BR');
+        }
+        
+        function formatTime(dateStr) {
+            if (!dateStr) return 'N/A';
+            const date = new Date(dateStr);
+            return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        }
+        
+        function calculateDuration(start, end) {
+            if (!start || !end) return 'N/A';
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+            const diffMs = endDate - startDate;
+            const diffMinutes = Math.floor(diffMs / 60000);
+            const diffSeconds = Math.floor((diffMs % 60000) / 1000);
+            return `${diffMinutes}min ${diffSeconds}s`;
+        }
+        
+        function getIntentBadgeClass(intent) {
+            switch (intent) {
+                case 'booking': return 'bg-primary';
+                case 'information': return 'bg-info';
+                case 'complaint': return 'bg-warning';
+                case 'cancellation': return 'bg-danger';
+                default: return 'bg-secondary';
+            }
+        }
+        
+        function getResultBadgeClass(status) {
+            switch (status) {
+                case 'confirmed': case 'completed': return 'bg-success';
+                case 'pending': return 'bg-warning';
+                case 'cancelled': case 'no_show': return 'bg-danger';
+                case 'rescheduled': return 'bg-info';
+                case 'spam': return 'bg-dark';
+                default: return 'bg-secondary';
+            }
+        }
+        
+        function formatAppointmentStatus(status) {
+            const statusMap = {
+                'pending': 'Pendente',
+                'confirmed': 'Confirmado',
+                'completed': 'Concluído',
+                'cancelled': 'Cancelado',
+                'rescheduled': 'Remarcado',
+                'no_show': 'Não Compareceu',
+                'spam': 'Spam'
+            };
+            return statusMap[status] || 'Apenas Conversa';
+        }
+        
+        function showLoadingState() {
+            document.getElementById('conversationsTableBody').innerHTML = `
+                <tr>
+                    <td colspan="9" class="text-center text-muted py-4">
+                        <i class="fas fa-spinner fa-spin me-2"></i>Carregando conversas...
+                    </td>
+                </tr>
+            `;
+        }
+        
+        function showSuccessMessage(message) {
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-success alert-dismissible fade show position-fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '9999';
+            alert.innerHTML = `
+                <i class="fas fa-check-circle me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alert);
+            
+            setTimeout(() => alert.remove(), 3000);
+        }
+        
+        function showErrorMessage(message) {
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '9999';
+            alert.innerHTML = `
+                <i class="fas fa-exclamation-triangle me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alert);
+            
+            setTimeout(() => alert.remove(), 5000);
+        }
+        
+        // Funções do menu de usuário
+        function exportData() {
+            window.open('/api/admin/conversations/export?format=csv', '_blank');
+            showSuccessMessage('Exportação iniciada');
+        }
+        
+        function refreshData() {
+            loadConversationsData();
+            showSuccessMessage('Dados atualizados');
+        }
+        
+        function logout() {
+            if (confirm('Tem certeza que deseja sair?')) {
+                if (window.secureAuth) {
+                    window.secureAuth.logout();
+                } else {
+                    localStorage.removeItem('ubs_token');
+                    localStorage.removeItem('adminToken');
+                }
+                window.location.href = 'login.html';
+            }
+        }
+
+        // Função para detectar user role do token
+        function getUserRole() {
+            try {
+                const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+                if (!token) return 'tenant_admin'; // fallback
+                
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                return payload.role || 'tenant_admin';
+            } catch (error) {
+                console.error('Erro ao decodificar token:', error);
+                return 'tenant_admin'; // fallback
+            }
+        }
+        
+                // Função para buscar dados do tenant via API
+        async function fetchTenantData(tenantId) {
+            try {
+                const authToken = getAuthToken();
+                const response = await fetch('/api/admin/tenant', {
+                    headers: {
+                        'Authorization': authToken,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const tenant = await response.json();
+                    // Verificar diferentes estruturas de resposta
+                    if (data.business_name) {
+                        return data.business_name;
+                    }
+                    else if (data.name) {
+                        return data.name;
+                    }
+                    else if (data.slug) {
+                        return data.slug.replace(/-/g, ' ');
+                    }
+                    else if (data.tenant && data.tenant.business_name) {
+                        return data.tenant.business_name;
+                    }
+                    else if (Array.isArray(data) && data.length > 0) {
+                        return data[0].business_name || data[0].name || data[0].slug || 'Empresa';
+                    }
+                    
+                    console.warn('⚠️ Estrutura de dados inesperada:', data);
+                    return 'Empresa';
+                } else {
+                    console.error('❌ Erro ao buscar dados do tenant:', response.status);
+                    const errorText = await response.text();
+                    console.error('Erro detalhado:', errorText);
+                    return 'Empresa';
+                }
+            } catch (error) {
+                console.error('Erro na requisição do tenant:', error);
+                return 'Empresa';
+            }
+        }
+        
+        // Função para carregar avatar dinâmico
+        async function loadDynamicAvatar() {
+            const userRole = getUserRole();
+            
+            if (userRole === 'super_admin') {
+                // Super admin avatar - nome fixo conforme combinado
+                document.getElementById('userAvatar').textContent = 'U';
+                document.getElementById('userName').textContent = 'UBS Platform';
+                document.getElementById('userRole').textContent = 'Super Administrador';
+            } else {
+                // Tenant admin avatar - buscar nome real da empresa
+                try {
+                    const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+                    if (token) {
+                        const payload = JSON.parse(atob(token.split('.')[1]));
+                        
+                        // Se token tem tenant_id, buscar dados reais
+                        if (payload.tenant_id) {
+                            const tenantName = await fetchTenantData(payload);
+                            const firstLetter = tenantName.charAt(0).toUpperCase();
+                            
+                            document.getElementById('userAvatar').textContent = firstLetter;
+                            document.getElementById('userName').textContent = tenantName;
+                            document.getElementById('userRole').textContent = 'Administrador';
+                        } else {
+                            // Fallback se não tem tenant_id no token
+                            document.getElementById('userAvatar').textContent = 'T';
+                            document.getElementById('userName').textContent = 'Tenant Admin';
+                            document.getElementById('userRole').textContent = 'Administrador';
+                        }
+                    } else {
+                        // Fallback sem token
+                        document.getElementById('userAvatar').textContent = 'E';
+                        document.getElementById('userName').textContent = 'Empresa';
+                        document.getElementById('userRole').textContent = 'Administrador';
+                    }
+                } catch (error) {
+                    console.error('Erro ao carregar avatar tenant:', error);
+                    // Fallback em caso de erro
+                    document.getElementById('userAvatar').textContent = 'E';
+                    document.getElementById('userName').textContent = 'Empresa';
+                    document.getElementById('userRole').textContent = 'Administrador';
+                }
+            }
+        }
+        
+        // Função para carregar sidebar dinâmica
+        function loadDynamicSidebar() {
+            const userRole = getUserRole();
+            const sidebar = document.getElementById('dynamicSidebar');
+            
+            if (userRole === 'super_admin') {
+                sidebar.innerHTML = `
+                    <div class="logo">
+                        <img src="assets/images/optimized/Logo_Int_Branco.webp" alt="UBS Logo">
+                    </div>
+                    
+                    <div class="nav-section">
+                        <div class="nav-section-title">Dashboard</div>
+                        <a class="nav-link" href="dashboard-standardized.html">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Visão Geral</span>
+                        </a>
+                    </div>
+
+                    <div class="nav-section">
+                        <div class="nav-section-title">Analytics</div>
+                        <a class="nav-link" href="services-standardized-admin.html">
+                            <i class="fas fa-concierge-bell"></i>
+                            <span>Serviços</span>
+                        </a>
+                        <a class="nav-link" href="customers-standardized-admin.html">
+                            <i class="fas fa-users"></i>
+                            <span>Clientes</span>
+                        </a>
+                        <a class="nav-link" href="appointments-standardized-admin.html">
+                            <i class="fas fa-calendar-check"></i>
+                            <span>Agendamentos</span>
+                        </a>
+                        <a class="nav-link active" href="conversations-standardized-admin.html">
+                            <i class="fab fa-whatsapp"></i>
+                            <span>Conversas</span>
+                        </a>
+                    </div>
+                    
+                    <div class="nav-section">
+                        <div class="nav-section-title">Plataforma</div>
+                        <a class="nav-link" href="tenants-standardized.html">
+                            <i class="fas fa-building"></i>
+                            <span>Tenants</span>
+                        </a>
+                        <a class="nav-link" href="tenant-business-analytics.html">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Business Analytics</span>
+                        </a>
+                    </div>
+                    
+                    <div class="nav-section">
+                        <div class="nav-section-title">Financeiro</div>
+                        <a class="nav-link" href="payments-standardized.html">
+                            <i class="fas fa-credit-card"></i>
+                            <span>Pagamentos</span>
+                        </a>
+                    </div>
+                    
+                    <div class="nav-section">
+                        <div class="nav-section-title">Sistema</div>
+                        <a class="nav-link" href="settings-standardized.html">
+                            <i class="fas fa-cog"></i>
+                            <span>Configurações</span>
+                        </a>
+                    </div>
+                `;
+            } else {
+                // Tenant admin sidebar
+                sidebar.innerHTML = `
+                    <div class="logo">
+                        <img src="assets/images/optimized/Logo_Int_Branco.webp" alt="UBS Logo">
+                    </div>
+                    
+                    <div class="nav-section">
+                        <div class="nav-section-title">Dashboard</div>
+                        <a class="nav-link" href="dashboard-tenant-admin.html">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Visão Geral</span>
+                        </a>
+                    </div>
+
+                    <div class="nav-section">
+                        <div class="nav-section-title">Operações</div>
+                        <a class="nav-link" href="appointments-standardized.html">
+                            <i class="fas fa-calendar-check"></i>
+                            <span>Agendamentos</span>
+                        </a>
+                        <a class="nav-link" href="customers-standardized.html">
+                            <i class="fas fa-users"></i>
+                            <span>Clientes</span>
+                        </a>
+                        <a class="nav-link" href="services-standardized.html">
+                            <i class="fas fa-concierge-bell"></i>
+                            <span>Serviços</span>
+                        </a>
+                        <a class="nav-link" href="professionals-standardized.html">
+                            <i class="fas fa-user-tie"></i>
+                            <span>Profissionais</span>
+                        </a>
+                    </div>
+                    
+                    <div class="nav-section">
+                        <div class="nav-section-title">Comunicação</div>
+                        <a class="nav-link active" href="conversations-standardized.html">
+                            <i class="fab fa-whatsapp"></i>
+                            <span>Conversas</span>
+                        </a>
+                    </div>
+                    
+                    <div class="nav-section">
+                        <div class="nav-section-title">Financeiro</div>
+                        <a class="nav-link" href="billing-standardized.html">
+                            <i class="fas fa-file-invoice-dollar"></i>
+                            <span>Faturamento</span>
+                        </a>
+                    </div>
+                    
+                    <div class="nav-section">
+                        <div class="nav-section-title">Sistema</div>
+                        <a class="nav-link" href="settings-standardized.html">
+                            <i class="fas fa-cog"></i>
+                            <span>Configurações</span>
+                        </a>
+                    </div>
+                `;
+            }
+        }
+        
+        // Inicializar sidebar dinâmica quando página carrega
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDynamicSidebar();
+            loadDynamicAvatar();
+        });
+    </script>
+</body>
+</html>

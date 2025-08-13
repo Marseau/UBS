@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profissionais - UBS</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- UBS Standard Styles -->
+    <link href="css/ubs-standard-styles.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    <link href="css/super-admin-dashboard.css" rel="stylesheet">
+    
+    <style>
+        /* LOGO GRANDE FORÇADO */
+        .sidebar .logo {
+            min-height: 180px !important;
+            padding: 20px 10px !important;
+        }
+        
+        .sidebar .logo img {
+            width: 90% !important;
+            max-width: 250px !important;
+            max-height: 150px !important;
+            height: auto !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+        <div class="logo">
+            <img src="assets/images/optimized/Logo_Int_Branco.webp" alt="UBS Logo">
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Dashboard</div>
+            <a class="nav-link" href="dashboard-tenant-admin.html">
+                <i class="fas fa-chart-line"></i>
+                <span>Visão Geral</span>
+            </a>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Operações</div>
+            <a class="nav-link" href="appointments-standardized.html">
+                <i class="fas fa-calendar-check"></i>
+                <span>Agendamentos</span>
+            </a>
+            <a class="nav-link" href="customers-standardized.html">
+                <i class="fas fa-users"></i>
+                <span>Clientes</span>
+            </a>
+            <a class="nav-link" href="services-standardized.html">
+                <i class="fas fa-concierge-bell"></i>
+                <span>Serviços</span>
+            </a>
+            <a class="nav-link active" href="professionals-standardized.html">
+                <i class="fas fa-user-tie"></i>
+                <span>Profissionais</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Comunicação</div>
+            <a class="nav-link" href="conversations-standardized.html">
+                <i class="fab fa-whatsapp"></i>
+                <span>Conversas</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Financeiro</div>
+            <a class="nav-link" href="payments-standardized.html">
+                <i class="fas fa-credit-card"></i>
+                <span>Pagamentos</span>
+            </a>
+            <a class="nav-link" href="billing-standardized.html">
+                <i class="fas fa-file-invoice-dollar"></i>
+                <span>Faturamento</span>
+            </a>
+        </div>
+        
+        <div class="nav-section">
+            <div class="nav-section-title">Sistema</div>
+            <a class="nav-link" href="settings-standardized.html">
+                <i class="fas fa-cog"></i>
+                <span>Configurações</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+        <!-- Header -->
+        <div class="top-navbar">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-0">Gerenciamento de Profissionais</h4>
+                    <small class="text-muted">Gerencie sua equipe de profissionais</small>
+                </div>
+                <div class="user-menu d-flex flex-column align-items-end gap-1">
+                    <!-- User Menu -->
+                    <div class="dropdown">
+                        <button class="btn btn-link dropdown-toggle d-flex align-items-center compact-button" data-bs-toggle="dropdown">
+                            <div class="user-avatar me-2" id="userAvatar">B</div>
+                            <div class="d-none d-md-block text-start">
+                                <div class="fw-medium compact-text" id="userName">Salão Bella Vista</div>
+                                <small class="text-muted compact-small" id="userRole">Administrador</small>
+                            </div>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end compact-dropdown">
+                            <li><a class="dropdown-item compact-dropdown-item" href="settings-standardized.html"><i class="fas fa-user-cog me-2"></i>Perfil</a></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="exportData()"><i class="fas fa-download me-2"></i>Exportar Dados</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="refreshData()"><i class="fas fa-sync me-2"></i>Atualizar</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item compact-dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="container-fluid p-4">
+            <!-- Quick Actions -->
+            <div class="d-flex gap-2 mb-3">
+                <button class="btn btn-success" onclick="addProfessional()">
+                    <i class="fas fa-plus me-2"></i>Novo Profissional
+                </button>
+            </div>
+            
+            <!-- KPIs -->            
+            <div class="row g-3 mb-4">
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value">8</div>
+                        <div class="metric-title">Total Profissionais</div>
+                        <div class="metric-subtitle">Ativos</div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value">6</div>
+                        <div class="metric-title">Trabalhando Hoje</div>
+                        <div class="metric-subtitle">Em atividade</div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value">142</div>
+                        <div class="metric-title">Agendamentos</div>
+                        <div class="metric-subtitle">Esta semana</div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6">
+                    <div class="metric-card">
+                        <div class="metric-value">4.8</div>
+                        <div class="metric-title">Avaliação Média</div>
+                        <div class="metric-subtitle">Satisfação</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tabela de Profissionais -->
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>Profissional</th>
+                            <th>Email</th>
+                            <th>Telefone</th>
+                            <th>Serviços</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Ana Costa</strong></td>
+                            <td>ana.costa@email.com</td>
+                            <td>(11) 99999-1111</td>
+                            <td><span class="badge bg-primary me-1">Corte Feminino</span><span class="badge bg-success">Coloração</span></td>
+                            <td><span class="badge bg-success">Ativo</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewProfessional(1, 'Ana Costa', 'ana.costa@email.com', '(11) 99999-1111', 'Cabelo,Coloração', 'Ativo', 'Especialista em cortes femininos e coloração')" title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="editProfessional(1, 'Ana Costa', 'ana.costa@email.com', '(11) 99999-1111', 'Cabelo,Coloração', 'Ativo', 'Especialista em cortes femininos e coloração')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Bruno Lima</strong></td>
+                            <td>bruno.lima@email.com</td>
+                            <td>(11) 98888-2222</td>
+                            <td><span class="badge bg-primary me-1">Corte Masculino</span><span class="badge bg-info">Barba</span></td>
+                            <td><span class="badge bg-success">Ativo</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewProfessional(2, 'Bruno Lima', 'bruno.lima@email.com', '(11) 98888-2222', 'Barba,Bigode', 'Ativo', 'Especialista em barbas e cortes masculinos')" title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="editProfessional(2, 'Bruno Lima', 'bruno.lima@email.com', '(11) 98888-2222', 'Barba,Bigode', 'Ativo', 'Especialista em barbas e cortes masculinos')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Carla Santos</strong></td>
+                            <td>carla.santos@email.com</td>
+                            <td>(11) 97777-3333</td>
+                            <td><span class="badge bg-warning me-1">Manicure</span><span class="badge bg-secondary">Pedicure</span></td>
+                            <td><span class="badge bg-success">Ativo</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewProfessional(3, 'Carla Santos', 'carla.santos@email.com', '(11) 97777-3333', 'Manicure,Pedicure', 'Ativo', 'Especialista em cuidados das unhas')" title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="editProfessional(3, 'Carla Santos', 'carla.santos@email.com', '(11) 97777-3333', 'Manicure,Pedicure', 'Ativo', 'Especialista em cuidados das unhas')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Diego Oliveira</strong></td>
+                            <td>diego.oliveira@email.com</td>
+                            <td>(11) 96666-4444</td>
+                            <td><span class="badge bg-success me-1">Limpeza de Pele</span><span class="badge bg-danger">Massagem</span></td>
+                            <td><span class="badge bg-warning">Férias</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewProfessional(4, 'Diego Oliveira', 'diego.oliveira@email.com', '(11) 96666-4444', 'Tratamentos,Massagem', 'Férias', 'Especialista em tratamentos faciais e massagens')" title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="editProfessional(4, 'Diego Oliveira', 'diego.oliveira@email.com', '(11) 96666-4444', 'Tratamentos,Massagem', 'Férias', 'Especialista em tratamentos faciais e massagens')" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal de Visualização -->
+    <div class="modal fade" id="viewProfessionalModal" tabindex="-1" aria-labelledby="viewProfessionalModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewProfessionalModalLabel">
+                        <i class="fas fa-user-tie me-2"></i>Detalhes do Profissional
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Nome:</strong></label>
+                            <p id="viewProfessionalName" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Email:</strong></label>
+                            <p id="viewProfessionalEmail" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Telefone:</strong></label>
+                            <p id="viewProfessionalPhone" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>Status:</strong></label>
+                            <p id="viewProfessionalStatus" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label"><strong>Serviços:</strong></label>
+                            <p id="viewProfessionalSpecialties" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label"><strong>Bio:</strong></label>
+                            <p id="viewProfessionalBio" class="form-control-plaintext">-</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><strong>ID do Profissional:</strong></label>
+                            <p id="viewProfessionalId" class="form-control-plaintext">-</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Fechar
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="editProfessionalFromView()">
+                        <i class="fas fa-edit me-2"></i>Editar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Edição/Novo Profissional -->
+    <div class="modal fade" id="editProfessionalModal" tabindex="-1" aria-labelledby="editProfessionalModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editProfessionalModalLabel">
+                        <i class="fas fa-edit me-2"></i>Editar Profissional
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editProfessionalForm">
+                        <input type="hidden" id="editProfessionalId" name="professionalId">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="editProfessionalName" class="form-label">Nome Completo</label>
+                                <input type="text" class="form-control" id="editProfessionalName" name="name" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editProfessionalEmail" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="editProfessionalEmail" name="email">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editProfessionalPhone" class="form-label">Telefone</label>
+                                <input type="tel" class="form-control" id="editProfessionalPhone" name="phone">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editProfessionalStatus" class="form-label">Status</label>
+                                <select class="form-select" id="editProfessionalStatus" name="status" required>
+                                    <option value="">Selecione o status</option>
+                                    <option value="active">Ativo</option>
+                                    <option value="inactive">Inativo</option>
+                                    <option value="vacation">Férias</option>
+                                    <option value="sick">Licença Médica</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label for="editProfessionalServices" class="form-label">Serviços</label>
+                                <select class="form-select" id="editProfessionalServices" name="services" multiple size="5">
+                                    <option value="">Carregando serviços...</option>
+                                </select>
+                                <div class="form-text">Selecione os serviços que este profissional oferece (Ctrl+clique para múltipla seleção)</div>
+                            </div>
+                            <div class="col-12">
+                                <label for="editProfessionalBio" class="form-label">Bio/Descrição</label>
+                                <textarea class="form-control" id="editProfessionalBio" name="bio" rows="3" placeholder="Breve descrição do profissional, experiência, especialidades..."></textarea>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="saveProfessional()">
+                        <i class="fas fa-save me-2"></i>Salvar Alterações
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/utils/secure-auth.js"></script>
+    <script src="js/utils/context-manager.js"></script>
+    <script>
+        // Variáveis globais para armazenar dados do profissional
+        let currentProfessionalData = {};
+        let servicesData = []; // Cache da lista de serviços
+        
+        // Função para carregar lista de serviços
+        async function loadServices() {
+            try {
+                const response = await fetch('/api/admin/services', {
+                    headers: {
+                        'Authorization': getAuthToken()
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    servicesData = data.services || [];
+                    
+                    // Ordena por nome
+                    servicesData.sort((a, b) => a.name.localeCompare(b.name));
+                    
+                    // Popula o dropdown
+                    populateServicesDropdown();
+                } else {
+                    console.error('Erro ao carregar serviços');
+                    servicesData = [
+                        { id: 1, name: 'Corte Feminino' },
+                        { id: 2, name: 'Corte Masculino' },
+                        { id: 3, name: 'Manicure' },
+                        { id: 4, name: 'Pedicure' },
+                        { id: 5, name: 'Limpeza de Pele' },
+                        { id: 6, name: 'Escova' },
+                        { id: 7, name: 'Barba' },
+                        { id: 8, name: 'Coloração' }
+                    ];
+                    populateServicesDropdown();
+                }
+            } catch (error) {
+                console.error('Erro ao carregar serviços:', error);
+                // Fallback com dados simulados
+                servicesData = [
+                    { id: 1, name: 'Corte Feminino' },
+                    { id: 2, name: 'Corte Masculino' },
+                    { id: 3, name: 'Manicure' },
+                    { id: 4, name: 'Pedicure' },
+                    { id: 5, name: 'Limpeza de Pele' },
+                    { id: 6, name: 'Escova' },
+                    { id: 7, name: 'Barba' },
+                    { id: 8, name: 'Coloração' }
+                ];
+                populateServicesDropdown();
+            }
+        }
+        
+        // Função para popular o dropdown de serviços
+        function populateServicesDropdown() {
+            const dropdown = document.getElementById('editProfessionalServices');
+            dropdown.innerHTML = '';
+            
+            servicesData.forEach(service => {
+                const option = document.createElement('option');
+                option.value = service.id;
+                option.textContent = service.name;
+                dropdown.appendChild(option);
+            });
+        }
+        
+        // Função para visualizar profissional
+        function viewProfessional(id, name, email, phone, specialties, status, bio) {
+            currentProfessionalData = { id, name, email, phone, specialties, status, bio };
+            
+            // Preenche o modal de visualização
+            document.getElementById('viewProfessionalName').textContent = name;
+            document.getElementById('viewProfessionalEmail').textContent = email;
+            document.getElementById('viewProfessionalPhone').textContent = phone;
+            document.getElementById('viewProfessionalStatus').innerHTML = getStatusBadge(status);
+            document.getElementById('viewProfessionalSpecialties').innerHTML = getSpecialtiesBadges(specialties);
+            document.getElementById('viewProfessionalBio').textContent = bio;
+            document.getElementById('viewProfessionalId').textContent = id;
+            
+            // Abre o modal
+            const modal = new bootstrap.Modal(document.getElementById('viewProfessionalModal'));
+            modal.show();
+            
+            console.log('Visualizando profissional:', id);
+        }
+        
+        // Função para editar profissional
+        function editProfessional(id, name, email, phone, specialties, status, bio) {
+            currentProfessionalData = { id, name, email, phone, specialties, status, bio };
+            
+            // Preenche o modal de edição
+            document.getElementById('editProfessionalId').value = id;
+            document.getElementById('editProfessionalName').value = name;
+            document.getElementById('editProfessionalEmail').value = email;
+            document.getElementById('editProfessionalPhone').value = phone;
+            document.getElementById('editProfessionalBio').value = bio;
+            
+            // Status
+            const statusValue = getStatusValue(status);
+            document.getElementById('editProfessionalStatus').value = statusValue;
+            
+            // Seleciona os serviços no dropdown múltiplo
+            selectProfessionalServices(specialties);
+            
+            // Restaura título de edição
+            document.getElementById('editProfessionalModalLabel').innerHTML = 
+                '<i class="fas fa-edit me-2"></i>Editar Profissional';
+            
+            // Abre o modal
+            const modal = new bootstrap.Modal(document.getElementById('editProfessionalModal'));
+            modal.show();
+            
+            console.log('Editando profissional:', id);
+        }
+        
+        // Função para selecionar serviços no dropdown múltiplo
+        function selectProfessionalServices(specialtiesString) {
+            const dropdown = document.getElementById('editProfessionalServices');
+            const specialties = specialtiesString ? specialtiesString.split(',').map(s => s.trim()) : [];
+            
+            // Limpa seleções anteriores
+            for (let option of dropdown.options) {
+                option.selected = false;
+            }
+            
+            // Seleciona os serviços correspondentes
+            specialties.forEach(specialty => {
+                for (let option of dropdown.options) {
+                    if (option.textContent === specialty) {
+                        option.selected = true;
+                        break;
+                    }
+                }
+            });
+        }
+        
+        // Função para editar a partir do modal de visualização
+        function editProfessionalFromView() {
+            // Fecha modal de visualização
+            const viewModal = bootstrap.Modal.getInstance(document.getElementById('viewProfessionalModal'));
+            viewModal.hide();
+            
+            // Abre modal de edição com os dados atuais
+            setTimeout(() => {
+                const { id, name, email, phone, specialties, status, bio } = currentProfessionalData;
+                editProfessional(id, name, email, phone, specialties, status, bio);
+            }, 300);
+        }
+        
+        // Função para novo profissional
+        function addProfessional() {
+            // Limpa o formulário
+            document.getElementById('editProfessionalForm').reset();
+            document.getElementById('editProfessionalId').value = 'new';
+            
+            // Muda o título do modal
+            document.getElementById('editProfessionalModalLabel').innerHTML = 
+                '<i class="fas fa-plus me-2"></i>Novo Profissional';
+            
+            // Abre o modal
+            const modal = new bootstrap.Modal(document.getElementById('editProfessionalModal'));
+            modal.show();
+        }
+        
+        // Função para salvar alterações
+        async function saveProfessional() {
+            const form = document.getElementById('editProfessionalForm');
+            const formData = new FormData(form);
+            
+            // Coleta os serviços selecionados
+            const servicesDropdown = document.getElementById('editProfessionalServices');
+            const selectedServices = Array.from(servicesDropdown.selectedOptions).map(option => option.textContent);
+            
+            const professionalData = {
+                id: formData.get('professionalId'),
+                name: formData.get('name'),
+                email: formData.get('email'),
+                phone: formData.get('phone'),
+                specialties: selectedServices,
+                status: formData.get('status'),
+                bio: formData.get('bio')
+            };
+            
+            try {
+                // Determine se é criação ou edição
+                const isNew = professionalData.id === 'new';
+                const url = isNew ? '/api/admin/professionals' : `/api/admin/professionals/${professionalData.id}`;
+                const method = isNew ? 'POST' : 'PUT';
+                
+                console.log('Salvando profissional:', professionalData);
+                
+                // Chamada para a API
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': getAuthToken()
+                    },
+                    body: JSON.stringify(professionalData)
+                });
+                
+                if (response.ok) {
+                    // Sucesso
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editProfessionalModal'));
+                    modal.hide();
+                    
+                    // Feedback de sucesso
+                    const action = isNew ? 'criado' : 'atualizado';
+                    showSuccessMessage(`Profissional ${action} com sucesso!`);
+                    
+                    // Atualizar a tabela
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Erro ao salvar profissional');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao salvar:', error);
+                showErrorMessage(`Erro ao salvar profissional: ${error.message}`);
+            }
+        }
+        
+        // Funções auxiliares
+        function getStatusBadge(status) {
+            const badges = {
+                'Ativo': '<span class="badge bg-success">Ativo</span>',
+                'Inativo': '<span class="badge bg-secondary">Inativo</span>',
+                'Férias': '<span class="badge bg-warning">Férias</span>',
+                'Licença Médica': '<span class="badge bg-danger">Licença Médica</span>'
+            };
+            return badges[status] || status;
+        }
+        
+        function getStatusValue(statusText) {
+            const statusMap = {
+                'Ativo': 'active',
+                'Inativo': 'inactive',
+                'Férias': 'vacation',
+                'Licença Médica': 'sick'
+            };
+            return statusMap[statusText] || 'active';
+        }
+        
+        function getSpecialtiesBadges(specialtiesString) {
+            if (!specialtiesString) return '-';
+            
+            const specialties = specialtiesString.split(',');
+            const colors = ['bg-primary', 'bg-success', 'bg-info', 'bg-warning', 'bg-danger', 'bg-secondary'];
+            
+            return specialties.map((specialty, index) => {
+                const color = colors[index % colors.length];
+                return `<span class="badge ${color} me-1">${specialty.trim()}</span>`;
+            }).join('');
+        }
+        
+        function getAuthToken() {
+            if (window.secureAuth) {
+                return window.secureAuth.getAuthHeader();
+            }
+            return 'Bearer ' + (localStorage.getItem('ubs_token') || localStorage.getItem('adminToken'));
+        }
+        
+        function showSuccessMessage(message) {
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-success alert-dismissible fade show position-fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '9999';
+            alert.innerHTML = `
+                <i class="fas fa-check-circle me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 3000);
+        }
+        
+        function showErrorMessage(message) {
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '9999';
+            alert.innerHTML = `
+                <i class="fas fa-exclamation-circle me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+        
+        // Funções originais
+        function refreshProfessionals() {
+            showSuccessMessage('Atualizando lista de profissionais...');
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        }
+        
+        function exportProfessionals() {
+            showSuccessMessage('Iniciando exportação...');
+            window.open('/api/admin/export/professionals', '_blank');
+        }
+        
+        // Funções do menu de usuário
+        function exportData() {
+            exportProfessionals();
+        }
+        
+        function refreshData() {
+            refreshProfessionals();
+        }
+        
+        function logout() {
+            if (confirm('Tem certeza que deseja sair?')) {
+                if (window.secureAuth) {
+                    window.secureAuth.logout();
+                } else {
+                    localStorage.removeItem('ubs_token');
+                    localStorage.removeItem('adminToken');
+                }
+                window.location.href = 'login.html';
+            }
+        }
+
+        // Inicializa contexto na página
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.contextManager) {
+                window.contextManager.refreshContext();
+            }
+            
+            // Carrega lista de serviços
+            loadServices();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+{
+    "name": "WhatsApp Simulator & Trainer (B)",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "GET",
+                "path": "simulator",
+                "responseMode": "lastNode"
+            },
+            "id": "7a6c4a3e-ff96-4ef6-9b61-358858532a83",
+            "name": "🕹️ Simulator UI (GET)",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [320, -80]
+        },
+        {
+            "parameters": {
+                "functionCode": "// Render simple HTML UI\nreturn [{ html: `<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>WhatsApp Simulator</title></head>\n<body style=\"font-family:system-ui;max-width:720px;margin:24px auto\">\n  <h2>WhatsApp Simulator</h2>\n  <form action=\"/simulator/send\" method=\"post\" style=\"display:grid;gap:8px\">\n    <input name=\"tenant_id\" placeholder=\"tenant_id (uuid)\" required />\n    <input name=\"tenant_name\" placeholder=\"tenant_name\" required />\n    <select name=\"business_domain\">\n      <option value=\"beauty\">beauty</option>\n      <option value=\"healthcare\">healthcare</option>\n      <option value=\"legal\">legal</option>\n    </select>\n    <input name=\"user_name\" placeholder=\"user_name\" value=\"Marseau\" required />\n    <input name=\"user_phone\" placeholder=\"user_phone\" value=\"+15556462139\" required />\n    <input name=\"conversation_id\" placeholder=\"conversation_id\" value=\"sim-1234\" required />\n    <textarea name=\"message_text\" placeholder=\"Digite a mensagem...\" rows=\"3\" required></textarea>\n    <button type=\"submit\">Enviar</button>\n  </form>\n  <p style=\"margin-top:16px;color:#666\">Este simulador envia a mensagem ao Workflow A (WABA Inbound) pela URL definida no node “HTTP → Workflow A”.</p>\n</body></html>` }];"
+            },
+            "id": "a9b1b10a-56a7-4ffd-8c7a-76d86f20f33a",
+            "name": "🧩 Render UI",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [610, -80]
+        },
+        {
+            "parameters": {
+                "responseBody": "={{$json.html}}",
+                "responseCode": 200,
+                "responseHeaders": {
+                    "entries": [
+                        { "name": "Content-Type", "value": "text/html; charset=utf-8" }
+                    ]
+                }
+            },
+            "id": "5e7e6e5c-e3c3-45a0-b37a-8a7875b2c5e6",
+            "name": "🔚 Respond (GET)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [840, -80]
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "simulator/send",
+                "responseMode": "lastNode"
+            },
+            "id": "6e3f5aa7-9619-423c-8dab-7a1f17b7a6a0",
+            "name": "📨 Simulator POST",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [320, 240]
+        },
+        {
+            "parameters": {
+                "functionCode": "// Build payload for Workflow A (WABA Inbound)\nconst f = $json;\n\n// Placeholder: set your Workflow A Webhook Test URL here\nconst A_TEST_URL = 'https://YOUR-N8N-DOMAIN/webhook-test/waba-inbound'; // <-- ajuste\n\nconst payload = {\n  tenant_id: f.tenant_id,\n  tenant_name: f.tenant_name,\n  business_domain: f.business_domain,\n  user_name: f.user_name,\n  user_phone: f.user_phone,\n  message_text: f.message_text,\n  conversation_id: f.conversation_id,\n  source: 'simulator'\n};\n\nreturn [{ A_TEST_URL, payload }];"
+            },
+            "id": "9c57f1c6-44ce-4d1a-9e4f-ffb7b8f846a7",
+            "name": "🧱 Build Payload",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [610, 240]
+        },
+        {
+            "parameters": {
+                "authentication": "none",
+                "url": "={{$json.A_TEST_URL}}",
+                "method": "POST",
+                "jsonParameters": true,
+                "responseFormat": "json",
+                "bodyParametersJson": "={{JSON.stringify($json.payload)}}",
+                "options": { "redirect": { "followRedirects": "manual" } }
+            },
+            "id": "d9e77d73-6a12-4f36-8f6b-1f7a4d77a9d4",
+            "name": "🌐 HTTP → Workflow A",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [840, 240]
+        },
+        {
+            "parameters": {
+                "functionCode": "// Prepare two message rows to insert into DB: user and assistant\nconst inp = $items(0).item.json; // original form fields from Webhook POST\nconst out = $json; // HTTP response from Workflow A\n\nconst conversation_id = inp.conversation_id || 'sim-1234';\n\n// Try to extract a reply string from the HTTP response JSON\nconst reply = (out && (out.reply || out.message || out.text || JSON.stringify(out))) || '';\n\nreturn [\n  {\n    conversation_id,\n    role: 'user',\n    text: inp.message_text,\n    source: 'simulator'\n  },\n  {\n    conversation_id,\n    role: 'assistant',\n    text: reply,\n    source: 'simulator'\n  }\n];"
+            },
+            "id": "b3a4c4cf-2b91-4b9c-8f2f-61e06a2e284e",
+            "name": "🧾 Prepare Logs",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [1070, 240]
+        },
+        {
+            "parameters": {
+                "operation": "insert",
+                "table": "messages",
+                "columns": "conversation_id, role, text, source"
+            },
+            "id": "c8d3a02c-7f20-4c3a-bf51-4bd46d0a1f60",
+            "name": "💾 Insert Messages (Supabase)",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [1290, 240]
+        },
+        {
+            "parameters": {
+                "functionCode": "// Build HTML showing last reply and a link back\nconst rows = $items().map(i => i.json);\nconst assistant = rows.find(r => r.role === 'assistant');\nconst reply = assistant?.text || '';\n\nconst esc = s => s.replace(/[<>&]/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[ch]));\n\nconst html = `<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>Simulator</title></head>\n<body style=\"font-family:system-ui;max-width:720px;margin:24px auto\">\n  <h3>Resposta do Assistente</h3>\n  <pre style=\"white-space:pre-wrap;border:1px solid #ddd;padding:12px;border-radius:8px\">${esc(reply)}</pre>\n  <p><a href=\"/simulator\">Voltar</a></p>\n</body></html>`;\n\nreturn [{ html }];"
+            },
+            "id": "e6f3c22e-2d1a-46c8-b2dc-b44e6d27d4de",
+            "name": "🧩 Render POST Response",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [1510, 240]
+        },
+        {
+            "parameters": {
+                "responseBody": "={{$json.html}}",
+                "responseHeaders": {
+                    "entries": [
+                        { "name": "Content-Type", "value": "text/html; charset=utf-8" }
+                    ]
+                },
+                "responseCode": 200
+            },
+            "id": "a7e1e6dd-df25-43eb-bab4-a6b0c1b2a6c5",
+            "name": "🔚 Respond (POST)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [1710, 240]
+        }
+    ],
+    "connections": {
+        "🕹️ Simulator UI (GET)": { "main": [[{ "node": "🧩 Render UI", "type": "main", "index": 0 }]] },
+        "🧩 Render UI": { "main": [[{ "node": "🔚 Respond (GET)", "type": "main", "index": 0 }]] },
+        "📨 Simulator POST": { "main": [[{ "node": "🧱 Build Payload", "type": "main", "index": 0 }]] },
+        "🧱 Build Payload": { "main": [[{ "node": "🌐 HTTP → Workflow A", "type": "main", "index": 0 }]] },
+        "🌐 HTTP → Workflow A": { "main": [[{ "node": "🧾 Prepare Logs", "type": "main", "index": 0 }]] },
+        "🧾 Prepare Logs": { "main": [[{ "node": "💾 Insert Messages (Supabase)", "type": "main", "index": 0 }]] },
+        "💾 Insert Messages (Supabase)": { "main": [[{ "node": "🧩 Render POST Response", "type": "main", "index": 0 }]] },
+        "🧩 Render POST Response": { "main": [[{ "node": "🔚 Respond (POST)", "type": "main", "index": 0 }]] }
+    },
+    "active": false,
+    "settings": {},
+    "versionId": "b3b4cdb1-29f8-437c-a789-e65892c72816",
+    "meta": { "templateCredsSetupCompleted": true },
+    "id": "99653bb9-7ad2-4388-9352-47d9a5bc34bf",
+    "tags": []
+}

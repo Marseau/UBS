@@ -1,0 +1,23 @@
+{
+  "7": {
+    "period": 7,
+    "calculations": {},
+    "stored_values": null,
+    "discrepancies": {},
+    "validation_status": {}
+  },
+  "30": {
+    "period": 30,
+    "calculations": {},
+    "stored_values": null,
+    "discrepancies": {},
+    "validation_status": {}
+  },
+  "90": {
+    "period": 90,
+    "calculations": {},
+    "stored_values": null,
+    "discrepancies": {},
+    "validation_status": {}
+  }
+}

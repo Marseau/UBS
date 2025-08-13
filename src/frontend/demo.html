@@ -1,0 +1,2381 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UBS | Demo Interativa - Teste Real do Sistema IA</title>
+    <meta name="description" content="Teste o sistema UBS na prática. Crie seu tenant de demonstração e converse com nossa IA especializada em tempo real.">
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #2D5A9B;
+            --primary-light: #4A7BC8;
+            --primary-dark: #1E3F6B;
+            --secondary-color: #F8F9FA;
+            --accent-color: #28A745;
+            --whatsapp-green: #25D366;
+            --whatsapp-dark: #128C7E;
+            --text-dark: #2C3E50;
+            --text-light: #6C757D;
+            --border-color: #E9ECEF;
+            --shadow: 0 4px 20px rgba(45, 90, 155, 0.15);
+            --shadow-lg: 0 10px 40px rgba(45, 90, 155, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text-dark);
+            background: linear-gradient(135deg, var(--secondary-color) 0%, #ffffff 100%);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            box-shadow: var(--shadow);
+            padding: 1rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-image {
+            width: 240px;
+            height: 120px;
+            border-radius: 8px;
+            object-fit: contain;
+        }
+
+        /* Responsivo para logo */
+        @media (max-width: 992px) {
+            .logo-image {
+                width: 200px;
+                height: 100px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .logo-image {
+                width: 160px;
+                height: 80px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .logo-image {
+                width: 120px;
+                height: 60px;
+            }
+        }
+
+        .brand-text {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            margin: 0;
+        }
+
+        /* Responsivo para texto da marca */
+        @media (max-width: 768px) {
+            .brand-text {
+                font-size: 1.2rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .brand-text {
+                font-size: 1rem;
+            }
+        }
+
+        .demo-badge {
+            background: linear-gradient(135deg, var(--whatsapp-green), var(--whatsapp-dark));
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-left: auto;
+        }
+
+        /* Responsivo para badge */
+        @media (max-width: 768px) {
+            .demo-badge {
+                font-size: 0.75rem;
+                padding: 0.4rem 0.8rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .demo-badge {
+                font-size: 0.7rem;
+                padding: 0.3rem 0.6rem;
+            }
+        }
+
+        /* Main Container */
+        .main-container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 2rem;
+            min-height: calc(100vh - 140px);
+        }
+
+        /* Responsivo para container principal */
+        @media (max-width: 1200px) {
+            .main-container {
+                grid-template-columns: 350px 1fr;
+                gap: 1.5rem;
+            }
+        }
+
+        /* Signup Form */
+        .signup-section {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            height: fit-content;
+            position: sticky;
+            top: 120px;
+        }
+
+        /* Responsivo para signup section */
+        @media (max-width: 992px) {
+            .signup-section {
+                padding: 1.5rem;
+                position: static;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .signup-section {
+                padding: 1rem;
+                border-radius: 12px;
+            }
+        }
+
+        .signup-section h2 {
+            color: var(--primary-color);
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .signup-section .subtitle {
+            color: var(--text-light);
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .form-control {
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(45, 90, 155, 0.25);
+            outline: none;
+        }
+
+        .domain-selector {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Responsivo para domain selector - alinhado com layout principal */
+        @media (max-width: 992px) {
+            .domain-selector {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 0.5rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .domain-selector {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 0.5rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .domain-selector {
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
+            }
+        }
+
+        .domain-option {
+            background: var(--secondary-color);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Responsivo para domain options - melhor alinhamento */
+        @media (max-width: 992px) {
+            .domain-option {
+                padding: 0.875rem;
+                font-size: 0.8rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .domain-option {
+                padding: 1rem;
+                font-size: 0.85rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .domain-option {
+                padding: 1rem;
+                font-size: 0.9rem;
+            }
+            
+            .domain-option i {
+                font-size: 1rem;
+            }
+        }
+
+        .domain-option:hover {
+            border-color: var(--primary-light);
+            background: rgba(74, 123, 200, 0.1);
+        }
+
+        .domain-option.selected {
+            border-color: var(--primary-color);
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .domain-option i {
+            font-size: 1.2rem;
+            margin: 0;
+            flex-shrink: 0;
+        }
+
+        .btn-create-demo {
+            background: linear-gradient(135deg, var(--whatsapp-green), var(--whatsapp-dark));
+            border: none;
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .btn-create-demo:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+            color: white;
+        }
+
+        .btn-create-demo:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .demo-info {
+            background: rgba(40, 167, 69, 0.1);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+        }
+
+        .demo-info i {
+            color: var(--accent-color);
+            margin-right: 0.5rem;
+        }
+
+        /* Chat Section */
+        .chat-section {
+            background: white;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 160px);
+            max-height: 800px;
+        }
+
+        /* Responsivo para chat section */
+        @media (max-width: 768px) {
+            .chat-section {
+                height: 600px;
+                max-height: 600px;
+                border-radius: 12px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .chat-section {
+                height: 500px;
+                max-height: 500px;
+            }
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, var(--whatsapp-green), var(--whatsapp-dark));
+            color: white;
+            padding: 1.5rem;
+            border-radius: 16px 16px 0 0;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        /* Responsivo para chat header */
+        @media (max-width: 768px) {
+            .chat-header {
+                padding: 1rem;
+                border-radius: 12px 12px 0 0;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .chat-header {
+                padding: 0.75rem;
+                gap: 0.75rem;
+            }
+        }
+
+        .chat-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .chat-title h3 {
+            margin: 0;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .chat-status {
+            font-size: 0.85rem;
+            opacity: 0.9;
+            margin: 0;
+        }
+
+        /* Responsivo para chat title */
+        @media (max-width: 768px) {
+            .chat-title h3 {
+                font-size: 1rem;
+            }
+            
+            .chat-status {
+                font-size: 0.75rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .chat-title h3 {
+                font-size: 0.9rem;
+            }
+            
+            .chat-status {
+                font-size: 0.7rem;
+            }
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            background: #E5DDD5;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100%" height="100%" fill="%23E5DDD5"/><g opacity="0.03"><path d="M20 20h10v10h-10zM40 40h10v10h-10zM60 20h10v10h-10zM80 40h10v10h-10z" fill="%23000"/></g></svg>');
+        }
+
+        /* Responsivo para chat messages */
+        @media (max-width: 768px) {
+            .chat-messages {
+                padding: 1rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .chat-messages {
+                padding: 0.75rem;
+            }
+        }
+
+        .message {
+            margin-bottom: 1rem;
+            display: flex;
+            animation: fadeInUp 0.3s ease;
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 0.75rem 1rem;
+            border-radius: 18px;
+            position: relative;
+            word-wrap: break-word;
+        }
+
+        /* Responsivo para message bubble */
+        @media (max-width: 768px) {
+            .message-bubble {
+                max-width: 85%;
+                padding: 0.6rem 0.8rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .message-bubble {
+                max-width: 90%;
+                padding: 0.5rem 0.7rem;
+                font-size: 0.9rem;
+            }
+        }
+
+        .message.user .message-bubble {
+            background: #DCF8C6;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.ai .message-bubble {
+            background: white;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 0.25rem;
+            text-align: right;
+        }
+
+        .message.ai .message-time {
+            text-align: left;
+        }
+
+        .chat-input-container {
+            padding: 1rem 1.5rem;
+            background: white;
+            border-radius: 0 0 16px 16px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        /* Responsivo para input container */
+        @media (max-width: 768px) {
+            .chat-input-container {
+                padding: 0.75rem 1rem;
+                border-radius: 0 0 12px 12px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .chat-input-container {
+                padding: 0.5rem 0.75rem;
+            }
+        }
+
+        .chat-input-form {
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-end;
+        }
+
+        .chat-input {
+            flex: 1;
+            border: 2px solid var(--border-color);
+            border-radius: 20px;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            resize: none;
+            max-height: 100px;
+            min-height: 44px;
+        }
+
+        .chat-input:focus {
+            border-color: var(--whatsapp-green);
+            outline: none;
+        }
+
+        .btn-send {
+            background: var(--whatsapp-green);
+            border: none;
+            color: white;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .btn-send:hover {
+            background: var(--whatsapp-dark);
+            transform: scale(1.1);
+        }
+
+        .btn-send:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Chat States */
+        .chat-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            color: var(--text-light);
+        }
+
+        .chat-placeholder i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .chat-placeholder h4 {
+            margin-bottom: 0.5rem;
+            color: var(--text-dark);
+        }
+
+        .loading-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-light);
+            font-style: italic;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--text-light);
+            border-radius: 50%;
+            animation: typingDots 1.4s ease-in-out infinite;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typingDots {
+            0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Optional Sections */
+        .optional-section {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #fafbfc;
+            border-radius: 8px;
+            border: 1px solid #e3e8ff;
+            transition: all 0.3s ease;
+        }
+
+        .optional-section .form-label {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #2D5A9B;
+        }
+
+        .optional-section .badge {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.4rem;
+        }
+
+        .optional-section .form-text {
+            color: #6c757d;
+            font-size: 0.8rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .services-container, .collaborators-container {
+            background: white;
+            border-radius: 6px;
+            padding: 0.75rem;
+            border: 1px solid #e9ecef;
+        }
+
+        .service-item, .collaborator-item {
+            margin-bottom: 0.75rem;
+            padding: 0.75rem;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+        }
+
+        .service-item:last-child, .collaborator-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .service-item .form-control, .collaborator-item .form-control,
+        .service-item .form-select, .collaborator-item .form-select {
+            font-size: 0.875rem;
+            padding: 0.5rem 0.75rem;
+            height: auto;
+        }
+
+        .input-group-text {
+            background: #e9ecef;
+            border-color: #dee2e6;
+            font-weight: 500;
+            font-size: 0.875rem;
+            padding: 0.5rem 0.75rem;
+        }
+
+        /* Form control sizing overrides */
+        .optional-section .form-control-sm,
+        .optional-section .form-select-sm,
+        .optional-section .input-group-sm .form-control,
+        .optional-section .input-group-sm .input-group-text {
+            font-size: 0.8rem;
+            padding: 0.4rem 0.6rem;
+            line-height: 1.2;
+        }
+
+        /* Small labels for optional sections */
+        .form-label-sm {
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            color: #6c757d;
+            display: block;
+        }
+
+        /* Better spacing for optional sections */
+        .optional-section + .optional-section {
+            margin-top: 0.75rem;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .optional-section {
+                padding: 0.75rem;
+            }
+            
+            .service-item, .collaborator-item {
+                padding: 0.5rem;
+                margin-bottom: 0.5rem;
+            }
+            
+            .services-container, .collaborators-container {
+                padding: 0.5rem;
+            }
+            
+            .optional-section .form-text {
+                font-size: 0.75rem;
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 992px) {
+            .main-container {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .signup-section {
+                position: static;
+            }
+
+            .chat-section {
+                height: 600px;
+            }
+
+            .domain-selector {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Success State */
+        .demo-created {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .demo-created .success-icon {
+            font-size: 3rem;
+            color: var(--accent-color);
+            margin-bottom: 1rem;
+        }
+
+        .demo-credentials {
+            background: var(--secondary-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            text-align: left;
+        }
+
+        .demo-credentials h5 {
+            color: var(--primary-color);
+            margin-bottom: 0.75rem;
+        }
+
+        .credential-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .credential-item:last-child {
+            border-bottom: none;
+        }
+
+        .credential-value {
+            font-family: monospace;
+            background: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        /* Popup Elegante para Email */
+        .email-popup {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            margin-top: 0.5rem;
+            animation: popupSlideIn 0.3s ease-out;
+        }
+        
+        .popup-content {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(45, 90, 155, 0.15);
+            border: 1px solid rgba(45, 90, 155, 0.1);
+            padding: 1.25rem;
+            position: relative;
+        }
+        
+        .popup-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            color: var(--text-dark);
+            font-size: 0.95rem;
+        }
+        
+        .popup-body p {
+            font-size: 0.9rem;
+            color: var(--text-dark);
+            line-height: 1.4;
+        }
+        
+        .popup-benefits {
+            list-style: none;
+            padding: 0;
+            margin: 0.75rem 0;
+        }
+        
+        .popup-benefits li {
+            font-size: 0.85rem;
+            color: var(--text-light);
+            padding: 0.25rem 0;
+            display: flex;
+            align-items: center;
+        }
+        
+        .popup-note {
+            background: rgba(45, 90, 155, 0.05);
+            border-radius: 6px;
+            padding: 0.5rem;
+            margin-top: 0.75rem;
+            display: flex;
+            align-items: center;
+        }
+        
+        .popup-close {
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            background: none;
+            border: none;
+            color: var(--text-light);
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        
+        .popup-close:hover {
+            background: rgba(0, 0, 0, 0.1);
+            color: var(--text-dark);
+        }
+        
+        @keyframes popupSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Responsivo para popup */
+        @media (max-width: 768px) {
+            .popup-content {
+                padding: 1rem;
+            }
+            
+            .popup-header {
+                font-size: 0.9rem;
+            }
+            
+            .popup-body p {
+                font-size: 0.85rem;
+            }
+            
+            .popup-benefits li {
+                font-size: 0.8rem;
+            }
+        }
+
+        /* Sistema de Notificação */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            max-width: 400px;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            z-index: 9999;
+            font-weight: 500;
+            animation: slideInRight 0.3s ease-out;
+            cursor: pointer;
+        }
+
+        .notification.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .notification.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .notification.warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .notification.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
+        .notification.fade-out {
+            animation: slideOutRight 0.3s ease-in;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="d-flex align-items-center">
+                <div class="logo-container">
+                    <picture>
+                        <source srcset="assets/images/optimized/UBS_Nac.webp" type="image/webp">
+                        <img src="assets/images/UBS_Nac.png" alt="UBS - Sistema Universal de Agendamentos" class="logo-image">
+                    </picture>
+                    <h1 class="brand-text">UBS Demo Interativa</h1>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <a href="/" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-arrow-left me-2"></i>
+                        Voltar
+                    </a>
+                    <div class="demo-badge">
+                        <i class="fas fa-play-circle me-2"></i>
+                        Teste Real com IA
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="main-container">
+        <!-- Signup Section -->
+        <div class="signup-section" id="signupSection">
+            <h2>Crie seu Demo</h2>
+            <p class="subtitle">Preencha os dados abaixo para criar um tenant de demonstração e testar nossa IA especializada em tempo real.</p>
+
+            <form id="demoForm">
+                <!-- 1. WhatsApp do Negócio - Primeiro campo -->
+                <div class="form-group">
+                    <label class="form-label" for="whatsappNumber">
+                        <i class="fab fa-whatsapp me-2"></i>WhatsApp do Negócio
+                    </label>
+                    <input type="tel" class="form-control" id="whatsappNumber" 
+                           placeholder="+55 (11) 99999-9999" maxlength="19" required>
+                    <small class="form-text text-muted" id="verificationStatus">
+                        <i class="fas fa-info-circle me-1"></i>Vamos verificar se este número já tem um negócio cadastrado
+                    </small>
+                </div>
+
+                <!-- 2. Seu WhatsApp de Usuário - Segundo campo -->
+                <div class="form-group">
+                    <label class="form-label" for="userNumber">
+                        <i class="fas fa-user me-2"></i>Seu WhatsApp de Usuário
+                    </label>
+                    <input type="tel" class="form-control" id="userNumber" 
+                           placeholder="+55 (11) 88888-8888" maxlength="19" required>
+                    <small class="form-text text-muted">
+                        <i class="fas fa-info-circle me-1"></i>Número que você usará para conversar com a IA
+                    </small>
+                </div>
+
+                <!-- Campos condicionais - aparecem baseado na existência do negócio -->
+                <div id="existingBusinessFields" style="display: none;">
+                    <!-- Para negócios existentes - apenas mostrar dados -->
+                    <div class="alert alert-success d-flex align-items-center">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <div>
+                            <strong>Negócio encontrado!</strong><br>
+                            <small>Vamos reutilizar os dados existentes para o teste.</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Nome do Negócio</label>
+                        <input type="text" class="form-control" id="existingBusinessName" readonly>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Email do Negócio</label>
+                        <input type="email" class="form-control" id="existingBusinessEmail" readonly>
+                    </div>
+                </div>
+
+                <div id="newBusinessFields" style="display: none;">
+                    <!-- Para negócios novos - campos para preenchimento -->
+                    <div class="alert alert-info d-flex align-items-center">
+                        <i class="fas fa-plus-circle me-2"></i>
+                        <div>
+                            <strong>Novo negócio!</strong><br>
+                            <small>Preencha os dados abaixo para criar seu demo.</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="businessName">
+                            <i class="fas fa-store me-2"></i>Nome do Negócio
+                        </label>
+                        <input type="text" class="form-control" id="businessName" 
+                               placeholder="Ex: Salão Bella Vista" required>
+                    </div>
+
+                    <div class="form-group" style="position: relative;">
+                        <label class="form-label" for="businessEmail">
+                            <i class="fas fa-envelope me-2"></i>Email do Negócio
+                        </label>
+                        <input type="email" class="form-control" id="businessEmail" 
+                               placeholder="contato@bellavista.com" required>
+                        
+                        <!-- Popup Elegante -->
+                        <div class="email-popup" id="emailPopup" style="display: none;">
+                            <div class="popup-content">
+                                <div class="popup-header">
+                                    <i class="fas fa-lightbulb text-warning me-2"></i>
+                                    <strong>💡 Dica Inteligente</strong>
+                                </div>
+                                <div class="popup-body">
+                                    <p class="mb-2">Use seu <strong>email real</strong> para experimentar as notificações que seus clientes receberão:</p>
+                                    <ul class="popup-benefits">
+                                        <li><i class="fas fa-check-circle text-success me-1"></i> Confirmações automáticas</li>
+                                        <li><i class="fas fa-check-circle text-success me-1"></i> Lembretes personalizados</li>
+                                        <li><i class="fas fa-check-circle text-success me-1"></i> Newsletter do seu segmento</li>
+                                    </ul>
+                                    <div class="popup-note">
+                                        <i class="fas fa-shield-alt text-primary me-1"></i>
+                                        <small>Seus dados estão seguros. Use para teste real!</small>
+                                    </div>
+                                </div>
+                                <button class="popup-close" id="closeEmailPopup">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-brain me-2"></i>Segmento do Negócio
+                        </label>
+                        <div class="domain-selector">
+                            <div class="domain-option" data-domain="beauty">
+                                <i class="fas fa-cut"></i>
+                                Beleza
+                            </div>
+                            <div class="domain-option" data-domain="healthcare">
+                                <i class="fas fa-heartbeat"></i>
+                                Saúde
+                            </div>
+                            <div class="domain-option" data-domain="legal">
+                                <i class="fas fa-balance-scale"></i>
+                                Jurídico
+                            </div>
+                            <div class="domain-option" data-domain="education">
+                                <i class="fas fa-graduation-cap"></i>
+                                Educação
+                            </div>
+                            <div class="domain-option" data-domain="sports">
+                                <i class="fas fa-dumbbell"></i>
+                                Esportes
+                            </div>
+                            <div class="domain-option" data-domain="consulting">
+                                <i class="fas fa-briefcase"></i>
+                                Consultoria
+                            </div>
+                            <div class="domain-option" data-domain="general">
+                                <i class="fas fa-star"></i>
+                                Diversos
+                            </div>
+                        </div>
+                        <input type="hidden" id="selectedDomain" required>
+                    </div>
+                </div>
+
+                <!-- Seção de Serviços (Opcional) -->
+                <div class="optional-section" id="servicesSection" style="display: none;">
+                    <label class="form-label">
+                        <i class="fas fa-list-alt me-2"></i>Serviços do Negócio 
+                        <span class="badge bg-secondary ms-2">Opcional</span>
+                    </label>
+                    <p class="form-text">
+                        <i class="fas fa-lightbulb text-warning me-1"></i>
+                        Cadastre serviços para ver o sistema gerenciar preços automaticamente
+                    </p>
+                    
+                    <div class="services-container">
+                        <div class="service-item">
+                            <div class="row g-2">
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label form-label-sm">Nome do Serviço</label>
+                                    <input type="text" class="form-control form-control-sm" id="service1Name" 
+                                           placeholder="Nome do serviço">
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label form-label-sm">Preço</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">R$</span>
+                                        <input type="text" class="form-control" id="service1Price" 
+                                               placeholder="45,00" pattern="[0-9]+([,\.][0-9]{1,2})?" 
+                                               title="Digite o valor em reais (ex: 45,00)">
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label form-label-sm">Duração</label>
+                                    <select class="form-select form-select-sm" id="service1Duration">
+                                        <option value="30">30min</option>
+                                        <option value="45">45min</option>
+                                        <option value="60" selected>1h</option>
+                                        <option value="90">1h30</option>
+                                        <option value="120">2h</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="service-item">
+                            <div class="row g-2">
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label form-label-sm">Nome do Serviço</label>
+                                    <input type="text" class="form-control form-control-sm" id="service2Name" 
+                                           placeholder="Nome do serviço">
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label form-label-sm">Preço</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">R$</span>
+                                        <input type="text" class="form-control" id="service2Price" 
+                                               placeholder="25,00" pattern="[0-9]+([,\.][0-9]{1,2})?" 
+                                               title="Digite o valor em reais (ex: 25,00)">
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label form-label-sm">Duração</label>
+                                    <select class="form-select form-select-sm" id="service2Duration">
+                                        <option value="30">30min</option>
+                                        <option value="45" selected>45min</option>
+                                        <option value="60">1h</option>
+                                        <option value="90">1h30</option>
+                                        <option value="120">2h</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seção de Colaboradores (Opcional) -->
+                <div class="optional-section" id="collaboratorsSection" style="display: none;">
+                    <label class="form-label">
+                        <i class="fas fa-users me-2"></i>Equipe & Colaboradores 
+                        <span class="badge bg-secondary ms-2">Opcional</span>
+                    </label>
+                    <p class="form-text">
+                        <i class="fas fa-lightbulb text-warning me-1"></i>
+                        Adicione colaboradores para ver o sistema organizar agendas individuais
+                    </p>
+                    
+                    <div class="collaborators-container">
+                        <div class="collaborator-item">
+                            <div class="row g-2">
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label form-label-sm">Nome Completo</label>
+                                    <input type="text" class="form-control form-control-sm" id="collaborator1Name" 
+                                           placeholder="Nome completo">
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label form-label-sm">Função</label>
+                                    <select class="form-select form-select-sm" id="collaborator1Role">
+                                        <option value="professional">Profissional</option>
+                                        <option value="specialist">Especialista</option>
+                                        <option value="senior">Sênior</option>
+                                        <option value="manager">Coordenador</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label form-label-sm">Horário</label>
+                                    <select class="form-select form-select-sm" id="collaborator1Schedule">
+                                        <option value="full">Integral</option>
+                                        <option value="morning">Manhã</option>
+                                        <option value="afternoon">Tarde</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="collaborator-item">
+                            <div class="row g-2">
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label form-label-sm">Nome Completo</label>
+                                    <input type="text" class="form-control form-control-sm" id="collaborator2Name" 
+                                           placeholder="Nome completo">
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label form-label-sm">Função</label>
+                                    <select class="form-select form-select-sm" id="collaborator2Role">
+                                        <option value="professional" selected>Profissional</option>
+                                        <option value="specialist">Especialista</option>
+                                        <option value="senior">Sênior</option>
+                                        <option value="manager">Coordenador</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label form-label-sm">Horário</label>
+                                    <select class="form-select form-select-sm" id="collaborator2Schedule">
+                                        <option value="full" selected>Integral</option>
+                                        <option value="morning">Manhã</option>
+                                        <option value="afternoon">Tarde</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-create-demo" id="createDemoBtn" disabled>
+                    <i class="fas fa-play-circle me-2" id="btnIcon"></i>
+                    <span id="btnText">Começar Teste</span>
+                </button>
+            </form>
+
+        </div>
+
+        <!-- Chat Section -->
+        <div class="chat-section" id="chatSection">
+            <div class="chat-header">
+                <div class="chat-avatar">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="chat-title">
+                    <h3 id="chatBusinessName">IA Especializada UBS</h3>
+                    <p class="chat-status" id="chatStatus">Preencha os dados ao lado para iniciar</p>
+                </div>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                <div class="chat-placeholder">
+                    <i class="fas fa-comments"></i>
+                    <h4>Pronto para conversar com nossa IA?</h4>
+                    <p>Preencha os dados ao lado e clique em "Começar Teste" para ativar nossa inteligência artificial especializada.</p>
+                    <small class="mt-2">
+                        A IA irá cumprimentá-lo e você poderá fazer agendamentos, tirar dúvidas e ver como ela entende seu negócio específico.
+                    </small>
+                </div>
+            </div>
+
+            <div class="chat-input-container" style="display: none;" id="chatInputContainer">
+                <form class="chat-input-form" id="chatForm">
+                    <textarea class="chat-input" id="chatInput" 
+                              placeholder="Digite sua mensagem..." rows="1"
+                              disabled></textarea>
+                    <button type="submit" class="btn-send" id="sendBtn" disabled>
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        class DemoInterativa {
+            constructor() {
+                console.log('🔧 DemoInterativa constructor called');
+                this.demoData = null;
+                this.chatActive = false;
+                this.selectedDomain = null;
+                this.businessExists = false;
+                this.existingBusinessData = null;
+                
+                this.initializeEventListeners();
+                this.initializeDomainSelector();
+                this.initializeSmartForm();
+            }
+
+            initializeEventListeners() {
+                console.log('🎯 initializeEventListeners called');
+                
+                // Form submission
+                const demoForm = document.getElementById('demoForm');
+                console.log('📝 Demo form element:', demoForm);
+                
+                if (demoForm) {
+                    demoForm.addEventListener('submit', (e) => {
+                        console.log('📤 FORM SUBMIT EVENT TRIGGERED!');
+                        e.preventDefault();
+                        this.createDemo();
+                    });
+                    console.log('✅ Form submit listener added');
+                } else {
+                    console.error('❌ Demo form not found!');
+                }
+                
+                // Button direct listener as backup
+                const createBtn = document.getElementById('createDemoBtn');
+                console.log('🔘 Create button element:', createBtn);
+                
+                if (createBtn) {
+                    createBtn.addEventListener('click', (e) => {
+                        console.log('🖱️ BUTTON CLICK EVENT TRIGGERED!');
+                        console.log('🔘 Button disabled:', createBtn.disabled);
+                        if (!createBtn.disabled) {
+                            e.preventDefault();
+                            this.createDemo();
+                        } else {
+                            console.log('⏸️ Button is disabled, ignoring click');
+                        }
+                    });
+                    console.log('✅ Button click listener added');
+                } else {
+                    console.error('❌ Create button not found!');
+                }
+                
+                // Email popup handlers
+                const emailInput = document.getElementById('businessEmail');
+                const emailPopup = document.getElementById('emailPopup');
+                const closePopupBtn = document.getElementById('closeEmailPopup');
+                
+                // Debug: verificar se elementos existem
+                console.log('Email popup debug:', {
+                    emailInput: !!emailInput,
+                    emailPopup: !!emailPopup,
+                    closePopupBtn: !!closePopupBtn
+                });
+                
+                // Verificar se elementos existem e mostrar popup quando focar no email
+                if (emailInput && emailPopup && closePopupBtn) {
+                    console.log('Email popup: elementos encontrados, adicionando event listeners');
+                    
+                    emailInput.addEventListener('focus', () => {
+                        console.log('Email input focused');
+                        const popupShown = localStorage.getItem('emailPopupShown');
+                        console.log('Popup already shown?', popupShown);
+                        
+                        if (!popupShown) {
+                            console.log('Showing popup');
+                            emailPopup.style.display = 'block';
+                            localStorage.setItem('emailPopupShown', 'true');
+                        }
+                    });
+                    
+                    // Fechar popup
+                    closePopupBtn.addEventListener('click', () => {
+                        console.log('Close button clicked');
+                        emailPopup.style.display = 'none';
+                    });
+                    
+                    // Fechar popup ao clicar fora
+                    document.addEventListener('click', (e) => {
+                        if (emailPopup.style.display === 'block' && 
+                            !emailInput.contains(e.target) && 
+                            !emailPopup.contains(e.target)) {
+                            console.log('Clicked outside, closing popup');
+                            emailPopup.style.display = 'none';
+                        }
+                    });
+                } else {
+                    console.error('Email popup: elementos não encontrados');
+                }
+                
+                // Debug: função para resetar popup (para testes)
+                window.resetEmailPopup = function() {
+                    localStorage.removeItem('emailPopupShown');
+                    console.log('Email popup reset - will show on next focus');
+                };
+
+                // Chat form submission
+                document.getElementById('chatForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.sendMessage();
+                });
+
+                // Phone number formatting
+                const phoneInput = document.getElementById('whatsappNumber');
+                phoneInput.addEventListener('input', (e) => {
+                    this.formatPhoneNumber(e.target);
+                    // A verificação já é feita em initializeSmartForm
+                });
+
+                const userPhoneInput = document.getElementById('userNumber');
+                userPhoneInput.addEventListener('input', (e) => {
+                    this.formatPhoneNumber(e.target);
+                    // updateButtonState já é chamado em initializeSmartForm
+                });
+
+                // Price formatting for Brazilian format
+                const priceInputs = ['service1Price', 'service2Price'];
+                priceInputs.forEach(id => {
+                    const input = document.getElementById(id);
+                    if (input) {
+                        // Format as user types
+                        input.addEventListener('input', (e) => {
+                            let value = e.target.value;
+                            // Allow only numbers, comma and dot
+                            value = value.replace(/[^0-9,\.]/g, '');
+                            // Replace multiple commas/dots with single comma
+                            value = value.replace(/[,\.]+/g, ',');
+                            // Ensure only one comma
+                            const parts = value.split(',');
+                            if (parts.length > 2) {
+                                value = parts[0] + ',' + parts.slice(1).join('');
+                            }
+                            // Limit decimal places to 2
+                            if (parts.length === 2 && parts[1].length > 2) {
+                                value = parts[0] + ',' + parts[1].substring(0, 2);
+                            }
+                            e.target.value = value;
+                        });
+
+                        // Add blur event to format with 2 decimal places
+                        input.addEventListener('blur', (e) => {
+                            let value = e.target.value;
+                            if (value && !value.includes(',')) {
+                                e.target.value = value + ',00';
+                            } else if (value && value.endsWith(',')) {
+                                e.target.value = value + '00';
+                            } else if (value && value.includes(',')) {
+                                const parts = value.split(',');
+                                if (parts[1].length === 1) {
+                                    e.target.value = value + '0';
+                                }
+                            }
+                        });
+                    }
+                });
+
+                // Auto-resize textarea
+                const chatInput = document.getElementById('chatInput');
+                chatInput.addEventListener('input', () => {
+                    chatInput.style.height = 'auto';
+                    chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
+                });
+
+                // Enter to send (Shift+Enter for new line)
+                chatInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+            }
+
+            initializeSmartForm() {
+                console.log('🧠 initializeSmartForm called');
+                
+                // Verificação automática quando WhatsApp do negócio é preenchido
+                const whatsappInput = document.getElementById('whatsappNumber');
+                const userInput = document.getElementById('userNumber');
+                
+                let verificationTimeout;
+                
+                whatsappInput.addEventListener('input', (e) => {
+                    // Clear previous timeout
+                    clearTimeout(verificationTimeout);
+                    
+                    const number = this.cleanPhoneNumber(e.target.value);
+                    const statusEl = document.getElementById('verificationStatus');
+                    
+                    // Se tem pelo menos 10 dígitos, verificar
+                    console.log('🔢 Number length:', number.length, 'Number:', number);
+                    if (number.length >= 10) {
+                        // Mostrar status de verificação
+                        statusEl.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Verificando negócio...';
+                        statusEl.className = 'form-text text-primary';
+                        
+                        // Aguardar 1 segundo após parar de digitar
+                        verificationTimeout = setTimeout(() => {
+                            console.log('⏱️ Timeout triggered, calling checkExistingBusiness');
+                            this.checkExistingBusiness(e.target.value);
+                        }, 1000);
+                    } else {
+                        // Limpar campos condicionais se não tem número suficiente
+                        console.log('📱 Number too short, hiding fields');
+                        statusEl.innerHTML = '<i class="fas fa-info-circle me-1"></i>Vamos verificar se este número já tem um negócio cadastrado';
+                        statusEl.className = 'form-text text-muted';
+                        this.hideAllConditionalFields();
+                    }
+                });
+
+                // Validação do campo usuário para habilitar botão
+                userInput.addEventListener('input', () => {
+                    this.updateButtonState();
+                });
+
+                // Inicializar estado do botão
+                this.updateButtonState();
+            }
+
+            cleanPhoneNumber(phoneStr) {
+                // Remove tudo que não é número
+                return phoneStr.replace(/\D/g, '');
+            }
+
+            async checkExistingBusiness(whatsappNumber) {
+                console.log('🔍 checkExistingBusiness called with:', whatsappNumber);
+                
+                try {
+                    const cleanNumber = this.cleanPhoneNumber(whatsappNumber);
+                    console.log('📞 Clean number:', cleanNumber);
+                    
+                    // Fazer verificação via API
+                    const apiUrl = `/api/demo/check-business?whatsapp=${encodeURIComponent(cleanNumber)}`;
+                    console.log('🌐 API URL:', apiUrl);
+                    
+                    const response = await fetch(apiUrl);
+                    const result = await response.json();
+                    console.log('📡 API Response:', result);
+                    
+                    const statusEl = document.getElementById('verificationStatus');
+                    
+                    if (result.success && result.exists) {
+                        console.log('✅ Negócio encontrado:', result.business);
+                        this.businessExists = true;
+                        this.existingBusinessData = result.business;
+                        
+                        statusEl.innerHTML = `<i class="fas fa-check-circle me-1"></i>Negócio encontrado: ${result.business.business_name}`;
+                        statusEl.className = 'form-text text-success';
+                        
+                        this.showExistingBusinessFields();
+                    } else {
+                        console.log('📋 Negócio não encontrado, mostrar campos novos');
+                        this.businessExists = false;
+                        this.existingBusinessData = null;
+                        
+                        statusEl.innerHTML = '<i class="fas fa-plus-circle me-1"></i>Número novo - pronto para cadastrar';
+                        statusEl.className = 'form-text text-info';
+                        
+                        this.showNewBusinessFields();
+                    }
+                    
+                    this.updateButtonState();
+                    
+                } catch (error) {
+                    console.error('❌ Erro ao verificar negócio:', error);
+                    
+                    const statusEl = document.getElementById('verificationStatus');
+                    statusEl.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Erro na verificação - assumindo novo negócio';
+                    statusEl.className = 'form-text text-warning';
+                    
+                    // Em caso de erro, assumir negócio novo
+                    this.businessExists = false;
+                    this.existingBusinessData = null;
+                    this.showNewBusinessFields();
+                    this.updateButtonState();
+                }
+            }
+
+            hideAllConditionalFields() {
+                console.log('👁️ hideAllConditionalFields called');
+                document.getElementById('existingBusinessFields').style.display = 'none';
+                document.getElementById('newBusinessFields').style.display = 'none';
+                document.getElementById('servicesSection').style.display = 'none';
+                document.getElementById('collaboratorsSection').style.display = 'none';
+                
+                this.businessExists = false;
+                this.existingBusinessData = null;
+                this.updateButtonState();
+            }
+
+            showExistingBusinessFields() {
+                console.log('✅ showExistingBusinessFields called');
+                
+                // Esconder campos novos e mostrar existentes
+                document.getElementById('newBusinessFields').style.display = 'none';
+                document.getElementById('existingBusinessFields').style.display = 'block';
+                
+                // Preencher dados existentes
+                document.getElementById('existingBusinessName').value = this.existingBusinessData.business_name || '';
+                document.getElementById('existingBusinessEmail').value = this.existingBusinessData.email || '';
+                
+                // Setar domínio se disponível
+                if (this.existingBusinessData.domain) {
+                    this.selectedDomain = this.existingBusinessData.domain;
+                    document.getElementById('selectedDomain').value = this.selectedDomain;
+                }
+                
+                // Esconder seções opcionais para negócios existentes
+                document.getElementById('servicesSection').style.display = 'none';
+                document.getElementById('collaboratorsSection').style.display = 'none';
+            }
+
+            showNewBusinessFields() {
+                console.log('📋 showNewBusinessFields called');
+                
+                // Esconder campos existentes e mostrar novos
+                document.getElementById('existingBusinessFields').style.display = 'none';
+                document.getElementById('newBusinessFields').style.display = 'block';
+                
+                // Limpar dados existentes
+                this.selectedDomain = null;
+                document.getElementById('selectedDomain').value = '';
+                
+                // Esconder seções opcionais até selecionar domínio
+                document.getElementById('servicesSection').style.display = 'none';
+                document.getElementById('collaboratorsSection').style.display = 'none';
+            }
+
+            updateButtonState() {
+                console.log('🔘 updateButtonState called');
+                
+                const userNumber = document.getElementById('userNumber').value.trim();
+                const whatsappNumber = document.getElementById('whatsappNumber').value.trim();
+                const btnText = document.getElementById('btnText');
+                const btnIcon = document.getElementById('btnIcon');
+                const btn = document.getElementById('createDemoBtn');
+                
+                const userNumberValid = this.cleanPhoneNumber(userNumber).length >= 10;
+                const whatsappNumberValid = this.cleanPhoneNumber(whatsappNumber).length >= 10;
+                
+                if (!whatsappNumberValid || !userNumberValid) {
+                    // Desabilitado - campos obrigatórios não preenchidos
+                    btn.disabled = true;
+                    btnText.textContent = 'Começar Teste';
+                    btnIcon.className = 'fas fa-play-circle me-2';
+                    return;
+                }
+                
+                if (this.businessExists) {
+                    // Negócio existente - habilitar para começar teste
+                    btn.disabled = false;
+                    btnText.textContent = 'Começar Teste';
+                    btnIcon.className = 'fas fa-play-circle me-2';
+                } else {
+                    // Negócio novo - verificar se campos obrigatórios estão preenchidos
+                    const businessName = document.getElementById('businessName')?.value.trim() || '';
+                    const businessEmail = document.getElementById('businessEmail')?.value.trim() || '';
+                    const domainSelected = this.selectedDomain;
+                    
+                    if (businessName && businessEmail && domainSelected) {
+                        btn.disabled = false;
+                        btnText.textContent = 'Cadastrar e Começar Teste';
+                        btnIcon.className = 'fas fa-rocket me-2';
+                    } else {
+                        btn.disabled = true;
+                        btnText.textContent = 'Cadastrar e Começar Teste';
+                        btnIcon.className = 'fas fa-rocket me-2';
+                    }
+                }
+            }
+
+            initializeDomainSelector() {
+                const domainOptions = document.querySelectorAll('.domain-option');
+                const hiddenInput = document.getElementById('selectedDomain');
+
+                domainOptions.forEach(option => {
+                    option.addEventListener('click', () => {
+                        // Remove selection from others
+                        domainOptions.forEach(opt => opt.classList.remove('selected'));
+                        
+                        // Select current
+                        option.classList.add('selected');
+                        this.selectedDomain = option.dataset.domain;
+                        hiddenInput.value = this.selectedDomain;
+                        
+                        // Show optional sections with animation
+                        this.showOptionalSections();
+                        
+                        // Update button state
+                        this.updateButtonState();
+                    });
+                });
+            }
+
+            showOptionalSections() {
+                const servicesSection = document.getElementById('servicesSection');
+                const collaboratorsSection = document.getElementById('collaboratorsSection');
+                
+                // Show sections with fade in animation
+                if (servicesSection && collaboratorsSection) {
+                    servicesSection.style.display = 'block';
+                    collaboratorsSection.style.display = 'block';
+                    
+                    // Add animation classes
+                    servicesSection.style.animation = 'fadeInUp 0.5s ease';
+                    collaboratorsSection.style.animation = 'fadeInUp 0.7s ease';
+                    
+                    // Populate with domain-specific examples
+                    this.populateExamplesByDomain();
+                }
+            }
+
+            populateExamplesByDomain() {
+                const examples = {
+                    beauty: {
+                        services: [
+                            { name: 'Corte feminino', price: 45, duration: 60 },
+                            { name: 'Manicure', price: 25, duration: 45 }
+                        ],
+                        collaborators: [
+                            { name: 'Maria Silva', role: 'specialist', schedule: 'full' },
+                            { name: 'Ana Costa', role: 'professional', schedule: 'morning' }
+                        ]
+                    },
+                    healthcare: {
+                        services: [
+                            { name: 'Consulta Clínica', price: 120, duration: 45 },
+                            { name: 'Exame Cardiológico', price: 180, duration: 60 }
+                        ],
+                        collaborators: [
+                            { name: 'Dr. Carlos Oliveira', role: 'senior', schedule: 'full' },
+                            { name: 'Dra. Ana Beatriz', role: 'specialist', schedule: 'afternoon' }
+                        ]
+                    },
+                    legal: {
+                        services: [
+                            { name: 'Consultoria Jurídica', price: 200, duration: 90 },
+                            { name: 'Análise Contratual', price: 150, duration: 60 }
+                        ],
+                        collaborators: [
+                            { name: 'Dr. Fernando Alves', role: 'senior', schedule: 'full' },
+                            { name: 'Dra. Patricia Rocha', role: 'specialist', schedule: 'morning' }
+                        ]
+                    },
+                    education: {
+                        services: [
+                            { name: 'Aula de Matemática', price: 50, duration: 60 },
+                            { name: 'Reforço Escolar', price: 40, duration: 90 }
+                        ],
+                        collaborators: [
+                            { name: 'Prof. Marina Souza', role: 'senior', schedule: 'full' },
+                            { name: 'Prof. Gabriel Torres', role: 'professional', schedule: 'afternoon' }
+                        ]
+                    },
+                    sports: {
+                        services: [
+                            { name: 'Personal Training', price: 80, duration: 60 },
+                            { name: 'Avaliação Física', price: 50, duration: 45 }
+                        ],
+                        collaborators: [
+                            { name: 'Personal Bruno', role: 'specialist', schedule: 'full' },
+                            { name: 'Instrutora Camila', role: 'professional', schedule: 'morning' }
+                        ]
+                    },
+                    consulting: {
+                        services: [
+                            { name: 'Consultoria Estratégica', price: 250, duration: 120 },
+                            { name: 'Marketing Digital', price: 200, duration: 90 }
+                        ],
+                        collaborators: [
+                            { name: 'Consultor Eduardo', role: 'senior', schedule: 'full' },
+                            { name: 'Consultora Fernanda', role: 'specialist', schedule: 'afternoon' }
+                        ]
+                    },
+                    general: {
+                        services: [
+                            { name: 'Atendimento Especializado', price: 80, duration: 60 },
+                            { name: 'Consultoria Técnica', price: 100, duration: 90 }
+                        ],
+                        collaborators: [
+                            { name: 'Ana Paula', role: 'professional', schedule: 'full' },
+                            { name: 'Carlos Santos', role: 'specialist', schedule: 'morning' }
+                        ]
+                    }
+                };
+
+                const domainExamples = examples[this.selectedDomain] || examples.general;
+                
+                // Populate services (as placeholders)
+                if (domainExamples.services[0]) {
+                    document.getElementById('service1Name').placeholder = `Ex: ${domainExamples.services[0].name}`;
+                    // Format price to Brazilian format (with comma)
+                    const price1 = domainExamples.services[0].price.toFixed(2).replace('.', ',');
+                    document.getElementById('service1Price').placeholder = price1;
+                    document.getElementById('service1Duration').value = domainExamples.services[0].duration;
+                }
+                
+                if (domainExamples.services[1]) {
+                    document.getElementById('service2Name').placeholder = `Ex: ${domainExamples.services[1].name}`;
+                    // Format price to Brazilian format (with comma)
+                    const price2 = domainExamples.services[1].price.toFixed(2).replace('.', ',');
+                    document.getElementById('service2Price').placeholder = price2;
+                    document.getElementById('service2Duration').value = domainExamples.services[1].duration;
+                }
+                
+                // Populate collaborators (as placeholders)
+                if (domainExamples.collaborators[0]) {
+                    document.getElementById('collaborator1Name').placeholder = `Ex: ${domainExamples.collaborators[0].name}`;
+                    document.getElementById('collaborator1Role').value = domainExamples.collaborators[0].role;
+                    document.getElementById('collaborator1Schedule').value = domainExamples.collaborators[0].schedule;
+                }
+                
+                if (domainExamples.collaborators[1]) {
+                    document.getElementById('collaborator2Name').placeholder = `Ex: ${domainExamples.collaborators[1].name}`;
+                    document.getElementById('collaborator2Role').value = domainExamples.collaborators[1].role;
+                    document.getElementById('collaborator2Schedule').value = domainExamples.collaborators[1].schedule;
+                }
+            }
+
+
+            formatPhoneNumber(input) {
+                // Remove tudo que não é número
+                let value = input.value.replace(/\D/g, '');
+                
+                // Limita a 13 dígitos (55 + 11 dígitos)
+                if (value.length > 13) {
+                    value = value.substring(0, 13);
+                }
+                
+                // Aplica a formatação +55 (11) 99999-9999
+                if (value.length >= 1) {
+                    if (value.length <= 2) {
+                        value = `+${value}`;
+                    } else if (value.length <= 4) {
+                        value = `+${value.substring(0, 2)} (${value.substring(2)}`;
+                    } else if (value.length <= 9) {
+                        value = `+${value.substring(0, 2)} (${value.substring(2, 4)}) ${value.substring(4)}`;
+                    } else {
+                        value = `+${value.substring(0, 2)} (${value.substring(2, 4)}) ${value.substring(4, 9)}-${value.substring(9)}`;
+                    }
+                }
+                
+                input.value = value;
+            }
+
+            async createDemo() {
+                const button = document.getElementById('createDemoBtn');
+                const originalText = button.innerHTML;
+                
+                try {
+                    // Show loading state
+                    button.disabled = true;
+                    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Criando Demo...';
+
+                    // Collect form data - handle both existing and new businesses
+                    let businessName, businessEmail;
+                    
+                    if (this.businessExists && this.existingBusinessData) {
+                        // Use existing business data
+                        businessName = this.existingBusinessData.business_name;
+                        businessEmail = this.existingBusinessData.email;
+                    } else {
+                        // Use form data for new business
+                        businessName = document.getElementById('businessName')?.value || '';
+                        businessEmail = document.getElementById('businessEmail')?.value || '';
+                    }
+                    
+                    const formData = {
+                        businessName: businessName,
+                        businessEmail: businessEmail,
+                        whatsappNumber: document.getElementById('whatsappNumber').value,
+                        userNumber: document.getElementById('userNumber').value,
+                        domain: this.selectedDomain
+                    };
+                    
+                    // Collect optional services data (only for new businesses)
+                    const services = [];
+                    const service1Name = document.getElementById('service1Name')?.value.trim() || '';
+                    const service1Price = document.getElementById('service1Price')?.value || '';
+                    const service1Duration = document.getElementById('service1Duration')?.value || '60';
+                    
+                    if (service1Name && service1Price) {
+                        // Convert Brazilian format (comma) to dot for parseFloat
+                        const price1 = parseFloat(service1Price.replace(',', '.'));
+                        services.push({
+                            name: service1Name,
+                            price: price1,
+                            duration: parseInt(service1Duration)
+                        });
+                    }
+                    
+                    const service2Name = document.getElementById('service2Name')?.value.trim() || '';
+                    const service2Price = document.getElementById('service2Price')?.value || '';
+                    const service2Duration = document.getElementById('service2Duration')?.value || '45';
+                    
+                    if (service2Name && service2Price) {
+                        // Convert Brazilian format (comma) to dot for parseFloat
+                        const price2 = parseFloat(service2Price.replace(',', '.'));
+                        services.push({
+                            name: service2Name,
+                            price: price2,
+                            duration: parseInt(service2Duration)
+                        });
+                    }
+
+                    // Collect optional collaborators data (only for new businesses)
+                    const collaborators = [];
+                    const collaborator1Name = document.getElementById('collaborator1Name')?.value.trim() || '';
+                    const collaborator1Role = document.getElementById('collaborator1Role')?.value || 'professional';
+                    const collaborator1Schedule = document.getElementById('collaborator1Schedule')?.value || 'full';
+                    
+                    if (collaborator1Name) {
+                        collaborators.push({
+                            name: collaborator1Name,
+                            role: collaborator1Role,
+                            schedule: collaborator1Schedule
+                        });
+                    }
+                    
+                    const collaborator2Name = document.getElementById('collaborator2Name')?.value.trim() || '';
+                    const collaborator2Role = document.getElementById('collaborator2Role')?.value || 'professional';
+                    const collaborator2Schedule = document.getElementById('collaborator2Schedule')?.value || 'full';
+                    
+                    if (collaborator2Name) {
+                        collaborators.push({
+                            name: collaborator2Name,
+                            role: collaborator2Role,
+                            schedule: collaborator2Schedule
+                        });
+                    }
+
+                    // Add optional data to form data
+                    if (services.length > 0) {
+                        formData.services = services;
+                    }
+                    
+                    if (collaborators.length > 0) {
+                        formData.collaborators = collaborators;
+                    }
+
+                    // Make API call to create demo tenant
+                    const response = await fetch('/api/demo/create-tenant', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(formData)
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        // Mostrar mensagem específica do servidor
+                        const errorMessage = result.error || 'Falha ao criar demo';
+                        this.showNotification(errorMessage, 'error');
+                        button.disabled = false;
+                        button.innerHTML = originalText;
+                        return;
+                    }
+
+                    this.demoData = result;
+
+                    // Show success and activate chat
+                    this.showDemoCreated();
+                    this.activateChat();
+
+                } catch (error) {
+                    console.error('Erro ao criar demo:', error);
+                    this.showNotification('Erro de conexão. Verifique sua internet e tente novamente.', 'error');
+                    
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                }
+            }
+
+            showDemoCreated() {
+                const signupSection = document.getElementById('signupSection');
+                
+                // Verificar se é reutilização ou criação nova
+                const isReused = this.demoData.isReused;
+                const titleText = isReused ? 'Demo Reutilizado!' : 'Demo Criado com Sucesso!';
+                const iconClass = isReused ? 'fas fa-recycle' : 'fas fa-check-circle';
+                const iconColor = isReused ? 'var(--primary-color)' : 'var(--accent-color)';
+                
+                signupSection.innerHTML = `
+                    <div class="demo-created">
+                        <div class="success-icon" style="color: ${iconColor};">
+                            <i class="${iconClass}"></i>
+                        </div>
+                        <h3 style="color: ${iconColor}; margin-bottom: 1rem;">${titleText}</h3>
+                        
+                        ${isReused ? `
+                        <div class="alert alert-info" style="background: rgba(45, 90, 155, 0.1); border: 1px solid rgba(45, 90, 155, 0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Tenant existente encontrado!</strong><br>
+                            Reutilizando o tenant do número ${this.demoData.whatsappNumber} para continuar o teste.
+                        </div>
+                        ` : ''}
+                        
+                        <div class="demo-credentials">
+                            <h5>Suas Credenciais:</h5>
+                            <div class="credential-item">
+                                <span><strong>Tenant ID:</strong></span>
+                                <span class="credential-value">${this.demoData.tenantId}</span>
+                            </div>
+                            <div class="credential-item">
+                                <span><strong>Email do Negócio:</strong></span>
+                                <span class="credential-value">${this.demoData.businessEmail}</span>
+                            </div>
+                            <div class="credential-item">
+                                <span><strong>WhatsApp do Negócio:</strong></span>
+                                <span class="credential-value">${this.demoData.whatsappNumber}</span>
+                            </div>
+                            <div class="credential-item">
+                                <span><strong>WhatsApp de Usuário:</strong></span>
+                                <span class="credential-value">${this.demoData.userNumber}</span>
+                            </div>
+                            <div class="credential-item">
+                                <span><strong>Domínio:</strong></span>
+                                <span class="credential-value">${this.demoData.domain}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            activateChat() {
+                this.chatActive = true;
+                
+                // Update chat header
+                document.getElementById('chatBusinessName').textContent = `${this.demoData.businessName} - IA Demo`;
+                document.getElementById('chatStatus').textContent = `Demo iniciado! • Especialista em ${this.getDomainName(this.demoData.domain)}`;
+                
+                // Show input container and clear placeholder
+                document.getElementById('chatInputContainer').style.display = 'block';
+                document.getElementById('chatInput').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                
+                // Clear messages and show welcome immediately
+                const messagesContainer = document.getElementById('chatMessages');
+                messagesContainer.innerHTML = '';
+                
+                // Add welcome message from AI immediately (no delay)
+                this.addMessage('ai', this.getWelcomeMessage());
+            }
+
+            getDomainName(domain) {
+                const domains = {
+                    beauty: 'Beleza & Estética',
+                    healthcare: 'Saúde & Bem-estar',
+                    legal: 'Jurídico & Advocacia',
+                    education: 'Educação & Ensino',
+                    sports: 'Esportes & Fitness',
+                    consulting: 'Consultoria & Negócios',
+                    general: 'Diversos Serviços'
+                };
+                return domains[domain] || 'Geral';
+            }
+
+            showNotification(message, type = 'info') {
+                // Remove notificação existente se houver
+                const existingNotification = document.querySelector('.notification');
+                if (existingNotification) {
+                    existingNotification.remove();
+                }
+
+                // Criar nova notificação
+                const notification = document.createElement('div');
+                notification.className = `notification ${type}`;
+                notification.textContent = message;
+
+                // Adicionar ao DOM
+                document.body.appendChild(notification);
+
+                // Remover automaticamente após 5 segundos
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.classList.add('fade-out');
+                        setTimeout(() => {
+                            if (notification.parentNode) {
+                                notification.remove();
+                            }
+                        }, 300);
+                    }
+                }, 5000);
+
+                // Permitir remoção manual ao clicar
+                notification.addEventListener('click', () => {
+                    notification.classList.add('fade-out');
+                    setTimeout(() => {
+                        if (notification.parentNode) {
+                            notification.remove();
+                        }
+                    }, 300);
+                });
+            }
+
+            getWelcomeMessage() {
+                const messages = {
+                    beauty: `Olá! Bem-vindo ao ${this.demoData.businessName}! 💇‍♀️✨
+
+Vejo que você nunca nos contatou antes. Para podermos oferecer o melhor atendimento, preciso conhecê-lo melhor:
+
+• Qual é o seu nome?
+• Qual seu melhor email para contato?
+• É sua primeira vez fazendo procedimentos estéticos?
+• Tem algum profissional de preferência?
+
+Por favor, me conte um pouco sobre você para começarmos! 😊`,
+
+                    healthcare: `Olá! Bem-vindo ao ${this.demoData.businessName}! 🏥💙
+
+Vejo que você nunca nos contatou antes. Para podermos oferecer o melhor atendimento médico, preciso conhecê-lo melhor:
+
+• Qual é o seu nome completo?
+• Qual seu melhor email e telefone para contato?
+• Tem algum histórico médico que devo saber?
+• Já possui algum médico de preferência aqui?
+• Qual o motivo da sua visita hoje?
+
+Por favor, me conte um pouco sobre você para começarmos! 😊`,
+
+                    legal: `Olá! Bem-vindo ao ${this.demoData.businessName}! ⚖️📋
+
+Vejo que você nunca nos contatou antes. Para podermos oferecer o melhor atendimento jurídico, preciso conhecê-lo melhor:
+
+• Qual é o seu nome completo?
+• Qual seu melhor email e telefone para contato?
+• Qual a natureza da questão jurídica que você possui?
+• Já possui algum advogado de preferência aqui?
+• É a primeira vez que busca orientação jurídica?
+
+Por favor, me conte um pouco sobre você e sua situação para começarmos! 😊`,
+
+                    education: `Olá! Bem-vindo ao ${this.demoData.businessName}! 📚🎓
+
+Vejo que você nunca nos contatou antes. Para podermos oferecer o melhor suporte educacional, preciso conhecê-lo melhor:
+
+• Qual é o seu nome?
+• Qual seu melhor email e telefone para contato?
+• Que matéria ou área precisa de apoio?
+• Qual seu nível de escolaridade atual?
+• Tem algum professor de preferência aqui?
+
+Por favor, me conte um pouco sobre você e seus objetivos de estudo! 😊`,
+
+                    sports: `Olá! Bem-vindo ao ${this.demoData.businessName}! 💪🏃‍♀️
+
+Vejo que você nunca treinou conosco antes. Para podermos criar o melhor plano de treino, preciso conhecê-lo melhor:
+
+• Qual é o seu nome?
+• Qual seu melhor email e telefone para contato?
+• Qual seu objetivo principal? (emagrecer, ganhar massa, etc.)
+• Tem experiência com exercícios físicos?
+• Tem algum personal trainer de preferência?
+
+Por favor, me conte um pouco sobre você e seus objetivos fitness! 😊`,
+
+                    consulting: `Olá! Bem-vindo ao ${this.demoData.businessName}! 💼📈
+
+Vejo que você nunca nos contatou antes. Para podermos oferecer a melhor consultoria, preciso conhecê-lo melhor:
+
+• Qual é o seu nome?
+• Qual seu melhor email e telefone para contato?
+• Qual o tipo de empresa ou projeto você tem?
+• Qual o principal desafio que está enfrentando?
+• Em que área precisa de consultoria?
+
+Por favor, me conte um pouco sobre você e sua empresa! 😊`,
+
+                    general: `Olá! Bem-vindo ao ${this.demoData.businessName}! ⭐🌟
+
+Vejo que você nunca nos contatou antes. Para podermos oferecer o melhor atendimento, preciso conhecê-lo melhor:
+
+• Qual é o seu nome?
+• Qual seu melhor email e telefone para contato?
+• Que tipo de serviço você está procurando?
+• É a primeira vez que nos contacta?
+• Tem alguma preferência específica?
+
+Por favor, me conte um pouco sobre você e o que precisa! 😊`
+                };
+
+                return messages[this.demoData.domain] || `Olá! Sou a IA do ${this.demoData.businessName}! Como posso ajudar você hoje?`;
+            }
+
+            async sendMessage() {
+                const input = document.getElementById('chatInput');
+                const message = input.value.trim();
+                
+                if (!message || !this.chatActive) return;
+
+                // Add user message
+                this.addMessage('user', message);
+                input.value = '';
+                input.style.height = 'auto';
+
+                // Show typing indicator
+                this.showTypingIndicator();
+
+                try {
+                    // Send to AI API
+                    const response = await fetch('/api/demo/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            tenantId: this.demoData.tenantId,
+                            message: message,
+                            domain: this.demoData.domain
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        const errorMessage = result.error || 'Falha na comunicação com IA';
+                        this.removeTypingIndicator();
+                        this.addMessage('ai', `Desculpe, ocorreu um erro: ${errorMessage}. Tente novamente.`);
+                        return;
+                    }
+                    
+                    // Remove typing indicator and add AI response
+                    this.removeTypingIndicator();
+                    this.addMessage('ai', result.response);
+
+                } catch (error) {
+                    console.error('Erro ao enviar mensagem:', error);
+                    this.removeTypingIndicator();
+                    this.addMessage('ai', 'Desculpe, houve um problema de conexão. Tente novamente.');
+                }
+            }
+
+            addMessage(sender, text) {
+                const messagesContainer = document.getElementById('chatMessages');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${sender}`;
+                
+                const now = new Date();
+                const timeString = now.toLocaleTimeString('pt-BR', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+
+                messageDiv.innerHTML = `
+                    <div class="message-bubble">
+                        ${text.replace(/\n/g, '<br>')}
+                        <div class="message-time">${timeString}</div>
+                    </div>
+                `;
+
+                messagesContainer.appendChild(messageDiv);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+
+            showTypingIndicator() {
+                const messagesContainer = document.getElementById('chatMessages');
+                const typingDiv = document.createElement('div');
+                typingDiv.className = 'message ai typing-indicator';
+                typingDiv.id = 'typingIndicator';
+                
+                typingDiv.innerHTML = `
+                    <div class="message-bubble">
+                        <div class="loading-indicator">
+                            <span>IA digitando</span>
+                            <div class="typing-dots">
+                                <div class="typing-dot"></div>
+                                <div class="typing-dot"></div>
+                                <div class="typing-dot"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                messagesContainer.appendChild(typingDiv);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+
+            removeTypingIndicator() {
+                const indicator = document.getElementById('typingIndicator');
+                if (indicator) {
+                    indicator.remove();
+                }
+            }
+        }
+
+        // Initialize the demo when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 DOMContentLoaded fired, creating DemoInterativa');
+            try {
+                window.demoInterativa = new DemoInterativa();
+                console.log('✅ DemoInterativa instance created successfully:', window.demoInterativa);
+            } catch (error) {
+                console.error('❌ Error creating DemoInterativa:', error);
+            }
+        });
+
+        // Global click listener for debugging
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'createDemoBtn') {
+                console.log('🌍 GLOBAL: Button click detected!', e.target);
+                console.log('🌍 GLOBAL: Button disabled:', e.target.disabled);
+                console.log('🌍 GLOBAL: Button type:', e.target.type);
+            }
+        });
+
+        // Form validation on input
+        document.addEventListener('DOMContentLoaded', () => {
+            // Aguardar um pouco para garantir que a classe foi inicializada
+            setTimeout(() => {
+                const businessNameInput = document.getElementById('businessName');
+                const businessEmailInput = document.getElementById('businessEmail');
+                
+                if (businessNameInput && businessEmailInput) {
+                    businessNameInput.addEventListener('input', () => {
+                        if (window.demoInterativa) {
+                            window.demoInterativa.updateButtonState();
+                        }
+                    });
+                    
+                    businessEmailInput.addEventListener('input', () => {
+                        if (window.demoInterativa) {
+                            window.demoInterativa.updateButtonState();
+                        }
+                    });
+                }
+            }, 500);
+        });
+    </script>
+</body>
+</html>

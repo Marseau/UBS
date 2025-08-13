@@ -1,0 +1,148 @@
+{
+  "name": "WhatsApp Booking Test Flow - Multi-tenant Fixed",
+  "nodes": [
+    {
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "path": "waba-test-inbound",
+        "httpMethod": "POST"
+      }
+    },
+    {
+      "name": "Tenant Identification - FIXED", 
+      "type": "n8n-nodes-base.function",
+      "parameters": {
+        "functionCode": "// Dynamic tenant lookup based on phone number\nconst tenantPhone = items[0].json.to;\n\n// Simulate tenant lookup (in real implementation, query database)\nconst tenantMapping = {\n  '+5511987654321': { tenant_id: 'tenant_1_beleza', domain: 'beleza' },\n  '+5511987654322': { tenant_id: 'tenant_2_saude', domain: 'saude' },\n  '+5511987654323': { tenant_id: 'tenant_3_juridico', domain: 'juridico' },\n  '+5511987654324': { tenant_id: 'tenant_4_educacao', domain: 'educacao' },\n  '+5511987654325': { tenant_id: 'tenant_5_esportes', domain: 'esportes' },\n  '+5511987654326': { tenant_id: 'tenant_6_consultoria', domain: 'consultoria' }\n};\n\nconst tenant = tenantMapping[tenantPhone] || { tenant_id: 'unknown', domain: 'geral' };\n\nreturn [{\n  ...items[0].json,\n  tenant_id: tenant.tenant_id,\n  domain: tenant.domain,\n  tenant_phone: tenantPhone,\n  user_phone: items[0].json.from\n}];"
+      }
+    },
+    {
+      "name": "AI Intent Classification",
+      "type": "n8n-nodes-base.openAi",
+      "parameters": {
+        "model": "gpt-4",
+        "prompt": "Classifique a intenção do usuário para agendamento no domínio {{ $json.domain }}: {{ $json.text }}. Retorne JSON com intent, servico, data, hora, profissional, urgencia.",
+        "maxTokens": 150
+      }
+    },
+    {
+      "name": "Log AI Interaction - ENHANCED",
+      "type": "n8n-nodes-base.supabase",
+      "parameters": {
+        "operation": "insert", 
+        "table": "ai_logs",
+        "fields": {
+          "tenant_id": "{{ $json.tenant_id }}",
+          "conversation_id": "{{ $json.conversation_id }}",
+          "turn_number": "{{ $json.turn || 1 }}",
+          "prompt": "{{ $json.ai_prompt }}",
+          "response": "{{ $json.ai_response }}",
+          "entities_extracted": "{{ JSON.stringify($json.entities_extracted || {}) }}",
+          "tokens_input": "{{ $json.usage?.prompt_tokens || 0 }}",
+          "tokens_output": "{{ $json.usage?.completion_tokens || 0 }}",
+          "cost_usd": "{{ ($json.usage?.total_tokens || 0) * 0.00002 }}",
+          "response_time_ms": "{{ $json.response_time_ms || 1000 }}",
+          "fallback_to_human": "{{ $json.fallback_to_human || false }}",
+          "scenario_id": "{{ $json.scenario_id }}",
+          "test_run_id": "{{ $json.test_run_id }}",
+          "is_test": true
+        }
+      }
+    },
+    {
+      "name": "Function Router",
+      "type": "n8n-nodes-base.switch", 
+      "parameters": {
+        "rules": [
+          { "condition": "$json.entities_extracted.intent === 'agendar'", "output": "booking_flow" },
+          { "condition": "$json.entities_extracted.intent === 'cancelar'", "output": "cancel_flow" },
+          { "condition": "$json.entities_extracted.intent === 'reagendar'", "output": "reschedule_flow" },
+          { "condition": "$json.entities_extracted.emergencia === true", "output": "emergency_protocol" },
+          { "condition": "$json.entities_extracted.spam_suspeito === true", "output": "spam_detection" }
+        ]
+      }
+    },
+    {
+      "name": "Create Appointment - FIXED",
+      "type": "n8n-nodes-base.supabase",
+      "parameters": {
+        "operation": "insert",
+        "table": "appointments",
+        "fields": {
+          "id": "{{ 'apt_' + $now + '_' + Math.random().toString(36).substr(2, 9) }}",
+          "tenant_id": "{{ $json.tenant_id }}",
+          "user_phone": "{{ $json.user_phone }}",
+          "service_id": "{{ $json.service_id }}",
+          "professional_id": "{{ $json.professional_id }}",
+          "starts_at": "{{ $json.appointment_datetime }}",
+          "status": "booked",
+          "conversation_id": "{{ $json.conversation_id }}",
+          "scenario_id": "{{ $json.scenario_id }}",
+          "is_test": true,
+          "test_run_id": "{{ $json.test_run_id }}",
+          "created_at": "{{ $now }}"
+        }
+      }
+    },
+    {
+      "name": "Log Message - ENHANCED",
+      "type": "n8n-nodes-base.supabase",
+      "parameters": {
+        "operation": "insert",
+        "table": "messages",
+        "fields": {
+          "tenant_id": "{{ $json.tenant_id }}",
+          "conversation_id": "{{ $json.conversation_id }}",
+          "from_user": true,
+          "content": "{{ $json.text }}",
+          "message_type": "{{ $json.message_type || 'text' }}",
+          "turn": "{{ $json.turn || 1 }}",
+          "urgency_detected": "{{ $json.entities_extracted?.urgencia === 'alta' }}",
+          "first_time_client": "{{ $json.entities_extracted?.tipo === 'primeira_vez' }}",
+          "student_level": "{{ $json.entities_extracted?.nivel }}",
+          "fitness_level": "{{ $json.entities_extracted?.nivel }}",
+          "service_type": "{{ $json.entities_extracted?.servico }}",
+          "test_run_id": "{{ $json.test_run_id }}",
+          "is_test": true,
+          "created_at": "{{ $now }}"
+        }
+      }
+    },
+    {
+      "name": "Emergency Protocol",
+      "type": "n8n-nodes-base.function",
+      "parameters": {
+        "functionCode": "// Emergency response for critical cases\nif (items[0].json.entities_extracted?.emergencia) {\n  return [{\n    ...items[0].json,\n    bot_response: 'EMERGÊNCIA MÉDICA: Ligue IMEDIATAMENTE 192 (SAMU). Se a pessoa não está respirando, inicie massagem cardíaca.',\n    emergency_protocol_activated: true,\n    fallback_to_human: true\n  }];\n}\nreturn items;"
+      }
+    },
+    {
+      "name": "Spam Detection",
+      "type": "n8n-nodes-base.function", 
+      "parameters": {
+        "functionCode": "// Spam detection logic\nconst message = items[0].json.text?.toLowerCase() || '';\nconst spamKeywords = ['barato', 'garantido', '100%', 'milagroso', 'secreto', 'viagra', 'sem receita'];\nconst isSpam = spamKeywords.some(keyword => message.includes(keyword));\n\nif (isSpam) {\n  return [{\n    ...items[0].json,\n    bot_response: 'Esta mensagem parece ser spam. Por favor, entre em contato apenas para agendamentos legítimos.',\n    spam_detected: true\n  }];\n}\nreturn items;"
+      }
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [["Tenant Identification - FIXED"]]
+    },
+    "Tenant Identification - FIXED": {
+      "main": [["AI Intent Classification"], ["Log Message - ENHANCED"]]
+    },
+    "AI Intent Classification": {
+      "main": [["Function Router"], ["Log AI Interaction - ENHANCED"]]
+    },
+    "Function Router": {
+      "booking_flow": [["Create Appointment - FIXED"]],
+      "emergency_protocol": [["Emergency Protocol"]],
+      "spam_detection": [["Spam Detection"]]
+    }
+  },
+  "settings": {},
+  "staticData": null,
+  "tags": ["whatsapp", "booking", "multi-tenant", "ubs", "test"],
+  "triggerCount": 0,
+  "updatedAt": "2025-08-11T00:00:00.000Z",
+  "versionId": "1.0-fixed"
+}

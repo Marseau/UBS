@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Navegação</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <h2>🔍 Teste de Navegação - Links do Dashboard</h2>
+        <p class="text-muted">Clique nos links abaixo para testar a navegação. Verifique se redirecionam corretamente.</p>
+        
+        <div class="alert alert-info">
+            <strong>Instrução:</strong> Abra o Console do navegador (F12) para ver logs de depuração.
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <h4>Links da Sidebar</h4>
+                <ul class="list-group">
+                    <li class="list-group-item">
+                        <a href="dashboard-standardized.html" onclick="logClick('dashboard-standardized.html'); return true;">
+                            <i class="fas fa-chart-line me-2"></i>Dashboard Super Admin
+                        </a>
+                    </li>
+                    <li class="list-group-item">
+                        <a href="tenant-business-analytics.html" onclick="logClick('tenant-business-analytics.html'); return true;">
+                            <i class="fas fa-chart-bar me-2"></i>Dashboard Tenant
+                        </a>
+                    </li>
+                    <li class="list-group-item">
+                        <a href="appointments-standardized.html" onclick="logClick('appointments-standardized.html'); return true;">
+                            <i class="fas fa-calendar-check me-2"></i>Agendamentos
+                        </a>
+                    </li>
+                    <li class="list-group-item">
+                        <a href="customers-standardized.html" onclick="logClick('customers-standardized.html'); return true;">
+                            <i class="fas fa-users me-2"></i>Clientes
+                        </a>
+                    </li>
+                    <li class="list-group-item">
+                        <a href="services-standardized.html" onclick="logClick('services-standardized.html'); return true;">
+                            <i class="fas fa-concierge-bell me-2"></i>Serviços
+                        </a>
+                    </li>
+                    <li class="list-group-item">
+                        <a href="conversations.html" onclick="logClick('conversations.html'); return true;">
+                            <i class="fab fa-whatsapp me-2"></i>Conversas
+                        </a>
+                    </li>
+                    <li class="list-group-item">
+                        <a href="payments-standardized.html" onclick="logClick('payments-standardized.html'); return true;">
+                            <i class="fas fa-credit-card me-2"></i>Pagamentos
+                        </a>
+                    </li>
+                    <li class="list-group-item">
+                        <a href="billing.html" onclick="logClick('billing.html'); return true;">
+                            <i class="fas fa-file-invoice-dollar me-2"></i>Faturamento
+                        </a>
+                    </li>
+                    <li class="list-group-item">
+                        <a href="settings.html" onclick="logClick('settings.html'); return true;">
+                            <i class="fas fa-cog me-2"></i>Configurações
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="col-md-6">
+                <h4>Log de Cliques</h4>
+                <div id="clickLog" class="bg-dark text-light p-3" style="height: 400px; overflow-y: auto; font-family: monospace;">
+                    <div class="text-success">🚀 Sistema de teste iniciado...</div>
+                    <div class="text-info">📝 Clique nos links para ver os logs aqui</div>
+                </div>
+                
+                <div class="mt-3">
+                    <button class="btn btn-secondary btn-sm" onclick="clearLog()">
+                        <i class="fas fa-trash me-1"></i>Limpar Log
+                    </button>
+                    <button class="btn btn-info btn-sm" onclick="testAllLinks()">
+                        <i class="fas fa-play me-1"></i>Testar Todos os Links
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4">
+            <h4>Diagnóstico</h4>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">JavaScript Carregado</div>
+                        <div class="card-body">
+                            <div id="jsStatus">Verificando...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">Event Listeners</div>
+                        <div class="card-body">
+                            <div id="listenersStatus">Verificando...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">Redirecionamentos</div>
+                        <div class="card-body">
+                            <div id="redirectStatus">Verificando...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let clickCount = 0;
+        
+        function logClick(href) {
+            clickCount++;
+            const timestamp = new Date().toLocaleTimeString();
+            const logElement = document.getElementById('clickLog');
+            
+            logElement.innerHTML += `<div class="text-warning">🖱️  [${timestamp}] Click #${clickCount}: ${href}</div>`;
+            logElement.scrollTop = logElement.scrollHeight;
+            
+            console.log(`🖱️ CLICK DETECTADO: ${href} (${timestamp})`);
+            
+            // Verificar se o link vai realmente navegar
+            setTimeout(() => {
+                if (window.location.pathname.includes(href.replace('.html', ''))) {
+                    console.log(`✅ NAVEGAÇÃO SUCESSO: ${href}`);
+                } else {
+                    console.log(`❌ NAVEGAÇÃO FALHOU: ${href} - ainda em ${window.location.pathname}`);
+                }
+            }, 1000);
+        }
+        
+        function clearLog() {
+            document.getElementById('clickLog').innerHTML = '<div class="text-success">🚀 Log limpo...</div>';
+            clickCount = 0;
+        }
+        
+        function testAllLinks() {
+            const links = document.querySelectorAll('a[href$=".html"]');
+            const logElement = document.getElementById('clickLog');
+            
+            logElement.innerHTML += '<div class="text-primary">🧪 Testando todos os links...</div>';
+            
+            links.forEach((link, index) => {
+                const href = link.getAttribute('href');
+                const exists = checkFileExists(href);
+                const status = exists ? '✅' : '❌';
+                
+                logElement.innerHTML += `<div class="text-${exists ? 'success' : 'danger'}">${status} ${href} - ${exists ? 'OK' : 'ARQUIVO NÃO ENCONTRADO'}</div>`;
+            });
+            
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        function checkFileExists(href) {
+            try {
+                const xhr = new XMLHttpRequest();
+                xhr.open('HEAD', href, false);
+                xhr.send();
+                return xhr.status !== 404;
+            } catch (e) {
+                return false;
+            }
+        }
+        
+        // Diagnóstico automático
+        document.addEventListener('DOMContentLoaded', function() {
+            // Verificar JavaScript
+            const jsStatus = document.getElementById('jsStatus');
+            jsStatus.innerHTML = `
+                <div class="text-success">✅ JavaScript funcionando</div>
+                <small>Console disponível: ${!!window.console}</small>
+            `;
+            
+            // Verificar Event Listeners globais
+            const listenersStatus = document.getElementById('listenersStatus');
+            const hasGlobalClickListener = !!document.onclick || 
+                                         !!window.onclick || 
+                                         document.addEventListener.toString().includes('click');
+            
+            listenersStatus.innerHTML = `
+                <div class="text-${hasGlobalClickListener ? 'warning' : 'success'}">
+                    ${hasGlobalClickListener ? '⚠️' : '✅'} Event listeners globais
+                </div>
+                <small>Interceptadores detectados: ${hasGlobalClickListener}</small>
+            `;
+            
+            // Verificar redirecionamentos
+            const redirectStatus = document.getElementById('redirectStatus');
+            const originalLocation = window.location.href;
+            
+            setTimeout(() => {
+                const stillSamePage = window.location.href === originalLocation;
+                redirectStatus.innerHTML = `
+                    <div class="text-${stillSamePage ? 'success' : 'warning'}">
+                        ${stillSamePage ? '✅' : '⚠️'} Página estável
+                    </div>
+                    <small>URL: ${window.location.pathname}</small>
+                `;
+            }, 2000);
+        });
+        
+        // Interceptar todos os cliques para debug
+        document.addEventListener('click', function(event) {
+            if (event.target.tagName === 'A' && event.target.href) {
+                console.log('🔍 CLICK INTERCEPTADO:', {
+                    href: event.target.href,
+                    pathname: new URL(event.target.href).pathname,
+                    target: event.target,
+                    preventDefault: event.defaultPrevented
+                });
+            }
+        });
+        
+        // Verificar se há redirecionamentos automáticos
+        const originalPushState = history.pushState;
+        const originalReplaceState = history.replaceState;
+        
+        history.pushState = function(...args) {
+            console.log('📍 HISTORY.PUSHSTATE:', args);
+            return originalPushState.apply(this, args);
+        };
+        
+        history.replaceState = function(...args) {
+            console.log('📍 HISTORY.REPLACESTATE:', args);
+            return originalReplaceState.apply(this, args);
+        };
+        
+        // Interceptar window.location changes
+        let currentLocation = window.location.href;
+        setInterval(() => {
+            if (window.location.href !== currentLocation) {
+                console.log('🌐 LOCATION CHANGED:', {
+                    from: currentLocation,
+                    to: window.location.href
+                });
+                currentLocation = window.location.href;
+            }
+        }, 100);
+    </script>
+</body>
+</html> 

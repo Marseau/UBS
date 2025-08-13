@@ -1,0 +1,640 @@
+{
+  "meta": {
+    "instanceId": "your-instance-id"
+  },
+  "createdAt": "2025-08-11T00:00:00.000Z",
+  "updatedAt": "2025-08-11T00:00:00.000Z",
+  "id": "waba-booking-e2e-workflow",
+  "name": "WABA Inbound → Booking E2E (Multi-tenant)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "waba-inbound",
+        "options": {
+          "noResponseBody": false
+        }
+      },
+      "id": "webhook-waba-inbound",
+      "name": "📱 WABA Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "webhookId": "waba-inbound"
+    },
+    {
+      "parameters": {
+        "functionCode": "// 🔍 TENANT IDENTIFICATION\n// Identifica tenant baseado no número de telefone de destino\n\nconst incomingData = $json;\n\n// Extrair dados do webhook WhatsApp Business API\nconst messageData = incomingData.entry?.[0]?.changes?.[0]?.value?.messages?.[0];\nconst contactData = incomingData.entry?.[0]?.changes?.[0]?.value?.contacts?.[0];\nconst metadataData = incomingData.entry?.[0]?.changes?.[0]?.value?.metadata;\n\nif (!messageData) {\n  return [{\n    error: 'No message data found',\n    skip_processing: true\n  }];\n}\n\n// Dados básicos da mensagem\nconst userPhone = messageData.from;\nconst businessPhone = metadataData?.phone_number_id || metadataData?.display_phone_number;\nconst messageText = messageData.text?.body || messageData.interactive?.button_reply?.title || '[Non-text message]';\nconst messageType = messageData.type;\nconst messageId = messageData.id;\nconst timestamp = messageData.timestamp;\n\n// Mapeamento de tenants (baseado no número de negócio)\n// Em produção, isso viria de uma query na base de dados\nconst tenantMapping = {\n  '+5511987654321': {\n    tenant_id: 'tenant_1_beleza',\n    tenant_name: 'Salão Elegância Premium',\n    domain: 'beauty',\n    business_phone: '+5511987654321'\n  },\n  '+5511987654322': {\n    tenant_id: 'tenant_2_saude', \n    tenant_name: 'Clínica Vida Saudável',\n    domain: 'healthcare',\n    business_phone: '+5511987654322'\n  },\n  '+5511987654323': {\n    tenant_id: 'tenant_3_juridico',\n    tenant_name: 'Advocacia Silva & Santos', \n    domain: 'legal',\n    business_phone: '+5511987654323'\n  },\n  '+5511987654324': {\n    tenant_id: 'tenant_4_educacao',\n    tenant_name: 'EduTech Cursos Personalizados',\n    domain: 'education', \n    business_phone: '+5511987654324'\n  },\n  '+5511987654325': {\n    tenant_id: 'tenant_5_esportes',\n    tenant_name: 'FitPro Academia & Personal',\n    domain: 'sports',\n    business_phone: '+5511987654325'\n  },\n  '+5511987654326': {\n    tenant_id: 'tenant_6_consultoria',\n    tenant_name: 'BizConsult Estratégia Empresarial', \n    domain: 'consulting',\n    business_phone: '+5511987654326'\n  }\n};\n\n// Identificar tenant\nconst tenant = tenantMapping[businessPhone] || {\n  tenant_id: 'unknown',\n  tenant_name: 'Unknown Business',\n  domain: 'general',\n  business_phone: businessPhone\n};\n\n// Dados do usuário\nconst userName = contactData?.profile?.name || 'Cliente';\n\n// Gerar conversation_id único\nconst conversationId = `conv_${userPhone.replace(/\\+/, '')}_${Date.now()}`;\n\n// Headers de tracking (para observabilidade)\nconst correlationId = $('Webhook').item.json.headers['x-correlation-id'] || `corr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;\nconst testExecutionId = $('Webhook').item.json.headers['x-test-execution-id'] || null;\nconst idempotencyKey = $('Webhook').item.json.headers['idempotency-key'] || `${messageId}_${tenant.tenant_id}`;\n\n// Payload enriquecido para próximo nó\nreturn [{\n  // Dados originais WABA\n  original_webhook: incomingData,\n  \n  // Dados da mensagem\n  message_id: messageId,\n  message_text: messageText,\n  message_type: messageType,\n  timestamp: timestamp,\n  \n  // Dados do usuário\n  user_phone: userPhone,\n  user_name: userName,\n  \n  // Dados do tenant identificado\n  tenant_id: tenant.tenant_id,\n  tenant_name: tenant.tenant_name,\n  business_domain: tenant.domain,\n  business_phone: tenant.business_phone,\n  \n  // IDs de tracking\n  conversation_id: conversationId,\n  correlation_id: correlationId,\n  test_execution_id: testExecutionId,\n  idempotency_key: idempotencyKey,\n  \n  // Flags de controle\n  skip_processing: false,\n  tenant_identified: tenant.tenant_id !== 'unknown',\n  \n  // Timestamp para métricas\n  processing_started_at: new Date().toISOString()\n}];"
+      },
+      "id": "tenant-identification",
+      "name": "🏢 Tenant Identification", 
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "skip_processing",
+              "leftValue": "={{ $json.skip_processing }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "skip-processing-check",
+      "name": "🚦 Skip Processing?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// 🤖 AI INTENT CLASSIFICATION & ENTITY EXTRACTION\n// Processa mensagem com GPT-4 para classificar intenção e extrair entidades\n\nconst messageData = $json;\n\n// Preparar prompt dinâmico baseado no domínio\nconst domainPrompts = {\n  beauty: `Você é assistente de agendamento para salão de beleza. Analise a mensagem e extraia:\\n- Intent: agendar, cancelar, reagendar, consultar, emergencia, spam\\n- Serviço solicitado: corte, coloração, manicure, sobrancelhas, escova\\n- Data preferida: hoje, amanha, semana, mes\\n- Horário preferido: manha, tarde, noite, específico\\n- Profissional solicitado: nome se mencionado\\n- Urgência: baixa, média, alta\\n- Cliente habitual: sim/não baseado no tom`,\n  \n  healthcare: `Você é assistente de agendamento médico. Analise a mensagem e extraia:\\n- Intent: agendar, cancelar, reagendar, consultar, emergencia, spam\\n- Tipo consulta: clinica_geral, fisioterapia, retorno, especialista\\n- Data preferida: hoje, amanha, semana, mes\\n- Horário preferido: manha, tarde\\n- Médico solicitado: nome se mencionado\\n- Urgência: baixa, média, alta, CRITICA\\n- Convênio: mencionado ou não\\n- Sintomas: se mencionados para triagem`,\n  \n  legal: `Você é assistente de agendamento jurídico. Analise a mensagem e extraia:\\n- Intent: agendar, cancelar, reagendar, consultar, urgencia_prazo, spam\\n- Área jurídica: trabalhista, civil, empresarial, geral\\n- Data preferida: hoje, amanha, semana, mes\\n- Horário preferido: manha, tarde\\n- Advogado solicitado: nome se mencionado\\n- Urgência: baixa, média, alta, PRAZO_CRITICO\\n- Tipo consulta: inicial, retorno, online\\n- Assunto: se mencionado resumidamente`,\n  \n  education: `Você é assistente de agendamento educacional. Analise a mensagem e extraia:\\n- Intent: agendar, cancelar, reagendar, consultar, spam\\n- Matéria: matematica, fisica, quimica, portugues, geral\\n- Nível: fundamental, medio, vestibular, concurso\\n- Data preferida: hoje, amanha, semana, mes\\n- Horário preferido: tarde, noite, sabado\\n- Professor solicitado: nome se mencionado\\n- Urgência: baixa, média, alta (prova próxima)\\n- Tipo aula: presencial, online, domicilio`,\n  \n  sports: `Você é assistente de agendamento fitness. Analise a mensagem e extraia:\\n- Intent: agendar, cancelar, reagendar, consultar, lesao, spam\\n- Atividade: personal, pilates, avaliacao, quadra\\n- Data preferida: hoje, amanha, semana, mes\\n- Horário preferido: manha, tarde, noite\\n- Instrutor solicitado: nome se mencionado\\n- Urgência: baixa, média, alta\\n- Objetivo: hipertrofia, emagrecimento, reabilitacao, condicionamento\\n- Nível: iniciante, intermediario, avancado`,\n  \n  consulting: `Você é assistente de agendamento empresarial. Analise a mensagem e extraia:\\n- Intent: agendar, cancelar, reagendar, consultar, crise_urgente, spam\\n- Tipo serviço: diagnostico, workshop, consultoria, sprint\\n- Data preferida: hoje, amanha, semana, mes\\n- Horário preferido: manha, tarde\\n- Consultor solicitado: nome se mencionado\\n- Urgência: baixa, média, alta, CRISE\\n- Área foco: estrategia, operacoes, financeiro, rh\\n- Tamanho empresa: startup, pequena, media, grande`\n};\n\nconst domainPrompt = domainPrompts[messageData.business_domain] || domainPrompts.beauty;\n\n// Prompt principal para GPT-4\nconst systemPrompt = `${domainPrompt}\\n\\nRESPONDA APENAS EM JSON VÁLIDO com esta estrutura exata:\\n{\\n  \"intent\": \"string\",\\n  \"confidence\": 0.95,\\n  \"entities\": {\\n    \"service\": \"string ou null\",\\n    \"date\": \"string ou null\", \\n    \"time\": \"string ou null\",\\n    \"professional\": \"string ou null\",\\n    \"urgency\": \"string\",\\n    \"additional_info\": {}\\n  },\\n  \"suggested_response\": \"string\",\\n  \"next_action\": \"string\"\\n}`;\n\nconst userMessage = `Mensagem do cliente: \"${messageData.message_text}\"\\nEmpresa: ${messageData.tenant_name}\\nDomínio: ${messageData.business_domain}`;\n\n// Payload para o nó OpenAI\nreturn [{\n  ...messageData,\n  ai_system_prompt: systemPrompt,\n  ai_user_message: userMessage,\n  ai_model: 'gpt-4',\n  ai_max_tokens: 300,\n  ai_temperature: 0.3\n}];"
+      },
+      "id": "ai-intent-prep",
+      "name": "🧠 AI Intent Prep",
+      "type": "n8n-nodes-base.function", 
+      "typeVersion": 1,
+      "position": [800, 200]
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "model": "gpt-4",
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 300
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "={{ $json.ai_system_prompt }}"
+            },
+            {
+              "role": "user", 
+              "content": "={{ $json.ai_user_message }}"
+            }
+          ]
+        }
+      },
+      "id": "openai-intent",
+      "name": "🤖 OpenAI Intent",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [1000, 200],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-main",
+          "name": "OpenAI Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// 📊 AI RESPONSE PROCESSING\n// Processa resposta da OpenAI e enriquece dados\n\nconst inputData = $json;\nconst aiResponse = inputData.message?.content || '{\"error\": \"No AI response\"}';\n\n// Parse da resposta JSON da IA\nlet aiParsed;\ntry {\n  aiParsed = JSON.parse(aiResponse);\n} catch (e) {\n  // Fallback se JSON inválido\n  aiParsed = {\n    intent: 'unknown',\n    confidence: 0.1,\n    entities: {},\n    suggested_response: 'Desculpe, não consegui entender sua mensagem.',\n    next_action: 'fallback_to_human'\n  };\n}\n\n// Enriquecer dados com resultado da IA\nconst enrichedData = {\n  // Dados originais\n  ...inputData,\n  \n  // Resultado da classificação IA\n  ai_intent: aiParsed.intent,\n  ai_confidence: aiParsed.confidence,\n  ai_entities: aiParsed.entities,\n  ai_suggested_response: aiParsed.suggested_response,\n  ai_next_action: aiParsed.next_action,\n  \n  // Dados de custo/usage\n  ai_tokens_used: inputData.usage?.total_tokens || 0,\n  ai_tokens_input: inputData.usage?.prompt_tokens || 0, \n  ai_tokens_output: inputData.usage?.completion_tokens || 0,\n  ai_cost_usd: (inputData.usage?.total_tokens || 0) * 0.00003, // GPT-4 pricing approximation\n  ai_model_used: 'gpt-4',\n  ai_response_raw: aiResponse,\n  \n  // Flags de decisão\n  requires_booking: ['agendar', 'reagendar'].includes(aiParsed.intent),\n  requires_human: ['emergencia', 'crise_urgente', 'lesao', 'spam'].includes(aiParsed.intent) || aiParsed.confidence < 0.6,\n  is_high_priority: aiParsed.entities?.urgency === 'alta' || ['emergencia', 'CRITICA', 'PRAZO_CRITICO', 'CRISE'].includes(aiParsed.entities?.urgency),\n  \n  // Timestamp\n  ai_processed_at: new Date().toISOString()\n};\n\nreturn [enrichedData];"
+      },
+      "id": "ai-response-processing",
+      "name": "📊 AI Response Processing",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "table": "conversation_history",
+        "columns": {
+          "values": [
+            {
+              "column": "tenant_id",
+              "value": "={{ $json.tenant_id }}"
+            },
+            {
+              "column": "user_id", 
+              "value": "={{ $json.user_phone }}"
+            },
+            {
+              "column": "content",
+              "value": "={{ $json.message_text }}"
+            },
+            {
+              "column": "is_from_user",
+              "value": true
+            },
+            {
+              "column": "message_type",
+              "value": "={{ $json.message_type }}"
+            },
+            {
+              "column": "intent_detected", 
+              "value": "={{ $json.ai_intent }}"
+            },
+            {
+              "column": "confidence_score",
+              "value": "={{ $json.ai_confidence }}"
+            },
+            {
+              "column": "conversation_context",
+              "value": "={{ JSON.stringify({ conversation_id: $json.conversation_id, entities: $json.ai_entities, correlation_id: $json.correlation_id, scenario_id: $json.ai_entities?.scenario_id }) }}"
+            },
+            {
+              "column": "tokens_used",
+              "value": "={{ $json.ai_tokens_used }}"
+            },
+            {
+              "column": "api_cost_usd",
+              "value": "={{ $json.ai_cost_usd }}"
+            },
+            {
+              "column": "model_used",
+              "value": "={{ $json.ai_model_used }}"
+            },
+            {
+              "column": "message_source",
+              "value": "whatsapp"
+            },
+            {
+              "column": "processing_cost_usd", 
+              "value": "0.001"
+            },
+            {
+              "column": "conversation_outcome",
+              "value": "={{ $json.ai_next_action }}"
+            },
+            {
+              "column": "test_execution_id",
+              "value": "={{ $json.test_execution_id }}"
+            }
+          ]
+        }
+      },
+      "id": "log-conversation-history",
+      "name": "💾 Log Conversation",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1400, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "requires_booking",
+              "leftValue": "={{ $json.requires_booking }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "booking-flow-check",
+      "name": "📅 Requires Booking?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1600, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "requires_human",
+              "leftValue": "={{ $json.requires_human }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "human-escalation-check",
+      "name": "🚨 Requires Human?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1600, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "// 📋 BOOKING FLOW ORCHESTRATOR\n// Orquestra processo de agendamento baseado nas entidades extraídas\n\nconst bookingData = $json;\n\n// Mapear serviços por domínio (em produção viria da base)\nconst serviceMapping = {\n  beauty: {\n    'corte': 'Corte Feminino Premium',\n    'coloracao': 'Coloração Completa', \n    'manicure': 'Manicure Completa',\n    'sobrancelhas': 'Design de Sobrancelhas',\n    'escova': 'Escova Modeladora'\n  },\n  healthcare: {\n    'clinica_geral': 'Consulta Clínico Geral',\n    'retorno': 'Retorno Médico',\n    'fisioterapia': 'Sessão Fisioterapia',\n    'dermatologia': 'Consulta Dermatológica'\n  },\n  legal: {\n    'inicial': 'Consulta Inicial Jurídica',\n    'retorno': 'Consulta de Retorno',\n    'online': 'Reunião Online',\n    'documentos': 'Análise Documental'\n  },\n  education: {\n    'matematica': 'Aula Particular Matemática',\n    'mentoria': 'Mentoria Educacional',\n    'vestibular': 'Preparatório Vestibular',\n    'online': 'Aula Online'\n  },\n  sports: {\n    'personal': 'Personal Training',\n    'avaliacao': 'Avaliação Física',\n    'quadra': 'Reserva Quadra Tênis',\n    'pilates': 'Aula Pilates'\n  },\n  consulting: {\n    'diagnostico': 'Diagnóstico Empresarial',\n    'workshop': 'Workshop Empresarial', \n    'sprint': 'Sprint Review',\n    'online': 'Consultoria Online'\n  }\n};\n\n// Identificar serviço\nconst domainServices = serviceMapping[bookingData.business_domain] || {};\nconst requestedService = bookingData.ai_entities?.service?.toLowerCase() || 'geral';\nconst serviceName = domainServices[requestedService] || Object.values(domainServices)[0] || 'Serviço Geral';\n\n// Processar data/hora preferida\nconst datePreference = bookingData.ai_entities?.date || 'amanha';\nconst timePreference = bookingData.ai_entities?.time || 'manha';\n\n// Calcular próxima data disponível baseada na preferência\nlet suggestedDateTime;\nconst now = new Date();\nconst tomorrow = new Date(now);\ntomorrow.setDate(tomorrow.getDate() + 1);\n\nswitch(datePreference.toLowerCase()) {\n  case 'hoje':\n    suggestedDateTime = new Date(now);\n    break;\n  case 'amanha':\n  case 'tomorrow':\n    suggestedDateTime = new Date(tomorrow);\n    break;\n  case 'semana':\n    suggestedDateTime = new Date(now);\n    suggestedDateTime.setDate(suggestedDateTime.getDate() + 7);\n    break;\n  default:\n    suggestedDateTime = new Date(tomorrow);\n}\n\n// Definir horário baseado na preferência\nswitch(timePreference.toLowerCase()) {\n  case 'manha':\n  case 'morning':\n    suggestedDateTime.setHours(9, 0, 0, 0);\n    break;\n  case 'tarde':\n  case 'afternoon':\n    suggestedDateTime.setHours(14, 0, 0, 0);\n    break;\n  case 'noite':\n  case 'evening':\n    suggestedDateTime.setHours(18, 0, 0, 0);\n    break;\n  default:\n    suggestedDateTime.setHours(10, 0, 0, 0);\n}\n\n// Gerar appointment ID\nconst appointmentId = `apt_${bookingData.tenant_id}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;\n\n// Preparar dados para criação do appointment\nconst appointmentData = {\n  ...bookingData,\n  \n  // Dados do agendamento\n  appointment_id: appointmentId,\n  service_name: serviceName,\n  requested_service: requestedService,\n  suggested_datetime: suggestedDateTime.toISOString(),\n  date_preference: datePreference,\n  time_preference: timePreference,\n  \n  // Dados do profissional (placeholder - em produção viria de query)\n  professional_name: bookingData.ai_entities?.professional || 'Próximo disponível',\n  \n  // Status e controle\n  booking_status: 'pending_confirmation',\n  booking_step: 'datetime_confirmation',\n  \n  // Preços (placeholder - em produção viria da tabela services)\n  estimated_price: getServicePrice(bookingData.business_domain, requestedService),\n  estimated_duration: getServiceDuration(bookingData.business_domain, requestedService),\n  \n  // Timestamp\n  booking_initiated_at: new Date().toISOString()\n};\n\n// Função auxiliar para preços\nfunction getServicePrice(domain, service) {\n  const prices = {\n    beauty: { corte: 85, coloracao: 250, manicure: 45, sobrancelhas: 35, escova: 50 },\n    healthcare: { clinica_geral: 200, retorno: 120, fisioterapia: 150, dermatologia: 250 },\n    legal: { inicial: 350, retorno: 200, online: 180, documentos: 300 },\n    education: { matematica: 80, mentoria: 120, vestibular: 150, online: 70 },\n    sports: { personal: 120, avaliacao: 180, quadra: 80, pilates: 90 },\n    consulting: { diagnostico: 2500, workshop: 3500, sprint: 450, online: 350 }\n  };\n  return prices[domain]?.[service] || 100;\n}\n\n// Função auxiliar para duração\nfunction getServiceDuration(domain, service) {\n  const durations = {\n    beauty: { corte: 90, coloracao: 180, manicure: 60, sobrancelhas: 45, escova: 60 },\n    healthcare: { clinica_geral: 60, retorno: 30, fisioterapia: 50, dermatologia: 45 },\n    legal: { inicial: 90, retorno: 60, online: 60, documentos: 120 },\n    education: { matematica: 60, mentoria: 90, vestibular: 120, online: 60 },\n    sports: { personal: 60, avaliacao: 90, quadra: 60, pilates: 50 },\n    consulting: { diagnostico: 240, workshop: 480, sprint: 120, online: 90 }\n  };\n  return durations[domain]?.[service] || 60;\n}\n\nreturn [appointmentData];"
+      },
+      "id": "booking-orchestrator",
+      "name": "📋 Booking Orchestrator",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1800, 100]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "table": "appointments",
+        "columns": {
+          "values": [
+            {
+              "column": "tenant_id",
+              "value": "={{ $json.tenant_id }}"
+            },
+            {
+              "column": "user_id",
+              "value": "={{ $json.user_phone }}"
+            },
+            {
+              "column": "start_time",
+              "value": "={{ $json.suggested_datetime }}"
+            },
+            {
+              "column": "end_time", 
+              "value": "={{ new Date(new Date($json.suggested_datetime).getTime() + $json.estimated_duration * 60000).toISOString() }}"
+            },
+            {
+              "column": "status",
+              "value": "pending"
+            },
+            {
+              "column": "quoted_price",
+              "value": "={{ $json.estimated_price }}"
+            },
+            {
+              "column": "final_price",
+              "value": "={{ $json.estimated_price }}"
+            },
+            {
+              "column": "appointment_data",
+              "value": "={{ JSON.stringify({ booking_source: 'whatsapp', service_name: $json.service_name, conversation_id: $json.conversation_id, ai_confidence: $json.ai_confidence, entities_extracted: $json.ai_entities }) }}"
+            },
+            {
+              "column": "test_execution_id",
+              "value": "={{ $json.test_execution_id }}"
+            }
+          ]
+        }
+      },
+      "id": "create-appointment",
+      "name": "📅 Create Appointment",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2000, 100],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// 🚨 HUMAN ESCALATION HANDLER\n// Processa casos que requerem intervenção humana\n\nconst escalationData = $json;\n\n// Definir tipo de escalação baseado no intent e urgência\nlet escalationType = 'general';\nlet escalationPriority = 'medium';\nlet escalationMessage = '';\n\nswitch(escalationData.ai_intent) {\n  case 'emergencia':\n  case 'CRITICA':\n    escalationType = 'medical_emergency';\n    escalationPriority = 'critical';\n    escalationMessage = '🚨 EMERGÊNCIA MÉDICA: Ligue IMEDIATAMENTE 192 (SAMU). Se a pessoa não está respirando, inicie massagem cardíaca.';\n    break;\n    \n  case 'crise_urgente':\n  case 'CRISE':\n    escalationType = 'business_crisis';\n    escalationPriority = 'high';\n    escalationMessage = '🔥 CRISE EMPRESARIAL: Situação crítica identificada. Um consultor entrará em contato em até 30 minutos.';\n    break;\n    \n  case 'urgencia_prazo':\n  case 'PRAZO_CRITICO':\n    escalationType = 'legal_deadline';\n    escalationPriority = 'high';\n    escalationMessage = '⚖️ PRAZO JURÍDICO: Prazo crítico identificado. Dr. Roberto entrará em contato em até 1 hora.';\n    break;\n    \n  case 'lesao':\n    escalationType = 'sports_injury';\n    escalationPriority = 'high';\n    escalationMessage = '🏥 LESÃO ESPORTIVA: Recomendamos procurar atendimento médico primeiro. Após liberação, adaptaremos seu treino.';\n    break;\n    \n  case 'spam':\n    escalationType = 'spam_detection';\n    escalationPriority = 'low';\n    escalationMessage = '🚫 Esta mensagem parece ser spam. Por favor, entre em contato apenas para agendamentos legítimos.';\n    break;\n    \n  default:\n    if (escalationData.ai_confidence < 0.6) {\n      escalationType = 'low_confidence';\n      escalationPriority = 'medium';\n      escalationMessage = '🤔 Não consegui entender completamente sua solicitação. Um de nossos atendentes entrará em contato em breve.';\n    }\n}\n\n// Preparar dados de escalação\nconst escalationPayload = {\n  ...escalationData,\n  \n  // Dados da escalação\n  escalation_type: escalationType,\n  escalation_priority: escalationPriority,\n  escalation_message: escalationMessage,\n  escalation_reason: `Intent: ${escalationData.ai_intent}, Confidence: ${escalationData.ai_confidence}`,\n  \n  // Dados para notificação\n  requires_immediate_attention: ['critical', 'high'].includes(escalationPriority),\n  estimated_response_time: getResponseTime(escalationPriority),\n  \n  // Timestamp\n  escalated_at: new Date().toISOString()\n};\n\n// Função auxiliar para tempo de resposta\nfunction getResponseTime(priority) {\n  switch(priority) {\n    case 'critical': return '5 minutos';\n    case 'high': return '30 minutos';\n    case 'medium': return '2 horas';\n    case 'low': return '24 horas';\n    default: return '4 horas';\n  }\n}\n\nreturn [escalationPayload];"
+      },
+      "id": "human-escalation-handler",
+      "name": "🚨 Human Escalation",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1800, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "// 💬 WHATSAPP RESPONSE SENDER\n// Prepara e envia resposta via WhatsApp Business API\n\nconst responseData = $json;\n\n// Determinar tipo de resposta baseado no fluxo\nlet whatsappMessage = '';\nlet messageType = 'text';\n\nif (responseData.escalation_message) {\n  // Resposta de escalação\n  whatsappMessage = responseData.escalation_message;\n} else if (responseData.appointment_id) {\n  // Resposta de agendamento\n  const datetime = new Date(responseData.suggested_datetime);\n  const dateStr = datetime.toLocaleDateString('pt-BR');\n  const timeStr = datetime.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});\n  \n  whatsappMessage = `✅ *Agendamento Confirmado!*\\n\\n` +\n    `📅 *Data:* ${dateStr}\\n` +\n    `🕐 *Horário:* ${timeStr}\\n` +\n    `💼 *Serviço:* ${responseData.service_name}\\n` +\n    `👤 *Profissional:* ${responseData.professional_name}\\n` +\n    `💰 *Valor:* R$ ${responseData.estimated_price},00\\n\\n` +\n    `📍 Chegue com 10 minutos de antecedência.\\n` +\n    `❓ Dúvidas? Digite *AJUDA*`;\n} else {\n  // Resposta padrão baseada na sugestão da IA\n  whatsappMessage = responseData.ai_suggested_response || 'Obrigado pela sua mensagem. Em breve retornaremos o contato.';\n}\n\n// Preparar payload para WhatsApp Business API\nconst whatsappPayload = {\n  messaging_product: 'whatsapp',\n  to: responseData.user_phone,\n  type: messageType,\n  text: {\n    body: whatsappMessage\n  }\n};\n\n// Adicionar headers necessários\nconst headers = {\n  'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,\n  'Content-Type': 'application/json'\n};\n\n// URL da API do WhatsApp\nconst whatsappUrl = `https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;\n\nreturn [{\n  ...responseData,\n  \n  // Dados da resposta WhatsApp\n  whatsapp_payload: whatsappPayload,\n  whatsapp_url: whatsappUrl,\n  whatsapp_headers: headers,\n  whatsapp_message: whatsappMessage,\n  \n  // Controle\n  response_sent_at: new Date().toISOString()\n}];"
+      },
+      "id": "whatsapp-response-sender",
+      "name": "💬 WhatsApp Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2200, 250]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.whatsapp_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.WHATSAPP_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "jsonBody": "={{ JSON.stringify($json.whatsapp_payload) }}",
+        "options": {}
+      },
+      "id": "whatsapp-api-call",
+      "name": "📤 Send WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2400, 250]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "table": "usage_costs",
+        "columns": {
+          "values": [
+            {
+              "column": "tenant_id",
+              "value": "={{ $json.tenant_id }}"
+            },
+            {
+              "column": "date",
+              "value": "={{ new Date().toISOString().split('T')[0] }}"
+            },
+            {
+              "column": "conversations_count",
+              "value": 1
+            },
+            {
+              "column": "ai_requests_count",
+              "value": 1
+            },
+            {
+              "column": "ai_tokens_used",
+              "value": "={{ $json.ai_tokens_used }}"
+            },
+            {
+              "column": "ai_cost_usd",
+              "value": "={{ $json.ai_cost_usd }}"
+            },
+            {
+              "column": "cost_per_conversation", 
+              "value": "={{ $json.ai_cost_usd }}"
+            },
+            {
+              "column": "test_execution_id",
+              "value": "={{ $json.test_execution_id }}"
+            }
+          ]
+        }
+      },
+      "id": "log-usage-costs",
+      "name": "💰 Log Usage Costs",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2600, 250],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// ✅ FINAL SUCCESS RESPONSE\n// Preparar resposta final de sucesso para o webhook\n\nconst finalData = $json;\n\n// Preparar resposta de sucesso\nconst successResponse = {\n  status: 'success',\n  message: 'WhatsApp message processed successfully',\n  data: {\n    conversation_id: finalData.conversation_id,\n    tenant_id: finalData.tenant_id,\n    business_domain: finalData.business_domain,\n    intent_detected: finalData.ai_intent,\n    confidence: finalData.ai_confidence,\n    action_taken: finalData.appointment_id ? 'appointment_created' : 'human_escalation',\n    appointment_id: finalData.appointment_id || null,\n    escalation_type: finalData.escalation_type || null,\n    processing_time_ms: new Date() - new Date(finalData.processing_started_at),\n    ai_cost_usd: finalData.ai_cost_usd,\n    test_execution_id: finalData.test_execution_id\n  },\n  timestamp: new Date().toISOString()\n};\n\nreturn [successResponse];"
+      },
+      "id": "success-response",
+      "name": "✅ Success Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2800, 250]
+    },
+    {
+      "parameters": {
+        "functionCode": "// ❌ ERROR HANDLER\n// Trata erros e falhas do pipeline\n\nconst errorData = $json;\n\n// Preparar resposta de erro\nconst errorResponse = {\n  status: 'error',\n  message: 'Failed to process WhatsApp message',\n  error: {\n    type: errorData.error?.type || 'unknown_error',\n    message: errorData.error?.message || 'Unknown error occurred',\n    conversation_id: errorData.conversation_id || null,\n    tenant_id: errorData.tenant_id || null,\n    correlation_id: errorData.correlation_id || null\n  },\n  timestamp: new Date().toISOString()\n};\n\nreturn [errorResponse];"
+      },
+      "id": "error-handler",
+      "name": "❌ Error Handler",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [800, 500]
+    }
+  ],
+  "connections": {
+    "📱 WABA Webhook": {
+      "main": [
+        [
+          {
+            "node": "🏢 Tenant Identification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🏢 Tenant Identification": {
+      "main": [
+        [
+          {
+            "node": "🚦 Skip Processing?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚦 Skip Processing?": {
+      "main": [
+        [
+          {
+            "node": "❌ Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🧠 AI Intent Prep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 AI Intent Prep": {
+      "main": [
+        [
+          {
+            "node": "🤖 OpenAI Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 OpenAI Intent": {
+      "main": [
+        [
+          {
+            "node": "📊 AI Response Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 AI Response Processing": {
+      "main": [
+        [
+          {
+            "node": "💾 Log Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Log Conversation": {
+      "main": [
+        [
+          {
+            "node": "📅 Requires Booking?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🚨 Requires Human?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📅 Requires Booking?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "📋 Booking Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚨 Requires Human?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "🚨 Human Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📋 Booking Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "📅 Create Appointment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📅 Create Appointment": {
+      "main": [
+        [
+          {
+            "node": "💬 WhatsApp Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚨 Human Escalation": {
+      "main": [
+        [
+          {
+            "node": "💬 WhatsApp Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💬 WhatsApp Response": {
+      "main": [
+        [
+          {
+            "node": "📤 Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📤 Send WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "💰 Log Usage Costs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💰 Log Usage Costs": {
+      "main": [
+        [
+          {
+            "node": "✅ Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "hash": "waba-booking-e2e-hash"
+}

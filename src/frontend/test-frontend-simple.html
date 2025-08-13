@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Frontend Integration</title>
+</head>
+<body>
+    <h1>Test Frontend Integration - FASE 5</h1>
+    
+    <div style="margin: 20px;">
+        <h2>Login Test</h2>
+        <button onclick="testLogin()">Test Login</button>
+        <pre id="loginResult"></pre>
+    </div>
+    
+    <div style="margin: 20px;">
+        <h2>Load Tenants Test</h2>
+        <button onclick="testLoadTenants()">Test Load Tenants</button>
+        <pre id="tenantsResult"></pre>
+    </div>
+    
+    <div style="margin: 20px;">
+        <h2>Load Metrics Test</h2>
+        <select id="tenantSelect" onchange="testLoadMetrics()">
+            <option value="">Select a tenant first</option>
+        </select>
+        <pre id="metricsResult"></pre>
+    </div>
+    
+    <div style="margin: 20px;">
+        <h2>Refresh Metrics Test</h2>
+        <button onclick="testRefresh()">Test Refresh</button>
+        <pre id="refreshResult"></pre>
+    </div>
+    
+    <script>
+        let authToken = null;
+        
+        async function testLogin() {
+            try {
+                const response = await fetch('/api/admin/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'admin@universalbooking.com',
+                        password: 'admin123'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.token) {
+                    authToken = data.token;
+                    localStorage.setItem('adminToken', authToken);
+                    document.getElementById('loginResult').textContent = '✅ Login successful!\nToken: ' + authToken.substring(0, 20) + '...';
+                } else {
+                    document.getElementById('loginResult').textContent = '❌ Login failed: ' + JSON.stringify(data);
+                }
+            } catch (error) {
+                document.getElementById('loginResult').textContent = '❌ Error: ' + error.message;
+            }
+        }
+        
+        async function testLoadTenants() {
+            if (!authToken) {
+                document.getElementById('tenantsResult').textContent = '❌ Please login first';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/tenant-business-analytics/tenants', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                const data = await response.json();
+                document.getElementById('tenantsResult').textContent = '✅ Tenants loaded:\n' + JSON.stringify(data, null, 2);
+                
+                // Populate select
+                if (data.success && data.tenants) {
+                    const select = document.getElementById('tenantSelect');
+                    select.innerHTML = '<option value="">Select a tenant</option>';
+                    data.tenants.forEach(tenant => {
+                        const option = document.createElement('option');
+                        option.value = tenant.tenant_id;
+                        option.textContent = tenant.name;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                document.getElementById('tenantsResult').textContent = '❌ Error: ' + error.message;
+            }
+        }
+        
+        async function testLoadMetrics() {
+            const tenantId = document.getElementById('tenantSelect').value;
+            if (!tenantId) return;
+            
+            try {
+                const response = await fetch(`/api/tenant-business-analytics/metrics/${tenantId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                const data = await response.json();
+                document.getElementById('metricsResult').textContent = '✅ Metrics loaded:\n' + JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('metricsResult').textContent = '❌ Error: ' + error.message;
+            }
+        }
+        
+        async function testRefresh() {
+            if (!authToken) {
+                document.getElementById('refreshResult').textContent = '❌ Please login first';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/tenant-business-analytics/refresh', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        period_days: 30
+                    })
+                });
+                
+                const data = await response.json();
+                document.getElementById('refreshResult').textContent = '✅ Refresh completed:\n' + JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('refreshResult').textContent = '❌ Error: ' + error.message;
+            }
+        }
+        
+        // Auto-load token if exists
+        window.onload = () => {
+            authToken = localStorage.getItem('adminToken');
+            if (authToken) {
+                document.getElementById('loginResult').textContent = '✅ Using existing token from localStorage';
+            }
+        };
+    </script>
+</body>
+</html>

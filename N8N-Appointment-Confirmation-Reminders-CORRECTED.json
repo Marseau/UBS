@@ -1,0 +1,537 @@
+{
+  "meta": {
+    "instanceId": "n8n-appointment-reminders-corrected-001"
+  },
+  "createdAt": "2025-08-11T00:00:00.000Z",
+  "updatedAt": "2025-08-11T00:00:00.000Z",
+  "id": "appointment-confirmation-reminders-corrected",
+  "name": "Appointment Confirmation & Reminders (Multi-tenant) - CORRECTED",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "appointment-cron-trigger",
+      "name": "⏰ Every 15 Minutes",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "getAll",
+        "table": "appointments",
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "condition": "equals",
+              "keyValue": "confirmed"
+            },
+            {
+              "keyName": "start_time",
+              "condition": "dateTimeBetween",
+              "keyValue": "={{ new Date().toISOString() }}",
+              "keyValue2": "={{ new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "fetch-upcoming-appointments",
+      "name": "📅 Fetch Appointments",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [400, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// 🔍 REMINDER SCHEDULER\n// Determina quais lembretes enviar baseado no timing\n\nconst appointmentData = $input.all();\nconst remindersToSend = [];\n\nfor (const appointment of appointmentData) {\n  const appointmentTime = new Date(appointment.json.start_time);\n  const now = new Date();\n  const timeDifference = appointmentTime.getTime() - now.getTime();\n  const hoursUntilAppointment = timeDifference / (1000 * 60 * 60);\n  \n  // Verificar se precisa enviar lembrete\n  let reminderType = null;\n  \n  // Lembrete 24 horas antes\n  if (hoursUntilAppointment <= 24 && hoursUntilAppointment > 23) {\n    reminderType = '24h_reminder';\n  }\n  // Lembrete 2 horas antes\n  else if (hoursUntilAppointment <= 2 && hoursUntilAppointment > 1.5) {\n    reminderType = '2h_reminder';\n  }\n  // Lembrete 30 minutos antes\n  else if (hoursUntilAppointment <= 0.5 && hoursUntilAppointment > 0.25) {\n    reminderType = '30min_reminder';\n  }\n  \n  if (reminderType) {\n    // Buscar dados do tenant\n    const tenantId = appointment.json.tenant_id;\n    const userId = appointment.json.user_id;\n    \n    // Mapear domínios de negócio por tenant (em produção viria da tabela tenants)\n    const tenantDomainMapping = {\n      'tenant_1_beleza': { domain: 'beauty', name: 'Salão Elegância Premium' },\n      'tenant_2_saude': { domain: 'healthcare', name: 'Clínica Vida Saudável' },\n      'tenant_3_juridico': { domain: 'legal', name: 'Advocacia Silva & Santos' },\n      'tenant_4_educacao': { domain: 'education', name: 'EduTech Cursos' },\n      'tenant_5_esportes': { domain: 'sports', name: 'FitPro Academia' },\n      'tenant_6_consultoria': { domain: 'consulting', name: 'BizConsult' }\n    };\n    \n    const tenantInfo = tenantDomainMapping[tenantId] || { domain: 'general', name: 'Empresa' };\n    \n    remindersToSend.push({\n      appointment_id: appointment.json.id,\n      tenant_id: tenantId,\n      tenant_name: tenantInfo.name,\n      business_domain: tenantInfo.domain,\n      user_id: userId,\n      start_time: appointment.json.start_time,\n      end_time: appointment.json.end_time,\n      appointment_data: appointment.json.appointment_data,\n      quoted_price: appointment.json.quoted_price,\n      reminder_type: reminderType,\n      hours_until_appointment: hoursUntilAppointment,\n      reminder_scheduled_at: new Date().toISOString()\n    });\n  }\n}\n\nreturn remindersToSend.map(reminder => ({ json: reminder }));"
+      },
+      "id": "reminder-scheduler",
+      "name": "📋 Reminder Scheduler",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has_reminders",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-reminders-check",
+      "name": "📬 Has Reminders?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// 💬 REMINDER MESSAGE GENERATOR\n// Gera mensagens personalizadas por domínio e tipo de lembrete\n\nconst reminderData = $json;\n\n// Preparar dados básicos\nconst appointmentTime = new Date(reminderData.start_time);\nconst dateStr = appointmentTime.toLocaleDateString('pt-BR', {\n  weekday: 'long',\n  year: 'numeric',\n  month: 'long',\n  day: 'numeric'\n});\nconst timeStr = appointmentTime.toLocaleTimeString('pt-BR', {\n  hour: '2-digit',\n  minute: '2-digit'\n});\n\n// Extrair informações do agendamento\nconst appointmentDetails = reminderData.appointment_data ? \n  JSON.parse(reminderData.appointment_data) : {};\nconst serviceName = appointmentDetails.service_name || 'Serviço agendado';\n\n// Templates de mensagem por domínio\nconst domainTemplates = {\n  beauty: {\n    '24h_reminder': {\n      emoji: '💄✨',\n      title: 'LEMBRETE - Seu agendamento é amanhã!',\n      content: `Olá! 😊\\n\\nVocê tem um agendamento conosco amanhã:\\n\\n💅 *Serviço:* ${serviceName}\\n📅 *Data:* ${dateStr}\\n🕐 *Horário:* ${timeStr}\\n💰 *Valor:* R$ ${reminderData.quoted_price},00\\n\\n✨ *Dicas importantes:*\\n• Chegue 10 min antes\\n• Traga uma referência se for coloração\\n• Cabelo limpo e seco para corte\\n\\nAguardamos você! 💖`\n    },\n    '2h_reminder': {\n      emoji: '💄⏰',\n      title: 'SEU AGENDAMENTO É EM 2 HORAS!',\n      content: `Oi, linda! 💅\\n\\nSeu agendamento é em 2 horas:\\n\\n💄 *${serviceName}*\\n🕐 *${timeStr}* (em 2 horas)\\n💰 *R$ ${reminderData.quoted_price},00*\\n\\n📍 *Último lembrete:*\\n• Chegue 10 minutos antes\\n• Traga documento com foto\\n\\nNos vemos logo! ✨`\n    },\n    '30min_reminder': {\n      emoji: '💄🏃‍♀️',\n      title: 'PARTIU! Seu horário é em 30 min!',\n      content: `Hey! 😊\\n\\n⏰ Seu horário é em *30 minutos*\\n💅 ${serviceName}\\n🕐 ${timeStr}\\n\\n🏃‍♀️ *Já está a caminho?*\\n\\nTe esperamos! 💖`\n    }\n  },\n  \n  healthcare: {\n    '24h_reminder': {\n      emoji: '🏥📋',\n      title: 'LEMBRETE - Consulta médica amanhã',\n      content: `Olá!\\n\\nLembramos que você tem consulta marcada:\\n\\n🩺 *Consulta:* ${serviceName}\\n📅 *Data:* ${dateStr}\\n🕐 *Horário:* ${timeStr}\\n💰 *Valor:* R$ ${reminderData.quoted_price},00\\n\\n📋 *Importante trazer:*\\n• Documento com foto\\n• Carteirinha do convênio\\n• Exames anteriores (se houver)\\n• Lista de medicamentos em uso\\n\\n🏥 Chegue 15 minutos antes\\n\\nCuidamos da sua saúde! 💙`\n    },\n    '2h_reminder': {\n      emoji: '🏥⏰',\n      title: 'CONSULTA EM 2 HORAS',\n      content: `Olá!\\n\\nSua consulta é em 2 horas:\\n\\n🩺 *${serviceName}*\\n🕐 *${timeStr}*\\n💰 *R$ ${reminderData.quoted_price},00*\\n\\n📋 *Não esqueça:*\\n• Documento e convênio\\n• Chegar 15 min antes\\n• Jejum (se solicitado)\\n\\nTe esperamos! 🏥`\n    },\n    '30min_reminder': {\n      emoji: '🏥🚨',\n      title: 'CONSULTA EM 30 MINUTOS',\n      content: `Olá!\\n\\n⏰ Sua consulta é em *30 minutos*\\n🩺 ${serviceName}\\n🕐 ${timeStr}\\n\\n🚨 *Já está a caminho?*\\n\\nSaúde em primeiro lugar! 💙`\n    }\n  },\n  \n  legal: {\n    '24h_reminder': {\n      emoji: '⚖️📄',\n      title: 'LEMBRETE - Reunião jurídica amanhã',\n      content: `Prezado(a) cliente,\\n\\nLembramos de nossa reunião:\\n\\n⚖️ *Assunto:* ${serviceName}\\n📅 *Data:* ${dateStr}\\n🕐 *Horário:* ${timeStr}\\n💰 *Honorários:* R$ ${reminderData.quoted_price},00\\n\\n📄 *Documentos necessários:*\\n• RG e CPF\\n• Documentos do caso\\n• Procuração (se aplicável)\\n• Contratos relacionados\\n\\n🏛️ Pontualidade é fundamental\\n\\nJustiça e transparência! ⚖️`\n    },\n    '2h_reminder': {\n      emoji: '⚖️⏰',\n      title: 'REUNIÃO EM 2 HORAS',\n      content: `Prezado(a),\\n\\nSua reunião é em 2 horas:\\n\\n⚖️ *${serviceName}*\\n🕐 *${timeStr}*\\n💰 *R$ ${reminderData.quoted_price},00*\\n\\n📄 *Confirme se trouxe:*\\n• Todos os documentos\\n• Lista de dúvidas\\n• Procuração atualizada\\n\\nAguardamos! ⚖️`\n    },\n    '30min_reminder': {\n      emoji: '⚖️🏃‍♂️',\n      title: 'REUNIÃO EM 30 MINUTOS',\n      content: `Prezado(a),\\n\\n⏰ Reunião em *30 minutos*\\n⚖️ ${serviceName}\\n🕐 ${timeStr}\\n\\n📍 *Já está a caminho?*\\n\\nJustiça não espera! ⚖️`\n    }\n  },\n  \n  education: {\n    '24h_reminder': {\n      emoji: '📚🎓',\n      title: 'LEMBRETE - Aula amanhã!',\n      content: `Olá, estudante! 😊\\n\\nSua aula é amanhã:\\n\\n📚 *Matéria:* ${serviceName}\\n📅 *Data:* ${dateStr}\\n🕐 *Horário:* ${timeStr}\\n💰 *Valor:* R$ ${reminderData.quoted_price},00\\n\\n🎒 *Para a aula:*\\n• Material da matéria\\n• Caderno para anotações\\n• Dúvidas listadas\\n• Exercícios anteriores\\n\\n🎓 Preparado para aprender?\\n\\nVamos conquistar seus objetivos! 📚`\n    },\n    '2h_reminder': {\n      emoji: '📚⏰',\n      title: 'AULA EM 2 HORAS!',\n      content: `E aí, estudante!\\n\\nSua aula é em 2 horas:\\n\\n📚 *${serviceName}*\\n🕐 *${timeStr}*\\n💰 *R$ ${reminderData.quoted_price},00*\\n\\n🎒 *Não esqueça:*\\n• Material da matéria\\n• Dúvidas anotadas\\n• Exercícios para revisar\\n\\nVamos arrasar! 🎓`\n    },\n    '30min_reminder': {\n      emoji: '📚🏃‍♀️',\n      title: 'AULA EM 30 MINUTOS!',\n      content: `Opa!\\n\\n⏰ Aula em *30 minutos*\\n📚 ${serviceName}\\n🕐 ${timeStr}\\n\\n🏃‍♀️ *Já está indo?*\\n\\nBora estudar! 🎓`\n    }\n  },\n  \n  sports: {\n    '24h_reminder': {\n      emoji: '💪🏃‍♂️',\n      title: 'LEMBRETE - Treino amanhã!',\n      content: `Fala, atleta! 💪\\n\\nSeu treino é amanhã:\\n\\n🏋️ *Atividade:* ${serviceName}\\n📅 *Data:* ${dateStr}\\n🕐 *Horário:* ${timeStr}\\n💰 *Valor:* R$ ${reminderData.quoted_price},00\\n\\n👟 *Para o treino:*\\n• Roupa de treino\\n• Tênis adequado\\n• Toalha e garrafa d'água\\n• Alimentação leve antes\\n\\n🔥 Bora quebrar limites!\\n\\nSeu melhor desempenho te espera! 💪`\n    },\n    '2h_reminder': {\n      emoji: '💪⏰',\n      title: 'TREINO EM 2 HORAS!',\n      content: `E aí, atleta!\\n\\nSeu treino é em 2 horas:\\n\\n🏋️ *${serviceName}*\\n🕐 *${timeStr}*\\n💰 *R$ ${reminderData.quoted_price},00*\\n\\n💪 *Se preparando:*\\n• Hidratação constante\\n• Lanche leve se precisar\\n• Equipamentos em dia\\n\\nVamos treinar! 🔥`\n    },\n    '30min_reminder': {\n      emoji: '💪🔥',\n      title: 'TREINO EM 30 MINUTOS!',\n      content: `Bora!\\n\\n⏰ Treino em *30 minutos*\\n🏋️ ${serviceName}\\n🕐 ${timeStr}\\n\\n🔥 *Preparado?*\\n\\nSua força te espera! 💪`\n    }\n  },\n  \n  consulting: {\n    '24h_reminder': {\n      emoji: '💼📊',\n      title: 'LEMBRETE - Reunião estratégica amanhã',\n      content: `Prezado(a) cliente,\\n\\nReuniões estratégicas amanhã:\\n\\n💼 *Consultoria:* ${serviceName}\\n📅 *Data:* ${dateStr}\\n🕐 *Horário:* ${timeStr}\\n💰 *Investimento:* R$ ${reminderData.quoted_price},00\\n\\n📊 *Preparação recomendada:*\\n• Relatórios financeiros atuais\\n• KPIs do período\\n• Lista de desafios específicos\\n• Objetivos para próximo trimestre\\n\\n🎯 Foco em resultados!\\n\\nVamos potencializar seu negócio! 💼`\n    },\n    '2h_reminder': {\n      emoji: '💼⏰',\n      title: 'REUNIÃO ESTRATÉGICA EM 2H',\n      content: `Olá!\\n\\nSua reunião é em 2 horas:\\n\\n💼 *${serviceName}*\\n🕐 *${timeStr}*\\n💰 *R$ ${reminderData.quoted_price},00*\\n\\n📊 *Confirme se tem:*\\n• Relatórios financeiros\\n• Lista de desafios\\n• KPIs atualizados\\n\\nVamos acelerar! 🎯`\n    },\n    '30min_reminder': {\n      emoji: '💼⚡',\n      title: 'REUNIÃO EM 30 MINUTOS!',\n      content: `Olá!\\n\\n⏰ Reunião em *30 minutos*\\n💼 ${serviceName}\\n🕐 ${timeStr}\\n\\n⚡ *Já está a caminho?*\\n\\nResultados te esperam! 🎯`\n    }\n  }\n};\n\n// Obter template para este domínio e tipo\nconst templates = domainTemplates[reminderData.business_domain] || domainTemplates.education;\nconst template = templates[reminderData.reminder_type] || templates['24h_reminder'];\n\n// Preparar mensagem final\nconst whatsappMessage = `${template.emoji}\\n\\n*${template.title}*\\n\\n${template.content}`;\n\n// Preparar payload WhatsApp\nconst whatsappPayload = {\n  messaging_product: 'whatsapp',\n  to: reminderData.user_id,\n  type: 'text',\n  text: {\n    body: whatsappMessage\n  }\n};\n\nreturn [{\n  ...reminderData,\n  \n  // Dados da mensagem\n  whatsapp_message: whatsappMessage,\n  whatsapp_payload: whatsappPayload,\n  message_template_used: template.emoji,\n  \n  // Controle\n  reminder_generated_at: new Date().toISOString()\n}];"
+      },
+      "id": "reminder-message-generator",
+      "name": "💬 Message Generator",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.WHATSAPP_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "jsonBody": "={{ JSON.stringify($json.whatsapp_payload) }}",
+        "options": {}
+      },
+      "id": "send-reminder-whatsapp",
+      "name": "📤 Send Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "table": "conversation_history",
+        "columns": {
+          "values": [
+            {
+              "column": "tenant_id",
+              "value": "={{ $json.tenant_id }}"
+            },
+            {
+              "column": "user_id",
+              "value": "={{ $json.user_id }}"
+            },
+            {
+              "column": "content",
+              "value": "={{ $json.whatsapp_message }}"
+            },
+            {
+              "column": "is_from_user",
+              "value": false
+            },
+            {
+              "column": "message_type",
+              "value": "reminder"
+            },
+            {
+              "column": "intent_detected",
+              "value": "={{ $json.reminder_type }}"
+            },
+            {
+              "column": "confidence_score",
+              "value": 1.0
+            },
+            {
+              "column": "conversation_context",
+              "value": "={{ JSON.stringify({ reminder_type: $json.reminder_type, appointment_id: $json.appointment_id, hours_before: $json.hours_until_appointment, business_domain: $json.business_domain }) }}"
+            },
+            {
+              "column": "message_source",
+              "value": "system_reminder"
+            },
+            {
+              "column": "conversation_outcome",
+              "value": "reminder_sent"
+            }
+          ]
+        }
+      },
+      "id": "log-reminder-sent",
+      "name": "📝 Log Reminder",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1400, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "appointment-actions",
+        "options": {
+          "noResponseBody": false
+        }
+      },
+      "id": "appointment-actions-webhook",
+      "name": "📲 Actions Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 600],
+      "webhookId": "appointment-actions"
+    },
+    {
+      "parameters": {
+        "functionCode": "// 🔄 APPOINTMENT ACTION PROCESSOR\n// Processa ações do cliente: confirmar, reagendar, cancelar\n\nconst actionData = $json;\n\n// Extrair dados da ação\nconst action = actionData.action; // 'confirm', 'reschedule', 'cancel'\nconst appointmentId = actionData.appointment_id;\nconst userId = actionData.user_id;\nconst tenantId = actionData.tenant_id;\nconst newDateTime = actionData.new_datetime; // Para reagendamento\nconst cancelReason = actionData.cancel_reason; // Para cancelamento\n\n// Validar ação\nconst validActions = ['confirm', 'reschedule', 'cancel', 'no_show'];\nif (!validActions.includes(action)) {\n  return [{\n    error: 'Invalid action',\n    valid_actions: validActions,\n    received_action: action\n  }];\n}\n\n// Preparar resposta baseada na ação\nlet responseMessage = '';\nlet appointmentStatus = '';\nlet actionDescription = '';\n\nswitch(action) {\n  case 'confirm':\n    appointmentStatus = 'confirmed';\n    actionDescription = 'Agendamento confirmado pelo cliente';\n    responseMessage = '✅ *Agendamento Confirmado!*\\n\\nObrigado por confirmar! Te esperamos no horário marcado. 😊';\n    break;\n    \n  case 'reschedule':\n    appointmentStatus = 'rescheduled';\n    actionDescription = 'Cliente solicitou reagendamento';\n    responseMessage = '🔄 *Reagendamento Solicitado*\\n\\nRecebemos sua solicitação! Em breve entraremos em contato para confirmar o novo horário.';\n    break;\n    \n  case 'cancel':\n    appointmentStatus = 'cancelled';\n    actionDescription = `Cancelado pelo cliente: ${cancelReason || 'Motivo não informado'}`;\n    responseMessage = '❌ *Agendamento Cancelado*\\n\\nSeu agendamento foi cancelado. Esperamos vê-lo em breve! 😊';\n    break;\n    \n  case 'no_show':\n    appointmentStatus = 'no_show';\n    actionDescription = 'Cliente não compareceu';\n    responseMessage = '😔 *Que pena que você não veio!*\\n\\nEsperamos uma próxima oportunidade. Entre em contato para reagendar!';\n    break;\n}\n\nreturn [{\n  // Dados originais\n  ...actionData,\n  \n  // Dados do processamento\n  appointment_id: appointmentId,\n  user_id: userId,\n  tenant_id: tenantId,\n  action_type: action,\n  new_status: appointmentStatus,\n  action_description: actionDescription,\n  response_message: responseMessage,\n  new_datetime: newDateTime,\n  cancel_reason: cancelReason,\n  \n  // Controle\n  action_processed_at: new Date().toISOString(),\n  requires_status_update: true\n}];"
+      },
+      "id": "appointment-action-processor",
+      "name": "🔄 Action Processor",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [400, 600]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "table": "appointments",
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "equals",
+              "keyValue": "={{ $json.appointment_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "values": [
+            {
+              "column": "status",
+              "value": "={{ $json.new_status }}"
+            },
+            {
+              "column": "updated_at",
+              "value": "={{ $json.action_processed_at }}"
+            }
+          ]
+        }
+      },
+      "id": "update-appointment-status",
+      "name": "💾 Update Status",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [600, 600],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "table": "conversation_history",
+        "columns": {
+          "values": [
+            {
+              "column": "tenant_id",
+              "value": "={{ $json.tenant_id }}"
+            },
+            {
+              "column": "user_id",
+              "value": "={{ $json.user_id }}"
+            },
+            {
+              "column": "content",
+              "value": "={{ $json.action_description }}"
+            },
+            {
+              "column": "is_from_user",
+              "value": true
+            },
+            {
+              "column": "message_type",
+              "value": "appointment_action"
+            },
+            {
+              "column": "intent_detected",
+              "value": "={{ $json.action_type }}"
+            },
+            {
+              "column": "confidence_score",
+              "value": 1.0
+            },
+            {
+              "column": "conversation_context",
+              "value": "={{ JSON.stringify({ action_type: $json.action_type, appointment_id: $json.appointment_id, new_status: $json.new_status, cancel_reason: $json.cancel_reason, new_datetime: $json.new_datetime }) }}"
+            },
+            {
+              "column": "message_source",
+              "value": "system_action"
+            },
+            {
+              "column": "conversation_outcome",
+              "value": "appointment_updated"
+            }
+          ]
+        }
+      },
+      "id": "log-appointment-action",
+      "name": "📋 Log Action",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [800, 600],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// 💬 ACTION RESPONSE GENERATOR\n// Gera resposta de confirmação da ação\n\nconst responseData = $json;\n\n// Preparar payload WhatsApp para resposta\nconst whatsappPayload = {\n  messaging_product: 'whatsapp',\n  to: responseData.user_id,\n  type: 'text',\n  text: {\n    body: responseData.response_message\n  }\n};\n\nreturn [{\n  ...responseData,\n  \n  // Resposta WhatsApp\n  whatsapp_payload: whatsappPayload,\n  response_sent_at: new Date().toISOString()\n}];"
+      },
+      "id": "action-response-generator",
+      "name": "💬 Response Generator",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1000, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.WHATSAPP_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "jsonBody": "={{ JSON.stringify($json.whatsapp_payload) }}",
+        "options": {}
+      },
+      "id": "send-action-response",
+      "name": "📤 Send Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 600]
+    },
+    {
+      "parameters": {
+        "functionCode": "// ✅ SUCCESS RESPONSE\n// Resposta final de sucesso\n\nconst successData = $json;\n\n// Contar lembretes enviados (para cron)\nconst remindersCount = $input.all().length;\n\n// Preparar resposta baseada no tipo de trigger\nlet response = {};\n\nif (successData.appointment_id) {\n  // Resposta de ação de agendamento\n  response = {\n    status: 'appointment_action_processed',\n    message: 'Appointment action processed successfully',\n    data: {\n      appointment_id: successData.appointment_id,\n      action_type: successData.action_type,\n      new_status: successData.new_status,\n      user_notified: true,\n      processed_at: successData.action_processed_at\n    }\n  };\n} else {\n  // Resposta de execução de cron\n  response = {\n    status: 'reminders_processed',\n    message: `${remindersCount} reminders processed successfully`,\n    data: {\n      reminders_sent: remindersCount,\n      processing_completed_at: new Date().toISOString()\n    }\n  };\n}\n\nresponse.timestamp = new Date().toISOString();\n\nreturn [response];"
+      },
+      "id": "final-success-response",
+      "name": "✅ Success Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1400, 400]
+    }
+  ],
+  "connections": {
+    "⏰ Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "📅 Fetch Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📅 Fetch Appointments": {
+      "main": [
+        [
+          {
+            "node": "📋 Reminder Scheduler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📋 Reminder Scheduler": {
+      "main": [
+        [
+          {
+            "node": "📬 Has Reminders?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📬 Has Reminders?": {
+      "main": [
+        [
+          {
+            "node": "✅ Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "💬 Message Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💬 Message Generator": {
+      "main": [
+        [
+          {
+            "node": "📤 Send Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📤 Send Reminder": {
+      "main": [
+        [
+          {
+            "node": "📝 Log Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📝 Log Reminder": {
+      "main": [
+        [
+          {
+            "node": "✅ Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📲 Actions Webhook": {
+      "main": [
+        [
+          {
+            "node": "🔄 Action Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 Action Processor": {
+      "main": [
+        [
+          {
+            "node": "💾 Update Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Update Status": {
+      "main": [
+        [
+          {
+            "node": "📋 Log Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📋 Log Action": {
+      "main": [
+        [
+          {
+            "node": "💬 Response Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💬 Response Generator": {
+      "main": [
+        [
+          {
+            "node": "📤 Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📤 Send Response": {
+      "main": [
+        [
+          {
+            "node": "✅ Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "hash": "appointment-reminders-corrected-hash-001",
+  "versionId": 1
+}

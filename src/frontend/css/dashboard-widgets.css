@@ -1,0 +1,702 @@
+/**
+ * UBS Dashboard Widgets CSS
+ * Estilos padronizados para todos os widgets do sistema
+ * 
+ * @version 2.0.0 - Sistema de Responsividade Avançado
+ * @author UBS Team
+ */
+
+/* Performance optimizations */
+* {
+    box-sizing: border-box;
+}
+
+/* Use will-change for animated elements */
+.widget-loading, .chart-container, .stat-card {
+    will-change: transform;
+}
+
+/* GPU acceleration for smooth animations */
+.card, .widget, .stat-card {
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+/* ============================================================================
+   VARIABLES & THEME - INTEGRAÇÃO COM SISTEMA FLUIDO
+   ============================================================================ */
+
+:root {
+    /* Herda as variáveis do ubs-standard-styles.css */
+    /* Estas variáveis complementam o sistema fluido principal */
+    
+    /* Cores específicas para widgets */
+    --widget-bg-primary: white;
+    --widget-border-color: var(--ubs-border-color);
+    --widget-text-primary: var(--ubs-text-dark);
+    --widget-text-secondary: var(--ubs-text-light);
+    --widget-text-muted: var(--ubs-text-muted);
+    
+    /* Sombras específicas para widgets */
+    --widget-shadow-sm: var(--ubs-shadow-sm);
+    --widget-shadow: var(--ubs-shadow);
+    --widget-shadow-lg: var(--ubs-shadow-lg);
+    
+    /* Transições específicas para widgets */
+    --widget-transition: var(--ubs-transition);
+    --widget-transition-fast: var(--ubs-transition-fast);
+    
+    /* Bordas específicas para widgets */
+    --widget-border-radius: var(--ubs-border-radius);
+    --widget-border-radius-lg: var(--ubs-border-radius-lg);
+    --widget-border-radius-sm: var(--ubs-border-radius-sm);
+}
+
+/* ============================================================================
+   METRIC CARD WIDGETS - SISTEMA FLUIDO
+   ============================================================================ */
+
+.metric-card {
+    background: var(--widget-bg-primary);
+    border-radius: var(--widget-border-radius-lg);
+    box-shadow: var(--widget-shadow);
+    padding: var(--ubs-card-padding);
+    transition: var(--widget-transition);
+    border: 1px solid var(--widget-border-color);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.metric-card:hover {
+    box-shadow: var(--widget-shadow-lg);
+    transform: translateY(-2px);
+}
+
+.metric-card-clickable {
+    cursor: pointer;
+}
+
+.metric-card-clickable:hover {
+    border-color: var(--ubs-primary);
+}
+
+.metric-card-body {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ubs-spacing-base);
+    flex: 1;
+}
+
+.metric-icon {
+    width: var(--ubs-icon-container-size);
+    height: var(--ubs-icon-container-size);
+    border-radius: var(--widget-border-radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--ubs-icon-size);
+    color: white;
+    flex-shrink: 0;
+}
+
+.metric-icon-primary { background: var(--ubs-primary); }
+.metric-icon-success { background: var(--ubs-success); }
+.metric-icon-warning { background: var(--ubs-warning); }
+.metric-icon-danger { background: var(--ubs-danger); }
+.metric-icon-info { background: var(--ubs-info); }
+
+.metric-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.metric-value {
+    font-size: var(--ubs-font-size-2xl);
+    font-weight: 700;
+    color: var(--widget-text-primary);
+    line-height: 1.2;
+    margin-bottom: var(--ubs-spacing-xs);
+}
+
+.metric-title {
+    font-size: var(--ubs-font-size-sm);
+    font-weight: 600;
+    color: var(--widget-text-primary);
+    margin-bottom: var(--ubs-spacing-xs);
+    line-height: 1.3;
+}
+
+.metric-subtitle {
+    font-size: var(--ubs-font-size-xs);
+    color: var(--widget-text-muted);
+    margin-bottom: var(--ubs-spacing-sm);
+}
+
+.metric-trend {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ubs-spacing-xs);
+    font-size: var(--ubs-font-size-xs);
+    font-weight: 600;
+    padding: var(--ubs-spacing-xs) var(--ubs-spacing-sm);
+    border-radius: var(--widget-border-radius-sm);
+}
+
+.trend-positive {
+    background: var(--ubs-success-light);
+    color: var(--ubs-success);
+}
+
+.trend-negative {
+    background: var(--ubs-danger-light);
+    color: var(--ubs-danger);
+}
+
+.trend-neutral {
+    background: var(--ubs-secondary-dark);
+    color: var(--widget-text-secondary);
+}
+
+.metric-trend small {
+    font-size: calc(var(--ubs-font-size-xs) * 0.9);
+    opacity: 0.8;
+    margin-left: var(--ubs-spacing-xs);
+}
+
+/* Compact Metric Cards */
+.metric-card-compact {
+    padding: var(--ubs-spacing-base);
+}
+
+.metric-card-compact .metric-icon {
+    width: calc(var(--ubs-icon-container-size) * 0.8);
+    height: calc(var(--ubs-icon-container-size) * 0.8);
+}
+
+.metric-card-compact .metric-value {
+    font-size: var(--ubs-font-size-xl);
+}
+
+.metric-card-compact .metric-title {
+    font-size: var(--ubs-font-size-xs);
+}
+
+/* Large Metric Cards */
+.metric-card-large {
+    padding: var(--ubs-spacing-xl);
+}
+
+.metric-card-large .metric-icon {
+    width: calc(var(--ubs-icon-container-size) * 1.2);
+    height: calc(var(--ubs-icon-container-size) * 1.2);
+}
+
+.metric-card-large .metric-value {
+    font-size: var(--ubs-font-size-3xl);
+}
+
+/* ============================================================================
+   CHART WIDGETS - SISTEMA FLUIDO
+   ============================================================================ */
+
+.chart-widget {
+    background: var(--widget-bg-primary);
+    border-radius: var(--widget-border-radius-lg);
+    box-shadow: var(--widget-shadow);
+    border: 1px solid var(--widget-border-color);
+    overflow: hidden;
+}
+
+.chart-header {
+    padding: var(--ubs-spacing-lg);
+    border-bottom: 1px solid var(--widget-border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--ubs-spacing-base);
+}
+
+.chart-title {
+    font-size: var(--ubs-font-size-lg);
+    font-weight: 600;
+    color: var(--widget-text-primary);
+    margin: 0;
+}
+
+.chart-actions {
+    display: flex;
+    gap: var(--ubs-spacing-sm);
+}
+
+.chart-body {
+    padding: var(--ubs-spacing-lg);
+    position: relative;
+}
+
+.chart-body canvas {
+    max-width: 100%;
+    height: auto;
+}
+
+/* ============================================================================
+   TABLE WIDGETS - SISTEMA FLUIDO
+   ============================================================================ */
+
+.table-widget {
+    background: var(--widget-bg-primary);
+    border-radius: var(--widget-border-radius-lg);
+    box-shadow: var(--widget-shadow);
+    border: 1px solid var(--widget-border-color);
+    overflow: hidden;
+}
+
+.table-header {
+    padding: var(--ubs-spacing-lg);
+    border-bottom: 1px solid var(--widget-border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--ubs-spacing-base);
+}
+
+.table-title {
+    font-size: var(--ubs-font-size-lg);
+    font-weight: 600;
+    color: var(--widget-text-primary);
+    margin: 0;
+}
+
+.table-search {
+    max-width: 300px;
+}
+
+.table-body {
+    overflow-x: auto;
+}
+
+.table-widget .table {
+    margin: 0;
+    font-size: var(--ubs-font-size-sm);
+}
+
+.table-widget .table th {
+    background: var(--ubs-secondary);
+    color: var(--widget-text-primary);
+    font-weight: 600;
+    border-bottom: 2px solid var(--widget-border-color);
+    padding: var(--ubs-spacing-base) var(--ubs-spacing-lg);
+    font-size: var(--ubs-font-size-sm);
+}
+
+.table-widget .table td {
+    padding: var(--ubs-spacing-base) var(--ubs-spacing-lg);
+    border-bottom: 1px solid var(--widget-border-color);
+    color: var(--widget-text-primary);
+}
+
+.table-widget .table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.table-widget .table th.sortable:hover {
+    background: var(--ubs-secondary-dark);
+}
+
+.table-pagination {
+    padding: var(--ubs-spacing-lg);
+    border-top: 1px solid var(--widget-border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--ubs-spacing-base);
+}
+
+/* ============================================================================
+   SECTION WIDGETS - SISTEMA FLUIDO
+   ============================================================================ */
+
+.section-widget {
+    background: var(--widget-bg-primary);
+    border-radius: var(--widget-border-radius-lg);
+    box-shadow: var(--widget-shadow);
+    border: 1px solid var(--widget-border-color);
+    margin-bottom: var(--ubs-spacing-lg);
+}
+
+.section-header {
+    padding: var(--ubs-spacing-lg);
+    border-bottom: 1px solid var(--widget-border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: var(--widget-transition-fast);
+}
+
+.section-title-area {
+    flex: 1;
+}
+
+.section-title {
+    font-size: var(--ubs-font-size-lg);
+    font-weight: 600;
+    color: var(--widget-text-primary);
+    margin: 0;
+}
+
+.section-subtitle {
+    font-size: var(--ubs-font-size-sm);
+    color: var(--widget-text-secondary);
+    margin: var(--ubs-spacing-xs) 0 0 0;
+}
+
+.section-actions {
+    display: flex;
+    gap: var(--ubs-spacing-sm);
+}
+
+.section-body {
+    padding: var(--ubs-spacing-lg);
+}
+
+.section-widget.collapsed .section-body {
+    display: none;
+}
+
+.section-widget.collapsed .section-header .fa-chevron-down {
+    transform: rotate(-90deg);
+}
+
+/* ============================================================================
+   FILTER WIDGETS - SISTEMA FLUIDO
+   ============================================================================ */
+
+.filter-widget {
+    background: var(--widget-bg-primary);
+    border-radius: var(--widget-border-radius);
+    padding: var(--ubs-spacing-lg);
+    margin-bottom: var(--ubs-spacing-lg);
+}
+
+.filter-body {
+    display: flex;
+    gap: var(--ubs-spacing-base);
+    flex-wrap: wrap;
+}
+
+.filter-horizontal .filter-body {
+    flex-direction: row;
+}
+
+.filter-horizontal .filter-body > div {
+    flex: 1;
+    min-width: 200px;
+}
+
+.filter-vertical .filter-body > div {
+    width: 100%;
+}
+
+.filter-widget .form-label {
+    font-size: var(--ubs-font-size-sm);
+    font-weight: 600;
+    color: var(--widget-text-primary);
+    margin-bottom: var(--ubs-spacing-xs);
+}
+
+.filter-widget .form-control,
+.filter-widget .form-select {
+    font-size: var(--ubs-font-size-sm);
+    border-radius: var(--widget-border-radius-sm);
+    border: 1px solid var(--widget-border-color);
+    padding: var(--ubs-spacing-sm) var(--ubs-spacing-base);
+}
+
+.filter-widget .form-control:focus,
+.filter-widget .form-select:focus {
+    border-color: var(--ubs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(45, 90, 155, 0.25);
+}
+
+/* ============================================================================
+   LOADING STATES - SISTEMA FLUIDO
+   ============================================================================ */
+
+.widget-loading {
+    position: relative;
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.widget-loading::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    z-index: 1000;
+    border-radius: var(--widget-border-radius);
+}
+
+.widget-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--ubs-icon-size);
+    height: var(--ubs-icon-size);
+    margin: calc(var(--ubs-icon-size) / -2) 0 0 calc(var(--ubs-icon-size) / -2);
+    border: 2px solid var(--widget-border-color);
+    border-radius: 50%;
+    border-top: 2px solid var(--ubs-primary);
+    animation: ubs-spin 1s linear infinite;
+    z-index: 1001;
+}
+
+@keyframes ubs-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: ubs-skeleton 1.5s infinite;
+    border-radius: var(--widget-border-radius-sm);
+}
+
+@keyframes ubs-skeleton {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ============================================================================
+   MEDIA QUERIES RESPONSIVAS PARA WIDGETS
+   ============================================================================ */
+
+/* Extra Small devices (phones, 320px and up) */
+@media (max-width: 575.98px) {
+    .metric-card-body {
+        flex-direction: column;
+        text-align: center;
+        gap: var(--ubs-spacing-sm);
+    }
+    
+    .metric-icon {
+        align-self: center;
+        margin-bottom: var(--ubs-spacing-sm);
+    }
+    
+    .filter-horizontal .filter-body {
+        flex-direction: column;
+    }
+    
+    .filter-horizontal .filter-body > div {
+        min-width: auto;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--ubs-spacing-base);
+    }
+    
+    .section-actions {
+        justify-content: center;
+    }
+    
+    .chart-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--ubs-spacing-base);
+    }
+    
+    .chart-actions {
+        justify-content: center;
+    }
+    
+    .table-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--ubs-spacing-base);
+    }
+    
+    .table-search {
+        max-width: none;
+    }
+}
+
+/* Small devices (landscape phones, 576px and up) */
+@media (min-width: 576px) and (max-width: 767.98px) {
+    .metric-card-body {
+        flex-direction: row;
+        text-align: left;
+    }
+    
+    .metric-icon {
+        align-self: flex-start;
+        margin-bottom: 0;
+    }
+    
+    .filter-horizontal .filter-body {
+        flex-direction: row;
+    }
+}
+
+/* Medium devices (tablets, 768px and up) */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .section-header {
+        flex-direction: row;
+        align-items: center;
+    }
+    
+    .chart-header {
+        flex-direction: row;
+        align-items: center;
+    }
+    
+    .table-header {
+        flex-direction: row;
+        align-items: center;
+    }
+}
+
+/* Large devices (desktops, 992px and up) */
+@media (min-width: 992px) {
+    .metric-card,
+    .chart-widget,
+    .table-widget,
+    .section-widget {
+        margin-bottom: var(--ubs-spacing-base);
+    }
+    
+    .metric-value {
+        font-size: var(--ubs-font-size-2xl);
+    }
+    
+    .metric-card-large .metric-value {
+        font-size: var(--ubs-font-size-3xl);
+    }
+}
+
+/* XXL devices (larger desktops, 1400px and up) */
+@media (min-width: 1400px) {
+    .metric-card,
+    .chart-widget,
+    .table-widget,
+    .section-widget {
+        padding: var(--ubs-spacing-xl);
+    }
+    
+    .chart-header,
+    .table-header,
+    .section-header {
+        padding: var(--ubs-spacing-xl);
+    }
+    
+    .chart-body,
+    .section-body {
+        padding: var(--ubs-spacing-xl);
+    }
+}
+
+/* ============================================================================
+   UTILITÁRIOS PARA WIDGETS
+   ============================================================================ */
+
+.ubs-text-primary { color: var(--widget-text-primary) !important; }
+.ubs-text-secondary { color: var(--widget-text-secondary) !important; }
+.ubs-text-muted { color: var(--widget-text-muted) !important; }
+.ubs-text-light { color: var(--ubs-text-light) !important; }
+
+.ubs-bg-primary { background-color: var(--ubs-primary) !important; }
+.ubs-bg-success { background-color: var(--ubs-success) !important; }
+.ubs-bg-warning { background-color: var(--ubs-warning) !important; }
+.ubs-bg-danger { background-color: var(--ubs-danger) !important; }
+.ubs-bg-info { background-color: var(--ubs-info) !important; }
+
+.ubs-border-primary { border-color: var(--ubs-primary) !important; }
+.ubs-border-success { border-color: var(--ubs-success) !important; }
+.ubs-border-warning { border-color: var(--ubs-warning) !important; }
+.ubs-border-danger { border-color: var(--ubs-danger) !important; }
+.ubs-border-info { border-color: var(--ubs-info) !important; }
+
+.ubs-shadow-sm { box-shadow: var(--widget-shadow-sm) !important; }
+.ubs-shadow { box-shadow: var(--widget-shadow) !important; }
+.ubs-shadow-lg { box-shadow: var(--widget-shadow-lg) !important; }
+
+.ubs-radius-sm { border-radius: var(--widget-border-radius-sm) !important; }
+.ubs-radius { border-radius: var(--widget-border-radius) !important; }
+.ubs-radius-lg { border-radius: var(--widget-border-radius-lg) !important; }
+
+/* ============================================================================
+   PRINT STYLES PARA WIDGETS
+   ============================================================================ */
+
+@media print {
+    .metric-card,
+    .chart-widget,
+    .table-widget,
+    .section-widget {
+        box-shadow: none !important;
+        border: 1px solid #ddd !important;
+        break-inside: avoid;
+        background: white !important;
+    }
+    
+    .section-actions,
+    .chart-actions,
+    .table-search,
+    .table-pagination {
+        display: none !important;
+    }
+    
+    .metric-trend {
+        background: none !important;
+        border: 1px solid #ddd !important;
+    }
+}
+
+/* ============================================================================
+   WIDGET ERROR STATES
+   ============================================================================ */
+
+.widget-error {
+    background: var(--widget-bg-primary);
+    border-radius: var(--widget-border-radius-lg);
+    padding: var(--ubs-spacing-2xl);
+    text-align: center;
+    border: 1px solid var(--ubs-danger-light);
+    color: var(--ubs-danger);
+    margin-bottom: var(--ubs-spacing-lg);
+}
+
+.widget-error .error-icon {
+    font-size: var(--ubs-font-size-3xl);
+    margin-bottom: var(--ubs-spacing-base);
+}
+
+.widget-error .error-message {
+    font-size: var(--ubs-font-size-base);
+    margin-bottom: var(--ubs-spacing-lg);
+}
+
+.widget-error .btn {
+    background: var(--ubs-danger);
+    border-color: var(--ubs-danger);
+    color: white;
+}
+
+.widget-error .btn:hover {
+    background: var(--ubs-danger);
+    border-color: var(--ubs-danger);
+    opacity: 0.9;
+} 

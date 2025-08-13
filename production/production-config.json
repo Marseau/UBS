@@ -1,0 +1,43 @@
+{
+  "environment": "production",
+  "database": {
+    "url": "",
+    "ssl": true,
+    "poolSize": 20,
+    "maxRetries": 3
+  },
+  "security": {
+    "jwtSecret": "&HiWg4*oybcITlII1sTd@kf1Z0KPzffoE@Ro^q0^UAshg%uYzk9ot@EOPSXJ4ULg",
+    "jwtExpiresIn": "24h",
+    "forceHttps": true,
+    "corsOrigins": [
+      "https://yourdomain.com",
+      "https://admin.yourdomain.com"
+    ],
+    "rateLimiting": {
+      "enabled": true,
+      "windowMs": 900000,
+      "maxRequests": 100
+    }
+  },
+  "monitoring": {
+    "enabled": true,
+    "logLevel": "info",
+    "metricsCollection": true
+  },
+  "performance": {
+    "cacheEnabled": true,
+    "compressionEnabled": true,
+    "staticFilesCaching": true
+  },
+  "integrations": {
+    "whatsapp": {
+      "webhookUrl": "https://yourdomain.com/api/whatsapp/webhook",
+      "verifyToken": "A0RDqTYmF5eSixs85KFH2#WyAUKdTue#"
+    },
+    "email": {
+      "smtpEnabled": true,
+      "provider": "zoho"
+    }
+  }
+}

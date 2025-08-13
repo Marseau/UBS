@@ -1,0 +1,267 @@
+/* Accessibility improvements for better contrast and focus */
+
+/* High contrast color palette */
+:root {
+    --high-contrast-primary: #003366;
+    --high-contrast-secondary: #0066CC;
+    --high-contrast-success: #006600;
+    --high-contrast-warning: #CC6600;
+    --high-contrast-danger: #CC0000;
+    --high-contrast-dark: #000000;
+    --high-contrast-light: #FFFFFF;
+    --high-contrast-muted: #666666;
+    --high-contrast-border: #999999;
+    --focus-color: #0066FF;
+    --focus-shadow: 0 0 0 3px rgba(0, 102, 255, 0.3);
+}
+
+/* Improve button contrast */
+.btn-primary {
+    background-color: var(--high-contrast-primary) !important;
+    border-color: var(--high-contrast-primary) !important;
+    color: var(--high-contrast-light) !important;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+    background-color: var(--high-contrast-secondary) !important;
+    border-color: var(--high-contrast-secondary) !important;
+    color: var(--high-contrast-light) !important;
+}
+
+.btn-secondary {
+    background-color: var(--high-contrast-muted) !important;
+    border-color: var(--high-contrast-muted) !important;
+    color: var(--high-contrast-light) !important;
+}
+
+.btn-success {
+    background-color: var(--high-contrast-success) !important;
+    border-color: var(--high-contrast-success) !important;
+}
+
+.btn-warning {
+    background-color: var(--high-contrast-warning) !important;
+    border-color: var(--high-contrast-warning) !important;
+    color: var(--high-contrast-light) !important;
+}
+
+.btn-danger {
+    background-color: var(--high-contrast-danger) !important;
+    border-color: var(--high-contrast-danger) !important;
+}
+
+/* Improve link contrast */
+a {
+    color: var(--high-contrast-secondary) !important;
+}
+
+a:hover,
+a:focus {
+    color: var(--high-contrast-primary) !important;
+    text-decoration: underline !important;
+}
+
+/* Improve text contrast */
+.text-muted {
+    color: var(--high-contrast-muted) !important;
+}
+
+.text-dark {
+    color: var(--high-contrast-dark) !important;
+}
+
+/* Focus indicators for keyboard navigation */
+button:focus,
+input:focus,
+select:focus,
+textarea:focus,
+a:focus,
+.btn:focus,
+.nav-link:focus,
+[tabindex]:focus {
+    outline: 2px solid var(--focus-color) !important;
+    outline-offset: 2px !important;
+    box-shadow: var(--focus-shadow) !important;
+}
+
+/* Improved focus for form controls */
+.form-control:focus,
+.form-select:focus,
+.form-check-input:focus {
+    border-color: var(--focus-color) !important;
+    box-shadow: var(--focus-shadow) !important;
+}
+
+/* Sidebar navigation focus */
+.sidebar .nav-link:focus {
+    background-color: rgba(0, 102, 255, 0.1) !important;
+    color: var(--high-contrast-dark) !important;
+}
+
+/* Table improvements */
+.table {
+    border-color: var(--high-contrast-border) !important;
+}
+
+.table td,
+.table th {
+    border-color: var(--high-contrast-border) !important;
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > td {
+    background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Badge improvements */
+.badge.bg-light {
+    background-color: var(--high-contrast-muted) !important;
+    color: var(--high-contrast-light) !important;
+}
+
+.badge.bg-warning {
+    background-color: var(--high-contrast-warning) !important;
+    color: var(--high-contrast-light) !important;
+}
+
+.badge.bg-success {
+    background-color: var(--high-contrast-success) !important;
+    color: var(--high-contrast-light) !important;
+}
+
+.badge.bg-danger {
+    background-color: var(--high-contrast-danger) !important;
+    color: var(--high-contrast-light) !important;
+}
+
+/* Card improvements */
+.card {
+    border-color: var(--high-contrast-border) !important;
+}
+
+.card-header {
+    border-bottom-color: var(--high-contrast-border) !important;
+    background-color: rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Modal improvements */
+.modal-header {
+    border-bottom-color: var(--high-contrast-border) !important;
+}
+
+.modal-footer {
+    border-top-color: var(--high-contrast-border) !important;
+}
+
+/* Alert improvements */
+.alert-warning {
+    background-color: rgba(204, 102, 0, 0.1) !important;
+    border-color: var(--high-contrast-warning) !important;
+    color: var(--high-contrast-warning) !important;
+}
+
+.alert-danger {
+    background-color: rgba(204, 0, 0, 0.1) !important;
+    border-color: var(--high-contrast-danger) !important;
+    color: var(--high-contrast-danger) !important;
+}
+
+.alert-success {
+    background-color: rgba(0, 102, 0, 0.1) !important;
+    border-color: var(--high-contrast-success) !important;
+    color: var(--high-contrast-success) !important;
+}
+
+/* Dropdown improvements */
+.dropdown-menu {
+    border-color: var(--high-contrast-border) !important;
+}
+
+.dropdown-item:focus,
+.dropdown-item:hover {
+    background-color: var(--high-contrast-secondary) !important;
+    color: var(--high-contrast-light) !important;
+}
+
+/* Skip link for screen readers */
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 6px;
+    background: var(--high-contrast-dark);
+    color: var(--high-contrast-light);
+    padding: 8px;
+    text-decoration: none;
+    border-radius: 4px;
+    z-index: 9999;
+}
+
+.skip-link:focus {
+    top: 6px;
+}
+
+/* Improved contrast for placeholders */
+::placeholder {
+    color: var(--high-contrast-muted) !important;
+    opacity: 1 !important;
+}
+
+/* High contrast for status indicators */
+.status-badge.confirmed {
+    background-color: var(--high-contrast-success) !important;
+    color: var(--high-contrast-light) !important;
+}
+
+.status-badge.pending {
+    background-color: var(--high-contrast-warning) !important;
+    color: var(--high-contrast-light) !important;
+}
+
+.status-badge.cancelled {
+    background-color: var(--high-contrast-danger) !important;
+    color: var(--high-contrast-light) !important;
+}
+
+/* Ensure proper contrast for disabled elements */
+button:disabled,
+.btn:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+    background-color: #f5f5f5 !important;
+    color: var(--high-contrast-muted) !important;
+    border-color: var(--high-contrast-border) !important;
+    opacity: 0.7 !important;
+}
+
+/* Loading state improvements */
+.spinner-border {
+    border-color: var(--high-contrast-muted) !important;
+    border-right-color: transparent !important;
+}
+
+/* Navbar improvements */
+.navbar-brand:focus {
+    outline: 2px solid var(--focus-color) !important;
+    outline-offset: 2px !important;
+}
+
+/* Ensure minimum contrast for all text */
+body {
+    color: var(--high-contrast-dark) !important;
+}
+
+/* Print styles for accessibility */
+@media print {
+    * {
+        background: white !important;
+        color: black !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+    
+    a,
+    a:visited {
+        text-decoration: underline !important;
+    }
+}

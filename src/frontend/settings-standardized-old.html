@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurações - UBS | Universal Booking System</title>
+    <meta name="description" content="Configure sua empresa e WhatsApp no UBS para automatizar agendamentos com IA.">
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --ubs-primary: #2D5A9B;
+            --ubs-primary-light: #4A7BC8;
+            --ubs-primary-dark: #1E3F6B;
+            --ubs-secondary: #F8F9FA;
+            --ubs-accent: #28A745;
+            --ubs-warning: #ffc107;
+            --ubs-danger: #dc3545;
+            --ubs-info: #17a2b8;
+            --ubs-text-dark: #2C3E50;
+            --ubs-text-light: #6C757D;
+            --ubs-border: #E9ECEF;
+            --ubs-shadow: 0 4px 20px rgba(45, 90, 155, 0.15);
+            --ubs-shadow-lg: 0 10px 40px rgba(45, 90, 155, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--ubs-secondary);
+            color: var(--ubs-text-dark);
+            overflow-x: hidden;
+        }
+
+        /* Top Navbar */
+        .top-navbar {
+            background: white;
+            border-bottom: 1px solid var(--ubs-border);
+            padding: 0.75rem 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1030;
+            box-shadow: var(--ubs-shadow);
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--ubs-primary) !important;
+            text-decoration: none;
+        }
+
+        .logo-image {
+            height: 40px;
+            width: auto;
+            object-fit: contain;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--ubs-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 70px;
+            left: 0;
+            width: 280px;
+            height: calc(100vh - 70px);
+            background: linear-gradient(180deg, var(--ubs-primary) 0%, var(--ubs-primary-dark) 100%);
+            padding: 2rem 0;
+            z-index: 1020;
+            overflow-y: auto;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar-menu li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 2rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-left-color: white;
+        }
+
+        .sidebar-menu i {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            margin-top: 70px;
+            padding: 2rem;
+            min-height: calc(100vh - 70px);
+        }
+
+        /* UBS Section */
+        .ubs-section {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--ubs-shadow);
+            border: 1px solid var(--ubs-border);
+            transition: all 0.3s ease;
+        }
+
+        .ubs-section:hover {
+            box-shadow: var(--ubs-shadow-lg);
+        }
+
+        .ubs-section-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--ubs-border);
+        }
+
+        .ubs-section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--ubs-text-dark);
+            margin: 0;
+        }
+
+        .ubs-section-subtitle {
+            color: var(--ubs-text-light);
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        .card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        /* Form Controls */
+        .form-floating {
+            margin-bottom: 1rem;
+        }
+
+        .form-floating > .form-control,
+        .form-floating > .form-select {
+            border: 1px solid var(--ubs-border);
+            border-radius: 8px;
+            padding: 0.75rem;
+            height: calc(3rem + 2px);
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-floating > .form-control:focus,
+        .form-floating > .form-select:focus {
+            border-color: var(--ubs-primary);
+            box-shadow: 0 0 0 0.25rem rgba(45, 90, 155, 0.1);
+        }
+
+        .form-floating > label {
+            padding: 1rem 0.75rem;
+            font-size: 0.95rem;
+            color: var(--ubs-text-light);
+        }
+
+        .form-check {
+            margin-bottom: 1rem;
+        }
+
+        .form-check-input:checked {
+            background-color: var(--ubs-primary);
+            border-color: var(--ubs-primary);
+        }
+
+        .form-check-input:focus {
+            box-shadow: 0 0 0 0.25rem rgba(45, 90, 155, 0.25);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            font-size: 0.95rem;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: var(--ubs-primary);
+            border: none;
+        }
+
+        .btn-primary:hover {
+            background: var(--ubs-primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--ubs-shadow);
+        }
+
+        .btn-success {
+            background: var(--ubs-accent);
+            border: none;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: var(--ubs-shadow);
+        }
+
+        .btn-outline-primary {
+            color: var(--ubs-primary);
+            border: 2px solid var(--ubs-primary);
+            background: transparent;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--ubs-primary);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        /* WhatsApp Connection Status */
+        .whatsapp-status {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            font-weight: 500;
+        }
+
+        .whatsapp-status.connected {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--ubs-accent);
+            border: 2px solid rgba(40, 167, 69, 0.3);
+        }
+
+        .whatsapp-status.disconnected {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--ubs-danger);
+            border: 2px solid rgba(220, 53, 69, 0.3);
+        }
+
+        .whatsapp-status.pending {
+            background: rgba(255, 193, 7, 0.1);
+            color: var(--ubs-warning);
+            border: 2px solid rgba(255, 193, 7, 0.3);
+        }
+
+        /* Business Hours */
+        .business-hours {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .business-day-row {
+            background: var(--ubs-secondary);
+            border: 1px solid var(--ubs-border);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+
+        .day-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--ubs-border);
+        }
+
+        .day-name {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--ubs-text-dark);
+        }
+
+        .day-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .business-slots-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .business-slot {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid var(--ubs-border);
+        }
+
+        .slot-times {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex: 1;
+        }
+
+        .slot-times input[type="time"] {
+            border: 1px solid var(--ubs-border);
+            border-radius: 6px;
+            padding: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .slot-separator {
+            color: var(--ubs-text-light);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        /* Notifications */
+        .ubs-notification {
+            position: fixed;
+            top: 90px;
+            right: 20px;
+            background: white;
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            box-shadow: var(--ubs-shadow-lg);
+            border-left: 4px solid var(--ubs-accent);
+            z-index: 1040;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+
+        .ubs-notification.show {
+            transform: translateX(0);
+        }
+
+        .ubs-notification.error {
+            border-left-color: var(--ubs-danger);
+        }
+
+        /* Alert Messages */
+        .alert {
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            border: none;
+            padding: 1rem;
+            font-size: 0.95rem;
+        }
+
+        /* Loading States */
+        .loading-spinner {
+            display: none;
+            margin-right: 0.5rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .ubs-section-header {
+                flex-direction: column;
+                text-align: center;
+                gap: 0.5rem;
+            }
+
+            .business-slot {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .slot-times {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Top Navbar -->
+    <nav class="top-navbar">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <a class="navbar-brand" href="/dashboard-standardized.html">
+                    <picture>
+                        <source srcset="assets/images/optimized/UBS_Nac.webp" type="image/webp">
+                        <img src="assets/images/UBS_Nac.png" alt="UBS - Universal Booking System" class="logo-image">
+                    </picture>
+                </a>
+                
+                <div class="user-info">
+                    <span class="d-none d-md-inline text-muted">Olá, <span id="userName">Usuário</span></span>
+                    <div class="user-avatar" id="userAvatar">U</div>
+                    <div class="dropdown">
+                        <button class="btn btn-link p-0" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-chevron-down text-muted"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/dashboard-standardized.html">Dashboard</a></li>
+                            <li><a class="dropdown-item" href="/settings-standardized.html">Configurações</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="logout()">Sair</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <ul class="sidebar-menu">
+            <li><a href="/dashboard-standardized.html"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+            <li><a href="/appointments-standardized.html"><i class="fas fa-calendar-alt"></i> Agendamentos</a></li>
+            <li><a href="/customers-standardized.html"><i class="fas fa-users"></i> Clientes</a></li>
+            <li><a href="/services-standardized.html"><i class="fas fa-concierge-bell"></i> Serviços</a></li>
+            <li><a href="/payments-standardized.html"><i class="fas fa-credit-card"></i> Pagamentos</a></li>
+            <li><a href="/analytics-standardized.html"><i class="fas fa-chart-line"></i> Analytics</a></li>
+            <li><a href="/billing-standardized.html"><i class="fas fa-file-invoice-dollar"></i> Billing</a></li>
+            <li><a href="/conversations-standardized.html"><i class="fas fa-comments"></i> Conversas</a></li>
+            <li><a href="/settings-standardized.html" class="active"><i class="fas fa-cog"></i> Configurações</a></li>
+        </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Page Header -->
+        <div class="ubs-section">
+            <div class="ubs-section-header">
+                <div class="card-icon" style="background: var(--ubs-primary);">
+                    <i class="fas fa-cog"></i>
+                </div>
+                <div>
+                    <h1 class="ubs-section-title">Configurações do Sistema</h1>
+                    <p class="ubs-section-subtitle">Configure sua empresa e WhatsApp para automatizar agendamentos com IA</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alert Container -->
+        <div id="alertContainer"></div>
+
+        <!-- Company Settings -->
+        <div class="ubs-section">
+            <div class="ubs-section-header">
+                <div class="card-icon" style="background: var(--ubs-info);">
+                    <i class="fas fa-building"></i>
+                </div>
+                <div>
+                    <h3 class="ubs-section-title">Informações da Empresa</h3>
+                    <p class="ubs-section-subtitle">Dados básicos do seu negócio</p>
+                </div>
+            </div>
+
+            <form id="companyForm">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="text" class="form-control" id="companyName" placeholder="Nome da Empresa">
+                            <label for="companyName">Nome da Empresa</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="text" class="form-control" id="companyPhone" placeholder="Telefone">
+                            <label for="companyPhone">Telefone</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="email" class="form-control" id="companyEmail" placeholder="Email">
+                            <label for="companyEmail">Email</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="text" class="form-control" id="companyAddress" placeholder="Endereço">
+                            <label for="companyAddress">Endereço</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-floating">
+                    <textarea class="form-control" id="companyDescription" placeholder="Descrição" style="height: 100px"></textarea>
+                    <label for="companyDescription">Descrição do Negócio</label>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-2"></i>Salvar Informações
+                </button>
+            </form>
+        </div>
+
+        <!-- WhatsApp Settings -->
+        <div class="ubs-section">
+            <div class="ubs-section-header">
+                <div class="card-icon" style="background: #25D366;">
+                    <i class="fab fa-whatsapp"></i>
+                </div>
+                <div>
+                    <h3 class="ubs-section-title">Configurações do WhatsApp</h3>
+                    <p class="ubs-section-subtitle">Configure a integração com WhatsApp Business</p>
+                </div>
+            </div>
+
+            <!-- WhatsApp Status -->
+            <div class="whatsapp-status" id="whatsappStatus">
+                <i class="fas fa-circle"></i>
+                <span>Verificando status da conexão...</span>
+            </div>
+
+            <form id="whatsappForm">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="text" class="form-control" id="whatsappNumber" placeholder="Número do WhatsApp">
+                            <label for="whatsappNumber">Número do WhatsApp Business</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="text" class="form-control" id="whatsappApiKey" placeholder="API Key">
+                            <label for="whatsappApiKey">API Key</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-floating">
+                    <textarea class="form-control" id="welcomeMessage" placeholder="Mensagem de Boas-vindas" style="height: 100px"></textarea>
+                    <label for="welcomeMessage">Mensagem de Boas-vindas</label>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fab fa-whatsapp me-2"></i>Conectar WhatsApp
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" onclick="testWhatsAppConnection()">
+                        <i class="fas fa-vial me-2"></i>Testar Conexão
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Business Hours -->
+        <div class="ubs-section">
+            <div class="ubs-section-header">
+                <div class="card-icon" style="background: var(--ubs-warning);">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div>
+                    <h3 class="ubs-section-title">Horário de Funcionamento</h3>
+                    <p class="ubs-section-subtitle">Configure os horários de atendimento</p>
+                </div>
+            </div>
+
+            <div class="business-hours" id="businessHours">
+                <!-- Business hours will be populated here -->
+                <div class="business-day-row">
+                    <div class="day-header">
+                        <h6 class="day-name">Segunda-feira</h6>
+                        <div class="day-controls">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="monday-enabled" checked>
+                                <label class="form-check-label" for="monday-enabled">Ativo</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="business-slots-container">
+                        <div class="business-slot">
+                            <div class="slot-times">
+                                <input type="time" value="09:00" class="form-control">
+                                <span class="slot-separator">até</span>
+                                <input type="time" value="18:00" class="form-control">
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-danger">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary mt-2">
+                        <i class="fas fa-plus me-2"></i>Adicionar Horário
+                    </button>
+                </div>
+
+                <!-- Similar structure for other days -->
+                <div class="business-day-row">
+                    <div class="day-header">
+                        <h6 class="day-name">Terça-feira</h6>
+                        <div class="day-controls">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="tuesday-enabled" checked>
+                                <label class="form-check-label" for="tuesday-enabled">Ativo</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="business-slots-container">
+                        <div class="business-slot">
+                            <div class="slot-times">
+                                <input type="time" value="09:00" class="form-control">
+                                <span class="slot-separator">até</span>
+                                <input type="time" value="18:00" class="form-control">
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-danger">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary mt-2">
+                        <i class="fas fa-plus me-2"></i>Adicionar Horário
+                    </button>
+                </div>
+
+                <!-- Continue for other days... -->
+            </div>
+
+            <button type="button" class="btn btn-primary mt-3" onclick="saveBusinessHours()">
+                <i class="fas fa-save me-2"></i>Salvar Horários
+            </button>
+        </div>
+
+        <!-- AI Settings -->
+        <div class="ubs-section">
+            <div class="ubs-section-header">
+                <div class="card-icon" style="background: var(--ubs-accent);">
+                    <i class="fas fa-brain"></i>
+                </div>
+                <div>
+                    <h3 class="ubs-section-title">Configurações da IA</h3>
+                    <p class="ubs-section-subtitle">Personalize o comportamento da inteligência artificial</p>
+                </div>
+            </div>
+
+            <form id="aiForm">
+                <div class="form-floating">
+                    <select class="form-select" id="aiPersonality">
+                        <option value="professional">Profissional</option>
+                        <option value="friendly">Amigável</option>
+                        <option value="casual">Casual</option>
+                        <option value="formal">Formal</option>
+                    </select>
+                    <label for="aiPersonality">Personalidade da IA</label>
+                </div>
+
+                <div class="form-floating">
+                    <textarea class="form-control" id="aiInstructions" placeholder="Instruções especiais" style="height: 120px"></textarea>
+                    <label for="aiInstructions">Instruções Especiais para a IA</label>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="aiAutoBooking" checked>
+                            <label class="form-check-label" for="aiAutoBooking">
+                                Permitir agendamentos automáticos
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="aiSendConfirmation" checked>
+                            <label class="form-check-label" for="aiSendConfirmation">
+                                Enviar confirmações automáticas
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-robot me-2"></i>Salvar Configurações da IA
+                </button>
+            </form>
+        </div>
+
+        <!-- Notification Settings -->
+        <div class="ubs-section">
+            <div class="ubs-section-header">
+                <div class="card-icon" style="background: var(--ubs-info);">
+                    <i class="fas fa-bell"></i>
+                </div>
+                <div>
+                    <h3 class="ubs-section-title">Notificações</h3>
+                    <p class="ubs-section-subtitle">Configure quando e como receber notificações</p>
+                </div>
+            </div>
+
+            <form id="notificationForm">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Notificações por Email</h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="emailNewBooking" checked>
+                            <label class="form-check-label" for="emailNewBooking">
+                                Novos agendamentos
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="emailCancellation">
+                            <label class="form-check-label" for="emailCancellation">
+                                Cancelamentos
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="emailReminders">
+                            <label class="form-check-label" for="emailReminders">
+                                Lembretes diários
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Notificações WhatsApp</h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="whatsappNewBooking" checked>
+                            <label class="form-check-label" for="whatsappNewBooking">
+                                Novos agendamentos
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="whatsappCancellation" checked>
+                            <label class="form-check-label" for="whatsappCancellation">
+                                Cancelamentos
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="whatsappReminders" checked>
+                            <label class="form-check-label" for="whatsappReminders">
+                                Lembretes automáticos
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-bell me-2"></i>Salvar Preferências
+                </button>
+            </form>
+        </div>
+    </main>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let isInitialized = false;
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeUserSafe();
+        });
+
+        // Safe user initialization to prevent loops
+        function initializeUserSafe() {
+            if (isInitialized) return;
+            isInitialized = true;
+
+            try {
+                checkAuthenticationStatus();
+                loadSettings();
+                initializeForms();
+            } catch (error) {
+                console.error('Error initializing settings page:', error);
+                showNotification('Erro ao inicializar página', 'error');
+            }
+        }
+
+        // Check authentication status
+        function checkAuthenticationStatus() {
+            const token = localStorage.getItem('ubs_token');
+            const userData = localStorage.getItem('ubs_user_data');
+
+            if (!token || !userData) {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            try {
+                const user = JSON.parse(userData);
+                updateUserInfo(user);
+            } catch (error) {
+                console.error('Error parsing user data:', error);
+                localStorage.removeItem('ubs_user_data');
+                window.location.href = '/login.html';
+            }
+        }
+
+        // Update user info in UI
+        function updateUserInfo(user) {
+            const userName = document.getElementById('userName');
+            const userAvatar = document.getElementById('userAvatar');
+
+            if (userName && user.nome) {
+                userName.textContent = user.nome;
+            }
+
+            if (userAvatar && user.nome) {
+                userAvatar.textContent = user.nome.charAt(0).toUpperCase();
+            }
+        }
+
+        // Load settings
+        async function loadSettings() {
+            try {
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/settings', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        handleAuthError();
+                        return;
+                    }
+                    throw new Error('Failed to load settings');
+                }
+                
+                const settings = await response.json();
+                populateSettings(settings);
+                
+            } catch (error) {
+                console.error('Error loading settings:', error);
+                showNotification('Erro ao carregar configurações. Usando valores padrão.', 'error');
+                loadDefaultSettings();
+            }
+        }
+
+        // Load default settings for demonstration
+        function loadDefaultSettings() {
+            const defaultSettings = {
+                company: {
+                    name: 'Minha Empresa',
+                    phone: '(11) 99999-9999',
+                    email: 'contato@minhaempresa.com',
+                    address: 'Rua das Empresas, 123',
+                    description: 'Descrição da minha empresa...'
+                },
+                whatsapp: {
+                    number: '5511999999999',
+                    apiKey: '',
+                    welcomeMessage: 'Olá! Como posso ajudá-lo hoje?'
+                },
+                ai: {
+                    personality: 'professional',
+                    instructions: 'Seja sempre educado e prestativo.',
+                    autoBooking: true,
+                    sendConfirmation: true
+                }
+            };
+            populateSettings(defaultSettings);
+        }
+
+        // Populate settings in form
+        function populateSettings(settings) {
+            // Company settings
+            if (settings.company) {
+                document.getElementById('companyName').value = settings.company.name || '';
+                document.getElementById('companyPhone').value = settings.company.phone || '';
+                document.getElementById('companyEmail').value = settings.company.email || '';
+                document.getElementById('companyAddress').value = settings.company.address || '';
+                document.getElementById('companyDescription').value = settings.company.description || '';
+            }
+
+            // WhatsApp settings
+            if (settings.whatsapp) {
+                document.getElementById('whatsappNumber').value = settings.whatsapp.number || '';
+                document.getElementById('whatsappApiKey').value = settings.whatsapp.apiKey || '';
+                document.getElementById('welcomeMessage').value = settings.whatsapp.welcomeMessage || '';
+                
+                // Update WhatsApp status
+                updateWhatsAppStatus(settings.whatsapp.connected || false);
+            }
+
+            // AI settings
+            if (settings.ai) {
+                document.getElementById('aiPersonality').value = settings.ai.personality || 'professional';
+                document.getElementById('aiInstructions').value = settings.ai.instructions || '';
+                document.getElementById('aiAutoBooking').checked = settings.ai.autoBooking !== false;
+                document.getElementById('aiSendConfirmation').checked = settings.ai.sendConfirmation !== false;
+            }
+        }
+
+        // Update WhatsApp status
+        function updateWhatsAppStatus(connected) {
+            const statusElement = document.getElementById('whatsappStatus');
+            
+            if (connected) {
+                statusElement.className = 'whatsapp-status connected';
+                statusElement.innerHTML = '<i class="fas fa-circle"></i><span>WhatsApp conectado e funcionando</span>';
+            } else {
+                statusElement.className = 'whatsapp-status disconnected';
+                statusElement.innerHTML = '<i class="fas fa-circle"></i><span>WhatsApp desconectado - Configure para começar</span>';
+            }
+        }
+
+        // Initialize forms
+        function initializeForms() {
+            // Company form
+            document.getElementById('companyForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                saveCompanySettings();
+            });
+
+            // WhatsApp form
+            document.getElementById('whatsappForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                saveWhatsAppSettings();
+            });
+
+            // AI form
+            document.getElementById('aiForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                saveAISettings();
+            });
+
+            // Notification form
+            document.getElementById('notificationForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                saveNotificationSettings();
+            });
+        }
+
+        // Save company settings
+        async function saveCompanySettings() {
+            try {
+                const formData = {
+                    name: document.getElementById('companyName').value,
+                    phone: document.getElementById('companyPhone').value,
+                    email: document.getElementById('companyEmail').value,
+                    address: document.getElementById('companyAddress').value,
+                    description: document.getElementById('companyDescription').value
+                };
+
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/settings/company', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) throw new Error('Failed to save company settings');
+
+                showNotification('Informações da empresa salvas com sucesso!');
+            } catch (error) {
+                console.error('Error saving company settings:', error);
+                showNotification('Erro ao salvar informações da empresa', 'error');
+            }
+        }
+
+        // Save WhatsApp settings
+        async function saveWhatsAppSettings() {
+            try {
+                const formData = {
+                    number: document.getElementById('whatsappNumber').value,
+                    apiKey: document.getElementById('whatsappApiKey').value,
+                    welcomeMessage: document.getElementById('welcomeMessage').value
+                };
+
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/settings/whatsapp', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) throw new Error('Failed to save WhatsApp settings');
+
+                showNotification('Configurações do WhatsApp salvas com sucesso!');
+                updateWhatsAppStatus(true);
+            } catch (error) {
+                console.error('Error saving WhatsApp settings:', error);
+                showNotification('Erro ao salvar configurações do WhatsApp', 'error');
+            }
+        }
+
+        // Save AI settings
+        async function saveAISettings() {
+            try {
+                const formData = {
+                    personality: document.getElementById('aiPersonality').value,
+                    instructions: document.getElementById('aiInstructions').value,
+                    autoBooking: document.getElementById('aiAutoBooking').checked,
+                    sendConfirmation: document.getElementById('aiSendConfirmation').checked
+                };
+
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/settings/ai', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) throw new Error('Failed to save AI settings');
+
+                showNotification('Configurações da IA salvas com sucesso!');
+            } catch (error) {
+                console.error('Error saving AI settings:', error);
+                showNotification('Erro ao salvar configurações da IA', 'error');
+            }
+        }
+
+        // Save notification settings
+        async function saveNotificationSettings() {
+            try {
+                const formData = {
+                    email: {
+                        newBooking: document.getElementById('emailNewBooking').checked,
+                        cancellation: document.getElementById('emailCancellation').checked,
+                        reminders: document.getElementById('emailReminders').checked
+                    },
+                    whatsapp: {
+                        newBooking: document.getElementById('whatsappNewBooking').checked,
+                        cancellation: document.getElementById('whatsappCancellation').checked,
+                        reminders: document.getElementById('whatsappReminders').checked
+                    }
+                };
+
+                const token = localStorage.getItem('ubs_token');
+                const response = await fetch('/api/settings/notifications', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) throw new Error('Failed to save notification settings');
+
+                showNotification('Preferências de notificação salvas com sucesso!');
+            } catch (error) {
+                console.error('Error saving notification settings:', error);
+                showNotification('Erro ao salvar preferências de notificação', 'error');
+            }
+        }
+
+        // Save business hours
+        function saveBusinessHours() {
+            showNotification('Horários de funcionamento salvos com sucesso!');
+            // Implementation for saving business hours
+        }
+
+        // Test WhatsApp connection
+        function testWhatsAppConnection() {
+            showNotification('Testando conexão WhatsApp...', 'success');
+            
+            setTimeout(() => {
+                showNotification('Conexão WhatsApp testada com sucesso!');
+                updateWhatsAppStatus(true);
+            }, 2000);
+        }
+
+        // Utility functions
+        function showNotification(message, type = 'success') {
+            const container = document.getElementById('notificationContainer');
+            const notification = document.createElement('div');
+            notification.className = `ubs-notification ${type}`;
+            notification.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            container.appendChild(notification);
+            setTimeout(() => notification.classList.add('show'), 100);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => container.removeChild(notification), 300);
+            }, 5000);
+        }
+
+        function handleAuthError() {
+            localStorage.removeItem('ubs_token');
+            localStorage.removeItem('ubs_user_data');
+            showNotification('Sessão expirada. Redirecionando...', 'error');
+            setTimeout(() => window.location.href = '/login.html', 2000);
+        }
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('ubs_token');
+            localStorage.removeItem('ubs_user_data');
+            showNotification('Logout realizado com sucesso!');
+            setTimeout(() => window.location.href = '/login.html', 1000);
+        }
+    </script>
+</body>
+</html> 

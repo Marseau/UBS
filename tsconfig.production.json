@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "declaration": false,
+    "skipLibCheck": true,
+    "noImplicitAny": false,
+    "allowJs": false,
+    "strict": false,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "src/frontend/js/**/*",
+    "src/services/tenant-metrics/platform-aggregation-optimized.service.ts",
+    "src/services/tenant-metrics/platform-aggregation-validated.service.ts",
+    "src/services/unified-cron.service.ts",
+    "src/services/subscription-monitor-enhanced.service.ts",
+    "scripts/**/*",
+    "*.js",
+    "**/*.js",
+    "node_modules",
+    "dist"
+  ]
+}

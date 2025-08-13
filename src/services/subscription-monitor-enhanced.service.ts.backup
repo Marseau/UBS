@@ -1,0 +1,412 @@
+import * as cron from 'node-cron';
+import { supabaseAdmin } from '../config/database';
+import { EmailService } from './email.service';
+
+interface SubscriptionAlert {
+  id: string;
+  tenantId: string;
+  type: 'trial_ending' | 'trial_ended' | 'payment_failed' | 'usage_limit' | 'billing_reminder';
+  severity: 'info' | 'warning' | 'critical';
+  title: string;
+  message: string;
+  daysRemaining?: number;
+  actionRequired: boolean;
+}
+
+interface Tenant {
+  id: string;
+  business_name: string;
+  email: string;
+  status: string;
+  subscription_plan?: string;
+  created_at: string;
+  domain_config?: any;
+}
+
+export class SubscriptionMonitorService {
+  private isRunning = false;
+  private emailService: EmailService;
+  private cronJobs: cron.ScheduledTask[] = [];
+
+  constructor() {
+    this.emailService = new EmailService();
+  }
+
+  startMonitoring(): void {
+    if (this.isRunning) {
+      console.warn('⚠️ Subscription monitoring already running');
+      return;
+    }
+
+    console.log('🚀 Starting subscription monitoring service...');
+    this.isRunning = true;
+
+    // Schedule cron jobs
+    this.scheduleCronJobs();
+    
+    console.log('✅ Subscription monitoring service started with cron jobs');
+  }
+
+  stopMonitoring(): void {
+    if (!this.isRunning) {
+      console.warn('⚠️ Subscription monitoring not running');
+      return;
+    }
+
+    console.log('🛑 Stopping subscription monitoring service...');
+    
+    // Stop all cron jobs
+    this.cronJobs.forEach(job => job.stop());
+    this.cronJobs = [];
+    
+    this.isRunning = false;
+    console.log('✅ Subscription monitoring service stopped');
+  }
+
+  private scheduleCronJobs(): void {
+    // Check trial subscriptions every hour
+    const trialJob = cron.schedule('0 * * * *', async () => {
+      await this.checkTrialSubscriptions();
+    }, { scheduled: false });
+
+    // Check active subscriptions every 6 hours
+    const activeJob = cron.schedule('0 */6 * * *', async () => {
+      await this.checkActiveSubscriptions();
+    }, { scheduled: false });
+
+    // Check usage limits daily at 8 AM
+    const usageJob = cron.schedule('0 8 * * *', async () => {
+      await this.checkUsageLimits();
+    }, { scheduled: false });
+
+    // Send daily summaries at 9 AM
+    const summaryJob = cron.schedule('0 9 * * *', async () => {
+      await this.sendDailySummaries();
+    }, { scheduled: false });
+
+    // Weekly billing reminders on Mondays at 10 AM
+    const billingJob = cron.schedule('0 10 * * 1', async () => {
+      await this.sendBillingReminders();
+    }, { scheduled: false });
+
+    // Start all jobs
+    [trialJob, activeJob, usageJob, summaryJob, billingJob].forEach(job => {
+      job.start();
+      this.cronJobs.push(job);
+    });
+
+    console.log('📅 Cron jobs scheduled:');
+    console.log('   - Trial checks: Every hour');
+    console.log('   - Active subscription checks: Every 6 hours');
+    console.log('   - Usage limit checks: Daily at 8 AM');
+    console.log('   - Daily summaries: Daily at 9 AM');
+    console.log('   - Billing reminders: Weekly on Mondays at 10 AM');
+  }
+
+  async checkTrialSubscriptions(): Promise<void> {
+    try {
+      console.log('🔍 Checking trial subscriptions...');
+      
+      const { data: tenants, error } = await supabaseAdmin
+        .from('tenants')
+        .select('id, business_name, email, status, created_at')
+        .eq('status', 'active')
+        .is('subscription_plan', null); // Trials don't have subscription plans
+
+      if (error) {
+        console.error('❌ Error fetching trial subscriptions:', error);
+        return;
+      }
+
+      for (const tenant of tenants || []) {
+        await this.processTrial(tenant);
+      }
+
+      console.log(`✅ Processed ${tenants?.length || 0} trial subscriptions`);
+    } catch (error) {
+      console.error('❌ Error in checkTrialSubscriptions:', error);
+    }
+  }
+
+  private async processTrial(tenant: Tenant): Promise<void> {
+    try {
+      const trialStart = new Date(tenant.created_at);
+      const trialEnd = new Date(trialStart);
+      trialEnd.setDate(trialEnd.getDate() + 14); // 14-day trial
+
+      const now = new Date();
+      const daysRemaining = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (daysRemaining <= 0) {
+        await this.handleTrialExpired(tenant);
+      } else if (daysRemaining <= 3) {
+        await this.handleTrialEnding(tenant, daysRemaining);
+      }
+    } catch (error) {
+      console.error('❌ Error processing trial:', error, { tenantId: tenant.id });
+    }
+  }
+
+  private async handleTrialEnding(tenant: Tenant, daysRemaining: number): Promise<void> {
+    const alert: SubscriptionAlert = {
+      id: `trial_ending_${tenant.id}_${Date.now()}`,
+      tenantId: tenant.id,
+      type: 'trial_ending',
+      severity: 'warning',
+      title: 'Período de Teste Terminando',
+      message: `Seu período de teste termina em ${daysRemaining} dia(s). Faça upgrade para continuar usando o serviço.`,
+      daysRemaining,
+      actionRequired: true
+    };
+
+    await this.sendAlert(tenant, alert);
+    console.log(`⚠️ Trial ending alert sent for tenant ${tenant.business_name} (${daysRemaining} days)`);
+  }
+
+  private async handleTrialExpired(tenant: Tenant): Promise<void> {
+    const alert: SubscriptionAlert = {
+      id: `trial_expired_${tenant.id}_${Date.now()}`,
+      tenantId: tenant.id,
+      type: 'trial_ended',
+      severity: 'critical',
+      title: 'Período de Teste Expirado',
+      message: 'Seu período de teste expirou. Faça upgrade para continuar usando o serviço.',
+      actionRequired: true
+    };
+
+    await this.sendAlert(tenant, alert);
+    
+    // Update tenant status to expired
+    await supabaseAdmin
+      .from('tenants')
+      .update({ status: 'expired' })
+      .eq('id', tenant.id);
+
+    console.log(`🚨 Trial expired - tenant ${tenant.business_name} suspended`);
+  }
+
+  async checkActiveSubscriptions(): Promise<void> {
+    try {
+      console.log('🔍 Checking active subscriptions...');
+      
+      const { data: tenants, error } = await supabaseAdmin
+        .from('tenants')
+        .select('id, business_name, email, status, subscription_plan')
+        .in('status', ['active', 'past_due']);
+
+      if (error) {
+        console.error('❌ Error fetching active subscriptions:', error);
+        return;
+      }
+
+      for (const tenant of tenants || []) {
+        await this.processActiveSubscription(tenant);
+      }
+
+      console.log(`✅ Processed ${tenants?.length || 0} active subscriptions`);
+    } catch (error) {
+      console.error('❌ Error in checkActiveSubscriptions:', error);
+    }
+  }
+
+  private async processActiveSubscription(tenant: Tenant): Promise<void> {
+    try {
+      if (tenant.status === 'past_due') {
+        const alert: SubscriptionAlert = {
+          id: `payment_failed_${tenant.id}_${Date.now()}`,
+          tenantId: tenant.id,
+          type: 'payment_failed',
+          severity: 'critical',
+          title: 'Falha no Pagamento',
+          message: 'Seu pagamento falhou. Atualize seu método de pagamento para continuar usando o serviço.',
+          actionRequired: true
+        };
+
+        await this.sendAlert(tenant, alert);
+        console.log(`💳 Payment failed alert sent for tenant ${tenant.business_name}`);
+      }
+    } catch (error) {
+      console.error('❌ Error processing active subscription:', error, { tenantId: tenant.id });
+    }
+  }
+
+  async checkUsageLimits(): Promise<void> {
+    try {
+      console.log('🔍 Checking usage limits...');
+      
+      const { data: tenants, error } = await supabaseAdmin
+        .from('tenants')
+        .select('id, business_name, email, subscription_plan, domain_config')
+        .eq('status', 'active');
+
+      if (error) {
+        console.error('❌ Error fetching tenants for usage check:', error);
+        return;
+      }
+
+      for (const tenant of tenants || []) {
+        await this.processUsageLimit(tenant);
+      }
+
+      console.log(`✅ Processed usage limits for ${tenants?.length || 0} tenants`);
+    } catch (error) {
+      console.error('❌ Error in checkUsageLimits:', error);
+    }
+  }
+
+  private async processUsageLimit(tenant: Tenant): Promise<void> {
+    try {
+      // Get appointment count for current month
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { data: appointments, error } = await supabaseAdmin
+        .from('appointments')
+        .select('id')
+        .eq('tenant_id', tenant.id)
+        .gte('created_at', startOfMonth.toISOString());
+
+      if (error) {
+        console.error('❌ Error fetching appointment count:', error);
+        return;
+      }
+
+      const appointmentCount = appointments?.length || 0;
+      const limit = this.getUsageLimit(tenant.subscription_plan);
+
+      if (appointmentCount >= limit * 0.9) { // 90% of limit
+        const alert: SubscriptionAlert = {
+          id: `usage_limit_${tenant.id}_${Date.now()}`,
+          tenantId: tenant.id,
+          type: 'usage_limit',
+          severity: appointmentCount >= limit ? 'critical' : 'warning',
+          title: 'Limite de Uso Atingido',
+          message: `Você usou ${appointmentCount} de ${limit} agendamentos este mês. ${appointmentCount >= limit ? 'Faça upgrade para continuar.' : 'Considere fazer upgrade.'}`,
+          actionRequired: appointmentCount >= limit
+        };
+
+        await this.sendAlert(tenant, alert);
+        console.log(`📊 Usage limit alert sent for tenant ${tenant.business_name} (${appointmentCount}/${limit})`);
+      }
+    } catch (error) {
+      console.error('❌ Error processing usage limit:', error, { tenantId: tenant.id });
+    }
+  }
+
+  private getUsageLimit(subscriptionPlan?: string): number {
+    switch (subscriptionPlan) {
+      case 'basic': return 100;
+      case 'pro': return 500;
+      case 'enterprise': return 2000;
+      default: return 50; // Trial/free limit
+    }
+  }
+
+  async sendDailySummaries(): Promise<void> {
+    try {
+      console.log('📊 Sending daily summaries...');
+      
+      const { data: tenants, error } = await supabaseAdmin
+        .from('tenants')
+        .select('id, business_name, email')
+        .eq('status', 'active');
+
+      if (error) {
+        console.error('❌ Error fetching tenants for daily summary:', error);
+        return;
+      }
+
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const dateStr = yesterday.toISOString().split('T')[0];
+
+      for (const tenant of tenants || []) {
+        try {
+          await this.emailService.sendDailySummary(tenant.id, dateStr);
+        } catch (error) {
+          console.error(`❌ Failed to send daily summary for ${tenant.business_name}:`, error);
+        }
+      }
+
+      console.log(`✅ Daily summaries sent to ${tenants?.length || 0} tenants`);
+    } catch (error) {
+      console.error('❌ Error in sendDailySummaries:', error);
+    }
+  }
+
+  async sendBillingReminders(): Promise<void> {
+    try {
+      console.log('💰 Sending billing reminders...');
+      
+      const { data: tenants, error } = await supabaseAdmin
+        .from('tenants')
+        .select('id, business_name, email, subscription_plan')
+        .eq('status', 'active')
+        .not('subscription_plan', 'is', null);
+
+      if (error) {
+        console.error('❌ Error fetching tenants for billing reminders:', error);
+        return;
+      }
+
+      for (const tenant of tenants || []) {
+        const alert: SubscriptionAlert = {
+          id: `billing_reminder_${tenant.id}_${Date.now()}`,
+          tenantId: tenant.id,
+          type: 'billing_reminder',
+          severity: 'info',
+          title: 'Lembrete de Cobrança',
+          message: `Seu plano ${tenant.subscription_plan} será renovado em breve. Verifique seus dados de pagamento.`,
+          actionRequired: false
+        };
+
+        await this.sendAlert(tenant, alert);
+      }
+
+      console.log(`✅ Billing reminders sent to ${tenants?.length || 0} tenants`);
+    } catch (error) {
+      console.error('❌ Error in sendBillingReminders:', error);
+    }
+  }
+
+  private async sendAlert(tenant: Tenant, alert: SubscriptionAlert): Promise<void> {
+    try {
+      // Send email alert
+      await this.emailService.sendSubscriptionAlert(tenant, alert);
+      
+      // Log the alert (you could also save to database here)
+      console.log(`📧 Alert sent: ${alert.title} to ${tenant.business_name}`);
+    } catch (error) {
+      console.error('❌ Failed to send alert:', error, { tenantId: tenant.id, alertType: alert.type });
+    }
+  }
+
+  // Manual trigger methods for testing
+  async triggerTrialCheck(): Promise<void> {
+    console.log('🔧 Manual trigger: Trial check');
+    await this.checkTrialSubscriptions();
+  }
+
+  async triggerUsageCheck(): Promise<void> {
+    console.log('🔧 Manual trigger: Usage check');
+    await this.checkUsageLimits();
+  }
+
+  async triggerDailySummary(): Promise<void> {
+    console.log('🔧 Manual trigger: Daily summary');
+    await this.sendDailySummaries();
+  }
+
+  getStatus(): object {
+    return {
+      isRunning: this.isRunning,
+      cronJobsActive: this.cronJobs.length,
+      emailServiceReady: this.emailService.isReady()
+    };
+  }
+}
+
+// Export singleton instance
+export const subscriptionMonitor = new SubscriptionMonitorService();
+export default SubscriptionMonitorService;

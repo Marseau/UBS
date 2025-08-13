@@ -1,0 +1,519 @@
+{
+  "meta": {
+    "instanceId": "n8n-escalation-mgmt-corrected-001"
+  },
+  "createdAt": "2025-08-11T00:00:00.000Z",
+  "updatedAt": "2025-08-11T00:00:00.000Z",
+  "id": "human-escalation-management-corrected",
+  "name": "Human Escalation Management (Multi-tenant) - CORRECTED",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "human-escalation",
+        "options": {
+          "noResponseBody": false
+        }
+      },
+      "id": "webhook-escalation-trigger",
+      "name": "🚨 Escalation Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "webhookId": "human-escalation"
+    },
+    {
+      "parameters": {
+        "functionCode": "// 🔍 ESCALATION CLASSIFICATION\n// Classifica tipo de escalação e define SLA\n\nconst escalationData = $json;\n\n// Extrair dados do webhook\nconst escalationType = escalationData.escalation_type || 'general';\nconst escalationPriority = escalationData.escalation_priority || 'medium';\nconst tenantId = escalationData.tenant_id;\nconst businessDomain = escalationData.business_domain;\nconst userPhone = escalationData.user_phone;\nconst conversationId = escalationData.conversation_id;\nconst originalMessage = escalationData.message_text;\n\n// Definir configurações por tipo de escalação\nconst escalationConfig = {\n  medical_emergency: {\n    sla_minutes: 5,\n    notification_channels: ['whatsapp', 'sms', 'call'],\n    auto_escalate_after: 3,\n    requires_immediate_response: true,\n    emergency_contacts: true,\n    legal_disclaimer: 'Em caso de emergência médica real, ligue 192 (SAMU)'\n  },\n  business_crisis: {\n    sla_minutes: 30,\n    notification_channels: ['whatsapp', 'email'],\n    auto_escalate_after: 2,\n    requires_immediate_response: true,\n    emergency_contacts: false,\n    legal_disclaimer: null\n  },\n  legal_deadline: {\n    sla_minutes: 60,\n    notification_channels: ['whatsapp', 'email'],\n    auto_escalate_after: 1,\n    requires_immediate_response: true,\n    emergency_contacts: false,\n    legal_disclaimer: 'Prazo jurídico identificado - ação imediata necessária'\n  },\n  sports_injury: {\n    sla_minutes: 60,\n    notification_channels: ['whatsapp'],\n    auto_escalate_after: 2,\n    requires_immediate_response: false,\n    emergency_contacts: false,\n    legal_disclaimer: 'Para lesões graves, procure atendimento médico'\n  },\n  spam_detection: {\n    sla_minutes: 1440, // 24 horas\n    notification_channels: ['email'],\n    auto_escalate_after: 0,\n    requires_immediate_response: false,\n    emergency_contacts: false,\n    legal_disclaimer: null\n  },\n  low_confidence: {\n    sla_minutes: 240, // 4 horas\n    notification_channels: ['whatsapp'],\n    auto_escalate_after: 1,\n    requires_immediate_response: false,\n    emergency_contacts: false,\n    legal_disclaimer: null\n  }\n};\n\n// Obter configuração para este tipo\nconst config = escalationConfig[escalationType] || escalationConfig.low_confidence;\n\n// Definir profissionais responsáveis por domínio\nconst domainProfessionals = {\n  beauty: {\n    primary: {\n      name: 'Marina Silva',\n      phone: '+5511987123456',\n      email: 'marina@salaoelegancia.com',\n      whatsapp: '+5511987123456'\n    },\n    backup: {\n      name: 'Carla Santos',\n      phone: '+5511987123457',\n      email: 'carla@salaoelegancia.com',\n      whatsapp: '+5511987123457'\n    }\n  },\n  healthcare: {\n    primary: {\n      name: 'Dr. Roberto Lima',\n      phone: '+5511987234567',\n      email: 'roberto@clinicavidasaudavel.com',\n      whatsapp: '+5511987234567'\n    },\n    backup: {\n      name: 'Enfermeira Ana Costa',\n      phone: '+5511987234568',\n      email: 'ana@clinicavidasaudavel.com',\n      whatsapp: '+5511987234568'\n    }\n  },\n  legal: {\n    primary: {\n      name: 'Dr. João Mendes',\n      phone: '+5511987345678',\n      email: 'joao@advocaciasilva.com',\n      whatsapp: '+5511987345678'\n    },\n    backup: {\n      name: 'Dra. Patricia Oliveira',\n      phone: '+5511987345679',\n      email: 'patricia@advocaciasilva.com',\n      whatsapp: '+5511987345679'\n    }\n  },\n  education: {\n    primary: {\n      name: 'Prof. Carlos Eduardo',\n      phone: '+5511987456789',\n      email: 'carlos@edutech.com',\n      whatsapp: '+5511987456789'\n    },\n    backup: {\n      name: 'Prof. Luciana Ramos',\n      phone: '+5511987456790',\n      email: 'luciana@edutech.com',\n      whatsapp: '+5511987456790'\n    }\n  },\n  sports: {\n    primary: {\n      name: 'Personal Marcos Fit',\n      phone: '+5511987567890',\n      email: 'marcos@fitpro.com',\n      whatsapp: '+5511987567890'\n    },\n    backup: {\n      name: 'Fisioterapeuta Laura',\n      phone: '+5511987567891',\n      email: 'laura@fitpro.com',\n      whatsapp: '+5511987567891'\n    }\n  },\n  consulting: {\n    primary: {\n      name: 'Consultor Sênior Paulo',\n      phone: '+5511987678901',\n      email: 'paulo@bizconsult.com',\n      whatsapp: '+5511987678901'\n    },\n    backup: {\n      name: 'Analista Senior Vera',\n      phone: '+5511987678902',\n      email: 'vera@bizconsult.com',\n      whatsapp: '+5511987678902'\n    }\n  }\n};\n\n// Obter profissionais para este domínio\nconst professionals = domainProfessionals[businessDomain] || domainProfessionals.consulting;\n\n// Gerar ID único para escalação\nconst escalationId = `esc_${tenantId}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;\n\n// Calcular deadline baseado no SLA\nconst deadline = new Date();\ndeadline.setMinutes(deadline.getMinutes() + config.sla_minutes);\n\n// Preparar dados enriquecidos\nreturn [{\n  // Dados originais\n  ...escalationData,\n  \n  // Dados da escalação\n  escalation_id: escalationId,\n  escalation_config: config,\n  sla_deadline: deadline.toISOString(),\n  assigned_professionals: professionals,\n  \n  // Controle de fluxo\n  notification_channels: config.notification_channels,\n  requires_immediate_response: config.requires_immediate_response,\n  emergency_contacts_needed: config.emergency_contacts,\n  legal_disclaimer: config.legal_disclaimer,\n  \n  // Tracking\n  escalation_created_at: new Date().toISOString(),\n  escalation_status: 'created',\n  attempts_made: 0,\n  max_escalation_attempts: config.auto_escalate_after\n}];"
+      },
+      "id": "escalation-classifier",
+      "name": "🔍 Escalation Classifier",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "table": "conversation_history",
+        "columns": {
+          "values": [
+            {
+              "column": "tenant_id",
+              "value": "={{ $json.tenant_id }}"
+            },
+            {
+              "column": "user_id",
+              "value": "={{ $json.user_phone }}"
+            },
+            {
+              "column": "content",
+              "value": "={{ $json.message_text }}"
+            },
+            {
+              "column": "is_from_user",
+              "value": true
+            },
+            {
+              "column": "message_type",
+              "value": "escalation"
+            },
+            {
+              "column": "intent_detected",
+              "value": "={{ $json.escalation_type }}"
+            },
+            {
+              "column": "confidence_score",
+              "value": 1.0
+            },
+            {
+              "column": "conversation_context",
+              "value": "={{ JSON.stringify({ escalation_id: $json.escalation_id, escalation_priority: $json.escalation_priority, business_domain: $json.business_domain, assigned_primary: $json.assigned_professionals.primary.name, assigned_backup: $json.assigned_professionals.backup.name, sla_deadline: $json.sla_deadline, requires_immediate_response: $json.requires_immediate_response, legal_disclaimer: $json.legal_disclaimer }) }}"
+            },
+            {
+              "column": "message_source",
+              "value": "escalation_system"
+            },
+            {
+              "column": "conversation_outcome",
+              "value": "escalation_created"
+            }
+          ]
+        }
+      },
+      "id": "log-escalation-case",
+      "name": "📋 Log Escalation Case",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [600, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is_emergency",
+              "leftValue": "={{ $json.requires_immediate_response }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "emergency-check",
+      "name": "🚨 Emergency Priority?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// 📱 WHATSAPP NOTIFICATION SENDER\n// Envia notificação WhatsApp para profissional\n\nconst notificationData = $json;\n\n// Definir qual profissional notificar (começa com primário)\nconst professional = notificationData.assigned_professionals.primary;\nconst isEmergency = notificationData.requires_immediate_response;\n\n// Preparar mensagem baseada no tipo de escalação\nlet whatsappMessage = '';\nconst escalationType = notificationData.escalation_type;\nconst businessName = notificationData.tenant_name;\nconst clientPhone = notificationData.user_phone;\nconst originalMessage = notificationData.message_text;\n\nswitch(escalationType) {\n  case 'medical_emergency':\n    whatsappMessage = `🚨 *EMERGÊNCIA MÉDICA* 🚨\\n\\n` +\n      `🏥 *Cliente:* ${clientPhone}\\n` +\n      `📞 *Empresa:* ${businessName}\\n` +\n      `⏰ *Horário:* ${new Date().toLocaleString('pt-BR')}\\n\\n` +\n      `💬 *Mensagem Original:*\\n\"${originalMessage}\"\\n\\n` +\n      `⚠️ *AÇÃO NECESSÁRIA:* Contate o cliente IMEDIATAMENTE\\n` +\n      `☎️ *Se emergência real:* Oriente ligar 192 (SAMU)\\n\\n` +\n      `🔗 *ID Caso:* ${notificationData.escalation_id}`;\n    break;\n    \n  case 'business_crisis':\n    whatsappMessage = `🔥 *CRISE EMPRESARIAL* 🔥\\n\\n` +\n      `💼 *Cliente:* ${clientPhone}\\n` +\n      `🏢 *Empresa:* ${businessName}\\n` +\n      `⏰ *Horário:* ${new Date().toLocaleString('pt-BR')}\\n\\n` +\n      `💬 *Situação Relatada:*\\n\"${originalMessage}\"\\n\\n` +\n      `⚡ *AÇÃO NECESSÁRIA:* Contate em até 30 minutos\\n` +\n      `📋 *Preparar:* Análise de crise e plano de contenção\\n\\n` +\n      `🔗 *ID Caso:* ${notificationData.escalation_id}`;\n    break;\n    \n  case 'legal_deadline':\n    whatsappMessage = `⚖️ *PRAZO JURÍDICO CRÍTICO* ⚖️\\n\\n` +\n      `👤 *Cliente:* ${clientPhone}\\n` +\n      `🏛️ *Escritório:* ${businessName}\\n` +\n      `⏰ *Horário:* ${new Date().toLocaleString('pt-BR')}\\n\\n` +\n      `📄 *Assunto Reportado:*\\n\"${originalMessage}\"\\n\\n` +\n      `⏳ *AÇÃO NECESSÁRIA:* Verificar prazo em até 1 hora\\n` +\n      `📚 *Preparar:* Documentos e cronograma processual\\n\\n` +\n      `🔗 *ID Caso:* ${notificationData.escalation_id}`;\n    break;\n    \n  case 'sports_injury':\n    whatsappMessage = `🏥 *LESÃO ESPORTIVA* 🏥\\n\\n` +\n      `🏃 *Atleta:* ${clientPhone}\\n` +\n      `💪 *Academia:* ${businessName}\\n` +\n      `⏰ *Horário:* ${new Date().toLocaleString('pt-BR')}\\n\\n` +\n      `🩹 *Lesão Relatada:*\\n\"${originalMessage}\"\\n\\n` +\n      `🩺 *AÇÃO NECESSÁRIA:* Avaliar se precisa médico primeiro\\n` +\n      `📋 *Depois:* Adaptar treino e acompanhar recuperação\\n\\n` +\n      `🔗 *ID Caso:* ${notificationData.escalation_id}`;\n    break;\n    \n  default:\n    whatsappMessage = `❓ *CASO PARA ANÁLISE* ❓\\n\\n` +\n      `👤 *Cliente:* ${clientPhone}\\n` +\n      `🏢 *Empresa:* ${businessName}\\n` +\n      `⏰ *Horário:* ${new Date().toLocaleString('pt-BR')}\\n\\n` +\n      `💬 *Mensagem:*\\n\"${originalMessage}\"\\n\\n` +\n      `🤖 *Motivo:* IA não conseguiu processar automaticamente\\n` +\n      `📞 *AÇÃO:* Entre em contato para esclarecer necessidade\\n\\n` +\n      `🔗 *ID Caso:* ${notificationData.escalation_id}`;\n}\n\n// Adicionar disclaimer legal se necessário\nif (notificationData.legal_disclaimer) {\n  whatsappMessage += `\\n\\n⚠️ *IMPORTANTE:* ${notificationData.legal_disclaimer}`;\n}\n\n// Preparar payload WhatsApp\nconst whatsappPayload = {\n  messaging_product: 'whatsapp',\n  to: professional.whatsapp,\n  type: 'text',\n  text: {\n    body: whatsappMessage\n  }\n};\n\nreturn [{\n  ...notificationData,\n  \n  // Dados da notificação\n  notification_recipient: professional,\n  whatsapp_payload: whatsappPayload,\n  whatsapp_message: whatsappMessage,\n  notification_channel: 'whatsapp',\n  notification_sent_at: new Date().toISOString(),\n  \n  // Controle de tentativas\n  current_attempt: 1,\n  notification_target: professional.whatsapp\n}];"
+      },
+      "id": "whatsapp-notification",
+      "name": "📱 WhatsApp Notification",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.WHATSAPP_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "jsonBody": "={{ JSON.stringify($json.whatsapp_payload) }}",
+        "options": {}
+      },
+      "id": "send-whatsapp-notification",
+      "name": "📤 Send WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "// 📧 EMAIL NOTIFICATION SENDER\n// Envia notificação por email para casos não-emergenciais\n\nconst emailData = $json;\nconst professional = emailData.assigned_professionals.primary;\nconst escalationType = emailData.escalation_type;\nconst businessName = emailData.tenant_name;\nconst clientPhone = emailData.user_phone;\nconst originalMessage = emailData.message_text;\nconst escalationId = emailData.escalation_id;\n\n// Preparar assunto e corpo do email\nlet emailSubject = '';\nlet emailBody = '';\n\nswitch(escalationType) {\n  case 'business_crisis':\n    emailSubject = `🔥 CRISE EMPRESARIAL - ${businessName} - ID: ${escalationId}`;\n    emailBody = `\n      <h2 style=\"color: #ff4444;\">🔥 CRISE EMPRESARIAL DETECTADA</h2>\n      <p><strong>Cliente:</strong> ${clientPhone}</p>\n      <p><strong>Empresa:</strong> ${businessName}</p>\n      <p><strong>Horário:</strong> ${new Date().toLocaleString('pt-BR')}</p>\n      <hr>\n      <h3>Situação Relatada:</h3>\n      <blockquote style=\"background: #f5f5f5; padding: 15px; border-left: 4px solid #ff4444;\">\n        ${originalMessage}\n      </blockquote>\n      <hr>\n      <h3>⚡ AÇÃO NECESSÁRIA:</h3>\n      <ul>\n        <li>Contatar cliente em até <strong>30 minutos</strong></li>\n        <li>Preparar análise de crise e plano de contenção</li>\n        <li>Documentar todas as ações tomadas</li>\n      </ul>\n      <p><strong>ID do Caso:</strong> ${escalationId}</p>\n    `;\n    break;\n    \n  case 'legal_deadline':\n    emailSubject = `⚖️ PRAZO JURÍDICO CRÍTICO - ${businessName} - ID: ${escalationId}`;\n    emailBody = `\n      <h2 style=\"color: #ff8800;\">⚖️ PRAZO JURÍDICO CRÍTICO</h2>\n      <p><strong>Cliente:</strong> ${clientPhone}</p>\n      <p><strong>Escritório:</strong> ${businessName}</p>\n      <p><strong>Horário:</strong> ${new Date().toLocaleString('pt-BR')}</p>\n      <hr>\n      <h3>Assunto Reportado:</h3>\n      <blockquote style=\"background: #f5f5f5; padding: 15px; border-left: 4px solid #ff8800;\">\n        ${originalMessage}\n      </blockquote>\n      <hr>\n      <h3>⏳ AÇÃO NECESSÁRIA:</h3>\n      <ul>\n        <li>Verificar prazo processual em até <strong>1 hora</strong></li>\n        <li>Preparar documentos necessários</li>\n        <li>Verificar cronograma processual</li>\n        <li>Contatar cliente para confirmação</li>\n      </ul>\n      <p><strong>ID do Caso:</strong> ${escalationId}</p>\n    `;\n    break;\n    \n  default:\n    emailSubject = `❓ Caso para Análise - ${businessName} - ID: ${escalationId}`;\n    emailBody = `\n      <h2 style=\"color: #4444ff;\">❓ CASO PARA ANÁLISE</h2>\n      <p><strong>Cliente:</strong> ${clientPhone}</p>\n      <p><strong>Empresa:</strong> ${businessName}</p>\n      <p><strong>Horário:</strong> ${new Date().toLocaleString('pt-BR')}</p>\n      <hr>\n      <h3>Mensagem:</h3>\n      <blockquote style=\"background: #f5f5f5; padding: 15px; border-left: 4px solid #4444ff;\">\n        ${originalMessage}\n      </blockquote>\n      <hr>\n      <h3>📞 AÇÃO NECESSÁRIA:</h3>\n      <p>A IA não conseguiu processar automaticamente esta mensagem.</p>\n      <p>Entre em contato com o cliente para esclarecer a necessidade.</p>\n      <p><strong>ID do Caso:</strong> ${escalationId}</p>\n    `;\n}\n\nreturn [{\n  ...emailData,\n  \n  // Dados do email\n  email_recipient: professional.email,\n  email_subject: emailSubject,\n  email_body: emailBody,\n  email_sent_at: new Date().toISOString(),\n  notification_channel: 'email'\n}];"
+      },
+      "id": "email-notification",
+      "name": "📧 Email Notification",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "fromEmail": "notifications@stratfin.tec.br",
+        "toEmail": "={{ $json.email_recipient }}",
+        "subject": "={{ $json.email_subject }}",
+        "emailType": "html",
+        "message": "={{ $json.email_body }}",
+        "options": {}
+      },
+      "id": "send-email-notification",
+      "name": "📤 Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1200, 400],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-main",
+          "name": "SMTP Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "table": "conversation_history",
+        "columns": {
+          "values": [
+            {
+              "column": "tenant_id",
+              "value": "={{ $json.tenant_id }}"
+            },
+            {
+              "column": "user_id",
+              "value": "={{ $json.notification_recipient.name }}"
+            },
+            {
+              "column": "content",
+              "value": "={{ $json.whatsapp_message || $json.email_subject }}"
+            },
+            {
+              "column": "is_from_user",
+              "value": false
+            },
+            {
+              "column": "message_type",
+              "value": "escalation_notification"
+            },
+            {
+              "column": "intent_detected",
+              "value": "={{ $json.escalation_type }}"
+            },
+            {
+              "column": "confidence_score",
+              "value": 1.0
+            },
+            {
+              "column": "conversation_context",
+              "value": "={{ JSON.stringify({ escalation_id: $json.escalation_id, notification_type: $json.notification_channel, recipient: $json.notification_recipient.name, recipient_contact: $json.notification_target || $json.email_recipient, sent_at: $json.notification_sent_at || $json.email_sent_at, attempt_number: $json.current_attempt || 1 }) }}"
+            },
+            {
+              "column": "message_source",
+              "value": "escalation_notification"
+            },
+            {
+              "column": "conversation_outcome",
+              "value": "notification_sent"
+            }
+          ]
+        }
+      },
+      "id": "log-notification",
+      "name": "📝 Log Notification",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1400, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "unit": "minutes",
+        "amount": "={{ $json.escalation_config.sla_minutes }}"
+      },
+      "id": "sla-timer",
+      "name": "⏰ SLA Timer",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1600, 300]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "getAll",
+        "table": "conversation_history",
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "conversation_context",
+              "condition": "contains",
+              "keyValue": "={{ $json.escalation_id }}"
+            },
+            {
+              "keyName": "message_type",
+              "condition": "equals",
+              "keyValue": "escalation"
+            }
+          ]
+        }
+      },
+      "id": "check-escalation-status",
+      "name": "✅ Check Status",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1800, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-main",
+          "name": "Supabase Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "still_open",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "escalation-needed-check",
+      "name": "🔄 Auto-Escalate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// 📈 AUTO ESCALATION HANDLER\n// Escalação automática para backup quando SLA não é atendido\n\nconst escalationData = $json;\n\n// Incrementar tentativa\nconst currentAttempts = escalationData.attempts_made || 0;\nconst newAttempts = currentAttempts + 1;\n\n// Determinar próximo profissional (backup)\nconst backupProfessional = escalationData.assigned_professionals.backup;\n\n// Preparar mensagem de escalação\nconst escalationMessage = `🆙 *ESCALAÇÃO AUTOMÁTICA* 🆙\\n\\n` +\n  `⚠️ *Caso não respondido dentro do SLA*\\n` +\n  `🔗 *ID Original:* ${escalationData.escalation_id}\\n` +\n  `⏰ *Tentativa:* ${newAttempts}/${escalationData.max_escalation_attempts}\\n\\n` +\n  `👤 *Cliente:* ${escalationData.user_phone}\\n` +\n  `🏢 *Empresa:* ${escalationData.tenant_name}\\n` +\n  `📋 *Tipo:* ${escalationData.escalation_type}\\n\\n` +\n  `💬 *Mensagem Original:*\\n\"${escalationData.message_text}\"\\n\\n` +\n  `🚨 *AÇÃO URGENTE NECESSÁRIA*\\n` +\n  `📞 *Status:* Profissional primário não respondeu`;\n\n// Preparar payload para WhatsApp do backup\nconst whatsappPayload = {\n  messaging_product: 'whatsapp',\n  to: backupProfessional.whatsapp,\n  type: 'text',\n  text: {\n    body: escalationMessage\n  }\n};\n\nreturn [{\n  ...escalationData,\n  \n  // Dados da auto-escalação\n  auto_escalation: true,\n  escalation_attempt: newAttempts,\n  backup_professional: backupProfessional,\n  escalation_message: escalationMessage,\n  whatsapp_payload: whatsappPayload,\n  escalated_at: new Date().toISOString(),\n  escalation_reason: 'SLA_TIMEOUT'\n}];"
+      },
+      "id": "auto-escalation-handler",
+      "name": "📈 Auto Escalation",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2200, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "// ✅ SUCCESS RESPONSE HANDLER\n// Resposta final de sucesso da escalação\n\nconst successData = $json;\n\n// Preparar resposta de sucesso\nconst successResponse = {\n  status: 'escalation_processed',\n  message: 'Human escalation processed successfully',\n  data: {\n    escalation_id: successData.escalation_id,\n    escalation_type: successData.escalation_type,\n    tenant_id: successData.tenant_id,\n    business_domain: successData.business_domain,\n    priority_level: successData.escalation_priority,\n    assigned_professional: successData.notification_recipient?.name || successData.assigned_professionals.primary.name,\n    notifications_sent: successData.notification_channel || 'multiple',\n    sla_minutes: successData.escalation_config?.sla_minutes || 'undefined',\n    requires_immediate_response: successData.requires_immediate_response,\n    auto_escalated: successData.auto_escalation || false,\n    processing_completed_at: new Date().toISOString(),\n    test_execution_id: successData.test_execution_id\n  },\n  timestamp: new Date().toISOString()\n};\n\nreturn [successResponse];"
+      },
+      "id": "escalation-success-response",
+      "name": "✅ Escalation Success",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2400, 300]
+    }
+  ],
+  "connections": {
+    "🚨 Escalation Trigger": {
+      "main": [
+        [
+          {
+            "node": "🔍 Escalation Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Escalation Classifier": {
+      "main": [
+        [
+          {
+            "node": "📋 Log Escalation Case",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📋 Log Escalation Case": {
+      "main": [
+        [
+          {
+            "node": "🚨 Emergency Priority?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚨 Emergency Priority?": {
+      "main": [
+        [
+          {
+            "node": "📧 Email Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📱 WhatsApp Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📱 WhatsApp Notification": {
+      "main": [
+        [
+          {
+            "node": "📤 Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📤 Send WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "📝 Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Email Notification": {
+      "main": [
+        [
+          {
+            "node": "📤 Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📤 Send Email": {
+      "main": [
+        [
+          {
+            "node": "📝 Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📝 Log Notification": {
+      "main": [
+        [
+          {
+            "node": "⏰ SLA Timer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏰ SLA Timer": {
+      "main": [
+        [
+          {
+            "node": "✅ Check Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Check Status": {
+      "main": [
+        [
+          {
+            "node": "🔄 Auto-Escalate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 Auto-Escalate?": {
+      "main": [
+        [
+          {
+            "node": "✅ Escalation Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📈 Auto Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📈 Auto Escalation": {
+      "main": [
+        [
+          {
+            "node": "✅ Escalation Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "hash": "escalation-mgmt-corrected-hash-001",
+  "versionId": 1
+}

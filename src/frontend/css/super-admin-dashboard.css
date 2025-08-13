@@ -1,0 +1,683 @@
+/* ==========================================
+   SUPER ADMIN DASHBOARD STYLES - STANDARDIZED
+   ========================================== */
+
+/* Import UBS Standard Variables */
+@import url('ubs-standard-styles.css');
+
+/* ==========================================
+   COMPACT UI STYLES (50% REDUCTION)
+   ========================================== */
+
+/* Compact Text Elements */
+.compact-text {
+    font-size: 0.7rem !important; /* 50% of default 0.875rem */
+    line-height: 1.2 !important;
+}
+
+.compact-small {
+    font-size: 0.6rem !important; /* 50% of default 0.75rem */
+    line-height: 1.1 !important;
+}
+
+.compact-label {
+    font-size: 0.6rem !important; /* 50% of default 0.75rem */
+    line-height: 1.2 !important;
+    font-weight: 500;
+}
+
+/* Compact Buttons */
+.compact-button {
+    font-size: 0.65rem !important; /* 50% of default 0.875rem */
+    padding: 0.25rem 0.5rem !important; /* 50% of default padding */
+    line-height: 1.2 !important;
+}
+
+.compact-button .fas {
+    font-size: 0.6rem !important;
+}
+
+/* Compact Dropdowns */
+.compact-dropdown {
+    font-size: 0.65rem !important;
+    min-width: 8rem !important; /* Smaller dropdown width */
+}
+
+.compact-dropdown-item {
+    font-size: 0.65rem !important;
+    padding: 0.25rem 0.75rem !important; /* 50% of default padding */
+    line-height: 1.2 !important;
+}
+
+.compact-dropdown-header {
+    font-size: 0.55rem !important;
+    padding: 0.25rem 0.75rem !important;
+    line-height: 1.1 !important;
+}
+
+/* Compact Select */
+.compact-select {
+    font-size: 0.65rem !important; /* 50% of default 0.875rem */
+    padding: 0.25rem 0.5rem !important; /* 50% of default padding */
+    min-width: 5rem !important; /* Smaller select width */
+    height: auto !important;
+    line-height: 1.2 !important;
+}
+
+.compact-select option {
+    font-size: 0.65rem !important;
+}
+
+/* Compact Loading Spinner */
+.compact-loading {
+    font-size: 0.6rem !important;
+    padding: 0.25rem 0.75rem !important;
+}
+
+.compact-loading .spinner-border-sm {
+    width: 0.75rem !important;
+    height: 0.75rem !important;
+}
+
+/* User Menu Adjustments */
+.user-menu {
+    gap: 0.25rem !important; /* Smaller gap between elements */
+}
+
+.user-avatar {
+    width: 1.5rem !important; /* 50% of default 2rem */
+    height: 1.5rem !important;
+    font-size: 0.6rem !important;
+    line-height: 1.5rem !important;
+}
+
+/* Action Buttons Area Adjustment */
+.action-buttons {
+    padding: 0.5rem 0 !important; /* Reduced padding */
+}
+
+.action-buttons .btn-action {
+    font-size: 0.75rem !important; /* Slightly reduced but readable */
+    padding: 0.375rem 0.75rem !important;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .compact-text {
+        font-size: 0.65rem !important;
+    }
+    
+    .compact-button {
+        font-size: 0.6rem !important;
+        padding: 0.2rem 0.4rem !important;
+    }
+    
+    .compact-select {
+        font-size: 0.6rem !important;
+        padding: 0.2rem 0.4rem !important;
+        min-width: 4rem !important;
+    }
+}
+
+/* Chart Widget Styles - Using Standard Variables */
+.chart-widget {
+    background: var(--ubs-bg-card, #ffffff);
+    border-radius: var(--ubs-border-radius, 10px);
+    box-shadow: var(--ubs-shadow-card, 0 1px 8px rgba(45,90,155,0.07));
+    margin-bottom: 1.5rem;
+    padding: 1.5rem;
+    min-height: 340px;
+    transition: var(--ubs-transition, all 0.3s ease);
+}
+
+.chart-widget:hover {
+    box-shadow: var(--ubs-shadow-card-hover);
+}
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.chart-title {
+    color: var(--ubs-primary);
+    font-weight: 600;
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.chart-body {
+    min-height: 220px;
+    position: relative;
+}
+
+.chart-widget canvas {
+    width: 100% !important;
+    height: 220px !important;
+}
+
+/* Table Widget Styles - Standardized */
+.table-widget {
+    background: var(--ubs-bg-card, #ffffff);
+    border-radius: var(--ubs-border-radius-lg, 12px);
+    box-shadow: var(--ubs-shadow-card, 0 2px 12px rgba(0,0,0,0.08));
+    margin-bottom: 1.5rem;
+    padding: 1.5rem;
+    transition: var(--ubs-transition, all 0.3s ease);
+}
+
+.table-widget:hover {
+    box-shadow: var(--ubs-shadow-card-hover);
+}
+
+.table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--ubs-border-light);
+}
+
+.table-title {
+    color: var(--ubs-primary);
+    font-weight: 600;
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.table-body {
+    min-height: 200px;
+}
+
+.table-body table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table-body th,
+.table-body td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--ubs-border-light);
+}
+
+.table-body th {
+    background-color: var(--ubs-bg-secondary);
+    font-weight: 600;
+    color: var(--ubs-text-primary);
+}
+
+.table-body tr:hover {
+    background-color: var(--ubs-bg-hover);
+}
+
+/* Trend Classes - Standardized */
+.trend-positive {
+    color: var(--ubs-success, #28a745);
+    font-weight: 600;
+}
+
+.trend-negative {
+    color: var(--ubs-danger, #dc3545);
+    font-weight: 600;
+}
+
+.trend-neutral {
+    color: var(--ubs-warning, #ffc107);
+    font-weight: 600;
+}
+
+.trend-stable {
+    color: var(--ubs-info, #17a2b8);
+    font-weight: 600;
+}
+
+/* Metric Icon Styles */
+.metric-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+}
+
+.metric-icon-primary {
+    background: var(--ubs-primary);
+}
+
+.metric-icon-success {
+    background: var(--ubs-success);
+}
+
+.metric-icon-warning {
+    background: var(--ubs-warning);
+}
+
+.metric-icon-danger {
+    background: var(--ubs-danger);
+}
+
+.metric-icon-info {
+    background: var(--ubs-info);
+}
+
+/* Strategic Insights Styles */
+.strategic-insights {
+    background: var(--ubs-bg-card);
+    border-radius: var(--ubs-border-radius);
+    box-shadow: var(--ubs-shadow-card);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.strategic-insights h5 {
+    color: var(--ubs-primary);
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+.insight-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem;
+    border-radius: var(--ubs-border-radius-sm);
+    margin-bottom: 0.5rem;
+    transition: var(--ubs-transition);
+}
+
+.insight-item:hover {
+    background-color: var(--ubs-bg-hover);
+}
+
+.insight-icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.9rem;
+}
+
+.insight-text {
+    flex: 1;
+    font-size: 0.9rem;
+    color: var(--ubs-text-secondary);
+}
+
+.insight-value {
+    font-weight: 600;
+    color: var(--ubs-text-primary);
+}
+
+/* Loading States */
+.loading-skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading-shimmer 1.5s infinite;
+}
+
+@keyframes loading-shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.loading-chart {
+    width: 100%;
+    height: 220px;
+    border-radius: var(--ubs-border-radius-sm);
+}
+
+.loading-text {
+    height: 1rem;
+    border-radius: var(--ubs-border-radius-sm);
+    margin-bottom: 0.5rem;
+}
+
+.loading-text.short {
+    width: 60%;
+}
+
+.loading-text.long {
+    width: 80%;
+}
+
+/* Error States */
+.error-state {
+    text-align: center;
+    padding: 2rem;
+    color: var(--ubs-danger);
+}
+
+.error-state i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.error-state p {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .chart-widget,
+    .table-widget {
+        padding: 1rem;
+        min-height: auto;
+    }
+    
+    .chart-body {
+        min-height: 180px;
+    }
+    
+    .chart-widget canvas {
+        height: 180px !important;
+    }
+    
+    .table-body {
+        min-height: 150px;
+        overflow-x: auto;
+    }
+    
+    .strategic-insights {
+        padding: 1rem;
+    }
+    
+    .insight-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+}
+
+/* Mobile Text Readability Fixes - Minimum 14px */
+@media (max-width: 375px) {
+    /* Global Text Size Increase for Mobile */
+    body {
+        font-size: 14px !important;
+        line-height: 1.6;
+    }
+    
+    /* Widget Text Sizes */
+    .metric-value {
+        font-size: 20px !important;
+    }
+    
+    .metric-label,
+    .metric-subtitle {
+        font-size: 14px !important;
+    }
+    
+    .metric-trend {
+        font-size: 14px !important;
+    }
+    
+    /* Chart and Table Titles */
+    .chart-title,
+    .table-title {
+        font-size: 16px !important;
+    }
+    
+    /* Table Text */
+    .table-body th,
+    .table-body td {
+        font-size: 14px !important;
+        padding: 0.875rem;
+    }
+    
+    /* Insights Text */
+    .strategic-insights h5 {
+        font-size: 16px !important;
+    }
+    
+    .insight-text {
+        font-size: 14px !important;
+    }
+    
+    .insight-value {
+        font-size: 14px !important;
+    }
+    
+    /* Button Text */
+    .btn {
+        font-size: 14px !important;
+        min-height: 44px;
+        padding: 12px 20px;
+    }
+    
+    /* Navigation Text */
+    .nav-link {
+        font-size: 14px !important;
+    }
+    
+    /* Error Messages */
+    .error-state p {
+        font-size: 14px !important;
+    }
+    
+    /* Loading Text */
+    .loading-message {
+        font-size: 14px !important;
+    }
+}
+
+/* Small Mobile Specific (320px) */
+@media (max-width: 320px) {
+    /* Further increase critical text */
+    .metric-value {
+        font-size: 18px !important;
+    }
+    
+    .chart-title,
+    .table-title,
+    .strategic-insights h5 {
+        font-size: 15px !important;
+    }
+}
+
+/* Force Light Theme - Override any dark styles including auto dark mode */
+.chart-widget,
+.table-widget,
+.strategic-insights,
+.metric-card,
+.stat-card,
+.widget,
+.card,
+.ubs-widget,
+.ubs-content-section,
+.content-section,
+.widget-header {
+    background: white !important;
+    color: #2C3E50 !important;
+    border: none !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Page background should be light gray */
+.main-content,
+body,
+html {
+    background: #F8F9FA !important;
+    color: #2C3E50 !important;
+}
+
+/* Override any dark mode media queries */
+@media (prefers-color-scheme: dark) {
+    .chart-widget,
+    .table-widget,
+    .strategic-insights,
+    .metric-card,
+    .stat-card,
+    .widget,
+    .card,
+    .ubs-widget {
+        background: white !important;
+        color: #2C3E50 !important;
+        border: none !important;
+    }
+    
+    .main-content,
+    body,
+    html {
+        background: #F8F9FA !important;
+        color: #2C3E50 !important;
+    }
+}
+
+.table-body th {
+    background-color: #F8F9FA !important;
+    color: #2C3E50 !important;
+}
+
+.table-body tr:hover {
+    background-color: #F8F9FA !important;
+}
+
+.loading-skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%) !important;
+}
+
+/* Touch Target Fixes - Minimum 44px for Mobile */
+@media (max-width: 375px) {
+    /* All Interactive Elements */
+    button,
+    a,
+    input,
+    select,
+    textarea,
+    .btn,
+    .clickable,
+    [onclick],
+    [role="button"] {
+        min-height: 44px !important;
+        min-width: 44px !important;
+    }
+    
+    /* Specific Button Adjustments */
+    .btn-sm {
+        padding: 12px 16px !important;
+        font-size: 14px !important;
+        min-height: 44px !important;
+    }
+    
+    .btn-icon {
+        width: 44px !important;
+        height: 44px !important;
+        padding: 0 !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    /* Dropdown Toggles */
+    .dropdown-toggle {
+        min-height: 44px !important;
+        padding: 12px 20px !important;
+    }
+    
+    /* Form Controls */
+    .form-control,
+    .form-select {
+        min-height: 44px !important;
+        font-size: 16px !important; /* Prevents zoom on iOS */
+    }
+    
+    /* Navigation Links */
+    .nav-link {
+        min-height: 44px !important;
+        padding: 12px 16px !important;
+        display: flex;
+        align-items: center;
+    }
+    
+    /* Table Action Buttons */
+    .table-body .btn {
+        min-height: 36px !important;
+        min-width: 36px !important;
+        margin: 2px;
+    }
+    
+    /* Close Buttons */
+    .btn-close,
+    .close {
+        min-width: 44px !important;
+        min-height: 44px !important;
+        padding: 12px !important;
+    }
+    
+    /* Custom Clickable Elements */
+    .metric-card,
+    .chart-header .btn,
+    .table-header .btn {
+        min-height: 44px !important;
+    }
+    
+    /* Pagination */
+    .pagination .page-link {
+        min-width: 44px !important;
+        min-height: 44px !important;
+        padding: 12px !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+/* Extra Touch Target Fixes for Smallest Screens */
+@media (max-width: 320px) {
+    /* Even larger touch targets for very small screens */
+    button,
+    a,
+    .btn,
+    [onclick],
+    [role="button"] {
+        min-height: 48px !important;
+        min-width: 48px !important;
+    }
+    
+    /* Increase spacing between clickable elements */
+    .btn + .btn,
+    .nav-link + .nav-link {
+        margin-left: 8px;
+    }
+    
+    /* Table actions need special handling */
+    .table-body .btn-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .table-body .btn-group .btn {
+        min-width: 100% !important;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .chart-widget,
+    .table-widget {
+        break-inside: avoid;
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+    
+    .loading-skeleton {
+        display: none;
+    }
+}

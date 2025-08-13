@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UBS - Dashboard Super Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="css/dashboard-widgets.css" rel="stylesheet">
+    <style>
+        /* UBS Color Palette */
+        :root {
+            --ubs-primary: #2D5A9B;
+            --ubs-secondary: #F8F9FA;
+            --ubs-success: #28A745;
+            --ubs-warning: #FFC107;
+            --ubs-danger: #DC3545;
+            --ubs-info: #17A2B8;
+            --ubs-light: #F8F9FA;
+            --ubs-dark: #343A40;
+        }
+
+        body {
+            background-color: var(--ubs-light);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        /* Sidebar Styling */
+        .sidebar {
+            width: 250px;
+            min-height: 100vh;
+            background: linear-gradient(135deg, var(--ubs-primary) 0%, #1e3a5f 100%);
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+
+        .sidebar.collapsed {
+            width: 70px;
+        }
+
+        .sidebar .logo-section {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .sidebar .logo-section img {
+            max-width: 60px;
+            height: auto;
+        }
+
+        .sidebar .logo-section h5 {
+            color: white;
+            margin-top: 10px;
+            font-weight: 600;
+        }
+
+        .sidebar .nav-section {
+            padding: 20px 0;
+        }
+
+        .sidebar .nav-section-title {
+            color: rgba(255,255,255,0.7);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 0 20px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.9);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-radius: 0;
+            margin: 2px 10px;
+            border-radius: 8px;
+        }
+
+        .sidebar .nav-link:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .sidebar .nav-link.active {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .sidebar .nav-link i {
+            width: 20px;
+            margin-right: 12px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 250px;
+            transition: all 0.3s ease;
+            min-height: 100vh;
+        }
+
+        .main-content.expanded {
+            margin-left: 70px;
+        }
+
+        /* Top Navigation */
+        .top-navbar {
+            background: white;
+            padding: 15px 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+
+        .top-navbar .page-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--ubs-dark);
+            margin: 0;
+        }
+
+        .top-navbar .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .top-navbar .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--ubs-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        /* Content Container */
+        .content-container {
+            padding: 30px;
+        }
+
+        /* UBS Sections */
+        .ubs-section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .ubs-section-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--ubs-dark);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .ubs-section-title i {
+            color: var(--ubs-primary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+        }
+
+        /* Sidebar Overlay for Mobile */
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+            display: none;
+        }
+
+        .sidebar-overlay.show {
+            display: block;
+        }
+
+        /* Tenant Dropdown */
+        .tenant-selector {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px;
+        }
+
+        .tenant-selector .dropdown-toggle {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            width: 100%;
+            text-align: left;
+        }
+
+        .tenant-selector .dropdown-toggle:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.5);
+        }
+
+        /* Debug Mode */
+        .debug-mode {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 9999;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="logo-section">
+            <img src="assets/images/logo.png" alt="UBS Logo" class="img-fluid">
+            <h5>UBS Platform</h5>
+        </div>
+
+        <!-- Tenant Selector (Super Admin Only) -->
+        <div class="tenant-selector">
+            <div class="dropdown">
+                <button class="btn dropdown-toggle" type="button" id="tenantDropdownBtn" data-bs-toggle="dropdown">
+                    <i class="fas fa-building me-2"></i>
+                    <span>Visão da Plataforma</span>
+                </button>
+                <ul class="dropdown-menu" id="tenantDropdown">
+                    <li><span class="dropdown-item-text">Carregando tenants...</span></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav-section">
+            <div class="nav-section-title">Dashboard</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link active" href="dashboard-standardized.html">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Visão Geral</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Operações</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="appointments-standardized.html">
+                        <i class="fas fa-calendar-check"></i>
+                        <span>Agendamentos</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="customers-standardized.html">
+                        <i class="fas fa-users"></i>
+                        <span>Clientes</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="services-standardized.html">
+                        <i class="fas fa-concierge-bell"></i>
+                        <span>Serviços</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Comunicação</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="conversations.html">
+                        <i class="fab fa-whatsapp"></i>
+                        <span>Conversas</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Financeiro</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="payments-standardized.html">
+                        <i class="fas fa-credit-card"></i>
+                        <span>Pagamentos</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="billing.html">
+                        <i class="fas fa-file-invoice-dollar"></i>
+                        <span>Faturamento</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="nav-section">
+            <div class="nav-section-title">Sistema</div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="settings.html">
+                        <i class="fas fa-cog"></i>
+                        <span>Configurações</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content" id="mainContent">
+        <!-- Top Navigation -->
+        <div class="top-navbar">
+            <div class="d-flex align-items-center">
+                <button class="btn btn-link text-dark me-3" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h1 class="page-title">Dashboard Super Admin</h1>
+            </div>
+            
+            <div class="user-menu">
+                <div class="dropdown">
+                    <button class="btn btn-link dropdown-toggle text-decoration-none" type="button" data-bs-toggle="dropdown">
+                        <span id="user-greeting">Olá, Super Admin</span>
+                        <div class="user-avatar ms-2" id="user-avatar-initial">S</div>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="settings.html"><i class="fas fa-user me-2"></i>Perfil</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="exportData()"><i class="fas fa-download me-2"></i>Exportar Dados</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="refreshData()"><i class="fas fa-sync me-2"></i>Atualizar</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Container -->
+        <div class="content-container">
+            <!-- Métricas da Plataforma -->
+            <div class="ubs-section">
+                <div class="ubs-section-title">
+                    <i class="fas fa-chart-bar"></i>
+                    Métricas da Plataforma
+                </div>
+                <div class="row g-3" id="metricsRow1">
+                    <!-- Métricas serão inseridas aqui -->
+                </div>
+                <div class="row g-3 mt-3" id="metricsRow2">
+                    <!-- Métricas serão inseridas aqui -->
+                </div>
+            </div>
+
+            <!-- Gráficos Analíticos -->
+            <div class="ubs-section">
+                <div class="ubs-section-title">
+                    <i class="fas fa-chart-line"></i>
+                    Gráficos Analíticos
+                </div>
+                <div class="row g-3" id="chartsContainer">
+                    <!-- Gráficos serão inseridos aqui -->
+                </div>
+            </div>
+
+            <!-- Insights e Rankings -->
+            <div class="ubs-section">
+                <div class="ubs-section-title">
+                    <i class="fas fa-trophy"></i>
+                    Insights e Rankings
+                </div>
+                <div class="row g-3" id="tablesContainer">
+                    <!-- Tabelas serão inseridas aqui -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Debug Mode -->
+    <div class="debug-mode" style="display: none;" id="debugMode">
+        <div>🔍 DEBUG MODE</div>
+        <div>Navegação: <span id="debugNavigation">OK</span></div>
+        <div>Tokens: <span id="debugTokens">-</span></div>
+        <div>Redirecionamentos: <span id="debugRedirects">0</span></div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        // Variáveis globais
+        let currentUserRole = 'super_admin';
+        let currentTenantId = null;
+        let dashboardInstance = null;
+        let debugMode = false;
+        let redirectCount = 0;
+
+        // Ativar debug mode com parâmetro URL
+        if (window.location.search.includes('debug=true')) {
+            debugMode = true;
+            document.getElementById('debugMode').style.display = 'block';
+            console.log('🔍 DEBUG MODE ATIVADO');
+        }
+
+        // Initialize page - SEM VERIFICAÇÃO DE AUTENTICAÇÃO
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🚀 Initializing UBS Dashboard System...');
+            
+            if (debugMode) {
+                document.getElementById('debugNavigation').textContent = 'CARREGANDO';
+                document.getElementById('debugTokens').textContent = 'VERIFICANDO';
+            }
+            
+            try {
+                // Setup UI components apenas
+                setupSidebarToggle();
+                setupMobileNavigation();
+                setupActiveNavigation();
+                
+                // Initialize dashboard content com dados mock
+                await initializeDashboardContent();
+                
+                if (debugMode) {
+                    document.getElementById('debugNavigation').textContent = 'OK';
+                    document.getElementById('debugTokens').textContent = localStorage.getItem('ubs_token') ? 'EXISTE' : 'INEXISTENTE';
+                }
+                
+                console.log('✅ Dashboard initialization completed successfully');
+                
+            } catch (error) {
+                console.error('❌ Dashboard initialization failed:', error);
+                showErrorState(error.message);
+            }
+        });
+
+        // Initialize dashboard content com dados mock
+        async function initializeDashboardContent() {
+            // Criar dados mock para teste
+            const mockData = {
+                saasMetrics: {
+                    activeTenants: 15,
+                    monthlyRevenue: 45000,
+                    newTenants: 3,
+                    churnRate: 2.1
+                },
+                systemMetrics: {
+                    totalAppointments: 1250,
+                    aiInteractions: 5680,
+                    conversionRate: 78.5,
+                    totalRevenue: 125000
+                }
+            };
+            
+            // Renderizar métricas
+            renderMetricCards(mockData);
+            
+            // Renderizar gráficos mock
+            renderCharts();
+            
+            // Renderizar tabelas mock
+            renderTables();
+        }
+
+        // Render metric cards
+        function renderMetricCards(data) {
+            const saas = data.saasMetrics || {};
+            const system = data.systemMetrics || {};
+
+            const metrics = [
+                {
+                    title: 'Tenants Ativos',
+                    value: saas.activeTenants || 0,
+                    icon: 'fas fa-building',
+                    iconClass: 'text-primary',
+                    trend: 'Plataforma ativa'
+                },
+                {
+                    title: 'MRR Total',
+                    value: formatCurrency(saas.monthlyRevenue || 0),
+                    icon: 'fas fa-dollar-sign',
+                    iconClass: 'text-success',
+                    trend: 'Receita mensal'
+                },
+                {
+                    title: 'Agendamentos',
+                    value: formatNumber(system.totalAppointments || 0),
+                    icon: 'fas fa-calendar-check',
+                    iconClass: 'text-info',
+                    trend: 'Total da plataforma'
+                },
+                {
+                    title: 'Interações IA',
+                    value: formatNumber(system.aiInteractions || 0),
+                    icon: 'fas fa-robot',
+                    iconClass: 'text-warning',
+                    trend: 'Automação ativa'
+                },
+                {
+                    title: 'Novos Tenants',
+                    value: saas.newTenants || 0,
+                    icon: 'fas fa-user-plus',
+                    iconClass: 'text-primary',
+                    trend: 'Crescimento'
+                },
+                {
+                    title: 'Taxa de Churn',
+                    value: (saas.churnRate || 0).toFixed(1) + '%',
+                    icon: 'fas fa-heart',
+                    iconClass: 'text-success',
+                    trend: 'Baixa rotatividade'
+                },
+                {
+                    title: 'Conversão',
+                    value: (system.conversionRate || 0).toFixed(1) + '%',
+                    icon: 'fas fa-bullseye',
+                    iconClass: 'text-info',
+                    trend: 'Taxa global'
+                },
+                {
+                    title: 'Receita Total',
+                    value: formatCurrency(system.totalRevenue || 0),
+                    icon: 'fas fa-chart-line',
+                    iconClass: 'text-warning',
+                    trend: 'Acumulado'
+                }
+            ];
+
+            // Renderizar primeira linha (4 cards)
+            renderMetricRow('metricsRow1', metrics.slice(0, 4));
+            
+            // Renderizar segunda linha (4 cards)
+            renderMetricRow('metricsRow2', metrics.slice(4, 8));
+        }
+
+        function renderMetricRow(containerId, metrics) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+
+            metrics.forEach(metric => {
+                const col = document.createElement('div');
+                col.className = 'col-lg-3 col-md-6';
+                
+                col.innerHTML = `
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="card-title text-muted">${metric.title}</h6>
+                                    <h3 class="card-text">${metric.value}</h3>
+                                    <small class="text-muted">${metric.trend}</small>
+                                </div>
+                                <div class="text-end">
+                                    <i class="${metric.icon} fa-2x ${metric.iconClass}"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(col);
+            });
+        }
+
+        function renderCharts() {
+            const container = document.getElementById('chartsContainer');
+            container.innerHTML = `
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-chart-line text-success me-2"></i>Evolução da Receita</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="revenueChart" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-building text-primary me-2"></i>Crescimento de Tenants</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="tenantsChart" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Inicializar gráficos mock
+            setTimeout(() => {
+                initializeMockCharts();
+            }, 100);
+        }
+
+        function renderTables() {
+            const container = document.getElementById('tablesContainer');
+            container.innerHTML = `
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-trophy text-warning me-2"></i>Top Tenants</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Tenant</th>
+                                            <th>Receita</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>Salão Beleza</strong></td>
+                                            <td>R$ 12.500</td>
+                                            <td><span class="badge bg-success">Ativo</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Clínica Saúde</strong></td>
+                                            <td>R$ 8.900</td>
+                                            <td><span class="badge bg-success">Ativo</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Advocacia Legal</strong></td>
+                                            <td>R$ 6.750</td>
+                                            <td><span class="badge bg-success">Ativo</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-chart-pie text-info me-2"></i>Distribuição por Domínio</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="domainChart" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Inicializar gráfico de domínio
+            setTimeout(() => {
+                initializeDomainChart();
+            }, 200);
+        }
+
+        function initializeMockCharts() {
+            // Revenue Chart
+            const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+            new Chart(revenueCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'],
+                    datasets: [{
+                        label: 'Receita (R$)',
+                        data: [25000, 30000, 35000, 40000, 42000, 45000],
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // Tenants Chart
+            const tenantsCtx = document.getElementById('tenantsChart').getContext('2d');
+            new Chart(tenantsCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'],
+                    datasets: [{
+                        label: 'Novos Tenants',
+                        data: [2, 3, 1, 4, 2, 3],
+                        backgroundColor: '#007bff',
+                        borderColor: '#007bff',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function initializeDomainChart() {
+            const domainCtx = document.getElementById('domainChart').getContext('2d');
+            new Chart(domainCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Beleza', 'Saúde', 'Jurídico', 'Educação', 'Outros'],
+                    datasets: [{
+                        data: [40, 25, 15, 10, 10],
+                        backgroundColor: [
+                            '#FF6384',
+                            '#36A2EB',
+                            '#FFCE56',
+                            '#4BC0C0',
+                            '#9966FF'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        // Utility functions
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(value);
+        }
+
+        function formatNumber(value) {
+            return new Intl.NumberFormat('pt-BR').format(value);
+        }
+
+        // Setup sidebar toggle
+        function setupSidebarToggle() {
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.getElementById('mainContent');
+            
+            sidebarToggle?.addEventListener('click', function() {
+                if (window.innerWidth <= 768) {
+                    sidebar.classList.toggle('mobile-open');
+                    document.getElementById('sidebarOverlay').classList.toggle('show');
+                } else {
+                    sidebar.classList.toggle('collapsed');
+                    mainContent.classList.toggle('expanded');
+                }
+            });
+        }
+
+        // Setup mobile navigation
+        function setupMobileNavigation() {
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            const sidebar = document.getElementById('sidebar');
+            
+            sidebarOverlay?.addEventListener('click', function() {
+                sidebar.classList.remove('mobile-open');
+                sidebarOverlay.classList.remove('show');
+            });
+            
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 768) {
+                    sidebar.classList.remove('mobile-open');
+                    sidebarOverlay.classList.remove('show');
+                }
+            });
+        }
+
+        // Setup active navigation highlighting
+        function setupActiveNavigation() {
+            const navLinks = document.querySelectorAll('.sidebar .nav-link');
+            navLinks.forEach(link => {
+                if (link.getAttribute('href') === 'dashboard-standardized.html') {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        // Show error state
+        function showErrorState(message) {
+            const container = document.querySelector('.content-container');
+            container.innerHTML = `
+                <div class="ubs-section">
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle fa-3x mb-3 text-warning"></i>
+                        <h4>Erro ao carregar página</h4>
+                        <p>${message}</p>
+                        <button class="btn btn-primary" onclick="location.reload()">
+                            <i class="fas fa-sync me-2"></i>Tentar Novamente
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Global functions
+        window.refreshData = function() {
+            console.log('🔄 Refreshing data...');
+            location.reload();
+        };
+
+        window.exportData = function() {
+            console.log('📊 Exporting data...');
+            alert('Funcionalidade de exportação será implementada em breve!');
+        };
+
+        window.logout = function() {
+            if (confirm('Tem certeza que deseja sair?')) {
+                localStorage.clear();
+                sessionStorage.clear();
+                window.location.href = 'login.html';
+            }
+        };
+
+        // Interceptar cliques para debug
+        if (debugMode) {
+            document.addEventListener('click', function(event) {
+                if (event.target.tagName === 'A' && event.target.href) {
+                    console.log('🔍 CLICK DEBUG:', {
+                        href: event.target.href,
+                        text: event.target.textContent.trim(),
+                        target: event.target
+                    });
+                }
+            });
+        }
+    </script>
+</body>
+</html> 

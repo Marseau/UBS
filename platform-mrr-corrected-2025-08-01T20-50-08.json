@@ -1,0 +1,311 @@
+{
+  "calculation_date": "2025-08-01T20:50:08.718Z",
+  "methodology": "Using created_at as subscription start date",
+  "trial_policy": "15 days free trial from creation",
+  "total_tenants": 10,
+  "periods": {
+    "7d": {
+      "period_days": 7,
+      "total_mrr": 559.3,
+      "paying_tenants": 7,
+      "trialing_tenants": 3,
+      "total_active_tenants": 10,
+      "average_mrr_per_paying_tenant": 79.89999999999999,
+      "plan_breakdown": {
+        "profissional": {
+          "count": 5,
+          "mrr": 399.5,
+          "fee": 79.9
+        },
+        "enterprise": {
+          "count": 2,
+          "mrr": 159.8,
+          "fee": 79.9
+        }
+      },
+      "paying_tenant_details": [
+        {
+          "name": "Bella Vista Spa",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-06-15T00:27:52.691Z",
+          "payment_start": "2025-06-30T00:27:52.691Z",
+          "days_paying": 33
+        },
+        {
+          "name": "Studio Glamour",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-06-15T00:27:52.691Z",
+          "payment_start": "2025-06-30T00:27:52.691Z",
+          "days_paying": 33
+        },
+        {
+          "name": "Charme Total",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-06-15T00:27:52.691Z",
+          "payment_start": "2025-06-30T00:27:52.691Z",
+          "days_paying": 33
+        },
+        {
+          "name": "Clínica Mente Sã",
+          "plan": "enterprise",
+          "mrr": 79.9,
+          "created_date": "2025-06-30T00:27:52.691Z",
+          "payment_start": "2025-07-15T00:27:52.691Z",
+          "days_paying": 18
+        },
+        {
+          "name": "Centro Terapêutico",
+          "plan": "enterprise",
+          "mrr": 79.9,
+          "created_date": "2025-06-30T00:27:52.691Z",
+          "payment_start": "2025-07-15T00:27:52.691Z",
+          "days_paying": 18
+        },
+        {
+          "name": "Advocacia Silva",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-07-10T00:27:52.691Z",
+          "payment_start": "2025-07-25T00:27:52.691Z",
+          "days_paying": 8
+        },
+        {
+          "name": "Escritório Costa",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-07-10T00:27:52.691Z",
+          "payment_start": "2025-07-25T00:27:52.691Z",
+          "days_paying": 8
+        }
+      ],
+      "trialing_tenant_details": [
+        {
+          "name": "Centro Educacional",
+          "plan": "basico",
+          "created_date": "2025-07-20T00:27:52.691Z",
+          "trial_ends": "2025-08-04T00:27:52.691Z",
+          "days_left_in_trial": 3
+        },
+        {
+          "name": "Academia do Saber",
+          "plan": "basico",
+          "created_date": "2025-07-20T00:27:52.691Z",
+          "trial_ends": "2025-08-04T00:27:52.691Z",
+          "days_left_in_trial": 3
+        },
+        {
+          "name": "Arena Fitness",
+          "plan": "basico",
+          "created_date": "2025-07-25T00:27:52.691Z",
+          "trial_ends": "2025-08-09T00:27:52.691Z",
+          "days_left_in_trial": 8
+        }
+      ]
+    },
+    "30d": {
+      "period_days": 30,
+      "total_mrr": 559.3,
+      "paying_tenants": 7,
+      "trialing_tenants": 3,
+      "total_active_tenants": 10,
+      "average_mrr_per_paying_tenant": 79.89999999999999,
+      "plan_breakdown": {
+        "profissional": {
+          "count": 5,
+          "mrr": 399.5,
+          "fee": 79.9
+        },
+        "enterprise": {
+          "count": 2,
+          "mrr": 159.8,
+          "fee": 79.9
+        }
+      },
+      "paying_tenant_details": [
+        {
+          "name": "Bella Vista Spa",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-06-15T00:27:52.691Z",
+          "payment_start": "2025-06-30T00:27:52.691Z",
+          "days_paying": 33
+        },
+        {
+          "name": "Studio Glamour",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-06-15T00:27:52.691Z",
+          "payment_start": "2025-06-30T00:27:52.691Z",
+          "days_paying": 33
+        },
+        {
+          "name": "Charme Total",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-06-15T00:27:52.691Z",
+          "payment_start": "2025-06-30T00:27:52.691Z",
+          "days_paying": 33
+        },
+        {
+          "name": "Clínica Mente Sã",
+          "plan": "enterprise",
+          "mrr": 79.9,
+          "created_date": "2025-06-30T00:27:52.691Z",
+          "payment_start": "2025-07-15T00:27:52.691Z",
+          "days_paying": 18
+        },
+        {
+          "name": "Centro Terapêutico",
+          "plan": "enterprise",
+          "mrr": 79.9,
+          "created_date": "2025-06-30T00:27:52.691Z",
+          "payment_start": "2025-07-15T00:27:52.691Z",
+          "days_paying": 18
+        },
+        {
+          "name": "Advocacia Silva",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-07-10T00:27:52.691Z",
+          "payment_start": "2025-07-25T00:27:52.691Z",
+          "days_paying": 8
+        },
+        {
+          "name": "Escritório Costa",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-07-10T00:27:52.691Z",
+          "payment_start": "2025-07-25T00:27:52.691Z",
+          "days_paying": 8
+        }
+      ],
+      "trialing_tenant_details": [
+        {
+          "name": "Centro Educacional",
+          "plan": "basico",
+          "created_date": "2025-07-20T00:27:52.691Z",
+          "trial_ends": "2025-08-04T00:27:52.691Z",
+          "days_left_in_trial": 3
+        },
+        {
+          "name": "Academia do Saber",
+          "plan": "basico",
+          "created_date": "2025-07-20T00:27:52.691Z",
+          "trial_ends": "2025-08-04T00:27:52.691Z",
+          "days_left_in_trial": 3
+        },
+        {
+          "name": "Arena Fitness",
+          "plan": "basico",
+          "created_date": "2025-07-25T00:27:52.691Z",
+          "trial_ends": "2025-08-09T00:27:52.691Z",
+          "days_left_in_trial": 8
+        }
+      ]
+    },
+    "90d": {
+      "period_days": 90,
+      "total_mrr": 559.3,
+      "paying_tenants": 7,
+      "trialing_tenants": 3,
+      "total_active_tenants": 10,
+      "average_mrr_per_paying_tenant": 79.89999999999999,
+      "plan_breakdown": {
+        "profissional": {
+          "count": 5,
+          "mrr": 399.5,
+          "fee": 79.9
+        },
+        "enterprise": {
+          "count": 2,
+          "mrr": 159.8,
+          "fee": 79.9
+        }
+      },
+      "paying_tenant_details": [
+        {
+          "name": "Bella Vista Spa",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-06-15T00:27:52.691Z",
+          "payment_start": "2025-06-30T00:27:52.691Z",
+          "days_paying": 33
+        },
+        {
+          "name": "Studio Glamour",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-06-15T00:27:52.691Z",
+          "payment_start": "2025-06-30T00:27:52.691Z",
+          "days_paying": 33
+        },
+        {
+          "name": "Charme Total",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-06-15T00:27:52.691Z",
+          "payment_start": "2025-06-30T00:27:52.691Z",
+          "days_paying": 33
+        },
+        {
+          "name": "Clínica Mente Sã",
+          "plan": "enterprise",
+          "mrr": 79.9,
+          "created_date": "2025-06-30T00:27:52.691Z",
+          "payment_start": "2025-07-15T00:27:52.691Z",
+          "days_paying": 18
+        },
+        {
+          "name": "Centro Terapêutico",
+          "plan": "enterprise",
+          "mrr": 79.9,
+          "created_date": "2025-06-30T00:27:52.691Z",
+          "payment_start": "2025-07-15T00:27:52.691Z",
+          "days_paying": 18
+        },
+        {
+          "name": "Advocacia Silva",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-07-10T00:27:52.691Z",
+          "payment_start": "2025-07-25T00:27:52.691Z",
+          "days_paying": 8
+        },
+        {
+          "name": "Escritório Costa",
+          "plan": "profissional",
+          "mrr": 79.9,
+          "created_date": "2025-07-10T00:27:52.691Z",
+          "payment_start": "2025-07-25T00:27:52.691Z",
+          "days_paying": 8
+        }
+      ],
+      "trialing_tenant_details": [
+        {
+          "name": "Centro Educacional",
+          "plan": "basico",
+          "created_date": "2025-07-20T00:27:52.691Z",
+          "trial_ends": "2025-08-04T00:27:52.691Z",
+          "days_left_in_trial": 3
+        },
+        {
+          "name": "Academia do Saber",
+          "plan": "basico",
+          "created_date": "2025-07-20T00:27:52.691Z",
+          "trial_ends": "2025-08-04T00:27:52.691Z",
+          "days_left_in_trial": 3
+        },
+        {
+          "name": "Arena Fitness",
+          "plan": "basico",
+          "created_date": "2025-07-25T00:27:52.691Z",
+          "trial_ends": "2025-08-09T00:27:52.691Z",
+          "days_left_in_trial": 8
+        }
+      ]
+    }
+  }
+}

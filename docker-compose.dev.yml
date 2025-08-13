@@ -1,0 +1,123 @@
+
+services:
+  # Universal Booking System API - Development
+  booking-api-dev:
+    build:
+      context: ./universal-booking-system
+      dockerfile: Dockerfile.dev
+    container_name: booking-api-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "9229:9229"  # Debug port
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - REDIS_URL=redis://redis-dev:6379
+    volumes:
+      - ./universal-booking-system/src:/app/src
+      - ./universal-booking-system/package.json:/app/package.json
+      - ./universal-booking-system/tsconfig.json:/app/tsconfig.json
+      - ./logs:/app/logs
+      - /app/node_modules  # Prevent overwriting node_modules
+    depends_on:
+      - redis-dev
+      - postgres-dev
+    networks:
+      - booking-dev-network
+    command: npm run dev
+
+  # Redis Cache - Development
+  redis-dev:
+    image: redis:7-alpine
+    container_name: redis-dev
+    restart: unless-stopped
+    ports:
+      - "6380:6379"  # Different port for dev
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-dev-data:/data
+    networks:
+      - booking-dev-network
+
+  # PostgreSQL Database - Development
+  postgres-dev:
+    image: postgres:15-alpine
+    container_name: postgres-dev
+    restart: unless-stopped
+    ports:
+      - "5433:5432"  # Different port for dev
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-booking_system_dev}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres123}
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./database/dev-seed.sql:/docker-entrypoint-initdb.d/seed.sql
+    networks:
+      - booking-dev-network
+
+  # N8N Development
+  n8n-dev:
+    image: n8nio/n8n:latest
+    container_name: n8n-dev
+    restart: unless-stopped
+    ports:
+      - "5679:5678"  # Different port for dev
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres-dev
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${N8N_DB:-n8n_dev}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER:-postgres}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-postgres123}
+      - N8N_BASIC_AUTH_ACTIVE=false  # Disabled for dev
+      - WEBHOOK_URL=http://localhost:5679/
+      - GENERIC_TIMEZONE=America/Sao_Paulo
+      - N8N_LOG_LEVEL=debug
+    depends_on:
+      - postgres-dev
+    volumes:
+      - n8n-dev-data:/home/node/.n8n
+      - ./n8n-workflows:/workflows
+    networks:
+      - booking-dev-network
+
+  # Adminer - Database Management
+  adminer:
+    image: adminer:latest
+    container_name: adminer-dev
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres-dev
+    networks:
+      - booking-dev-network
+
+  # Redis Commander - Redis Management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: redis-commander
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis-dev:6379
+    depends_on:
+      - redis-dev
+    networks:
+      - booking-dev-network
+
+volumes:
+  postgres-dev-data:
+  redis-dev-data:
+  n8n-dev-data:
+
+networks:
+  booking-dev-network:
+    driver: bridge
