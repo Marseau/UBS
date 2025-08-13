@@ -9,7 +9,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
   'https://qsdfyffuonywmtnlycri.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MTEyNjQ3OCwiZXhwIjoyMDY2NzAyNDc4fQ.x_V9gwALfFJsgDq47uAjCBBfT5vHfBN3_ht-lm6C9iU'
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 async function verifyFilterLogic() {
