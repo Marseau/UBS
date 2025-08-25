@@ -1,18 +1,40 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import * as dotenv from 'dotenv';
-import { AdminAuthMiddleware } from './middleware/admin-auth.js';
+import { AdminAuthMiddleware } from './middleware/admin-auth';
 import { verifyActiveSubscription } from './middleware/subscription-auth';
 import { redisCacheService } from './services/redis-cache.service';
+import { validateProductionModel } from './utils/ai-config';
 
 // Load environment variables
 dotenv.config();
 
+// 🚨 PRP-OPENAI-MODEL-UNI: Validação crítica em produção
+validateProductionModel();
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// Confiar no proxy (dev.ubs.app.br → localhost)
+app.set('trust proxy', 1);
+
+// Middleware: RAW body para webhooks WhatsApp (V3 oficial)
+try {
+  const whatsappV3WebhookPath = '/api/whatsapp-v3/webhook';
+  const whatsappOfficialWebhookPath = '/api/whatsapp/webhook';
+  // raw body para verificar assinatura
+  // @ts-ignore: express.raw disponível
+  app.use(whatsappV3WebhookPath, express.raw({ type: 'application/json' }));
+  // @ts-ignore: express.raw disponível
+  app.use(whatsappOfficialWebhookPath, express.raw({ type: 'application/json' }));
+} catch (_) { /* noop */ }
+
+// Demais rotas usam JSON normal
 app.use(express.json());
+
+// Servir arquivos estáticos da pasta frontend
+app.use('/src/frontend', express.static(path.join(__dirname, 'frontend')));
 
 // Autenticação para rotas da API de Admin
 const authMiddleware = new AdminAuthMiddleware();
@@ -31,6 +53,35 @@ app.get('/api/health', (req, res) => {
 });
 
 // API Routes
+try {
+  // Oficial: V3 no endpoint padrão
+  const whatsappWebhookV3 = require('./routes/whatsapp-webhook-v3.routes');
+  app.use('/api/whatsapp', 'default' in whatsappWebhookV3 ? whatsappWebhookV3.default : whatsappWebhookV3);
+  console.log('✅ WhatsApp webhook V3 promoted to official /api/whatsapp');
+} catch (error) {
+  console.error('❌ Failed to load WhatsApp webhook V3 as official route:', error);
+}
+
+// V2 removida para evitar confusão; manter apenas V3
+
+// Alias: manter V3 acessível também em /api/whatsapp-v3
+try {
+  const whatsappWebhookV3Alias = require('./routes/whatsapp-webhook-v3.routes');
+  app.use('/api/whatsapp-v3', 'default' in whatsappWebhookV3Alias ? whatsappWebhookV3Alias.default : whatsappWebhookV3Alias);
+  console.log('✅ WhatsApp webhook V3 alias mounted at /api/whatsapp-v3');
+} catch (error) {
+  console.error('❌ Failed to load WhatsApp webhook V3 routes:', error);
+}
+
+try {
+  // Load Google OAuth routes (no auth required for OAuth flow)
+  const googleOAuthRoutes = require('./routes/google-oauth.routes');
+  app.use('/api/google-oauth', 'default' in googleOAuthRoutes ? googleOAuthRoutes.default : googleOAuthRoutes);
+  console.log('✅ Google OAuth routes loaded successfully - CALENDAR INTEGRATION READY');
+} catch (error) {
+  console.error("❌ Failed to load Google OAuth routes:", error);
+}
+
 try {
   // Load auth routes first (critical for registration)
   const authRoutes = require('./routes/auth');
@@ -378,7 +429,23 @@ try {
 }
 
 // Define o caminho para a pasta frontend de forma explícita e segura
-const frontendPath = path.join(process.cwd(), 'src', 'frontend');
+const candidatePaths: string[] = [
+  path.join(process.cwd(), 'src', 'frontend'),
+  path.resolve(__dirname, '..', 'src', 'frontend')
+];
+function resolveFrontendPath(paths: string[]): string {
+  const defaultPath: string = path.join(process.cwd(), 'src', 'frontend');
+  for (const p of paths) {
+    try {
+      if (fs.existsSync(path.join(p, 'demo.html'))) {
+        return p;
+      }
+    } catch (_) { /* ignore */ }
+  }
+  return defaultPath;
+}
+const frontendPath: string = resolveFrontendPath(candidatePaths);
+console.log('🖥️ Frontend path using:', frontendPath);
 
 // Routes - Define these BEFORE static middleware to ensure they take precedence
 app.get('/', (req, res) => {
@@ -452,6 +519,32 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Helper para listar rotas (diagnóstico)
+function listRoutes(limit: number = 50): string[] {
+  const acc: string[] = [];
+  // @ts-ignore
+  const stack = app._router?.stack || [];
+  for (const layer of stack) {
+    if (layer.route) {
+      const methods = Object.keys(layer.route.methods)
+        .filter((m) => (layer.route.methods as any)[m])
+        .map((m) => m.toUpperCase());
+      acc.push(`${methods.join(', ')} ${layer.route.path}`);
+    }
+  }
+  return acc.slice(0, limit);
+}
+
+// Rota de diagnóstico
+app.get('/__signature', (_req, res) => {
+  res.json({
+    app: 'ubs-main',
+    frontendPath,
+    routes: listRoutes(100),
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Initialize Email and Monitoring Services
 let emailService: any = null;
 let subscriptionMonitor: any = null;
@@ -507,6 +600,20 @@ async function initializeServices() {
       
     } catch (error) {
       console.error('❌ Failed to initialize New Metrics Cron Service:', error);
+    }
+    
+    // Initialize Conversation Outcome Processor
+    try {
+      const { conversationOutcomeProcessor } = await import('./cron/conversation-outcome-processor');
+      
+      // Start conversation outcome processor (runs every 15 minutes)
+      conversationOutcomeProcessor.start();
+      
+      console.log('✅ Conversation Outcome Processor initialized successfully');
+      console.log('⏰ Conversation outcome cronjob scheduled for every 15 minutes');
+      
+    } catch (error) {
+      console.error('❌ Failed to initialize Conversation Outcome Processor:', error);
     }
     
     // Initialize COMPREHENSIVE METRICS SYSTEM (TODAS AS 14+ MÉTRICAS)
