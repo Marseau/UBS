@@ -35,12 +35,16 @@ export class LLMIntentClassifierService {
 
       console.log('🤖 [LLM-CLASSIFIER] Chamando OpenAI para classificação fechada');
 
+      // Usar modelo compatível com JSON mode
+      const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+      const supportsJsonMode = model.includes('gpt-4o') || model.includes('gpt-3.5-turbo') || model === 'gpt-4o-mini';
+      
       const completion = await this.openai.chat.completions.create({
-        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        model,
         temperature: 0,
         top_p: 0,
         max_tokens: 20,
-        response_format: { type: 'json_object' },
+        ...(supportsJsonMode && { response_format: { type: 'json_object' } }),
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
