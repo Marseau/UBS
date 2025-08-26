@@ -17,7 +17,7 @@ export interface WebhookOrchestrationResult {
   conversationOutcome: string | null; // null se conversa em andamento
   updatedContext: EnhancedConversationContext;
   telemetryData: {
-    intent: string;
+    intent: string | null;
     confidence: number;
     decision_method: string;
     flow_lock_active: boolean;
@@ -150,7 +150,7 @@ export class WebhookFlowOrchestratorService {
         llmMetrics: result.llmMetrics, // 🚨 CORREÇÃO: Incluir métricas LLM no retorno
         updatedContext,
         telemetryData: {
-          intent: intentResult.intent || 'unknown',
+          intent: intentResult.intent,
           confidence: intentResult.confidence,
           decision_method: intentResult.decision_method,
           flow_lock_active: !!updatedContext.flow_lock?.active_flow,

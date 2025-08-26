@@ -1397,7 +1397,7 @@ class ValidationService {
     const __persist_modelUsed: string | null = __persist_llm.model_used ?? (process.env.OPENAI_MODEL || 'gpt-4');
     const __persist_aiConfidence: number | null = __persist_llm.confidence_score ?? null;
 
-    const __persist_intent: string | undefined = result?.telemetryData?.intent;
+    const __persist_intent: string | null | undefined = result?.telemetryData?.intent;
 
     setImmediate(async () => {
       console.log('🔍 setImmediate executado para persistência');
