@@ -133,7 +133,7 @@ export class ConversationOutcomeAnalyzerService {
 
   /**
    * PERSISTIR OUTCOME NA ÚLTIMA MENSAGEM
-   * REGRA: Apenas a última mensagem AI da conversa deve ter o outcome
+   * REGRA: A última mensagem da conversa deve ter o outcome (AI ou usuário)
    */
   async persistOutcomeToFinalMessage(analysis: OutcomeAnalysis): Promise<boolean> {
     try {
@@ -142,15 +142,13 @@ export class ConversationOutcomeAnalyzerService {
         outcome: analysis.outcome
       });
 
-      // Atualizar APENAS a última mensagem AI com o outcome
+      // Atualizar a ÚLTIMA mensagem da conversa com o outcome
       const { error } = await this.supabase
         .from('conversation_history')
         .update({ 
-          conversation_outcome: analysis.outcome,
-          updated_at: new Date().toISOString()
+          conversation_outcome: analysis.outcome
         })
-        .eq('id', analysis.finalMessageId)
-        .eq('is_from_user', false); // Garantir que é mensagem AI
+        .eq('id', analysis.finalMessageId); // Não filtrar por is_from_user
 
       if (error) {
         logger.error('❌ Failed to persist outcome', {
@@ -182,7 +180,7 @@ export class ConversationOutcomeAnalyzerService {
     try {
       const { data, error } = await this.supabase
         .from('conversation_history')
-        .select('id, content, is_from_user, intent_detected, created_at, conversation_context, tenant_id, user_phone')
+        .select('id, content, is_from_user, intent_detected, created_at, conversation_context, tenant_id, user_id')
         .eq('session_id_uuid', sessionId)
         .order('created_at', { ascending: true });
 
@@ -208,7 +206,7 @@ export class ConversationOutcomeAnalyzerService {
       return {
         sessionId,
         tenantId: firstMessage.tenant_id,
-        userPhone: firstMessage.user_phone,
+        userPhone: firstMessage.user_id, // user_id será usado como identificador
         messages,
         startTime,
         endTime,
@@ -233,9 +231,11 @@ export class ConversationOutcomeAnalyzerService {
     
     const userMessages = context.messages.filter(m => m.isFromUser);
     const aiMessages = context.messages.filter(m => !m.isFromUser);
-    const finalAiMessage = aiMessages[aiMessages.length - 1];
     
-    if (!finalAiMessage) {
+    // CORREÇÃO: Usar a ÚLTIMA mensagem da conversa (não necessariamente AI)
+    const lastMessage = context.messages[context.messages.length - 1];
+    
+    if (!lastMessage) {
       return null;
     }
 
@@ -247,7 +247,7 @@ export class ConversationOutcomeAnalyzerService {
         confidence: 0.95,
         reasoning: 'Appointment action detected in conversation flow',
         triggeredBy: 'appointment_action',
-        finalMessageId: finalAiMessage.id
+        finalMessageId: lastMessage.id
       };
     }
 
@@ -259,7 +259,7 @@ export class ConversationOutcomeAnalyzerService {
         confidence: 0.85,
         reasoning: 'Specific info request pattern detected',
         triggeredBy: trigger as any,
-        finalMessageId: finalAiMessage.id
+        finalMessageId: lastMessage.id
       };
     }
 
@@ -274,7 +274,7 @@ export class ConversationOutcomeAnalyzerService {
         confidence: 0.8,
         reasoning: `Conversation abandoned after ${context.totalDuration}ms`,
         triggeredBy: 'timeout',
-        finalMessageId: finalAiMessage.id
+        finalMessageId: lastMessage.id
       };
     }
 
@@ -286,7 +286,7 @@ export class ConversationOutcomeAnalyzerService {
         confidence: 0.7,
         reasoning: 'Pattern-based outcome detection',
         triggeredBy: trigger as any,
-        finalMessageId: finalAiMessage.id
+        finalMessageId: lastMessage.id
       };
     }
 
@@ -296,7 +296,7 @@ export class ConversationOutcomeAnalyzerService {
       confidence: 0.6,
       reasoning: 'Default outcome for completed conversation',
       triggeredBy: trigger as any,
-      finalMessageId: finalAiMessage.id
+      finalMessageId: lastMessage.id
     };
   }
 
