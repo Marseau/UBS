@@ -1,0 +1,192 @@
+{
+  "outcomes": [
+    "appointment_scheduled",
+    "information_provided", 
+    "appointment_rescheduled",
+    "appointment_cancelled",
+    "service_inquiry",
+    "pricing_inquiry"
+  ],
+  "domains": {
+    "healthcare": {
+      "conversations": [
+        {
+          "id": "healthcare_appointment_request_1",
+          "expected_outcome": "appointment_scheduled",
+          "test_user_phone": "+5511988776655",
+          "messages": [
+            "Olá, preciso marcar uma consulta",
+            "Tenho disponibilidade na próxima semana",
+            "Prefiro pela manhã se possível",
+            "Pode ser terça-feira às 9h?",
+            "Perfeito, confirmo o horário",
+            "Obrigado pelo atendimento"
+          ]
+        },
+        {
+          "id": "healthcare_pricing_inquiry_1", 
+          "expected_outcome": "pricing_inquiry",
+          "test_user_phone": "+5511988776656",
+          "messages": [
+            "Boa tarde, gostaria de saber valores",
+            "Preciso de uma consulta de cardiologia",
+            "Qual o valor da primeira consulta?",
+            "Vocês atendem por convênio?",
+            "Entendi, vou verificar e retorno",
+            "Muito obrigado pelas informações"
+          ]
+        }
+      ]
+    },
+    "beauty": {
+      "conversations": [
+        {
+          "id": "beauty_service_booking_1",
+          "expected_outcome": "appointment_scheduled", 
+          "test_user_phone": "+5511988776657",
+          "messages": [
+            "Oi, quero agendar um corte e escova",
+            "Tenho cabelo longo, demora quanto tempo?",
+            "Posso agendar para sábado?",
+            "Que horas vocês abrem no sábado?",
+            "Às 10h está bom pra mim",
+            "Agendado! Vou estar lá no horário"
+          ]
+        },
+        {
+          "id": "beauty_rescheduling_1",
+          "expected_outcome": "appointment_rescheduled",
+          "test_user_phone": "+5511988776658", 
+          "messages": [
+            "Preciso remarcar meu horário de amanhã",
+            "Surgiu um compromisso inadiável",
+            "Podem me colocar para quinta-feira?",
+            "Qualquer horário da tarde serve",
+            "15h está perfeito",
+            "Obrigada pela flexibilidade!"
+          ]
+        }
+      ]
+    },
+    "education": {
+      "conversations": [
+        {
+          "id": "education_course_inquiry_1",
+          "expected_outcome": "information_provided",
+          "test_user_phone": "+5511988776659",
+          "messages": [
+            "Olá, gostaria de informações sobre cursos",
+            "Estou interessado em inglês intermediário",
+            "Quantas aulas por semana?",
+            "Qual a duração total do curso?",
+            "O material está incluso no valor?",
+            "Vou conversar em casa e retorno"
+          ]
+        },
+        {
+          "id": "education_enrollment_1",
+          "expected_outcome": "appointment_scheduled",
+          "test_user_phone": "+5511988776660",
+          "messages": [
+            "Quero me matricular no curso de espanhol",
+            "Já fiz o teste de nivelamento",
+            "Quando começam as próximas turmas?",
+            "Posso fazer a matrícula hoje?",
+            "Que documentos preciso levar?",
+            "Estarei aí às 14h para matricular"
+          ]
+        }
+      ]
+    },
+    "sports": {
+      "conversations": [
+        {
+          "id": "sports_training_schedule_1", 
+          "expected_outcome": "appointment_scheduled",
+          "test_user_phone": "+5511988776661",
+          "messages": [
+            "Quero começar treinar na academia",
+            "Sou iniciante, preciso de avaliação?",
+            "Posso agendar para esta semana?",
+            "Prefiro no período da manhã",
+            "Sexta às 8h pode ser?",
+            "Combinado, vou estar lá pontualmente"
+          ]
+        },
+        {
+          "id": "sports_class_info_1",
+          "expected_outcome": "service_inquiry", 
+          "test_user_phone": "+5511988776662",
+          "messages": [
+            "Vocês têm aulas de pilates?",
+            "Quais os horários disponíveis?",
+            "É necessário experiência prévia?", 
+            "Quanto custa o pacote mensal?",
+            "Posso fazer uma aula experimental?",
+            "Vou pensar e entro em contato"
+          ]
+        }
+      ]
+    },
+    "legal": {
+      "conversations": [
+        {
+          "id": "legal_consultation_1",
+          "expected_outcome": "appointment_scheduled",
+          "test_user_phone": "+5511988776663", 
+          "messages": [
+            "Preciso de uma consulta jurídica",
+            "É sobre direito trabalhista",
+            "Vocês atendem nessa área?",
+            "Posso agendar para esta semana?",
+            "Quinta-feira à tarde tem vaga?",
+            "Confirmado para quinta às 15h"
+          ]
+        },
+        {
+          "id": "legal_document_help_1",
+          "expected_outcome": "information_provided",
+          "test_user_phone": "+5511988776664",
+          "messages": [
+            "Preciso de ajuda com um contrato",
+            "É um contrato de prestação de serviços", 
+            "Vocês fazem revisão de contratos?",
+            "Qual seria o custo aproximado?",
+            "Quanto tempo demora a análise?",
+            "Vou enviar o contrato por email"
+          ]
+        }
+      ]
+    },
+    "consulting": {
+      "conversations": [
+        {
+          "id": "consulting_business_help_1",
+          "expected_outcome": "appointment_scheduled",
+          "test_user_phone": "+5511988776665",
+          "messages": [
+            "Preciso de consultoria empresarial",
+            "Minha empresa está com problemas de fluxo de caixa",
+            "Vocês atendem pequenas empresas?",
+            "Posso agendar uma reunião?",
+            "Segunda-feira de manhã serve?",
+            "Perfeito, nos vemos segunda às 9h"
+          ]
+        },
+        {
+          "id": "consulting_strategy_1", 
+          "expected_outcome": "service_inquiry",
+          "test_user_phone": "+5511988776666",
+          "messages": [
+            "Gostaria de saber sobre consultoria em marketing",
+            "Precisamos melhorar nossa presença digital",
+            "Vocês trabalham com marketing digital?",
+            "Como funciona o processo de consultoria?",
+            "Qual o investimento necessário?",
+            "Vou discutir com sócios e retorno"
+          ]
+        }
+      ]
+    }
+  }
+}

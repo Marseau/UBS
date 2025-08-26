@@ -58,10 +58,10 @@ export interface EnhancedConversationContext {
   
   // Estatísticas de intent
   intent_history: {
-    intent: string;
+    intent: string | null;
     confidence: number;
     timestamp: string;
-    decision_method: 'command' | 'dictionary' | 'regex' | 'llm';
+    decision_method: 'command' | 'dictionary' | 'regex' | 'llm' | 'none';
   }[];
   
   // Compatibilidade legada

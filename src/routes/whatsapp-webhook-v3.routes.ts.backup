@@ -8,7 +8,7 @@ import crypto from 'crypto';
 import Redis from 'ioredis';
 import { supabaseAdmin } from '../config/database';
 import { handleIncomingMessage } from "../services/message-handler";
-import { WebhookV3FlowIntegrationService } from '../services/webhook-v3-flow-integration.service';
+
 import { WebhookFlowOrchestratorService } from '../services/webhook-flow-orchestrator.service';
 import { demoTokenValidator } from '../utils/demo-token-validator';
 import { VALID_CONVERSATION_OUTCOMES } from '../types/billing-cron.types';
@@ -683,13 +683,7 @@ class ValidationService {
         return best.score>=3 ? best.name : undefined;
         }
         
-        // ===== Message Processor =====
-        class MessageProcessor {
-        private flowIntegration: WebhookV3FlowIntegrationService;
-        
-        constructor(private cache: CacheService, private openai: OpenAI) {
-            this.flowIntegration = new WebhookV3FlowIntegrationService();
-        }
+
         
         async process(sessionKey: string, text: string, phoneNumberId: string, userPhone: string, demoPayload?: any): Promise<ProcessingResult> {
         try {
@@ -1241,7 +1235,7 @@ class ValidationService {
       await cache.setSession(sessionKey, session);
       }
 
-      // Captura assíncrona de usage (tokens/custo) mesmo em respostas diretas  
+      // ✅ Captura assíncrona de usage (tokens/custo) mesmo em respostas diretas  
       private captureUsageOnlyAsync(sessionKey: string, session: SessionData, text: string): void {
         // 🚀 OTIMIZAÇÃO #5: Amostragem durante burst testing (10% dos casos)
         const isBurstTest = sessionKey.includes('burst_') || sessionKey.includes('pico_');
@@ -1249,27 +1243,72 @@ class ValidationService {
           return; // Skip 90% das chamadas durante burst
         }
         
-        // Execute em background sem bloquear resposta
+        // ✅ Execute em background sem bloquear resposta
         setImmediate(async () => {
           try {
+            const startTime = Date.now();
             const completion = await this.openai.chat.completions.create({
-            model: config.openai.model,
-            temperature: 0,
-            max_tokens: 1,
-            messages: [
-              { role: 'system', content: 'Responda apenas com OK.' },
-              { role: 'user', content: text || 'OK' }
-            ]
-          });
-          (session as any).__last_llm_stats = {
-            prompt_tokens: (completion as any)?.usage?.prompt_tokens ?? null,
-            completion_tokens: (completion as any)?.usage?.completion_tokens ?? null,
-            total_tokens: (completion as any)?.usage?.total_tokens ?? null,
-            latency_ms: null
-          };
-          await cache.setSession(sessionKey, session);
-          } catch (error) {
-            logger.warn('Telemetry capture failed, non-blocking:', error);
+              model: config.openai.model,
+              temperature: 0,
+              max_tokens: 1,
+              messages: [
+                { role: 'system', content: 'Responda apenas com OK.' },
+                { role: 'user', content: text || 'OK' }
+              ]
+            });
+            
+            const latencyMs = Date.now() - startTime;
+            const usage = completion.usage;
+            
+            // ✅ VALIDAÇÃO: Verificar se usage está disponível
+            if (!usage || !usage.total_tokens) {
+              logger.warn('⚠️ OpenAI usage data não disponível em captureUsageOnlyAsync', { 
+                sessionKey, 
+                usage, 
+                completion 
+              });
+              return;
+            }
+            
+            // ✅ Calcular custo estimado (simplificado para este contexto)
+            const promptCost = (usage.prompt_tokens / 1000) * (parseFloat(process.env.OPENAI_PROMPT_COST_PER_1K || '0.03'));
+            const completionCost = (usage.completion_tokens / 1000) * (parseFloat(process.env.OPENAI_COMPLETION_COST_PER_1K || '0.06'));
+            const apiCost = Math.round((promptCost + completionCost) * 100000) / 100000;
+            
+            // ✅ CALCULAR PROCESSING COST de forma consistente com o orchestrator
+            const calculateProcessingCost = (apiCost: number): number => {
+              const percentageCost = apiCost * 0.10; // 10% do custo da API
+              const infrastructureCost = 0.00002; // Custo fixo de infraestrutura
+              const databaseCost = 0.00001; // Custo de operações no banco
+              return Math.round((percentageCost + infrastructureCost + databaseCost) * 100000) / 100000;
+            };
+            
+            // ✅ Salvar métricas completas na sessão
+            (session as any).__last_llm_stats = {
+              prompt_tokens: usage.prompt_tokens ?? null,
+              completion_tokens: usage.completion_tokens ?? null,
+              total_tokens: usage.total_tokens ?? null,
+              api_cost_usd: apiCost,
+              processing_cost_usd: calculateProcessingCost(apiCost),
+              latency_ms: latencyMs,
+              confidence_score: 0.95 // Alta confiança para respostas simples
+            };
+            
+            await cache.setSession(sessionKey, session);
+            
+            logger.info('✅ Métricas LLM capturadas em captureUsageOnlyAsync', {
+              sessionKey,
+              totalTokens: usage.total_tokens,
+              apiCost,
+              latencyMs
+            });
+            
+          } catch (error: any) {
+            logger.warn('❌ Telemetry capture failed, non-blocking:', { 
+              error: error?.message || 'Unknown error', 
+              sessionKey,
+              model: config.openai.model 
+            });
           }
         });
       }
@@ -1378,148 +1417,289 @@ class ValidationService {
 
     console.log('🔍 ANTES do setImmediate - sobre para executar persistência');
     
-    // Capturar variáveis antes do setImmediate para evitar problemas de escopo
-    const messageText = text;
-    const aiResponse = result.aiResponse;
-    const messagePhone = userPhone;
-    
     // ===== Persistência ASSÍNCRONA em conversation_history (fire-and-forget) =====
-    // ===== Capturas para persistência assíncrona (evitar undefined em escopo) =====
-    const __persist_userContent: string = (messageText ?? '').toString();
-    const __persist_aiContent: string = (aiResponse ?? '').toString();
-    const __persist_userPhone: string = (messagePhone ?? '').toString();
-
-    const __persist_llm = (result?.llmMetrics as any) || {};
-    const __persist_totalTokens: number = __persist_llm.total_tokens ?? 0;
-    const __persist_apiCostUsd: number = __persist_llm.api_cost_usd ?? 0;
-    const __persist_processingCostUsd: number = __persist_llm.processing_cost_usd ?? 0;
-    // const __persist_latencyMs: number | null = __persist_llm.latency_ms ?? null; // Removido - coluna não existe
-    const __persist_modelUsed: string | null = __persist_llm.model_used ?? (process.env.OPENAI_MODEL || 'gpt-4');
-    const __persist_aiConfidence: number | null = __persist_llm.confidence_score ?? null;
-
-    const __persist_intent: string | undefined = result?.telemetryData?.intent;
-
     setImmediate(async () => {
       console.log('🔍 setImmediate executado para persistência');
       try {
-        // 1) Resolver tenantId (usa updatedContext; fallback para phoneNumberId)
-        let tenantId: string | undefined = result.updatedContext?.tenant_id;
-        if (!tenantId && phoneNumberId) {
-          try {
-            const t = await DatabaseService.findTenantByBusinessPhone(phoneNumberId);
-            if (t?.id) tenantId = t.id;
-          } catch {}
-        }
-        if (!tenantId) {
-          logger.error('❌ Persistência abortada: tenantId indefinido');
-          return;
-        }
-
-        // 2) Garantir userId pelo telefone
+      // ✅ Tenant ID já vem correto do orchestrator
+      let tenantId: string | undefined = result.updatedContext?.tenant_id;
+      if (!tenantId && phoneNumberId) {
+        try {
+          const t = await DatabaseService.findTenantByBusinessPhone(phoneNumberId);
+          if (t?.id) tenantId = t.id;
+        } catch {}
+      }
+      
+      // 🔍 DEBUG: Logs para diagnosticar persistência
+      logger.info('Persist debug', { 
+        tenantId, 
+        phoneNumberId, 
+        userPhone,
+        intent: result.telemetryData?.intent,
+        demoMode: (req as any)?.demoMode,
+        contextTenantId: result.updatedContext?.tenant_id 
+      });
+      
+      if (tenantId) {
+        // Tentar identificar o usuário por telefone
         let userId: string | null = null;
         try {
-          const u = await DatabaseService.findUserByPhone(tenantId, __persist_userPhone);
+          const u = await DatabaseService.findUserByPhone(tenantId, userPhone);
           if (u?.id) userId = u.id;
         } catch {}
+        // Se ainda não encontrou, cria/vincula um usuário mínimo por telefone e relação com o tenant
         if (!userId) {
           try {
-            const ensuredId = await DatabaseService.upsertUserForTenant(tenantId, __persist_userPhone, {} as any);
-            if (ensuredId) userId = ensuredId;
+            const ensuredId = await DatabaseService.upsertUserForTenant(tenantId, userPhone, {} as any);
+            if (ensuredId) {
+              userId = ensuredId;
+            }
           } catch (e) {
-            logger.error('Failed to ensure minimal user for demo', { tenantId, userPhone: __persist_userPhone, error: e });
+            logger.error('Failed to ensure minimal user for demo', { tenantId, userPhone, error: e });
           }
         }
-        if (!userId) {
-          logger.error('❌ Persistência abortada: userId indefinido');
-          return;
+        // Garantir relação user_tenants
+        if (userId) {
+          try {
+            const rel = await supabaseAdmin
+              .from('user_tenants')
+              .select('tenant_id,user_id')
+              .eq('tenant_id', tenantId)
+              .eq('user_id', userId)
+              .maybeSingle();
+            if (!rel.data) {
+              const insRel = await supabaseAdmin.from('user_tenants')
+                .insert([{ tenant_id: tenantId, user_id: userId }]);
+              if (insRel.error) logger.error('Failed to insert user_tenants relation', { tenantId, userId, error: insRel.error });
+            }
+          } catch (e) {
+            logger.error('Failed to ensure user_tenants relation', { tenantId, userId, error: e });
+          }
         }
 
-        // 3) Session + duration_minutes
+        // 🚨 CORREÇÃO CRÍTICA: OUTCOME SEMPRE NULL - SISTEMA LEGACY DESABILITADO
+        const intent: string | undefined = result.telemetryData?.intent;
+        const outcome: string | null = null; // ✅ FORÇAR NULL - OUTCOMES SÃO DETERMINADOS PELO ConversationOutcomeAnalyzerService
+        
+        console.log('🔧 OUTCOME REAL:', { intent, originalOutcome: result.conversationOutcome, finalOutcome: outcome });
+        // ✅ Telemetria do orchestrator disponível
+        // ✅ CORREÇÃO CRÍTICA: Usar métricas LLM do WebhookFlowOrchestrator
+        const llmMetrics = result.llmMetrics as any || {};
+        
+        // ✅ LOGS DETALHADOS para debug das métricas LLM
+        console.log('🔍 MÉTRICAS LLM CAPTURADAS:', { 
+          hasLLMMetrics: !!result.llmMetrics, 
+          llmMetrics,
+          resultKeys: Object.keys(result || {}),
+          telemetryKeys: Object.keys(result.telemetryData || {})
+        });
+        
+        const totalTokens = llmMetrics.total_tokens ?? null;
+        const apiCostUsd = llmMetrics.api_cost_usd ?? null;
+        const processingCostUsd = llmMetrics.processing_cost_usd ?? null; // ✅ ADIÇÃO: Custo de processamento
+        const latencyOpenAiMs = llmMetrics.latency_ms ?? null;
+        
+        // ✅ VALIDAÇÃO: Verificar se métricas estão sendo capturadas
+        if (!llmMetrics.total_tokens && !llmMetrics.api_cost_usd) {
+          logger.warn('⚠️ Métricas LLM vazias ou incompletas', {
+            sessionKey,
+            intent: result.telemetryData?.intent,
+            hasLLMMetrics: !!result.llmMetrics,
+            llmMetricsKeys: Object.keys(llmMetrics),
+            totalTokens,
+            apiCostUsd
+          });
+        } else {
+          logger.info('✅ Métricas LLM capturadas com sucesso', {
+            sessionKey,
+            totalTokens,
+            apiCostUsd,
+            processingCostUsd,
+            latencyOpenAiMs
+          });
+        }
+
+        // ✅ session_id estável por whatsapp_session_key (conversation_id)
         const sessionDataForContext = (await cache.getSession(sessionKey) as any) || {};
         if (!sessionDataForContext.conversationId) {
           sessionDataForContext.conversationId = crypto.randomUUID();
+          // ✅ CORREÇÃO: WhatsApp timestamp já está em segundos Unix
           const firstMessageMs = messageTimestamp ? parseInt(messageTimestamp) * 1000 : Date.now();
           sessionDataForContext.conversationStartedAt = new Date(firstMessageMs).toISOString();
           await cache.setSession(sessionKey, sessionDataForContext);
         }
         const sessionUuid = sessionDataForContext.conversationId as string;
+        const startedAtMs = Date.parse(sessionDataForContext.conversationStartedAt || new Date().toISOString());
         
-        // CORREÇÃO: Buscar timestamp da primeira mensagem da mesma session_id no banco
-        let firstSessionMessageMs = Date.parse(sessionDataForContext.conversationStartedAt || new Date().toISOString());
-        try {
-          const { data: firstMessage } = await supabaseAdmin
-            .from('conversation_history')
-            .select('created_at')
-            .eq('tenant_id', tenantId)
-            .contains('conversation_context', { session_id: sessionUuid })
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .single();
-          
-          if (firstMessage?.created_at) {
-            firstSessionMessageMs = Date.parse(firstMessage.created_at);
-          }
-        } catch (error) {
-          // Se não encontrou mensagem anterior, é a primeira mensagem da sessão
-        }
-        
+        // ✅ CORREÇÃO: WhatsApp timestamp já está em segundos Unix, não multiplicar por 1000
         const currentMessageMs = messageTimestamp ? parseInt(messageTimestamp) * 1000 : Date.now();
-        const diffMs = Math.max(0, currentMessageMs - firstSessionMessageMs);
-        const durationMinutes = Math.floor(diffMs / 60000);
-
-        // 4) Bases (NÃO colocar content/is_from_user/message_type aqui)
+        
+        // ✅ CORREÇÃO: Cálculo mais preciso de duration_minutes
+        const diffMs = currentMessageMs - startedAtMs;
+        const durationMinutes = Math.max(0, Math.floor(diffMs / 60000));
+        
+        // ✅ DEBUG MELHORADO: Log para investigar duration_minutes
+        console.log('🔍 DURATION DEBUG CORRIGIDO:', {
+          messageTimestamp,
+          messageTimestampSeconds: messageTimestamp ? parseInt(messageTimestamp) : null,
+          currentMessageMs,
+          startedAtMs,
+          conversationStartedAt: sessionDataForContext.conversationStartedAt,
+          diffMs,
+          durationMinutes,
+          durationMinutesFormatted: `${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m`
+        });
+        // Base comum para ambas as mensagens
         const commonBase = {
           tenant_id: tenantId,
           user_id: userId,
           message_source: (req as any)?.demoMode ? 'whatsapp_demo' : 'whatsapp',
           created_at: new Date().toISOString(),
-          conversation_outcome: null, // outcome final é resolvido por analisador/cron
-          conversation_context: { session_id: sessionUuid, duration_minutes: durationMinutes }
-        } as const;
+        };
 
-        // 5) Compor linhas finais
-        const userRow = {
+        // Base para mensagem do usuário (sem LLM metrics)
+        const userMessageBase = {
           ...commonBase,
-          content: __persist_userContent,
-          is_from_user: true,
-          message_type: 'text',
-          intent_detected: __persist_intent ?? null,
+          model_used: null,
           tokens_used: 0,
           api_cost_usd: 0,
-          processing_cost_usd: 0.00003, // Custo mínimo de infraestrutura para mensagens de usuário
-          model_used: null,
+          processing_cost_usd: 0,
           confidence_score: null
-          // latency_ms: null // Removido - coluna não existe
         };
 
-        const aiRow = {
+        // Base para mensagem do AI (com LLM metrics)  
+        const aiMessageBase = {
           ...commonBase,
-          content: __persist_aiContent,
+          model_used: config.openai.model,
+          // ✅ CORREÇÃO CRÍTICA: Incluir métricas LLM capturadas do OpenAI
+          tokens_used: totalTokens,
+          api_cost_usd: apiCostUsd,
+          processing_cost_usd: processingCostUsd, // ✅ CORREÇÃO: Usar valor já calculado pelo orchestrator
+          confidence_score: result.telemetryData?.confidence || null
+        };
+
+        // GARANTIR que conversation_outcome siga a lógica correta
+        console.log('🔧 OUTCOME FINAL:', { outcome, willBeNull: outcome === null });
+        
+        // ✅ VALIDAÇÃO CRÍTICA: Verificar dados obrigatórios antes da inserção
+        if (!tenantId || !userId) {
+          logger.error('❌ Dados obrigatórios faltando para conversation_history', { 
+            tenantId, 
+            userId, 
+            sessionKey,
+            intent: result.telemetryData?.intent,
+            hasLLMMetrics: !!result.llmMetrics
+          });
+          return; // Não tentar inserir dados incompletos
+        }
+        
+                      // ✅ VALIDAÇÃO: Verificar se métricas LLM estão disponíveis
+        if (!result.llmMetrics) {
+          logger.warn('⚠️ Métricas LLM não disponíveis para persistência', {
+            sessionKey,
+            intent: result.telemetryData?.intent,
+            hasTelemetryData: !!result.telemetryData
+          });
+        }
+        
+
+        
+        // ✅ PREPARAR DADOS PARA INSERÇÃO COM VALIDAÇÃO
+        const userMessageData = {
+          ...userMessageBase,
+          content: text,
+          is_from_user: true,
+          message_type: 'text',
+          intent_detected: intent || null,
+          conversation_outcome: null, // ✅ CORREÇÃO: Mensagem usuário sempre NULL
+          conversation_context: {
+            session_id: sessionUuid,
+            duration_minutes: durationMinutes
+          }
+        };
+
+        const aiMessageData = {
+          ...aiMessageBase,
+          content: result.aiResponse,
           is_from_user: false,
           message_type: 'text',
-          intent_detected: __persist_intent ?? null,
-          tokens_used: __persist_totalTokens,
-          api_cost_usd: __persist_apiCostUsd,
-          processing_cost_usd: __persist_processingCostUsd,
-          model_used: __persist_modelUsed,
-          confidence_score: __persist_aiConfidence
-          // latency_ms: null // Removido - coluna não existe
+          intent_detected: intent || null,
+          conversation_outcome: outcome, // ✅ CORREÇÃO: Só preenche se for fim de conversa
+          conversation_context: {
+            session_id: sessionUuid,
+            duration_minutes: durationMinutes
+          }
         };
 
-        // 6) Inserir (sem validação prévia equivocada)
-        const { error: chError } = await supabaseAdmin.from('conversation_history').insert([userRow, aiRow]);
-        if (chError) {
-          logger.error('🚨 Insert conversation_history falhou', { error: chError });
+        // ✅ VALIDAÇÃO FINAL: Verificar se todos os campos obrigatórios estão preenchidos
+        const requiredFields = ['content', 'is_from_user', 'message_type', 'tenant_id', 'user_id'];
+        const hasAllRequiredFields = [userMessageData, aiMessageData].every(msg => 
+          requiredFields.every(field => msg[field as keyof typeof msg] !== null && msg[field as keyof typeof msg] !== undefined)
+        );
+
+        if (!hasAllRequiredFields) {
+          logger.error('❌ Campos obrigatórios faltando nos dados de inserção', {
+            userMessageFields: requiredFields.map(f => ({ field: f, value: userMessageData[f as keyof typeof userMessageData] })),
+            aiMessageFields: requiredFields.map(f => ({ field: f, value: aiMessageData[f as keyof typeof aiMessageData] }))
+          });
           return;
         }
-        console.log('✅ INSERT SUCESSO - Conversation history salva');
-        logger.info('Conversation history persisted successfully', {
-          sessionKey,
-          tenantId,
-          userId,
-          intent: __persist_intent,
-          tokensUsed: __persist_totalTokens
-        });
+
+        // ✅ INSERÇÃO COM RETRY LOGIC
+        let insertSuccess = false;
+        let retryCount = 0;
+        const maxRetries = 3;
+
+        while (!insertSuccess && retryCount < maxRetries) {
+          try {
+            const { error: chError } = await supabaseAdmin.from('conversation_history').insert([
+              userMessageData,
+              aiMessageData
+            ]);
+
+            if (chError) {
+              retryCount++;
+              logger.warn(`⚠️ Tentativa ${retryCount}/${maxRetries} falhou`, { 
+                error: chError, 
+                tenantId, 
+                userId, 
+                message_source: commonBase.message_source 
+              });
+              
+              if (retryCount >= maxRetries) {
+                logger.error('🚨 Todas as tentativas de inserção falharam', { 
+                  error: chError, 
+                  tenantId, 
+                  userId, 
+                  message_source: commonBase.message_source,
+                  retryCount 
+                });
+              } else {
+                // Aguardar antes da próxima tentativa (exponential backoff)
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+              }
+            } else {
+              insertSuccess = true;
+              console.log('✅ INSERT SUCESSO - Conversation history salva');
+              logger.info('Conversation history persisted successfully', {
+                sessionKey,
+                tenantId,
+                userId,
+                intent,
+                hasLLMMetrics: !!result.llmMetrics,
+                tokensUsed: result.llmMetrics?.total_tokens || 0
+              });
+            }
+          } catch (retryError) {
+            retryCount++;
+            logger.error(`🚨 Erro na tentativa ${retryCount}/${maxRetries}`, { 
+              error: retryError, 
+              tenantId, 
+              userId 
+            });
+          }
+        }
+      }
       } catch (e) {
         logger.error('Failed to persist conversation_history', { error: e });
       }
@@ -1531,7 +1711,8 @@ class ValidationService {
         shouldSendWhatsApp: result.shouldSendWhatsApp,
         intent: result.telemetryData?.intent,
         tenantId: result.updatedContext?.tenant_id,
-        model: config.openai.model
+        model: config.openai.model,
+        processingTime
       });
     });
 

@@ -4,7 +4,7 @@
  * Baseado na OS: Sincronizar Intenções e Evitar Mistura
  */
 
-import { DeterministicIntentDetectorService } from './deterministic-intent-detector.service';
+import { DeterministicIntentDetectorService, detectIntents } from './deterministic-intent-detector.service';
 import { FlowLockManagerService } from './flow-lock-manager.service';
 import { ConversationOutcomeAnalyzerService } from './conversation-outcome-analyzer.service';
 import { mergeEnhancedConversationContext } from '../utils/conversation-context-helper';
@@ -28,8 +28,9 @@ export interface WebhookOrchestrationResult {
     completion_tokens: number | null;
     total_tokens: number | null;
     api_cost_usd: number | null;
-    processing_cost_usd: number | null; // 🚨 ADIÇÃO: Custo de processamento (10% do API cost)
+    processing_cost_usd: number | null;
     confidence_score: number | null;
+    latency_ms: number | null;
   };
 }
 
@@ -79,11 +80,17 @@ export class WebhookFlowOrchestratorService {
       }
 
       // 3. Detecção determinística de intenção
-      const intentResult = await this.intentDetector.detectIntent(
-        messageText,
-        context,
-        { tenantConfig }
-      );
+      // ✅ USAR FUNÇÃO IMPORTADA diretamente para evitar conflito de nomes
+      const detectedIntents = detectIntents(messageText);
+      const primaryIntent = detectedIntents[0] || 'general';
+      
+      // ✅ ADAPTER: Converter para formato esperado pelo resto do código
+      const intentResult = {
+        intent: primaryIntent,
+        confidence: 0.95, // Alta confiança para detecção determinística
+        decision_method: 'deterministic_regex',
+        allowed_by_flow_lock: true // Sempre permitido para compatibilidade
+      };
 
       // 🚨 CORREÇÃO: SEMPRE usar OpenAI para gerar respostas reais e capturar métricas LLM
       // Removido curto-circuito determinístico que impedia uso do OpenAI
@@ -166,6 +173,15 @@ export class WebhookFlowOrchestratorService {
           decision_method: 'error',
           flow_lock_active: false,
           processing_time_ms: Date.now() - startTime
+        },
+        llmMetrics: {
+          prompt_tokens: null,
+          completion_tokens: null,
+          total_tokens: null,
+          api_cost_usd: null,
+          processing_cost_usd: null,
+          confidence_score: null,
+          latency_ms: null
         }
       };
     }
@@ -575,6 +591,8 @@ Intenção detectada: ${intent}`;
         model: process.env.OPENAI_MODEL || 'gpt-4',
         temperature: 0.7,
         max_tokens: 300,
+        logprobs: true,
+        top_logprobs: 3,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -584,16 +602,80 @@ Intenção detectada: ${intent}`;
       const aiResponse = completion.choices[0]?.message?.content?.trim() || '🚨 FALLBACK: generateAIResponseWithFlowContext - Não entendi. Pode reformular?';
       const latencyMs = Date.now() - startTime;
 
-      // Capturar métricas LLM
+      // Calcular confidence score baseado na resposta da IA
+      const calculateAIConfidenceScore = (completion: any): number => {
+        try {
+          // Se não há logprobs, usar confiança baseada na finish_reason
+          console.log('🔍 DEBUG LOGPROBS:', completion.choices[0]?.logprobs);
+          if (!completion.choices[0]?.logprobs?.content) {
+            const finishReason = completion.choices[0]?.finish_reason;
+            console.log('🔍 DEBUG NO LOGPROBS, using finish_reason:', finishReason);
+            switch (finishReason) {
+              case 'stop': return 0.85; // Resposta completa
+              case 'length': return 0.60; // Truncada por limite
+              case 'content_filter': return 0.30; // Filtrada
+              default: return 0.50; // Razão desconhecida
+            }
+          }
+
+          // Calcular confidence médio dos tokens usando logprobs
+          const logprobs = completion.choices[0].logprobs.content;
+          if (!logprobs || logprobs.length === 0) return 0.70;
+
+          const avgLogprob = logprobs.reduce((sum: number, token: any) => {
+            return sum + (token.logprob || -2.0);
+          }, 0) / logprobs.length;
+
+          // Converter logprob para confidence (0-1)
+          // logprobs são valores negativos, quanto maior (menos negativo) melhor
+          // -0.5 = alta confiança (~0.9), -3.0 = baixa confiança (~0.3)
+          const confidence = Math.max(0.1, Math.min(0.99, Math.exp(avgLogprob / -2.0)));
+          
+          return Math.round(confidence * 100) / 100; // 2 decimais
+        } catch (error) {
+          console.warn('Erro calculando AI confidence:', error);
+          return 0.70; // Fallback seguro
+        }
+      };
+
+      const aiConfidenceScore = calculateAIConfidenceScore(completion);
+      console.log('🔍 DEBUG AI CONFIDENCE CALCULATED:', aiConfidenceScore);
+
+      // ✅ CAPTURAR MÉTRICAS LLM COM VALIDAÇÃO
       const usage = completion.usage;
       const apiCost = this.calculateOpenAICost(usage);
+      
+      // ✅ VALIDAÇÃO: Verificar se usage está disponível
+      if (!usage || !usage.total_tokens) {
+        console.warn('⚠️ OpenAI usage data não disponível', { usage, completion });
+      }
+      
+      // ✅ CALCULAR PROCESSING COST de forma mais realista
+      const calculateProcessingCost = (apiCost: number | null): number => {
+        if (!apiCost) return 0.00001; // Custo mínimo para operações sem API
+        
+        // ✅ LÓGICA REALISTA: 10% do custo da API + custo fixo de infraestrutura
+        const percentageCost = apiCost * 0.10; // 10% do custo da API
+        const infrastructureCost = 0.00002; // Custo fixo de infraestrutura (Supabase, Redis, etc.)
+        const databaseCost = 0.00001; // Custo de 2 INSERTs na conversation_history
+        
+        return Math.round((percentageCost + infrastructureCost + databaseCost) * 100000) / 100000;
+      };
+      
       const llmMetrics = {
         prompt_tokens: usage?.prompt_tokens ?? null,
         completion_tokens: usage?.completion_tokens ?? null,
         total_tokens: usage?.total_tokens ?? null,
         api_cost_usd: apiCost,
-        processing_cost_usd: apiCost ? (apiCost * 0.1) : null, // 🚨 ADIÇÃO: 10% do API cost
-        confidence_score: intentResult.confidence || null
+        processing_cost_usd: (() => {
+          if (!apiCost) return 0.00001; // custo mínimo
+          const percentageCost = apiCost * 0.10; // 10% do custo da API
+          const infrastructureCost = 0.00002; // custo fixo de infraestrutura
+          const databaseCost = 0.00001; // custo de inserts no conversation_history
+          return Math.round((apiCost + percentageCost + infrastructureCost + databaseCost) * 100000) / 100000;
+        })(),
+        confidence_score: aiConfidenceScore,
+        latency_ms: latencyMs
       };
 
       console.log('✅ OpenAI respondeu:', {
