@@ -51,7 +51,7 @@ export class WebhookV3FlowIntegrationService {
   async processWithFlowLockOrFallback(
     session: any,
     text: string,
-    intent: string,
+    intent: string | null,
     tenantData: any,
     availabilityBlock?: any,
     legacyGenerateLLMResponse?: Function
@@ -260,7 +260,7 @@ export class WebhookV3FlowIntegrationService {
   private async logComparison(
     session: any,
     text: string,
-    intent: string,
+    intent: string | null,
     tenantData: any,
     availabilityBlock: any,
     flowLockResponse: string,

@@ -82,13 +82,13 @@ export class WebhookFlowOrchestratorService {
       // 3. Detecção determinística de intenção
       // ✅ USAR FUNÇÃO IMPORTADA diretamente para evitar conflito de nomes
       const detectedIntents = detectIntents(messageText);
-      const primaryIntent = detectedIntents[0] || 'general';
+      const primaryIntent = detectedIntents[0] || null;
       
       // ✅ ADAPTER: Converter para formato esperado pelo resto do código
       const intentResult = {
         intent: primaryIntent,
-        confidence: 0.95, // Alta confiança para detecção determinística
-        decision_method: 'deterministic_regex',
+        confidence: primaryIntent ? 0.95 : 0.0, // Alta confiança se detectado, zero se não
+        decision_method: primaryIntent ? 'deterministic_regex' : 'unknown',
         allowed_by_flow_lock: true // Sempre permitido para compatibilidade
       };
 
@@ -150,7 +150,7 @@ export class WebhookFlowOrchestratorService {
         llmMetrics: result.llmMetrics, // 🚨 CORREÇÃO: Incluir métricas LLM no retorno
         updatedContext,
         telemetryData: {
-          intent: intentResult.intent,
+          intent: intentResult.intent || 'unknown',
           confidence: intentResult.confidence,
           decision_method: intentResult.decision_method,
           flow_lock_active: !!updatedContext.flow_lock?.active_flow,
@@ -224,7 +224,7 @@ export class WebhookFlowOrchestratorService {
   /**
    * Mapeia intent para flow type
    */
-  private mapIntentToFlow(intent: string): FlowType {
+  private mapIntentToFlow(intent: string | null): FlowType {
     const flowMap: Record<string, FlowType> = {
       'onboarding': 'onboarding',
       'booking': 'booking',
@@ -241,6 +241,9 @@ export class WebhookFlowOrchestratorService {
       'general': null
     };
 
+    // Se intent for null, não cria fluxo
+    if (!intent) return null;
+    
     // Intents institucionais não criam fluxo
     if (intent.startsWith('institutional_')) return null;
 
@@ -769,7 +772,7 @@ Intenção detectada: ${intent}`;
   /**
    * Determina novo estado do Flow Lock baseado na intenção
    */
-  private determineNewFlowState(intent: string, currentFlow: string | null, context: EnhancedConversationContext): any {
+  private determineNewFlowState(intent: string | null, currentFlow: string | null, context: EnhancedConversationContext): any {
     const targetFlow = this.mapIntentToFlow(intent);
     
     if (!targetFlow) {
@@ -789,7 +792,7 @@ Intenção detectada: ${intent}`;
    * Detecta se a conversa está finalizada e deve persistir outcome
    * Retorna null se conversa ainda está em andamento
    */
-  private shouldPersistOutcome(intent: string, response: string, context: EnhancedConversationContext): string | null {
+  private shouldPersistOutcome(intent: string | null, response: string, context: EnhancedConversationContext): string | null {
     // 🚨 CORREÇÃO CRÍTICA: Outcome deve ser NULL para conversas em andamento
     // Só persistir quando conversa REALMENTE finaliza
     
@@ -798,7 +801,7 @@ Intenção detectada: ${intent}`;
       'booking_confirm', 'cancel_confirm', 'reschedule_confirm'
     ];
     
-    if (trulyFinalizingIntents.includes(intent)) {
+    if (intent && trulyFinalizingIntents.includes(intent)) {
       return this.determineConversationOutcome(intent, response);
     }
     

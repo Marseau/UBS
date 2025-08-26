@@ -727,7 +727,7 @@ class ValidationService {
         // 4) Intent - REMOVIDO: agora será detectado pelo Flow Lock System
         // let intent = ValidationService.detectIntent(text);
         // Detecção de intent movida para flowIntegration.processWithFlowLockOrFallback()
-        let intent = 'general'; // Placeholder - será sobrescrito pelo Flow Lock
+        let intent: string | null = null; // Placeholder - será sobrescrito pelo Flow Lock
         // Confirmação explícita (confirmo/ciente/de acordo/ok/👍/✅) quando há pendingConfirmation
         if (/\b(confirm(o|ado)?|ciente|de acordo|ok)\b|[👍✅]/i.test(text)) {
           if (session.pendingConfirmation?.appointmentId) {
@@ -867,7 +867,7 @@ class ValidationService {
         }
       }
       
-      private async processDirectCommands(sessionKey: string, text: string, phoneNumberId: string, intent: string, session: SessionData): Promise<ProcessingResult | null> {
+      private async processDirectCommands(sessionKey: string, text: string, phoneNumberId: string, intent: string | null, session: SessionData): Promise<ProcessingResult | null> {
       const tenant = await this.getTenantFromCache(phoneNumberId);
       if (!tenant) return null;
       
@@ -908,7 +908,7 @@ class ValidationService {
     // Consulta de preço (determinístico)
     try {
       const isPriceQuery = /(pre[çc]o|valor|quanto\s+(custa|sai|fica))/i.test(text);
-      if ((intent === 'services' || intent === 'general') && isPriceQuery && Array.isArray(tenant.services) && tenant.services.length) {
+      if ((intent === 'services' || !intent) && isPriceQuery && Array.isArray(tenant.services) && tenant.services.length) {
         const serviceNames = tenant.services.map((s: any) => s?.name).filter(Boolean);
         let target = session.inferredService;
         if (!target) {
@@ -982,7 +982,7 @@ class ValidationService {
     return tenantCache;
     }
     
-    private async getTenantData(phoneNumberId: string, intent: string, userPhone: string, forcedTenantId?: string | null) {
+    private async getTenantData(phoneNumberId: string, intent: string | null, userPhone: string, forcedTenantId?: string | null) {
     // Se temos forcedTenantId do demo token, buscar tenant real
     if (forcedTenantId) {
       logger.info('🎭 [GET-TENANT-DATA] Using forced tenantId for demo', { forcedTenantId });
@@ -1009,7 +1009,7 @@ class ValidationService {
     const tenant = await this.getTenantFromCache(phoneNumberId);
     if (!tenant) return null;
     let user: any = null, appointments: any[] = [];
-    if (['my_appointments', 'cancel', 'reschedule'].includes(intent)) {
+    if (intent && ['my_appointments', 'cancel', 'reschedule'].includes(intent)) {
       user = await DatabaseService.findUserByPhone(tenant.id, userPhone);
       if (user) appointments = await DatabaseService.listUserAppointments(tenant.id, (user as any)?.id);
     }
@@ -1601,7 +1601,7 @@ export default router;
             content: 'Você ainda está aí? Se preferir, posso encerrar por aqui e retomamos quando quiser.',
             is_from_user: false,
             message_type: 'text',
-            intent_detected: 'general',
+            intent_detected: 'system_message',
             conversation_outcome: null, // OUTCOMES DETERMINADOS PELO ConversationOutcomeAnalyzerService
             message_source: 'whatsapp_demo',
             model_used: 'system',
@@ -1623,7 +1623,7 @@ export default router;
             content: 'Conversa encerrada por inatividade. Podemos retomar quando quiser.',
             is_from_user: false,
             message_type: 'text',
-            intent_detected: 'general',
+            intent_detected: 'system_message',
             conversation_outcome: null, // OUTCOMES DETERMINADOS PELO ConversationOutcomeAnalyzerService
             message_source: 'whatsapp_demo',
             model_used: 'system',
