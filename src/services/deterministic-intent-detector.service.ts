@@ -141,7 +141,7 @@ export function detectPrimaryIntent(textRaw: string): IntentKey | null {
 
 /** Interface para resultados de detecção de intent */
 export interface IntentDetectionResult {
-  intent: string;
+  intent: string | null;
   decision_method: 'command' | 'dictionary' | 'regex' | 'llm';
   allowed_by_flow_lock: boolean;
   confidence: number;
@@ -156,13 +156,10 @@ export class DeterministicIntentDetectorService {
   ): Promise<IntentDetectionResult> {
     const intent = detectPrimaryIntent(messageText);
     
-    // Normalizações para satisfazer os tipos do IntentDetectionResult
-    const safeIntent: string = intent ?? 'unknown';
-    const safeDecisionMethod: 'command' | 'dictionary' | 'regex' | 'llm' = intent ? 'regex' : 'llm';
-    
+    // ✅ CORREÇÃO: Retornar null quando não detecta, sem fallback
     return {
-      intent: safeIntent,
-      decision_method: safeDecisionMethod,
+      intent: intent, // null se nada foi detectado
+      decision_method: intent ? 'regex' : 'llm',
       allowed_by_flow_lock: true, // Deterministic intents are always allowed
       confidence: intent ? 1.0 : 0.0, // 100% confidence if matched, 0% if unknown
     };
