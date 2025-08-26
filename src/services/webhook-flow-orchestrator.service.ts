@@ -5,6 +5,8 @@
  */
 
 import { DeterministicIntentDetectorService, detectIntents } from './deterministic-intent-detector.service';
+import { LLMIntentClassifierService } from './llm-intent-classifier.service';
+import { IntentDisambiguationService } from './intent-disambiguation.service';
 import { FlowLockManagerService } from './flow-lock-manager.service';
 import { ConversationOutcomeAnalyzerService } from './conversation-outcome-analyzer.service';
 import { mergeEnhancedConversationContext } from '../utils/conversation-context-helper';
@@ -36,12 +38,16 @@ export interface WebhookOrchestrationResult {
 
 export class WebhookFlowOrchestratorService {
   private intentDetector: DeterministicIntentDetectorService;
+  private llmClassifier: LLMIntentClassifierService;
+  private disambiguation: IntentDisambiguationService;
   private flowManager: FlowLockManagerService;
   private outcomeAnalyzer: ConversationOutcomeAnalyzerService;
   private openai: OpenAI;
 
   constructor() {
     this.intentDetector = new DeterministicIntentDetectorService();
+    this.llmClassifier = new LLMIntentClassifierService();
+    this.disambiguation = new IntentDisambiguationService();
     this.flowManager = new FlowLockManagerService();
     this.outcomeAnalyzer = new ConversationOutcomeAnalyzerService();
     this.openai = new OpenAI({
@@ -62,8 +68,8 @@ export class WebhookFlowOrchestratorService {
     const startTime = Date.now();
 
     try {
-      // 1. Resolver contexto enhanced (com flow_lock)
-      const context = await this.resolveEnhancedContext(
+      // 1. Resolver contexto enhanced (com flow_lock) - mutável para desambiguação
+      let context = await this.resolveEnhancedContext(
         userId, 
         tenantId, 
         tenantConfig,
@@ -79,32 +85,65 @@ export class WebhookFlowOrchestratorService {
         return this.handleFlowWarning(context, timeoutStatus.message || '');
       }
 
-      // 3. Detecção determinística de intenção
-      // ✅ USAR FUNÇÃO IMPORTADA diretamente para evitar conflito de nomes
-      const detectedIntents = detectIntents(messageText);
-      const primaryIntent = detectedIntents[0] || null;
+      // 3. Sistema de detecção de intenção em 3 camadas
+      let intentResult = await this.detectIntentThreeLayers(
+        messageText, 
+        context,
+        existingContext?.session_id || userId
+      );
       
-      // ✅ ADAPTER: Converter para formato esperado pelo resto do código
-      const intentResult = {
-        intent: primaryIntent,
-        confidence: primaryIntent ? 0.95 : 0.0, // Alta confiança se detectado, zero se não
-        decision_method: primaryIntent ? 'deterministic_regex' : 'unknown',
-        allowed_by_flow_lock: true // Sempre permitido para compatibilidade
-      };
+      // Se está aguardando desambiguação, processar resposta
+      if (this.disambiguation.isAwaitingIntent(context)) {
+        const disambiguationResult = this.disambiguation.processDisambiguationResponse(messageText);
+        
+        if (disambiguationResult.resolvedIntent) {
+          // Intent resolvida via desambiguação
+          intentResult = {
+            intent: disambiguationResult.resolvedIntent,
+            confidence: 0.9,
+            decision_method: 'llm_classification',
+            allowed_by_flow_lock: true
+          };
+          
+          // Limpar estado de aguardando
+          context = this.disambiguation.clearAwaitingIntent(context);
+          
+          console.log(`🎯 [INTENT-3LAYER] Intent resolvida via desambiguação: ${intentResult.intent}`);
+        }
+      }
 
-      // 🚨 CORREÇÃO: SEMPRE usar OpenAI para gerar respostas reais e capturar métricas LLM
-      // Removido curto-circuito determinístico que impedia uso do OpenAI
+      // 4. Se ainda não tem intent, ativar desambiguação (Camada 3)
+      if (!intentResult.intent && !this.disambiguation.isAwaitingIntent(context)) {
+        console.log('❓ [INTENT-3LAYER] Ativando desambiguação (Camada 3)');
+        
+        const disambiguationResult = this.disambiguation.generateDisambiguationQuestion();
+        const updatedContextWithAwaiting = this.disambiguation.markAwaitingIntent(context);
+        
+        return {
+          aiResponse: disambiguationResult.disambiguationQuestion!,
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext: updatedContextWithAwaiting,
+          telemetryData: {
+            intent: null,
+            confidence: 0.0,
+            decision_method: 'disambiguation_request',
+            flow_lock_active: false,
+            processing_time_ms: Date.now() - startTime
+          }
+        };
+      }
 
-      // 4. Verificar se intenção é permitida pelo flow lock
+      // 5. Verificar se intenção é permitida pelo flow lock
       if (!intentResult.allowed_by_flow_lock) {
         return this.handleBlockedIntent(context, intentResult);
       }
 
-      // 5. Determinar novo fluxo baseado na intenção
+      // 6. Determinar novo fluxo baseado na intenção
       const targetFlow = this.mapIntentToFlow(intentResult.intent);
       const flowDecision = this.flowManager.canStartNewFlow(context, targetFlow);
 
-      // 6. 🚨 CORREÇÃO CRÍTICA: Sempre usar OpenAI para gerar resposta real
+      // 7. 🚨 CORREÇÃO CRÍTICA: Sempre usar OpenAI para gerar resposta real
       // Flow Lock apenas gerencia estado, OpenAI gera TODAS as respostas
       console.log('🔍 ORQUESTRADOR DEBUG - Antes de chamar generateAIResponseWithFlowContext:', {
         intent: intentResult.intent,
@@ -126,7 +165,7 @@ export class WebhookFlowOrchestratorService {
         responseLength: result.response.length
       });
 
-      // 7. Atualizar contexto com novo estado
+      // 8. Atualizar contexto com novo estado
       const updatedContext = await this.updateContextWithFlowState(
         userId,
         tenantId,
@@ -384,6 +423,61 @@ export class WebhookFlowOrchestratorService {
       response: '🚨 FALLBACK: executeFlowAction - Não entendi. Pode reformular?',
       outcome: null as any, // 🚨 CORREÇÃO: fallback não finaliza conversa
       newFlowLock: context.flow_lock
+    };
+  }
+
+  /**
+   * Sistema de detecção de intenção em 3 camadas
+   * Camada 1: Determinístico (regex)
+   * Camada 2: LLM fechado (temperature=0, allowlist)  
+   * Camada 3: Desambiguação com usuário
+   */
+  private async detectIntentThreeLayers(
+    messageText: string,
+    context: any,
+    sessionId: string
+  ) {
+    const startTime = Date.now();
+    
+    // CAMADA 1: Determinística
+    console.log('🔍 [INTENT-3LAYER] Camada 1: Detector determinístico');
+    const detectedIntents = detectIntents(messageText);
+    const primaryIntent = detectedIntents[0] || null;
+    
+    if (primaryIntent) {
+      console.log(`✅ [INTENT-3LAYER] Camada 1 SUCCESS: ${primaryIntent}`);
+      return {
+        intent: primaryIntent,
+        confidence: 1.0, // 100% de confiança em matches determinísticos
+        decision_method: 'deterministic_regex',
+        allowed_by_flow_lock: true
+      };
+    }
+    
+    console.log('❌ [INTENT-3LAYER] Camada 1 FALHOU - tentando Camada 2');
+    
+    // CAMADA 2: LLM Fechado
+    console.log('🤖 [INTENT-3LAYER] Camada 2: Classificador LLM');
+    const llmResult = await this.llmClassifier.classifyIntent(messageText);
+    
+    if (llmResult.intent) {
+      console.log(`✅ [INTENT-3LAYER] Camada 2 SUCCESS: ${llmResult.intent} (${llmResult.processing_time_ms}ms)`);
+      return {
+        intent: llmResult.intent,
+        confidence: llmResult.confidence,
+        decision_method: llmResult.decision_method,
+        allowed_by_flow_lock: true
+      };
+    }
+    
+    console.log('❌ [INTENT-3LAYER] Camada 2 FALHOU - Camada 3 será acionada');
+    
+    // CAMADA 3: Será tratada no fluxo principal (desambiguação)
+    return {
+      intent: null,
+      confidence: 0.0,
+      decision_method: 'needs_disambiguation',
+      allowed_by_flow_lock: true
     };
   }
 
