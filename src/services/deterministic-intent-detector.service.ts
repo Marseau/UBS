@@ -113,7 +113,95 @@ const PATTERNS: Record<IntentKey, RegExp[]> = {
   ]
 };
 
+/** Normaliza: minúsculo + sem acento (evita falhas de regex) */
+export function normalize(text: string): string {
+  return (text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
 
+/** Utilitários para montar regex com segurança */
+const any = (xs: readonly string[]) => new RegExp(`\\b(?:${xs.join('|')})\\b`, 'i');
+const has = (xs: readonly string[]) => new RegExp(`(?:${xs.join('|')})`, 'i');
+
+/** Padrões úteis (ids e datas simples) */
+const RX_UUID = /\b[0-9a-f]{8,}(?:-[0-9a-f]{4}){0,3}\b/i;
+const RX_DATETIME_BR = /\b(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\s+\d{1,2}:\d{2})\b/i;
+
+/** Léxico base (sem acento, então escreva sem acento mesmo) */
+const W = {
+  oi: ['oi','ola','opa','bom dia','boa tarde','boa noite','eae','fala'] as const,
+  serv: ['servico','servicos','procedimento','procedimentos','catalogo','menu','lista de servicos'] as const,
+  preco: ['preco','precos','valor','valores','quanto custa','quanto sai','quanto fica','tabela de preco'] as const,
+  disp: ['disponibilidade','agenda','agendar','marcar','quando posso','tem horario','tem vaga','datas','horario','horarios','agendamento'] as const,
+  meusAg: ['meu agendamento','meus agendamentos','o que marquei','ver agendamento','ver agendamentos'] as const,
+  cancel: ['cancelar','cancela','desmarcar','anular'] as const,
+  remarcar: ['remarcar','remarca','trocar horario','mudar horario','trocar data','mudar data','adiar','reagendar','reagenda'] as const,
+  confirma: ['confirmo','confirmado','ok','ciente','de acordo','fechado','blz','beleza'] as const,
+  mod: ['alterar agendamento','mudar agendamento','trocar servico','trocar profissional','alterar servico','alterar data','alterar hora'] as const,
+  addr: ['endereco','onde fica','localizacao','como chegar','maps','google maps','local'] as const,
+  pay: ['pagamento','formas de pagamento','pix','cartao','credito','debito','dinheiro','transferencia'] as const,
+  hours: ['horario de funcionamento','horarios de funcionamento','horario de atendimento','abre','fecha','funciona','funcionamento'] as const,
+  pol: ['politica','politicas','no show','noshow','cancelamento','remarcacao','regras','termos'] as const,
+  wrong: ['nao sou cliente','mensagem por engano','numero errado','contato errado','mensagem errada'] as const,
+  test: ['teste','ping','health check','healthcheck'] as const,
+  abad: ['deixa pra la','nao quero mais','depois eu vejo','fica pra outra','agora nao','desisti','deixa'] as const,
+  noshow: ['nao compareci','no show','fiquei sem ir','faltei','nao pude ir'] as const,
+} as const;
+
+/** Regras determinísticas (em texto já normalizado) */
+const RULES: Record<IntentKey, RegExp[]> = {
+  greeting: [any(W.oi)],
+
+  services: [
+    any(W.serv),
+    has(['fazer as unhas','corte','cabelo','barba','sobrancelha','massagem','limpeza de pele','depilacao','progressiva','mecha','escova']),
+  ],
+
+  pricing: [
+    any(W.preco),
+    has(['preco do','valor do','quanto .* (custa|sai|fica)']),
+  ],
+
+  availability: [
+    any(W.disp),
+    /\b(hoje|amanha|depois de amanha|semana que vem|mes que vem|manha|tarde|noite)\b/i,
+  ],
+
+  my_appointments: [
+    any(W.meusAg),
+    has(['tenho .* agendamento','marquei .* quando','qual meu horario']),
+  ],
+
+  cancel: [
+    new RegExp(`\\b(?:${W.cancel.join('|')})\\b.*${RX_UUID.source}`, 'i'), // comando completo com ID
+    any(W.cancel), // intenção genérica (sem ID) → ainda é cancel intent
+  ],
+
+  reschedule: [
+    new RegExp(`\\b(?:${W.remarcar.join('|')})\\b.*${RX_UUID.source}.*\\b(?:para|em|->)\\b.*${RX_DATETIME_BR.source}`, 'i'),
+    any(W.remarcar),
+  ],
+
+  confirm: [
+    any(W.confirma),
+    /[👍✅]/,
+  ],
+
+  modify_appointment: [any(W.mod)],
+  address: [any(W.addr)],
+  payments: [any(W.pay)],
+  business_hours: [any(W.hours)],
+  policies: [any(W.pol)],
+  wrong_number: [any(W.wrong)],
+  test_message: [any(W.test)],
+  booking_abandoned: [any(W.abad)],
+  noshow_followup: [any(W.noshow)],
+  handoff: [/\b(atendente humano|falar com humano|pessoa de verdade|humano)\b/i],
+};
+
+/** Retorna TODAS as intents que casam, ordenadas por prioridade (mais importante primeiro) */
 export function detectIntents(text: string): IntentKey[] {
   const t = norm(text);
   const found: IntentKey[] = [];
@@ -136,44 +224,21 @@ export function detectIntents(text: string): IntentKey[] {
 /** Intenção primária (para persistir em `intent_detected`); retorna null se nada casar */
 export function detectPrimaryIntent(textRaw: string): IntentKey | null {
   const hits = detectIntents(textRaw);
-  return hits.length ? (hits[0] as IntentKey) : null;
+  return hits[0] ?? null;
 }
 
-/** Interface para resultados de detecção de intent */
-export interface IntentDetectionResult {
-  intent: string | null;
-  decision_method: 'command' | 'dictionary' | 'regex' | 'llm';
-  allowed_by_flow_lock: boolean;
-  confidence: number;
-}
-
-/** Service class wrapper para compatibilidade com código existente */
+// --- Adapter para compatibilidade com o orchestrator ---
+// O orchestrator importa { DeterministicIntentDetectorService } e instancia a classe.
+// Mantemos a API como métodos de instância que delegam para as funções acima.
+// --- Adapter para o orchestrator ---
 export class DeterministicIntentDetectorService {
-  async detectIntent(
-    messageText: string, 
-    context: any, 
-    options: any = {}
-  ): Promise<IntentDetectionResult> {
-    const intent = detectPrimaryIntent(messageText);
-    
-    // ✅ CORREÇÃO: Retornar null quando não detecta, sem fallback
-    return {
-      intent: intent, // null se nada foi detectado
-      decision_method: intent ? 'regex' : 'llm',
-      allowed_by_flow_lock: true, // Deterministic intents are always allowed
-      confidence: intent ? 1.0 : 0.0, // 100% confidence if matched, 0% if unknown
-    };
-  }
-
   public detectIntents(textRaw: string): IntentKey[] {
     return detectIntents(textRaw);
   }
-  
   public detectPrimaryIntent(textRaw: string): IntentKey | null {
     return detectPrimaryIntent(textRaw);
   }
-  
-  detect(text: string): string | null {
+  public detect(text: string): string | null {
     const intents = detectIntents(text);
     return intents.length ? intents[0] as string : null;
   }

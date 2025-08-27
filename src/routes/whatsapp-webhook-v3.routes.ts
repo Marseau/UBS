@@ -13,6 +13,28 @@ import { WebhookFlowOrchestratorService } from '../services/webhook-flow-orchest
 import { demoTokenValidator } from '../utils/demo-token-validator';
 import { VALID_CONVERSATION_OUTCOMES } from '../types/billing-cron.types';
 
+// ===== INTENT ALLOWLIST (100% precisão via regex → LLM → validador) =====
+const ALLOWED_INTENTS = new Set<string>([
+  'greeting',
+  'services',
+  'pricing',
+  'availability',
+  'my_appointments',
+  'address',
+  'payments',
+  'business_hours',
+  'cancel',
+  'reschedule',
+  'confirm',
+  'modify_appointment',
+  'policies',
+  'handoff',
+  'wrong_number',
+  'test_message',
+  'booking_abandoned',
+  'noshow_followup'
+]);
+
 /**
  * Mapeia intent detectado para conversation_outcome válido usando ENUMs definidos
  */
@@ -351,7 +373,7 @@ class ValidationService {
       ];
       return patterns.some(p => p.test(text)) || text.length > 500 || session.messageCount > 10;
       }
-      static detectIntent(text: string): string {
+      static detectIntent(text: string): string | null {
       const t = text.toLowerCase().trim();
       
       // Menu rápido 1..5
@@ -381,7 +403,7 @@ class ValidationService {
       noshow_followup: /(n[ãa]o compareci|no\s*show|faltei|n[ãa]o pude ir)/i
       };
       for (const [k, re] of Object.entries(intents)) if (re.test(text)) return k;
-      return 'general';
+      return null; // nenhum regex bateu → deixa LLM decidir; se LLM não classificar, persistir NULL
       }
       }
       
@@ -727,7 +749,7 @@ class ValidationService {
         // 4) Intent - REMOVIDO: agora será detectado pelo Flow Lock System
         // let intent = ValidationService.detectIntent(text);
         // Detecção de intent movida para flowIntegration.processWithFlowLockOrFallback()
-        let intent: string | null = null; // Placeholder - será sobrescrito pelo Flow Lock
+        let intent = 'general'; // Placeholder - será sobrescrito pelo Flow Lock
         // Confirmação explícita (confirmo/ciente/de acordo/ok/👍/✅) quando há pendingConfirmation
         if (/\b(confirm(o|ado)?|ciente|de acordo|ok)\b|[👍✅]/i.test(text)) {
           if (session.pendingConfirmation?.appointmentId) {
@@ -848,7 +870,8 @@ class ValidationService {
       // Classificação de intenção via IA para fallback quando regex falhar
       private async classifyIntentWithLLM(text: string): Promise<string | null> {
         try {
-          const system = 'Classifique a intenção do usuário entre: greeting, services, availability, my_appointments, cancel, reschedule, policies, handoff, address, payments, business_hours, wrong_number, test_message, booking_abandoned, confirm, modify_appointment, noshow_followup. Responda apenas com a chave exata.';
+          const keys = Array.from(ALLOWED_INTENTS).join(', ');
+          const system = `Classifique a intenção do usuário entre: ${keys}. Responda apenas com a chave exata.`;
           const completion = await this.openai.chat.completions.create({
             model: config.openai.model,
             temperature: 0,
@@ -859,15 +882,14 @@ class ValidationService {
             ]
           });
           const out = completion.choices?.[0]?.message?.content?.trim().toLowerCase();
-          const allowed = new Set(['greeting','services','availability','my_appointments','cancel','reschedule','policies','handoff','address','payments','business_hours','wrong_number','test_message','booking_abandoned','confirm','modify_appointment','noshow_followup','general']);
-          if (out && allowed.has(out)) return out;
+          if (out && ALLOWED_INTENTS.has(out)) return out;
           return null;
         } catch {
           return null;
         }
       }
       
-      private async processDirectCommands(sessionKey: string, text: string, phoneNumberId: string, intent: string | null, session: SessionData): Promise<ProcessingResult | null> {
+      private async processDirectCommands(sessionKey: string, text: string, phoneNumberId: string, intent: string, session: SessionData): Promise<ProcessingResult | null> {
       const tenant = await this.getTenantFromCache(phoneNumberId);
       if (!tenant) return null;
       
@@ -908,7 +930,7 @@ class ValidationService {
     // Consulta de preço (determinístico)
     try {
       const isPriceQuery = /(pre[çc]o|valor|quanto\s+(custa|sai|fica))/i.test(text);
-      if ((intent === 'services' || !intent) && isPriceQuery && Array.isArray(tenant.services) && tenant.services.length) {
+      if ((intent === 'services' || intent === 'general') && isPriceQuery && Array.isArray(tenant.services) && tenant.services.length) {
         const serviceNames = tenant.services.map((s: any) => s?.name).filter(Boolean);
         let target = session.inferredService;
         if (!target) {
@@ -982,7 +1004,7 @@ class ValidationService {
     return tenantCache;
     }
     
-    private async getTenantData(phoneNumberId: string, intent: string | null, userPhone: string, forcedTenantId?: string | null) {
+    private async getTenantData(phoneNumberId: string, intent: string, userPhone: string, forcedTenantId?: string | null) {
     // Se temos forcedTenantId do demo token, buscar tenant real
     if (forcedTenantId) {
       logger.info('🎭 [GET-TENANT-DATA] Using forced tenantId for demo', { forcedTenantId });
@@ -1009,7 +1031,7 @@ class ValidationService {
     const tenant = await this.getTenantFromCache(phoneNumberId);
     if (!tenant) return null;
     let user: any = null, appointments: any[] = [];
-    if (intent && ['my_appointments', 'cancel', 'reschedule'].includes(intent)) {
+    if (['my_appointments', 'cancel', 'reschedule'].includes(intent)) {
       user = await DatabaseService.findUserByPhone(tenant.id, userPhone);
       if (user) appointments = await DatabaseService.listUserAppointments(tenant.id, (user as any)?.id);
     }
@@ -1393,17 +1415,27 @@ class ValidationService {
     const __persist_totalTokens: number = __persist_llm.total_tokens ?? 0;
     const __persist_apiCostUsd: number = __persist_llm.api_cost_usd ?? 0;
     const __persist_processingCostUsd: number = __persist_llm.processing_cost_usd ?? 0;
-    // const __persist_latencyMs: number | null = __persist_llm.latency_ms ?? null; // Removido - coluna não existe
     const __persist_modelUsed: string | null = __persist_llm.model_used ?? (process.env.OPENAI_MODEL || 'gpt-4');
-    const __persist_aiConfidence: number | null = __persist_llm.confidence_score ?? null;
+    const __persist_aiConfidence: number | undefined = result?.telemetryData?.confidence;
 
-    const __persist_intent: string | null | undefined = result?.telemetryData?.intent;
+    const __persist_intent: string | undefined = result?.telemetryData?.intent ?? undefined;
+    // === Captura demo token payload para persistência assíncrona ===
+    const __persist_demoPayload = (req as any)?.demoMode || null;
 
     setImmediate(async () => {
       console.log('🔍 setImmediate executado para persistência');
       try {
-        // 1) Resolver tenantId (usa updatedContext; fallback para phoneNumberId)
-        let tenantId: string | undefined = result.updatedContext?.tenant_id;
+        // 1) Resolver tenantId com prioridade ao DEMO token
+        let tenantId: string | undefined = undefined;
+        // a) DEMO: se veio no token, usar sempre
+        if (__persist_demoPayload?.tenantId) {
+          tenantId = __persist_demoPayload.tenantId;
+        }
+        // b) Contexto atualizado pelo orchestrator
+        if (!tenantId && result.updatedContext?.tenant_id) {
+          tenantId = result.updatedContext.tenant_id;
+        }
+        // c) Fallback: descobrir pelo phoneNumberId real do WhatsApp
         if (!tenantId && phoneNumberId) {
           try {
             const t = await DatabaseService.findTenantByBusinessPhone(phoneNumberId);
@@ -1411,7 +1443,7 @@ class ValidationService {
           } catch {}
         }
         if (!tenantId) {
-          logger.error('❌ Persistência abortada: tenantId indefinido');
+          logger.error('❌ Persistência abortada: tenantId indefinido (verifique x-demo-token.tenantId ou phone_number_id)');
           return;
         }
 
@@ -1434,44 +1466,28 @@ class ValidationService {
           return;
         }
 
-        // 3) Session + duration_minutes
+        // 3) Session + duration_minutes (usar tempos do servidor para evitar drift do WhatsApp)
         const sessionDataForContext = (await cache.getSession(sessionKey) as any) || {};
-        if (!sessionDataForContext.conversationId) {
-          sessionDataForContext.conversationId = crypto.randomUUID();
-          const firstMessageMs = messageTimestamp ? parseInt(messageTimestamp) * 1000 : Date.now();
-          sessionDataForContext.conversationStartedAt = new Date(firstMessageMs).toISOString();
+        if (!sessionDataForContext.sessionStartMs) {
+          sessionDataForContext.sessionStartMs = Date.now();
           await cache.setSession(sessionKey, sessionDataForContext);
         }
-        const sessionUuid = sessionDataForContext.conversationId as string;
-        
-        // CORREÇÃO: Buscar timestamp da primeira mensagem da mesma session_id no banco
-        let firstSessionMessageMs = Date.parse(sessionDataForContext.conversationStartedAt || new Date().toISOString());
-        try {
-          const { data: firstMessage } = await supabaseAdmin
-            .from('conversation_history')
-            .select('created_at')
-            .eq('tenant_id', tenantId)
-            .contains('conversation_context', { session_id: sessionUuid })
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .single();
-          
-          if (firstMessage?.created_at) {
-            firstSessionMessageMs = Date.parse(firstMessage.created_at);
-          }
-        } catch (error) {
-          // Se não encontrou mensagem anterior, é a primeira mensagem da sessão
+        const startedAtMs = Number(sessionDataForContext.sessionStartMs);
+        const currentMessageMs = Date.now();
+        const durationMinutes = Math.max(0, Math.floor((currentMessageMs - startedAtMs) / 60000));
+
+        // Backward-compat: manter conversationId (session UUID) se já existir; senão criar
+        if (!sessionDataForContext.conversationId) {
+          sessionDataForContext.conversationId = crypto.randomUUID();
+          await cache.setSession(sessionKey, sessionDataForContext);
         }
-        
-        const currentMessageMs = messageTimestamp ? parseInt(messageTimestamp) * 1000 : Date.now();
-        const diffMs = Math.max(0, currentMessageMs - firstSessionMessageMs);
-        const durationMinutes = Math.floor(diffMs / 60000);
+        const sessionUuid = String(sessionDataForContext.conversationId);
 
         // 4) Bases (NÃO colocar content/is_from_user/message_type aqui)
         const commonBase = {
           tenant_id: tenantId,
           user_id: userId,
-          message_source: (req as any)?.demoMode ? 'whatsapp_demo' : 'whatsapp',
+          message_source: __persist_demoPayload ? 'whatsapp_demo' : 'whatsapp',
           created_at: new Date().toISOString(),
           conversation_outcome: null, // outcome final é resolvido por analisador/cron
           conversation_context: { session_id: sessionUuid, duration_minutes: durationMinutes }
@@ -1486,11 +1502,17 @@ class ValidationService {
           intent_detected: __persist_intent ?? null,
           tokens_used: 0,
           api_cost_usd: 0,
-          processing_cost_usd: 0.00003, // Custo mínimo de infraestrutura para mensagens de usuário
+          processing_cost_usd: 0,
           model_used: null,
           confidence_score: null
-          // latency_ms: null // Removido - coluna não existe
         };
+
+        // Ajuste de custo de processamento quando não há LLM (resposta determinística)
+        let __effective_processingCostUsd = __persist_processingCostUsd;
+        if (!__persist_totalTokens || __persist_totalTokens === 0) {
+          // custo mínimo de infra + inserts no BD
+          __effective_processingCostUsd = 0.00003; // 0.00002 infra + 0.00001 DB
+        }
 
         const aiRow = {
           ...commonBase,
@@ -1500,10 +1522,9 @@ class ValidationService {
           intent_detected: __persist_intent ?? null,
           tokens_used: __persist_totalTokens,
           api_cost_usd: __persist_apiCostUsd,
-          processing_cost_usd: __persist_processingCostUsd,
+          processing_cost_usd: __effective_processingCostUsd,
           model_used: __persist_modelUsed,
           confidence_score: __persist_aiConfidence
-          // latency_ms: null // Removido - coluna não existe
         };
 
         // 6) Inserir (sem validação prévia equivocada)
@@ -1601,7 +1622,7 @@ export default router;
             content: 'Você ainda está aí? Se preferir, posso encerrar por aqui e retomamos quando quiser.',
             is_from_user: false,
             message_type: 'text',
-            intent_detected: 'system_message',
+            intent_detected: 'general',
             conversation_outcome: null, // OUTCOMES DETERMINADOS PELO ConversationOutcomeAnalyzerService
             message_source: 'whatsapp_demo',
             model_used: 'system',
@@ -1623,7 +1644,7 @@ export default router;
             content: 'Conversa encerrada por inatividade. Podemos retomar quando quiser.',
             is_from_user: false,
             message_type: 'text',
-            intent_detected: 'system_message',
+            intent_detected: 'general',
             conversation_outcome: null, // OUTCOMES DETERMINADOS PELO ConversationOutcomeAnalyzerService
             message_source: 'whatsapp_demo',
             model_used: 'system',

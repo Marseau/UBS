@@ -34,6 +34,15 @@ export interface WebhookOrchestrationResult {
   };
 }
 
+// Resolve opções simples de desambiguação (pt-BR)
+function resolveDisambiguationChoice(text: string): string | null {
+  const t = (text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (/(servicos?|lista|catalogo)/i.test(t)) return 'services';
+  if (/(precos?|preco|valores?|quanto|orcamento)/i.test(t)) return 'pricing';
+  if (/(horarios?|agenda|disponivel|amanha|hoje|quando)/i.test(t)) return 'availability';
+  return null;
+}
+
 export class WebhookFlowOrchestratorService {
   private intentDetector: DeterministicIntentDetectorService;
   private flowManager: FlowLockManagerService;
@@ -79,27 +88,67 @@ export class WebhookFlowOrchestratorService {
         return this.handleFlowWarning(context, timeoutStatus.message || '');
       }
 
+      // 2.5. Se estamos aguardando escolha de intenção (desambiguação), resolva primeiro
+      if (context && (context as any).awaiting_intent === true) {
+        const choice = resolveDisambiguationChoice(messageText);
+        if (choice) {
+          // limpamos a flag no contexto e seguimos com a intent resolvida
+          const updatedCtx = await mergeEnhancedConversationContext(
+            userId,
+            tenantId,
+            context,
+            { intent: choice, decision_method: 'llm', confidence: 1.0 }
+          );
+          return await this.orchestrateWebhookFlow(messageText, userId, tenantId, tenantConfig, updatedCtx);
+        } else {
+          // ainda ambíguo → pergunta novamente, sem efeitos colaterais
+          return {
+            aiResponse: 'Só para confirmar: você quer *serviços*, *preços* ou *horários*?',
+            shouldSendWhatsApp: true,
+            conversationOutcome: null,
+            updatedContext: context,
+            telemetryData: {
+              intent: null,
+              confidence: 0,
+              decision_method: 'disambiguation_pending',
+              flow_lock_active: !!context.flow_lock?.active_flow,
+              processing_time_ms: 0
+            }
+          };
+        }
+      }
+
       // 3. Detecção determinística de intenção
       const primary = this.intentDetector.detectPrimaryIntent(messageText); // string | null
-
-      // 📊 LOG: após regex (camada 1)
-      console.log('[INTENT] regex primary:', primary);
 
       let finalIntent: string | null = primary;
 
       if (!finalIntent) {
-        // 📊 LOG: antes de chamar LLM (camada 2)
-        console.log('[INTENT] Calling LLM (regex=null)');
         finalIntent = await this.classifyIntentWithLLM(messageText);
       }
 
-      // 📊 LOG: após LLM (camada 2)  
-      console.log('[INTENT] final:', finalIntent);
-
       // se ainda null → desambiguação (camada 3)
       if (!finalIntent) {
-        // responder pergunta curta e marcar awaiting_intent = true
-        // ...
+        const updatedCtx = await mergeEnhancedConversationContext(
+          userId,
+          tenantId,
+          context,
+          { intent: 'unknown', confidence: 0, decision_method: 'llm' }
+        );
+
+        return {
+          aiResponse: 'Só para confirmar: você quer *serviços*, *preços* ou *horários*?',
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext: updatedCtx,
+          telemetryData: {
+            intent: null,
+            confidence: 0,
+            decision_method: 'disambiguation',
+            flow_lock_active: !!updatedCtx.flow_lock?.active_flow,
+            processing_time_ms: Date.now() - startTime
+          }
+        };
       }
       
       // ✅ ADAPTER: Converter para formato esperado pelo resto do código
@@ -763,7 +812,7 @@ Intenção detectada: ${intent}`;
   /**
    * Constrói contexto do fluxo atual para OpenAI
    */
-  private buildFlowContext(currentFlow: string | null, currentStep: string | null, intent: string): string {
+  private buildFlowContext(currentFlow: string | null, currentStep: string | null, intent: string | null): string {
     if (!currentFlow) {
       return `O cliente está iniciando uma nova conversa. Intenção detectada: ${intent}`;
     }
@@ -809,11 +858,6 @@ Intenção detectada: ${intent}`;
    * Retorna null se conversa ainda está em andamento
    */
   private shouldPersistOutcome(intent: string | null, response: string, context: EnhancedConversationContext): string | null {
-    // 🔧 MODO VALIDAÇÃO: Persistir todas as mensagens para análise de intents
-    if (process.env.ENABLE_INTENT_VALIDATION === 'true') {
-      return this.determineConversationOutcome(intent, response, true);
-    }
-    
     // 🚨 CORREÇÃO CRÍTICA: Outcome deve ser NULL para conversas em andamento
     // Só persistir quando conversa REALMENTE finaliza
     
@@ -837,15 +881,9 @@ Intenção detectada: ${intent}`;
 
   /**
    * Determina outcome da conversa baseado na intenção e resposta
-   * APENAS para intents que realmente finalizam conversa (ou modo validação)
+   * APENAS para intents que realmente finalizam conversa
    */
-  private determineConversationOutcome(intent: string | null, response: string, isValidationMode: boolean = false): string {
-    // 🔧 MODO VALIDAÇÃO: Persistir todas as mensagens para análise
-    if (isValidationMode) {
-      // Em modo validação, usar o intent como outcome para análise
-      return `validation_${intent || 'null'}`;
-    }
-    
+  private determineConversationOutcome(intent: string | null, response: string): string {
     // Mapear APENAS intents finalizadores para outcomes válidos
     const finalizingOutcomeMap: Record<string, string> = {
       'booking_confirm': 'appointment_created',
@@ -909,35 +947,11 @@ Intenção detectada: ${intent}`;
    * Usa temperature=0 e top_p=0 para máxima consistência
    */
   private async classifyIntentWithLLM(text: string): Promise<string | null> {
-    const SYSTEM_PROMPT = `Você é um classificador de intenção. Classifique a mensagem do usuário em EXATAMENTE UMA das chaves abaixo e nada além disso.
-
-INTENTS PERMITIDAS:
-- greeting
-- services
-- pricing
-- availability
-- my_appointments
-- address
-- payments
-- business_hours
-- cancel
-- reschedule
-- confirm
-- modify_appointment
-- policies
-- wrong_number
-- test_message
-- booking_abandoned
-- noshow_followup
-
-Regras:
-1) Responda SOMENTE com JSON no formato: {"intent":"<uma-das-chaves>"}.
-2) Se NÃO for possível classificar com segurança, responda exatamente: {"intent":null}.
-3) Não explique. Não inclua texto extra. Sem sinônimos fora da lista.`;
+    const SYSTEM_PROMPT = `Você é um classificador de intenção. Classifique a mensagem do usuário em EXATAMENTE UMA das chaves abaixo e nada além disso.\n\nINTENTS PERMITIDAS:\n- greeting\n- services\n- pricing\n- availability\n- my_appointments\n- address\n- payments\n- business_hours\n- cancel\n- reschedule\n- confirm\n- modify_appointment\n- policies\n- wrong_number\n- test_message\n- booking_abandoned\n- noshow_followup\n\nRegras:\n1) Responda SOMENTE com JSON no formato: {\"intent\":\"<uma-das-chaves-ou-null>\"}.\n2) Se NÃO for possível classificar com segurança, responda exatamente: {\"intent\":null}.\n3) Não explique. Não inclua texto extra. Sem sinônimos fora da lista.`;
 
     try {
       const completion = await this.openai.chat.completions.create({
-        model: process.env.OPENAI_MODEL || 'gpt-4',
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         temperature: 0,
         top_p: 0,
         max_tokens: 20,
@@ -948,17 +962,28 @@ Regras:
       });
 
       const raw = completion.choices?.[0]?.message?.content?.trim() || '';
-      let parsed: { intent: string | null } | null = null;
-      try { parsed = JSON.parse(raw); } catch { return null; }
 
-      if (!parsed || typeof parsed.intent === 'undefined') return null;
-      if (parsed.intent === null) return null;
-
-      // Validar contra a allowlist FINAL
-      return INTENT_KEYS.includes(parsed.intent as any) ? parsed.intent : null;
+      // Tentativa 1: parse direto
+      try {
+        const parsed = JSON.parse(raw);
+        const intent = (parsed && typeof parsed.intent !== 'undefined') ? parsed.intent : null;
+        if (intent === null) return null;
+        return INTENT_KEYS.includes(intent as any) ? intent : null;
+      } catch {
+        // Tentativa 2: extrair via regex simples do tipo \"intent\":\"...\"
+        const m = raw.match(/\"intent\"\s*:\s*\"([a-zA-Z0-9_]+)\"/);
+        if (m && m[1] && INTENT_KEYS.includes(m[1] as any)) {
+          return m[1];
+        }
+        // Tentativa 3: caso retorne null explícito como texto
+        if (/\{\s*\"intent\"\s*:\s*null\s*\}/.test(raw)) {
+          return null;
+        }
+        return null;
+      }
 
     } catch (error) {
-      console.error('❌ LLM intent classification failed:', error);
+      console.error('❌ LLM intent classification failed (no JSON mode):', error);
       return null;
     }
   }

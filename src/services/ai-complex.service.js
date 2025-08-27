@@ -10,6 +10,27 @@ const agent_factory_1 = require("./agents/agent-factory");
 const memory_service_1 = require("./memory.service");
 const media_processor_service_1 = require("./media-processor.service");
 const { ConversationOutcomeService } = require("./conversation-outcome.service");
+
+// ==== INTENTS ALLOWLIST (sem outcomes) ====
+const ALLOWED_INTENTS = [
+  'greeting',
+  'services',
+  'pricing',
+  'availability',
+  'my_appointments',
+  'address',
+  'payments',
+  'business_hours',
+  'cancel',
+  'reschedule',
+  'confirm',
+  'modify_appointment',
+  'policies',
+  'wrong_number',
+  'test_message',
+  'booking_abandoned',
+  'noshow_followup'
+];
 class AIService {
     constructor() {
         this.config = {
@@ -138,9 +159,13 @@ class AIService {
             const intentPrompt = this.buildIntentRecognitionPrompt(message, context);
             const response = await this.openai.chat.completions.create({
                 model: 'gpt-3.5-turbo',
-                messages: [{ role: 'user', content: intentPrompt }],
-                temperature: 0.3,
-                max_tokens: 200
+                messages: [
+                  { role: 'system', content: 'Você é um classificador de intenção estrito. Responda apenas em JSON válido e use somente intents permitidas.' },
+                  { role: 'user', content: intentPrompt }
+                ],
+                temperature: 0,
+                top_p: 0,
+                max_tokens: 100
             });
             const result = response.choices[0]?.message?.content;
             if (!result) {
@@ -252,44 +277,42 @@ class AIService {
         return prompt;
     }
     buildIntentRecognitionPrompt(message, context) {
-        return `Analise a seguinte mensagem e identifique a intenção do usuário.
+        return `Você é um CLASSIFICADOR DE INTENÇÃO em um sistema de agendamento de serviços (SaaS).
+Analise a mensagem do usuário no CONTEXTO DA CONVERSA e escolha EXATAMENTE UMA das intenções abaixo.
 
-Mensagem: "${message}"
+INTENTS PERMITIDAS:
+- ${ALLOWED_INTENTS.join('\n- ')}
 
-Contexto do negócio: ${context.tenantConfig?.domain || 'geral'}
+Regras obrigatórias:
+1) Responda APENAS em JSON válido, sem texto extra.
+2) Formato exato: {"intent": "<uma-das-chaves-ou-null>", "confidence": 0.0}
+3) Se não tiver certeza, use {"intent": null, "confidence": 0.0}.
+4) Nunca invente intenções fora da lista.
+5) Nunca retorne múltiplas intenções.
 
-Possíveis intenções:
-- booking_request: solicitar agendamento
-- booking_cancel: cancelar agendamento  
-- booking_reschedule: reagendar agendamento
-- booking_inquiry: perguntar sobre agendamento existente
-- service_inquiry: perguntar sobre serviços
-- availability_check: verificar disponibilidade
-- price_inquiry: perguntar sobre preços
-- business_hours: perguntar sobre horários de funcionamento
-- location_inquiry: perguntar sobre localização
-- general_greeting: cumprimento geral
-- complaint: reclamação
-- compliment: elogio
-- escalation_request: solicitar atendimento humano
-- emergency: emergência
-- other: outras intenções
+Mensagem do usuário (pt-BR):
+"${message}"
 
-Retorne APENAS um JSON no formato:
-{
-  "intent": "tipo_da_intencao",
-  "confidence": 0.95,
-  "entities": [
-    {"type": "service_name", "value": "exemplo", "confidence": 0.9}
-  ]
-}`;
+Domínio do negócio: ${context.tenantConfig?.domain || 'geral'}
+
+Exemplos:
+Usuário: "Tenho disponibilidade na próxima semana"
+→ {"intent":"availability","confidence":0.9}
+
+Usuário: "Não compareci ontem, quero remarcar"
+→ {"intent":"noshow_followup","confidence":0.95}
+
+Usuário: "Quais serviços vocês oferecem?"
+→ {"intent":"services","confidence":0.95}`;
     }
     parseIntentResult(result) {
         try {
             const parsed = JSON.parse(result);
+            const intent = (parsed && typeof parsed.intent !== 'undefined') ? parsed.intent : null;
+            const inAllowlist = intent && ALLOWED_INTENTS.includes(intent);
             return {
-                type: parsed.intent || 'other',
-                confidence: parsed.confidence || 0.5,
+                type: inAllowlist ? intent : 'other',
+                confidence: (inAllowlist ? (parsed.confidence || 0.7) : 0.3),
                 entities: parsed.entities || [],
                 context: {}
             };
