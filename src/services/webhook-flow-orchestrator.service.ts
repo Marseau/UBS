@@ -4,12 +4,18 @@
  * Baseado na OS: Sincronizar Intenções e Evitar Mistura
  */
 
-import { DeterministicIntentDetectorService, detectIntents, INTENT_KEYS } from './deterministic-intent-detector.service';
+import { DeterministicIntentDetectorService, detectIntents, INTENT_KEYS, detectIntentByRegex } from './deterministic-intent-detector.service';
 import { FlowLockManagerService } from './flow-lock-manager.service';
 import { ConversationOutcomeAnalyzerService } from './conversation-outcome-analyzer.service';
+
+const SYSTEM_STANDARD_RESPONSES: string[] = [
+  'Só para confirmar: você quer *serviços*, *preços* ou *horários*?',
+  'Infelizmente neste momento não possuo esta informação no sistema.'
+];
 import { mergeEnhancedConversationContext } from '../utils/conversation-context-helper';
 import { EnhancedConversationContext, FlowType, FlowStep } from '../types/flow-lock.types';
 import OpenAI from 'openai';
+import { MODELS, getModelForContext } from '../utils/ai-models';
 
 export interface WebhookOrchestrationResult {
   aiResponse: string;
@@ -22,6 +28,7 @@ export interface WebhookOrchestrationResult {
     decision_method: string;
     flow_lock_active: boolean;
     processing_time_ms: number;
+    model_used?: string; // 🚀 Modelo usado nas métricas LLM
   };
   llmMetrics?: {
     prompt_tokens: number | null;
@@ -112,19 +119,31 @@ export class WebhookFlowOrchestratorService {
               confidence: 0,
               decision_method: 'disambiguation_pending',
               flow_lock_active: !!context.flow_lock?.active_flow,
-              processing_time_ms: 0
+              processing_time_ms: 0,
+              model_used: 'disambiguation' // 🚀 Modelo de desambiguação para telemetry
             }
           };
         }
       }
 
-      // 3. Detecção determinística de intenção
-      const primary = this.intentDetector.detectPrimaryIntent(messageText); // string | null
-
-      let finalIntent: string | null = primary;
+      // 3. Detecção de intenção - Camadas Regex → LLM
+      const first = detectIntentByRegex(messageText);
+      let finalIntent = first.intent;
+      let finalConfidence = first.confidence;
+      let decision_method: 'regex' | 'llm' = first.decision_method;
 
       if (!finalIntent) {
-        finalIntent = await this.classifyIntentWithLLM(messageText);
+        try {
+          const llm = await this.classifyIntentWithLLMFallback(messageText);
+          // Se LLM retornar 'null' (unknown), mantemos null (NÃO forçar 'general')
+          finalIntent = (llm?.intent as any) ?? null;
+          finalConfidence = (typeof llm?.confidence === 'number') ? llm.confidence : 0.0;
+          decision_method = 'llm';
+        } catch {
+          finalIntent = null;
+          finalConfidence = 0.0;
+          decision_method = 'llm';
+        }
       }
 
       // se ainda null → desambiguação (camada 3)
@@ -146,7 +165,8 @@ export class WebhookFlowOrchestratorService {
             confidence: 0,
             decision_method: 'disambiguation',
             flow_lock_active: !!updatedCtx.flow_lock?.active_flow,
-            processing_time_ms: Date.now() - startTime
+            processing_time_ms: Date.now() - startTime,
+            model_used: 'disambiguation' // 🚀 Modelo de desambiguação para telemetry
           }
         };
       }
@@ -154,8 +174,8 @@ export class WebhookFlowOrchestratorService {
       // ✅ ADAPTER: Converter para formato esperado pelo resto do código
       const intentResult = {
         intent: finalIntent,
-        confidence: finalIntent ? 0.95 : 0.0,
-        decision_method: finalIntent === primary ? 'deterministic_regex' : 'llm_classification',
+        confidence: finalConfidence,
+        decision_method: decision_method,
         allowed_by_flow_lock: true
       } as const;
 
@@ -217,11 +237,12 @@ export class WebhookFlowOrchestratorService {
         llmMetrics: result.llmMetrics, // 🚨 CORREÇÃO: Incluir métricas LLM no retorno
         updatedContext,
         telemetryData: {
-          intent: intentResult.intent,
-          confidence: intentResult.confidence,
-          decision_method: intentResult.decision_method,
+          intent: finalIntent,              // pode ser null — e assim deve ficar
+          confidence: finalConfidence,
+          decision_method,
           flow_lock_active: !!updatedContext.flow_lock?.active_flow,
-          processing_time_ms: Date.now() - startTime
+          processing_time_ms: Date.now() - startTime,
+          model_used: result.llmMetrics?.model_used || 'unknown' // 🚀 Incluir modelo usado no telemetry
         }
       };
 
@@ -239,7 +260,8 @@ export class WebhookFlowOrchestratorService {
           confidence: 0,
           decision_method: 'error',
           flow_lock_active: false,
-          processing_time_ms: Date.now() - startTime
+          processing_time_ms: Date.now() - startTime,
+          model_used: 'error' // 🚀 Modelo de erro para telemetry
         },
         llmMetrics: {
           prompt_tokens: null,
@@ -305,8 +327,7 @@ export class WebhookFlowOrchestratorService {
       'pricing': 'pricing',
       'services': 'pricing',
       'flow_cancel': null,
-      'greeting': null,
-      'general': null
+      'greeting': null
     };
 
     // Intents institucionais não criam fluxo
@@ -499,7 +520,8 @@ export class WebhookFlowOrchestratorService {
         confidence: 1.0,
         decision_method: 'timeout',
         flow_lock_active: false,
-        processing_time_ms: 0
+        processing_time_ms: 0,
+        model_used: 'timeout' // 🚀 Modelo de timeout para telemetry
       }
     };
   }
@@ -515,7 +537,8 @@ export class WebhookFlowOrchestratorService {
         confidence: 1.0,
         decision_method: 'timeout',
         flow_lock_active: !!context.flow_lock?.active_flow,
-        processing_time_ms: 0
+        processing_time_ms: 0,
+        model_used: 'timeout_warning' // 🚀 Modelo de warning para telemetry
       }
     };
   }
@@ -534,7 +557,8 @@ export class WebhookFlowOrchestratorService {
         confidence: intentResult.confidence,
         decision_method: intentResult.decision_method,
         flow_lock_active: true,
-        processing_time_ms: 0
+        processing_time_ms: 0,
+        model_used: 'blocked' // 🚀 Modelo de intent bloqueado para telemetry
       }
     };
   }
@@ -653,40 +677,21 @@ IMPORTANTE: Responda APENAS com a mensagem honesta para o cliente. Se não soube
       const userPrompt = `Mensagem do cliente: "${messageText}"
 Intenção detectada: ${intent}`;
 
-      console.log('🤖 Chamando OpenAI para gerar resposta...');
+      console.log('🤖 Chamando OpenAI com fallback escalonado...');
       
-      const completion = await this.openai.chat.completions.create({
-        model: process.env.OPENAI_MODEL || 'gpt-4',
-        temperature: 0.7,
-        max_tokens: 300,
-        logprobs: true,
-        top_logprobs: 3,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ]
-      });
-
-      const aiResponse = completion.choices[0]?.message?.content?.trim() || '🚨 FALLBACK: generateAIResponseWithFlowContext - Não entendi. Pode reformular?';
-      const latencyMs = Date.now() - startTime;
-
-      // Calcular confidence score baseado na resposta da IA
-      const calculateAIConfidenceScore = (completion: any): number => {
+      // Função para calcular confidence do modelo
+      const calculateConfidence = (completion: any): number => {
         try {
-          // Se não há logprobs, usar confiança baseada na finish_reason
-          console.log('🔍 DEBUG LOGPROBS:', completion.choices[0]?.logprobs);
           if (!completion.choices[0]?.logprobs?.content) {
             const finishReason = completion.choices[0]?.finish_reason;
-            console.log('🔍 DEBUG NO LOGPROBS, using finish_reason:', finishReason);
             switch (finishReason) {
-              case 'stop': return 0.85; // Resposta completa
-              case 'length': return 0.60; // Truncada por limite
-              case 'content_filter': return 0.30; // Filtrada
-              default: return 0.50; // Razão desconhecida
+              case 'stop': return 0.85;
+              case 'length': return 0.60;
+              case 'content_filter': return 0.30;
+              default: return 0.50;
             }
           }
 
-          // Calcular confidence médio dos tokens usando logprobs
           const logprobs = completion.choices[0].logprobs.content;
           if (!logprobs || logprobs.length === 0) return 0.70;
 
@@ -694,24 +699,113 @@ Intenção detectada: ${intent}`;
             return sum + (token.logprob || -2.0);
           }, 0) / logprobs.length;
 
-          // Converter logprob para confidence (0-1)
-          // logprobs são valores negativos, quanto maior (menos negativo) melhor
-          // -0.5 = alta confiança (~0.9), -3.0 = baixa confiança (~0.3)
           const confidence = Math.max(0.1, Math.min(0.99, Math.exp(avgLogprob / -2.0)));
-          
-          return Math.round(confidence * 100) / 100; // 2 decimais
+          return Math.round(confidence * 100) / 100;
         } catch (error) {
-          console.warn('Erro calculando AI confidence:', error);
-          return 0.70; // Fallback seguro
+          return 0.70;
         }
       };
+      
+      // Sistema de fallback escalonado usando configuração centralizada
+      // 🚀 CORREÇÃO: Ordem correta por custo (mais barato → mais caro)
+      // gpt-4o-mini ($0.00075) → gpt-3.5-turbo ($0.0035) → gpt-4 ($0.09)
+      const models = [MODELS.FAST, MODELS.BALANCED, MODELS.STRICT] as const;
+      let completion: any = null;
+      let modelUsed: string = MODELS.FAST; // Começar com o mais barato
+      let finalConfidenceScore = 0;
+      
+      for (let i = 0; i < models.length; i++) {
+        const model = models[i];
+        
+        try {
+          console.log(`🎯 Tentando modelo: ${model}`);
+          
+          completion = await this.openai.chat.completions.create({
+            model: model as any,
+            temperature: 0.7,
+            max_tokens: 300,
+            logprobs: true,
+            top_logprobs: 3,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt }
+            ]
+          });
+          
+          const text = completion.choices?.[0]?.message?.content ?? '';
+          
+          // 📊 Calcular confidence score apenas para métricas (não para fallback)
+          finalConfidenceScore = calculateConfidence(completion);
+          console.log(`📊 Confidence ${model}: ${finalConfidenceScore}`);
+          
+          // 🔍 Validação objetiva da resposta (substitui threshold artificial)
+          const { valid, validationScore } = this.validateAIResponse(text, messageText, intentResult);
+          
+          if (valid || i === models.length - 1) {
+            modelUsed = model as string;
+            console.log(`✅ Modelo escolhido: ${model} (validation: ${valid ? 'PASS' : 'FAIL-LAST'}, confidence: ${finalConfidenceScore})`);
+            
+            // 🚀 CRÍTICO: Capturar métricas apenas do modelo vencedor
+            const usage = completion.usage || {};
+            const apiCost = this.calculateOpenAICost(usage, model);
+            
+            console.log(`💰 Métricas do modelo vencedor: tokens=${usage.total_tokens}, cost=${apiCost}, model=${model}`);
+            break;
+          }
+          
+          console.log(`⚠️ Resposta não passou na validação, tentando próximo modelo...`);
+          
+        } catch (error: any) {
+          console.error(`❌ Erro no modelo ${model}:`, {
+            message: error?.message || 'Erro desconhecido',
+            status: error?.status || error?.response?.status,
+            statusText: error?.response?.statusText,
+            code: error?.code,
+            type: error?.type,
+            param: error?.param,
+            errorDetails: error?.error || error?.response?.data,
+            stack: error?.stack?.substring(0, 500) // Truncar stack trace
+          });
+          
+          // Detectar tipos específicos de erro da OpenAI API
+          if (error?.status === 400) {
+            console.log(`🚨 API Error 400 (Bad Request) - Possível problema com parâmetros do modelo ${model}`);
+          } else if (error?.status === 401) {
+            console.log(`🚨 API Error 401 (Unauthorized) - Problema de autenticação`);
+          } else if (error?.status === 403) {
+            console.log(`🚨 API Error 403 (Forbidden) - Modelo ${model} pode não estar disponível para sua conta`);
+          } else if (error?.status === 429) {
+            console.log(`🚨 API Error 429 (Rate Limit) - Rate limit atingido no modelo ${model}`);
+          } else if (error?.status === 500 || error?.status === 502 || error?.status === 503) {
+            console.log(`🚨 API Error ${error.status} - Erro interno da OpenAI no modelo ${model}`);
+          } else if (error?.code === 'ENOTFOUND' || error?.code === 'ETIMEDOUT') {
+            console.log(`🚨 Network Error - Problema de conectividade com OpenAI (${error.code})`);
+          } else {
+            console.log(`🚨 Erro não identificado no modelo ${model} - Type: ${error?.type || 'unknown'}`);
+          }
+          
+          if (i === models.length - 1) {
+            throw error; // Re-throw no último modelo
+          }
+          console.log(`🔄 Tentando próximo modelo...`);
+        }
+      }
 
-      const aiConfidenceScore = calculateAIConfidenceScore(completion);
-      console.log('🔍 DEBUG AI CONFIDENCE CALCULATED:', aiConfidenceScore);
+      // Verificar se temos uma completion válida
+      if (!completion) {
+        throw new Error('Nenhum modelo conseguiu gerar resposta');
+      }
+
+      const aiResponse = completion.choices[0]?.message?.content?.trim() || '🚨 FALLBACK: generateAIResponseWithFlowContext - Não entendi. Pode reformular?';
+      const latencyMs = Date.now() - startTime;
+
+      // Usar a função de confidence já definida
+      const aiConfidenceScore = calculateConfidence(completion);
+      console.log(`🔍 Final confidence score: ${aiConfidenceScore} com modelo: ${modelUsed}`);
 
       // ✅ CAPTURAR MÉTRICAS LLM COM VALIDAÇÃO
       const usage = completion.usage;
-      const apiCost = this.calculateOpenAICost(usage);
+      const apiCost = this.calculateOpenAICost(usage, modelUsed);
       
       // ✅ VALIDAÇÃO: Verificar se usage está disponível
       if (!usage || !usage.total_tokens) {
@@ -743,12 +837,15 @@ Intenção detectada: ${intent}`;
           return Math.round((apiCost + percentageCost + infrastructureCost + databaseCost) * 100000) / 100000;
         })(),
         confidence_score: aiConfidenceScore,
-        latency_ms: latencyMs
+        latency_ms: latencyMs,
+        model_used: modelUsed // 🚀 Incluir modelo usado no fallback
       };
 
       console.log('✅ OpenAI respondeu:', {
         intent,
+        model: modelUsed,
         tokens: usage?.total_tokens,
+        confidence: aiConfidenceScore,
         latency: latencyMs,
         cost: llmMetrics.api_cost_usd
       });
@@ -823,15 +920,53 @@ Intenção detectada: ${intent}`;
   /**
    * Calcula custo estimado da chamada OpenAI
    */
-  private calculateOpenAICost(usage: any): number | null {
+  private calculateOpenAICost(usage: any, model?: string): number | null {
     if (!usage || !usage.prompt_tokens || !usage.completion_tokens) {
       return null;
     }
 
-    const promptCost = (usage.prompt_tokens / 1000) * (parseFloat(process.env.OPENAI_PROMPT_COST_PER_1K || '0.03'));
-    const completionCost = (usage.completion_tokens / 1000) * (parseFloat(process.env.OPENAI_COMPLETION_COST_PER_1K || '0.06'));
+    // 💰 CUSTOS CORRETOS POR MODELO (por 1K tokens)
+    const modelCosts: Record<string, { prompt: number; completion: number }> = {
+      'gpt-4o-mini': { prompt: 0.00015, completion: 0.0006 },
+      'gpt-3.5-turbo': { prompt: 0.0015, completion: 0.002 },
+      'gpt-4': { prompt: 0.03, completion: 0.06 },
+      'gpt-4o': { prompt: 0.005, completion: 0.015 }
+    };
+
+    // Detectar modelo atual ou usar fallback genérico
+    const costs = modelCosts[model || 'gpt-4'] || modelCosts['gpt-4'];
     
-    return Math.round((promptCost + completionCost) * 100000) / 100000; // 5 casas decimais
+    const promptCost = (usage.prompt_tokens / 1000) * costs!.prompt;
+    const completionCost = (usage.completion_tokens / 1000) * costs!.completion;
+    
+    return Math.round((promptCost + completionCost) * 1000000) / 1000000; // 6 casas decimais para precisão
+  }
+
+  /**
+   * Valida resposta do AI usando critérios simples e objetivos
+   * 🚀 CORREÇÃO: Se tem resposta válida, aceita. Se não tem, escala.
+   */
+  private validateAIResponse(text: string, userMessage: string, intentResult: any): { valid: boolean; validationScore: number } {
+    // ✅ VALIDAÇÃO SIMPLES: Resposta não-vazia = válida
+    const hasValidResponse = !!(text && text.trim().length > 0);
+    
+    // ✅ CHECK BÁSICO: Não contém padrões óbvios de erro
+    const errorPatterns = [
+      /\[erro\]/i,
+      /\[error\]/i,
+      /undefined/i,
+      /null$/i,
+      /^error:/i,
+      /^failed:/i
+    ];
+    
+    const hasErrorPattern = errorPatterns.some(pattern => pattern.test(text));
+    
+    // ✅ LÓGICA SIMPLES: Tem resposta válida E não tem erro = aceita
+    const valid = hasValidResponse && !hasErrorPattern;
+    const validationScore = valid ? 1.0 : 0.0;
+
+    return { valid, validationScore };
   }
 
   /**
@@ -901,24 +1036,19 @@ Intenção detectada: ${intent}`;
   }
 
   /**
-   * DETECTAR E PERSISTIR OUTCOME QUANDO CONVERSA FINALIZA
-   * Chama ConversationOutcomeAnalyzerService para análise contextual
+   * DETECTAR OUTCOME QUANDO CONVERSA FINALIZA
+   * APENAS análise - persistência é responsabilidade do cronjob
    */
   async checkAndPersistConversationOutcome(
     sessionId: string,
     trigger: 'timeout' | 'flow_completion' | 'appointment_action' | 'user_exit' = 'flow_completion'
   ): Promise<void> {
     try {
-      // Usar o novo serviço de análise contextual
+      // APENAS analisar - SEM persistir (responsabilidade do cronjob)
       const analysis = await this.outcomeAnalyzer.analyzeConversationOutcome(sessionId, trigger);
       
       if (analysis) {
-        // Persistir outcome APENAS na última mensagem AI
-        const success = await this.outcomeAnalyzer.persistOutcomeToFinalMessage(analysis);
-        
-        if (success) {
-          console.log(`🎯 Conversation outcome persisted: ${analysis.outcome} (${analysis.confidence})`);
-        }
+        console.log(`🎯 Conversation outcome analyzed: ${analysis.outcome} (${analysis.confidence}) - will be persisted by cronjob`);
       }
     } catch (error) {
       console.error('❌ Failed to check conversation outcome:', error);
@@ -943,48 +1073,114 @@ Intenção detectada: ${intent}`;
    */
 
   /**
-   * Classificação LLM determinística e fechada
-   * Usa temperature=0 e top_p=0 para máxima consistência
+   * CLASSIFICAÇÃO DE INTENTS COM SISTEMA DE FALLBACK LLM
+   * Usa o mesmo sistema de fallback: 3.5-turbo → 4o-mini → 4
    */
-  private async classifyIntentWithLLM(text: string): Promise<string | null> {
-    const SYSTEM_PROMPT = `Você é um classificador de intenção. Classifique a mensagem do usuário em EXATAMENTE UMA das chaves abaixo e nada além disso.\n\nINTENTS PERMITIDAS:\n- greeting\n- services\n- pricing\n- availability\n- my_appointments\n- address\n- payments\n- business_hours\n- cancel\n- reschedule\n- confirm\n- modify_appointment\n- policies\n- wrong_number\n- test_message\n- booking_abandoned\n- noshow_followup\n\nRegras:\n1) Responda SOMENTE com JSON no formato: {\"intent\":\"<uma-das-chaves-ou-null>\"}.\n2) Se NÃO for possível classificar com segurança, responda exatamente: {\"intent\":null}.\n3) Não explique. Não inclua texto extra. Sem sinônimos fora da lista.`;
+  private async classifyIntentWithLLMFallback(messageText: string): Promise<{ intent: string | null; confidence: number } | null> {
+    console.log('🎯 Iniciando classificação de intent com fallback LLM...');
 
-    try {
-      const completion = await this.openai.chat.completions.create({
-        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-        temperature: 0,
-        top_p: 0,
-        max_tokens: 20,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `Mensagem do usuário (pt-BR):\n---\n${text}\n---\nClassifique.` }
-        ]
-      });
+    // Intents permitidos (baseado no ai-complex.service.js original)
+    const ALLOWED_INTENTS = [
+      'greeting', 'booking', 'pricing',
+      'address', 'business_hours', 'services',
+      'flow_cancel', 'my_appointments'
+    ];
 
-      const raw = completion.choices?.[0]?.message?.content?.trim() || '';
+    const systemPrompt = `Classifique a intenção do usuário usando APENAS as opções abaixo:
 
-      // Tentativa 1: parse direto
+${ALLOWED_INTENTS.join(', ')}
+
+Instruções:
+- Responda APENAS com o nome da intenção
+- Se não se encaixar em nenhuma categoria, não responda nada
+- Seja preciso e conciso
+
+Exemplos:
+- "Olá" → greeting
+- "Quero marcar" → booking  
+- "Quanto custa?" → pricing
+- "Onde vocês ficam?" → address
+- "Que horas abrem?" → business_hours
+- "Quais serviços?" → services
+- "Cancelar" → flow_cancel
+- "Meus agendamentos" → my_appointments
+
+Opções válidas: ${ALLOWED_INTENTS.join(', ')}`;
+
+    // Sistema de fallback usando configuração centralizada
+    // 🚀 CORREÇÃO: Ordem correta por custo (mais barato → mais caro)
+    // gpt-4o-mini ($0.00075) → gpt-3.5-turbo ($0.0035) → gpt-4 ($0.09)
+    const models = [MODELS.FAST, MODELS.BALANCED, MODELS.STRICT] as const;
+    
+    for (let i = 0; i < models.length; i++) {
+      const model = models[i];
+      
       try {
-        const parsed = JSON.parse(raw);
-        const intent = (parsed && typeof parsed.intent !== 'undefined') ? parsed.intent : null;
-        if (intent === null) return null;
-        return INTENT_KEYS.includes(intent as any) ? intent : null;
-      } catch {
-        // Tentativa 2: extrair via regex simples do tipo \"intent\":\"...\"
-        const m = raw.match(/\"intent\"\s*:\s*\"([a-zA-Z0-9_]+)\"/);
-        if (m && m[1] && INTENT_KEYS.includes(m[1] as any)) {
-          return m[1];
-        }
-        // Tentativa 3: caso retorne null explícito como texto
-        if (/\{\s*\"intent\"\s*:\s*null\s*\}/.test(raw)) {
-          return null;
-        }
-        return null;
-      }
+        console.log(`🎯 Tentando classificar intent com modelo: ${model}`);
+        
+        const completion = await this.openai.chat.completions.create({
+          model: model as any,
+          temperature: 0,
+          max_tokens: 8,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: messageText }
+          ]
+        });
 
-    } catch (error) {
-      console.error('❌ LLM intent classification failed (no JSON mode):', error);
-      return null;
+        const raw = (completion.choices?.[0]?.message?.content || '').trim().toLowerCase();
+        const intent = raw.replace(/[^a-z_]/g, ''); // sanitiza
+
+        // 🔍 Validação objetiva: intent deve estar na lista permitida
+        const isValidIntent = ALLOWED_INTENTS.includes(intent as any);
+        
+        if (isValidIntent || i === models.length - 1) {
+          // Calcular confidence apenas para métricas (não para fallback)
+          const confidence = intent === 'general' ? 0.5 : 0.8;
+          
+          console.log(`✅ Intent classificado: ${intent} (modelo: ${model}, valid: ${isValidIntent ? 'PASS' : 'FAIL-LAST'}, confidence: ${confidence})`);
+          
+          if (isValidIntent) {
+            // 🚀 CRÍTICO: Log do modelo vencedor para classificação
+            console.log(`💡 Intent classificado pelo modelo vencedor: ${model} (${intent}, confidence: ${confidence})`);
+            return { intent, confidence };
+          } else {
+            // Último modelo e intent inválido
+            console.log(`❌ Último modelo ${model} retornou intent inválido: ${intent}`);
+            return null;
+          }
+        }
+        
+        console.log(`⚠️ Intent inválido: ${intent}, tentando próximo modelo...`)
+        
+      } catch (error: any) {
+        console.error(`❌ Erro no modelo ${model} para classificação de intent:`, {
+          message: error?.message || 'Erro desconhecido',
+          status: error?.status || error?.response?.status,
+          statusText: error?.response?.statusText,
+          code: error?.code,
+          type: error?.type,
+          param: error?.param,
+          errorDetails: error?.error || error?.response?.data
+        });
+        
+        // Detectar tipos específicos de erro da OpenAI API para classificação
+        if (error?.status === 403) {
+          console.log(`🚨 CLASSIFICAÇÃO - Modelo ${model} pode não estar disponível (Error 403)`);
+        } else if (error?.status === 429) {
+          console.log(`🚨 CLASSIFICAÇÃO - Rate limit atingido no modelo ${model}`);
+        } else if (error?.status === 400) {
+          console.log(`🚨 CLASSIFICAÇÃO - Parâmetros inválidos para modelo ${model}`);
+        }
+        
+        if (i === models.length - 1) {
+          throw error; // Re-throw no último modelo
+        }
+        console.log(`🔄 Tentando próximo modelo para classificação...`);
+      }
     }
+
+    return null;
   }
+
 }

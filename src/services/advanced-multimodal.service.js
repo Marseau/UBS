@@ -321,7 +321,7 @@ class AdvancedMultiModalService {
             const base64Image = buffer.toString('base64');
             const dataUrl = `data:${mimeType};base64,${base64Image}`;
             const response = await this.openai.chat.completions.create({
-                model: 'gpt-4-vision-preview',
+                model: 'gpt-4',
                 messages: [{
                         role: 'user',
                         content: [
@@ -353,7 +353,7 @@ class AdvancedMultiModalService {
             const base64Image = buffer.toString('base64');
             const dataUrl = `data:${mimeType};base64,${base64Image}`;
             const response = await this.openai.chat.completions.create({
-                model: 'gpt-4-vision-preview',
+                model: 'gpt-4',
                 messages: [{
                         role: 'user',
                         content: [

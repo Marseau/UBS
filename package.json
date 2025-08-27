@@ -167,7 +167,7 @@
     "node-cron": "^3.0.3",
     "node-fetch": "^2.7.0",
     "nodemailer": "^6.9.8",
-    "openai": "^5.8.2",
+    "openai": "^5.16.0",
     "pg": "^8.16.3",
     "playwright": "^1.54.1",
     "qrcode-terminal": "^0.12.0",

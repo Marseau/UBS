@@ -408,28 +408,28 @@ export class PlatformAggregationRefactoredService {
     }
 
     private calculateRiskDistribution(rankings: any[]): any {
-        const distribution = { high: 0, medium: 0, low: 0, unknown: 0 };
-        rankings.forEach(r => {
-            distribution[r.risk_level] = (distribution[r.risk_level] || 0) + 1;
+        const distribution: { [key: string]: number } = { high: 0, medium: 0, low: 0, unknown: 0 };
+        rankings.forEach((r: any) => {
+            distribution[r.risk_level as string] = (distribution[r.risk_level as string] || 0) + 1;
         });
         return distribution;
     }
 
     private identifyImprovementOpportunities(rankings: any[]): string[] {
-        const opportunities = [];
+        const opportunities: string[] = [];
         
-        const highRiskCount = rankings.filter(r => r.risk_level === 'high').length;
-        const zeroAppointments = rankings.filter(r => r.appointments === 0).length;
-        const lowHealthScores = rankings.filter(r => r.health_score < 50).length;
+        const highRiskCount = rankings.filter((r: any) => r.risk_level === 'high').length;
+        const zeroAppointments = rankings.filter((r: any) => r.appointments === 0).length;
+        const lowHealthScores = rankings.filter((r: any) => r.health_score < 50).length;
 
         if (highRiskCount > 0) {
-            (opportunities as any).push(`${highRiskCount} tenants com risco alto precisam atenção`);
+            opportunities.push(`${highRiskCount} tenants com risco alto precisam atenção`);
         }
         if (zeroAppointments > 0) {
-            (opportunities as any).push(`${zeroAppointments} tenants sem appointments precisam ativação`);
+            opportunities.push(`${zeroAppointments} tenants sem appointments precisam ativação`);
         }
         if (lowHealthScores > 0) {
-            (opportunities as any).push(`${lowHealthScores} tenants com saúde abaixo de 50 pontos`);
+            opportunities.push(`${lowHealthScores} tenants com saúde abaixo de 50 pontos`);
         }
 
         return opportunities;

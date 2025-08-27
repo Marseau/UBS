@@ -1,14 +1,57 @@
-node_modules
+# Dependencies
 node_modules/
-ubs_business_data_temporal/
-*.log
-.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
 .env
 .env.*
+.env.local
+.env.development
+.env.production
 
-# Large files to ignore
-ubs_business_data_temporal/
-node_modules/
-*.csv
-*.log
+# Build outputs
 dist/
+build/
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Data files
+*.csv
+*.xlsx
+*.json.backup
+ubs_business_data_temporal/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history

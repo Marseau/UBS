@@ -25,7 +25,7 @@ class ConsultingAgent {
             ],
             maxTokens: 2048,
             temperature: 0.6,
-            model: 'gpt-4-turbo-preview'
+            model: 'gpt-4'
         };
     }
     getAgent() {

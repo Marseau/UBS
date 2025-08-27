@@ -1,0 +1,52 @@
+{
+  "outcomes": [
+    "appointment_scheduled",
+    "pricing_inquiry"
+  ],
+  "domains": {
+    "healthcare": {
+      "conversations": [
+        {
+          "id": "healthcare_appointment_request_1",
+          "expected_outcome": "appointment_scheduled",
+          "test_user_phone": "+5511988776655",
+          "messages": [
+            "Olá, preciso marcar uma consulta",
+            "Tenho disponibilidade na próxima semana"
+          ]
+        },
+        {
+          "id": "healthcare_pricing_inquiry_1", 
+          "expected_outcome": "pricing_inquiry",
+          "test_user_phone": "+5511988776656",
+          "messages": [
+            "Boa tarde, gostaria de saber valores",
+            "Preciso de uma consulta de cardiologia"
+          ]
+        }
+      ]
+    },
+    "beauty": {
+      "conversations": [
+        {
+          "id": "beauty_service_booking_1",
+          "expected_outcome": "appointment_scheduled", 
+          "test_user_phone": "+5511988776657",
+          "messages": [
+            "Oi, quero agendar um corte e escova",
+            "Tenho cabelo longo, demora quanto tempo?"
+          ]
+        },
+        {
+          "id": "beauty_pricing_inquiry_1",
+          "expected_outcome": "pricing_inquiry",
+          "test_user_phone": "+5511988776658", 
+          "messages": [
+            "Quanto custa um corte de cabelo?",
+            "Vocês fazem escova também?"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -386,22 +386,27 @@ export class ConversationOutcomeAnalyzerService {
     try {
       const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
       
-      // Buscar sessões sem outcome nas últimas 10 minutos
+      // Buscar sessões sem outcome nas últimas 10 minutos (última mensagem pode ser do usuário OU da IA)
       const { data, error } = await this.supabase
         .from('conversation_history')
-        .select('session_id_uuid')
+        .select('session_id_uuid, created_at')
         .is('conversation_outcome', null)
-        .eq('is_from_user', false)
         .lt('created_at', tenMinutesAgo)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(500);
 
       if (error || !data) {
+        logger.warn('⚠️ No sessions fetched for outcome scan', { error });
         return;
       }
 
-      const uniqueSessions = [...new Set(data.map((row: any) => row.session_id_uuid))];
-      
+      // Deduplicar por sessão (ignorar nulos)
+      const uniqueSessions = [...new Set(
+        data
+          .map((row: any) => row.session_id_uuid)
+          .filter((s: string | null) => !!s)
+      )];
+
       logger.info(`🔍 Checking ${uniqueSessions.length} sessions for timeout outcomes`);
 
       for (const sessionId of uniqueSessions) {

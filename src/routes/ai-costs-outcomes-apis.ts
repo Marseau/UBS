@@ -27,7 +27,7 @@ router.get('/api/super-admin/ai-costs-analysis', async (req, res) => {
     if (error) throw error;
 
     // Calculate platform totals
-    const platformTotals = aiCosts?.reduce((totals, tenant) => ({
+    const platformTotals = aiCosts?.reduce((totals: any, tenant: any) => ({
       totalCost: totals.totalCost + parseFloat(tenant.total_cost_usd || '0'),
       totalTokens: totals.totalTokens + parseInt(tenant.total_tokens || '0'),
       totalConversations: totals.totalConversations + parseInt(tenant.total_conversations || '0'),
@@ -86,7 +86,7 @@ router.get('/api/super-admin/conversation-outcomes', async (req, res) => {
     if (error) throw error;
 
     // Calculate platform averages
-    const platformAverages = outcomes?.reduce((averages, tenant) => {
+    const platformAverages = outcomes?.reduce((averages: any, tenant: any) => {
       const weight = parseInt(tenant.total_conversations || '0');
       return {
         totalConversations: averages.totalConversations + weight,
@@ -140,7 +140,7 @@ router.get('/api/super-admin/conversation-outcomes', async (req, res) => {
           overallQualityRating: parseFloat(finalAverages.avgSatisfactionScore) >= 4.0 ? 'Excellent' :
                                  parseFloat(finalAverages.avgSatisfactionScore) >= 3.5 ? 'Good' :
                                  parseFloat(finalAverages.avgSatisfactionScore) >= 3.0 ? 'Fair' : 'Poor',
-          improvementAreas: outcomes?.filter(t => parseFloat(t.success_rate || '0') < 60).length || 0
+          improvementAreas: outcomes?.filter((t: any) => parseFloat(t.success_rate || '0') < 60).length || 0
         }
       }
     });
@@ -184,8 +184,8 @@ router.get('/api/super-admin/ai-costs-vs-outcomes', async (req, res) => {
     const outcomes = outcomesResult.data || [];
 
     // Merge data by tenant
-    const correlationData = aiCosts.map(costData => {
-      const outcomeData = outcomes.find(o => o.tenant_id === costData.tenant_id);
+    const correlationData = aiCosts.map((costData: any) => {
+      const outcomeData = outcomes.find((o: any) => o.tenant_id === costData.tenant_id);
       
       return {
         tenant_id: costData.tenant_id,
@@ -205,17 +205,17 @@ router.get('/api/super-admin/ai-costs-vs-outcomes', async (req, res) => {
         cost_effectiveness: costData.avg_cost_per_conversation && outcomeData ?
           parseFloat(outcomeData.success_rate || '0') / parseFloat(costData.avg_cost_per_conversation) : 0
       };
-    }).filter(d => d.total_cost_usd > 0); // Only include tenants with AI costs
+    }).filter((d: any) => d.total_cost_usd > 0); // Only include tenants with AI costs
 
     // Calculate correlation insights
     const insights = {
       totalTenants: correlationData.length,
-      highROITenants: correlationData.filter(d => d.roi_score > 50).length,
+      highROITenants: correlationData.filter((d: any) => d.roi_score > 50).length,
       costEffectiveThreshold: 200, // success_rate / cost_per_conversation > 200 is good
-      costEffectiveTenants: correlationData.filter(d => d.cost_effectiveness > 200).length,
+      costEffectiveTenants: correlationData.filter((d: any) => d.cost_effectiveness > 200).length,
       averageROI: correlationData.length > 0 ? 
-        (correlationData.reduce((sum, d) => sum + d.roi_score, 0) / correlationData.length).toFixed(2) : '0',
-      bestPerformingTenant: correlationData.sort((a, b) => b.roi_score - a.roi_score)[0]?.business_name || 'N/A'
+        (correlationData.reduce((sum: any, d: any) => sum + d.roi_score, 0) / correlationData.length).toFixed(2) : '0',
+      bestPerformingTenant: correlationData.sort((a: any, b: any) => b.roi_score - a.roi_score)[0]?.business_name || 'N/A'
     };
 
     res.json({
@@ -226,7 +226,7 @@ router.get('/api/super-admin/ai-costs-vs-outcomes', async (req, res) => {
         insights,
         chartData: {
           // Scatter plot data: x = cost per conversation, y = success rate
-          scatter: correlationData.map(d => ({
+          scatter: correlationData.map((d: any) => ({
             x: d.avg_cost_per_conversation,
             y: d.success_rate,
             label: d.business_name,

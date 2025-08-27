@@ -401,7 +401,7 @@ router.post('/calculate-all-tenants', async (req: Request, res: Response): Promi
 router.get('/health', async (req: Request, res: Response): Promise<Response | void> => {
     try {
         // Try to get a sample tenant for testing
-        const { data: tenants } = await postgresMetricsService['supabase']
+        const { data: tenants } = await (postgresMetricsService as any).supabase
             .from('tenants')
             .select('id')
             .eq('status', 'active')
@@ -416,7 +416,7 @@ router.get('/health', async (req: Request, res: Response): Promise<Response | vo
         }
 
         const testTenant = tenants[0];
-        const dateRange = postgresMetricsService.constructor['generateDateRange'](7);
+        const dateRange = (postgresMetricsService.constructor as any).generateDateRange(7);
 
         // Test one function to verify connectivity
         await postgresMetricsService.calculateMonthlyRevenue({

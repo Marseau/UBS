@@ -12,6 +12,12 @@ import { WebhookV3FlowIntegrationService } from '../services/webhook-v3-flow-int
 import { WebhookFlowOrchestratorService } from '../services/webhook-flow-orchestrator.service';
 import { demoTokenValidator } from '../utils/demo-token-validator';
 import { VALID_CONVERSATION_OUTCOMES } from '../types/billing-cron.types';
+import { MODELS, getModelForContext } from '../utils/ai-models';
+
+const SYSTEM_STANDARD_RESPONSES: string[] = [
+  'Só para confirmar: você quer *serviços*, *preços* ou *horários*?',
+  'Infelizmente neste momento não possuo esta informação no sistema.'
+];
 
 // ===== INTENT ALLOWLIST (100% precisão via regex → LLM → validador) =====
 const ALLOWED_INTENTS = new Set<string>([
@@ -749,7 +755,7 @@ class ValidationService {
         // 4) Intent - REMOVIDO: agora será detectado pelo Flow Lock System
         // let intent = ValidationService.detectIntent(text);
         // Detecção de intent movida para flowIntegration.processWithFlowLockOrFallback()
-        let intent = 'general'; // Placeholder - será sobrescrito pelo Flow Lock
+        let intent = null; // Será definido pelo sistema 2-camadas (Regex → LLM)
         // Confirmação explícita (confirmo/ciente/de acordo/ok/👍/✅) quando há pendingConfirmation
         if (/\b(confirm(o|ado)?|ciente|de acordo|ok)\b|[👍✅]/i.test(text)) {
           if (session.pendingConfirmation?.appointmentId) {
@@ -873,7 +879,7 @@ class ValidationService {
           const keys = Array.from(ALLOWED_INTENTS).join(', ');
           const system = `Classifique a intenção do usuário entre: ${keys}. Responda apenas com a chave exata.`;
           const completion = await this.openai.chat.completions.create({
-            model: config.openai.model,
+            model: getModelForContext('intent'),
             temperature: 0,
             max_tokens: 8,
             messages: [
@@ -889,7 +895,7 @@ class ValidationService {
         }
       }
       
-      private async processDirectCommands(sessionKey: string, text: string, phoneNumberId: string, intent: string, session: SessionData): Promise<ProcessingResult | null> {
+      private async processDirectCommands(sessionKey: string, text: string, phoneNumberId: string, intent: string | null, session: SessionData): Promise<ProcessingResult | null> {
       const tenant = await this.getTenantFromCache(phoneNumberId);
       if (!tenant) return null;
       
@@ -930,7 +936,7 @@ class ValidationService {
     // Consulta de preço (determinístico)
     try {
       const isPriceQuery = /(pre[çc]o|valor|quanto\s+(custa|sai|fica))/i.test(text);
-      if ((intent === 'services' || intent === 'general') && isPriceQuery && Array.isArray(tenant.services) && tenant.services.length) {
+      if ((intent === 'services' || intent === 'pricing') && isPriceQuery && Array.isArray(tenant.services) && tenant.services.length) {
         const serviceNames = tenant.services.map((s: any) => s?.name).filter(Boolean);
         let target = session.inferredService;
         if (!target) {
@@ -1004,7 +1010,7 @@ class ValidationService {
     return tenantCache;
     }
     
-    private async getTenantData(phoneNumberId: string, intent: string, userPhone: string, forcedTenantId?: string | null) {
+    private async getTenantData(phoneNumberId: string, intent: string | null, userPhone: string, forcedTenantId?: string | null) {
     // Se temos forcedTenantId do demo token, buscar tenant real
     if (forcedTenantId) {
       logger.info('🎭 [GET-TENANT-DATA] Using forced tenantId for demo', { forcedTenantId });
@@ -1031,7 +1037,7 @@ class ValidationService {
     const tenant = await this.getTenantFromCache(phoneNumberId);
     if (!tenant) return null;
     let user: any = null, appointments: any[] = [];
-    if (['my_appointments', 'cancel', 'reschedule'].includes(intent)) {
+    if (intent && ['my_appointments', 'cancel', 'reschedule'].includes(intent)) {
       user = await DatabaseService.findUserByPhone(tenant.id, userPhone);
       if (user) appointments = await DatabaseService.listUserAppointments(tenant.id, (user as any)?.id);
     }
@@ -1166,20 +1172,21 @@ class ValidationService {
       policies: 'Mostre políticas reais. Se não houver → frase honesta padrão.',
       handoff: 'Se houver outros canais (ex.: e-mail, telefone) → informe-os. Se não → frase honesta padrão.',
       noshow_followup: 'Explique brevemente a política cadastrada (se não houver → frase honesta padrão).',
-      general: 'Se o usuário perguntar algo fora do escopo, responda: "Posso ajudar apenas com informações sobre serviços, horários e agendamentos."',
+      // general removido - não deve ser usado como fallback
       wrong_number: 'Agradeça o aviso e encerre cordialmente.',
       test_message: 'Responda "ok, online" de forma amigável e curta.',
       booking_abandoned: 'Agradeça e encerre cordialmente; ofereça retomar quando quiser.',
-      modify_appointment: 'Peça o ID e detalhe o que deseja alterar (serviço/profissional/data/hora).'
+      modify_appointment: 'Peça o ID e detalhe o que deseja alterar (serviço/profissional/data/hora).',
+      unknown: 'Responda de forma natural e útil, baseado apenas nas informações disponíveis no sistema.'
       };
       
       const history: ChatCompletionMessageParam[] = session.history.slice(-6).map(h => ({ role: h.role, content: h.content }));
       
-      const objectiveKey = onboardingStage ? 'first_time' : (intent === 'greeting' ? 'returning' : intent);
+      const objectiveKey = onboardingStage ? 'first_time' : (intent === 'greeting' ? 'returning' : (intent || 'unknown'));
       const messages: ChatCompletionMessageParam[] = [
         { role: 'system', content: systemPrompt + '\n🚨 REFORÇO CRÍTICO: Toda resposta ou vem do BD, ou é a frase honesta padrão. NUNCA invente dados. NUNCA prometa retorno. NUNCA mencione atendente humano. Proibido usar menus numerados (1,2,3,4,5), emojis de opção (1️⃣,2️⃣,3️⃣) ou "escolha uma opção".' },
         ...history,
-        { role: 'user', content: `${text}\n\n[OBJETIVO]: ${intentInstructions[objectiveKey as keyof typeof intentInstructions] || intentInstructions.general}` }
+        { role: 'user', content: `${text}\n\n[OBJETIVO]: ${intentInstructions[objectiveKey as keyof typeof intentInstructions] || 'Responda de forma natural e útil, baseado apenas nas informações disponíveis no sistema.'}` }
       ];
       
       // Timeout curto para UX responsiva
@@ -1191,7 +1198,7 @@ class ValidationService {
       let completion;
       try {
         completion = await this.openai.chat.completions.create({
-          model: config.openai.model,
+          model: getModelForContext('conversation'),
           temperature: config.openai.temperature,
           max_tokens: config.openai.maxTokens,
           messages
@@ -1201,7 +1208,7 @@ class ValidationService {
         const code = e?.code || e?.error?.code || '';
         if (/model_not_found/i.test(code + ' ' + msg) || /does not have access to model/i.test(msg)) {
           completion = await this.openai.chat.completions.create({
-            model: 'gpt-4',
+            model: getModelForContext('critical'),
             temperature: config.openai.temperature,
             max_tokens: config.openai.maxTokens,
             messages
@@ -1275,7 +1282,7 @@ class ValidationService {
         setImmediate(async () => {
           try {
             const completion = await this.openai.chat.completions.create({
-            model: config.openai.model,
+            model: getModelForContext('intent'),
             temperature: 0,
             max_tokens: 1,
             messages: [
@@ -1415,7 +1422,7 @@ class ValidationService {
     const __persist_totalTokens: number = __persist_llm.total_tokens ?? 0;
     const __persist_apiCostUsd: number = __persist_llm.api_cost_usd ?? 0;
     const __persist_processingCostUsd: number = __persist_llm.processing_cost_usd ?? 0;
-    const __persist_modelUsed: string | null = __persist_llm.model_used ?? (process.env.OPENAI_MODEL || 'gpt-4');
+    const __persist_modelUsed: string | null = __persist_llm.model_used ?? (process.env.OPENAI_MODEL || 'gpt-3.5-turbo');
     const __persist_aiConfidence: number | undefined = result?.telemetryData?.confidence;
 
     const __persist_intent: string | undefined = result?.telemetryData?.intent ?? undefined;
@@ -1493,7 +1500,11 @@ class ValidationService {
           conversation_context: { session_id: sessionUuid, duration_minutes: durationMinutes }
         } as const;
 
-        // 5) Compor linhas finais
+        // 5) Definir custos base de infraestrutura (valores do orchestrator)
+        const BASE_INFRA_COST_USER = 0.00003; // 0.00002 (infra) + 0.00001 (inserts)
+        const BASE_INFRA_COST_AI_NO_LLM = 0.00001; // custo mínimo quando não há LLM
+
+        // 6) Compor linhas finais
         const userRow = {
           ...commonBase,
           content: __persist_userContent,
@@ -1502,7 +1513,7 @@ class ValidationService {
           intent_detected: __persist_intent ?? null,
           tokens_used: 0,
           api_cost_usd: 0,
-          processing_cost_usd: 0,
+          processing_cost_usd: BASE_INFRA_COST_USER, // <<<<<<<<<< AQUI
           model_used: null,
           confidence_score: null
         };
@@ -1510,16 +1521,21 @@ class ValidationService {
         // Ajuste de custo de processamento quando não há LLM (resposta determinística)
         let __effective_processingCostUsd = __persist_processingCostUsd;
         if (!__persist_totalTokens || __persist_totalTokens === 0) {
-          // custo mínimo de infra + inserts no BD
-          __effective_processingCostUsd = 0.00003; // 0.00002 infra + 0.00001 DB
+          __effective_processingCostUsd = BASE_INFRA_COST_AI_NO_LLM;
         }
+
+        // Filtro para respostas padrão do sistema
+        const aiContentForIntentCheck = __persist_aiContent || '';
+        const intent_for_ai = SYSTEM_STANDARD_RESPONSES.some(s => aiContentForIntentCheck.includes(s))
+          ? 'system_clarification'
+          : (__persist_intent ?? null);
 
         const aiRow = {
           ...commonBase,
           content: __persist_aiContent,
           is_from_user: false,
           message_type: 'text',
-          intent_detected: __persist_intent ?? null,
+          intent_detected: intent_for_ai,
           tokens_used: __persist_totalTokens,
           api_cost_usd: __persist_apiCostUsd,
           processing_cost_usd: __effective_processingCostUsd,
@@ -1552,7 +1568,7 @@ class ValidationService {
         shouldSendWhatsApp: result.shouldSendWhatsApp,
         intent: result.telemetryData?.intent,
         tenantId: result.updatedContext?.tenant_id,
-        model: config.openai.model
+        model: result.telemetryData?.model_used || 'unknown'
       });
     });
 
@@ -1622,7 +1638,7 @@ export default router;
             content: 'Você ainda está aí? Se preferir, posso encerrar por aqui e retomamos quando quiser.',
             is_from_user: false,
             message_type: 'text',
-            intent_detected: 'general',
+            intent_detected: null,
             conversation_outcome: null, // OUTCOMES DETERMINADOS PELO ConversationOutcomeAnalyzerService
             message_source: 'whatsapp_demo',
             model_used: 'system',
@@ -1644,7 +1660,7 @@ export default router;
             content: 'Conversa encerrada por inatividade. Podemos retomar quando quiser.',
             is_from_user: false,
             message_type: 'text',
-            intent_detected: 'general',
+            intent_detected: null,
             conversation_outcome: null, // OUTCOMES DETERMINADOS PELO ConversationOutcomeAnalyzerService
             message_source: 'whatsapp_demo',
             model_used: 'system',

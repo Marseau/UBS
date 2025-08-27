@@ -548,7 +548,7 @@ export class TenantMetricsService {
         try {
             // Calculate previous period based on current period
             const periodDays = parseInt(period.replace('d', ''));
-            const client = this.analyticsService['client'] || getAdminClient();
+            const client = (this.analyticsService as any).client || getAdminClient();
             
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - (periodDays * 2));

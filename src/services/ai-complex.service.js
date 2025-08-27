@@ -12,30 +12,67 @@ const media_processor_service_1 = require("./media-processor.service");
 const { ConversationOutcomeService } = require("./conversation-outcome.service");
 
 // ==== INTENTS ALLOWLIST (sem outcomes) ====
-const ALLOWED_INTENTS = [
-  'greeting',
-  'services',
-  'pricing',
-  'availability',
-  'my_appointments',
-  'address',
-  'payments',
-  'business_hours',
-  'cancel',
-  'reschedule',
-  'confirm',
-  'modify_appointment',
-  'policies',
-  'wrong_number',
-  'test_message',
-  'booking_abandoned',
-  'noshow_followup'
-];
+const ALLOWED_INTENTS = new Set([
+  'greeting','services','pricing','availability','my_appointments','address','payments',
+  'business_hours','cancel','reschedule','confirm','modify_appointment','policies',
+  'wrong_number','test_message','booking_abandoned','noshow_followup'
+]);
+
+function clamp(num, min, max) { return Math.max(min, Math.min(max, num)); }
+
+// Normalização conservadora para LLM
+function normalizeLLMConfidence(raw) {
+  if (typeof raw !== 'number' || Number.isNaN(raw)) return 0.6;
+  // corta topos: nunca 1.0; nunca <0.3
+  return clamp(raw, 0.3, 0.85);
+}
+
+exports.classifyIntentWithLLM = async function classifyIntentWithLLM(openai, model, text) {
+  const system = [
+    'Você é um CLASSIFICADOR DE INTENÇÃO em um SaaS de agendamento.',
+    'Responda com APENAS UMA chave EXATA dentre as opções válidas.',
+    'Se não tiver certeza, retorne exatamente: "unknown".',
+    '',
+    'PADRÕES ESPECIAIS:',
+    '- Adiamento/postpone → "booking_abandoned"',
+    '- Agradecimentos/elogios → "greeting"',
+    '- Requisitos/procedimentos (docs, tempo) → "services"',
+    '- Contexto empresarial genérico → "services"',
+    '',
+    'EXEMPLOS:',
+    '- "Entendi, vou verificar e retorno" → booking_abandoned',
+    '- "Obrigada pela flexibilidade!" → greeting',
+    '- "É necessário experiência prévia?" → services',
+    '- "Que documentos preciso levar?" → services',
+    '- "Vou enviar o contrato por email" → services',
+    '',
+    'Opções válidas:',
+    Array.from(ALLOWED_INTENTS).join(', ')
+  ].join('\n');
+
+  const completion = await openai.chat.completions.create({
+    model,
+    temperature: 0,
+    max_tokens: 8,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: text }
+    ]
+  });
+
+  const raw = (completion.choices?.[0]?.message?.content || '').trim().toLowerCase();
+  const intent = raw.replace(/[^a-z_]/g, ''); // sanitiza
+  
+  if (intent === 'unknown') return { intent: null, confidence: 0.0, decision_method: 'llm' };
+  if (!ALLOWED_INTENTS.has(intent)) return { intent: null, confidence: 0.0, decision_method: 'llm' };
+
+  return { intent, confidence: normalizeLLMConfidence(completion?.usage?.prompt_tokens ? 0.7 : 0.6), decision_method: 'llm' };
+};
 class AIService {
     constructor() {
         this.config = {
             openaiApiKey: process.env.OPENAI_API_KEY || '',
-            model: process.env.OPENAI_MODEL || 'gpt-4-turbo-preview',
+            model: process.env.OPENAI_MODEL || 'gpt-4',
             temperature: parseFloat(process.env.AI_TEMPERATURE || '0.7'),
             maxTokens: parseInt(process.env.AI_MAX_TOKENS || '2048'),
             timeout: parseInt(process.env.AI_TIMEOUT || '30000'),

@@ -113,7 +113,7 @@ export class ConversationHistoryPersistence {
         outcome: null as any, // Outcome will be set ONLY when conversation is finished via ConversationOutcomeAnalyzerService
         phone_number_id: assistantMessage.phoneNumberId,
         conversation_context: assistantMessage.conversationContext,
-        model_used: assistantMessage.modelUsed || 'gpt-4',
+        model_used: assistantMessage.modelUsed || 'gpt-3.5-turbo',
         created_at: timestamp
       };
 
@@ -194,7 +194,7 @@ export class ConversationHistoryPersistence {
         outcome: null as any, // Outcome will be set ONLY when conversation is finished via ConversationOutcomeAnalyzerService
         phone_number_id: message.phoneNumberId,
         conversation_context: message.conversationContext,
-        model_used: message.isFromUser ? undefined : (message.modelUsed || 'gpt-4'),
+        model_used: message.isFromUser ? undefined : (message.modelUsed || 'gpt-3.5-turbo'),
         created_at: timestamp
       };
 

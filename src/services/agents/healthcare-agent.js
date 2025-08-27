@@ -24,7 +24,7 @@ class HealthcareAgent {
             ],
             maxTokens: 2048,
             temperature: 0.7,
-            model: 'gpt-4-turbo-preview'
+            model: 'gpt-4'
         };
     }
     getAgent() {

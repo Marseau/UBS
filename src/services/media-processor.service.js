@@ -10,7 +10,7 @@ class MediaProcessorService {
             const base64Image = content.toString('base64');
             const dataUrl = `data:${mimeType};base64,${base64Image}`;
             const response = await this.openai.chat.completions.create({
-                model: 'gpt-4-vision-preview',
+                model: 'gpt-4',
                 messages: [
                     {
                         role: 'user',
