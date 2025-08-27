@@ -27,7 +27,7 @@ function verifyDemoToken(token: string | undefined): boolean {
 }
 
 // 📌 Endpoint Demo — apenas porta de entrada
-router.post("/demo/chat", async (req, res) => {
+router.post("/chat", async (req, res) => {
   try {
     const token = req.headers["x-demo-token"] as string;
     if (!verifyDemoToken(token)) {

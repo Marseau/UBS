@@ -5,18 +5,20 @@
     "declaration": false,
     "skipLibCheck": true,
     "noImplicitAny": false,
-    "allowJs": false
+    "allowJs": true,
+    "emitDeclarationOnly": false
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "src/**/*.js"
   ],
   "exclude": [
     "src/frontend/js/**/*",
     "src/services/subscription-monitor-enhanced.service.ts",
     "scripts/**/*",
-    "*.js",
-    "**/*.js",
     "node_modules",
-    "dist"
+    "dist",
+    "tests",
+    "tools"
   ]
 }

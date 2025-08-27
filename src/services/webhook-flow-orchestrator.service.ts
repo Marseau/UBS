@@ -4,9 +4,7 @@
  * Baseado na OS: Sincronizar Intenções e Evitar Mistura
  */
 
-import { DeterministicIntentDetectorService, detectIntents } from './deterministic-intent-detector.service';
-import { LLMIntentClassifierService } from './llm-intent-classifier.service';
-import { IntentDisambiguationService } from './intent-disambiguation.service';
+import { DeterministicIntentDetectorService, detectIntents, INTENT_KEYS } from './deterministic-intent-detector.service';
 import { FlowLockManagerService } from './flow-lock-manager.service';
 import { ConversationOutcomeAnalyzerService } from './conversation-outcome-analyzer.service';
 import { mergeEnhancedConversationContext } from '../utils/conversation-context-helper';
@@ -38,16 +36,12 @@ export interface WebhookOrchestrationResult {
 
 export class WebhookFlowOrchestratorService {
   private intentDetector: DeterministicIntentDetectorService;
-  private llmClassifier: LLMIntentClassifierService;
-  private disambiguation: IntentDisambiguationService;
   private flowManager: FlowLockManagerService;
   private outcomeAnalyzer: ConversationOutcomeAnalyzerService;
   private openai: OpenAI;
 
   constructor() {
     this.intentDetector = new DeterministicIntentDetectorService();
-    this.llmClassifier = new LLMIntentClassifierService();
-    this.disambiguation = new IntentDisambiguationService();
     this.flowManager = new FlowLockManagerService();
     this.outcomeAnalyzer = new ConversationOutcomeAnalyzerService();
     this.openai = new OpenAI({
@@ -68,8 +62,8 @@ export class WebhookFlowOrchestratorService {
     const startTime = Date.now();
 
     try {
-      // 1. Resolver contexto enhanced (com flow_lock) - mutável para desambiguação
-      let context = await this.resolveEnhancedContext(
+      // 1. Resolver contexto enhanced (com flow_lock)
+      const context = await this.resolveEnhancedContext(
         userId, 
         tenantId, 
         tenantConfig,
@@ -85,65 +79,50 @@ export class WebhookFlowOrchestratorService {
         return this.handleFlowWarning(context, timeoutStatus.message || '');
       }
 
-      // 3. Sistema de detecção de intenção em 3 camadas
-      let intentResult = await this.detectIntentThreeLayers(
-        messageText, 
-        context,
-        existingContext?.session_id || userId
-      );
+      // 3. Detecção determinística de intenção
+      const primary = this.intentDetector.detectPrimaryIntent(messageText); // string | null
+
+      // 📊 LOG: após regex (camada 1)
+      console.log('[INTENT] regex primary:', primary);
+
+      let finalIntent: string | null = primary;
+
+      if (!finalIntent) {
+        // 📊 LOG: antes de chamar LLM (camada 2)
+        console.log('[INTENT] Calling LLM (regex=null)');
+        finalIntent = await this.classifyIntentWithLLM(messageText);
+      }
+
+      // 📊 LOG: após LLM (camada 2)  
+      console.log('[INTENT] final:', finalIntent);
+
+      // se ainda null → desambiguação (camada 3)
+      if (!finalIntent) {
+        // responder pergunta curta e marcar awaiting_intent = true
+        // ...
+      }
       
-      // Se está aguardando desambiguação, processar resposta
-      if (this.disambiguation.isAwaitingIntent(context)) {
-        const disambiguationResult = this.disambiguation.processDisambiguationResponse(messageText);
-        
-        if (disambiguationResult.resolvedIntent) {
-          // Intent resolvida via desambiguação
-          intentResult = {
-            intent: disambiguationResult.resolvedIntent,
-            confidence: 0.9,
-            decision_method: 'llm_classification',
-            allowed_by_flow_lock: true
-          };
-          
-          // Limpar estado de aguardando
-          context = this.disambiguation.clearAwaitingIntent(context);
-          
-          console.log(`🎯 [INTENT-3LAYER] Intent resolvida via desambiguação: ${intentResult.intent}`);
-        }
-      }
+      // ✅ ADAPTER: Converter para formato esperado pelo resto do código
+      const intentResult = {
+        intent: finalIntent,
+        confidence: finalIntent ? 0.95 : 0.0,
+        decision_method: finalIntent === primary ? 'deterministic_regex' : 'llm_classification',
+        allowed_by_flow_lock: true
+      } as const;
 
-      // 4. Se ainda não tem intent, ativar desambiguação (Camada 3)
-      if (!intentResult.intent && !this.disambiguation.isAwaitingIntent(context)) {
-        console.log('❓ [INTENT-3LAYER] Ativando desambiguação (Camada 3)');
-        
-        const disambiguationResult = this.disambiguation.generateDisambiguationQuestion();
-        const updatedContextWithAwaiting = this.disambiguation.markAwaitingIntent(context);
-        
-        return {
-          aiResponse: disambiguationResult.disambiguationQuestion!,
-          shouldSendWhatsApp: true,
-          conversationOutcome: null,
-          updatedContext: updatedContextWithAwaiting,
-          telemetryData: {
-            intent: null,
-            confidence: 0.0,
-            decision_method: 'disambiguation_request',
-            flow_lock_active: false,
-            processing_time_ms: Date.now() - startTime
-          }
-        };
-      }
+      // 🚨 CORREÇÃO: SEMPRE usar OpenAI para gerar respostas reais e capturar métricas LLM
+      // Removido curto-circuito determinístico que impedia uso do OpenAI
 
-      // 5. Verificar se intenção é permitida pelo flow lock
+      // 4. Verificar se intenção é permitida pelo flow lock
       if (!intentResult.allowed_by_flow_lock) {
         return this.handleBlockedIntent(context, intentResult);
       }
 
-      // 6. Determinar novo fluxo baseado na intenção
+      // 5. Determinar novo fluxo baseado na intenção
       const targetFlow = this.mapIntentToFlow(intentResult.intent);
       const flowDecision = this.flowManager.canStartNewFlow(context, targetFlow);
 
-      // 7. 🚨 CORREÇÃO CRÍTICA: Sempre usar OpenAI para gerar resposta real
+      // 6. 🚨 CORREÇÃO CRÍTICA: Sempre usar OpenAI para gerar resposta real
       // Flow Lock apenas gerencia estado, OpenAI gera TODAS as respostas
       console.log('🔍 ORQUESTRADOR DEBUG - Antes de chamar generateAIResponseWithFlowContext:', {
         intent: intentResult.intent,
@@ -165,7 +144,7 @@ export class WebhookFlowOrchestratorService {
         responseLength: result.response.length
       });
 
-      // 8. Atualizar contexto com novo estado
+      // 7. Atualizar contexto com novo estado
       const updatedContext = await this.updateContextWithFlowState(
         userId,
         tenantId,
@@ -264,6 +243,7 @@ export class WebhookFlowOrchestratorService {
    * Mapeia intent para flow type
    */
   private mapIntentToFlow(intent: string | null): FlowType {
+    if (!intent) return null;
     const flowMap: Record<string, FlowType> = {
       'onboarding': 'onboarding',
       'booking': 'booking',
@@ -280,9 +260,6 @@ export class WebhookFlowOrchestratorService {
       'general': null
     };
 
-    // Se intent for null, não cria fluxo
-    if (!intent) return null;
-    
     // Intents institucionais não criam fluxo
     if (intent.startsWith('institutional_')) return null;
 
@@ -423,61 +400,6 @@ export class WebhookFlowOrchestratorService {
       response: '🚨 FALLBACK: executeFlowAction - Não entendi. Pode reformular?',
       outcome: null as any, // 🚨 CORREÇÃO: fallback não finaliza conversa
       newFlowLock: context.flow_lock
-    };
-  }
-
-  /**
-   * Sistema de detecção de intenção em 3 camadas
-   * Camada 1: Determinístico (regex)
-   * Camada 2: LLM fechado (temperature=0, allowlist)  
-   * Camada 3: Desambiguação com usuário
-   */
-  private async detectIntentThreeLayers(
-    messageText: string,
-    context: any,
-    sessionId: string
-  ) {
-    const startTime = Date.now();
-    
-    // CAMADA 1: Determinística
-    console.log('🔍 [INTENT-3LAYER] Camada 1: Detector determinístico');
-    const detectedIntents = detectIntents(messageText);
-    const primaryIntent = detectedIntents[0] || null;
-    
-    if (primaryIntent) {
-      console.log(`✅ [INTENT-3LAYER] Camada 1 SUCCESS: ${primaryIntent}`);
-      return {
-        intent: primaryIntent,
-        confidence: 1.0, // 100% de confiança em matches determinísticos
-        decision_method: 'deterministic_regex',
-        allowed_by_flow_lock: true
-      };
-    }
-    
-    console.log('❌ [INTENT-3LAYER] Camada 1 FALHOU - tentando Camada 2');
-    
-    // CAMADA 2: LLM Fechado
-    console.log('🤖 [INTENT-3LAYER] Camada 2: Classificador LLM');
-    const llmResult = await this.llmClassifier.classifyIntent(messageText);
-    
-    if (llmResult.intent) {
-      console.log(`✅ [INTENT-3LAYER] Camada 2 SUCCESS: ${llmResult.intent} (${llmResult.processing_time_ms}ms)`);
-      return {
-        intent: llmResult.intent,
-        confidence: llmResult.confidence,
-        decision_method: llmResult.decision_method,
-        allowed_by_flow_lock: true
-      };
-    }
-    
-    console.log('❌ [INTENT-3LAYER] Camada 2 FALHOU - Camada 3 será acionada');
-    
-    // CAMADA 3: Será tratada no fluxo principal (desambiguação)
-    return {
-      intent: null,
-      confidence: 0.0,
-      decision_method: 'needs_disambiguation',
-      allowed_by_flow_lock: true
     };
   }
 
@@ -887,6 +809,11 @@ Intenção detectada: ${intent}`;
    * Retorna null se conversa ainda está em andamento
    */
   private shouldPersistOutcome(intent: string | null, response: string, context: EnhancedConversationContext): string | null {
+    // 🔧 MODO VALIDAÇÃO: Persistir todas as mensagens para análise de intents
+    if (process.env.ENABLE_INTENT_VALIDATION === 'true') {
+      return this.determineConversationOutcome(intent, response, true);
+    }
+    
     // 🚨 CORREÇÃO CRÍTICA: Outcome deve ser NULL para conversas em andamento
     // Só persistir quando conversa REALMENTE finaliza
     
@@ -910,9 +837,15 @@ Intenção detectada: ${intent}`;
 
   /**
    * Determina outcome da conversa baseado na intenção e resposta
-   * APENAS para intents que realmente finalizam conversa
+   * APENAS para intents que realmente finalizam conversa (ou modo validação)
    */
-  private determineConversationOutcome(intent: string, response: string): string {
+  private determineConversationOutcome(intent: string | null, response: string, isValidationMode: boolean = false): string {
+    // 🔧 MODO VALIDAÇÃO: Persistir todas as mensagens para análise
+    if (isValidationMode) {
+      // Em modo validação, usar o intent como outcome para análise
+      return `validation_${intent || 'null'}`;
+    }
+    
     // Mapear APENAS intents finalizadores para outcomes válidos
     const finalizingOutcomeMap: Record<string, string> = {
       'booking_confirm': 'appointment_created',
@@ -921,7 +854,7 @@ Intenção detectada: ${intent}`;
     };
 
     // Se não é um intent finalizador, isso é um erro de lógica
-    if (!finalizingOutcomeMap[intent]) {
+    if (!intent || !finalizingOutcomeMap[intent]) {
       console.error(`🚨 ERRO: determineConversationOutcome chamado para intent não-finalizador: ${intent}`);
       return 'error';
     }
@@ -970,4 +903,63 @@ Intenção detectada: ${intent}`;
    * 🚨 FUNÇÃO REMOVIDA: tryDeterministicResponse
    * Todas as respostas devem usar OpenAI para capturar métricas LLM corretas
    */
+
+  /**
+   * Classificação LLM determinística e fechada
+   * Usa temperature=0 e top_p=0 para máxima consistência
+   */
+  private async classifyIntentWithLLM(text: string): Promise<string | null> {
+    const SYSTEM_PROMPT = `Você é um classificador de intenção. Classifique a mensagem do usuário em EXATAMENTE UMA das chaves abaixo e nada além disso.
+
+INTENTS PERMITIDAS:
+- greeting
+- services
+- pricing
+- availability
+- my_appointments
+- address
+- payments
+- business_hours
+- cancel
+- reschedule
+- confirm
+- modify_appointment
+- policies
+- wrong_number
+- test_message
+- booking_abandoned
+- noshow_followup
+
+Regras:
+1) Responda SOMENTE com JSON no formato: {"intent":"<uma-das-chaves>"}.
+2) Se NÃO for possível classificar com segurança, responda exatamente: {"intent":null}.
+3) Não explique. Não inclua texto extra. Sem sinônimos fora da lista.`;
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || 'gpt-4',
+        temperature: 0,
+        top_p: 0,
+        max_tokens: 20,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: `Mensagem do usuário (pt-BR):\n---\n${text}\n---\nClassifique.` }
+        ]
+      });
+
+      const raw = completion.choices?.[0]?.message?.content?.trim() || '';
+      let parsed: { intent: string | null } | null = null;
+      try { parsed = JSON.parse(raw); } catch { return null; }
+
+      if (!parsed || typeof parsed.intent === 'undefined') return null;
+      if (parsed.intent === null) return null;
+
+      // Validar contra a allowlist FINAL
+      return INTENT_KEYS.includes(parsed.intent as any) ? parsed.intent : null;
+
+    } catch (error) {
+      console.error('❌ LLM intent classification failed:', error);
+      return null;
+    }
+  }
 }
