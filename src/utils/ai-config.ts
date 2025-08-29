@@ -27,7 +27,7 @@ export function getOpenAIModel(): string {
     console.log(`🤖 AI Models: [${models.join(', ')}] (fallback system)`);
   }
   
-  return models[0];
+  return models[0] || 'gpt-4o-mini'; // fallback padrão
 }
 
 /**

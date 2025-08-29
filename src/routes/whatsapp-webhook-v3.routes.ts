@@ -38,7 +38,8 @@ const ALLOWED_INTENTS = new Set<string>([
   'wrong_number',
   'test_message',
   'booking_abandoned',
-  'noshow_followup'
+  'noshow_followup',
+  'booking'  // ✅ ADICIONADO: intent usado pelo orquestrador
 ]);
 
 /**
@@ -70,7 +71,7 @@ function mapIntentToConversationOutcome(intent: string | undefined, text: string
       result = 'appointment_inquiry';
       break;
     case 'services':
-      result = 'service_inquiry'; // ✅ CORRIGIDO: services deve ser service_inquiry
+      result = 'info_request_fulfilled'; // ✅ CORRIGIDO: services mapeado para outcome válido
       break;
     case 'pricing':
       result = 'price_inquiry';
@@ -761,7 +762,7 @@ class ValidationService {
         }
         
         // 5) Direct commands (cancel/remarcar/address/payments)
-        const direct = await this.processDirectCommands(sessionKey, text, phoneNumberId, intent, session);
+        const direct = await this.processDirectCommands(sessionKey, text, phoneNumberId, intent, session, forcedTenantId || undefined);
         if (direct) {
         this.captureUsageOnlyAsync(sessionKey, session, text);
         await this.updateSessionHistory(sessionKey, session, text, direct.response);
@@ -888,8 +889,30 @@ class ValidationService {
         }
       }
       
-      private async processDirectCommands(sessionKey: string, text: string, phoneNumberId: string, intent: string | null, session: SessionData): Promise<ProcessingResult | null> {
-      const tenant = await this.getTenantFromCache(phoneNumberId);
+      private async processDirectCommands(sessionKey: string, text: string, phoneNumberId: string, intent: string | null, session: SessionData, forcedTenantId?: string): Promise<ProcessingResult | null> {
+      // ✅ CORRIGIDO: Usar forcedTenantId quando disponível (demo mode)
+      let tenant: any = null;
+      if (forcedTenantId) {
+        const { data: tenantData } = await supabaseAdmin.from('tenants').select('*').eq('id', forcedTenantId).single();
+        if (tenantData) {
+          tenant = {
+            id: tenantData.id,
+            business_name: tenantData.business_name,
+            domain: tenantData.domain || 'general',
+            address: undefined, // Demo mode - endereço opcional
+            payment_methods: undefined,
+            policies: {
+              reschedule: 'Remarcações até 24h antes sem custo.',
+              cancel: 'Cancelamentos até 24h antes com reembolso integral.',
+              no_show: 'Em caso de no-show, poderá haver cobrança.'
+            },
+            business_description: undefined,
+            services: []
+          };
+        }
+      } else {
+        tenant = await this.getTenantFromCache(phoneNumberId);
+      }
       if (!tenant) return null;
       
       // Cancelamento direto
@@ -926,6 +949,8 @@ class ValidationService {
       this.captureUsageOnlyAsync(sessionKey, session, text);
       return { success: true, response: `Formas de pagamento: ${tenant.payment_methods.join(', ')}. Deseja ver os serviços?`, action: 'direct_response' };
     }
+    // 🚫 COMENTADO: Interceptava services antes do webhook-flow-orchestrator
+    /*
     // Consulta de preço (determinístico)
     try {
       const isPriceQuery = /(pre[çc]o|valor|quanto\s+(custa|sai|fica))/i.test(text);
@@ -959,6 +984,9 @@ class ValidationService {
         return { success: true, response: `Para ${target}, o valor é sob consulta. Posso confirmar e te retorno, ou prefere que eu já veja horários?`, action: 'direct_response', metadata: { intent: 'services', service: target } };
       }
     } catch {}
+    */
+    // 🚫 COMENTADO: Interceptava services antes do webhook-flow-orchestrator  
+    /*
     // Serviços (determinístico, sem LLM)
     if (intent === 'services' && Array.isArray(tenant.services) && tenant.services.length) {
       const names = tenant.services.map((s: any) => s?.name).filter(Boolean);
@@ -974,6 +1002,7 @@ class ValidationService {
       const phrase = top.length ? `Temos ${list}${tail}. Quer que eu veja horários ou valores de algum específico?` : 'Temos diversos serviços. Posso te enviar as opções conforme sua preferência (manhã, tarde ou noite)?';
       return { success: true, response: phrase, action: 'direct_response', metadata: { intent: 'services', tenantId: tenant.id } };
     }
+    */
     return null;
     }
     
@@ -983,17 +1012,28 @@ class ValidationService {
       const t = await DatabaseService.findTenantByBusinessPhone(phoneNumberId);
       if (t) {
         const services = await DatabaseService.listServices(t.id);
+        // ✅ CORRIGIDO: Usar business_address e business_rules do schema
+        const addrObj: any = (t as any)?.business_address;
+        const address = addrObj ? 
+          [addrObj?.street, addrObj?.number, addrObj?.city, addrObj?.state]
+            .filter(Boolean).join(', ') : undefined;
+        
+        const rules: any = (t as any)?.business_rules || {};
+        const policies = {
+          reschedule: rules?.cancellation_policy || 'Remarcações até 24h antes sem custo.',
+          cancel: rules?.cancellation_policy || 'Cancelamentos até 24h antes com reembolso integral.',
+          no_show: rules?.peak_hours_surcharge ? 
+            'No-show: pode haver cobrança.' : 
+            'Em caso de no-show, poderá haver cobrança.'
+        };
+
         tenantCache = {
           id: t.id,
           business_name: t.business_name,
           domain: t.domain || 'general',
-          address: t?.address || undefined,
-          payment_methods: Array.isArray((t as any)?.payment_methods) ? (t as any).payment_methods : undefined,
-          policies: {
-            reschedule: t?.reschedule_policy || 'Remarcações até 24h antes sem custo.',
-            cancel: t?.cancel_policy || 'Cancelamentos até 24h antes com reembolso integral.',
-            no_show: t?.no_show_policy || 'Em caso de não comparecimento, poderá haver cobrança.'
-          },
+          address,
+          payment_methods: rules?.payment_methods || undefined,
+          policies,
           business_description: (t as any)?.business_description || undefined,
           services
         };
@@ -1394,11 +1434,12 @@ class ValidationService {
     const processingTime = Date.now() - startTime;
     const response = {
       status: 'success',
-      response: result.aiResponse,
+      response: result?.aiResponse || 'Sem resposta gerada.',
       telemetry: { 
-        ...result.telemetryData, 
+        intent_detected: result?.telemetryData?.intent || 'general', // <- garantir intent aqui
         processingTime,
-        tokens_used: result.llmMetrics?.total_tokens || 0 // ✅ INCLUIR tokens_used na resposta
+        tokens_used: result?.llmMetrics?.total_tokens || 0,
+        ...(result?.telemetryData ?? {})
       }
     };
     
@@ -1425,7 +1466,7 @@ class ValidationService {
     const __persist_modelUsed: string | null = __persist_llm.model_used ?? (process.env.OPENAI_MODEL || 'gpt-3.5-turbo');
     const __persist_aiConfidence: number | undefined = result?.telemetryData?.confidence;
 
-    const __persist_intent: string | undefined = result?.telemetryData?.intent ?? undefined;
+    // ❌ REMOVIDO: Não persistir intent na conversation_history conforme combinado
     // === Captura demo token payload para persistência assíncrona ===
     const __persist_demoPayload = (req as any)?.demoMode || null;
 
@@ -1510,7 +1551,7 @@ class ValidationService {
           content: __persist_userContent,
           is_from_user: true,
           message_type: 'text',
-          intent_detected: __persist_intent ?? null,
+          intent_detected: null, // ✅ SEMPRE NULL conforme combinado
           tokens_used: 0,
           api_cost_usd: 0,
           processing_cost_usd: BASE_INFRA_COST_USER, // <<<<<<<<<< AQUI
@@ -1524,11 +1565,8 @@ class ValidationService {
           __effective_processingCostUsd = BASE_INFRA_COST_AI_NO_LLM;
         }
 
-        // Filtro para respostas padrão do sistema
-        const aiContentForIntentCheck = __persist_aiContent || '';
-        const intent_for_ai = SYSTEM_STANDARD_RESPONSES.some(s => aiContentForIntentCheck.includes(s))
-          ? 'system_clarification'
-          : (__persist_intent ?? null);
+        // ✅ SEMPRE NULL: Não persistir intent conforme combinado
+        const intent_for_ai = null;
 
         const aiRow = {
           ...commonBase,
@@ -1554,7 +1592,7 @@ class ValidationService {
           sessionKey,
           tenantId,
           userId,
-          intent: __persist_intent,
+          intent: null, // ✅ SEMPRE NULL conforme combinado
           tokensUsed: __persist_totalTokens
         });
       } catch (e) {
@@ -1583,6 +1621,7 @@ class ValidationService {
 }
 
 router.post('/webhook', validateWhatsAppSignature, processWebhookMessage);
+
 
 // 🎯 EXPORTAR: Para uso da demo
 export { processWebhookMessage };

@@ -7,6 +7,7 @@
 import { DeterministicIntentDetectorService, detectIntents, INTENT_KEYS, detectIntentByRegex } from './deterministic-intent-detector.service';
 import { FlowLockManagerService } from './flow-lock-manager.service';
 import { ConversationOutcomeAnalyzerService } from './conversation-outcome-analyzer.service';
+const ServiceService = require('./services.service.js');
 
 const SYSTEM_STANDARD_RESPONSES: string[] = [
   'Só para confirmar: você quer *serviços*, *preços* ou *horários*?',
@@ -417,12 +418,12 @@ export class WebhookFlowOrchestratorService {
       };
     }
 
-    if (intent === 'pricing') {
+    if (intent === 'pricing' || intent === 'services') {
       const pricingLock = this.flowManager.startFlowLock('pricing', 'start');
-      const response = this.generatePricingResponse(tenantConfig);
+      const response = await this.generatePricingResponse(tenantConfig, context.tenant_id);
       return {
         response: response + ' Gostaria de agendar algum serviço?',
-        outcome: this.determineConversationOutcome('pricing', response), // ✅ CORREÇÃO: usar mapping correto
+        outcome: 'pricing_info_provided', // ✅ CORREÇÃO: pricing/services fornecem informação
         newFlowLock: pricingLock
       };
     }
@@ -567,18 +568,26 @@ export class WebhookFlowOrchestratorService {
    * Geradores de resposta
    */
   
-  private generatePricingResponse(tenantConfig: any): string {
-    const services = tenantConfig?.services || [];
-    if (services.length === 0) {
+  private async generatePricingResponse(tenantConfig: any, tenantId: string): Promise<string> {
+    try {
+      const serviceService = new ServiceService();
+      const result = await serviceService.findServices(tenantId, { limit: 10 });
+      const services = result.services || [];
+      
+      if (services.length === 0) {
+        return 'Entre em contato para informações sobre preços.';
+      }
+
+      let response = '💰 Nossos preços:\n\n';
+      services.slice(0, 5).forEach((service: any) => {
+        response += `• ${service.name}: R$ ${service.base_price ? service.base_price : service.price}\n`;
+      });
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Erro ao buscar serviços:', error);
       return 'Entre em contato para informações sobre preços.';
     }
-
-    let response = '💰 Nossos preços:\n\n';
-    services.slice(0, 5).forEach((service: any) => {
-      response += `• ${service.name}: R$ ${service.price}\n`;
-    });
-    
-    return response;
   }
 
   private generateInstitutionalResponse(intent: string, tenantConfig: any): string {
@@ -637,6 +646,17 @@ export class WebhookFlowOrchestratorService {
         response: `Confirma agendamento no horário ${messageText}? Digite "confirmo" para finalizar.`,
         outcome: 'booking_slot_selected',
         newFlowLock: nextLock
+      };
+    }
+
+    // === HANDLERS ESPECÍFICOS ANTES DO OPENAI ===
+    if (intent === 'pricing' || intent === 'services') {
+      const pricingLock = this.flowManager.startFlowLock('pricing', 'start');
+      const response = await this.generatePricingResponse(tenantConfig, context.tenant_id);
+      return {
+        response: response + ' Gostaria de agendar algum serviço?',
+        outcome: 'pricing_info_provided', // ✅ CORREÇÃO: pricing/services fornecem informação
+        newFlowLock: pricingLock
       };
     }
 

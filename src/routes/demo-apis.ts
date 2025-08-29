@@ -1,10 +1,10 @@
 // src/routes/demo-apis.ts
-import express from 'express';
-import bcrypt from 'bcrypt';
-import crypto from 'crypto';
-import { createClient } from '@supabase/supabase-js';
-// handleIncomingMessage removido - agora usa diretamente rota WhatsApp única
-import { generateDemoToken, demoTokenValidator } from '../utils/demo-token-validator';
+import express from "express";
+import crypto from "crypto";
+import bcrypt from "bcrypt";
+import { createClient } from "@supabase/supabase-js";
+import { handleIncomingMessage } from "../services/message-handler"; 
+import verifyDemoToken, { generateDemoToken } from "../utils/demo-token-validator";
 
 const router = express.Router();
 
@@ -285,63 +285,44 @@ router.post('/create-tenant', async (req, res) => {
     const businessPhoneDigits = cleanPhone(whatsappNumber);
     const userPhoneDigits = cleanPhone(userNumber);
 
-    console.log('🔍 DEBUG TENANT EXISTENTE:');
-    console.log('  - whatsappNumber original:', whatsappNumber);
-    console.log('  - businessPhoneDigits limpo:', businessPhoneDigits);
+    const cleanBusinessPhone = String(whatsappNumber).replace(/\D/g, "");
 
-    // PRIMEIRO: Verificar se é tenant existente ANTES das validações de serviços/colaboradores
-    const { data: existingTenant, error: tenantSearchError } = await supabase
-      .from('tenants')
-      .select('id, business_name, domain, account_type, phone, email')
-      .eq('phone', businessPhoneDigits)
+    // 1) Reuso por telefone (apenas contas de teste)
+    const { data: existingByPhone, error: findPhoneErr } = await supabase
+      .from("tenants")
+      .select("id, business_name, domain, account_type, phone")
+      .eq("phone", cleanBusinessPhone)
       .maybeSingle();
 
-    console.log('  - Query result:', { existingTenant, tenantSearchError });
-
-    if (existingTenant && existingTenant.account_type === 'test') {
-      console.log('♻️ Tenant existente encontrado, pulando validações de serviços/colaboradores');
-      // Verificar se tenant existente tem setup completo (profissionais + serviços)
-      const setupStatus = await validateTenantSetup(existingTenant.id);
-      
-      // Gerar token para ativar chat
-      const demoToken = generateDemoToken('demo_ui', existingTenant.id);
-      
+    if (findPhoneErr) {
+      return res.status(500).json({ error: "Falha ao verificar telefone", details: findPhoneErr.message });
+    }
+    if (existingByPhone && existingByPhone.account_type === "test") {
+      const demoToken = generateDemoToken('demo_ui', existingByPhone.id);
       return res.json({
         success: true,
+        tenantId: existingByPhone.id,
+        businessName: existingByPhone.business_name,
+        domain: existingByPhone.domain,
         isReused: true,
-        tenantId: existingTenant.id,
-        businessName: existingTenant.business_name,
-        businessEmail: existingTenant.email,
-        whatsappNumber,
-        userNumber,
-        domain: existingTenant.domain,
-        setupComplete: setupStatus.isComplete,
-        setupDetails: setupStatus,
         demoToken
       });
     }
 
-    // SEGUNDO: Para novos tenants, validar serviços obrigatórios
-    // 🚨 NOVA VALIDAÇÃO OBRIGATÓRIA - SERVIÇOS
-    if (!services || services.length < 1) {
-      return res.status(400).json({
-        error: 'É necessário informar pelo menos 1 serviço com nome, preço e duração para iniciar o teste.'
-      });
-    }
+    // 2) Bloquear e-mail duplicado
+    const { data: existingByEmail, error: findEmailErr } = await supabase
+      .from("tenants")
+      .select("id")
+      .eq("email", businessEmail)
+      .maybeSingle();
 
-    // Validar se serviço tem os campos mínimos
-    const invalidService = services.find((s: any) => !s.name || !s.price || !s.duration);
-    if (invalidService) {
-      return res.status(400).json({
-        error: 'Cada serviço deve ter nome, preço e duração definidos.'
-      });
+    if (findEmailErr) {
+      return res.status(500).json({ error: "Falha ao verificar e-mail", details: findEmailErr.message });
     }
-
-    // TERCEIRO: Para novos tenants, validar profissionais obrigatórios
-    // 🚨 NOVA VALIDAÇÃO OBRIGATÓRIA - PROFISSIONAIS
-    if (!collaborators || collaborators.length < 1) {
+    if (existingByEmail) {
       return res.status(400).json({
-        error: 'É necessário informar pelo menos 1 profissional para iniciar o teste.'
+        success: false,
+        error: "Este email já foi usado em outro demo. Tente outro.",
       });
     }
 
@@ -664,64 +645,88 @@ router.post('/create-appointment', async (req, res) => {
 // header: x-demo-token (HMAC do payload base64url)
 // body: { tenantId, userPhone, text }
 // =====================================================
-router.post('/chat', async (req, res) => {
-  console.log('🟢🟢🟢 DEMO CHAT ROUTE CALLED 🟢🟢🟢');
+router.post("/chat", async (req, res) => {
   try {
-    const token = req.headers['x-demo-token'] as string;
-    // TEMPORÁRIO: Bypass token validation para testar fluxo principal
-    const payload = token ? { source: 'test_suite', tenantId: '7245cb1c-5937-4f0f-98a9-03c278b29dcd' } : null;
-    if (!token) {
-      return res.status(401).send('Missing demo token');
+    const token =
+      (req.headers["x-demo-token"] as string) ||
+      (req.get && req.get("x-demo-token")) || // alguns proxies normalizam
+      "";
+
+    if (!verifyDemoToken(token)) {
+      console.warn("demo/chat: invalid token", { got: token ? "present" : "missing" });
+      return res.status(401).json({ error: "Invalid demo token" });
     }
 
-    const { userPhone, text, message, tenantId: bodyTenantId } = req.body || {};
-    const tenantId = payload?.tenantId || bodyTenantId || 'demo-tenant-id'; // Usar tenantId do token, body ou fallback
-    const messageText = text || message; // Aceitar tanto 'text' quanto 'message'
-    const demoUserPhone = userPhone || '+5511999999999'; // Phone padrão para demo UI
-    
-    if (!messageText) {
-      return res.status(400).send('Missing message text');
+    const { tenantId, userPhone, text } = req.body || {};
+    if (!tenantId || !userPhone || !text) {
+      return res.status(400).json({ 
+        error: "Campos obrigatórios faltando",
+        required: ["tenantId", "userPhone", "text"]
+      });
     }
 
-    // 🎯 CONDIÇÃO ÚNICA: Usar diretamente a rota WhatsApp com flag demo
-    (req as any).demoMode = { tenantId };
-    
-    // Criar payload WhatsApp como objeto (webhook v3 vai tratar corretamente)
-    const whatsappPayload = {
-      object: 'whatsapp_business_account',
-      entry: [{
-        id: tenantId,
-        changes: [{
-          value: {
-            messaging_product: 'whatsapp',
-            metadata: {
-              display_phone_number: tenantId,
-              phone_number_id: tenantId
-            },
-            messages: [{
-              from: demoUserPhone,
-              id: `demo_${Date.now()}`,
-              timestamp: Math.floor(Date.now() / 1000).toString(),
-              text: { body: messageText },
-              type: 'text'
-            }]
-          }
-        }]
-      }]
+    const result = await handleIncomingMessage({
+      tenantId,
+      userPhone,
+      text,
+      source: "demo",
+    });
+
+    // 🛡️ BLINDAGEM CONTRA VALORES UNDEFINED/NULL
+    const telemetry = result?.telemetry || {};
+    const safeResponse = {
+      status: result?.status || 'success',
+      response: result?.response || 'Sem resposta gerada.',
+      telemetry: {
+        intent_detected: telemetry.intent_detected || 'general',
+        processingTime: telemetry.processingTime ?? 0,
+        tokens_used: telemetry.tokens_used ?? 0,
+        api_cost_usd: (telemetry as any).api_cost_usd ?? 0,
+        confidence: (telemetry as any).confidence ?? null,
+        decision_method: (telemetry as any).decision_method || 'unknown',
+        flow_lock_active: (telemetry as any).flow_lock_active ?? false,
+        processing_time_ms: (telemetry as any).processing_time_ms ?? 0,
+        model_used: (telemetry as any).model_used || 'unknown',
+        // Preservar campos extras válidos
+        ...Object.fromEntries(
+          Object.entries(telemetry).filter(([key, value]) => 
+            value !== undefined && value !== null && 
+            !['intent_detected', 'processingTime', 'tokens_used'].includes(key)
+          )
+        )
+      }
     };
-    
-    // Substituir req.body com o payload correto
-    req.body = whatsappPayload;
 
-    // 🎯 CONDIÇÃO ÚNICA: Usar função extraída da webhook v3
-    console.log('🔥🔥🔥 ANTES DE CHAMAR processWebhookMessage 🔥🔥🔥');
-    console.log('🔥 DEBUG req.body antes da chamada:', typeof req.body, req.body);
-    const { processWebhookMessage } = require('./whatsapp-webhook-v3.routes');
-    console.log('🔥🔥🔥 FUNCTION IMPORTED:', typeof processWebhookMessage, '🔥🔥🔥');
-    return await processWebhookMessage(req, res);
+    console.log('📤 Demo chat response blindada:', { 
+      status: safeResponse.status,
+      responseLength: safeResponse.response?.length || 0,
+      telemetryKeys: Object.keys(safeResponse.telemetry)
+    });
+
+    return res.status(200).json(safeResponse);
   } catch (err) {
-    console.error('❌ Erro na rota demo/chat:', err);
-    return res.status(500).send('Internal Server Error');
+    console.error("❌ Erro no chat demo:", err);
+    
+    // 🛡️ RESPOSTA DE ERRO SEMPRE VÁLIDA
+    const errorResponse = {
+      status: 'error',
+      response: 'Ocorreu um erro interno. Nossa equipe foi notificada.',
+      telemetry: {
+        intent_detected: 'general',
+        processingTime: 0,
+        tokens_used: 0,
+        api_cost_usd: 0,
+        confidence: null,
+        decision_method: 'error',
+        flow_lock_active: false,
+        processing_time_ms: 0,
+        model_used: 'error',
+        error_type: (err as any)?.name || 'UnknownError',
+        error_message: (err as any)?.message || 'Erro desconhecido'
+      }
+    };
+
+    return res.status(500).json(errorResponse);
   }
 });
 
@@ -842,6 +847,18 @@ async function createDemoSetup(tenantId: string, domain: string, businessName: s
   try {
     console.log(`🏗️ Criando setup demo para tenant ${tenantId} (${domain})`);
     
+    const googleCreds = process.env.GOOGLE_REFRESH_TOKEN
+      ? {
+          provider: "google",
+          refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+          access_token: null,
+          expiry_date: 0,
+          token_type: null,
+          scope: null,
+          shared_calendar: true,
+        }
+      : null;
+
     // 1. CRIAR PROFISSIONAL PRINCIPAL com Google Calendar já linkado
     const professionalId = crypto.randomUUID();
     const professionalData = {
@@ -866,13 +883,22 @@ async function createDemoSetup(tenantId: string, domain: string, businessName: s
       google_calendar_id: 'primary'
     };
 
-    const { error: profError } = await supabase.from('professionals').insert([professionalData]);
+    const { data: profRow, error: profError } = await supabase.from('professionals').insert([professionalData]).select();
     if (profError) {
       console.error('❌ Erro ao criar profissional:', profError);
       throw profError;
     }
     
     console.log(`✅ Profissional criado: ${professionalData.name} (Google Calendar: primary)`);
+
+    if (profRow?.[0]?.id && googleCreds?.refresh_token) {
+      try {
+        const { ensureFreshGoogleToken } = await import("../utils/google-token");
+        await ensureFreshGoogleToken(profRow[0].id);
+      } catch (e: any) {
+        console.warn("ensureFreshGoogleToken warning:", e?.message || e);
+      }
+    }
 
     // 2. CRIAR SERVIÇOS PADRÃO POR DOMÍNIO
     const services = getDomainServices(domain, tenantId);

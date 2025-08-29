@@ -72,7 +72,7 @@ class AIService {
     constructor() {
         this.config = {
             openaiApiKey: process.env.OPENAI_API_KEY || '',
-            model: models: ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4'] // Sistema de fallback,
+            models: ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4'], // Sistema de fallback
             temperature: parseFloat(process.env.AI_TEMPERATURE || '0.7'),
             maxTokens: parseInt(process.env.AI_MAX_TOKENS || '2048'),
             timeout: parseInt(process.env.AI_TIMEOUT || '30000'),
