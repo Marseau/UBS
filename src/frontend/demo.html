@@ -988,7 +988,7 @@
     <!-- Header -->
     <header class="header">
         <div class="container">
-            <div class="d-flex align-items-center">
+            <div class="d-flex align-items-center justify-content-between">
                 <div class="logo-container">
                     <picture>
                         <source srcset="assets/images/optimized/UBS_Nac.webp" type="image/webp">
@@ -996,16 +996,10 @@
                     </picture>
                     <h1 class="brand-text">UBS Demo Interativa</h1>
                 </div>
-                <div class="d-flex align-items-center gap-3">
-                    <a href="/" class="btn btn-outline-primary btn-sm">
-                        <i class="fas fa-arrow-left me-2"></i>
-                        Voltar
-                    </a>
-                    <div class="demo-badge">
-                        <i class="fas fa-play-circle me-2"></i>
-                        Teste Real com IA
-                    </div>
-                </div>
+                <a href="/" class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-arrow-left me-2"></i>
+                    Voltar
+                </a>
             </div>
         </div>
     </header>
@@ -1037,7 +1031,7 @@
                     </label>
                     <input type="tel" class="form-control" id="userNumber" 
                            placeholder="+55 (11) 88888-8888" maxlength="19" required>
-                    <small class="form-text text-muted">
+                    <small id="userStatus" class="form-text text-muted">
                         <i class="fas fa-info-circle me-1"></i>Número que você usará para conversar com a IA
                     </small>
                 </div>
@@ -1347,6 +1341,7 @@
                 this.selectedDomain = null;
                 this.businessExists = false;
                 this.existingBusinessData = null;
+                this.userConnected = false;
                 
                 this.initializeEventListeners();
                 this.initializeDomainSelector();
@@ -1558,8 +1553,28 @@
                 });
 
                 // Validação do campo usuário para habilitar botão
-                userInput.addEventListener('input', () => {
-                    this.updateButtonState();
+                let userVerificationTimeout;
+                
+                userInput.addEventListener('input', (e) => {
+                    // Clear previous timeout
+                    clearTimeout(userVerificationTimeout);
+                    
+                    const userNumber = e.target.value.trim();
+                    
+                    if (this.cleanPhoneNumber(userNumber).length >= 10) {
+                        // Wait 1 second before making API call
+                        userVerificationTimeout = setTimeout(() => {
+                            console.log('🔍 Validating user number:', userNumber);
+                            this.checkUser(userNumber);
+                        }, 1000);
+                    } else {
+                        // Reset user status for short numbers
+                        this.userConnected = false;
+                        const statusEl = document.getElementById('userStatus');
+                        statusEl.innerHTML = '<i class="fas fa-info-circle me-1"></i>Número que você usará para conversar com a IA';
+                        statusEl.className = 'form-text text-muted';
+                        this.updateButtonState();
+                    }
                 });
 
                 // Inicializar estado do botão
@@ -1625,6 +1640,54 @@
                 }
             }
 
+            async checkUser(userNumber) {
+                console.log('👤 checkUser called with:', userNumber);
+                
+                try {
+                    const cleanNumber = this.cleanPhoneNumber(userNumber);
+                    console.log('📞 Clean user number:', cleanNumber);
+                    
+                    // Buscar o tenantId (fixo para demo por enquanto)
+                    const tenantId = '00000000-0000-4000-8000-000000000001';
+                    
+                    // Fazer verificação via API
+                    const apiUrl = `/api/demo/check-user?userPhone=${encodeURIComponent(cleanNumber)}&tenantId=${encodeURIComponent(tenantId)}`;
+                    console.log('🌐 API URL:', apiUrl);
+                    
+                    const response = await fetch(apiUrl);
+                    const result = await response.json();
+                    console.log('📡 User API Response:', result);
+                    
+                    const statusEl = document.getElementById('userStatus');
+                    
+                    if (result.success) {
+                        console.log('✅ Usuário conectado');
+                        this.userConnected = true;
+                        
+                        statusEl.innerHTML = '<i class="fas fa-user-check me-1"></i>Usuário conectado';
+                        statusEl.className = 'form-text text-success';
+                    } else {
+                        console.log('❌ Erro ao conectar usuário');
+                        this.userConnected = false;
+                        
+                        statusEl.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Erro ao conectar usuário';
+                        statusEl.className = 'form-text text-danger';
+                    }
+                    
+                    this.updateButtonState();
+                    
+                } catch (error) {
+                    console.error('❌ Erro ao verificar usuário:', error);
+                    
+                    const statusEl = document.getElementById('userStatus');
+                    statusEl.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Erro na verificação do usuário';
+                    statusEl.className = 'form-text text-warning';
+                    
+                    this.userConnected = false;
+                    this.updateButtonState();
+                }
+            }
+
             hideAllConditionalFields() {
                 console.log('👁️ hideAllConditionalFields called');
                 document.getElementById('existingBusinessFields').style.display = 'none';
@@ -1640,9 +1703,9 @@
             showExistingBusinessFields() {
                 console.log('✅ showExistingBusinessFields called');
                 
-                // Esconder campos novos e mostrar existentes
+                // Para negócios existentes, esconder AMBOS os campos (não mostrar nome/email)
                 document.getElementById('newBusinessFields').style.display = 'none';
-                document.getElementById('existingBusinessFields').style.display = 'block';
+                document.getElementById('existingBusinessFields').style.display = 'none';
                 
                 // Preencher dados existentes
                 document.getElementById('existingBusinessName').value = this.existingBusinessData.business_name || '';
@@ -1677,6 +1740,8 @@
 
             updateButtonState() {
                 console.log('🔘 updateButtonState called');
+                console.log('🔘 userConnected:', this.userConnected);
+                console.log('🔘 businessExists:', this.businessExists);
                 
                 const userNumber = document.getElementById('userNumber').value.trim();
                 const whatsappNumber = document.getElementById('whatsappNumber').value.trim();
@@ -1695,25 +1760,77 @@
                     return;
                 }
                 
+                // NOVA LÓGICA: Verificar tanto negócio quanto usuário
+                if (!this.userConnected) {
+                    // Usuário não validado ainda
+                    btn.disabled = true;
+                    btnText.textContent = 'Aguardando validação do usuário...';
+                    btnIcon.className = 'fas fa-spinner fa-spin me-2';
+                    return;
+                }
+                
                 if (this.businessExists) {
-                    // Negócio existente - habilitar para começar teste
+                    // Negócio existente E usuário conectado - habilitar para começar teste
                     btn.disabled = false;
                     btnText.textContent = 'Começar Teste';
                     btnIcon.className = 'fas fa-play-circle me-2';
                 } else {
-                    // Negócio novo - verificar se campos obrigatórios estão preenchidos
+                    // Negócio novo E usuário conectado - verificar TODOS os campos obrigatórios das tabelas
+                    
+                    // TABELA TENANTS: name, business_name, domain, email, phone, whatsapp_phone  
                     const businessName = document.getElementById('businessName')?.value.trim() || '';
                     const businessEmail = document.getElementById('businessEmail')?.value.trim() || '';
                     const domainSelected = this.selectedDomain;
+                    // phone e whatsapp_phone já validados acima
                     
-                    if (businessName && businessEmail && domainSelected) {
+                    // TABELA SERVICES: pelo menos 1 serviço com name, duration_minutes, base_price
+                    const service1Name = document.getElementById('service1Name')?.value.trim() || '';
+                    const service1Price = document.getElementById('service1Price')?.value.trim() || '';
+                    const service1Duration = document.getElementById('service1Duration')?.value || '';
+                    
+                    const service2Name = document.getElementById('service2Name')?.value.trim() || '';
+                    const service2Price = document.getElementById('service2Price')?.value.trim() || '';
+                    const service2Duration = document.getElementById('service2Duration')?.value || '';
+                    
+                    const hasValidService1 = service1Name && service1Price && service1Duration;
+                    const hasValidService2 = service2Name && service2Price && service2Duration;
+                    const hasAtLeastOneService = hasValidService1 || hasValidService2;
+                    
+                    // TABELA PROFESSIONALS: pelo menos 1 profissional com name
+                    const collaborator1Name = document.getElementById('collaborator1Name')?.value.trim() || '';
+                    const collaborator2Name = document.getElementById('collaborator2Name')?.value.trim() || '';
+                    const hasAtLeastOneProfessional = collaborator1Name || collaborator2Name;
+                    
+                    // ADMIN_USERS: name, email (mesmo dados do business)
+                    // USERS: phone (já validado com userConnected)
+                    // TENANT_USERS: join (já criado pela API check-user)
+                    
+                    console.log('🔘 Validação completa das tabelas:');
+                    console.log('  - TENANTS businessName:', businessName);
+                    console.log('  - TENANTS businessEmail:', businessEmail);  
+                    console.log('  - TENANTS domain:', domainSelected);
+                    console.log('  - SERVICES hasAtLeastOneService:', hasAtLeastOneService);
+                    console.log('  - PROFESSIONALS hasAtLeastOneProfessional:', hasAtLeastOneProfessional);
+                    console.log('  - USERS userConnected:', this.userConnected);
+                    
+                    if (businessName && businessEmail && domainSelected && hasAtLeastOneService && hasAtLeastOneProfessional) {
                         btn.disabled = false;
                         btnText.textContent = 'Cadastrar e Começar Teste';
                         btnIcon.className = 'fas fa-rocket me-2';
+                        console.log('✅ Todas as tabelas validadas - botão habilitado');
                     } else {
                         btn.disabled = true;
                         btnText.textContent = 'Cadastrar e Começar Teste';
                         btnIcon.className = 'fas fa-rocket me-2';
+                        
+                        // Log dos campos/tabelas faltantes
+                        const missing = [];
+                        if (!businessName) missing.push('Nome do Negócio (TENANTS.business_name)');
+                        if (!businessEmail) missing.push('Email do Negócio (TENANTS.email + ADMIN_USERS.email)');
+                        if (!domainSelected) missing.push('Domínio (TENANTS.domain)');
+                        if (!hasAtLeastOneService) missing.push('Pelo menos 1 serviço completo (SERVICES)');
+                        if (!hasAtLeastOneProfessional) missing.push('Pelo menos 1 profissional (PROFESSIONALS)');
+                        console.log('❌ Campos obrigatórios faltando:', missing.join(', '));
                     }
                 }
             }
@@ -2025,52 +2142,8 @@
             showDemoCreated() {
                 const signupSection = document.getElementById('signupSection');
                 
-                // Verificar se é reutilização ou criação nova
-                const isReused = this.demoData.isReused;
-                const titleText = isReused ? 'Demo Reutilizado!' : 'Demo Criado com Sucesso!';
-                const iconClass = isReused ? 'fas fa-recycle' : 'fas fa-check-circle';
-                const iconColor = isReused ? 'var(--primary-color)' : 'var(--accent-color)';
-                
-                signupSection.innerHTML = `
-                    <div class="demo-created">
-                        <div class="success-icon" style="color: ${iconColor};">
-                            <i class="${iconClass}"></i>
-                        </div>
-                        <h3 style="color: ${iconColor}; margin-bottom: 1rem;">${titleText}</h3>
-                        
-                        ${isReused ? `
-                        <div class="alert alert-info" style="background: rgba(45, 90, 155, 0.1); border: 1px solid rgba(45, 90, 155, 0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
-                            <i class="fas fa-info-circle me-2"></i>
-                            <strong>Tenant existente encontrado!</strong><br>
-                            Reutilizando o tenant do número ${this.demoData.whatsappNumber} para continuar o teste.
-                        </div>
-                        ` : ''}
-                        
-                        <div class="demo-credentials">
-                            <h5>Suas Credenciais:</h5>
-                            <div class="credential-item">
-                                <span><strong>Tenant ID:</strong></span>
-                                <span class="credential-value">${this.demoData.tenantId}</span>
-                            </div>
-                            <div class="credential-item">
-                                <span><strong>Email do Negócio:</strong></span>
-                                <span class="credential-value">${this.demoData.businessEmail}</span>
-                            </div>
-                            <div class="credential-item">
-                                <span><strong>WhatsApp do Negócio:</strong></span>
-                                <span class="credential-value">${this.demoData.whatsappNumber}</span>
-                            </div>
-                            <div class="credential-item">
-                                <span><strong>WhatsApp de Usuário:</strong></span>
-                                <span class="credential-value">${this.demoData.userNumber}</span>
-                            </div>
-                            <div class="credential-item">
-                                <span><strong>Domínio:</strong></span>
-                                <span class="credential-value">${this.demoData.domain}</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
+                // Esconder a seção de signup sem mostrar credenciais
+                signupSection.style.display = 'none';
             }
 
             activateChat() {
@@ -2374,6 +2447,51 @@ Por favor, me conte um pouco sobre você e o que precisa! 😊`
                         }
                     });
                 }
+                
+                // Event listeners para validação em tempo real dos SERVIÇOS
+                const serviceFields = [
+                    'service1Name', 'service1Price', 'service1Duration',
+                    'service2Name', 'service2Price', 'service2Duration'
+                ];
+                
+                serviceFields.forEach(fieldId => {
+                    const field = document.getElementById(fieldId);
+                    if (field) {
+                        field.addEventListener('input', () => {
+                            if (window.demoInterativa) {
+                                console.log('🔧 Service field changed:', fieldId, field.value);
+                                window.demoInterativa.updateButtonState();
+                            }
+                        });
+                        
+                        // Para selects, também escutar 'change'
+                        if (field.tagName === 'SELECT') {
+                            field.addEventListener('change', () => {
+                                if (window.demoInterativa) {
+                                    console.log('🔧 Service field changed:', fieldId, field.value);
+                                    window.demoInterativa.updateButtonState();
+                                }
+                            });
+                        }
+                    }
+                });
+                
+                // Event listeners para validação em tempo real dos PROFISSIONAIS
+                const professionalFields = ['collaborator1Name', 'collaborator2Name'];
+                
+                professionalFields.forEach(fieldId => {
+                    const field = document.getElementById(fieldId);
+                    if (field) {
+                        field.addEventListener('input', () => {
+                            if (window.demoInterativa) {
+                                console.log('👥 Professional field changed:', fieldId, field.value);
+                                window.demoInterativa.updateButtonState();
+                            }
+                        });
+                    }
+                });
+                
+                console.log('✅ Event listeners adicionados para validação completa');
             }, 500);
         });
     </script>
