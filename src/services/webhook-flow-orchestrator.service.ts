@@ -934,7 +934,7 @@ Intenção detectada: ${intent}`;
     };
 
     // Detectar modelo atual ou usar fallback genérico
-    const costs = modelCosts[model || 'gpt-4'] || modelCosts['gpt-4'];
+    const costs = modelCosts[model || 'gpt-4o-mini'] || modelCosts['gpt-4o-mini'];
     
     const promptCost = (usage.prompt_tokens / 1000) * costs!.prompt;
     const completionCost = (usage.completion_tokens / 1000) * costs!.completion;

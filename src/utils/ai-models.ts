@@ -6,7 +6,7 @@
 export const MODELS = {
   FAST: process.env.OPENAI_MODEL_FAST || "gpt-4o-mini",      // Para classificação, intent detection, telemetry
   BALANCED: process.env.OPENAI_MODEL_BALANCED || "gpt-3.5-turbo", // Para conversas normais
-  STRICT: process.env.OPENAI_MODEL_STRICT || "gpt-4"         // Para casos críticos e fallback
+  STRICT: process.env.OPENAI_MODEL_STRICT || "gpt-4o-mini"   // Sistema de fallback inicia com modelo economico         // Para casos críticos e fallback
 };
 
 /**
