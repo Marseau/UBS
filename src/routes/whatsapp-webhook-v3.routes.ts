@@ -1333,12 +1333,19 @@ class ValidationService {
       }
       });
       
-      router.post('/webhook', validateWhatsAppSignature, async (req, res) => {
+      // 🎯 FUNÇÃO EXTRAÍDA: Para ser reutilizada por demo e webhook
+      async function processWebhookMessage(req: any, res: any) {
+      console.log('🚨🚨🚨 PROCESSWEBHOOKMESSAGE CHAMADA - FONTE:', req.demoMode ? 'DEMO' : 'WHATSAPP', '🚨🚨🚨');
       const startTime = Date.now();
       try {
       // Idempotência por message.id
-      // OBS: req.body está em Buffer; precisamos parsear para extrair message/id
-      const parsed = JSON.parse((req.body as Buffer).toString('utf8') || '{}');
+      // OBS: req.body pode ser Buffer (webhook), string (demo) ou object (direct)
+      // Para demo, sempre vai ser objeto JavaScript já parseado pelo Express
+      const parsed = req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)
+        ? req.body  // Objeto direto (demo)
+        : typeof req.body === 'string' 
+          ? JSON.parse(req.body)  // String JSON (webhook manual)
+          : JSON.parse((req.body as Buffer).toString('utf8') || '{}'); // Buffer (webhook WhatsApp)
       const entry = Array.isArray(parsed.entry) ? parsed.entry[0] : undefined;
       const change = entry && Array.isArray(entry.changes) ? entry.changes[0] : undefined;
       const value = change?.value || {};
@@ -1580,7 +1587,12 @@ class ValidationService {
     logger.error('Webhook processing error', { error, processingTime });
     return res.status(200).json({ status: 'error', response: 'Ocorreu um erro interno. Nossa equipe foi notificada.', metadata: { processingTime } });
   }
-});
+}
+
+router.post('/webhook', validateWhatsAppSignature, processWebhookMessage);
+
+// 🎯 EXPORTAR: Para uso da demo
+export { processWebhookMessage };
 
 // ===== Graceful Shutdown =====
 async function shutdown(code = 0) {
