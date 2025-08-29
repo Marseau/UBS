@@ -43,8 +43,8 @@ class MultiModalHelpers {
         try {
             const base64Image = buffer.toString('base64');
             const dataUrl = `data:${mimeType};base64,${base64Image}`;
-            const response = await this.openai.chat.completions.create({
-                model: 'gpt-4',
+            const response = await this.createChatCompletionWithFallback({
+                models: ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4'],
                 messages: [{
                         role: 'user',
                         content: [
@@ -75,8 +75,8 @@ class MultiModalHelpers {
         try {
             const base64Image = buffer.toString('base64');
             const dataUrl = `data:${mimeType};base64,${base64Image}`;
-            const response = await this.openai.chat.completions.create({
-                model: 'gpt-4',
+            const response = await this.createChatCompletionWithFallback({
+                models: ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4'],
                 messages: [{
                         role: 'user',
                         content: [
@@ -306,6 +306,27 @@ class MultiModalHelpers {
             errors: []
         };
     }
+    // Método para fallback de modelos OpenAI
+    async createChatCompletionWithFallback({ models, messages, max_tokens, temperature }) {
+        for (const model of models) {
+            try {
+                const response = await this.openai.chat.completions.create({
+                    model,
+                    messages,
+                    max_tokens,
+                    temperature
+                });
+                return response;
+            } catch (error) {
+                console.warn(`MultiModal: ${model} failed, trying next...`);
+                if (model === models[models.length - 1]) {
+                    throw error; // Se é o último modelo, lança o erro
+                }
+                continue; // Tenta próximo modelo
+            }
+        }
+    }
+
     updateMetrics(metrics, contentType, processingTime, success) {
         metrics.totalProcessed++;
         if (metrics.totalProcessed === 1) {

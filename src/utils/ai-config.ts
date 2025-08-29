@@ -8,20 +8,26 @@
  */
 
 /**
- * Retorna o modelo OpenAI configurado via variável de ambiente
- * com fallback seguro para gpt-4
- * 
- * @returns string - Nome do modelo OpenAI (ex: 'gpt-4', 'gpt-4-turbo')
+ * Retorna array de modelos OpenAI para sistema de fallback
+ * @returns string[] - Array de modelos em ordem de prioridade
+ */
+export function getOpenAIModels(): string[] {
+  return ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4'];
+}
+
+/**
+ * Retorna primeiro modelo da sequência de fallback
+ * @returns string - Nome do modelo primário
  */
 export function getOpenAIModel(): string {
-  const model = process.env.OPENAI_MODEL?.trim() || 'gpt-4';
+  const models = getOpenAIModels();
   
   // Log de debug em desenvolvimento
   if (process.env.NODE_ENV === 'development') {
-    console.log(`🤖 AI Model: ${model} (from ${process.env.OPENAI_MODEL ? 'env' : 'default'})`);
+    console.log(`🤖 AI Models: [${models.join(', ')}] (fallback system)`);
   }
   
-  return model;
+  return models[0];
 }
 
 /**
@@ -35,20 +41,20 @@ export function isGpt4(): boolean {
 }
 
 /**
- * Validação de modelo para produção
- * Aborta processo se modelo não for gpt-4* em produção
+ * Validação de modelos para produção
+ * Sistema de fallback sempre disponível
  */
 export function validateProductionModel(): void {
-  if (process.env.NODE_ENV === 'production' && !isGpt4()) {
-    const currentModel = getOpenAIModel();
-    console.error('🚨 CRITICAL ERROR: OPENAI_MODEL must be gpt-4* in production');
-    console.error(`📋 Current model: ${currentModel}`);
-    console.error(`📋 NODE_ENV: ${process.env.NODE_ENV}`);
-    console.error(`📋 OPENAI_MODEL env: ${process.env.OPENAI_MODEL || 'not set'}`);
-    console.error('🔧 Fix: Set OPENAI_MODEL=gpt-4 or similar gpt-4* variant');
-    
-    // Abortar processo em produção
-    process.exit(1);
+  const models = getOpenAIModels();
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`✅ AI Fallback System: ${models.length} modelos configurados`);
+    console.log(`🎯 Ordem de tentativa: ${models.join(' → ')}`);
+  }
+  
+  // Em produção, apenas logga sem abortar processo
+  if (process.env.NODE_ENV === 'production') {
+    console.log(`🚀 Production AI: Fallback system active with ${models.length} models`);
   }
 }
 
@@ -57,7 +63,7 @@ export function validateProductionModel(): void {
  * Usar em todos os serviços que fazem chamadas à API
  */
 export const defaultOpenAIConfig = {
-  model: getOpenAIModel(),
+  models: getOpenAIModels(), // Array para fallback
   temperature: 0.7,
   max_tokens: 1000,
   top_p: 1,

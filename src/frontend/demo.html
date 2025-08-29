@@ -2325,7 +2325,8 @@ Por favor, me conte um pouco sobre você e o que precisa! 😊`
                     const response = await fetch('/api/demo/chat', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'x-demo-token': this.demoData.demoToken
                         },
                         body: JSON.stringify({
                             tenantId: this.demoData.tenantId,

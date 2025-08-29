@@ -139,14 +139,7 @@ const logger = (() => {
 const config = {
     openai: {
         apiKey: process.env.OPENAI_API_KEY || '',
-        model: (() => {
-            const raw = (process.env.OPENAI_MODEL?.trim() || 'gpt-4');
-            if (!/^gpt-4/i.test(raw)) {
-                console.warn(`OPENAI_MODEL='${raw}' não é gpt-4*. Forçando 'gpt-4'.`);
-                return 'gpt-4';
-            }
-            return raw;
-        })(),
+        models: ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4'], // Sistema de fallback com 3 modelos
         maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '180'), // 🚀 OTIMIZAÇÃO #3: Reduzir tokens
         temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.6'),
         promptCostPer1k: parseFloat(process.env.OPENAI_PROMPT_COST_PER_1K || '0'),

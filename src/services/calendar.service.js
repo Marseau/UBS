@@ -4,6 +4,7 @@ exports.CalendarService = void 0;
 const googleapis_1 = require("googleapis");
 const database_1 = require("../config/database");
 const EncryptionService = require("../utils/encryption.service");
+const { ensureFreshGoogleToken } = require("../utils/google-token");
 class CalendarService {
     constructor() {
         this.initializeGoogleAuth();
@@ -37,6 +38,15 @@ class CalendarService {
             
             // Handle both direct professional_id and nested professional object
             const professionalId = appointment.professional_id || appointment.professional?.id;
+
+            // ✅ Garante token fresco antes de obter auth client
+            if (professionalId) {
+                try {
+                    await ensureFreshGoogleToken({ professionalId });
+                } catch (e) {
+                    console.warn('⚠️ Falha ao atualizar token (seguindo assim mesmo):', e?.message || e);
+                }
+            }
             
             const authClient = await this.getAuthClientForProfessional(professionalId);
             if (!authClient) throw new Error("Credenciais do profissional não configuradas para o Google Calendar.");
@@ -658,6 +668,13 @@ class CalendarService {
             if (!professional.google_calendar_credentials) {
                 console.log('❌ Profissional sem credenciais do Google Calendar');
                 return [];
+            }
+
+            // ✅ Garante token fresco para este profissional
+            try {
+                await ensureFreshGoogleToken({ professionalId });
+            } catch (e) {
+                console.warn('⚠️ Falha ao atualizar token (seguindo assim mesmo):', e?.message || e);
             }
 
             // Usar o cliente autenticado existente

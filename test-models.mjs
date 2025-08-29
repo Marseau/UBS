@@ -13,7 +13,7 @@ const MODELS = [
   "gpt-4.1-mini",
   "gpt-4.1",
   "o4-mini",
-  "gpt-3.5-turbo" // legado; útil p/ checar acesso
+  "gpt-3.5-turbo"
 ];
 
 async function testModel(model) {
@@ -21,16 +21,14 @@ async function testModel(model) {
     const r = await client.responses.create({
       model,
       input: [{ role: "user", content: "ping" }],
-      max_output_tokens: 5,
+      max_output_tokens: 32,   // ✅ mínimo 16
       temperature: 0
     });
     const text = r.output_text ?? "";
     return { model, ok: true, note: text.slice(0, 60).replace(/\s+/g, " ") };
   } catch (err) {
-    // normalizar mensagem
     const e = err?.error ?? err;
     const msg = (e?.message || String(e)).slice(0, 200);
-    // alguns códigos comuns: 404 (modelo não existe), 403 (sem acesso), 429 (rate limit)
     const code = e?.status || e?.code || e?.statusCode || "ERR";
     return { model, ok: false, code, error: msg };
   }
@@ -43,7 +41,7 @@ async function testModel(model) {
     const r = await testModel(m);
     results.push(r);
     if (r.ok) console.log(`✅ ${m} → OK`);
-    else console.log(`❌ ${m} → ${r.code}: ${r.error}`);
+    else      console.log(`❌ ${m} → ${r.code}: ${r.error}`);
   }
 
   console.log("\nResumo:");
