@@ -78,6 +78,9 @@ export class WebhookFlowOrchestratorService {
   ): Promise<WebhookOrchestrationResult> {
     const startTime = Date.now();
 
+    // Log de sentinela no Orchestrator (primeira linha da função)
+    console.log('🧭 ENTER orchestrateWebhookFlow', { onboarding: existingContext?.onboarding });
+
     try {
       // 1. Resolver contexto enhanced (com flow_lock)
       const context = await this.resolveEnhancedContext(
@@ -616,6 +619,12 @@ export class WebhookFlowOrchestratorService {
     tenantConfig: any
   ): Promise<{ response: string; outcome: string; newFlowLock?: any; llmMetrics?: any }> {
     
+    // Se vier onboarding do contexto, force o objetivo 'first_time'
+    const onboarding = (context as any)?.onboarding;
+    const onboardingStage = onboarding?.required ? (onboarding.stage || 'need_name') : null;
+    
+    console.log('🔍 [ORCHESTRATOR] Onboarding check:', { onboarding, onboardingStage });
+    
     const intent = intentResult.intent;
     const currentFlow: string | null = context.flow_lock?.active_flow || null;
     const currentStep: string | null = context.flow_lock?.step || null;
@@ -670,6 +679,22 @@ export class WebhookFlowOrchestratorService {
       const businessInfo = this.buildBusinessContext(tenantConfig);
       const flowContext = this.buildFlowContext(currentFlow, currentStep, intent);
       
+      // Ajustar prompt baseado em onboarding
+      let onboardingInstruction = '';
+      if (onboardingStage) {
+        const stageMessages = {
+          'need_name': 'Percebi que seu cadastro está incompleto. Para começar, qual é o seu nome completo?',
+          'need_email': 'Notei que seu cadastro está incompleto. Qual é o seu e-mail?', 
+          'need_gender': 'Para completar seu cadastro, você se identifica como masculino, feminino ou outro?'
+        };
+        onboardingInstruction = `
+
+🚀 ONBOARDING ATIVO - PRIORIDADE MÁXIMA:
+Seu cadastro está incompleto. Solicite APENAS UM dado por vez, nesta ordem: 1) nome completo; 2) e-mail; 3) gênero (masculino/feminino/outro). 
+Responda curto (1–2 frases). Não ofereça ver agendamentos enquanto não tiver nome e e-mail.
+Resposta sugerida para ${onboardingStage}: "${stageMessages[onboardingStage as keyof typeof stageMessages]}"`;
+      }
+      
       const systemPrompt = `Você é a assistente oficial do ${tenantConfig.name || 'negócio'}. Seu papel é atender com clareza, honestidade e objetividade, sempre em tom natural.
 
 ⚠️ REGRAS DE HONESTIDADE ABSOLUTA - OBRIGATÓRIAS:
@@ -678,7 +703,7 @@ export class WebhookFlowOrchestratorService {
 - Use APENAS dados reais do sistema. Zero invenções. Zero promessas.
 - PROIBIDO inventar: horários, endereços, formas de pagamento, telefones, políticas.
 
-${businessInfo}
+${businessInfo}${onboardingInstruction}
 
 🎯 DADOS PERMITIDOS (somente se existirem):
 - Serviços com preços reais
@@ -692,10 +717,11 @@ ${businessInfo}
 - Contatos telefônicos
 - Políticas não confirmadas
 
-IMPORTANTE: Responda APENAS com a mensagem honesta para o cliente. Se não souber, use exatamente: "Infelizmente neste momento não possuo esta informação no sistema."`;
+IMPORTANTE: Responda APENAS com a mensagem honesta para o cliente. Se não souber, use exatamente: "Infelizmente neste momento não possou esta informação no sistema."`;
 
       const userPrompt = `Mensagem do cliente: "${messageText}"
-Intenção detectada: ${intent}`;
+Intenção detectada: ${intent}${onboardingStage ? `
+🚀 ONBOARDING: Coletar ${onboardingStage.replace('need_', '')}` : ''}`;
 
       console.log('🤖 Chamando OpenAI com fallback escalonado...');
       

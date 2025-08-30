@@ -491,6 +491,71 @@ class ValidationService {
       return null;
       }
       }
+      
+      /**
+       * Normaliza número de telefone UNIVERSAL para formato padrão internacional: +[país][número]
+       * Detecta automaticamente o país e aplica normalização apropriada
+       * Evita duplicação de usuários com mesmo número em formatos diferentes
+       */
+      static normalizePhoneNumber(digits: string): string {
+        if (!digits) return '';
+        
+        // Remove leading zeros, espaços e caracteres especiais
+        const clean = digits.replace(/^0+/, '').replace(/[\s\-\(\)\.]/g, '');
+        
+        // Se já tem + no início, assume que está correto
+        if (digits.startsWith('+')) {
+          return digits.replace(/[\s\-\(\)\.]/g, '');
+        }
+        
+        // Detecta país por comprimento e padrões
+        if (clean.length >= 10) {
+          // Brasil (55): 11+ dígitos começando com 55
+          if (clean.startsWith('55') && clean.length >= 12) {
+            return `+${clean}`;
+          }
+          
+          // EUA/Canadá (1): 10-11 dígitos
+          if (clean.length === 10 || (clean.length === 11 && clean.startsWith('1'))) {
+            const number = clean.startsWith('1') ? clean : `1${clean}`;
+            return `+${number}`;
+          }
+          
+          // Reino Unido (44): números começando com 44
+          if (clean.startsWith('44')) {
+            return `+${clean}`;
+          }
+          
+          // França (33): números começando com 33
+          if (clean.startsWith('33')) {
+            return `+${clean}`;
+          }
+          
+          // Alemanha (49): números começando com 49
+          if (clean.startsWith('49')) {
+            return `+${clean}`;
+          }
+          
+          // Outros países europeus comuns
+          if (clean.startsWith('34') || clean.startsWith('39') || clean.startsWith('31')) {
+            return `+${clean}`;
+          }
+          
+          // Brasil - números locais (assumir Brasil se não detectado outro país)
+          if (clean.length === 11 && clean.startsWith('11')) {
+            return `+55${clean}`;
+          }
+          
+          // Brasil - número sem DDD (assume SP/11)
+          if (clean.length === 9) {
+            return `+5511${clean}`;
+          }
+        }
+        
+        // Default: assume formato completo com +
+        return `+${clean}`;
+      }
+      
       static async listUserAppointments(tenantId: string, userId: string): Promise<any[]> {
       try {
       const { data } = await supabaseAdmin
@@ -534,11 +599,14 @@ class ValidationService {
         const existing = await supabaseAdmin.from('users').select('*').or(orClause).limit(1).maybeSingle();
         let userId: string | null = existing.data?.id || null;
 
+        // Normalizar telefone para formato padrão brasileiro (+5511XXXXXXXXX)
+        const normalizedPhone = existing.data?.phone || (digits ? DatabaseService.normalizePhoneNumber(digits) : null);
+        
         // Cria ou atualiza usuário (aceita parciais: nome OU email)
         const payload: any = {
           name: session.name || existing.data?.name || null,
           email: session.email || existing.data?.email || null,
-          phone: existing.data?.phone || (digits ? `+${digits}` : null),
+          phone: normalizedPhone,
           gender: session.gender || (existing.data as any)?.gender || null
         };
         if (!userId) {
@@ -746,10 +814,8 @@ class ValidationService {
           session.demoMode = demoPayload;
         }
         
-        // 4) Intent - REMOVIDO: agora será detectado pelo Flow Lock System
-        // let intent = ValidationService.detectIntent(text);
-        // Detecção de intent movida para flowIntegration.processWithFlowLockOrFallback()
-        let intent = null; // Será definido pelo sistema 2-camadas (Regex → LLM)
+        // 4) Intent - Detecção mínima reativada antes do Flow Lock System
+        let intent = ValidationService.detectIntent(text) || 'general';
         // Confirmação explícita (confirmo/ciente/de acordo/ok/👍/✅) quando há pendingConfirmation
         if (/\b(confirm(o|ado)?|ciente|de acordo|ok)\b|[👍✅]/i.test(text)) {
           if (session.pendingConfirmation?.appointmentId) {
@@ -771,15 +837,28 @@ class ValidationService {
         
         // 6) Tenant & user context (with forced tenantId from demo token)
         const tenantData = await this.getTenantData(phoneNumberId, intent, userPhone, forcedTenantId);
-        // 6.1) Forçar saudação com nome quando usuário existir
+        
+        
+        console.log(`🚨 DEBUG COMPLETO: phoneId="${phoneNumberId}", intent="${intent}", tenantId="${tenantData?.tenant?.id}", userPhone="${userPhone}"`);
+        
+        // 6.1) Forçar saudação com nome quando usuário existir E já estiver com dados completos
         if (intent === 'greeting' && tenantData?.tenant?.id) {
           const user = await DatabaseService.findUserByPhone(tenantData.tenant.id, userPhone);
           const firstName = (user?.name || session.name || '').split(/\s+/)[0] || '';
-          if (firstName) {
+          const hasEmail = !!(session.email || user?.email);
+          
+          console.log(`🔍 PRIMEIRA VEZ? user=${!!user}, firstName="${firstName}", hasEmail=${hasEmail}, userPhone="${userPhone}"`);
+          
+          // Só retorna saudação direta se usuário tem nome E email (dados completos)
+          if (firstName && hasEmail) {
+            console.log(`✅ USUÁRIO CONHECIDO: Saudação direta para ${firstName}`);
             session.name = firstName;
+            if (user?.email && !session.email) session.email = user.email;
             await cache.setSession(sessionKey, session);
             const greet = this.greetingByTime(tenantData.tenant.business_name, firstName);
             return { success: true, response: `${greet} Como posso te ajudar?`, action: 'direct_response', metadata: { intent: 'greeting', tenantId: tenantData.tenant.id } };
+          } else {
+            console.log(`🆕 PRIMEIRA VEZ: Continuando para onboarding`);
           }
         }
         
@@ -1069,10 +1148,10 @@ class ValidationService {
 
     const tenant = await this.getTenantFromCache(phoneNumberId);
     if (!tenant) return null;
-    let user: any = null, appointments: any[] = [];
-    if (intent && ['my_appointments', 'cancel', 'reschedule'].includes(intent)) {
-      user = await DatabaseService.findUserByPhone(tenant.id, userPhone);
-      if (user) appointments = await DatabaseService.listUserAppointments(tenant.id, (user as any)?.id);
+    let user: any = await DatabaseService.findUserByPhone(tenant.id, userPhone);
+    let appointments: any[] = [];
+    if (user && intent && ['my_appointments','cancel','reschedule'].includes(intent)) {
+      appointments = await DatabaseService.listUserAppointments(tenant.id, user.id);
     }
     return { tenant, user, appointments };
     }
@@ -1128,21 +1207,23 @@ class ValidationService {
       const agentPrompt = DEMO_PARITY ? loadAgentSystemPromptByDomain(tenantData?.tenant?.domain) : null;
       const desc = (tenantData?.tenant as any)?.business_description ? String((tenantData?.tenant as any).business_description).replace(/\s+/g,' ').slice(0,160) : '';
       const positioning = desc ? `Posicionamento: ${desc}` : '';
-      const userKnown = !!(tenantData?.user?.id);
-      const hasName = !!(session.name || tenantData?.user?.name);
-      const hasEmail = !!(session.email || tenantData?.user?.email);
+      const nameKnown = !!(session.name || tenantData?.user?.name);
+      const emailKnown = !!(session.email || tenantData?.user?.email);
       const inferredGender = ValidationService.inferGenderFromName(session.name || tenantData?.user?.name || '');
-      const hasGender = !!(session.gender || inferredGender);
+      const genderKnown = !!(session.gender || inferredGender);
+      
+      // Onboarding também quando o usuário existe, mas tem cadastro incompleto
+      let onboardingStage: 'need_name'|'need_email'|'need_gender'|null = null;
+      if (!nameKnown) onboardingStage = 'need_name';
+      else if (!emailKnown) onboardingStage = 'need_email';
+      else if (!genderKnown) onboardingStage = 'need_gender';
+      
+      const userKnown = !!(tenantData?.user?.id) && (nameKnown || emailKnown);
       const hasAppointments = Array.isArray(tenantData?.appointments) && tenantData.appointments.length > 0;
       const canReferencePastAppointments = userKnown && hasAppointments;
-      let onboardingStage: 'need_name'|'need_email'|'need_gender'|null = null;
-      if (!userKnown) {
-        if (!hasName) onboardingStage = 'need_name';
-        else if (!hasEmail) onboardingStage = 'need_email';
-        else if (!hasGender) onboardingStage = 'need_gender';
-      }
 
       const prelude = DEMO_PARITY ? '' : `${greeting}`;
+      const profileNote = onboardingStage ? 'Nota: usuário com cadastro incompleto — colete o próximo dado faltante de forma cordial, em frase única.' : '';
       // 🎯 PROMPT EXECUTIVO – SaaS Honesto (Revisado)
       const universalFirstTime = [
         `Você é a assistente oficial do {business_name}. Seu papel é atender com clareza, honestidade e objetividade, sempre em tom natural.`,
@@ -1183,6 +1264,7 @@ class ValidationService {
         `Negócio: ${tenantData?.tenant?.business_name || 'N/D'}`,
         sessionSummary || 'Nenhum dado coletado ainda',
         prelude,
+        profileNote,
         contextRules,
         ...contextBlocks
       ].filter(Boolean).join('\n');
@@ -1191,6 +1273,7 @@ class ValidationService {
 
       // 📚 Instruções por Intent - SaaS Honesto
       const intentInstructions: Record<string, string> = {
+      first_time: 'Percebi que seu cadastro está incompleto. Solicite APENAS UM dado por vez, nesta ordem: 1) nome completo; depois 2) e-mail; depois 3) gênero (masculino/feminino/outro). Responda curto (1–2 frases). Não ofereça ver agendamentos enquanto não tiver nome e e-mail.',
       greeting: 'Cumprimente pelo nome (se existir) e finalize com: "Como posso te ajudar?"',
       services: 'Liste serviços reais em frases naturais. Se BD vazio → frase honesta padrão.',
       pricing: 'Informe valor real. Se não existir → "Para este serviço o valor não está cadastrado no sistema."',
@@ -1422,12 +1505,53 @@ class ValidationService {
     const demoPayload = (req as any)?.demoMode;
     const actualTenantId = demoPayload?.tenantId || phoneNumberId;
     
+    // ===== ONBOARDING GATE (antes do orchestrator) =====
+    let onboarding: { required: boolean; stage?: 'need_name'|'need_email'|'need_gender' } = { required: false };
+    try {
+      // 1) Descobrir tenant real (já está em actualTenantId)
+      const tenantId = actualTenantId;
+
+      // 2) Buscar sessão atual (Redis)
+      const sess = await cache.getSession(sessionKey);
+      const sessName = sess?.name || '';
+      const sessEmail = sess?.email || '';
+      const sessGender = sess?.gender || '';
+
+      // 3) Buscar usuário no BD
+      let userRow: any = null;
+      if (tenantId) {
+        userRow = await DatabaseService.findUserByPhone(tenantId, userPhone);
+      }
+
+      const nameKnown   = Boolean(sessName || userRow?.name);
+      const emailKnown  = Boolean(sessEmail || userRow?.email);
+      const genderKnown = Boolean(sessGender || ValidationService.inferGenderFromName(sessName || userRow?.name || ''));
+
+      console.log('🔍 [ONBOARDING GATE] Status:', { 
+        nameKnown, emailKnown, genderKnown, 
+        sessName, sessEmail, userRow: !!userRow 
+      });
+
+      if (!nameKnown || !emailKnown || !genderKnown) {
+        onboarding.required = true;
+        onboarding.stage = !nameKnown ? 'need_name' : !emailKnown ? 'need_email' : 'need_gender';
+        console.log('🚀 [ONBOARDING GATE] Onboarding necessário:', onboarding.stage);
+      } else {
+        console.log('✅ [ONBOARDING GATE] Usuário completo, seguindo fluxo normal');
+      }
+    } catch (e) {
+      logger.warn('Onboarding pre-check failed (non-blocking):', e);
+    }
+    
+    // Log de sentinela na rota (antes do orchestrator)
+    logger.info('🚦ENTER ROUTE /webhook-v3', { sessionKey, onboarding });
+    
     const result = await orchestrator.orchestrateWebhookFlow(
       text,
       userPhone,
       actualTenantId,
       { domain: 'whatsapp', services: [], policies: {} },
-      { session_id: sessionKey, demoMode: demoPayload }
+      { session_id: sessionKey, demoMode: demoPayload, onboarding } // <-- AQUI
     );
     
     // 🚀 OTIMIZAÇÃO #1: RESPOSTA PRIMEIRO, BANCO DEPOIS
@@ -1573,7 +1697,7 @@ class ValidationService {
           content: __persist_aiContent,
           is_from_user: false,
           message_type: 'text',
-          intent_detected: intent_for_ai,
+          intent_detected: null,
           tokens_used: __persist_totalTokens,
           api_cost_usd: __persist_apiCostUsd,
           processing_cost_usd: __effective_processingCostUsd,
