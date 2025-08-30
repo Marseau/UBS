@@ -46,7 +46,7 @@ export async function handleIncomingMessage({ tenantId, userPhone, text, source 
         model_used: result?.telemetryData?.model_used || result?.llmMetrics?.model || 'unknown',
         // Preservar campos extras válidos
         ...(result?.telemetryData ? Object.fromEntries(
-          Object.entries(result.telemetryData).filter(([key, value]) => 
+          Object.entries(result?.telemetryData || {}).filter(([key, value]) => 
             value !== undefined && value !== null && key !== 'intent'
           )
         ) : {})
