@@ -27,6 +27,22 @@ router.get('/_demo/health', (_req, res) => {
 // Helpers
 const cleanPhone = (s: string) => s.replace(/\D/g, '');
 
+/**
+ * Normalize phone to E164 format
+ */
+const normalizeE164 = (phone: string) => {
+  const cleaned = cleanPhone(phone);
+  // Se já tem código de país, mantém; senão assume Brasil (+55)
+  return cleaned.startsWith('55') ? cleaned : `55${cleaned}`;
+};
+
+/**
+ * Issue demo token for tenant
+ */
+const issueDemoToken = async (tenantId: string) => {
+  return generateDemoToken('demo_ui', tenantId);
+};
+
 // =====================================================
 // VALIDAÇÕES ROBUSTAS PARA NÚMEROS WHATSAPP
 // =====================================================
@@ -439,7 +455,7 @@ router.post('/create-tenant', async (req, res) => {
     }
 
     // 🚀 CRIAR PROFISSIONAIS E SERVIÇOS AUTOMATICAMENTE
-    await createDemoSetup(tenantId, domain, businessName);
+    await createDemoSetupWithUpsert(tenantId, domain, businessName);
     
     // Validar setup completo
     const setupStatus = await validateTenantSetup(tenantId);
@@ -957,43 +973,84 @@ router.get('/validate-setup/:tenantId', async (req, res) => {
 /**
  * Criar setup completo de demo (profissionais + serviços) automaticamente
  */
-async function createDemoSetup(tenantId: string, domain: string, businessName: string) {
+async function createDemoSetup(reqBody: any) {
   try {
-    console.log(`🏗️ Criando setup demo para tenant ${tenantId} (${domain})`);
+    const { businessName, businessEmail, whatsapp, whatsappNumber, userPhone, domain } = reqBody;
+    const phoneInput = whatsapp || whatsappNumber;
     
-    const googleCreds = process.env.GOOGLE_REFRESH_TOKEN
-      ? {
-          provider: "google",
-          refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
-          access_token: null,
-          expiry_date: 0,
-          token_type: null,
-          scope: null,
-          shared_calendar: true,
-        }
-      : null;
+    // Validações básicas
+    if (!businessName || !phoneInput) {
+      throw new Error('businessName e telefone são obrigatórios');
+    }
+    
+    // Usar valores padrão se não fornecidos
+    const finalEmail = businessEmail || `demo@${businessName.toLowerCase().replace(/\s+/g, '')}.com`;
+    const finalUserPhone = userPhone || phoneInput;
+    const finalDomain = domain || 'healthcare';
+    
+    console.log(`🏗️ Criando setup demo completo: ${businessName} (${finalDomain})`);
+    
+    // Normalizar telefone
+    const phone = normalizeE164(phoneInput);
+    const businessPhoneDigits = cleanPhone(phoneInput);
+    const userPhoneDigits = cleanPhone(finalUserPhone);
 
-    // 1. CRIAR PROFISSIONAL PRINCIPAL com Google Calendar já linkado
+    // 1. CRIAR TENANT
+    const tenantId = crypto.randomUUID();
+    const slug = businessName
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    const { data: tenant, error: tenantError } = await supabase
+      .from('tenants')
+      .insert({
+        id: tenantId,
+        name: businessName,
+        slug,
+        business_name: businessName,
+        email: finalEmail,
+        phone: phone,
+        whatsapp_phone: businessPhoneDigits,
+        domain: finalDomain,
+        account_type: 'test',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (tenantError || !tenant) {
+      console.error('❌ Erro ao criar tenant:', tenantError);
+      throw tenantError;
+    }
+
+    console.log(`✅ Tenant criado: ${tenantId}`);
+
+    // 2. CRIAR PROFISSIONAL PRINCIPAL com Google Calendar já linkado
     const professionalId = crypto.randomUUID();
     const professionalData = {
       id: professionalId,
       tenant_id: tenantId,
       name: `Profissional ${businessName}`,
-      email: `demo@${businessName.toLowerCase().replace(/\s+/g, '')}.com`,
+      email: finalEmail,
       phone: '+5511999999999',
-      specialties: getDomainSpecialties(domain),
+      specialties: getDomainSpecialties(finalDomain),
       is_active: true,
-      // ✅ GOOGLE CALENDAR JÁ LINKADO (primary) - MANTENDO PARA TESTES REAIS
-      google_calendar_credentials: process.env.DEMO_GOOGLE_CALENDAR_CREDENTIALS ? 
-        JSON.parse(process.env.DEMO_GOOGLE_CALENDAR_CREDENTIALS) : 
-        {
-          "type": "service_account",
-          "project_id": "demo-calendar",
-          "private_key_id": "demo-key-id",
-          "client_email": "demo@demo-calendar.iam.gserviceaccount.com",
-          "calendar_configured": true,
-          "demo_mode": true
-        },
+      // ✅ GOOGLE CALENDAR REAL - Token real do .env para demos funcionais
+      google_calendar_credentials: process.env.GOOGLE_CALENDAR_CREDENTIALS ? 
+        JSON.parse(process.env.GOOGLE_CALENDAR_CREDENTIALS) : 
+        process.env.DEMO_GOOGLE_CALENDAR_CREDENTIALS ?
+          JSON.parse(process.env.DEMO_GOOGLE_CALENDAR_CREDENTIALS) :
+          {
+            "type": "service_account",
+            "project_id": "demo-calendar",
+            "private_key_id": "demo-key-id", 
+            "client_email": "demo@demo-calendar.iam.gserviceaccount.com",
+            "calendar_configured": true,
+            "demo_mode": true
+          },
       google_calendar_id: 'primary'
     };
 
@@ -1005,29 +1062,37 @@ async function createDemoSetup(tenantId: string, domain: string, businessName: s
     
     console.log(`✅ Profissional criado: ${professionalData.name} (Google Calendar: primary)`);
 
-    if (profRow?.[0]?.id && googleCreds?.refresh_token) {
+    // 🔄 GARANTIR TOKEN GOOGLE ATUALIZADO para demos funcionais
+    if (profRow?.[0]?.id) {
       try {
         const { ensureFreshGoogleToken } = await import("../utils/google-token");
-        await ensureFreshGoogleToken(profRow[0].id);
+        const refreshResult = await ensureFreshGoogleToken({ professionalId: profRow[0].id });
+        console.log(`🔑 Google Token refresh result:`, refreshResult);
+        
+        if (process.env.GOOGLE_REFRESH_TOKEN) {
+          console.log(`✅ Profissional com Google Calendar: ${profRow[0].id} (token disponível)`);
+        }
       } catch (e: any) {
-        console.warn("ensureFreshGoogleToken warning:", e?.message || e);
+        console.warn("⚠️ ensureFreshGoogleToken warning:", e?.message || e);
       }
     }
 
-    // 2. CRIAR SERVIÇOS PADRÃO POR DOMÍNIO
-    const services = getDomainServices(domain, tenantId);
+    // 3. CRIAR SERVIÇOS PADRÃO POR DOMÍNIO
+    const services = getDomainServices(finalDomain, tenantId);
     const { error: servicesError } = await supabase.from('services').insert(services);
     if (servicesError) {
       console.error('❌ Erro ao criar serviços:', servicesError);
       throw servicesError;
     }
     
-    console.log(`✅ ${services.length} serviços criados para domínio ${domain}`);
+    console.log(`✅ ${services.length} serviços criados para domínio ${finalDomain}`);
 
-    // 3. VINCULAR PROFISSIONAL AOS SERVIÇOS
+    // 4. VINCULAR PROFISSIONAL AOS SERVIÇOS
     const professionalServices = services.map(service => ({
       professional_id: professionalData.id,
       service_id: service.id,
+      tenant_id: tenantId,
+      is_active: true,
       created_at: new Date().toISOString()
     }));
 
@@ -1038,10 +1103,110 @@ async function createDemoSetup(tenantId: string, domain: string, businessName: s
     }
 
     console.log(`✅ Profissional vinculado a ${services.length} serviços`);
+    return { tenantId, professionalId: professionalData.id };
+
+  } catch (error) {
+    console.error('❌ Erro no setup demo completo:', error);
+    throw error;
+  }
+}
+
+/**
+ * Versão com UPSERT para evitar conflitos em reprocessamento
+ */
+async function createDemoSetupWithUpsert(tenantId: string, domain: string, businessName: string) {
+  try {
+    console.log(`🏗️ Criando setup demo (UPSERT) para tenant ${tenantId} (${domain})`);
+    
+    // 1. CRIAR/ATUALIZAR PROFISSIONAL PRINCIPAL com Google Calendar já linkado
+    const professionalId = crypto.randomUUID();
+    const professionalData = {
+      id: professionalId,
+      tenant_id: tenantId,
+      name: `Profissional ${businessName}`,
+      email: `demo@${businessName.toLowerCase().replace(/\s+/g, '')}.com`,
+      phone: '+5511999999999',
+      specialties: getDomainSpecialties(domain),
+      is_active: true,
+      // ✅ GOOGLE CALENDAR REAL - Token real do .env para demos funcionais
+      google_calendar_credentials: process.env.GOOGLE_CALENDAR_CREDENTIALS ? 
+        JSON.parse(process.env.GOOGLE_CALENDAR_CREDENTIALS) : 
+        process.env.DEMO_GOOGLE_CALENDAR_CREDENTIALS ?
+          JSON.parse(process.env.DEMO_GOOGLE_CALENDAR_CREDENTIALS) :
+          {
+            "type": "service_account",
+            "project_id": "demo-calendar",
+            "private_key_id": "demo-key-id", 
+            "client_email": "demo@demo-calendar.iam.gserviceaccount.com",
+            "calendar_configured": true,
+            "demo_mode": true
+          },
+      google_calendar_id: 'primary'
+    };
+
+    const { data: profRow, error: profError } = await supabase.from('professionals')
+      .upsert([professionalData], { onConflict: 'tenant_id,name' })
+      .select();
+    if (profError) {
+      console.error('❌ Erro ao criar/atualizar profissional:', profError);
+      throw profError;
+    }
+    
+    console.log(`✅ Profissional criado/atualizado: ${professionalData.name} (Google Calendar: primary)`);
+
+    // 🔄 GARANTIR TOKEN GOOGLE ATUALIZADO para demos funcionais
+    if (profRow?.[0]?.id) {
+      try {
+        const { ensureFreshGoogleToken } = await import("../utils/google-token");
+        const refreshResult = await ensureFreshGoogleToken({ professionalId: profRow[0].id });
+        console.log(`🔑 Google Token refresh result:`, refreshResult);
+        
+        if (process.env.GOOGLE_REFRESH_TOKEN) {
+          console.log(`✅ Profissional com Google Calendar: ${profRow[0].id} (token disponível)`);
+        }
+      } catch (e: any) {
+        console.warn("⚠️ ensureFreshGoogleToken warning:", e?.message || e);
+      }
+    }
+
+    // 2. CRIAR/ATUALIZAR SERVIÇOS PADRÃO POR DOMÍNIO
+    const services = getDomainServices(domain, tenantId);
+    const { error: servicesError } = await supabase.from('services')
+      .upsert(services, { onConflict: 'tenant_id,name' });
+    if (servicesError) {
+      console.error('❌ Erro ao criar/atualizar serviços:', servicesError);
+      throw servicesError;
+    }
+    
+    console.log(`✅ ${services.length} serviços criados/atualizados para domínio ${domain}`);
+
+    // 3. VINCULAR PROFISSIONAL AOS SERVIÇOS (buscar IDs atualizados)
+    const { data: createdServices } = await supabase.from('services')
+      .select('id, name')
+      .eq('tenant_id', tenantId);
+
+    const professionalServices = (createdServices || []).map(service => ({
+      professional_id: professionalData.id,
+      service_id: service.id,
+      tenant_id: tenantId, // Campo obrigatório NOT NULL
+      is_active: true,
+      created_at: new Date().toISOString()
+    }));
+
+    if (professionalServices.length > 0) {
+      const { error: linkError } = await supabase.from('professional_services')
+        .upsert(professionalServices, { onConflict: 'tenant_id,professional_id,service_id' });
+      if (linkError) {
+        console.error('❌ Erro ao vincular profissional aos serviços:', linkError);
+        throw linkError;
+      }
+      console.log(`✅ Profissional vinculado a ${professionalServices.length} serviços`);
+    }
+
     return { professionalId: professionalData.id, servicesCount: services.length };
 
   } catch (error) {
-    console.error('❌ Erro no setup demo:', error);
+    console.error('❌ Erro no setup demo (UPSERT):', error);
     throw error;
   }
 }
@@ -1140,7 +1305,7 @@ function getDomainServices(domain: string, tenantId: string) {
         duration_minutes: 60,
         base_price: 80,
         service_config: { category: 'hair', demo_service: true },
-        status: 'active',
+        is_active: true,
         created_at: new Date().toISOString()
       },
       {
@@ -1151,7 +1316,7 @@ function getDomainServices(domain: string, tenantId: string) {
         duration_minutes: 120,
         base_price: 150,
         service_config: { category: 'color', demo_service: true },
-        status: 'active',
+        is_active: true,
         created_at: new Date().toISOString()
       },
       {
@@ -1162,7 +1327,7 @@ function getDomainServices(domain: string, tenantId: string) {
         duration_minutes: 45,
         base_price: 35,
         service_config: { category: 'nails', demo_service: true },
-        status: 'active',
+        is_active: true,
         created_at: new Date().toISOString()
       }
     ],
@@ -1175,7 +1340,7 @@ function getDomainServices(domain: string, tenantId: string) {
         duration_minutes: 30,
         base_price: 150,
         service_config: { category: 'consultation', demo_service: true },
-        status: 'active',
+        is_active: true,
         created_at: new Date().toISOString()
       },
       {
@@ -1186,7 +1351,7 @@ function getDomainServices(domain: string, tenantId: string) {
         duration_minutes: 20,
         base_price: 100,
         service_config: { category: 'followup', demo_service: true },
-        status: 'active',
+        is_active: true,
         created_at: new Date().toISOString()
       }
     ],
@@ -1199,7 +1364,7 @@ function getDomainServices(domain: string, tenantId: string) {
         duration_minutes: 60,
         base_price: 300,
         service_config: { category: 'consulting', demo_service: true },
-        status: 'active',
+        is_active: true,
         created_at: new Date().toISOString()
       },
       {
@@ -1210,7 +1375,7 @@ function getDomainServices(domain: string, tenantId: string) {
         duration_minutes: 90,
         base_price: 500,
         service_config: { category: 'contracts', demo_service: true },
-        status: 'active',
+        is_active: true,
         created_at: new Date().toISOString()
       }
     ]
@@ -1246,102 +1411,86 @@ function getDomainServices(domain: string, tenantId: string) {
 }
 
 // =====================================================
+// POST /api/demo/create - Criar tenant demo completo
+// Body: { businessName, businessEmail, whatsappNumber, userPhone, domain }
+// =====================================================
+router.post('/create', async (req, res) => {
+  try {
+    console.log('🚀 INICIANDO createDemo:', req.body);
+    
+    // Normalizar telefone
+    const phone = normalizeE164(req.body.whatsapp ?? req.body.whatsappNumber);
+
+    // 1. Verificar se já existe tenant com esse telefone
+    const { data: existing } = await supabase
+      .from('tenants')
+      .select('id')
+      .eq('phone', phone)
+      .single();
+
+    if (existing) {
+      // Se já existe → apenas retorna tenant e token
+      console.log(`🔄 Tenant já existe para phone ${phone}, retornando existing: ${existing.id}`);
+      return res.status(200).json({
+        success: true,
+        tenant_id: existing.id,
+        isReused: true,
+        demo_token: await issueDemoToken(existing.id)
+      });
+    }
+
+    // 2. Caso não exista → criar fluxo completo da demo
+    const { tenantId, professionalId } = await createDemoSetup(req.body);
+
+    return res.status(200).json({
+      success: true,
+      tenant_id: tenantId,
+      professional_id: professionalId,
+      isReused: false,
+      demo_token: await issueDemoToken(tenantId)
+    });
+
+  } catch (err) {
+    console.error('❌ createDemo error:', err);
+    return res.status(500).json({ success: false, error: 'Erro interno do servidor' });
+  }
+});
+
+// =====================================================
 // GET /check-user?userPhone=+55...&tenantId=uuid
-// Verifica/cria usuário e join com tenant
+// Apenas verifica se usuário existe (não cria)
 // =====================================================
 router.get('/check-user', async (req, res) => {
   try {
     const { userPhone, tenantId } = req.query;
-    
+
     if (!userPhone || !tenantId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'userPhone e tenantId são obrigatórios' 
-      });
+      return res.status(400).json({ success: false, error: 'Missing parameters' });
     }
 
-    const cleanUserPhone = cleanPhone(userPhone as string);
-    
-    if (cleanUserPhone.length < 7) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Número muito curto (mínimo 7 dígitos)' 
-      });
-    }
+    const cleanUserPhone = userPhone.toString().replace(/\D/g, '');
 
-    // 1. Verificar se usuário existe
-    const { data: existingUser } = await supabase
+    // Apenas verifica se usuário já existe no banco
+    const { data: existingUser, error } = await supabase
       .from('users')
       .select('id')
       .eq('phone', cleanUserPhone)
-      .single();
-
-    let userId = existingUser?.id;
-
-    // 2. Se não existe, criar usuário
-    if (!userId) {
-      const { data: newUser, error } = await supabase
-        .from('users')
-        .insert({
-          phone: cleanUserPhone,
-          name: null, // Deixa null para ativar onboarding via IA
-          created_at: new Date().toISOString()
-        })
-        .select('id')
-        .single();
-
-      if (error || !newUser) {
-        console.error('❌ Erro ao criar usuário:', error);
-        return res.status(500).json({ 
-          success: false, 
-          error: 'Erro ao criar usuário',
-          debug: error?.message 
-        });
-      }
-
-      userId = newUser.id;
-    }
-
-    // 3. Verificar se join existe
-    const { data: existingJoin } = await supabase
-      .from('user_tenants')
-      .select('tenant_id, user_id')
-      .eq('tenant_id', tenantId)
-      .eq('user_id', userId)
       .maybeSingle();
 
-    // 4. Se não existe join, criar
-    if (!existingJoin) {
-      const { error } = await supabase
-        .from('user_tenants')
-        .insert({
-          tenant_id: tenantId,
-          user_id: userId
-        });
-
-      if (error) {
-        console.error('❌ Erro ao inserir em user_tenants:', error);
-        return res.status(500).json({ 
-          success: false, 
-          error: 'Erro ao conectar usuário ao tenant',
-          debug: error.message 
-        });
-      }
+    if (error) {
+      console.error('❌ Erro ao verificar usuário:', error);
+      return res.status(500).json({ success: false, error: 'Erro ao verificar usuário' });
     }
 
+    // Retorna apenas se existe ou não
     return res.json({
       success: true,
-      userConnected: true,
-      userId: userId,
-      message: 'Usuário conectado com sucesso'
+      exists: !!existingUser
     });
 
-  } catch (error) {
-    console.error('Error in check-user:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: 'Erro interno do servidor' 
-    });
+  } catch (err) {
+    console.error('❌ Erro inesperado no /check-user:', err);
+    return res.status(500).json({ success: false, error: 'Erro inesperado' });
   }
 });
 
