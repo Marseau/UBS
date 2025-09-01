@@ -15,6 +15,87 @@ const syncService = new CalendarSyncBidirectionalService();
  * WEBHOOK - Google Calendar Push Notifications
  * Triggered quando há mudanças no Google Calendar
  */
+/**
+ * TESTE - Criar e remover evento no Google Calendar
+ * POST /api/calendar/sync/test
+ * Body: { professionalId: "uuid" }
+ */
+router.post('/sync/test', async (req, res) => {
+    try {
+        const { professionalId } = req.body;
+        
+        if (!professionalId) {
+            return res.status(400).json({ 
+                error: 'professionalId é obrigatório',
+                usage: 'POST /api/calendar/sync/test {"professionalId": "uuid"}' 
+            });
+        }
+
+        console.log(`🧪 Testando Google Calendar sync para profissional: ${professionalId}`);
+
+        // 1. Buscar profissional e credenciais
+        const { data: professional, error: profError } = await supabaseAdmin
+            .from('professionals')
+            .select('id, name, google_calendar_credentials, google_calendar_id')
+            .eq('id', professionalId)
+            .single();
+
+        if (profError || !professional) {
+            console.error('❌ Profissional não encontrado:', profError);
+            return res.status(404).json({ error: 'Profissional não encontrado' });
+        }
+
+        if (!professional.google_calendar_credentials || !professional.google_calendar_id) {
+            return res.status(400).json({ 
+                error: 'Profissional não possui Google Calendar configurado',
+                professional: { 
+                    id: professional.id, 
+                    name: professional.name,
+                    hasCredentials: !!professional.google_calendar_credentials,
+                    calendarId: professional.google_calendar_id
+                }
+            });
+        }
+
+        // 2. Tentar criar evento de teste
+        const eventId = await syncService.createTestEvent(professionalId);
+        
+        if (eventId) {
+            console.log(`✅ Evento de teste criado: ${eventId}`);
+            
+            // 3. Remover evento de teste imediatamente
+            await syncService.deleteTestEvent(professionalId, eventId);
+            console.log(`🗑️ Evento de teste removido: ${eventId}`);
+            
+            return res.json({
+                ok: true,
+                calendar_id: professional.google_calendar_id,
+                professional: {
+                    id: professional.id,
+                    name: professional.name
+                },
+                test: {
+                    eventCreated: eventId,
+                    eventDeleted: true,
+                    message: 'Google Calendar sync funcionando corretamente'
+                }
+            });
+        } else {
+            return res.status(500).json({
+                error: 'Falha ao criar evento de teste no Google Calendar',
+                calendar_id: professional.google_calendar_id
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Erro no teste de sync:', error);
+        return res.status(500).json({ 
+            error: 'Erro interno no teste de sync',
+            details: error.message 
+        });
+    }
+});
+
 router.post('/google-calendar-webhook', async (req, res) => {
     try {
         console.log('📅 Google Calendar webhook recebido:', req.headers);

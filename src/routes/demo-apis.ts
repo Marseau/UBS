@@ -737,7 +737,7 @@ router.post("/chat", async (req, res) => {
     const options = {
       hostname: 'localhost',
       port: process.env.PORT || 3000,
-      path: '/api/whatsapp-v3/webhook',  // 🔧 CORREÇÃO: Usar endpoint v3 com /webhook
+      path: '/api/whatsapp/webhook',  // 🔧 CORREÇÃO: Usar endpoint v3 oficial
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -757,18 +757,31 @@ router.post("/chat", async (req, res) => {
       proxyRes.on('end', () => {
         try {
           console.log('📤 Response do webhook v3:', data);
+          console.log('🔍 Response status:', proxyRes.statusCode);
+          console.log('🔍 Response headers:', proxyRes.headers);
           
           // Tentar usar a resposta real do webhook v3
           if (data && data.trim()) {
             try {
               const webhookResponse = JSON.parse(data);
-              if (webhookResponse && webhookResponse.response) {
+              if (webhookResponse && (webhookResponse.response || webhookResponse.aiResponse)) {
                 // ✅ Usar resposta real do webhook v3
-                res.status(200).json(webhookResponse);
+                const finalResponse = {
+                  status: 'success',
+                  response: webhookResponse.response || webhookResponse.aiResponse,
+                  telemetry: webhookResponse.telemetry || {
+                    intent: 'unknown',
+                    confidence: 0,
+                    decision_method: 'webhook_v3_success',
+                    flow_lock_active: false,
+                    processing_time_ms: 0
+                  }
+                };
+                res.status(200).json(finalResponse);
                 return;
               }
-            } catch (parseError) {
-              console.log('⚠️ Webhook v3 retornou dados não-JSON, usando fallback');
+            } catch (parseError: any) {
+              console.log('⚠️ Webhook v3 retornou dados não-JSON, usando fallback:', parseError?.message || 'Erro desconhecido');
             }
           }
           

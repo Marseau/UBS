@@ -6,7 +6,7 @@ export type IntentKey =
   | 'greeting' | 'services' | 'pricing' | 'availability' | 'my_appointments'
   | 'address' | 'payments' | 'business_hours' | 'cancel' | 'reschedule'
   | 'confirm' | 'modify_appointment' | 'policies' | 'wrong_number'
-  | 'test_message' | 'booking_abandoned' | 'noshow_followup';
+  | 'test_message' | 'booking_abandoned' | 'noshow_followup' | 'onboarding';
 
 export type DecisionMethod = 'regex' | 'llm';
 
@@ -33,7 +33,8 @@ export const INTENT_KEYS = [
   'wrong_number',
   'test_message',
   'booking_abandoned',
-  'noshow_followup'
+  'noshow_followup',
+  'onboarding'
 ] as const;
 
 // Ordem de prioridade para resolver sobreposições (primeiro vence)
@@ -223,7 +224,7 @@ const RULES: Record<IntentKey, RegExp[]> = {
   test_message: [any(W.test)],
   booking_abandoned: [any(W.abad)],
   noshow_followup: [any(W.noshow)],
-  // general removido - não deve estar disponível como fallback
+  onboarding: [], // Intent interno do sistema - não detectado por regex
 };
 
 // ===== FUNÇÃO PRINCIPAL DE DETECÇÃO (NOVA API) =====
@@ -270,7 +271,7 @@ export function detectIntentByRegex(text: string): IntentDetectionResult {
     test_message: /\b(teste|ping|health\s*check)\b/i,
     booking_abandoned: /\b(deixa pra l[áa]|esquece|n[ãa]o quero mais|depois eu vejo|fica pra outra|agora n[ãa]o)\b/i,
     noshow_followup: /\b(n[ãa]o compareci|no\s*show|faltei|n[ãa]o pude ir)\b/i,
-    // general removido - não deve estar disponível como fallback
+    onboarding: /^$/, // Intent interno - nunca casará com texto real
   };
 
   for (const [intent, re] of Object.entries(map)) {

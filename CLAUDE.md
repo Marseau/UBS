@@ -2,7 +2,78 @@
 
 Este arquivo contém as regras globais e diretrizes de desenvolvimento para o sistema **WhatsAppSalon-N8N / Universal Booking System**. Estas regras são obrigatórias para TODOS os desenvolvimentos e seguem os princípios de **Context Engineering**.
 
-## 🔄 Context Engineering - Princípios Fundamentais
+## 🎯 METODOLOGIA DE EXECUÇÃO OBRIGATÓRIA
+
+### **Execute Prompt - Contrato de Desenvolvimento Claude**
+
+**IMPORTANTE: Esta metodologia deve ser seguida RIGOROSAMENTE para todas as tarefas e implementações.**
+
+#### **1. 📋 CONTEXTO OBRIGATÓRIO - CONSULTE NESTA ORDEM:**
+
+**Primeira Consulta Obrigatória:**
+- **📄 `src/frontend/LANDING.HTML`**: Leia PRIMEIRO para entender o SaaS
+  - Proposta de valor
+  - Funcionalidades oferecidas  
+  - Público-alvo
+  - Escopo real do produto
+
+**Recursos de Apoio MCPs Disponíveis:**
+- 🧠 **Memory MCP**: Acesso ao grafo de decisões, entidades e definições
+- 📂 **Filesystem MCP**: Leitura/escrita de arquivos do projeto
+- 🌐 **Crawled Pages**: Documentação raspada (Google Calendar, Stripe, WhatsApp, Engenharia de Contexto)
+- 🧪 **Playwright MCP**: Testes automatizados web
+- 🤖 **Puppeteer MCP**: Automação de browser real
+- 🛠️ **GitHub MCP**: Histórico de commits, branches, pull requests
+- 🗃️ **Supabase MCP**: Banco de dados do projeto e sua estrutura
+- ⚡ **N8N MCP**: Acesso direto aos workflows
+
+#### **2. 🧭 Metodologia COLEAM00 (Obrigatória)**
+
+**Você deve seguir rigorosamente estas etapas:**
+
+1. **C**onteúdo – Entenda completamente a tarefa descrita
+2. **O**bjetivo – Determine a entrega exata e sucesso esperado
+3. **L**ocalização – Consulte as fontes (filesystem, memory, crawled_pages)
+4. **E**vidência – Fundamente sua resposta em dados verificáveis
+5. **A**nálise – Explique sua escolha e caminho técnico
+6. **M00** – Documente o raciocínio, mantendo consistência futura
+
+#### **3. 🚫 REGRAS RÍGIDAS - NUNCA VIOLE:**
+
+- ✅ **SEMPRE** alinhe respostas com a proposta da `landing.html`
+- ✅ **SEMPRE** siga método Coleam00 das crawled_pages
+- ❌ **NÃO** sugira funcionalidades fora do escopo da landing
+- ❌ **NÃO** invente informações não encontradas
+- ❌ **SE não souber, PERGUNTE** em vez de assumir
+- ✅ **CITE fontes** (landing.html + MCPs utilizados + crawled_pages)
+- ❌ **PROIBIDO** dar soluções rápidas/temporárias
+- ✅ **SOLUÇÃO DEFINITIVA É OBRIGATÓRIA**
+
+#### **4. 📝 FORMATO DE RESPOSTA OBRIGATÓRIO:**
+
+```markdown
+# 📌 Análise Inicial (COLEAM00)
+[Aplicação da metodologia COLEAM00]
+
+# 🗂️ Consultas Realizadas via MCPs
+[Fontes consultadas e dados coletados]
+
+# 💡 Proposta Técnica com Justificativa
+[Solução técnica fundamentada]
+
+# ✅ Passos para Execução
+[Steps detalhados de implementação]
+
+# 🧪 Testes Recomendados
+[Estratégia de validação]
+
+# 🔁 Memória Atualizada (se necessário)
+[Documentação de decisões]
+```
+
+---
+
+## 📄 Context Engineering - Princípios Fundamentais
 
 **IMPORTANTE: Estes princípios se aplicam a TODOS os desenvolvimentos:**
 
@@ -130,7 +201,7 @@ src/
 - **Teste comportamento** antes de marcar tarefas de implementação como completas
 - **Crie sub-tarefas** descobertas durante desenvolvimento
 
-## 📎 Padrões de Código & Convenções
+## 🔎 Padrões de Código & Convenções
 
 ### TypeScript Standards
 - **Use TypeScript strict mode** - Configuração rigorosa habilitada
@@ -173,7 +244,7 @@ src/
 - **Query optimization**: Prepared statements e índices otimizados
 - **Deadlock prevention**: Retry automático com backoff exponencial
 
-## 🔄 Comandos de Desenvolvimento Essenciais
+## 📄 Comandos de Desenvolvimento Essenciais
 
 ### Core Development Workflow
 ```bash
@@ -259,6 +330,7 @@ DAILY_METRICS_SCHEDULE="0 2 * * *"   # 2 AM daily execution
 - ❌ Não esqueça tratamento de erro de ferramenta - Implemente retry adequado e degradação graceful
 
 ### Desenvolvimento Geral
+- ❌ **PROIBIDO: NUNCA criar implementações mock ou hardcoded** - Use sempre integrações reais (Supabase, APIs, etc.)
 - ❌ Não assuma contexto faltante - Faça perguntas se incerto
 - ❌ Não alucine bibliotecas ou funções - Use apenas pacotes Python conhecidos e verificados
 - ❌ Não ignore validação de entrada - Use modelos Pydantic para todas as entradas externas
@@ -367,4 +439,31 @@ GET  /api/super-admin/system-health        # Health check completo do sistema
 4. **Teste compatibilidade** com agentes IA existentes
 5. **Atualize documentação** relevante
 
-Estas regras garantem desenvolvimento consistente, seguro e alinhado com os princípios de Context Engineering para o sistema WhatsApp Salon N8N.
+---
+
+## 📋 CONTRATO DE DESENVOLVIMENTO - RESUMO EXECUTIVO
+
+**🎯 EXECUÇÃO OBRIGATÓRIA PARA CADA TAREFA:**
+
+1. **📄 Consulte `landing.html` PRIMEIRO**
+2. **🧭 Aplique metodologia COLEAM00**
+3. **🗂️ Use MCPs para coleta de dados**
+4. **📝 Responda no formato obrigatório**
+5. **✅ Implemente solução definitiva**
+6. **🧪 Valide em 3 níveis**
+7. **🔁 Documente decisões**
+
+**🚫 NUNCA:**
+- Sugerir funcionalidades fora do escopo
+- Inventar informações não verificadas
+- Dar soluções temporárias
+- Violar padrões estabelecidos
+
+**✅ SEMPRE:**
+- Alinhar com proposta de valor do SaaS
+- Citar fontes consultadas
+- Implementar soluções robustas
+- Seguir arquitetura multi-tenant
+- Preservar performance e segurança
+
+Estas regras garantem desenvolvimento consistente, seguro e alinhado com os princípios de Context Engineering para o sistema WhatsAppSalon-N8N / Universal Booking System.

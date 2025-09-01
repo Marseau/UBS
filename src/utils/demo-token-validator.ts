@@ -2,22 +2,10 @@ import crypto from "crypto";
 
 const DEMO_SECRET = process.env.DEMO_MODE_TOKEN || "fixed-secret-for-load-test-2025";
 
-/** Valida o x-demo-token no formato base64url.payload + HMAC-SHA256 */
-export default function verifyDemoToken(token?: string): boolean {
-  if (!token) return false;
-  try {
-    const [dataB64, sig] = token.split(".");
-    if (!dataB64 || !sig) return false;
-
-    const expected = crypto
-      .createHmac("sha256", DEMO_SECRET)
-      .update(dataB64)
-      .digest("base64url");
-
-    return sig === expected;
-  } catch {
-    return false;
-  }
+// simples e suficiente para DEMO (sem HMAC no browser)
+export default function verifyDemoToken(headerValue?: string): boolean {
+  const secret = process.env.DEMO_MODE_TOKEN || "fixed-secret-for-load-test-2025";
+  return !!headerValue && headerValue === secret;
 }
 
 // =====================================================

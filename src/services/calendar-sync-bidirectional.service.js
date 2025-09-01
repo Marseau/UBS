@@ -19,6 +19,112 @@ class CalendarSyncBidirectionalService {
     }
 
     /**
+     * CRIAR EVENTO DE TESTE no Google Calendar
+     * Para validar se a integração está funcionando
+     */
+    async createTestEvent(professionalId) {
+        try {
+            console.log(`🧪 Criando evento de teste para profissional: ${professionalId}`);
+
+            // 1. Obter cliente autenticado
+            const authClient = await this.calendarService.getAuthClientForProfessional(professionalId);
+            if (!authClient) {
+                console.log('❌ Credenciais Google não encontradas para o profissional');
+                return null;
+            }
+
+            // 2. Buscar dados do profissional
+            const { data: professional, error: profError } = await supabaseAdmin
+                .from('professionals')
+                .select('name, google_calendar_id')
+                .eq('id', professionalId)
+                .single();
+
+            if (profError || !professional) {
+                console.error('❌ Profissional não encontrado:', profError);
+                return null;
+            }
+
+            // 3. Criar evento de teste
+            const calendar = google.calendar({ version: 'v3', auth: authClient });
+            const calendarId = professional.google_calendar_id || 'primary';
+
+            const now = new Date();
+            const endTime = new Date(now.getTime() + (30 * 60 * 1000)); // 30 minutos
+
+            const event = {
+                summary: 'Demo UBS - Teste Sync',
+                description: 'Evento de teste criado automaticamente pela Demo UBS para validar integração Google Calendar. Será removido automaticamente.',
+                start: {
+                    dateTime: now.toISOString(),
+                    timeZone: 'America/Sao_Paulo'
+                },
+                end: {
+                    dateTime: endTime.toISOString(), 
+                    timeZone: 'America/Sao_Paulo'
+                },
+                colorId: '3' // Cor roxo para identificar como teste
+            };
+
+            const response = await calendar.events.insert({
+                calendarId: calendarId,
+                resource: event
+            });
+
+            console.log(`✅ Evento de teste criado: ${response.data.id}`);
+            return response.data.id;
+
+        } catch (error) {
+            console.error('❌ Erro ao criar evento de teste:', error);
+            return null;
+        }
+    }
+
+    /**
+     * REMOVER EVENTO DE TESTE do Google Calendar
+     */
+    async deleteTestEvent(professionalId, eventId) {
+        try {
+            console.log(`🗑️ Removendo evento de teste: ${eventId}`);
+
+            // 1. Obter cliente autenticado
+            const authClient = await this.calendarService.getAuthClientForProfessional(professionalId);
+            if (!authClient) {
+                console.log('❌ Credenciais Google não encontradas');
+                return false;
+            }
+
+            // 2. Buscar dados do profissional
+            const { data: professional, error: profError } = await supabaseAdmin
+                .from('professionals')
+                .select('google_calendar_id')
+                .eq('id', professionalId)
+                .single();
+
+            if (profError || !professional) {
+                console.error('❌ Profissional não encontrado:', profError);
+                return false;
+            }
+
+            // 3. Remover evento
+            const calendar = google.calendar({ version: 'v3', auth: authClient });
+            const calendarId = professional.google_calendar_id || 'primary';
+
+            await calendar.events.delete({
+                calendarId: calendarId,
+                eventId: eventId
+            });
+
+            console.log(`✅ Evento de teste removido: ${eventId}`);
+            return true;
+
+        } catch (error) {
+            console.error('❌ Erro ao remover evento de teste:', error);
+            return false;
+        }
+    }
+
+    /**
      * IMPORTAR EVENTOS EXTERNOS para o sistema
      * Cria appointments para eventos criados manualmente no Google Calendar
      */
@@ -47,7 +153,7 @@ class CalendarSyncBidirectionalService {
 
             const { data: tenant, error: tenantError } = await supabaseAdmin
                 .from('tenants')
-                .select('business_name, business_config')
+                .select('business_name')
                 .eq('id', tenantId)
                 .single();
 

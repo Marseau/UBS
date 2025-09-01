@@ -762,13 +762,8 @@ class CalendarService {
             console.log(`👥 Encontrados ${professionals.length} profissionais com calendário`);
 
             // Buscar configuração de horário do tenant
-            const { data: tenant } = await database_1.supabaseAdmin
-                .from('tenants')
-                .select('business_config')
-                .eq('id', tenantId)
-                .single();
-
-            const businessHours = tenant?.business_config?.business_hours || { start: "09:00", end: "18:00" };
+            // Use default business hours since business_config column doesn't exist
+            const businessHours = { start: "09:00", end: "18:00" };
 
             // Consultar horários para cada profissional
             const allSlots = [];

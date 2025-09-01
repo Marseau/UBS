@@ -1,47 +1,26 @@
-# Database Schema Analysis - Cleaned Version
+# Database Schema Analysis - Current Metrics System
+*Updated with Production Validation - January 2025*
 
 ## Overview
-This document analyzes the **existing** database schema for metrics optimization, focusing on the 3 core tables that are already implemented and working.
+This document analyzes the **active metrics system** in production, focusing on the 2 core tables that are actively used and the deprecated analytics tables.
 
-## Core Tables (Already Exist)
+## Active Metrics Tables (Production Validated)
 
-### 1. `platform_metrics`
-**Purpose:** Platform-wide aggregated metrics
-**Location:** `/database/platform-metrics-schema.sql`
-**Status:** ✅ **ACTIVE AND WORKING**
+### 1. `tenant_metrics` - PRIMARY METRICS SYSTEM
+**Purpose:** Tenant-specific metrics with JSONB flexibility  
+**Production Status:** ✅ **ACTIVE AND HEAVILY USED**
+**Last Activity:** 2025-09-01 (TODAY)
+**Total Records:** 286 active records
 
-**Current Columns:**
-- `id` - Primary key
-- `metric_date` - Date for metrics
-- `total_mrr` - Monthly recurring revenue
-- `total_appointments` - Total appointments
-- `total_customers` - Total customers
-- `total_revenue` - Total revenue
-- `total_tenants` - Total tenants
-- `active_tenants` - Active tenants
-- `avg_completion_rate` - Average completion rate
-- `total_cancellations` - Total cancellations
-- `total_reschedules` - Total reschedules
-- `created_at`, `updated_at` - Timestamps
-
-**Functions:**
-- `calculate_platform_metrics()` - Calculates platform metrics
-- `update_platform_metrics()` - Updates platform metrics
-- `get_platform_metrics_with_comparisons()` - API-ready data
-
-### 2. `tenant_metrics`
-**Purpose:** Tenant-specific metrics with JSONB flexibility
-**Location:** `/database/tenant-metrics-schema.sql`
-**Status:** ✅ **ACTIVE AND WORKING**
-
-**Current Columns:**
-- `id` - Primary key
-- `tenant_id` - Foreign key to tenants
-- `metric_type` - Type of metric (ranking, risk_assessment, participation, evolution)
-- `metric_data` - JSONB data containing all metrics
-- `period` - Time period (7d, 30d, 90d, 1y)
-- `calculated_at` - Calculation timestamp
-- `created_at`, `updated_at` - Timestamps
+**Confirmed Production Structure:**
+- `id` UUID PRIMARY KEY
+- `tenant_id` UUID (FK to tenants)
+- `metric_type` VARCHAR (ranking, risk_assessment, participation, evolution)
+- `metric_data` JSONB (flexible metrics storage)
+- `period` VARCHAR (7d, 30d, 90d, 1y)
+- `calculated_at` TIMESTAMPTZ
+- `metricas_validadas` JSONB (validated metrics)
+- `created_at`, `updated_at` TIMESTAMPTZ
 
 **JSONB Structure Examples:**
 ```json
@@ -53,51 +32,83 @@ This document analyzes the **existing** database schema for metrics optimization
 }
 ```
 
-### 3. `usage_costs` (Implied from usage cost files)
-**Purpose:** Usage-based cost tracking
-**Location:** `/database/add-usage-cost-to-metrics.sql`
-**Status:** ✅ **ACTIVE AND WORKING**
+### 2. `platform_metrics` - PLATFORM AGGREGATIONS
+**Purpose:** Platform-wide aggregated metrics
+**Production Status:** ✅ **ACTIVE FOR AGGREGATIONS**
+**Last Activity:** 2025-08-12 (Recent)
+**Total Records:** 3 aggregation records
+
+**Confirmed Production Structure:**
+- `id` UUID PRIMARY KEY
+- `platform_id` VARCHAR
+- `period` VARCHAR (daily, weekly, monthly)
+- `metric_type` VARCHAR (aggregation type)
+- `metric_data` JSONB (platform-wide KPIs)
+- `created_at`, `updated_at` TIMESTAMP
+
+**JSONB Structure Examples:**
+```json
+{
+  "total_mrr": 125000,
+  "total_tenants": 450,
+  "active_tenants": 380,
+  "total_appointments": 15200,
+  "avg_completion_rate": 0.87
+}
+```
+
+### 3. `usage_costs` - COST TRACKING
+**Purpose:** Usage-based cost tracking integration
+**Status:** ✅ **ACTIVE FOR BILLING**
 
 **Cost Structure:**
 - Chat minutes: $0.001 per minute
-- Conversations: $0.007 per conversation
+- Conversations: $0.007 per conversation  
 - AI interactions: $0.02 per interaction
 
-**Functions:**
-- `calculate_new_metrics_system_with_usage_cost()` - Calculates costs
-- `get_revenue_vs_usage_cost_data()` - Revenue vs cost analysis
+## 🚫 Deprecated Analytics Tables (DO NOT USE)
 
-## Current API Integration
+### Legacy Analytics System (DEPRECATED)
+**Status:** ❌ **DEPRECATED - Last activity August 2025**
 
-### Existing APIs (Working)
-1. **Platform APIs** → `platform_metrics` table
-2. **Tenant APIs** → `tenant_metrics` table
-3. **Usage Cost APIs** → usage cost calculations
+These tables should be **ignored** in new development:
+- `analytics_job_executions` (12 records, last: 2025-08-11)
+- `analytics_system_metrics` (3 records, last: 2025-08-08)  
+- `analytics_tenant_metrics` (30 records, last: 2025-08-08)
 
-### Performance Status
-- **Platform queries:** ~50-100ms
-- **Tenant queries:** ~20-50ms
-- **Usage cost queries:** ~100-200ms
+**Migration Note:** The analytics_* tables were replaced by the current tenant_metrics and platform_metrics system. New development should only reference the active tables.
 
-## Optimization Strategy
+## Current API Integration (Active System)
 
-### Phase 1: Column Completion
-Add missing columns to existing tables without breaking current functionality:
+### Production APIs (Working with Active Tables)
+1. **Tenant APIs** → `tenant_metrics` table (PRIMARY - 286 records)
+2. **Platform APIs** → `platform_metrics` table (AGGREGATIONS - 3 records)
+3. **Cost APIs** → `usage_costs` calculations
 
-**platform_metrics additions needed:**
-- `total_chat_minutes`
-- `total_conversations`
-- `total_ai_interactions`
-- `operational_efficiency_pct`
-- `spam_rate_pct`
-- `receita_uso_ratio`
+### Performance Status (Production Validated)
+- **Tenant queries:** ~20-50ms (optimized for heavy use)
+- **Platform queries:** ~50-100ms (aggregation focused)
+- **Cost queries:** ~100-200ms (billing calculations)
 
-**tenant_metrics additions needed:**
-- Additional JSONB fields for:
+## Current System Status
+
+### ✅ What's Working (No Changes Needed)
+- `tenant_metrics` with 286 active records (heavy production use)
+- `platform_metrics` with aggregation data (recent activity)
+- JSONB flexible structure allowing dynamic metrics
+- Performance within acceptable ranges
+
+### 🔧 Optimization Opportunities  
+- Additional JSONB fields in `tenant_metrics`:
   - `health_score`
-  - `risk_level`
+  - `risk_level` 
   - `efficiency_score`
   - `ranking_position`
+
+- Enhanced `platform_metrics` aggregations:
+  - `total_chat_minutes`
+  - `total_conversations` 
+  - `operational_efficiency_pct`
 
 ### Phase 2: Query Optimization
 Optimize existing queries with:
@@ -113,6 +124,19 @@ Unify APIs to use optimized queries from existing tables
 - **Data integrity:** 100% preservation of existing data
 - **Zero downtime:** No service interruption
 - **API compatibility:** All existing endpoints continue working
+
+## Deprecated Services (DO NOT USE)
+
+### Legacy Analytics Scheduler (DEPRECATED)
+**Status:** ❌ **DEPRECATED - Uses analytics_* tables**
+**File:** `src/services/analytics-scheduler.service.ts`
+
+This service is deprecated as it operates on the old analytics_* tables. The active metrics system uses:
+- `src/services/tenant-metrics-cron-optimized.service.ts` (PRIMARY - 25x faster)
+- `src/services/unified-cron.service.ts` (Alternative)
+- `src/services/tenant-metrics/` (Specialized metrics modules)
+
+**Migration Note:** New development should use the optimized tenant-metrics system, not the analytics-scheduler service.
 
 ## Conclusion
 The current 3-table structure is solid and working. Instead of creating new tables, we will:

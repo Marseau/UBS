@@ -12,15 +12,75 @@ export interface LLMClassificationResult {
   decision_method: 'llm_classification';
   confidence: number;
   processing_time_ms: number;
+  model_used?: string;
 }
 
 export class LLMIntentClassifierService {
   private openai: OpenAI;
+  private config: any;
   
   constructor() {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY || ''
     });
+    
+    // Config para escalonamento de modelos
+    this.config = {
+      openai: {
+        models: ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4'],
+        temperature: 0,
+        maxTokens: 20
+      }
+    };
+  }
+
+  /**
+   * ✅ Escalonamento de modelos: tenta em ordem até bater confiança mínima
+   */
+  private async classifyWithEscalation(
+    userText: string,
+    systemPrompt: string,
+    minConfidence = 0.75
+  ): Promise<{ intent: string | null; confidence: number; model_used: string; raw?: any }> {
+    const models = (this.config?.openai?.models && this.config.openai.models.length > 0)
+      ? this.config.openai.models
+      : ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4'];
+
+    let lastError: any;
+    for (const model of models) {
+      try {
+        const supportsJsonMode = model.includes('gpt-4o') || model.includes('gpt-3.5-turbo') || model === 'gpt-4o-mini';
+        
+        const resp = await this.openai.chat.completions.create({
+          model,
+          temperature: this.config?.openai?.temperature ?? 0,
+          top_p: 0,
+          max_tokens: this.config?.openai?.maxTokens ?? 20,
+          ...(supportsJsonMode && { response_format: { type: 'json_object' } }),
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userText }
+          ]
+        });
+
+        const rawResponse = resp.choices?.[0]?.message?.content?.trim() || '';
+        
+        // Parse e validação rigorosa usando método existente
+        const classifiedIntent = this.parseAndValidateResponse(rawResponse);
+        const confidence = classifiedIntent ? 0.8 : 0.0; // 80% para LLM válida, 0% para null
+
+        if (classifiedIntent && confidence >= minConfidence) {
+          return { intent: classifiedIntent, confidence, model_used: model, raw: resp };
+        }
+        // baixa confiança → tenta próximo modelo
+      } catch (err) {
+        lastError = err;
+        // falha do modelo → tenta próximo
+      }
+    }
+
+    // Se todos falharam/baixa confiança → retorna nulo com último modelo
+    return { intent: null, confidence: 0, model_used: models[models.length - 1], raw: lastError };
   }
 
   /**
@@ -33,39 +93,22 @@ export class LLMIntentClassifierService {
       const systemPrompt = this.buildSystemPrompt();
       const userPrompt = this.buildUserPrompt(text);
 
-      console.log('🤖 [LLM-CLASSIFIER] Chamando OpenAI para classificação fechada');
+      console.log('🤖 [LLM-CLASSIFIER] Chamando OpenAI para classificação fechada com escalonamento');
 
-      // Usar modelo compatível com JSON mode
-      const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-      const supportsJsonMode = model.includes('gpt-4o') || model.includes('gpt-3.5-turbo') || model === 'gpt-4o-mini';
-      
-      const completion = await this.openai.chat.completions.create({
-        model,
-        temperature: 0,
-        top_p: 0,
-        max_tokens: 20,
-        ...(supportsJsonMode && { response_format: { type: 'json_object' } }),
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ]
-      });
+      // Usar escalonamento de modelos
+      const { intent, confidence, model_used } = 
+        await this.classifyWithEscalation(userPrompt, systemPrompt, 0.75);
 
       const processingTime = Date.now() - startTime;
-      const rawResponse = completion.choices?.[0]?.message?.content?.trim() || '';
       
-      console.log('🤖 [LLM-CLASSIFIER] Resposta bruta:', rawResponse);
-
-      // Parse e validação rigorosa
-      const classifiedIntent = this.parseAndValidateResponse(rawResponse);
-      
-      console.log(`🤖 [LLM-CLASSIFIER] Intent classificada: ${classifiedIntent} (${processingTime}ms)`);
+      console.log(`🤖 [LLM-CLASSIFIER] Intent classificada: ${intent} (${processingTime}ms) [${model_used}]`);
 
       return {
-        intent: classifiedIntent,
+        intent,
         decision_method: 'llm_classification',
-        confidence: classifiedIntent ? 0.8 : 0.0, // 80% para LLM, 0% para null
-        processing_time_ms: processingTime
+        confidence,
+        processing_time_ms: processingTime,
+        model_used
       };
 
     } catch (error) {
@@ -74,7 +117,8 @@ export class LLMIntentClassifierService {
         intent: null,
         decision_method: 'llm_classification',
         confidence: 0.0,
-        processing_time_ms: Date.now() - startTime
+        processing_time_ms: Date.now() - startTime,
+        model_used: 'error'
       };
     }
   }

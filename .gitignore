@@ -55,3 +55,18 @@ pids/
 
 # Optional REPL history
 .node_repl_history
+
+# Test scripts and debugging files
+test-*.js
+debug-*.js
+apply-*.js
+fix-*.js
+fix-*.sql
+generate-*.js
+verify-*.js
+check-*.sql
+
+# Documentation and analysis files
+*.md
+!README.md
+!CLAUDE.md

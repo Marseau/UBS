@@ -12,12 +12,6 @@ import { WebhookV3FlowIntegrationService } from '../services/webhook-v3-flow-int
 import { WebhookFlowOrchestratorService } from '../services/webhook-flow-orchestrator.service';
 import { demoTokenValidator } from '../utils/demo-token-validator';
 import { VALID_CONVERSATION_OUTCOMES } from '../types/billing-cron.types';
-import { MODELS, getModelForContext } from '../utils/ai-models';
-
-const SYSTEM_STANDARD_RESPONSES: string[] = [
-  'Só para confirmar: você quer *serviços*, *preços* ou *horários*?',
-  'Infelizmente neste momento não possuo esta informação no sistema.'
-];
 
 // ===== INTENT ALLOWLIST (100% precisão via regex → LLM → validador) =====
 const ALLOWED_INTENTS = new Set<string>([
@@ -38,24 +32,29 @@ const ALLOWED_INTENTS = new Set<string>([
   'wrong_number',
   'test_message',
   'booking_abandoned',
-  'noshow_followup',
-  'booking'  // ✅ ADICIONADO: intent usado pelo orquestrador
+  'noshow_followup'
 ]);
 
+
 /**
- * Mapeia intent detectado para conversation_outcome válido usando ENUMs definidos
+ * Mapeia intent detectado para um conversation_outcome válido.
  */
-function mapIntentToConversationOutcome(intent: string | undefined, text: string, shouldSendWhatsApp: boolean): string {
+function mapIntentToConversationOutcome(
+  intent: string | undefined,
+  text: string,
+  shouldSendWhatsApp: boolean
+): string {
+  const DEFAULT_OUTCOME = 'info_request_fulfilled';
+
   if (!intent) {
-    console.log('🔧 MAP DEBUG: No intent, returning info_request_fulfilled');
-    return 'info_request_fulfilled';
+    console.log('🔧 MAP DEBUG: No intent, retornando info_request_fulfilled');
+    return DEFAULT_OUTCOME;
   }
 
-  // Verificar padrões específicos de texto
+  // Padrões diretos no texto
   const isCancel = /cancelar\s+([0-9a-fA-F\-]{8,})/i.test(text);
   const isReschedule = /remarcar\s+([0-9a-fA-F\-]{8,})/i.test(text);
 
-  // Mapeamento baseado no intent e contexto
   if (shouldSendWhatsApp && isCancel) {
     console.log('🔧 MAP DEBUG: appointment_cancelled');
     return 'appointment_cancelled';
@@ -65,52 +64,28 @@ function mapIntentToConversationOutcome(intent: string | undefined, text: string
     return 'appointment_rescheduled';
   }
 
-  let result: string;
   switch (intent) {
-    case 'my_appointments':
-      result = 'appointment_inquiry';
-      break;
-    case 'services':
-      result = 'info_request_fulfilled'; // ✅ CORRIGIDO: services mapeado para outcome válido
-      break;
-    case 'pricing':
-      result = 'price_inquiry';
-      break;
-    case 'address':
-      result = 'location_inquiry';
-      break;
-    case 'business_hours':
-      result = 'business_hours_inquiry';
-      break;
-    case 'booking':
-      result = shouldSendWhatsApp ? 'appointment_created' : 'appointment_inquiry'; // ✅ CORRIGIDO: booking inicial é appointment_inquiry
-      break;
-    case 'reschedule':
-      result = 'appointment_modified'; // ✅ ADICIONADO: reschedule mapping
-      break;
-    case 'cancel':
-      result = 'appointment_cancelled'; // ✅ ADICIONADO: cancel mapping
-      break;
-    case 'confirm':
-      result = 'appointment_confirmed'; // ✅ ADICIONADO: confirm mapping
-      break;
-    case 'personal_info':
-      result = 'appointment_inquiry'; // ✅ ADICIONADO: personal_info parte do booking
-      break;
+    case 'my_appointments':   return 'appointment_inquiry';
+    case 'services':          return 'service_inquiry';
+    case 'pricing':           return 'price_inquiry';
+    case 'address':           return 'location_inquiry';
+    case 'business_hours':    return 'business_hours_inquiry';
+    case 'booking':           return shouldSendWhatsApp ? 'appointment_created' : 'appointment_inquiry';
+    case 'reschedule':        return 'appointment_modified';
+    case 'cancel':            return 'appointment_cancelled';
+    case 'confirm':           return 'appointment_confirmed';
+    case 'personal_info':     return 'appointment_inquiry';
     case 'greeting':
     case 'policies':
     case 'payments':
     case 'handoff':
     case 'general':
-    default:
-      result = 'info_request_fulfilled';
-      break;
+    default:                  return DEFAULT_OUTCOME;
   }
-  
-  console.log('🔧 MAP DEBUG:', { intent, result, shouldSendWhatsApp });
-  return result;
 }
 
+
+ 
 /**
  * NOTA: Para validar a assinatura do WhatsApp corretamente,
  * garanta que este path receba RAW body:
@@ -140,7 +115,14 @@ const logger = (() => {
 const config = {
     openai: {
         apiKey: process.env.OPENAI_API_KEY || '',
-        models: ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4'], // Sistema de fallback com 3 modelos
+        model: (() => {
+            const raw = (process.env.OPENAI_MODEL?.trim() || 'gpt-4');
+            if (!/^gpt-4/i.test(raw)) {
+                console.warn(`OPENAI_MODEL='${raw}' não é gpt-4*. Forçando 'gpt-4'.`);
+                return 'gpt-4';
+            }
+            return raw;
+        })(),
         maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '180'), // 🚀 OTIMIZAÇÃO #3: Reduzir tokens
         temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.6'),
         promptCostPer1k: parseFloat(process.env.OPENAI_PROMPT_COST_PER_1K || '0'),
@@ -491,71 +473,6 @@ class ValidationService {
       return null;
       }
       }
-      
-      /**
-       * Normaliza número de telefone UNIVERSAL para formato padrão internacional: +[país][número]
-       * Detecta automaticamente o país e aplica normalização apropriada
-       * Evita duplicação de usuários com mesmo número em formatos diferentes
-       */
-      static normalizePhoneNumber(digits: string): string {
-        if (!digits) return '';
-        
-        // Remove leading zeros, espaços e caracteres especiais
-        const clean = digits.replace(/^0+/, '').replace(/[\s\-\(\)\.]/g, '');
-        
-        // Se já tem + no início, assume que está correto
-        if (digits.startsWith('+')) {
-          return digits.replace(/[\s\-\(\)\.]/g, '');
-        }
-        
-        // Detecta país por comprimento e padrões
-        if (clean.length >= 10) {
-          // Brasil (55): 11+ dígitos começando com 55
-          if (clean.startsWith('55') && clean.length >= 12) {
-            return `+${clean}`;
-          }
-          
-          // EUA/Canadá (1): 10-11 dígitos
-          if (clean.length === 10 || (clean.length === 11 && clean.startsWith('1'))) {
-            const number = clean.startsWith('1') ? clean : `1${clean}`;
-            return `+${number}`;
-          }
-          
-          // Reino Unido (44): números começando com 44
-          if (clean.startsWith('44')) {
-            return `+${clean}`;
-          }
-          
-          // França (33): números começando com 33
-          if (clean.startsWith('33')) {
-            return `+${clean}`;
-          }
-          
-          // Alemanha (49): números começando com 49
-          if (clean.startsWith('49')) {
-            return `+${clean}`;
-          }
-          
-          // Outros países europeus comuns
-          if (clean.startsWith('34') || clean.startsWith('39') || clean.startsWith('31')) {
-            return `+${clean}`;
-          }
-          
-          // Brasil - números locais (assumir Brasil se não detectado outro país)
-          if (clean.length === 11 && clean.startsWith('11')) {
-            return `+55${clean}`;
-          }
-          
-          // Brasil - número sem DDD (assume SP/11)
-          if (clean.length === 9) {
-            return `+5511${clean}`;
-          }
-        }
-        
-        // Default: assume formato completo com +
-        return `+${clean}`;
-      }
-      
       static async listUserAppointments(tenantId: string, userId: string): Promise<any[]> {
       try {
       const { data } = await supabaseAdmin
@@ -599,14 +516,11 @@ class ValidationService {
         const existing = await supabaseAdmin.from('users').select('*').or(orClause).limit(1).maybeSingle();
         let userId: string | null = existing.data?.id || null;
 
-        // Normalizar telefone para formato padrão brasileiro (+5511XXXXXXXXX)
-        const normalizedPhone = existing.data?.phone || (digits ? DatabaseService.normalizePhoneNumber(digits) : null);
-        
         // Cria ou atualiza usuário (aceita parciais: nome OU email)
         const payload: any = {
           name: session.name || existing.data?.name || null,
           email: session.email || existing.data?.email || null,
-          phone: normalizedPhone,
+          phone: existing.data?.phone || (digits ? `+${digits}` : null),
           gender: session.gender || (existing.data as any)?.gender || null
         };
         if (!userId) {
@@ -814,8 +728,10 @@ class ValidationService {
           session.demoMode = demoPayload;
         }
         
-        // 4) Intent - Detecção mínima reativada antes do Flow Lock System
-        let intent = ValidationService.detectIntent(text) || 'general';
+        // 4) Intent - REMOVIDO: agora será detectado pelo Flow Lock System
+        // let intent = ValidationService.detectIntent(text);
+        // Detecção de intent movida para flowIntegration.processWithFlowLockOrFallback()
+        let intent = 'general'; // Placeholder - será sobrescrito pelo Flow Lock
         // Confirmação explícita (confirmo/ciente/de acordo/ok/👍/✅) quando há pendingConfirmation
         if (/\b(confirm(o|ado)?|ciente|de acordo|ok)\b|[👍✅]/i.test(text)) {
           if (session.pendingConfirmation?.appointmentId) {
@@ -828,7 +744,7 @@ class ValidationService {
         }
         
         // 5) Direct commands (cancel/remarcar/address/payments)
-        const direct = await this.processDirectCommands(sessionKey, text, phoneNumberId, intent, session, forcedTenantId || undefined);
+        const direct = await this.processDirectCommands(sessionKey, text, phoneNumberId, intent, session);
         if (direct) {
         this.captureUsageOnlyAsync(sessionKey, session, text);
         await this.updateSessionHistory(sessionKey, session, text, direct.response);
@@ -837,28 +753,15 @@ class ValidationService {
         
         // 6) Tenant & user context (with forced tenantId from demo token)
         const tenantData = await this.getTenantData(phoneNumberId, intent, userPhone, forcedTenantId);
-        
-        
-        console.log(`🚨 DEBUG COMPLETO: phoneId="${phoneNumberId}", intent="${intent}", tenantId="${tenantData?.tenant?.id}", userPhone="${userPhone}"`);
-        
-        // 6.1) Forçar saudação com nome quando usuário existir E já estiver com dados completos
+        // 6.1) Forçar saudação com nome quando usuário existir
         if (intent === 'greeting' && tenantData?.tenant?.id) {
           const user = await DatabaseService.findUserByPhone(tenantData.tenant.id, userPhone);
           const firstName = (user?.name || session.name || '').split(/\s+/)[0] || '';
-          const hasEmail = !!(session.email || user?.email);
-          
-          console.log(`🔍 PRIMEIRA VEZ? user=${!!user}, firstName="${firstName}", hasEmail=${hasEmail}, userPhone="${userPhone}"`);
-          
-          // Só retorna saudação direta se usuário tem nome E email (dados completos)
-          if (firstName && hasEmail) {
-            console.log(`✅ USUÁRIO CONHECIDO: Saudação direta para ${firstName}`);
+          if (firstName) {
             session.name = firstName;
-            if (user?.email && !session.email) session.email = user.email;
             await cache.setSession(sessionKey, session);
             const greet = this.greetingByTime(tenantData.tenant.business_name, firstName);
             return { success: true, response: `${greet} Como posso te ajudar?`, action: 'direct_response', metadata: { intent: 'greeting', tenantId: tenantData.tenant.id } };
-          } else {
-            console.log(`🆕 PRIMEIRA VEZ: Continuando para onboarding`);
           }
         }
         
@@ -952,7 +855,7 @@ class ValidationService {
           const keys = Array.from(ALLOWED_INTENTS).join(', ');
           const system = `Classifique a intenção do usuário entre: ${keys}. Responda apenas com a chave exata.`;
           const completion = await this.openai.chat.completions.create({
-            model: getModelForContext('intent'),
+            model: config.openai.model,
             temperature: 0,
             max_tokens: 8,
             messages: [
@@ -968,30 +871,8 @@ class ValidationService {
         }
       }
       
-      private async processDirectCommands(sessionKey: string, text: string, phoneNumberId: string, intent: string | null, session: SessionData, forcedTenantId?: string): Promise<ProcessingResult | null> {
-      // ✅ CORRIGIDO: Usar forcedTenantId quando disponível (demo mode)
-      let tenant: any = null;
-      if (forcedTenantId) {
-        const { data: tenantData } = await supabaseAdmin.from('tenants').select('*').eq('id', forcedTenantId).single();
-        if (tenantData) {
-          tenant = {
-            id: tenantData.id,
-            business_name: tenantData.business_name,
-            domain: tenantData.domain || 'general',
-            address: undefined, // Demo mode - endereço opcional
-            payment_methods: undefined,
-            policies: {
-              reschedule: 'Remarcações até 24h antes sem custo.',
-              cancel: 'Cancelamentos até 24h antes com reembolso integral.',
-              no_show: 'Em caso de no-show, poderá haver cobrança.'
-            },
-            business_description: undefined,
-            services: []
-          };
-        }
-      } else {
-        tenant = await this.getTenantFromCache(phoneNumberId);
-      }
+      private async processDirectCommands(sessionKey: string, text: string, phoneNumberId: string, intent: string, session: SessionData): Promise<ProcessingResult | null> {
+      const tenant = await this.getTenantFromCache(phoneNumberId);
       if (!tenant) return null;
       
       // Cancelamento direto
@@ -1028,12 +909,10 @@ class ValidationService {
       this.captureUsageOnlyAsync(sessionKey, session, text);
       return { success: true, response: `Formas de pagamento: ${tenant.payment_methods.join(', ')}. Deseja ver os serviços?`, action: 'direct_response' };
     }
-    // 🚫 COMENTADO: Interceptava services antes do webhook-flow-orchestrator
-    /*
     // Consulta de preço (determinístico)
     try {
       const isPriceQuery = /(pre[çc]o|valor|quanto\s+(custa|sai|fica))/i.test(text);
-      if ((intent === 'services' || intent === 'pricing') && isPriceQuery && Array.isArray(tenant.services) && tenant.services.length) {
+      if ((intent === 'services' || intent === 'general') && isPriceQuery && Array.isArray(tenant.services) && tenant.services.length) {
         const serviceNames = tenant.services.map((s: any) => s?.name).filter(Boolean);
         let target = session.inferredService;
         if (!target) {
@@ -1063,9 +942,6 @@ class ValidationService {
         return { success: true, response: `Para ${target}, o valor é sob consulta. Posso confirmar e te retorno, ou prefere que eu já veja horários?`, action: 'direct_response', metadata: { intent: 'services', service: target } };
       }
     } catch {}
-    */
-    // 🚫 COMENTADO: Interceptava services antes do webhook-flow-orchestrator  
-    /*
     // Serviços (determinístico, sem LLM)
     if (intent === 'services' && Array.isArray(tenant.services) && tenant.services.length) {
       const names = tenant.services.map((s: any) => s?.name).filter(Boolean);
@@ -1081,7 +957,6 @@ class ValidationService {
       const phrase = top.length ? `Temos ${list}${tail}. Quer que eu veja horários ou valores de algum específico?` : 'Temos diversos serviços. Posso te enviar as opções conforme sua preferência (manhã, tarde ou noite)?';
       return { success: true, response: phrase, action: 'direct_response', metadata: { intent: 'services', tenantId: tenant.id } };
     }
-    */
     return null;
     }
     
@@ -1091,28 +966,17 @@ class ValidationService {
       const t = await DatabaseService.findTenantByBusinessPhone(phoneNumberId);
       if (t) {
         const services = await DatabaseService.listServices(t.id);
-        // ✅ CORRIGIDO: Usar business_address e business_rules do schema
-        const addrObj: any = (t as any)?.business_address;
-        const address = addrObj ? 
-          [addrObj?.street, addrObj?.number, addrObj?.city, addrObj?.state]
-            .filter(Boolean).join(', ') : undefined;
-        
-        const rules: any = (t as any)?.business_rules || {};
-        const policies = {
-          reschedule: rules?.cancellation_policy || 'Remarcações até 24h antes sem custo.',
-          cancel: rules?.cancellation_policy || 'Cancelamentos até 24h antes com reembolso integral.',
-          no_show: rules?.peak_hours_surcharge ? 
-            'No-show: pode haver cobrança.' : 
-            'Em caso de no-show, poderá haver cobrança.'
-        };
-
         tenantCache = {
           id: t.id,
           business_name: t.business_name,
           domain: t.domain || 'general',
-          address,
-          payment_methods: rules?.payment_methods || undefined,
-          policies,
+          address: t?.address || undefined,
+          payment_methods: Array.isArray((t as any)?.payment_methods) ? (t as any).payment_methods : undefined,
+          policies: {
+            reschedule: t?.reschedule_policy || 'Remarcações até 24h antes sem custo.',
+            cancel: t?.cancel_policy || 'Cancelamentos até 24h antes com reembolso integral.',
+            no_show: t?.no_show_policy || 'Em caso de não comparecimento, poderá haver cobrança.'
+          },
           business_description: (t as any)?.business_description || undefined,
           services
         };
@@ -1122,7 +986,7 @@ class ValidationService {
     return tenantCache;
     }
     
-    private async getTenantData(phoneNumberId: string, intent: string | null, userPhone: string, forcedTenantId?: string | null) {
+    private async getTenantData(phoneNumberId: string, intent: string, userPhone: string, forcedTenantId?: string | null) {
     // Se temos forcedTenantId do demo token, buscar tenant real
     if (forcedTenantId) {
       logger.info('🎭 [GET-TENANT-DATA] Using forced tenantId for demo', { forcedTenantId });
@@ -1148,10 +1012,10 @@ class ValidationService {
 
     const tenant = await this.getTenantFromCache(phoneNumberId);
     if (!tenant) return null;
-    let user: any = await DatabaseService.findUserByPhone(tenant.id, userPhone);
-    let appointments: any[] = [];
-    if (user && intent && ['my_appointments','cancel','reschedule'].includes(intent)) {
-      appointments = await DatabaseService.listUserAppointments(tenant.id, user.id);
+    let user: any = null, appointments: any[] = [];
+    if (['my_appointments', 'cancel', 'reschedule'].includes(intent)) {
+      user = await DatabaseService.findUserByPhone(tenant.id, userPhone);
+      if (user) appointments = await DatabaseService.listUserAppointments(tenant.id, (user as any)?.id);
     }
     return { tenant, user, appointments };
     }
@@ -1207,23 +1071,21 @@ class ValidationService {
       const agentPrompt = DEMO_PARITY ? loadAgentSystemPromptByDomain(tenantData?.tenant?.domain) : null;
       const desc = (tenantData?.tenant as any)?.business_description ? String((tenantData?.tenant as any).business_description).replace(/\s+/g,' ').slice(0,160) : '';
       const positioning = desc ? `Posicionamento: ${desc}` : '';
-      const nameKnown = !!(session.name || tenantData?.user?.name);
-      const emailKnown = !!(session.email || tenantData?.user?.email);
+      const userKnown = !!(tenantData?.user?.id);
+      const hasName = !!(session.name || tenantData?.user?.name);
+      const hasEmail = !!(session.email || tenantData?.user?.email);
       const inferredGender = ValidationService.inferGenderFromName(session.name || tenantData?.user?.name || '');
-      const genderKnown = !!(session.gender || inferredGender);
-      
-      // Onboarding também quando o usuário existe, mas tem cadastro incompleto
-      let onboardingStage: 'need_name'|'need_email'|'need_gender'|null = null;
-      if (!nameKnown) onboardingStage = 'need_name';
-      else if (!emailKnown) onboardingStage = 'need_email';
-      else if (!genderKnown) onboardingStage = 'need_gender';
-      
-      const userKnown = !!(tenantData?.user?.id) && (nameKnown || emailKnown);
+      const hasGender = !!(session.gender || inferredGender);
       const hasAppointments = Array.isArray(tenantData?.appointments) && tenantData.appointments.length > 0;
       const canReferencePastAppointments = userKnown && hasAppointments;
+      let onboardingStage: 'need_name'|'need_email'|'need_gender'|null = null;
+      if (!userKnown) {
+        if (!hasName) onboardingStage = 'need_name';
+        else if (!hasEmail) onboardingStage = 'need_email';
+        else if (!hasGender) onboardingStage = 'need_gender';
+      }
 
       const prelude = DEMO_PARITY ? '' : `${greeting}`;
-      const profileNote = onboardingStage ? 'Nota: usuário com cadastro incompleto — colete o próximo dado faltante de forma cordial, em frase única.' : '';
       // 🎯 PROMPT EXECUTIVO – SaaS Honesto (Revisado)
       const universalFirstTime = [
         `Você é a assistente oficial do {business_name}. Seu papel é atender com clareza, honestidade e objetividade, sempre em tom natural.`,
@@ -1264,7 +1126,6 @@ class ValidationService {
         `Negócio: ${tenantData?.tenant?.business_name || 'N/D'}`,
         sessionSummary || 'Nenhum dado coletado ainda',
         prelude,
-        profileNote,
         contextRules,
         ...contextBlocks
       ].filter(Boolean).join('\n');
@@ -1273,7 +1134,6 @@ class ValidationService {
 
       // 📚 Instruções por Intent - SaaS Honesto
       const intentInstructions: Record<string, string> = {
-      first_time: 'Percebi que seu cadastro está incompleto. Solicite APENAS UM dado por vez, nesta ordem: 1) nome completo; depois 2) e-mail; depois 3) gênero (masculino/feminino/outro). Responda curto (1–2 frases). Não ofereça ver agendamentos enquanto não tiver nome e e-mail.',
       greeting: 'Cumprimente pelo nome (se existir) e finalize com: "Como posso te ajudar?"',
       services: 'Liste serviços reais em frases naturais. Se BD vazio → frase honesta padrão.',
       pricing: 'Informe valor real. Se não existir → "Para este serviço o valor não está cadastrado no sistema."',
@@ -1288,21 +1148,20 @@ class ValidationService {
       policies: 'Mostre políticas reais. Se não houver → frase honesta padrão.',
       handoff: 'Se houver outros canais (ex.: e-mail, telefone) → informe-os. Se não → frase honesta padrão.',
       noshow_followup: 'Explique brevemente a política cadastrada (se não houver → frase honesta padrão).',
-      // general removido - não deve ser usado como fallback
+      general: 'Se o usuário perguntar algo fora do escopo, responda: "Posso ajudar apenas com informações sobre serviços, horários e agendamentos."',
       wrong_number: 'Agradeça o aviso e encerre cordialmente.',
       test_message: 'Responda "ok, online" de forma amigável e curta.',
       booking_abandoned: 'Agradeça e encerre cordialmente; ofereça retomar quando quiser.',
-      modify_appointment: 'Peça o ID e detalhe o que deseja alterar (serviço/profissional/data/hora).',
-      unknown: 'Responda de forma natural e útil, baseado apenas nas informações disponíveis no sistema.'
+      modify_appointment: 'Peça o ID e detalhe o que deseja alterar (serviço/profissional/data/hora).'
       };
       
       const history: ChatCompletionMessageParam[] = session.history.slice(-6).map(h => ({ role: h.role, content: h.content }));
       
-      const objectiveKey = onboardingStage ? 'first_time' : (intent === 'greeting' ? 'returning' : (intent || 'unknown'));
+      const objectiveKey = onboardingStage ? 'first_time' : (intent === 'greeting' ? 'returning' : intent);
       const messages: ChatCompletionMessageParam[] = [
         { role: 'system', content: systemPrompt + '\n🚨 REFORÇO CRÍTICO: Toda resposta ou vem do BD, ou é a frase honesta padrão. NUNCA invente dados. NUNCA prometa retorno. NUNCA mencione atendente humano. Proibido usar menus numerados (1,2,3,4,5), emojis de opção (1️⃣,2️⃣,3️⃣) ou "escolha uma opção".' },
         ...history,
-        { role: 'user', content: `${text}\n\n[OBJETIVO]: ${intentInstructions[objectiveKey as keyof typeof intentInstructions] || 'Responda de forma natural e útil, baseado apenas nas informações disponíveis no sistema.'}` }
+        { role: 'user', content: `${text}\n\n[OBJETIVO]: ${intentInstructions[objectiveKey as keyof typeof intentInstructions] || intentInstructions.general}` }
       ];
       
       // Timeout curto para UX responsiva
@@ -1314,7 +1173,7 @@ class ValidationService {
       let completion;
       try {
         completion = await this.openai.chat.completions.create({
-          model: getModelForContext('conversation'),
+          model: config.openai.model,
           temperature: config.openai.temperature,
           max_tokens: config.openai.maxTokens,
           messages
@@ -1324,7 +1183,7 @@ class ValidationService {
         const code = e?.code || e?.error?.code || '';
         if (/model_not_found/i.test(code + ' ' + msg) || /does not have access to model/i.test(msg)) {
           completion = await this.openai.chat.completions.create({
-            model: getModelForContext('critical'),
+            model: 'gpt-4',
             temperature: config.openai.temperature,
             max_tokens: config.openai.maxTokens,
             messages
@@ -1398,7 +1257,7 @@ class ValidationService {
         setImmediate(async () => {
           try {
             const completion = await this.openai.chat.completions.create({
-            model: getModelForContext('intent'),
+            model: config.openai.model,
             temperature: 0,
             max_tokens: 1,
             messages: [
@@ -1449,19 +1308,12 @@ class ValidationService {
       }
       });
       
-      // 🎯 FUNÇÃO EXTRAÍDA: Para ser reutilizada por demo e webhook
-      async function processWebhookMessage(req: any, res: any) {
-      console.log('🚨🚨🚨 PROCESSWEBHOOKMESSAGE CHAMADA - FONTE:', req.demoMode ? 'DEMO' : 'WHATSAPP', '🚨🚨🚨');
+      router.post('/webhook', validateWhatsAppSignature, async (req, res) => {
       const startTime = Date.now();
       try {
       // Idempotência por message.id
-      // OBS: req.body pode ser Buffer (webhook), string (demo) ou object (direct)
-      // Para demo, sempre vai ser objeto JavaScript já parseado pelo Express
-      const parsed = req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)
-        ? req.body  // Objeto direto (demo)
-        : typeof req.body === 'string' 
-          ? JSON.parse(req.body)  // String JSON (webhook manual)
-          : JSON.parse((req.body as Buffer).toString('utf8') || '{}'); // Buffer (webhook WhatsApp)
+      // OBS: req.body está em Buffer; precisamos parsear para extrair message/id
+      const parsed = JSON.parse((req.body as Buffer).toString('utf8') || '{}');
       const entry = Array.isArray(parsed.entry) ? parsed.entry[0] : undefined;
       const change = entry && Array.isArray(entry.changes) ? entry.changes[0] : undefined;
       const value = change?.value || {};
@@ -1503,67 +1355,57 @@ class ValidationService {
 
     // 🚨 DEMO MODE: Usar tenantId do token, não phoneNumberId
     const demoPayload = (req as any)?.demoMode;
-    const actualTenantId = demoPayload?.tenantId || phoneNumberId;
+    let actualTenantId = demoPayload?.tenantId;
     
-    // ===== ONBOARDING GATE (antes do orchestrator) =====
-    let onboarding: { required: boolean; stage?: 'need_name'|'need_email'|'need_gender' } = { required: false };
-    try {
-      // 1) Descobrir tenant real (já está em actualTenantId)
-      const tenantId = actualTenantId;
-
-      // 2) Buscar sessão atual (Redis)
-      const sess = await cache.getSession(sessionKey);
-      const sessName = sess?.name || '';
-      const sessEmail = sess?.email || '';
-      const sessGender = sess?.gender || '';
-
-      // 3) Buscar usuário no BD
-      let userRow: any = null;
-      if (tenantId) {
-        userRow = await DatabaseService.findUserByPhone(tenantId, userPhone);
+    // Se não é demo mode, resolver tenantId pelo phoneNumberId
+    if (!actualTenantId) {
+      try {
+        const tenant = await DatabaseService.findTenantByBusinessPhone(phoneNumberId);
+        actualTenantId = tenant?.id;
+      } catch (error) {
+        logger.error('Failed to resolve tenant from phoneNumberId', { phoneNumberId, error });
       }
-
-      const nameKnown   = Boolean(sessName || userRow?.name);
-      const emailKnown  = Boolean(sessEmail || userRow?.email);
-      const genderKnown = Boolean(sessGender || ValidationService.inferGenderFromName(sessName || userRow?.name || ''));
-
-      console.log('🔍 [ONBOARDING GATE] Status:', { 
-        nameKnown, emailKnown, genderKnown, 
-        sessName, sessEmail, userRow: !!userRow 
-      });
-
-      if (!nameKnown || !emailKnown || !genderKnown) {
-        onboarding.required = true;
-        onboarding.stage = !nameKnown ? 'need_name' : !emailKnown ? 'need_email' : 'need_gender';
-        console.log('🚀 [ONBOARDING GATE] Onboarding necessário:', onboarding.stage);
-      } else {
-        console.log('✅ [ONBOARDING GATE] Usuário completo, seguindo fluxo normal');
-      }
-    } catch (e) {
-      logger.warn('Onboarding pre-check failed (non-blocking):', e);
     }
     
-    // Log de sentinela na rota (antes do orchestrator)
-    logger.info('🚦ENTER ROUTE /webhook-v3', { sessionKey, onboarding });
+    // Fallback para phoneNumberId se não encontrar tenant (desenvolvimento)
+    if (!actualTenantId) {
+      actualTenantId = phoneNumberId;
+      logger.warn('Using phoneNumberId as tenantId fallback', { phoneNumberId });
+    }
+    
+    // 🔧 CRITICAL FIX: Criar usuário antes do orchestrator para evitar loop de onboarding
+    try {
+      if (actualTenantId && actualTenantId !== phoneNumberId) {
+        const emptySession: SessionData = {
+          lastActivity: Date.now(),
+          messageCount: 0,
+          spamScore: 0,
+          history: []
+        };
+        await DatabaseService.upsertUserForTenant(actualTenantId, userPhone, emptySession);
+        logger.info('User created/updated before orchestrator call', { userPhone, tenantId: actualTenantId });
+      }
+    } catch (error) {
+      logger.error('Failed to create user before orchestrator', { error, userPhone, actualTenantId });
+    }
     
     const result = await orchestrator.orchestrateWebhookFlow(
       text,
       userPhone,
       actualTenantId,
       { domain: 'whatsapp', services: [], policies: {} },
-      { session_id: sessionKey, demoMode: demoPayload, onboarding } // <-- AQUI
+      { session_id: sessionKey, demoMode: demoPayload }
     );
     
     // 🚀 OTIMIZAÇÃO #1: RESPOSTA PRIMEIRO, BANCO DEPOIS
     const processingTime = Date.now() - startTime;
     const response = {
       status: 'success',
-      response: result?.aiResponse || 'Sem resposta gerada.',
+      response: result.aiResponse,
       telemetry: { 
-        intent_detected: result?.telemetryData?.intent || 'general', // <- garantir intent aqui
+        ...result.telemetryData, 
         processingTime,
-        tokens_used: result?.llmMetrics?.total_tokens || 0,
-        ...(result?.telemetryData ?? {})
+        tokens_used: result.llmMetrics?.total_tokens || 0 // ✅ INCLUIR tokens_used na resposta
       }
     };
     
@@ -1583,16 +1425,17 @@ class ValidationService {
     const __persist_aiContent: string = (aiResponse ?? '').toString();
     const __persist_userPhone: string = (messagePhone ?? '').toString();
 
-    const __persist_llm = (result?.llmMetrics as any) || {};
+    const __persist_llm = (result?.llmMetrics as any) || {}
+    ;
     const __persist_totalTokens: number = __persist_llm.total_tokens ?? 0;
     const __persist_apiCostUsd: number = __persist_llm.api_cost_usd ?? 0;
     const __persist_processingCostUsd: number = __persist_llm.processing_cost_usd ?? 0;
-    const __persist_modelUsed: string | null = __persist_llm.model_used ?? (process.env.OPENAI_MODEL || 'gpt-3.5-turbo');
-    const __persist_aiConfidence: number | undefined = result?.telemetryData?.confidence;
+    const __persist_modelUsed: string | null = __persist_llm.model_used ?? (process.env.OPENAI_MODEL || 'gpt-4');
+    const __persist_aiConfidence: number = result?.telemetryData?.confidence ?? 0;
 
-    // ❌ REMOVIDO: Não persistir intent na conversation_history conforme combinado
+    const __persist_intent: string | undefined = result?.telemetryData?.intent ?? undefined;
     // === Captura demo token payload para persistência assíncrona ===
-    const __persist_demoPayload = (req as any)?.demoMode || null;
+    const __persist_demoPayload = (req as any)?.demoMode ?? undefined;
 
     setImmediate(async () => {
       console.log('🔍 setImmediate executado para persistência');
@@ -1665,20 +1508,16 @@ class ValidationService {
           conversation_context: { session_id: sessionUuid, duration_minutes: durationMinutes }
         } as const;
 
-        // 5) Definir custos base de infraestrutura (valores do orchestrator)
-        const BASE_INFRA_COST_USER = 0.00003; // 0.00002 (infra) + 0.00001 (inserts)
-        const BASE_INFRA_COST_AI_NO_LLM = 0.00001; // custo mínimo quando não há LLM
-
-        // 6) Compor linhas finais
+        // 5) Compor linhas finais
         const userRow = {
           ...commonBase,
           content: __persist_userContent,
           is_from_user: true,
           message_type: 'text',
-          intent_detected: null, // ✅ SEMPRE NULL conforme combinado
+          intent_detected: __persist_intent ?? null,
           tokens_used: 0,
           api_cost_usd: 0,
-          processing_cost_usd: BASE_INFRA_COST_USER, // <<<<<<<<<< AQUI
+          processing_cost_usd: 0,
           model_used: null,
           confidence_score: null
         };
@@ -1686,18 +1525,16 @@ class ValidationService {
         // Ajuste de custo de processamento quando não há LLM (resposta determinística)
         let __effective_processingCostUsd = __persist_processingCostUsd;
         if (!__persist_totalTokens || __persist_totalTokens === 0) {
-          __effective_processingCostUsd = BASE_INFRA_COST_AI_NO_LLM;
+          // custo mínimo de infra + inserts no BD
+          __effective_processingCostUsd = 0.00003; // 0.00002 infra + 0.00001 DB
         }
-
-        // ✅ SEMPRE NULL: Não persistir intent conforme combinado
-        const intent_for_ai = null;
 
         const aiRow = {
           ...commonBase,
           content: __persist_aiContent,
           is_from_user: false,
           message_type: 'text',
-          intent_detected: null,
+          intent_detected: __persist_intent ?? null,
           tokens_used: __persist_totalTokens,
           api_cost_usd: __persist_apiCostUsd,
           processing_cost_usd: __effective_processingCostUsd,
@@ -1716,7 +1553,7 @@ class ValidationService {
           sessionKey,
           tenantId,
           userId,
-          intent: null, // ✅ SEMPRE NULL conforme combinado
+          intent: __persist_intent,
           tokensUsed: __persist_totalTokens
         });
       } catch (e) {
@@ -1730,7 +1567,7 @@ class ValidationService {
         shouldSendWhatsApp: result.shouldSendWhatsApp,
         intent: result.telemetryData?.intent,
         tenantId: result.updatedContext?.tenant_id,
-        model: result.telemetryData?.model_used || 'unknown'
+        model: config.openai.model
       });
     });
 
@@ -1742,13 +1579,7 @@ class ValidationService {
     logger.error('Webhook processing error', { error, processingTime });
     return res.status(200).json({ status: 'error', response: 'Ocorreu um erro interno. Nossa equipe foi notificada.', metadata: { processingTime } });
   }
-}
-
-router.post('/webhook', validateWhatsAppSignature, processWebhookMessage);
-
-
-// 🎯 EXPORTAR: Para uso da demo
-export { processWebhookMessage };
+});
 
 // ===== Graceful Shutdown =====
 async function shutdown(code = 0) {
@@ -1806,7 +1637,7 @@ export default router;
             content: 'Você ainda está aí? Se preferir, posso encerrar por aqui e retomamos quando quiser.',
             is_from_user: false,
             message_type: 'text',
-            intent_detected: null,
+            intent_detected: 'general',
             conversation_outcome: null, // OUTCOMES DETERMINADOS PELO ConversationOutcomeAnalyzerService
             message_source: 'whatsapp_demo',
             model_used: 'system',
@@ -1828,7 +1659,7 @@ export default router;
             content: 'Conversa encerrada por inatividade. Podemos retomar quando quiser.',
             is_from_user: false,
             message_type: 'text',
-            intent_detected: null,
+            intent_detected: 'general',
             conversation_outcome: null, // OUTCOMES DETERMINADOS PELO ConversationOutcomeAnalyzerService
             message_source: 'whatsapp_demo',
             model_used: 'system',
@@ -1844,5 +1675,5 @@ export default router;
     }
   } catch (e) {
     logger.error('Inactivity watchdog error', { error: e });
-  }
-}, 0); */
+    }
+*/

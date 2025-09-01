@@ -5,6 +5,7 @@
 
 export type FlowType = 
   | 'onboarding' 
+  | 'returning_user'
   | 'pricing' 
   | 'booking' 
   | 'reschedule' 
@@ -26,7 +27,14 @@ export type FlowStep =
   | 'show_slots'
   | 'confirm'
   | 'complete'
-  | 'abandoned';
+  | 'abandoned'
+  | 'need_name'
+  | 'need_email'
+  | 'need_gender'
+  | 'ask_additional_data'
+  | 'need_birthday'
+  | 'need_address'
+  | 'finish';
 
 export type FlowPriority = 'high' | 'medium' | 'low';
 

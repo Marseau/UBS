@@ -830,6 +830,17 @@ async function initializeServices() {
 
 app.listen(PORT, async () => {
   console.log(`🌐 Server running on http://localhost:${PORT}`);
+  
+  // ENV Sanity Check
+  console.log('🔎 ENV SANITY', {
+    NODE_ENV: process.env.NODE_ENV,
+    OPENAI_MODEL: process.env.OPENAI_MODEL,
+    ENABLE_CRON: process.env.ENABLE_CRON,
+    DISABLE_ANALYTICS_CRON: process.env.DISABLE_ANALYTICS_CRON,
+    DISABLE_TENANT_METRICS_CRON: process.env.DISABLE_TENANT_METRICS_CRON,
+    DISABLE_CONVERSATION_BILLING: process.env.DISABLE_CONVERSATION_BILLING,
+  });
+  
   console.log(`📧 Email Service: ${process.env.ENABLE_EMAIL_SERVICE === 'true' ? 'ENABLED' : 'DISABLED'}`);
   console.log(`🔔 Email Reminders: ${process.env.ENABLE_EMAIL_REMINDERS === 'true' ? 'ENABLED' : 'DISABLED'}`);
   console.log(`💰 Subscription Monitor: ${process.env.ENABLE_SUBSCRIPTION_MONITORING === 'true' ? 'ENABLED' : 'DISABLED'}`);

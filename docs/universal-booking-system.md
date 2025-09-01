@@ -35,55 +35,97 @@ SUPABASE_PROJECT_ID=qsdfyffuonywmtnlycri
 ---
 
 ## 🏗️ ARQUITETURA DO BANCO DE DADOS
+*Atualizado com dados reais de produção - Janeiro 2025*
 
-### **Tabelas Principais**
+### **Produção: 60 Tabelas Ativas**
+- **Status**: ACTIVE_HEALTHY (PostgreSQL 17.4.1.45)
+- **Análise**: Via MCP Supabase direto
+- **Total Registros**: Sistema ativo com dados reais
+
+### **Tabelas Principais (Verificadas em Produção)**
 
 #### `tenants` - Multi-tenancy Core
 ```sql
-- id (UUID, PK)
-- slug (UNIQUE) - Ex: "maria-silva-advocacia"
-- domain (ENUM) - business_domain
-- business_name, email, phone, whatsapp_phone
-- domain_config (JSONB) - Configurações específicas do domínio
-- ai_settings (JSONB) - Configurações de IA personalizadas
-- business_rules (JSONB) - Regras de negócio
+✅ PRODUÇÃO CONFIRMADA:
+- id UUID PRIMARY KEY (gen_random_uuid())
+- name TEXT NOT NULL
+- slug TEXT UNIQUE NOT NULL
+- business_name TEXT NOT NULL
+- domain business_domain ENUM (legal|healthcare|education|beauty|sports|consulting|other)
+- email CITEXT UNIQUE NOT NULL
+- phone TEXT UNIQUE NOT NULL
+- ai_settings JSONB (greeting_message, domain_keywords, escalation_triggers)
+- business_rules JSONB (working_hours, payment_methods, cancellation_policy)  
+- domain_config JSONB
+- monthly_subscription_fee NUMERIC (default: 79.90)
+- plan_type VARCHAR (standard|profissional|enterprise)
+- subscription_status VARCHAR (default: 'active')
+- account_type VARCHAR (real|test) -- isolamento demo
 ```
 
-#### `users` - Cross-Tenant Users
+#### `users` - Cross-Tenant Users (Híbrido Supabase Auth)
 ```sql
-- id (UUID, PK)
-- phone (UNIQUE) - Chave principal de identificação
-- email, name
-- preferences (JSONB)
+✅ ESTRUTURA HÍBRIDA CONFIRMADA:
+-- Campos de Negócio:
+- id UUID PRIMARY KEY  
+- phone TEXT UNIQUE (identificador principal)
+- name, email CITEXT
+- account_type VARCHAR (real|test)
+- preferences, address, emergency_contact JSONB
+- birth_date DATE, gender TEXT
+
+-- Campos Supabase Auth (herdados):
+- encrypted_password VARCHAR
+- email_confirmed_at, phone_confirmed_at TIMESTAMPTZ
+- raw_app_meta_data, raw_user_meta_data JSONB
+- is_sso_user BOOLEAN
 ```
 
-#### `user_tenants` - Relacionamento Many-to-Many
+#### `appointments` - Sistema Enterprise de Agendamentos
 ```sql
-- user_id + tenant_id (PK composta)
-- role - 'customer', 'admin', 'professional'
-- tenant_preferences (JSONB)
-- total_bookings, first_interaction, last_interaction
+✅ PRODUÇÃO COM RECURSOS AVANÇADOS:
+- id UUID PRIMARY KEY
+- tenant_id, user_id, professional_id, service_id (FKs)
+- start_time, end_time TIMESTAMPTZ NOT NULL
+- status appointment_status ENUM (7 estados)
+- quoted_price, final_price NUMERIC(10,2)
+- appointment_data JSONB
+- external_event_id TEXT (sync Google Calendar)
+
+-- NOVOS CAMPOS DE PRODUÇÃO:
+- confirmation_status TEXT (default: 'confirmed')
+- requires_explicit_confirmation BOOLEAN (default: false)
+- confirmation_expires_at TIMESTAMPTZ
+- confirmation_confirmed_at TIMESTAMPTZ
+- customer_notes, internal_notes TEXT
+- cancelled_at TIMESTAMPTZ, cancelled_by TEXT
 ```
 
-#### `services` - Serviços Universais
+#### `conversation_history` - IA + Tracking de Custos
 ```sql
-- id (UUID, PK)
-- tenant_id (FK)
-- category_id (FK)
-- name, description
-- duration_type (ENUM) - 'fixed', 'variable', 'estimated', 'session'
-- price_model (ENUM) - 'fixed', 'hourly', 'package', 'dynamic'
-- service_config (JSONB) - Configurações específicas
+✅ SISTEMA AVANÇADO DE IA EM PRODUÇÃO:
+- tenant_id, user_id UUID (isolamento multi-tenant)
+- content TEXT, is_from_user BOOLEAN
+- intent_detected TEXT, confidence_score NUMERIC
+- conversation_context JSONB
+
+-- TRACKING DE CUSTOS REAL:
+- tokens_used INTEGER (default: 0)
+- api_cost_usd NUMERIC (default: 0)
+- processing_cost_usd NUMERIC (default: 0)
+- model_used VARCHAR (default: 'gpt-4')
+- conversation_outcome TEXT
+- session_id_uuid UUID
 ```
 
-#### `appointments` - Agendamentos
+#### `professionals` - Integração Google Calendar
 ```sql
-- id (UUID, PK)
-- tenant_id, user_id, service_id (FKs)
-- start_time, end_time, timezone
-- status (ENUM) - 'pending', 'confirmed', 'completed', etc.
-- quoted_price, final_price
-- appointment_data (JSONB) - Dados específicos do agendamento
+✅ INTEGRAÇÃO CALENDAR ATIVA:
+- tenant_id UUID, name TEXT NOT NULL
+- specialties TEXT[], working_hours JSONB
+- google_calendar_credentials JSONB
+- google_calendar_id TEXT (default: 'primary')
+- is_active BOOLEAN (default: true)
 ```
 
 ---

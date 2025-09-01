@@ -20,10 +20,11 @@ export class FlowLockManagerService {
   };
 
   private readonly STEP_TIMEOUTS = {
-    // Timeouts por etapa (padrão: 60s + 30s aviso + 30s encerramento)
+    // Timeouts por etapa - Sistema humanizado em 3 estágios
     default: 60000,       // 1 min para resposta
-    warning: 30000,       // 30s aviso de encerramento  
-    final: 30000          // 30s final antes de encerrar
+    checking: 30000,      // 30s aguardando confirmação após pergunta
+    finalizing: 10000,    // 10s para despedida antes de encerrar
+    final: 0              // Encerra imediatamente após despedida
   };
 
   /**
@@ -154,31 +155,57 @@ export class FlowLockManagerService {
   }
 
   /**
-   * Verifica se flow está próximo do timeout
+   * Verifica se flow está próximo do timeout - Sistema humanizado em 3 estágios
    */
-  checkTimeoutStatus(context: EnhancedConversationContext): { status: 'active' | 'warning' | 'expired', message?: string } {
+  checkTimeoutStatus(context: EnhancedConversationContext): { status: 'active' | 'checking' | 'finalizing' | 'expired', message?: string } {
     const currentLock = context.flow_lock;
     if (!currentLock?.active_flow) return { status: 'active' };
-
+    
     const now = new Date();
     const expiresAt = new Date(currentLock.expires_at);
     const timeLeft = expiresAt.getTime() - now.getTime();
-
+    
+    // Verificar se já temos um estado de timeout em andamento
+    const timeoutState = currentLock.step_data?.timeout_state || 'none';
+    
     if (timeLeft <= 0) {
       return { 
         status: 'expired', 
         message: 'Sessão expirada. Digite algo para começar novamente.' 
       };
     }
-
-    if (timeLeft <= this.STEP_TIMEOUTS.warning) {
+    
+    // Estágio 3: Finalização - Despedida amigável (últimos 10s)
+    if (timeoutState === 'finalizing' && timeLeft <= this.STEP_TIMEOUTS.finalizing) {
       return { 
-        status: 'warning', 
-        message: `Você ainda está aí? Vou encerrar em ${Math.ceil(timeLeft / 1000)} segundos se não responder.` 
+        status: 'finalizing', 
+        message: 'Sem problemas! Vou encerrar nossa conversa por agora. Quando quiser continuar, é só mandar uma mensagem! 👋' 
       };
     }
-
+    
+    // Estágio 2: Verificação - Pergunta se ainda está presente (últimos 30s)
+    if (timeLeft <= this.STEP_TIMEOUTS.checking && timeoutState !== 'checking') {
+      return { 
+        status: 'checking', 
+        message: 'Você ainda está aí? 😊' 
+      };
+    }
+    
+    // Estágio 1: Ativo
     return { status: 'active' };
+  }
+
+  /**
+   * Marca um novo estágio de timeout no flow lock
+   */
+  markTimeoutStage(context: EnhancedConversationContext, stage: 'checking' | 'finalizing'): FlowLock | null {
+    const currentLock = context.flow_lock;
+    if (!currentLock?.active_flow) return null;
+    
+    return {
+      ...currentLock,
+      step_data: { ...currentLock.step_data, timeout_state: stage }
+    };
   }
 
   /**

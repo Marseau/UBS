@@ -1,22 +1,107 @@
 /**
  * Webhook Flow Orchestrator Service
  * Orquestra integração do Flow Lock System com webhook existente
- * Baseado na OS: Sincronizar Intenções e Evitar Mistura
+ * Revisão consolidada com Onboarding determinístico e sem duplicações
  */
 
-import { DeterministicIntentDetectorService, detectIntents, INTENT_KEYS, detectIntentByRegex } from './deterministic-intent-detector.service';
+import { DeterministicIntentDetectorService, detectIntents, INTENT_KEYS } from './deterministic-intent-detector.service';
 import { FlowLockManagerService } from './flow-lock-manager.service';
 import { ConversationOutcomeAnalyzerService } from './conversation-outcome-analyzer.service';
-const ServiceService = require('./services.service.js');
-
-const SYSTEM_STANDARD_RESPONSES: string[] = [
-  'Só para confirmar: você quer *serviços*, *preços* ou *horários*?',
-  'Infelizmente neste momento não possuo esta informação no sistema.'
-];
 import { mergeEnhancedConversationContext } from '../utils/conversation-context-helper';
+import { supabaseAdmin } from '../config/database';
 import { EnhancedConversationContext, FlowType, FlowStep } from '../types/flow-lock.types';
 import OpenAI from 'openai';
-import { MODELS, getModelForContext } from '../utils/ai-models';
+
+// 🔎 Build marker – aparece no boot/rebuild do servidor
+console.log('🆕 VERSÃO REBUILD ATIVA - data/hora:', new Date().toLocaleString('pt-BR'));
+
+// ----------------------------------------------------------------------------
+// Utilidades locais
+// ----------------------------------------------------------------------------
+
+// Resolve opções simples de desambiguação (pt-BR)
+function resolveDisambiguationChoice(text: string): string | null {
+  const t = (text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (/(servicos?|lista|catalogo)/i.test(t)) return 'services';
+  if (/(precos?|preco|valores?|quanto|orcamento)/i.test(t)) return 'pricing';
+  if (/(horarios?|agenda|disponivel|amanha|hoje|quando)/i.test(t)) return 'availability';
+  return null;
+}
+
+// === ONBOARDING HELPERS (determinísticos) ===
+function extractEmailStrict(t: string): string | null {
+  const m = (t || '').match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
+  return m ? m[0].toLowerCase() : null;
+}
+
+function inferGenderFromName(name?: string): string | undefined {
+  if (!name) return undefined;
+  const first = name.split(/\s+/)[0]?.toLowerCase();
+  if (!first) return undefined;
+  if (/a$/.test(first)) return 'female';
+  if (/o$/.test(first)) return 'male';
+  return undefined;
+}
+
+function extractBirthDate(text: string): string | null {
+  // Regex para formatos: dd/mm/aaaa, dd-mm-aaaa, dd.mm.aaaa
+  const dateRegex = /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/;
+  const match = text.match(dateRegex);
+  
+  if (!match || !match[1] || !match[2] || !match[3]) return null;
+  
+  const day = parseInt(match[1]);
+  const month = parseInt(match[2]);
+  const year = parseInt(match[3]);
+  
+  // Validações básicas
+  if (day < 1 || day > 31) return null;
+  if (month < 1 || month > 12) return null;
+  if (year < 1900 || year > new Date().getFullYear()) return null;
+  
+  // Retorna no formato ISO (YYYY-MM-DD) para o banco
+  return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+}
+
+function extractNameStrict(t: string): string | null {
+  t = (t || '').trim();
+
+  // não confundir saudações com nome
+  if (/\b(oi|ol[áa]|bom dia|boa tarde|boa noite|hey|hello)\b/i.test(t)) return null;
+
+  // formatos explícitos
+  const m =
+    t.match(/\b(meu nome é|me chamo|sou)\s+(.+)/i) ||
+    t.match(/\bnome\s*:\s*(.+)/i);
+
+  let candidate = (m?.[2] || m?.[1] || '').trim();
+  
+  // Se não achou padrão explícito, tenta padrão genérico CORRIGIDO (aceita nome único)
+  if (!candidate) {
+    // CORREÇÃO: Aceitar tanto nome único quanto composto
+    const genericMatch = t.match(/([A-ZÀ-Ú][a-zA-ZÀ-ÿ''´`-]+(?:\s+[A-ZÀ-Ú][a-zA-ZÀ-ÿ''´`-]+)*)/);
+    candidate = genericMatch?.[1]?.trim() || '';
+  }
+  
+  if (!candidate) return null;
+
+  // CORREÇÃO: Aceitar tanto nome único quanto múltiplo
+  const parts = candidate.split(/\s+/).filter(p => p.length >= 2);
+  if (parts.length < 1) return null; // Mínimo 1 palavra (não 2+)
+
+  // anti-lixo básico
+  if (/\b(obrigad[ao]|valeu|tchau|por favor|como vai|tudo bem)\b/i.test(candidate)) return null;
+
+  return candidate.replace(/\s+/g, ' ').trim();
+}
+
+function firstName(name?: string) {
+  return (name || '').split(' ')[0] || '';
+}
+
+// ----------------------------------------------------------------------------
+// Tipos de retorno
+// ----------------------------------------------------------------------------
 
 export interface WebhookOrchestrationResult {
   aiResponse: string;
@@ -29,7 +114,7 @@ export interface WebhookOrchestrationResult {
     decision_method: string;
     flow_lock_active: boolean;
     processing_time_ms: number;
-    model_used?: string; // 🚀 Modelo usado nas métricas LLM
+    model_used?: string;
   };
   llmMetrics?: {
     prompt_tokens: number | null;
@@ -42,14 +127,9 @@ export interface WebhookOrchestrationResult {
   };
 }
 
-// Resolve opções simples de desambiguação (pt-BR)
-function resolveDisambiguationChoice(text: string): string | null {
-  const t = (text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  if (/(servicos?|lista|catalogo)/i.test(t)) return 'services';
-  if (/(precos?|preco|valores?|quanto|orcamento)/i.test(t)) return 'pricing';
-  if (/(horarios?|agenda|disponivel|amanha|hoje|quando)/i.test(t)) return 'availability';
-  return null;
-}
+// ----------------------------------------------------------------------------
+// Serviço principal
+// ----------------------------------------------------------------------------
 
 export class WebhookFlowOrchestratorService {
   private intentDetector: DeterministicIntentDetectorService;
@@ -71,48 +151,67 @@ export class WebhookFlowOrchestratorService {
    */
   async orchestrateWebhookFlow(
     messageText: string,
-    userId: string,
+    userPhone: string,
     tenantId: string,
     tenantConfig: any,
     existingContext?: any
   ): Promise<WebhookOrchestrationResult> {
     const startTime = Date.now();
-
-    // Log de sentinela no Orchestrator (primeira linha da função)
-    console.log('🧭 ENTER orchestrateWebhookFlow', { onboarding: existingContext?.onboarding });
+    
+    
+    // Normalizar userPhone para usar consistentemente
+    const normalizedUserPhone = userPhone.replace(/[\s\-\(\)]/g, '');
 
     try {
-      // 1. Resolver contexto enhanced (com flow_lock)
+      // 1) Resolver contexto enhanced (com flow_lock)
       const context = await this.resolveEnhancedContext(
-        userId, 
-        tenantId, 
+        userPhone,
+        tenantId,
         tenantConfig,
         existingContext
       );
 
-      // 2. Verificar timeout de fluxo ativo
+      // 2) Verificar timeout de fluxo ativo - Sistema humanizado em 3 estágios
       const timeoutStatus = this.flowManager.checkTimeoutStatus(context);
-      if (timeoutStatus.status === 'expired') {
-        return await this.handleExpiredFlow(context, timeoutStatus.message || '');
+      
+      // Se usuário responde durante checking, resetar timeout
+      const timeoutState = context.flow_lock?.step_data?.timeout_state;
+      let activeContext = context;
+      if (timeoutState === 'checking' && messageText.trim()) {
+        console.log('🔄 [TIMEOUT] Usuário respondeu durante checking - resetando timeout');
+        // Resetar timeout removendo o estado de checking
+        const resetLock = this.flowManager.advanceStep(context, context.flow_lock?.step || 'start');
+        if (resetLock) {
+          resetLock.step_data = { ...resetLock.step_data };
+          delete resetLock.step_data.timeout_state;
+        }
+        activeContext = await mergeEnhancedConversationContext(
+          userPhone, tenantId, { ...context, flow_lock: resetLock }
+        );
       }
-      if (timeoutStatus.status === 'warning') {
-        return this.handleFlowWarning(context, timeoutStatus.message || '');
+      
+      if (timeoutStatus.status === 'expired') {
+        return await this.handleExpiredFlow(activeContext, timeoutStatus.message || '', normalizedUserPhone);
+      }
+      if (timeoutStatus.status === 'checking' && timeoutState !== 'checking') {
+        return await this.handleTimeoutChecking(activeContext, timeoutStatus.message || '', userPhone, tenantId);
+      }
+      if (timeoutStatus.status === 'finalizing') {
+        return await this.handleTimeoutFinalizing(activeContext, timeoutStatus.message || '', userPhone, tenantId);
       }
 
-      // 2.5. Se estamos aguardando escolha de intenção (desambiguação), resolva primeiro
-      if (context && (context as any).awaiting_intent === true) {
+      // 2.5) Se estamos aguardando escolha de intenção (desambiguação), resolva primeiro
+      if ((activeContext as any)?.awaiting_intent === true) {
         const choice = resolveDisambiguationChoice(messageText);
         if (choice) {
-          // limpamos a flag no contexto e seguimos com a intent resolvida
           const updatedCtx = await mergeEnhancedConversationContext(
-            userId,
+            userPhone,
             tenantId,
-            context,
+            activeContext,
             { intent: choice, decision_method: 'llm', confidence: 1.0 }
           );
-          return await this.orchestrateWebhookFlow(messageText, userId, tenantId, tenantConfig, updatedCtx);
+          return await this.orchestrateWebhookFlow(messageText, userPhone, tenantId, tenantConfig, updatedCtx);
         } else {
-          // ainda ambíguo → pergunta novamente, sem efeitos colaterais
           return {
             aiResponse: 'Só para confirmar: você quer *serviços*, *preços* ou *horários*?',
             shouldSendWhatsApp: true,
@@ -124,36 +223,147 @@ export class WebhookFlowOrchestratorService {
               decision_method: 'disambiguation_pending',
               flow_lock_active: !!context.flow_lock?.active_flow,
               processing_time_ms: 0,
-              model_used: 'disambiguation' // 🚀 Modelo de desambiguação para telemetry
+              model_used: undefined
             }
           };
         }
       }
 
-      // 3. Detecção de intenção - Camadas Regex → LLM
-      const first = detectIntentByRegex(messageText);
-      let finalIntent = first.intent;
-      let finalConfidence = first.confidence;
-      let decision_method: 'regex' | 'llm' = first.decision_method;
+      // === USER PROFILE LOOKUP (buscar primeiro) ===
+      let userProfile: { id: string; name: string | null; email: string | null; birth_date: string | null; address: any | null; gender: string | null; } | null = null;
+      try {
+        // Usar mesma normalização que resto do sistema
+        const normalizedPhone = userPhone.replace(/[\s\-\(\)]/g, '');
+        console.log(`🔍 [PROFILE] Buscando perfil para: "${userPhone}" -> normalizado: "${normalizedPhone}"`);
+        const { data } = await supabaseAdmin
+          .from('users')
+          .select('id, name, email, birth_date, address, gender')
+          .eq('phone', normalizedPhone)
+          .single();
+        userProfile = data as any || null;
+        console.log(`🔍 [PROFILE] Perfil encontrado:`, userProfile);
+      } catch (error) {
+        console.log(`🔍 [PROFILE] Usuário não encontrado:`, error);
+        // User não existe ainda
+        userProfile = null;
+      }
 
-      if (!finalIntent) {
-        try {
-          const llm = await this.classifyIntentWithLLMFallback(messageText);
-          // Se LLM retornar 'null' (unknown), mantemos null (NÃO forçar 'general')
-          finalIntent = (llm?.intent as any) ?? null;
-          finalConfidence = (typeof llm?.confidence === 'number') ? llm.confidence : 0.0;
-          decision_method = 'llm';
-        } catch {
-          finalIntent = null;
-          finalConfidence = 0.0;
-          decision_method = 'llm';
+      // Verificar se tem dados completos (nome + email + birth_date + address)
+      const hasCompleteProfile = !!(userProfile?.name && userProfile?.email && userProfile?.birth_date && userProfile?.address);
+      
+      // === RETURNING USER GREETING CHECK (prioridade antes do onboarding) ===
+      // Se é uma saudação/greeting de usuário existente, dar resposta personalizada
+      if (userProfile?.name) {
+        const isGreeting = this.intentDetector.detectPrimaryIntent(messageText) === 'greeting';
+        console.log(`🔍 [GREETING] User has name: ${userProfile.name}, isGreeting: ${isGreeting}, hasCompleteProfile: ${hasCompleteProfile}`);
+        
+        if (isGreeting) {
+          if (!hasCompleteProfile) {
+            // Usuário com nome mas dados incompletos
+            console.log(`🎯 [RETURNING] Detectado saudação de usuário retornando com perfil incompleto`);
+            return await this.handleReturningUserGreeting({
+              messageText,
+              userPhone,
+              tenantId,
+              context,
+              tenantConfig,
+              userProfile
+            });
+          } else {
+            // Usuário com perfil completo - saudação personalizada final
+            console.log(`🎯 [COMPLETE] Detectado saudação de usuário com perfil completo`);
+            return await this.handleCompleteUserGreeting({
+              messageText,
+              userPhone,
+              tenantId,
+              context,
+              tenantConfig,
+              userProfile
+            });
+          }
         }
       }
 
-      // se ainda null → desambiguação (camada 3)
+      // === ONBOARDING GATE (após verificar returning user greetings) ===
+      const activeFlow = context.flow_lock?.active_flow || null;
+      const currentStep = (context.flow_lock?.step as any) || null;
+
+      // 1) se já está em onboarding, continua nele (mas apenas se não foi interceptado por greeting)
+      if (activeFlow === 'onboarding') {
+        return await this.handleOnboardingStep({
+          messageText,
+          userPhone,
+          tenantId,
+          context,
+          tenantConfig,
+          currentStep: (currentStep || 'need_name'),
+          greetFirst: false,
+          existingUserData: null
+        });
+      }
+
+      // 1.1) se está em flow de usuário retornando, processar resposta
+      if (activeFlow === 'returning_user') {
+        return await this.handleReturningUserFlow({
+          messageText,
+          userPhone,
+          tenantId,
+          context,
+          tenantConfig,
+          currentStep: (currentStep || 'need_email')
+        });
+      }
+
+      // === PROFILE COMPLETION CHECK ===
+      if (!hasCompleteProfile) {
+        // Se tem nome, usar saudação personalizada de retorno (para mensagens não-greeting)
+        if (userProfile?.name) {
+          return await this.handleReturningUserGreeting({
+            messageText,
+            userPhone,
+            tenantId,
+            context,
+            tenantConfig,
+            userProfile
+          });
+        }
+        
+        // Usuário totalmente novo - onboarding tradicional
+        const onboardingLock = this.flowManager.startFlowLock('onboarding', 'need_name');
+        const onboardingCtx = await this.updateContextWithFlowState(
+          userPhone,
+          tenantId,
+          context,
+          onboardingLock,
+          { intent: 'onboarding', confidence: 1.0, decision_method: 'gate_onboarding' }
+        );
+
+        return await this.handleOnboardingStep({
+          messageText,
+          userPhone,
+          tenantId,
+          context: onboardingCtx,
+          tenantConfig,
+          currentStep: 'need_name',
+          greetFirst: true,
+          existingUserData: null
+        });
+      }
+      // === FIM DO GATE ===
+
+      // 3) Detecção determinística de intenção
+      const primary = this.intentDetector.detectPrimaryIntent(messageText); // string | null
+      let finalIntent: string | null = primary;
+
+      // 3.1) fallback com LLM se não determinístico
+      if (!finalIntent) {
+        finalIntent = await this.classifyIntentWithLLM(messageText);
+      }
+
+      // 3.2) se ainda null → desambiguação
       if (!finalIntent) {
         const updatedCtx = await mergeEnhancedConversationContext(
-          userId,
+          userPhone,
           tenantId,
           context,
           { intent: 'unknown', confidence: 0, decision_method: 'llm' }
@@ -170,102 +380,87 @@ export class WebhookFlowOrchestratorService {
             decision_method: 'disambiguation',
             flow_lock_active: !!updatedCtx.flow_lock?.active_flow,
             processing_time_ms: Date.now() - startTime,
-            model_used: 'disambiguation' // 🚀 Modelo de desambiguação para telemetry
+            model_used: undefined
           }
         };
       }
-      
-      // ✅ ADAPTER: Converter para formato esperado pelo resto do código
+
+      // Adapter de intenção unificada
       const intentResult = {
         intent: finalIntent,
-        confidence: finalConfidence,
-        decision_method: decision_method,
+        confidence: finalIntent ? 0.95 : 0.0,
+        decision_method: finalIntent === primary ? 'deterministic_regex' : 'llm_classification',
         allowed_by_flow_lock: true
       } as const;
 
-      // 🚨 CORREÇÃO: SEMPRE usar OpenAI para gerar respostas reais e capturar métricas LLM
-      // Removido curto-circuito determinístico que impedia uso do OpenAI
-
-      // 4. Verificar se intenção é permitida pelo flow lock
+      // 4) Flow Lock — permissão
       if (!intentResult.allowed_by_flow_lock) {
         return this.handleBlockedIntent(context, intentResult);
       }
 
-      // 5. Determinar novo fluxo baseado na intenção
+      // 5) Mapear fluxo e decisão
       const targetFlow = this.mapIntentToFlow(intentResult.intent);
       const flowDecision = this.flowManager.canStartNewFlow(context, targetFlow);
 
-      // 6. 🚨 CORREÇÃO CRÍTICA: Sempre usar OpenAI para gerar resposta real
-      // Flow Lock apenas gerencia estado, OpenAI gera TODAS as respostas
-      console.log('🔍 ORQUESTRADOR DEBUG - Antes de chamar generateAIResponseWithFlowContext:', {
-        intent: intentResult.intent,
-        flowLock: context.flow_lock?.active_flow,
-        messageText: messageText.substring(0, 50)
-      });
-      
+      // 6) Geração de resposta (sempre via OpenAI, exceto comandos diretos)
       const result = await this.generateAIResponseWithFlowContext(
         messageText,
         intentResult,
         flowDecision,
         context,
-        tenantConfig
+        tenantConfig,
+        userPhone
       );
-      
-      console.log('🔍 ORQUESTRADOR DEBUG - Resultado generateAIResponseWithFlowContext:', {
-        hasLLMMetrics: !!result.llmMetrics,
-        outcome: result.outcome,
-        responseLength: result.response.length
-      });
 
-      // 7. Atualizar contexto com novo estado
+      // 7) Atualizar contexto com novo estado
       const updatedContext = await this.updateContextWithFlowState(
-        userId,
+        userPhone,
         tenantId,
         context,
         result.newFlowLock,
         intentResult
       );
 
-      // 🚨 CORREÇÃO: Só persistir outcome se conversa finalizada
+      // 8) Persistir outcome apenas quando conversa finaliza
       const finalOutcome = this.shouldPersistOutcome(intentResult.intent, result.response, updatedContext);
-      console.log('🔧 OUTCOME PERSISTENCE CHECK:', {
-        intent: intentResult.intent,
-        shouldPersist: finalOutcome !== null,
-        outcome: finalOutcome
-      });
 
       return {
         aiResponse: result.response,
         shouldSendWhatsApp: true,
-        conversationOutcome: finalOutcome, // null se conversa em andamento
-        llmMetrics: result.llmMetrics, // 🚨 CORREÇÃO: Incluir métricas LLM no retorno
+        conversationOutcome: finalOutcome,
+        llmMetrics: result.llmMetrics,
         updatedContext,
         telemetryData: {
-          intent: finalIntent,              // pode ser null — e assim deve ficar
-          confidence: finalConfidence,
-          decision_method,
+          intent: intentResult.intent,
+          confidence: intentResult.confidence,
+          decision_method: intentResult.decision_method,
           flow_lock_active: !!updatedContext.flow_lock?.active_flow,
           processing_time_ms: Date.now() - startTime,
-          model_used: result.llmMetrics?.model_used || 'unknown' // 🚀 Incluir modelo usado no telemetry
+          model_used: (intentResult as any).model_used
         }
       };
 
     } catch (error) {
       console.error('Webhook orchestration error:', error);
-      
-      // Fallback para sistema legado
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      console.error('Error details:', {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error)
+      });
+
+      const fallbackContext = await this.resolveEnhancedContext(userPhone, tenantId, tenantConfig, existingContext);
       return {
         aiResponse: 'Desculpe, ocorreu um erro. Tente novamente.',
         shouldSendWhatsApp: true,
         conversationOutcome: 'error',
-        updatedContext: await this.resolveEnhancedContext(userId, tenantId, tenantConfig, existingContext),
+        updatedContext: fallbackContext,
         telemetryData: {
           intent: 'error',
           confidence: 0,
           decision_method: 'error',
           flow_lock_active: false,
-          processing_time_ms: Date.now() - startTime,
-          model_used: 'error' // 🚀 Modelo de erro para telemetry
+          processing_time_ms: 0,
+          model_used: undefined
         },
         llmMetrics: {
           prompt_tokens: null,
@@ -289,10 +484,9 @@ export class WebhookFlowOrchestratorService {
     tenantConfig: any,
     existingContext?: any
   ): Promise<EnhancedConversationContext> {
-    
     const baseUpdates = {
       tenant_id: tenantId,
-      domain: tenantConfig.domain || 'general',
+      domain: tenantConfig?.domain || 'general',
       source: 'whatsapp' as const,
       mode: 'prod' as const
     };
@@ -325,18 +519,17 @@ export class WebhookFlowOrchestratorService {
       'booking_confirm': 'booking',
       'slot_selection': 'booking',
       'reschedule': 'reschedule',
-      'reschedule_confirm': 'reschedule', 
+      'reschedule_confirm': 'reschedule',
       'cancel': 'cancel',
       'cancel_confirm': 'cancel',
       'pricing': 'pricing',
       'services': 'pricing',
       'flow_cancel': null,
-      'greeting': null
+      'greeting': null,
+      'general': null
     };
 
-    // Intents institucionais não criam fluxo
     if (intent.startsWith('institutional_')) return null;
-
     return flowMap[intent] || null;
   }
 
@@ -348,15 +541,14 @@ export class WebhookFlowOrchestratorService {
     intentResult: any,
     flowDecision: any,
     context: EnhancedConversationContext,
-    tenantConfig: any
+    tenantConfig: any,
+    userPhone: string
   ): Promise<{ response: string; outcome: string; newFlowLock?: any }> {
 
     const intent = intentResult.intent;
-    const currentFlow = context.flow_lock?.active_flow;
-    const currentStep = context.flow_lock?.step;
+    const currentFlow = context.flow_lock?.active_flow as (string | null);
 
-    // === COMANDO DIRETOS (prioridade máxima) ===
-    
+    // === COMANDOS DIRETOS (prioridade máxima) ===
     if (intent === 'flow_cancel') {
       const abandonedLock = this.flowManager.abandonFlow(context, 'user_requested');
       return {
@@ -421,12 +613,12 @@ export class WebhookFlowOrchestratorService {
       };
     }
 
-    if (intent === 'pricing' || intent === 'services') {
+    if (intent === 'pricing') {
       const pricingLock = this.flowManager.startFlowLock('pricing', 'start');
-      const response = await this.generatePricingResponse(tenantConfig, context.tenant_id);
+      const response = this.generatePricingResponse(tenantConfig);
       return {
         response: response + ' Gostaria de agendar algum serviço?',
-        outcome: 'pricing_info_provided', // ✅ CORREÇÃO: pricing/services fornecem informação
+        outcome: null as any, // pricing não finaliza conversa
         newFlowLock: pricingLock
       };
     }
@@ -440,80 +632,1090 @@ export class WebhookFlowOrchestratorService {
         };
       }
 
-      const onboardingLock = this.flowManager.startFlowLock('onboarding', 'collect_email');
+      // Descobre "o que falta"
+      const needName  = !(context as any)?.user?.name;
+      const needEmail = !(context as any)?.user?.email;
+
+      const businessName = tenantConfig?.name || tenantConfig?.business_name || 'nosso atendimento';
+      const intro = `Sou a assistente virtual da ${businessName}.`;
+
+      if (needName) {
+        const lock = this.flowManager.startFlowLock('onboarding', 'need_name');
+        return {
+          response:
+            `Perfeito! ${intro}\n` +
+            `Para começarmos, me diga por favor seu **nome completo**.`,
+          outcome: 'onboarding_started',
+          newFlowLock: lock
+        };
+      }
+
+      if (needEmail) {
+        const lock = this.flowManager.startFlowLock('onboarding', 'need_email');
+        return {
+          response:
+            `Obrigado, anotado! ${intro}\n` +
+            `Agora, qual é seu **email**?`,
+          outcome: 'onboarding_continue',
+          newFlowLock: lock
+        };
+      }
+
+      // Nada a coletar → apenas confirme e retome a conversa
       return {
-        response: 'Olá! Para melhor atendê-lo, qual seu email?',
-        outcome: 'onboarding_started', 
-        newFlowLock: onboardingLock
+        response: `Cadastro concluído ✅. Como posso ajudar?`,
+        outcome: null as any,
+        newFlowLock: context.flow_lock || null
       };
     }
 
     // === INTENTS INSTITUCIONAIS (não alteram fluxo) ===
 
-    if (intent.startsWith('institutional_')) {
+    if (intent && intent.startsWith('institutional_')) {
       const response = this.generateInstitutionalResponse(intent, tenantConfig);
       return {
         response,
         outcome: 'institutional_info_provided',
-        newFlowLock: context.flow_lock // Manter fluxo atual
+        newFlowLock: context.flow_lock
       };
     }
 
-    // === FALLBACKS ===
-
+    // === GREETING (comportamento revisado) ===
     if (intent === 'greeting') {
+      // Buscar dados do usuário diretamente do banco
+      const normalizedPhone = userPhone?.replace(/[\s\-\(\)]/g, '');
+      let userProfile: { name: string | null; email: string | null } | null = null;
+      
+      if (normalizedPhone) {
+        try {
+          const userData = await supabaseAdmin
+            .from('users')
+            .select('name, email')
+            .eq('phone', normalizedPhone)
+            .single();
+          userProfile = userData.data;
+        } catch (error) {
+          // Usuário não existe no banco
+          userProfile = null;
+        }
+      }
+
+      const needName = !userProfile?.name;
+      const needEmail = !userProfile?.email;
+
+      // Nome do negócio para apresentação
+      const businessName = tenantConfig?.name || tenantConfig?.business_name || 'nosso atendimento';
+      const intro = `Sou a assistente virtual da ${businessName}.`;
+
+      if (needName) {
+        // Primeiro contato real: apresente-se e peça o nome completo
+        const lock = this.flowManager.startFlowLock('onboarding', 'need_name');
+        return {
+          response:
+            `Olá! ${intro} Percebi que é seu primeiro contato por aqui 😊\n` +
+            `Para te atender melhor, como posso te chamar? Qual é seu **nome completo**?`,
+          outcome: 'onboarding_started',
+          newFlowLock: lock
+        };
+      }
+
+      if (needEmail) {
+        // Já temos nome; peça somente o email
+        const lock = this.flowManager.startFlowLock('onboarding', 'need_email');
+        return {
+          response:
+            `Obrigado! ${intro}\n` +
+            `Para concluir seu cadastro, qual é seu **email**?`,
+          outcome: 'onboarding_continue',
+          newFlowLock: lock
+        };
+      }
+
+      // Usuário completo → saudação personalizada
+      const userName = userProfile?.name;
+      let userGender: string | undefined = undefined;
+      
+      // Tentar buscar gender do usuário
+      if (normalizedPhone) {
+        try {
+          const userGenderData = await supabaseAdmin
+            .from('users')
+            .select('gender')
+            .eq('phone', normalizedPhone)
+            .single();
+          userGender = (userGenderData.data as any)?.gender;
+        } catch (genderError) {
+          console.log('🔧 Campo gender não disponível, inferindo do nome');
+        }
+      }
+      
+      // Se não temos gender da DB, inferir do nome
+      if (!userGender && userName) {
+        userGender = inferGenderFromName(userName);
+      }
+      
+      const helpPhrase = userGender === 'female' || userGender === 'feminino' ? 'ajudá-la' : 'ajudá-lo';
+      const greeting = userName ? `, ${userName}` : '';
+      
       return {
-        response: 'Olá! Como posso ajudá-lo?',
-        outcome: null as any, // 🚨 CORREÇÃO: greeting não finaliza conversa
-        newFlowLock: null
+        response: `Como posso ajud${helpPhrase} hoje${greeting}? 😊`,
+        outcome: null as any,
+        newFlowLock: context.flow_lock || null
       };
     }
 
-    // General fallback - conversa ainda em andamento
+    // === FALLBACK ===
     return {
-      response: '🚨 FALLBACK: executeFlowAction - Não entendi. Pode reformular?',
-      outcome: null as any, // 🚨 CORREÇÃO: fallback não finaliza conversa
+      response: 'Não entendi. Pode reformular, por favor?',
+      outcome: null as any,
       newFlowLock: context.flow_lock
     };
   }
 
   /**
-   * Atualiza contexto com novo estado do flow
+   * Handler para usuários que retornam com dados incompletos
+   * Saudação personalizada + pedido do que está faltando
    */
-  private async updateContextWithFlowState(
-    userId: string,
-    tenantId: string,
-    currentContext: EnhancedConversationContext,
-    newFlowLock: any,
-    intentResult: any
-  ): Promise<EnhancedConversationContext> {
+  private async handleReturningUserGreeting({
+    messageText,
+    userPhone,
+    tenantId,
+    context,
+    tenantConfig,
+    userProfile
+  }: {
+    messageText: string;
+    userPhone: string;
+    tenantId: string;
+    context: EnhancedConversationContext;
+    tenantConfig: any;
+    userProfile: { id: string; name: string | null; email: string | null; birth_date: string | null; address: any | null; gender: string | null; };
+  }): Promise<WebhookOrchestrationResult> {
     
-    return await mergeEnhancedConversationContext(
-      userId,
+    const firstName = userProfile.name?.split(' ')[0] || '';
+    
+    // Detectar negativas antes de pedir dados
+    const negativePatterns = [
+      /\b(não|nao)\b/i,
+      /\b(agora não|agora nao)\b/i,
+      /\b(sem tempo|depois)\b/i,
+      /\b(não quero|nao quero)\b/i,
+      /\b(prefiro não|prefiro nao)\b/i,
+      /\b(muito pessoal|privado)\b/i
+    ];
+    
+    const isNegativeResponse = negativePatterns.some(pattern => pattern.test(messageText));
+    
+    if (isNegativeResponse) {
+      // Resposta empática e redirecionamento para saudação personalizada
+      const normalizedPhone = userPhone?.replace(/[\s\-\(\)]/g, '');
+      let userGender: string | undefined = undefined;
+      
+      // Tentar buscar gender do banco
+      try {
+        const userGenderData = await supabaseAdmin
+          .from('users')
+          .select('gender')
+          .eq('phone', normalizedPhone)
+          .single();
+        userGender = (userGenderData.data as any)?.gender;
+      } catch (genderError) {
+        // Inferir do nome se não tem no banco
+        userGender = inferGenderFromName(userProfile.name || undefined);
+      }
+      
+      const helpPhrase = userGender === 'female' || userGender === 'feminino' ? 'ajudá-la' : 'ajudá-lo';
+      
+      return {
+        aiResponse: `Sem problemas! Entendo perfeitamente. Como posso ajud${helpPhrase} hoje, ${firstName}? 😊`,
+        shouldSendWhatsApp: true,
+        conversationOutcome: null,
+        updatedContext: context,
+        telemetryData: {
+          intent: 'returning_user_declined_data',
+          confidence: 1.0,
+          decision_method: 'negative_response_detected',
+          flow_lock_active: false,
+          processing_time_ms: 0,
+          model_used: undefined
+        }
+      };
+    }
+    
+    // Determinar que dados estão faltando e criar saudação apropriada
+    if (!userProfile.email) {
+      const greetings = [
+        `${firstName}, como vai! Que bom ter você de volta! 😊`,
+        `Reparei que não tenho seu e-mail, poderia me informar para completarmos seu perfil?`
+      ];
+      
+      const lock = this.flowManager.startFlowLock('returning_user', 'need_email');
+      const updatedContext = await mergeEnhancedConversationContext(
+        userPhone, tenantId, { ...context, flow_lock: lock }
+      );
+      
+      return {
+        aiResponse: greetings.join('\n\n'),
+        shouldSendWhatsApp: true,
+        conversationOutcome: null,
+        updatedContext,
+        telemetryData: {
+          intent: 'returning_user_need_email',
+          confidence: 1.0,
+          decision_method: 'returning_user_greeting',
+          flow_lock_active: true,
+          processing_time_ms: 0,
+          model_used: undefined
+        }
+      };
+    }
+    
+    if (!userProfile.birth_date) {
+      const greetings = [
+        `${firstName}, como vai! Que bom ter você de volta! 😊`,
+        `Reparei que não tenho sua data de nascimento, poderia me informar para completarmos seu perfil?`
+      ];
+      
+      const lock = this.flowManager.startFlowLock('returning_user', 'need_birthday');
+      const updatedContext = await mergeEnhancedConversationContext(
+        userPhone, tenantId, { ...context, flow_lock: lock }
+      );
+      
+      return {
+        aiResponse: greetings.join('\n\n'),
+        shouldSendWhatsApp: true,
+        conversationOutcome: null,
+        updatedContext,
+        telemetryData: {
+          intent: 'returning_user_need_birthday',
+          confidence: 1.0,
+          decision_method: 'returning_user_greeting',
+          flow_lock_active: true,
+          processing_time_ms: 0,
+          model_used: undefined
+        }
+      };
+    }
+    
+    if (!userProfile.address) {
+      const greetings = [
+        `${firstName}, como vai! Que bom ter você de volta! 😊`,
+        `Reparei que não tenho seu endereço, poderia me informar para completarmos seu perfil?`
+      ];
+      
+      const lock = this.flowManager.startFlowLock('returning_user', 'need_address');
+      const updatedContext = await mergeEnhancedConversationContext(
+        userPhone, tenantId, { ...context, flow_lock: lock }
+      );
+      
+      return {
+        aiResponse: greetings.join('\n\n'),
+        shouldSendWhatsApp: true,
+        conversationOutcome: null,
+        updatedContext,
+        telemetryData: {
+          intent: 'returning_user_need_address',
+          confidence: 1.0,
+          decision_method: 'returning_user_greeting',
+          flow_lock_active: true,
+          processing_time_ms: 0,
+          model_used: undefined
+        }
+      };
+    }
+    
+    // Se tem nome e email, mas falta outros dados, ir direto para saudação personalizada
+    const normalizedPhone = userPhone?.replace(/[\s\-\(\)]/g, '');
+    let userGender: string | undefined = undefined;
+    
+    try {
+      const userGenderData = await supabaseAdmin
+        .from('users')
+        .select('gender')
+        .eq('phone', normalizedPhone)
+        .single();
+      userGender = (userGenderData.data as any)?.gender;
+    } catch (genderError) {
+      userGender = inferGenderFromName(userProfile.name || undefined);
+    }
+    
+    const helpPhrase = userGender === 'female' || userGender === 'feminino' ? 'ajudá-la' : 'ajudá-lo';
+    
+    return {
+      aiResponse: `Como posso ajud${helpPhrase} hoje, ${firstName}? 😊`,
+      shouldSendWhatsApp: true,
+      conversationOutcome: null,
+      updatedContext: context,
+      telemetryData: {
+        intent: 'returning_user_complete',
+        confidence: 1.0,
+        decision_method: 'returning_user_greeting',
+        flow_lock_active: false,
+        processing_time_ms: 0,
+        model_used: undefined
+      }
+    };
+  }
+
+  /**
+   * Handler para processar respostas de usuários retornando (quando fornecem email, etc.)
+   */
+  private async handleReturningUserFlow({
+    messageText,
+    userPhone,
+    tenantId,
+    context,
+    tenantConfig,
+    currentStep
+  }: {
+    messageText: string;
+    userPhone: string;
+    tenantId: string;
+    context: EnhancedConversationContext;
+    tenantConfig: any;
+    currentStep: string;
+  }): Promise<WebhookOrchestrationResult> {
+    
+    if (currentStep === 'need_email') {
+      // Buscar dados atuais do usuário
+      let userProfile: { name: string | null } | null = null;
+      try {
+        const normalizedPhone = userPhone.replace(/[\s\-\(\)]/g, '');
+        const { data } = await supabaseAdmin
+          .from('users')
+          .select('name')
+          .eq('phone', normalizedPhone)
+          .single();
+        userProfile = data || null;
+      } catch (error) {
+        userProfile = null;
+      }
+
+      const firstName = userProfile?.name?.split(' ')[0] || '';
+      
+      // Detectar negativas
+      const negativePatterns = [
+        /\b(não|nao)\b/i,
+        /\b(agora não|agora nao)\b/i,
+        /\b(sem tempo|depois)\b/i,
+        /\b(não quero|nao quero)\b/i,
+        /\b(prefiro não|prefiro nao)\b/i
+      ];
+      
+      const isNegativeResponse = negativePatterns.some(pattern => pattern.test(messageText));
+      
+      if (isNegativeResponse) {
+        // Resposta empática e saudação personalizada
+        const normalizedPhone = userPhone?.replace(/[\s\-\(\)]/g, '');
+        let userGender: string | undefined = undefined;
+        
+        try {
+          const userGenderData = await supabaseAdmin
+            .from('users')
+            .select('gender')
+            .eq('phone', normalizedPhone)
+            .single();
+          userGender = (userGenderData.data as any)?.gender;
+        } catch (genderError) {
+          userGender = inferGenderFromName(userProfile?.name || undefined);
+        }
+        
+        const helpPhrase = userGender === 'female' || userGender === 'feminino' ? 'ajudá-la' : 'ajudá-lo';
+        
+        return {
+          aiResponse: `Sem problemas! Entendo perfeitamente. Como posso ajud${helpPhrase} hoje, ${firstName}? 😊`,
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext: await mergeEnhancedConversationContext(
+            userPhone, tenantId, { ...context, flow_lock: null }
+          ),
+          telemetryData: {
+            intent: 'returning_user_declined_email',
+            confidence: 1.0,
+            decision_method: 'negative_response_detected',
+            flow_lock_active: false,
+            processing_time_ms: 0,
+            model_used: undefined
+          }
+        };
+      }
+      
+      // Tentar extrair email
+      const extractedEmail = extractEmailStrict(messageText);
+      
+      if (extractedEmail) {
+        // Salvar email
+        const normalizedPhone = userPhone.replace(/[\s\-\(\)]/g, '');
+        await supabaseAdmin
+          .from('users')
+          .update({ email: extractedEmail })
+          .eq('phone', normalizedPhone);
+        
+        // Saudação personalizada após salvar email
+        const normalizedPhoneGender = userPhone?.replace(/[\s\-\(\)]/g, '');
+        let userGender: string | undefined = undefined;
+        
+        try {
+          const userGenderData = await supabaseAdmin
+            .from('users')
+            .select('gender')
+            .eq('phone', normalizedPhoneGender)
+            .single();
+          userGender = (userGenderData.data as any)?.gender;
+        } catch (genderError) {
+          userGender = inferGenderFromName(userProfile?.name || undefined);
+        }
+        
+        const helpPhrase = userGender === 'female' || userGender === 'feminino' ? 'ajudá-la' : 'ajudá-lo';
+        
+        return {
+          aiResponse: `Perfeito! 📧 E-mail salvo com sucesso. Como posso ajud${helpPhrase} hoje, ${firstName}? 😊`,
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext: await mergeEnhancedConversationContext(
+            userPhone, tenantId, { ...context, flow_lock: null }
+          ),
+          telemetryData: {
+            intent: 'returning_user_email_saved',
+            confidence: 1.0,
+            decision_method: 'email_extracted_and_saved',
+            flow_lock_active: false,
+            processing_time_ms: 0,
+            model_used: undefined
+          }
+        };
+      }
+      
+      // Email não foi detectado - pedir novamente
+      return {
+        aiResponse: `${firstName}, poderia me passar um e-mail válido? Por exemplo: seuemail@exemplo.com`,
+        shouldSendWhatsApp: true,
+        conversationOutcome: null,
+        updatedContext: context,
+        telemetryData: {
+          intent: 'returning_user_invalid_email',
+          confidence: 1.0,
+          decision_method: 'invalid_email_format',
+          flow_lock_active: true,
+          processing_time_ms: 0,
+          model_used: undefined
+        }
+      };
+    }
+    
+    // Fallback caso não reconheça o step
+    return {
+      aiResponse: 'Não entendi. Pode reformular, por favor?',
+      shouldSendWhatsApp: true,
+      conversationOutcome: null,
+      updatedContext: context,
+      telemetryData: {
+        intent: 'returning_user_fallback',
+        confidence: 0.5,
+        decision_method: 'unknown_step',
+        flow_lock_active: false,
+        processing_time_ms: 0,
+        model_used: undefined
+      }
+    };
+  }
+
+  /**
+   * Handler para usuários com perfil completo (nome + email) que enviam saudação
+   * Retorna saudação personalizada imediata com gênero apropriado
+   */
+  private async handleCompleteUserGreeting({
+    messageText,
+    userPhone,
+    tenantId,
+    context,
+    tenantConfig,
+    userProfile
+  }: {
+    messageText: string;
+    userPhone: string;
+    tenantId: string;
+    context: EnhancedConversationContext;
+    tenantConfig: any;
+    userProfile: { id: string; name: string | null; email: string | null; birth_date: string | null; address: any | null; gender: string | null; };
+  }): Promise<WebhookOrchestrationResult> {
+    
+    console.log(`🎯 [COMPLETE GREETING] Executando para: ${userProfile.name} (${userPhone})`);
+    const firstName = userProfile.name?.split(' ')[0] || '';
+    
+    // Buscar dados completos do usuário para gênero usando mesma lógica do conversation-context-helper
+    let userGender: string | undefined;
+    try {
+      const raw = String(userPhone || '').trim();
+      const digits = raw.replace(/\D/g, '');
+      const candidatesSet = new Set<string>();
+      if (digits) {
+        candidatesSet.add(digits);
+        candidatesSet.add(`+${digits}`);
+        if (digits.startsWith('55')) {
+          const local = digits.slice(2);
+          if (local) {
+            candidatesSet.add(local);
+            candidatesSet.add(`+${local}`);
+          }
+        } else {
+          candidatesSet.add(`55${digits}`);
+          candidatesSet.add(`+55${digits}`);
+        }
+      }
+      const candidates = Array.from(candidatesSet);
+      const orClause = candidates.map(v => `phone.eq.${v}`).join(',');
+      
+      console.log(`🔍 Telefone original: "${userPhone}" -> Candidates: ${candidates.join(',')}`);
+      const { data: fullUser } = await supabaseAdmin
+        .from('users')
+        .select('gender')
+        .or(orClause)
+        .limit(1)
+        .maybeSingle();
+        
+      userGender = (fullUser as any)?.gender;
+      console.log(`🔍 Gender do DB: "${userGender}" para ${userProfile.name}`);
+    } catch (error) {
+      console.log(`❌ Erro ao buscar gender do DB:`, error);
+    }
+    
+    // Se não temos gender do DB, inferir do nome
+    if (!userGender && userProfile.name) {
+      userGender = inferGenderFromName(userProfile.name || undefined);
+      console.log(`🔍 Gender inferido do nome: "${userGender}" para ${userProfile.name}`);
+    }
+    
+    console.log(`🔍 Gender final: "${userGender}"`);
+    // Escolher a forma de "ajudá-lo/ajudá-la" baseado no gênero
+    const helpPhrase = userGender === 'female' || userGender === 'feminino' ? 'ajudá-la' : 'ajudá-lo';
+    console.log(`🔍 Help phrase: "${helpPhrase}"`);;
+    
+    const personalizedGreeting = `${firstName}, como vai! Que bom ter você de volta! 😊 Como posso ${helpPhrase} hoje?`;
+    
+    // Salvar contexto limpo (sem flow ativo)
+    const updatedContext = await mergeEnhancedConversationContext(
+      userPhone,
       tenantId,
       {
-        ...currentContext,
-        flow_lock: newFlowLock || currentContext.flow_lock
+        ...context,
+        flow_lock: null // Remove flow lock
       },
       {
-        intent: intentResult.intent,
-        confidence: intentResult.confidence,
-        decision_method: intentResult.decision_method
+        intent: 'greeting',
+        confidence: 1.0,
+        decision_method: 'regex'
       }
     );
+    
+    return {
+      aiResponse: personalizedGreeting,
+      shouldSendWhatsApp: true,
+      conversationOutcome: null,
+      updatedContext,
+      telemetryData: {
+        intent: 'greeting',
+        confidence: 1.0,
+        decision_method: 'personalized_complete_user_greeting',
+        flow_lock_active: false,
+        processing_time_ms: 0,
+        model_used: undefined
+      }
+    };
+  }
+
+  /**
+   * Handler determinístico do Onboarding
+   * Apresenta empresa/bot e conduz: nome → email → persistência → limpa flow
+   */
+  private async handleOnboardingStep({
+    messageText,
+    userPhone,
+    tenantId,
+    context,
+    tenantConfig,
+    currentStep,
+    greetFirst,
+    existingUserData = null
+  }: {
+    messageText: string;
+    userPhone: string;
+    tenantId: string;
+    context: EnhancedConversationContext;
+    tenantConfig: any;
+    currentStep: 'need_name' | 'need_email';
+    greetFirst: boolean;
+    existingUserData?: { id: string; name: string | null; email: string | null; } | null;
+  }): Promise<WebhookOrchestrationResult> {
+
+    let tenantRow: { business_name: string; ai_settings: any; } | null = null;
+    try {
+      const { data } = await supabaseAdmin
+        .from('tenants')
+        .select('business_name, ai_settings')
+        .eq('id', tenantId)
+        .single();
+      tenantRow = data || null;
+    } catch (error) {
+      tenantRow = null;
+    }
+
+    const biz = tenantRow?.business_name ?? (tenantConfig?.name || 'sua empresa');
+    const botName = (tenantRow?.ai_settings as any)?.bot_name ?? 'Assistente UBS';
+
+    // === PASSO 1 — NOME ===
+    if (currentStep === 'need_name') {
+      console.log('🔍 FLOW DEBUG - STEP need_name - texto:', messageText);
+      const maybeName = extractNameStrict(messageText);
+      console.log('🔍 FLOW DEBUG - nome extraído:', maybeName);
+
+      if (greetFirst && !maybeName) {
+        // 🔧 CRITICAL FIX: Só mostrar intro se NÃO extraiu nome da primeira mensagem
+        const intro = `Olá, eu sou a assistente oficial da ${biz}. Percebi que este é seu primeiro contato.`;
+        const ask  = `Para melhor atendê-lo, qual é seu nome completo?`;
+        const lock = this.flowManager.startFlowLock('onboarding', 'need_name');
+
+        const updatedContext = await mergeEnhancedConversationContext(
+          userPhone, tenantId, { ...context, flow_lock: lock }
+        );
+
+        return {
+          aiResponse: `${intro}\n${ask}`,
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext,
+          telemetryData: {
+            intent: 'onboarding',
+            confidence: 1.0,
+            decision_method: 'onboarding_intro',
+            flow_lock_active: true,
+            processing_time_ms: 0,
+            model_used: undefined
+          }
+        };
+      }
+
+      if (!maybeName) {
+        const lock = this.flowManager.startFlowLock('onboarding', 'need_name');
+        const updatedContext = await mergeEnhancedConversationContext(
+          userPhone, tenantId, { ...context, flow_lock: lock }
+        );
+
+        return {
+          aiResponse: `Para melhor atendê-lo, qual é seu nome completo?`,
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext,
+          telemetryData: {
+            intent: 'onboarding',
+            confidence: 1.0,
+            decision_method: 'ask_name',
+            flow_lock_active: true,
+            processing_time_ms: 0,
+            model_used: undefined
+          }
+        };
+      }
+
+      // Persistir NOME e GÊNERO agora
+      const normalizedPhoneForUpsert = userPhone.replace(/[\s\-\(\)]/g, '');
+      const inferredGender = inferGenderFromName(maybeName);
+      
+      try {
+        console.log('🔧 UPSERT DEBUG:', {
+          phone: normalizedPhoneForUpsert,
+          name: maybeName,
+          gender: inferredGender
+        });
+        
+        console.log('🚀 INICIANDO UPSERT...');
+        const startTime = Date.now();
+        
+        const result = await Promise.race([
+          supabaseAdmin
+            .from('users')
+            .upsert({ 
+              phone: normalizedPhoneForUpsert, 
+              name: maybeName,
+              gender: inferredGender 
+            }, { onConflict: 'phone' }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('UPSERT_TIMEOUT_10S')), 10000)
+          )
+        ]);
+
+        const duration = Date.now() - startTime;
+        console.log(`⏱️ UPSERT DURATION: ${duration}ms`);
+        
+        console.log('🔍 RESULT TYPE:', typeof result);
+        console.log('🔍 RESULT KEYS:', Object.keys(result || {}));
+        
+        const { data, error } = result as any;
+        
+        console.log('📊 HAS DATA:', !!data, 'HAS ERROR:', !!error);
+        
+        if (error) {
+          console.error('❌ UPSERT ERROR CODE:', error.code);
+          console.error('❌ UPSERT ERROR MESSAGE:', error.message);
+          console.error('❌ UPSERT ERROR DETAILS:', error.details);
+        } else if (data) {
+          console.log('✅ UPSERT SUCCESS - ROWS AFFECTED:', Array.isArray(data) ? data.length : 'N/A');
+        } else {
+          console.log('⚠️ UPSERT COMPLETED BUT NO DATA/ERROR');
+        }
+      } catch (catchError: any) {
+        console.error('❌ UPSERT EXCEPTION:', catchError?.message || catchError);
+      }
+
+      // Avançar para E-MAIL
+      const nextLock = this.flowManager.startFlowLock('onboarding', 'need_email');
+      const updatedContext = await mergeEnhancedConversationContext(
+        userPhone, tenantId, { ...context, flow_lock: nextLock }
+      );
+
+      return {
+        aiResponse: `Obrigado, ${firstName(maybeName)}! Agora me informe seu e-mail para finalizarmos.`,
+        shouldSendWhatsApp: true,
+        conversationOutcome: null,
+        updatedContext,
+        telemetryData: {
+          intent: 'onboarding',
+          confidence: 1.0,
+          decision_method: 'name_saved',
+          flow_lock_active: true,
+          processing_time_ms: 0,
+          model_used: undefined
+        }
+      };
+    }
+
+    // === PASSO 2 — E-MAIL ===
+    if (currentStep === 'need_email') {
+      const maybeEmail = extractEmailStrict(messageText);
+
+      if (!maybeEmail) {
+        const lock = this.flowManager.startFlowLock('onboarding', 'need_email');
+        const updatedContext = await mergeEnhancedConversationContext(
+          userPhone, tenantId, { ...context, flow_lock: lock }
+        );
+
+        // Mensagem personalizada baseada se já conhecemos o usuário
+        let emailMessage;
+        if (existingUserData?.name) {
+          // Usuário já tem nome - saudação amigável
+          emailMessage = `Olá ${existingUserData.name.split(' ')[0]}! Para concluir seu cadastro, pode me passar seu e-mail no formato nome@exemplo.com?`;
+        } else {
+          // Caso padrão
+          emailMessage = `Pode me passar seu e-mail no formato nome@exemplo.com?`;
+        }
+
+        return {
+          aiResponse: emailMessage,
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext,
+          telemetryData: {
+            intent: 'onboarding',
+            confidence: 1.0,
+            decision_method: 'ask_email',
+            flow_lock_active: true,
+            processing_time_ms: 0,
+            model_used: undefined
+          }
+        };
+      }
+
+      // Persistir E-MAIL agora
+      const normalizedPhoneForEmail = userPhone.replace(/[\s\-\(\)]/g, '');
+      await supabaseAdmin
+        .from('users')
+        .upsert({ phone: normalizedPhoneForEmail, email: maybeEmail }, { onConflict: 'phone' });
+
+      // Avançar para PERGUNTA OPCIONAL
+      const nextLock = this.flowManager.startFlowLock('onboarding', 'ask_additional_data');
+      const updatedContext = await mergeEnhancedConversationContext(
+        userPhone, tenantId, { ...context, flow_lock: nextLock }
+      );
+
+      return {
+        aiResponse: `Obrigado! 📧 E-mail salvo. Para personalizar ainda mais nosso atendimento, você se importaria de fornecer algumas informações adicionais? (É opcional e rápido!) \n\nResponda *sim* ou *não*.`,
+        shouldSendWhatsApp: true,
+        conversationOutcome: null,
+        updatedContext,
+        telemetryData: {
+          intent: 'onboarding',
+          confidence: 1.0,
+          decision_method: 'email_saved_ask_additional',
+          flow_lock_active: true,
+          processing_time_ms: 0,
+          model_used: undefined
+        }
+      };
+    }
+
+    // === PASSO 3 — PERGUNTA SOBRE DADOS ADICIONAIS ===
+    if (currentStep === 'ask_additional_data') {
+      const response = messageText.toLowerCase().trim();
+      
+      if (response.includes('sim') || response.includes('s')) {
+        // Usuário aceita fornecer dados adicionais - ir para aniversário
+        const nextLock = this.flowManager.startFlowLock('onboarding', 'need_birthday');
+        const updatedContext = await mergeEnhancedConversationContext(
+          userPhone, tenantId, { ...context, flow_lock: nextLock }
+        );
+
+        return {
+          aiResponse: `Ótimo! 🎂 Qual é sua data de aniversário? (formato: dd/mm/aaaa)`,
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext,
+          telemetryData: {
+            intent: 'onboarding',
+            confidence: 1.0,
+            decision_method: 'user_accepts_additional_data',
+            flow_lock_active: true,
+            processing_time_ms: 0,
+            model_used: undefined
+          }
+        };
+      } else {
+        // Usuário recusa - finalizar onboarding
+        const cleanedContext = await mergeEnhancedConversationContext(
+          userPhone, tenantId, { ...context, flow_lock: null }
+        );
+
+        // Buscar dados do usuário para personalização
+        const normalizedPhone = userPhone.replace(/[\s\-\(\)]/g, '');
+        let userName = '';
+        let userGender: string | undefined = undefined;
+        
+        try {
+          // Primeiro tentar buscar apenas o nome (que sabemos que existe)
+          const userNameData = await supabaseAdmin
+            .from('users')
+            .select('name')
+            .eq('phone', normalizedPhone)
+            .single();
+          userName = userNameData.data?.name || '';
+
+          // Tentar buscar gender apenas se necessário
+          try {
+            const userGenderData = await supabaseAdmin
+              .from('users')
+              .select('gender')
+              .eq('phone', normalizedPhone)
+              .single();
+            userGender = (userGenderData.data as any)?.gender;
+          } catch (genderError) {
+            // Ignora erro se gender não existir - será inferido do nome
+            console.log('🔧 Campo gender não disponível, inferindo do nome');
+          }
+        } catch (error) {
+          console.log('❌ Erro ao buscar dados do usuário:', error);
+        }
+        
+        // Se não temos gender da DB, inferir do nome
+        if (!userGender && userName) {
+          userGender = inferGenderFromName(userName);
+        }
+        
+        const helpPhrase = userGender === 'female' || userGender === 'feminino' ? 'ajudá-la' : 'ajudá-lo';
+        const greeting = userName ? `, ${userName}` : '';
+
+        return {
+          aiResponse: `Sem problemas! Seus dados básicos já foram salvos. Como posso ajud${helpPhrase} hoje${greeting}? 😊`,
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext: cleanedContext,
+          telemetryData: {
+            intent: 'onboarding_completed',
+            confidence: 1.0,
+            decision_method: 'user_declines_additional_data',
+            flow_lock_active: false,
+            processing_time_ms: 0,
+            model_used: undefined
+          }
+        };
+      }
+    }
+
+    // === PASSO 4 — ANIVERSÁRIO ===
+    if (currentStep === 'need_birthday') {
+      const maybeBirthDate = extractBirthDate(messageText);
+
+      if (!maybeBirthDate) {
+        const lock = this.flowManager.startFlowLock('onboarding', 'need_birthday');
+        const updatedContext = await mergeEnhancedConversationContext(
+          userPhone, tenantId, { ...context, flow_lock: lock }
+        );
+
+        return {
+          aiResponse: `Por favor, informe sua data de aniversário no formato dd/mm/aaaa (exemplo: 15/03/1990)`,
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext,
+          telemetryData: {
+            intent: 'onboarding',
+            confidence: 1.0,
+            decision_method: 'invalid_birthday_format',
+            flow_lock_active: true,
+            processing_time_ms: 0,
+            model_used: undefined
+          }
+        };
+      }
+
+      // Persistir data de aniversário
+      const normalizedPhoneForBirthday = userPhone.replace(/[\s\-\(\)]/g, '');
+      await supabaseAdmin
+        .from('users')
+        .upsert({ phone: normalizedPhoneForBirthday, birth_date: maybeBirthDate }, { onConflict: 'phone' });
+
+      // Avançar para ENDEREÇO
+      const nextLock = this.flowManager.startFlowLock('onboarding', 'need_address');
+      const updatedContext = await mergeEnhancedConversationContext(
+        userPhone, tenantId, { ...context, flow_lock: nextLock }
+      );
+
+      return {
+        aiResponse: `Obrigado! 🏠 Por último, pode me informar seu endereço? (rua, número, bairro, cidade)`,
+        shouldSendWhatsApp: true,
+        conversationOutcome: null,
+        updatedContext,
+        telemetryData: {
+          intent: 'onboarding',
+          confidence: 1.0,
+          decision_method: 'birthday_saved',
+          flow_lock_active: true,
+          processing_time_ms: 0,
+          model_used: undefined
+        }
+      };
+    }
+
+    // === PASSO 5 — ENDEREÇO ===
+    if (currentStep === 'need_address') {
+      const address = messageText.trim();
+
+      if (!address || address.length < 10) {
+        const lock = this.flowManager.startFlowLock('onboarding', 'need_address');
+        const updatedContext = await mergeEnhancedConversationContext(
+          userPhone, tenantId, { ...context, flow_lock: lock }
+        );
+
+        return {
+          aiResponse: `Por favor, informe um endereço mais completo (rua, número, bairro, cidade)`,
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext,
+          telemetryData: {
+            intent: 'onboarding',
+            confidence: 1.0,
+            decision_method: 'incomplete_address',
+            flow_lock_active: true,
+            processing_time_ms: 0,
+            model_used: undefined
+          }
+        };
+      }
+
+      // Persistir endereço como JSON
+      const normalizedPhoneForAddress = userPhone.replace(/[\s\-\(\)]/g, '');
+      const addressData = { full_address: address, created_at: new Date().toISOString() };
+      
+      await supabaseAdmin
+        .from('users')
+        .upsert({ phone: normalizedPhoneForAddress, address: addressData }, { onConflict: 'phone' });
+
+      // Finalizar onboarding completo
+      const cleanedContext = await mergeEnhancedConversationContext(
+        userPhone, tenantId, { ...context, flow_lock: null }
+      );
+
+      // Buscar dados do usuário para personalização
+      const normalizedPhone = userPhone.replace(/[\s\-\(\)]/g, '');
+      let userName = '';
+      let userGender: string | undefined = undefined;
+      
+      try {
+        // Primeiro tentar buscar apenas o nome (que sabemos que existe)
+        const userNameData = await supabaseAdmin
+          .from('users')
+          .select('name')
+          .eq('phone', normalizedPhone)
+          .single();
+        userName = userNameData.data?.name || '';
+
+        // Tentar buscar gender apenas se necessário
+        try {
+          const userGenderData = await supabaseAdmin
+            .from('users')
+            .select('gender')
+            .eq('phone', normalizedPhone)
+            .single();
+          userGender = (userGenderData.data as any)?.gender;
+        } catch (genderError) {
+          // Ignora erro se gender não existir - será inferido do nome
+          console.log('🔧 Campo gender não disponível, inferindo do nome');
+        }
+      } catch (error) {
+        console.log('❌ Erro ao buscar dados do usuário:', error);
+      }
+      
+      // Se não temos gender da DB, inferir do nome
+      if (!userGender && userName) {
+        userGender = inferGenderFromName(userName);
+      }
+      
+      const helpPhrase = userGender === 'female' || userGender === 'feminino' ? 'ajudá-la' : 'ajudá-lo';
+      const greeting = userName ? `, ${userName}` : '';
+
+      return {
+        aiResponse: `Excelente! 🎉 Agora temos seu perfil completo. Como posso ajud${helpPhrase} hoje${greeting}? 😊`,
+        shouldSendWhatsApp: true,
+        conversationOutcome: null,
+        updatedContext: cleanedContext,
+        telemetryData: {
+          intent: 'onboarding_completed',
+          confidence: 1.0,
+          decision_method: 'complete_onboarding_with_additional_data',
+          flow_lock_active: false,
+          processing_time_ms: 0,
+          model_used: undefined
+        }
+      };
+    }
+
+    // Fallback seguro: voltar para NOME
+    const lock = this.flowManager.startFlowLock('onboarding', 'need_name');
+    const fallbackCtx = await mergeEnhancedConversationContext(userPhone, tenantId, { ...context, flow_lock: lock });
+
+    return {
+      aiResponse: `Vamos começar — qual é seu nome completo?`,
+      shouldSendWhatsApp: true,
+      conversationOutcome: null,
+      updatedContext: fallbackCtx,
+      telemetryData: {
+        intent: 'onboarding',
+        confidence: 1.0,
+        decision_method: 'fallback',
+        flow_lock_active: true,
+        processing_time_ms: 0,
+        model_used: undefined
+      }
+    };
   }
 
   /**
    * Handlers especiais
    */
-  
-  private async handleExpiredFlow(context: EnhancedConversationContext, message: string): Promise<WebhookOrchestrationResult> {
+  private async handleExpiredFlow(context: EnhancedConversationContext, message: string, userPhone: string): Promise<WebhookOrchestrationResult> {
     const cleanedContext = await mergeEnhancedConversationContext(
-      'temp-user',
+      userPhone,
       context.tenant_id,
       { ...context, flow_lock: null }
     );
-    
+
     return {
       aiResponse: message,
       shouldSendWhatsApp: true,
@@ -525,7 +1727,7 @@ export class WebhookFlowOrchestratorService {
         decision_method: 'timeout',
         flow_lock_active: false,
         processing_time_ms: 0,
-        model_used: 'timeout' // 🚀 Modelo de timeout para telemetry
+        model_used: undefined
       }
     };
   }
@@ -542,7 +1744,59 @@ export class WebhookFlowOrchestratorService {
         decision_method: 'timeout',
         flow_lock_active: !!context.flow_lock?.active_flow,
         processing_time_ms: 0,
-        model_used: 'timeout_warning' // 🚀 Modelo de warning para telemetry
+        model_used: undefined
+      }
+    };
+  }
+
+  /**
+   * Handler para timeout checking - Pergunta se usuário ainda está presente
+   */
+  private async handleTimeoutChecking(context: EnhancedConversationContext, message: string, userPhone: string, tenantId: string): Promise<WebhookOrchestrationResult> {
+    // Marcar que estamos no estágio de checking
+    const updatedLock = this.flowManager.markTimeoutStage(context, 'checking');
+    const updatedContext = await mergeEnhancedConversationContext(
+      userPhone, tenantId, { ...context, flow_lock: updatedLock }
+    );
+    
+    return {
+      aiResponse: message,
+      shouldSendWhatsApp: true,
+      conversationOutcome: 'timeout_checking',
+      updatedContext,
+      telemetryData: {
+        intent: 'timeout_checking',
+        confidence: 1.0,
+        decision_method: 'timeout',
+        flow_lock_active: !!context.flow_lock?.active_flow,
+        processing_time_ms: 0,
+        model_used: undefined
+      }
+    };
+  }
+
+  /**
+   * Handler para timeout finalizing - Despedida amigável antes de encerrar
+   */
+  private async handleTimeoutFinalizing(context: EnhancedConversationContext, message: string, userPhone: string, tenantId: string): Promise<WebhookOrchestrationResult> {
+    // Marcar que estamos no estágio final e programar para encerrar logo
+    const updatedLock = this.flowManager.markTimeoutStage(context, 'finalizing');
+    const updatedContext = await mergeEnhancedConversationContext(
+      userPhone, tenantId, { ...context, flow_lock: updatedLock }
+    );
+    
+    return {
+      aiResponse: message,
+      shouldSendWhatsApp: true,
+      conversationOutcome: 'timeout_finalizing',
+      updatedContext,
+      telemetryData: {
+        intent: 'timeout_finalizing',
+        confidence: 1.0,
+        decision_method: 'timeout',
+        flow_lock_active: !!context.flow_lock?.active_flow,
+        processing_time_ms: 0,
+        model_used: undefined
       }
     };
   }
@@ -550,7 +1804,7 @@ export class WebhookFlowOrchestratorService {
   private handleBlockedIntent(context: EnhancedConversationContext, intentResult: any): WebhookOrchestrationResult {
     const currentFlow = context.flow_lock?.active_flow;
     const message = `Vamos terminar ${currentFlow} primeiro. Como posso continuar ajudando?`;
-    
+
     return {
       aiResponse: message,
       shouldSendWhatsApp: true,
@@ -562,7 +1816,7 @@ export class WebhookFlowOrchestratorService {
         decision_method: intentResult.decision_method,
         flow_lock_active: true,
         processing_time_ms: 0,
-        model_used: 'blocked' // 🚀 Modelo de intent bloqueado para telemetry
+        model_used: (intentResult as any).model_used
       }
     };
   }
@@ -570,467 +1824,187 @@ export class WebhookFlowOrchestratorService {
   /**
    * Geradores de resposta
    */
-  
-  private async generatePricingResponse(tenantConfig: any, tenantId: string): Promise<string> {
-    try {
-      const serviceService = new ServiceService();
-      const result = await serviceService.findServices(tenantId, { limit: 10 });
-      const services = result.services || [];
-      
-      if (services.length === 0) {
-        return 'Entre em contato para informações sobre preços.';
-      }
-
-      let response = '💰 Nossos preços:\n\n';
-      services.slice(0, 5).forEach((service: any) => {
-        response += `• ${service.name}: R$ ${service.base_price ? service.base_price : service.price}\n`;
-      });
-      
-      return response;
-    } catch (error) {
-      console.error('❌ Erro ao buscar serviços:', error);
+  private generatePricingResponse(tenantConfig: any): string {
+    const services = tenantConfig?.services || [];
+    if (services.length === 0) {
       return 'Entre em contato para informações sobre preços.';
     }
+
+    let response = '💰 Nossos preços:\n\n';
+    services.slice(0, 5).forEach((service: any) => {
+      response += `• ${service.name}: R$ ${service.price}\n`;
+    });
+
+    return response;
   }
 
   private generateInstitutionalResponse(intent: string, tenantConfig: any): string {
     const policies = tenantConfig?.policies || {};
-    
+
     const responses: Record<string, string> = {
-      'institutional_address': policies.address || 'Consulte nosso site para endereço.',
-      'institutional_hours': policies.hours || 'Segunda a sexta, 8h às 18h.',
-      'institutional_policy': policies.cancellation || 'Cancelamentos com 24h de antecedência.',
-      'institutional_payment': 'Aceitamos dinheiro, cartão e PIX.',
-      'institutional_contact': tenantConfig?.phone || 'Entre em contato pelo WhatsApp.'
+      'institutional_address': policies.address || 'Infelizmente neste momento não possuo esta informação no sistema.',
+      'institutional_hours': policies.hours || 'Infelizmente neste momento não possuo esta informação no sistema.',
+      'institutional_policy': policies.cancellation || 'Infelizmente neste momento não possuo esta informação no sistema.',
+      'institutional_payment': tenantConfig?.payment || 'Infelizmente neste momento não possuo esta informação no sistema.',
+      'institutional_contact': tenantConfig?.phone || 'Infelizmente neste momento não possuo esta informação no sistema.'
     };
 
-    return responses[intent] || 'Informação não disponível no momento.';
+    return responses[intent] || 'Infelizmente neste momento não possuo esta informação no sistema.';
   }
 
   /**
    * 🚨 MÉTODO CRÍTICO: Gera resposta via OpenAI com contexto do Flow Lock
-   * Flow Lock apenas gerencia estado, OpenAI gera TODAS as respostas
+   * Flow Lock apenas gerencia estado, OpenAI gera TODAS as respostas (exceto comandos diretos)
    */
   private async generateAIResponseWithFlowContext(
     messageText: string,
     intentResult: any,
     flowDecision: any,
     context: EnhancedConversationContext,
-    tenantConfig: any
-  ): Promise<{ response: string; outcome: string; newFlowLock?: any; llmMetrics?: any }> {
-    
-    // Se vier onboarding do contexto, force o objetivo 'first_time'
-    const onboarding = (context as any)?.onboarding;
-    const onboardingStage = onboarding?.required ? (onboarding.stage || 'need_name') : null;
-    
-    console.log('🔍 [ORCHESTRATOR] Onboarding check:', { onboarding, onboardingStage });
-    
+    tenantConfig: any,
+    userPhone: string
+  ): Promise<{ response: string; outcome: string | null; newFlowLock?: any; llmMetrics?: any }> {
     const intent = intentResult.intent;
     const currentFlow: string | null = context.flow_lock?.active_flow || null;
     const currentStep: string | null = context.flow_lock?.step || null;
 
-    // === COMANDOS DIRETOS COM FLOW LOCK (sem OpenAI) ===
-    
+    // Comandos diretos (sem OpenAI)
     if (intent === 'flow_cancel') {
       const abandonedLock = this.flowManager.abandonFlow(context, 'user_requested');
-      return {
-        response: 'Cancelado. Como posso ajudar?',
-        outcome: 'flow_cancelled',
-        newFlowLock: abandonedLock
-      };
+      return { response: 'Cancelado. Como posso ajudar?', outcome: 'flow_cancelled', newFlowLock: abandonedLock };
     }
-
     if (intent === 'booking_confirm' && currentFlow === 'booking') {
       const completedLock = this.flowManager.completeFlow(context, 'appointment_booked');
-      return {
-        response: '✅ Agendamento confirmado! Você receberá um lembrete por email.',
-        outcome: 'appointment_booked',
-        newFlowLock: completedLock
-      };
+      return { response: '✅ Agendamento confirmado! Você receberá um lembrete por email.', outcome: 'appointment_booked', newFlowLock: completedLock };
     }
-
     if (intent === 'slot_selection' && currentFlow === 'booking') {
       const nextLock = this.flowManager.advanceStep(context, 'confirm', { selectedSlot: messageText });
-      return {
-        response: `Confirma agendamento no horário ${messageText}? Digite "confirmo" para finalizar.`,
-        outcome: 'booking_slot_selected',
-        newFlowLock: nextLock
-      };
+      return { response: `Confirma agendamento no horário ${messageText}? Digite "confirmo" para finalizar.`, outcome: 'booking_slot_selected', newFlowLock: nextLock };
     }
 
-    // === HANDLERS ESPECÍFICOS ANTES DO OPENAI ===
-    if (intent === 'pricing' || intent === 'services') {
-      const pricingLock = this.flowManager.startFlowLock('pricing', 'start');
-      const response = await this.generatePricingResponse(tenantConfig, context.tenant_id);
-      return {
-        response: response + ' Gostaria de agendar algum serviço?',
-        outcome: 'pricing_info_provided', // ✅ CORREÇÃO: pricing/services fornecem informação
-        newFlowLock: pricingLock
-      };
-    }
+    // OpenAI para todos os demais
+    const start = Date.now();
 
-    // === USAR OPENAI PARA TODAS AS OUTRAS RESPOSTAS ===
-    console.log('🚨 MÉTODO CHAMADO: generateAIResponseWithFlowContext');
-    console.log('🔍 DEBUG - Entrando no bloco OpenAI:', { intent, currentFlow, currentStep });
-    const startTime = Date.now();
-    
-    try {
-      // Construir contexto para OpenAI
-      const businessInfo = this.buildBusinessContext(tenantConfig);
-      const flowContext = this.buildFlowContext(currentFlow, currentStep, intent);
-      
-      // Ajustar prompt baseado em onboarding
-      let onboardingInstruction = '';
-      if (onboardingStage) {
-        const stageMessages = {
-          'need_name': 'Percebi que seu cadastro está incompleto. Para começar, qual é o seu nome completo?',
-          'need_email': 'Notei que seu cadastro está incompleto. Qual é o seu e-mail?', 
-          'need_gender': 'Para completar seu cadastro, você se identifica como masculino, feminino ou outro?'
-        };
-        onboardingInstruction = `
+    const businessInfo = this.buildBusinessContext(tenantConfig);
+    const flowCtx = this.buildFlowContext(currentFlow, currentStep, intent);
 
-🚀 ONBOARDING ATIVO - PRIORIDADE MÁXIMA:
-Seu cadastro está incompleto. Solicite APENAS UM dado por vez, nesta ordem: 1) nome completo; 2) e-mail; 3) gênero (masculino/feminino/outro). 
-Responda curto (1–2 frases). Não ofereça ver agendamentos enquanto não tiver nome e e-mail.
-Resposta sugerida para ${onboardingStage}: "${stageMessages[onboardingStage as keyof typeof stageMessages]}"`;
-      }
-      
-      const systemPrompt = `Você é a assistente oficial do ${tenantConfig.name || 'negócio'}. Seu papel é atender com clareza, honestidade e objetividade, sempre em tom natural.
+    const systemPrompt = `Você é a assistente oficial do ${tenantConfig?.name || 'negócio'}. Seu papel é atender com clareza, honestidade e objetividade, sempre em tom natural.
 
 ⚠️ REGRAS DE HONESTIDADE ABSOLUTA - OBRIGATÓRIAS:
 - NUNCA invente dados. NUNCA prometa retorno. NUNCA mencione atendente humano.
-- Para informações inexistentes (endereço, horários, pagamento, políticas) use SEMPRE a frase exata: "Infelizmente neste momento não possuo esta informação no sistema."
-- Use APENAS dados reais do sistema. Zero invenções. Zero promessas.
-- PROIBIDO inventar: horários, endereços, formas de pagamento, telefones, políticas.
+- Para informações inexistentes use exatamente: "Infelizmente neste momento não possuo esta informação no sistema."
+- Use APENAS dados reais do sistema.
 
-${businessInfo}${onboardingInstruction}
+${businessInfo}
 
 🎯 DADOS PERMITIDOS (somente se existirem):
 - Serviços com preços reais
-- Agendamentos confirmados  
+- Agendamentos confirmados
 - Profissionais cadastrados
 
 🚫 DADOS PROIBIDOS (sempre usar frase padrão):
 - Horários de funcionamento
-- Endereço/localização  
+- Endereço/localização
 - Formas de pagamento
 - Contatos telefônicos
 - Políticas não confirmadas
 
-IMPORTANTE: Responda APENAS com a mensagem honesta para o cliente. Se não souber, use exatamente: "Infelizmente neste momento não possou esta informação no sistema."`;
+Responda APENAS a mensagem do cliente, em pt-BR.`;
 
-      const userPrompt = `Mensagem do cliente: "${messageText}"
-Intenção detectada: ${intent}${onboardingStage ? `
-🚀 ONBOARDING: Coletar ${onboardingStage.replace('need_', '')}` : ''}`;
+    const userPrompt = `Mensagem do cliente: "${messageText}"
+Intenção detectada: ${intent}
+${flowCtx}`;
 
-      console.log('🤖 Chamando OpenAI com fallback escalonado...');
-      
-      // Função para calcular confidence do modelo
-      const calculateConfidence = (completion: any): number => {
-        try {
-          if (!completion.choices[0]?.logprobs?.content) {
-            const finishReason = completion.choices[0]?.finish_reason;
-            switch (finishReason) {
-              case 'stop': return 0.85;
-              case 'length': return 0.60;
-              case 'content_filter': return 0.30;
-              default: return 0.50;
-            }
-          }
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || 'gpt-4',
+        temperature: 0.7,
+        max_tokens: 300,
+        logprobs: true,
+        top_logprobs: 3,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ]
+      });
 
-          const logprobs = completion.choices[0].logprobs.content;
-          if (!logprobs || logprobs.length === 0) return 0.70;
+      const aiResponse = completion.choices[0]?.message?.content?.trim()
+        || 'Não entendi. Pode reformular, por favor?';
+      const latencyMs = Date.now() - start;
 
-          const avgLogprob = logprobs.reduce((sum: number, token: any) => {
-            return sum + (token.logprob || -2.0);
-          }, 0) / logprobs.length;
-
-          const confidence = Math.max(0.1, Math.min(0.99, Math.exp(avgLogprob / -2.0)));
-          return Math.round(confidence * 100) / 100;
-        } catch (error) {
-          return 0.70;
+      // Confiança heurística
+      const aiConfidenceScore = (() => {
+        const lp = completion.choices[0]?.logprobs?.content;
+        if (!lp || lp.length === 0) {
+          const fr = completion.choices[0]?.finish_reason;
+          return fr === 'stop' ? 0.85 : 0.6;
         }
-      };
-      
-      // Sistema de fallback escalonado usando configuração centralizada
-      // 🚀 CORREÇÃO: Ordem correta por custo (mais barato → mais caro)
-      // gpt-4o-mini ($0.00075) → gpt-3.5-turbo ($0.0035) → gpt-4 ($0.09)
-      const models = [MODELS.FAST, MODELS.BALANCED, MODELS.STRICT] as const;
-      let completion: any = null;
-      let modelUsed: string = MODELS.FAST; // Começar com o mais barato
-      let finalConfidenceScore = 0;
-      
-      for (let i = 0; i < models.length; i++) {
-        const model = models[i];
-        
-        try {
-          console.log(`🎯 Tentando modelo: ${model}`);
-          
-          completion = await this.openai.chat.completions.create({
-            model: model as any,
-            temperature: 0.7,
-            max_tokens: 300,
-            logprobs: true,
-            top_logprobs: 3,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt }
-            ]
-          });
-          
-          const text = completion.choices?.[0]?.message?.content ?? '';
-          
-          // 📊 Calcular confidence score apenas para métricas (não para fallback)
-          finalConfidenceScore = calculateConfidence(completion);
-          console.log(`📊 Confidence ${model}: ${finalConfidenceScore}`);
-          
-          // 🔍 Validação objetiva da resposta (substitui threshold artificial)
-          const { valid, validationScore } = this.validateAIResponse(text, messageText, intentResult);
-          
-          if (valid || i === models.length - 1) {
-            modelUsed = model as string;
-            console.log(`✅ Modelo escolhido: ${model} (validation: ${valid ? 'PASS' : 'FAIL-LAST'}, confidence: ${finalConfidenceScore})`);
-            
-            // 🚀 CRÍTICO: Capturar métricas apenas do modelo vencedor
-            const usage = completion.usage || {};
-            const apiCost = this.calculateOpenAICost(usage, model);
-            
-            console.log(`💰 Métricas do modelo vencedor: tokens=${usage.total_tokens}, cost=${apiCost}, model=${model}`);
-            break;
-          }
-          
-          console.log(`⚠️ Resposta não passou na validação, tentando próximo modelo...`);
-          
-        } catch (error: any) {
-          console.error(`❌ Erro no modelo ${model}:`, {
-            message: error?.message || 'Erro desconhecido',
-            status: error?.status || error?.response?.status,
-            statusText: error?.response?.statusText,
-            code: error?.code,
-            type: error?.type,
-            param: error?.param,
-            errorDetails: error?.error || error?.response?.data,
-            stack: error?.stack?.substring(0, 500) // Truncar stack trace
-          });
-          
-          // Detectar tipos específicos de erro da OpenAI API
-          if (error?.status === 400) {
-            console.log(`🚨 API Error 400 (Bad Request) - Possível problema com parâmetros do modelo ${model}`);
-          } else if (error?.status === 401) {
-            console.log(`🚨 API Error 401 (Unauthorized) - Problema de autenticação`);
-          } else if (error?.status === 403) {
-            console.log(`🚨 API Error 403 (Forbidden) - Modelo ${model} pode não estar disponível para sua conta`);
-          } else if (error?.status === 429) {
-            console.log(`🚨 API Error 429 (Rate Limit) - Rate limit atingido no modelo ${model}`);
-          } else if (error?.status === 500 || error?.status === 502 || error?.status === 503) {
-            console.log(`🚨 API Error ${error.status} - Erro interno da OpenAI no modelo ${model}`);
-          } else if (error?.code === 'ENOTFOUND' || error?.code === 'ETIMEDOUT') {
-            console.log(`🚨 Network Error - Problema de conectividade com OpenAI (${error.code})`);
-          } else {
-            console.log(`🚨 Erro não identificado no modelo ${model} - Type: ${error?.type || 'unknown'}`);
-          }
-          
-          if (i === models.length - 1) {
-            throw error; // Re-throw no último modelo
-          }
-          console.log(`🔄 Tentando próximo modelo...`);
-        }
-      }
+        const avg = lp.reduce((s: number, t: any) => s + (t.logprob || -2), 0) / lp.length;
+        const conf = Math.max(0.1, Math.min(0.99, Math.exp(avg / -2.0)));
+        return Math.round(conf * 100) / 100;
+      })();
 
-      // Verificar se temos uma completion válida
-      if (!completion) {
-        throw new Error('Nenhum modelo conseguiu gerar resposta');
-      }
-
-      const aiResponse = completion.choices[0]?.message?.content?.trim() || '🚨 FALLBACK: generateAIResponseWithFlowContext - Não entendi. Pode reformular?';
-      const latencyMs = Date.now() - startTime;
-
-      // Usar a função de confidence já definida
-      const aiConfidenceScore = calculateConfidence(completion);
-      console.log(`🔍 Final confidence score: ${aiConfidenceScore} com modelo: ${modelUsed}`);
-
-      // ✅ CAPTURAR MÉTRICAS LLM COM VALIDAÇÃO
       const usage = completion.usage;
-      const apiCost = this.calculateOpenAICost(usage, modelUsed);
-      
-      // ✅ VALIDAÇÃO: Verificar se usage está disponível
-      if (!usage || !usage.total_tokens) {
-        console.warn('⚠️ OpenAI usage data não disponível', { usage, completion });
-      }
-      
-      // ✅ CALCULAR PROCESSING COST de forma mais realista
-      const calculateProcessingCost = (apiCost: number | null): number => {
-        if (!apiCost) return 0.00001; // Custo mínimo para operações sem API
-        
-        // ✅ LÓGICA REALISTA: 10% do custo da API + custo fixo de infraestrutura
-        const percentageCost = apiCost * 0.10; // 10% do custo da API
-        const infrastructureCost = 0.00002; // Custo fixo de infraestrutura (Supabase, Redis, etc.)
-        const databaseCost = 0.00001; // Custo de 2 INSERTs na conversation_history
-        
-        return Math.round((percentageCost + infrastructureCost + databaseCost) * 100000) / 100000;
-      };
-      
+      const apiCost = this.calculateOpenAICost(usage);
+
       const llmMetrics = {
         prompt_tokens: usage?.prompt_tokens ?? null,
         completion_tokens: usage?.completion_tokens ?? null,
         total_tokens: usage?.total_tokens ?? null,
         api_cost_usd: apiCost,
         processing_cost_usd: (() => {
-          if (!apiCost) return 0.00001; // custo mínimo
-          const percentageCost = apiCost * 0.10; // 10% do custo da API
-          const infrastructureCost = 0.00002; // custo fixo de infraestrutura
-          const databaseCost = 0.00001; // custo de inserts no conversation_history
-          return Math.round((apiCost + percentageCost + infrastructureCost + databaseCost) * 100000) / 100000;
+          if (!apiCost) return 0.00001;
+          const pct = apiCost * 0.10;
+          const infra = 0.00002;
+          const db = 0.00001;
+          return Math.round((apiCost + pct + infra + db) * 100000) / 100000;
         })(),
         confidence_score: aiConfidenceScore,
-        latency_ms: latencyMs,
-        model_used: modelUsed // 🚀 Incluir modelo usado no fallback
+        latency_ms: latencyMs
       };
 
-      console.log('✅ OpenAI respondeu:', {
-        intent,
-        model: modelUsed,
-        tokens: usage?.total_tokens,
-        confidence: aiConfidenceScore,
-        latency: latencyMs,
-        cost: llmMetrics.api_cost_usd
-      });
-
-      // Determinar novo estado do Flow Lock baseado na intenção
       const newFlowLock = this.determineNewFlowState(intent, currentFlow, context);
-      
-      // 🚨 CORREÇÃO CRÍTICA: Outcome será determinado pelo shouldPersistOutcome, não aqui
-      // generateAIResponseWithFlowContext não deve determinar outcomes
-      const outcome = null as any; // AI responses não finalizam conversas por si só
+      return { response: aiResponse, outcome: null, newFlowLock, llmMetrics };
 
-      return {
-        response: aiResponse,
-        outcome,
-        newFlowLock,
-        llmMetrics
-      };
-
-    } catch (error: any) {
+    } catch (error) {
       console.error('❌ Erro ao chamar OpenAI:', error);
-      console.error('❌ Stack trace:', error?.stack);
-      console.error('❌ Error details:', { message: error?.message, code: error?.code, status: error?.status });
-      
-      // Fallback para resposta determinística
-      return await this.executeFlowAction(
-        messageText,
-        intentResult,
-        flowDecision,
-        context,
-        tenantConfig
-      );
+      // Fallback determinístico
+      return await this.executeFlowAction(messageText, intentResult, flowDecision, context, tenantConfig, userPhone);
     }
   }
 
-  /**
-   * Constrói contexto do negócio para OpenAI
-   */
   private buildBusinessContext(tenantConfig: any): string {
     const services = tenantConfig?.services?.slice(0, 5) || [];
     const policies = tenantConfig?.policies || {};
-    
+
     let context = `SOBRE O NEGÓCIO:
-- Nome: ${tenantConfig.name || 'Não informado'}
-- Tipo: ${tenantConfig.domain || 'Serviços gerais'}`;
+- Nome: ${tenantConfig?.name || 'Não informado'}
+- Tipo: ${tenantConfig?.domain || 'Serviços gerais'}`;
 
     if (services.length > 0) {
       context += `\n- Serviços: ${services.map((s: any) => `${s.name} (R$ ${s.price})`).join(', ')}`;
     }
-
-    if (policies.address) {
-      context += `\n- Endereço: ${policies.address}`;
-    }
-
-    if (policies.hours) {
-      context += `\n- Horário: ${policies.hours}`;
-    }
-
+    if (policies.address) context += `\n- Endereço: ${policies.address}`;
+    if (policies.hours) context += `\n- Horário: ${policies.hours}`;
     return context;
   }
 
-  /**
-   * Constrói contexto do fluxo atual para OpenAI
-   */
   private buildFlowContext(currentFlow: string | null, currentStep: string | null, intent: string | null): string {
-    if (!currentFlow) {
-      return `O cliente está iniciando uma nova conversa. Intenção detectada: ${intent}`;
+    if (!currentFlow) return `O cliente está iniciando uma nova conversa. Intenção: ${intent}`;
+    return `O cliente está no fluxo de ${currentFlow}, etapa: ${currentStep || 'inicial'}. Intenção: ${intent}`;
     }
 
-    return `O cliente está no meio de um fluxo de ${currentFlow}, etapa: ${currentStep || 'inicial'}. Intenção detectada: ${intent}`;
+  private calculateOpenAICost(usage: any): number | null {
+    if (!usage || !usage.prompt_tokens || !usage.completion_tokens) return null;
+    const promptCost = (usage.prompt_tokens / 1000) * (parseFloat(process.env.OPENAI_PROMPT_COST_PER_1K || '0.03'));
+    const completionCost = (usage.completion_tokens / 1000) * (parseFloat(process.env.OPENAI_COMPLETION_COST_PER_1K || '0.06'));
+    return Math.round((promptCost + completionCost) * 100000) / 100000;
   }
 
-  /**
-   * Calcula custo estimado da chamada OpenAI
-   */
-  private calculateOpenAICost(usage: any, model?: string): number | null {
-    if (!usage || !usage.prompt_tokens || !usage.completion_tokens) {
-      return null;
-    }
-
-    // 💰 CUSTOS CORRETOS POR MODELO (por 1K tokens)
-    const modelCosts: Record<string, { prompt: number; completion: number }> = {
-      'gpt-4o-mini': { prompt: 0.00015, completion: 0.0006 },
-      'gpt-3.5-turbo': { prompt: 0.0015, completion: 0.002 },
-      'gpt-4': { prompt: 0.03, completion: 0.06 },
-      'gpt-4o': { prompt: 0.005, completion: 0.015 }
-    };
-
-    // Detectar modelo atual ou usar fallback genérico
-    const costs = modelCosts[model || 'gpt-4o-mini'] || modelCosts['gpt-4o-mini'];
-    
-    const promptCost = (usage.prompt_tokens / 1000) * costs!.prompt;
-    const completionCost = (usage.completion_tokens / 1000) * costs!.completion;
-    
-    return Math.round((promptCost + completionCost) * 1000000) / 1000000; // 6 casas decimais para precisão
-  }
-
-  /**
-   * Valida resposta do AI usando critérios simples e objetivos
-   * 🚀 CORREÇÃO: Se tem resposta válida, aceita. Se não tem, escala.
-   */
-  private validateAIResponse(text: string, userMessage: string, intentResult: any): { valid: boolean; validationScore: number } {
-    // ✅ VALIDAÇÃO SIMPLES: Resposta não-vazia = válida
-    const hasValidResponse = !!(text && text.trim().length > 0);
-    
-    // ✅ CHECK BÁSICO: Não contém padrões óbvios de erro
-    const errorPatterns = [
-      /\[erro\]/i,
-      /\[error\]/i,
-      /undefined/i,
-      /null$/i,
-      /^error:/i,
-      /^failed:/i
-    ];
-    
-    const hasErrorPattern = errorPatterns.some(pattern => pattern.test(text));
-    
-    // ✅ LÓGICA SIMPLES: Tem resposta válida E não tem erro = aceita
-    const valid = hasValidResponse && !hasErrorPattern;
-    const validationScore = valid ? 1.0 : 0.0;
-
-    return { valid, validationScore };
-  }
-
-  /**
-   * Determina novo estado do Flow Lock baseado na intenção
-   */
   private determineNewFlowState(intent: string | null, currentFlow: string | null, context: EnhancedConversationContext): any {
     const targetFlow = this.mapIntentToFlow(intent);
-    
-    if (!targetFlow) {
-      return context.flow_lock; // Manter estado atual
-    }
-
-    // Iniciar novo fluxo se não há fluxo ativo
-    if (!currentFlow) {
-      return this.flowManager.startFlowLock(targetFlow, 'start');
-    }
-
-    // Continuar fluxo atual
+    if (!targetFlow) return context.flow_lock;
+    if (!currentFlow) return this.flowManager.startFlowLock(targetFlow, 'start');
     return context.flow_lock;
   }
 
@@ -1038,73 +2012,42 @@ Intenção detectada: ${intent}${onboardingStage ? `
    * Detecta se a conversa está finalizada e deve persistir outcome
    * Retorna null se conversa ainda está em andamento
    */
-  private shouldPersistOutcome(intent: string | null, response: string, context: EnhancedConversationContext): string | null {
-    // 🚨 CORREÇÃO CRÍTICA: Outcome deve ser NULL para conversas em andamento
-    // Só persistir quando conversa REALMENTE finaliza
-    
-    // 1. INTENTS FINALIZADORES EXPLÍCITOS - apenas confirmações que criam/modificam appointments
-    const trulyFinalizingIntents = [
-      'booking_confirm', 'cancel_confirm', 'reschedule_confirm'
-    ];
-    
-    if (intent && trulyFinalizingIntents.includes(intent)) {
-      return this.determineConversationOutcome(intent, response);
+  private shouldPersistOutcome(intent: string | null, _response: string, _context: EnhancedConversationContext): string | null {
+    const finalizers = ['booking_confirm', 'cancel_confirm', 'reschedule_confirm'];
+    if (intent && finalizers.includes(intent)) {
+      return this.determineConversationOutcome(intent, _response);
     }
-    
-    // 2. TIMEOUT DE INATIVIDADE - só será processado pelo cronjob, não aqui
-    // Removida lógica de timeout pois será handled pelo ConversationOutcomeProcessor
-    
-    // 3. TODAS AS OUTRAS INTERAÇÕES - conversa ainda em andamento
-    // Includes: greeting, pricing, booking, address, business_hours, etc.
-    // Essas são interações dentro da conversa, não o fim dela
     return null;
   }
 
-  /**
-   * Determina outcome da conversa baseado na intenção e resposta
-   * APENAS para intents que realmente finalizam conversa
-   */
-  private determineConversationOutcome(intent: string | null, response: string): string {
-    // Mapear APENAS intents finalizadores para outcomes válidos
-    const finalizingOutcomeMap: Record<string, string> = {
+  private determineConversationOutcome(intent: string | null, _response: string): string {
+    const map: Record<string, string> = {
       'booking_confirm': 'appointment_created',
-      'cancel_confirm': 'appointment_cancelled', 
+      'cancel_confirm': 'appointment_cancelled',
       'reschedule_confirm': 'appointment_modified'
     };
-
-    // Se não é um intent finalizador, isso é um erro de lógica
-    if (!intent || !finalizingOutcomeMap[intent]) {
-      console.error(`🚨 ERRO: determineConversationOutcome chamado para intent não-finalizador: ${intent}`);
+    if (!intent || !map[intent]) {
+      console.error(`determineConversationOutcome chamado com intent não-finalizador: ${intent}`);
       return 'error';
     }
-
-    return finalizingOutcomeMap[intent];
+    return map[intent];
   }
 
-  /**
-   * DETECTAR OUTCOME QUANDO CONVERSA FINALIZA
-   * APENAS análise - persistência é responsabilidade do cronjob
-   */
   async checkAndPersistConversationOutcome(
     sessionId: string,
     trigger: 'timeout' | 'flow_completion' | 'appointment_action' | 'user_exit' = 'flow_completion'
   ): Promise<void> {
     try {
-      // APENAS analisar - SEM persistir (responsabilidade do cronjob)
       const analysis = await this.outcomeAnalyzer.analyzeConversationOutcome(sessionId, trigger);
-      
       if (analysis) {
-        console.log(`🎯 Conversation outcome analyzed: ${analysis.outcome} (${analysis.confidence}) - will be persisted by cronjob`);
+        const success = await this.outcomeAnalyzer.persistOutcomeToFinalMessage(analysis);
+        if (success) console.log(`🎯 Conversation outcome persisted: ${analysis.outcome} (${analysis.confidence})`);
       }
     } catch (error) {
       console.error('❌ Failed to check conversation outcome:', error);
     }
   }
 
-  /**
-   * EXECUTAR ANÁLISE PERIÓDICA DE CONVERSAS FINALIZADAS
-   * Deve ser chamado por cronjob para processar conversas abandonadas por timeout
-   */
   async processFinishedConversations(): Promise<void> {
     try {
       await this.outcomeAnalyzer.checkForFinishedConversations();
@@ -1114,119 +2057,91 @@ Intenção detectada: ${intent}${onboardingStage ? `
   }
 
   /**
-   * 🚨 FUNÇÃO REMOVIDA: tryDeterministicResponse
-   * Todas as respostas devem usar OpenAI para capturar métricas LLM corretas
+   * Classificação LLM determinística e fechada
    */
+  private async classifyIntentWithLLM(text: string): Promise<string | null> {
+    const SYSTEM_PROMPT = `Você é um classificador de intenção. Classifique a mensagem do usuário em EXATAMENTE UMA das chaves abaixo e nada além disso.
 
-  /**
-   * CLASSIFICAÇÃO DE INTENTS COM SISTEMA DE FALLBACK LLM
-   * Usa o mesmo sistema de fallback: 3.5-turbo → 4o-mini → 4
-   */
-  private async classifyIntentWithLLMFallback(messageText: string): Promise<{ intent: string | null; confidence: number } | null> {
-    console.log('🎯 Iniciando classificação de intent com fallback LLM...');
+INTENTS PERMITIDAS:
+- greeting
+- services
+- pricing
+- availability
+- my_appointments
+- address
+- payments
+- business_hours
+- cancel
+- reschedule
+- confirm
+- modify_appointment
+- policies
+- wrong_number
+- test_message
+- booking_abandoned
+- noshow_followup
 
-    // Intents permitidos (baseado no ai-complex.service.js original)
-    const ALLOWED_INTENTS = [
-      'greeting', 'booking', 'pricing',
-      'address', 'business_hours', 'services',
-      'flow_cancel', 'my_appointments'
-    ];
+Regras:
+1) Responda SOMENTE com JSON no formato: {"intent":"<uma-das-chaves-ou-null>"}.
+2) Se NÃO for possível classificar com segurança, responda exatamente: {"intent":null}.
+3) Não explique. Não inclua texto extra.`;
 
-    const systemPrompt = `Classifique a intenção do usuário usando APENAS as opções abaixo:
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        temperature: 0,
+        top_p: 0,
+        max_tokens: 20,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: `Mensagem do usuário (pt-BR):\n---\n${text}\n---\nClassifique.` }
+        ]
+      });
 
-${ALLOWED_INTENTS.join(', ')}
+      const raw = completion.choices?.[0]?.message?.content?.trim() || '';
 
-Instruções:
-- Responda APENAS com o nome da intenção
-- Se não se encaixar em nenhuma categoria, não responda nada
-- Seja preciso e conciso
-
-Exemplos:
-- "Olá" → greeting
-- "Quero marcar" → booking  
-- "Quanto custa?" → pricing
-- "Onde vocês ficam?" → address
-- "Que horas abrem?" → business_hours
-- "Quais serviços?" → services
-- "Cancelar" → flow_cancel
-- "Meus agendamentos" → my_appointments
-
-Opções válidas: ${ALLOWED_INTENTS.join(', ')}`;
-
-    // Sistema de fallback usando configuração centralizada
-    // 🚀 CORREÇÃO: Ordem correta por custo (mais barato → mais caro)
-    // gpt-4o-mini ($0.00075) → gpt-3.5-turbo ($0.0035) → gpt-4 ($0.09)
-    const models = [MODELS.FAST, MODELS.BALANCED, MODELS.STRICT] as const;
-    
-    for (let i = 0; i < models.length; i++) {
-      const model = models[i];
-      
+      // Tentativa 1: parse direto
       try {
-        console.log(`🎯 Tentando classificar intent com modelo: ${model}`);
-        
-        const completion = await this.openai.chat.completions.create({
-          model: model as any,
-          temperature: 0,
-          max_tokens: 8,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: messageText }
-          ]
-        });
-
-        const raw = (completion.choices?.[0]?.message?.content || '').trim().toLowerCase();
-        const intent = raw.replace(/[^a-z_]/g, ''); // sanitiza
-
-        // 🔍 Validação objetiva: intent deve estar na lista permitida
-        const isValidIntent = ALLOWED_INTENTS.includes(intent as any);
-        
-        if (isValidIntent || i === models.length - 1) {
-          // Calcular confidence apenas para métricas (não para fallback)
-          const confidence = intent === 'general' ? 0.5 : 0.8;
-          
-          console.log(`✅ Intent classificado: ${intent} (modelo: ${model}, valid: ${isValidIntent ? 'PASS' : 'FAIL-LAST'}, confidence: ${confidence})`);
-          
-          if (isValidIntent) {
-            // 🚀 CRÍTICO: Log do modelo vencedor para classificação
-            console.log(`💡 Intent classificado pelo modelo vencedor: ${model} (${intent}, confidence: ${confidence})`);
-            return { intent, confidence };
-          } else {
-            // Último modelo e intent inválido
-            console.log(`❌ Último modelo ${model} retornou intent inválido: ${intent}`);
-            return null;
-          }
-        }
-        
-        console.log(`⚠️ Intent inválido: ${intent}, tentando próximo modelo...`)
-        
-      } catch (error: any) {
-        console.error(`❌ Erro no modelo ${model} para classificação de intent:`, {
-          message: error?.message || 'Erro desconhecido',
-          status: error?.status || error?.response?.status,
-          statusText: error?.response?.statusText,
-          code: error?.code,
-          type: error?.type,
-          param: error?.param,
-          errorDetails: error?.error || error?.response?.data
-        });
-        
-        // Detectar tipos específicos de erro da OpenAI API para classificação
-        if (error?.status === 403) {
-          console.log(`🚨 CLASSIFICAÇÃO - Modelo ${model} pode não estar disponível (Error 403)`);
-        } else if (error?.status === 429) {
-          console.log(`🚨 CLASSIFICAÇÃO - Rate limit atingido no modelo ${model}`);
-        } else if (error?.status === 400) {
-          console.log(`🚨 CLASSIFICAÇÃO - Parâmetros inválidos para modelo ${model}`);
-        }
-        
-        if (i === models.length - 1) {
-          throw error; // Re-throw no último modelo
-        }
-        console.log(`🔄 Tentando próximo modelo para classificação...`);
+        const parsed = JSON.parse(raw);
+        const intent = (parsed && typeof parsed.intent !== 'undefined') ? parsed.intent : null;
+        if (intent === null) return null;
+        return INTENT_KEYS.includes(intent as any) ? intent : null;
+      } catch {
+        // Tentativa 2: extrair via regex simples
+        const m = raw.match(/\"intent\"\s*:\s*\"([a-zA-Z0-9_]+)\"/);
+        if (m && m[1] && INTENT_KEYS.includes(m[1] as any)) return m[1];
+        if (/\{\s*\"intent\"\s*:\s*null\s*\}/.test(raw)) return null;
+        return null;
       }
-    }
 
-    return null;
+    } catch (error) {
+      console.error('❌ LLM intent classification failed:', error);
+      return null;
+    }
   }
 
+  /**
+   * Atualiza contexto com novo estado do flow
+   */
+  private async updateContextWithFlowState(
+    userId: string,
+    tenantId: string,
+    currentContext: EnhancedConversationContext,
+    newFlowLock: any,
+    intentResult: any
+  ): Promise<EnhancedConversationContext> {
+    return await mergeEnhancedConversationContext(
+      userId,
+      tenantId,
+      {
+        ...currentContext,
+        flow_lock: newFlowLock || currentContext.flow_lock
+      },
+      {
+        intent: intentResult.intent,
+        confidence: intentResult.confidence,
+        decision_method: intentResult.decision_method
+      }
+    );
+  }
 }

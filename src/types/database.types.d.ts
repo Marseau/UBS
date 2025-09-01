@@ -840,6 +840,11 @@ export type Database = {
           phone: string;
           preferences: Json | null;
           updated_at: string | null;
+          address: Json | null;
+          birth_date: string | null;
+          gender: string | null;
+          emergency_contact: Json | null;
+          account_type: string | null;
         };
         Insert: {
           created_at?: string | null;
@@ -849,6 +854,11 @@ export type Database = {
           phone: string;
           preferences?: Json | null;
           updated_at?: string | null;
+          address?: Json | null;
+          birth_date?: string | null;
+          gender?: string | null;
+          emergency_contact?: Json | null;
+          account_type?: string | null;
         };
         Update: {
           created_at?: string | null;
@@ -858,6 +868,11 @@ export type Database = {
           phone?: string;
           preferences?: Json | null;
           updated_at?: string | null;
+          address?: Json | null;
+          birth_date?: string | null;
+          gender?: string | null;
+          emergency_contact?: Json | null;
+          account_type?: string | null;
         };
         Relationships: [];
       };
@@ -1120,6 +1135,7 @@ export type Database = {
         };
         Relationships: [];
       };
+      /** @deprecated Use tenant_metrics and platform_metrics instead. This table is deprecated as of January 2025. */
       analytics_system_metrics: {
         Row: {
           id: string;
@@ -1156,6 +1172,7 @@ export type Database = {
         };
         Relationships: [];
       };
+      /** @deprecated Use tenant_metrics instead. This table is deprecated as of January 2025. */
       analytics_tenant_metrics: {
         Row: {
           id: string;
@@ -1200,6 +1217,7 @@ export type Database = {
           },
         ];
       };
+      /** @deprecated This table is deprecated as of January 2025. Use the new optimized metrics system instead. */
       analytics_job_executions: {
         Row: {
           id: string;
