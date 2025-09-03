@@ -648,19 +648,6 @@ async function initializeServices() {
       console.error('❌ Failed to initialize New Metrics Cron Service:', error);
     }
     
-    // Initialize Conversation Outcome Processor
-    try {
-      const { conversationOutcomeProcessor } = await import('./cron/conversation-outcome-processor');
-      
-      // Start conversation outcome processor (runs every 15 minutes)
-      conversationOutcomeProcessor.start();
-      
-      console.log('✅ Conversation Outcome Processor initialized successfully');
-      console.log('⏰ Conversation outcome cronjob scheduled for every 15 minutes');
-      
-    } catch (error) {
-      console.error('❌ Failed to initialize Conversation Outcome Processor:', error);
-    }
     
     // Initialize COMPREHENSIVE METRICS SYSTEM (TODAS AS 14+ MÉTRICAS)
     if (process.env.ENABLE_COMPREHENSIVE_METRICS !== 'false') {
