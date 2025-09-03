@@ -274,16 +274,19 @@ async function getPreviousEnhancedContext(
 
     // CORREÇÃO: Buscar conversas mais recentes e agrupar por session_id
     // IMPORTANTE: Excluir conversas que já foram finalizadas pelo cronjob
+    // TESTE RLS: Usar query mais simples para diagnosticar problema de permissão
+    console.log(`🔍 [RLS-TEST] Testando query conversation_history para user_id=${user.id}, tenant_id=${tenantId}`);
+    
     const { data: recentConversations, error } = await supabaseAdmin
       .from('conversation_history')
-      .select('conversation_context, created_at')
+      .select('conversation_context, created_at, user_id, tenant_id')
       .eq('user_id', user.id)
       .eq('tenant_id', tenantId)
-      .is('conversation_outcome', null) // Apenas conversas ainda ativas
       .order('created_at', { ascending: false })
-      .limit(50); // Pegar mais registros para análise de sessões
+      .limit(10); // Reduzir limite para debug
 
     console.log(`🔍 [DEBUG] Query conversation_history - UserID: ${user.id}, TenantID: ${tenantId}, Encontrados: ${recentConversations?.length || 0}, Error:`, error);
+    console.log(`🔍 [RECOVERY-DEBUG] Query details - SQL: conversation_history WHERE user_id='${user.id}' AND tenant_id='${tenantId}' AND conversation_outcome IS NULL`);
 
     if (error || !recentConversations || recentConversations.length === 0) {
       return null;
@@ -341,8 +344,10 @@ async function getPreviousEnhancedContext(
         
         const context = JSON.parse(rawContextStr);
         
-        // Validar se tem session_id válido
-        if (context.session_id && isValidUUID(context.session_id)) {
+        // Validar se tem session_id válido (pode ser UUID ou tenant:phone format)
+        console.log(`🔍 [VALIDATION] session_id: "${context.session_id}", isUUID: ${isValidUUID(context.session_id)}, hasColon: ${context.session_id?.includes(':')}`);
+        
+        if (context.session_id && (isValidUUID(context.session_id) || context.session_id.includes(':'))) {
           const sessionId = context.session_id;
           const currentTimestamp = conversation.created_at;
           

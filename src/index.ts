@@ -2,6 +2,10 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import * as dotenv from 'dotenv';
+import helmet from 'helmet';
+import cors from 'cors';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
 import { AdminAuthMiddleware } from './middleware/admin-auth';
 import { verifyActiveSubscription } from './middleware/subscription-auth';
 import { redisCacheService } from './services/redis-cache.service';
@@ -19,19 +23,61 @@ const PORT = process.env.PORT || 3000;
 // Confiar no proxy (dev.ubs.app.br → localhost)
 app.set('trust proxy', 1);
 
-// Middleware: RAW body para webhooks WhatsApp (V3 oficial)
-try {
-  const whatsappV3WebhookPath = '/api/whatsapp-v3/webhook';
-  const whatsappOfficialWebhookPath = '/api/whatsapp/webhook';
-  // raw body para verificar assinatura
-  // @ts-ignore: express.raw disponível
-  app.use(whatsappV3WebhookPath, express.raw({ type: 'application/json' }));
-  // @ts-ignore: express.raw disponível
-  app.use(whatsappOfficialWebhookPath, express.raw({ type: 'application/json' }));
-} catch (_) { /* noop */ }
+// ============================================================================
+// CONFIGURAÇÃO DE SEGURANÇA BASELINE
+// ============================================================================
 
-// Demais rotas usam JSON normal
-app.use(express.json());
+// 🛡️ Helmet: Headers de segurança
+app.use(helmet({
+  contentSecurityPolicy: false, // Desabilitar CSP para permitir inline scripts no dashboard
+  crossOriginEmbedderPolicy: false // Desabilitar para permitir embeds externos
+}));
+
+// 🌐 CORS: Configuração segura
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://dev.ubs.app.br', 'https://app.ubs.saas.com.br'] 
+    : ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Demo-Token', 'X-Demo-Session']
+};
+app.use(cors(corsOptions));
+
+// 📊 Morgan: Logging de requests
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// 🚦 Rate Limiting: Proteção contra abuse
+const limiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 1200, // máximo 1200 requests por minuto por IP
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Exceções para webhooks críticos
+  skip: (req) => {
+    return req.path.includes('/webhook') || req.path.includes('/api/whatsapp');
+  }
+});
+app.use(limiter);
+
+// 1) RAW só para webhooks (usar wildcard)
+app.use('/api/whatsapp-v3/webhook', express.raw({ type: '*/*' }));
+app.use('/api/whatsapp/webhook', express.raw({ type: '*/*' }));
+
+// 2) JSON global, exceto nos webhooks
+const jsonParser = express.json();
+app.use((req, res, next) => {
+  if (req.path === '/api/whatsapp-v3/webhook' || req.path === '/api/whatsapp/webhook') {
+    return next();
+  }
+  return jsonParser(req, res, next);
+});
+
+// 3) Resolução determinística de tenant (aplicar aos webhooks)
+import { resolveTenant } from './middleware/resolve-tenant';
+app.use('/api/whatsapp-v3/webhook', resolveTenant);
+app.use('/api/whatsapp/webhook', resolveTenant);
 
 // Servir arquivos estáticos da pasta frontend
 app.use('/src/frontend', express.static(path.join(__dirname, 'frontend')));
@@ -48,7 +94,7 @@ app.use('/api/admin', (req, res, next) => {
 });
 
 // Basic health check route
-app.get('/api/health', (req, res) => {
+app.get('/api/health', (_req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
@@ -448,58 +494,58 @@ const frontendPath: string = resolveFrontendPath(candidatePaths);
 console.log('🖥️ Frontend path using:', frontendPath);
 
 // Routes - Define these BEFORE static middleware to ensure they take precedence
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'landing.html'));
 });
 
-app.get('/admin', (req, res) => {
+app.get('/admin', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'dashboard-main.html'));
 });
 
-app.get('/login', (req, res) => {
+app.get('/login', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'login.html'));
 });
 
-app.get('/register', (req, res) => {
+app.get('/register', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'register.html'));
 });
 
-app.get('/demo', (req, res) => {
+app.get('/demo', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'demo.html'));
 });
 
-app.get('/forgot-password', (req, res) => {
+app.get('/forgot-password', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'forgot-password.html'));
 });
 
-app.get('/domain-details', (req, res) => {
+app.get('/domain-details', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'domain-details.html'));
 });
 
 // Tenant Business Analytics Dashboard route
-app.get('/tenant-business-analytics', (req, res) => {
+app.get('/tenant-business-analytics', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'tenant-business-analytics.html'));
 });
 
 // Redirect old tenant platform dashboard to new business analytics
-app.get('/admin/tenant-platform', (req, res) => {
+app.get('/admin/tenant-platform', (_req, res) => {
   res.redirect('/tenant-business-analytics.html');
 });
 
-app.get('/dashboard-standardized', (req, res) => {
+app.get('/dashboard-standardized', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'dashboard-standardized.html'));
 });
 
-app.get('/dashboard-tenant-analysis', (req, res) => {
+app.get('/dashboard-tenant-analysis', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'dashboard-tenant-analysis.html'));
 });
 
-app.get('/dashboard-tenant-admin', (req, res) => {
+app.get('/dashboard-tenant-admin', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'dashboard-tenant-admin.html'));
 });
 
 // Test page for tenant redirect
-app.get('/test-tenant-redirect', (req, res) => {
+app.get('/test-tenant-redirect', (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'test-tenant-redirect.html'));
 });
 
@@ -515,7 +561,7 @@ app.use(express.static(frontendPath, {
   }
 }));
 
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
@@ -549,8 +595,8 @@ app.get('/__signature', (_req, res) => {
 let emailService: any = null;
 let subscriptionMonitor: any = null;
 let analyticsScheduler: any = null;
-let metricsCronService: any = null;
-let calendarSyncCron: any = null;
+let _metricsCronService: any = null;
+let _calendarSyncCron: any = null;
 
 async function initializeServices() {
   try {
@@ -638,7 +684,7 @@ async function initializeServices() {
         console.log('📊 Cobertura: 14+ métricas para todos os tenants (7d/30d/90d)');
         
         // Add manual execution endpoint
-        app.post('/api/admin/execute-comprehensive-metrics', authMiddleware.verifyToken, async (req, res) => {
+        app.post('/api/admin/execute-comprehensive-metrics', authMiddleware.verifyToken, async (_req, res) => {
           try {
             console.log('🚀 Execução manual do sistema de métricas iniciada...');
             const result = await executeAllMetrics();
@@ -782,7 +828,7 @@ async function initializeServices() {
         console.log('🚀 Inicializando Optimized Cron Service...');
         console.log('📋 Replacing: 21 legacy crons → 5 optimized crons');
         
-        const { optimizedCronService } = await import('./services/optimized-cron.service');
+        const { optimizedCronService: _optimizedCronService } = await import('./services/optimized-cron.service');
         console.log('✅ Optimized Cron Service initialized successfully - PRODUCTION READY');
       } catch (error) {
         console.error('❌ Failed to initialize Optimized Cron Service:', error);

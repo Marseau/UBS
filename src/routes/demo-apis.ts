@@ -1481,19 +1481,46 @@ router.get('/check-user', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing parameters' });
     }
 
-    const cleanUserPhone = userPhone.toString().replace(/\D/g, '');
+    // CORREÇÃO: Usar a mesma lógica de normalização complexa de telefone
+    const raw = String(userPhone || '').trim();
+    const digits = raw.replace(/\D/g, '');
+    const candidatesSet = new Set<string>();
+    
+    if (digits) {
+      candidatesSet.add(digits);
+      candidatesSet.add(`+${digits}`);
+      
+      if (digits.startsWith('55')) {
+        const local = digits.slice(2);
+        if (local) {
+          candidatesSet.add(local);
+          candidatesSet.add(`+${local}`);
+        }
+      } else {
+        candidatesSet.add(`55${digits}`);
+        candidatesSet.add(`+55${digits}`);
+      }
+    }
+    
+    const candidates = Array.from(candidatesSet);
+    const orClause = candidates.map(v => `phone.eq.${v}`).join(',');
 
-    // Apenas verifica se usuário já existe no banco
+    console.log(`🔍 [check-user] Buscando usuário - Phone: ${userPhone}, Candidates: ${candidates.join(',')}`);
+
+    // Buscar usuário usando a mesma lógica complexa
     const { data: existingUser, error } = await supabase
       .from('users')
-      .select('id')
-      .eq('phone', cleanUserPhone)
+      .select('id, phone, name')
+      .or(orClause)
+      .limit(1)
       .maybeSingle();
 
     if (error) {
       console.error('❌ Erro ao verificar usuário:', error);
       return res.status(500).json({ success: false, error: 'Erro ao verificar usuário' });
     }
+
+    console.log(`🔍 [check-user] Resultado - User encontrado:`, existingUser ? `ID: ${existingUser.id}, Phone: ${existingUser.phone}, Name: ${existingUser.name}` : 'NULL');
 
     // Retorna apenas se existe ou não
     return res.json({

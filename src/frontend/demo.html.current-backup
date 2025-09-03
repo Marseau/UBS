@@ -510,45 +510,6 @@
             text-align: left;
         }
 
-        /* System hint styles */
-        .system-hint {
-            margin: 2rem auto;
-            text-align: center;
-            animation: fadeInUp 0.3s ease;
-        }
-
-        .system-hint-content {
-            background: #fffbe6;
-            border: 1px solid #ffe58f;
-            color: #614700;
-            padding: 1rem 1.5rem;
-            border-radius: 12px;
-            font-size: 14px;
-            max-width: 80%;
-            margin: 0 auto;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .system-hint-content strong {
-            color: #8b6914;
-        }
-
-        @media (max-width: 768px) {
-            .system-hint-content {
-                max-width: 90%;
-                padding: 0.8rem 1rem;
-                font-size: 13px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .system-hint-content {
-                max-width: 95%;
-                padding: 0.7rem 0.8rem;
-                font-size: 12px;
-            }
-        }
-
         .chat-input-container {
             padding: 1rem 1.5rem;
             background: white;
@@ -636,51 +597,6 @@
         .chat-placeholder h4 {
             margin-bottom: 0.5rem;
             color: var(--text-dark);
-        }
-
-        /* User Prompt Styles */
-        .user-prompt .simple-icon {
-            font-size: 3rem;
-            color: var(--primary-color);
-            margin-bottom: 1rem;
-            opacity: 0.6;
-        }
-
-        .user-prompt h4 {
-            color: var(--text-dark);
-            margin-bottom: 0.8rem;
-            font-weight: 500;
-        }
-
-        .prompt-suggestions {
-            max-width: 400px;
-            margin: 1rem 0;
-        }
-
-        .suggestion-bubbles {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.4rem;
-            justify-content: center;
-            margin-top: 0.5rem;
-        }
-
-        .suggestion-bubble {
-            background: var(--border-color);
-            color: var(--text-dark);
-            padding: 0.4rem 0.7rem;
-            border-radius: 12px;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            border: 1px solid var(--border-color);
-            user-select: none;
-        }
-
-        .suggestion-bubble:hover {
-            background: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
         }
 
         .loading-indicator {
@@ -1066,13 +982,52 @@
         .notification.fade-out {
             animation: slideOutRight 0.3s ease-in;
         }
+
+        /* User Prompt Styles */
+        .user-prompt {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: var(--text-light);
+        }
+
+        .simple-icon i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.6;
+            color: var(--whatsapp-green);
+        }
+
+        .prompt-suggestions {
+            margin-top: 1.5rem;
+        }
+
+        .suggestion-buttons {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 0.75rem;
+        }
+
+        .suggestion-btn {
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .suggestion-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
     </style>
 </head>
 <body>
     <!-- Header -->
     <header class="header">
         <div class="container">
-            <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center">
                 <div class="logo-container">
                     <picture>
                         <source srcset="assets/images/optimized/UBS_Nac.webp" type="image/webp">
@@ -1080,18 +1035,26 @@
                     </picture>
                     <h1 class="brand-text">UBS Demo Interativa</h1>
                 </div>
-                <a href="/" class="btn btn-outline-primary btn-sm">
-                    <i class="fas fa-arrow-left me-2"></i>
-                    Voltar
-                </a>
+                <div class="d-flex align-items-center gap-3">
+                    <a href="/" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-arrow-left me-2"></i>
+                        Voltar
+                    </a>
+                    <div class="demo-badge">
+                        <i class="fas fa-play-circle me-2"></i>
+                        Teste Real com IA
+                    </div>
+                </div>
             </div>
         </div>
     </header>
 
     <!-- Main Content -->
     <div class="main-container">
-        <!-- Signup Section -->
-        <div class="signup-section" id="signupSection">
+        <!-- Content Container - mesmo tamanho para signup e chat -->
+        <div class="content-container">
+            <!-- Signup Section -->
+            <div class="signup-section" id="signupSection">
             <h2>Crie seu Demo</h2>
             <p class="subtitle">Preencha os dados abaixo para criar um tenant de demonstração e testar nossa IA especializada em tempo real.</p>
 
@@ -1115,7 +1078,7 @@
                     </label>
                     <input type="tel" class="form-control" id="userNumber" 
                            placeholder="+55 (11) 88888-8888" maxlength="19" required>
-                    <small id="userStatus" class="form-text text-muted">
+                    <small class="form-text text-muted">
                         <i class="fas fa-info-circle me-1"></i>Número que você usará para conversar com a IA
                     </small>
                 </div>
@@ -1425,7 +1388,6 @@
                 this.selectedDomain = null;
                 this.businessExists = false;
                 this.existingBusinessData = null;
-                this.userConnected = false;
                 
                 this.initializeEventListeners();
                 this.initializeDomainSelector();
@@ -1637,35 +1599,8 @@
                 });
 
                 // Validação do campo usuário para habilitar botão
-                let userVerificationTimeout;
-                
-                userInput.addEventListener('input', (e) => {
-                    // Clear previous timeout
-                    clearTimeout(userVerificationTimeout);
-                    
-                    const userNumber = e.target.value.trim();
-                    
-                    if (this.cleanPhoneNumber(userNumber).length >= 10) {
-                        // Wait 1 second before making API call
-                        userVerificationTimeout = setTimeout(() => {
-                            console.log('🔍 Validating user number:', userNumber);
-                            // Só chama checkUser se já temos um tenant (negócio existente)
-                            if (this.existingBusinessData?.id) {
-                                this.checkUser(userNumber, this.existingBusinessData.id);
-                            } else {
-                                // Sem tenant ainda, apenas define como conectado para habilitar botão
-                                this.userConnected = true;
-                                this.updateButtonState();
-                            }
-                        }, 1000);
-                    } else {
-                        // Reset user status for short numbers
-                        this.userConnected = false;
-                        const statusEl = document.getElementById('userStatus');
-                        statusEl.innerHTML = '<i class="fas fa-info-circle me-1"></i>Número que você usará para conversar com a IA';
-                        statusEl.className = 'form-text text-muted';
-                        this.updateButtonState();
-                    }
+                userInput.addEventListener('input', () => {
+                    this.updateButtonState();
                 });
 
                 // Inicializar estado do botão
@@ -1731,44 +1666,6 @@
                 }
             }
 
-            async checkUser(userNumber, tenantId) {
-                try {
-                    const cleanNumber = this.cleanPhoneNumber(userNumber);
-                    const url = `/api/demo/check-user?userPhone=${encodeURIComponent(cleanNumber)}&tenantId=${encodeURIComponent(tenantId)}`;
-
-                    const resp = await fetch(url);
-                    const result = await resp.json();
-
-                    // result: { success: boolean, exists: boolean }
-                    if (!result.success) {
-                        console.warn('⚠️ check-user retornou erro lógico. Segue fluxo mesmo assim.');
-                        this.userExists = false;
-                    } else {
-                        this.userExists = !!result.exists;
-                    }
-
-                    // Não bloqueie o início do chat: o v3 decidirá criar usuário/join/onboarding
-                    this.userConnected = true; 
-                    console.log('👤 checkUser:', { exists: this.userExists });
-
-                    // Atualizar estado do botão após verificação do usuário
-                    this.updateButtonState();
-
-                    return this.userExists;
-                } catch (err) {
-                    console.error('❌ Erro em checkUser:', err);
-                    // Em caso de erro, não bloquear o fluxo da demo
-                    this.userExists = false;
-                    this.userConnected = true;
-                    
-                    // Atualizar estado do botão mesmo em caso de erro
-                    this.updateButtonState();
-                    
-                    return false;
-                }
-            }
-
-
             hideAllConditionalFields() {
                 console.log('👁️ hideAllConditionalFields called');
                 document.getElementById('existingBusinessFields').style.display = 'none';
@@ -1784,9 +1681,9 @@
             showExistingBusinessFields() {
                 console.log('✅ showExistingBusinessFields called');
                 
-                // Para negócios existentes, esconder AMBOS os campos (não mostrar nome/email)
+                // Esconder campos novos e mostrar existentes
                 document.getElementById('newBusinessFields').style.display = 'none';
-                document.getElementById('existingBusinessFields').style.display = 'none';
+                document.getElementById('existingBusinessFields').style.display = 'block';
                 
                 // Preencher dados existentes
                 document.getElementById('existingBusinessName').value = this.existingBusinessData.business_name || '';
@@ -1821,20 +1718,12 @@
 
             updateButtonState() {
                 console.log('🔘 updateButtonState called');
-                console.log('🔘 userConnected:', this.userConnected);
-                console.log('🔘 businessExists:', this.businessExists);
                 
                 const userNumber = document.getElementById('userNumber').value.trim();
                 const whatsappNumber = document.getElementById('whatsappNumber').value.trim();
                 const btnText = document.getElementById('btnText');
                 const btnIcon = document.getElementById('btnIcon');
                 const btn = document.getElementById('createDemoBtn');
-                
-                // Verificar se elementos existem
-                if (!btnText || !btnIcon || !btn) {
-                    console.warn('⚠️ updateButtonState: elementos do botão não encontrados');
-                    return;
-                }
                 
                 const userNumberValid = this.cleanPhoneNumber(userNumber).length >= 10;
                 const whatsappNumberValid = this.cleanPhoneNumber(whatsappNumber).length >= 10;
@@ -1847,77 +1736,25 @@
                     return;
                 }
                 
-                // NOVA LÓGICA: Verificar tanto negócio quanto usuário
-                if (!this.userConnected) {
-                    // Usuário não validado ainda
-                    btn.disabled = true;
-                    btnText.textContent = 'Aguardando validação do usuário...';
-                    btnIcon.className = 'fas fa-spinner fa-spin me-2';
-                    return;
-                }
-                
                 if (this.businessExists) {
-                    // Negócio existente E usuário conectado - habilitar para começar teste
+                    // Negócio existente - habilitar para começar teste
                     btn.disabled = false;
                     btnText.textContent = 'Começar Teste';
                     btnIcon.className = 'fas fa-play-circle me-2';
                 } else {
-                    // Negócio novo E usuário conectado - verificar TODOS os campos obrigatórios das tabelas
-                    
-                    // TABELA TENANTS: name, business_name, domain, email, phone, whatsapp_phone  
+                    // Negócio novo - verificar se campos obrigatórios estão preenchidos
                     const businessName = document.getElementById('businessName')?.value.trim() || '';
                     const businessEmail = document.getElementById('businessEmail')?.value.trim() || '';
                     const domainSelected = this.selectedDomain;
-                    // phone e whatsapp_phone já validados acima
                     
-                    // TABELA SERVICES: pelo menos 1 serviço com name, duration_minutes, base_price
-                    const service1Name = document.getElementById('service1Name')?.value.trim() || '';
-                    const service1Price = document.getElementById('service1Price')?.value.trim() || '';
-                    const service1Duration = document.getElementById('service1Duration')?.value || '';
-                    
-                    const service2Name = document.getElementById('service2Name')?.value.trim() || '';
-                    const service2Price = document.getElementById('service2Price')?.value.trim() || '';
-                    const service2Duration = document.getElementById('service2Duration')?.value || '';
-                    
-                    const hasValidService1 = service1Name && service1Price && service1Duration;
-                    const hasValidService2 = service2Name && service2Price && service2Duration;
-                    const hasAtLeastOneService = hasValidService1 || hasValidService2;
-                    
-                    // TABELA PROFESSIONALS: pelo menos 1 profissional com name
-                    const collaborator1Name = document.getElementById('collaborator1Name')?.value.trim() || '';
-                    const collaborator2Name = document.getElementById('collaborator2Name')?.value.trim() || '';
-                    const hasAtLeastOneProfessional = collaborator1Name || collaborator2Name;
-                    
-                    // ADMIN_USERS: name, email (mesmo dados do business)
-                    // USERS: phone (já validado com userConnected)
-                    // TENANT_USERS: join (já criado pela API check-user)
-                    
-                    console.log('🔘 Validação completa das tabelas:');
-                    console.log('  - TENANTS businessName:', businessName);
-                    console.log('  - TENANTS businessEmail:', businessEmail);  
-                    console.log('  - TENANTS domain:', domainSelected);
-                    console.log('  - SERVICES hasAtLeastOneService:', hasAtLeastOneService);
-                    console.log('  - PROFESSIONALS hasAtLeastOneProfessional:', hasAtLeastOneProfessional);
-                    console.log('  - USERS userConnected:', this.userConnected);
-                    
-                    if (businessName && businessEmail && domainSelected && hasAtLeastOneService && hasAtLeastOneProfessional) {
+                    if (businessName && businessEmail && domainSelected) {
                         btn.disabled = false;
                         btnText.textContent = 'Cadastrar e Começar Teste';
                         btnIcon.className = 'fas fa-rocket me-2';
-                        console.log('✅ Todas as tabelas validadas - botão habilitado');
                     } else {
                         btn.disabled = true;
                         btnText.textContent = 'Cadastrar e Começar Teste';
                         btnIcon.className = 'fas fa-rocket me-2';
-                        
-                        // Log dos campos/tabelas faltantes
-                        const missing = [];
-                        if (!businessName) missing.push('Nome do Negócio (TENANTS.business_name)');
-                        if (!businessEmail) missing.push('Email do Negócio (TENANTS.email + ADMIN_USERS.email)');
-                        if (!domainSelected) missing.push('Domínio (TENANTS.domain)');
-                        if (!hasAtLeastOneService) missing.push('Pelo menos 1 serviço completo (SERVICES)');
-                        if (!hasAtLeastOneProfessional) missing.push('Pelo menos 1 profissional (PROFESSIONALS)');
-                        console.log('❌ Campos obrigatórios faltando:', missing.join(', '));
                     }
                 }
             }
@@ -2122,7 +1959,7 @@
                         businessName: businessName,
                         businessEmail: businessEmail,
                         whatsappNumber: document.getElementById('whatsappNumber').value,
-                        userPhone: document.getElementById('userNumber').value,
+                        userNumber: document.getElementById('userNumber').value,
                         domain: this.selectedDomain
                     };
                     
@@ -2192,7 +2029,7 @@
                     }
 
                     // Make API call to create demo tenant
-                    const response = await fetch('/api/demo/create', {
+                    const response = await fetch('/api/demo/create-tenant', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -2211,30 +2048,11 @@
                         return;
                     }
 
-                    // Ajustar campos da nova API /create
-                    this.demoData = {
-                        ...result,
-                        tenantId: result.tenant_id, // Compatibilidade
-                        demoToken: result.demo_token, // Token para chat
-                        userNumber: document.getElementById('userNumber')?.value,
-                        businessName: businessName,
-                        domain: this.selectedDomain
-                    };
-                    
-                    console.log('✅ Demo criado com sucesso:', this.demoData);
-                    
+                    this.demoData = result;
+
                     // Show success and activate chat
                     this.showDemoCreated();
                     this.activateChat();
-
-                    // After creating tenant and before/after enabling chat...
-                    const tenantId = result?.tenant_id || this.existingBusinessData?.id;
-                    const userNumber = document.getElementById('userNumber')?.value;
-                    
-                    // Only verify; don't block chat if doesn't exist
-                    if (userNumber && tenantId) {
-                        this.checkUser(userNumber, tenantId).catch(() => {});
-                    }
 
                 } catch (error) {
                     console.error('Erro ao criar demo:', error);
@@ -2248,23 +2066,60 @@
             showDemoCreated() {
                 const signupSection = document.getElementById('signupSection');
                 
-                // Esconder a seção de signup sem mostrar credenciais
-                signupSection.style.display = 'none';
+                // Verificar se é reutilização ou criação nova
+                const isReused = this.demoData.isReused;
+                const titleText = isReused ? 'Demo Reutilizado!' : 'Demo Criado com Sucesso!';
+                const iconClass = isReused ? 'fas fa-recycle' : 'fas fa-check-circle';
+                const iconColor = isReused ? 'var(--primary-color)' : 'var(--accent-color)';
+                
+                signupSection.innerHTML = `
+                    <div class="demo-created">
+                        <div class="success-icon" style="color: ${iconColor};">
+                            <i class="${iconClass}"></i>
+                        </div>
+                        <h3 style="color: ${iconColor}; margin-bottom: 1rem;">${titleText}</h3>
+                        
+                        ${isReused ? `
+                        <div class="alert alert-info" style="background: rgba(45, 90, 155, 0.1); border: 1px solid rgba(45, 90, 155, 0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Tenant existente encontrado!</strong><br>
+                            Reutilizando o tenant do número ${this.demoData.whatsappNumber} para continuar o teste.
+                        </div>
+                        ` : ''}
+                        
+                        <div class="demo-credentials">
+                            <h5>Suas Credenciais:</h5>
+                            <div class="credential-item">
+                                <span><strong>Tenant ID:</strong></span>
+                                <span class="credential-value">${this.demoData.tenantId}</span>
+                            </div>
+                            <div class="credential-item">
+                                <span><strong>Email do Negócio:</strong></span>
+                                <span class="credential-value">${this.demoData.businessEmail}</span>
+                            </div>
+                            <div class="credential-item">
+                                <span><strong>WhatsApp do Negócio:</strong></span>
+                                <span class="credential-value">${this.demoData.whatsappNumber}</span>
+                            </div>
+                            <div class="credential-item">
+                                <span><strong>WhatsApp de Usuário:</strong></span>
+                                <span class="credential-value">${this.demoData.userNumber}</span>
+                            </div>
+                            <div class="credential-item">
+                                <span><strong>Domínio:</strong></span>
+                                <span class="credential-value">${this.demoData.domain}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
             }
 
             activateChat() {
                 this.chatActive = true;
                 
                 // Update chat header
-                const chatBusinessName = document.getElementById('chatBusinessName');
-                const chatStatus = document.getElementById('chatStatus');
-                
-                if (chatBusinessName) {
-                    chatBusinessName.textContent = `${this.demoData.businessName} - IA Demo`;
-                }
-                if (chatStatus) {
-                    chatStatus.textContent = `Demo iniciado! • Especialista em ${this.getDomainName(this.demoData.domain)}`;
-                }
+                document.getElementById('chatBusinessName').textContent = `${this.demoData.businessName} - IA Demo`;
+                document.getElementById('chatStatus').textContent = `Demo iniciado! • Especialista em ${this.getDomainName(this.demoData.domain)}`;
                 
                 // Show input container and clear placeholder
                 document.getElementById('chatInputContainer').style.display = 'block';
@@ -2291,32 +2146,20 @@
                     <p>Como no WhatsApp real, você deve enviar a primeira mensagem.</p>
                     <div class="prompt-suggestions">
                         <small class="text-muted mb-2 d-block">Sugestões:</small>
-                        <div class="suggestion-bubbles">
-                            <span class="suggestion-bubble" onclick="demoApp.quickStart('Olá')">Olá</span>
-                            <span class="suggestion-bubble" onclick="demoApp.quickStart('Oi, tudo bem?')">Oi, tudo bem?</span>
-                            <span class="suggestion-bubble" onclick="demoApp.quickStart('Bom dia')">Bom dia</span>
+                        <div class="suggestion-buttons">
+                            <button type="button" class="btn btn-outline-success btn-sm suggestion-btn" onclick="document.getElementById('chatInput').value='Oi'; document.getElementById('chatInput').focus();">
+                                Oi 👋
+                            </button>
+                            <button type="button" class="btn btn-outline-primary btn-sm suggestion-btn" onclick="document.getElementById('chatInput').value='Gostaria de agendar um horário'; document.getElementById('chatInput').focus();">
+                                Agendar
+                            </button>
+                            <button type="button" class="btn btn-outline-info btn-sm suggestion-btn" onclick="document.getElementById('chatInput').value='Quais são os preços?'; document.getElementById('chatInput').focus();">
+                                Preços
+                            </button>
                         </div>
                     </div>
                 `;
                 messagesContainer.appendChild(prompt);
-                
-                // Focus no input
-                setTimeout(() => {
-                    document.getElementById('chatInput').focus();
-                }, 300);
-            }
-
-            showSystemHint() {
-                const messagesContainer = document.getElementById('chatMessages');
-                const hint = document.createElement('div');
-                hint.className = 'system-hint';
-                hint.innerHTML = `
-                    <div class="system-hint-content">
-                        <strong>💡 Dica:</strong> Digite "oi", "olá" ou sua pergunta para começar a conversar. 
-                        <br>A primeira mensagem deve ser do usuário.
-                    </div>
-                `;
-                messagesContainer.appendChild(hint);
                 
                 // Focus on input
                 const input = document.getElementById('chatInput');
@@ -2463,23 +2306,6 @@ Por favor, me conte um pouco sobre você e o que precisa! 😊`
                 return messages[this.demoData.domain] || `Olá! Sou a IA do ${this.demoData.businessName}! Como posso ajudar você hoje?`;
             }
 
-            quickStart(message) {
-                const input = document.getElementById('chatInput');
-                input.value = message;
-                
-                // Remove the user prompt
-                const messagesContainer = document.getElementById('chatMessages');
-                const userPrompt = messagesContainer.querySelector('.user-prompt');
-                if (userPrompt) {
-                    userPrompt.style.opacity = '0.5';
-                    userPrompt.style.transform = 'scale(0.9)';
-                    setTimeout(() => userPrompt.remove(), 200);
-                }
-                
-                // Send the message
-                this.sendMessage();
-            }
-
             async sendMessage() {
                 const input = document.getElementById('chatInput');
                 const message = input.value.trim();
@@ -2499,13 +2325,12 @@ Por favor, me conte um pouco sobre você e o que precisa! 😊`
                     const response = await fetch('/api/demo/chat', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'x-demo-token': 'fixed-secret-for-load-test-2025'
+                            'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
                             tenantId: this.demoData.tenantId,
-                            userPhone: this.demoData.userNumber || '5511999999999',
-                            text: message
+                            message: message,
+                            domain: this.demoData.domain
                         })
                     });
 
@@ -2622,53 +2447,9 @@ Por favor, me conte um pouco sobre você e o que precisa! 😊`
                         }
                     });
                 }
-                
-                // Event listeners para validação em tempo real dos SERVIÇOS
-                const serviceFields = [
-                    'service1Name', 'service1Price', 'service1Duration',
-                    'service2Name', 'service2Price', 'service2Duration'
-                ];
-                
-                serviceFields.forEach(fieldId => {
-                    const field = document.getElementById(fieldId);
-                    if (field) {
-                        field.addEventListener('input', () => {
-                            if (window.demoInterativa) {
-                                console.log('🔧 Service field changed:', fieldId, field.value);
-                                window.demoInterativa.updateButtonState();
-                            }
-                        });
-                        
-                        // Para selects, também escutar 'change'
-                        if (field.tagName === 'SELECT') {
-                            field.addEventListener('change', () => {
-                                if (window.demoInterativa) {
-                                    console.log('🔧 Service field changed:', fieldId, field.value);
-                                    window.demoInterativa.updateButtonState();
-                                }
-                            });
-                        }
-                    }
-                });
-                
-                // Event listeners para validação em tempo real dos PROFISSIONAIS
-                const professionalFields = ['collaborator1Name', 'collaborator2Name'];
-                
-                professionalFields.forEach(fieldId => {
-                    const field = document.getElementById(fieldId);
-                    if (field) {
-                        field.addEventListener('input', () => {
-                            if (window.demoInterativa) {
-                                console.log('👥 Professional field changed:', fieldId, field.value);
-                                window.demoInterativa.updateButtonState();
-                            }
-                        });
-                    }
-                });
-                
-                console.log('✅ Event listeners adicionados para validação completa');
             }, 500);
         });
+ 
     </script>
 </body>
 </html>

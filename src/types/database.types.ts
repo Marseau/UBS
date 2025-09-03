@@ -790,6 +790,79 @@ export type Database = {
         }
         Relationships: []
       }
+      tenant_whatsapp_config: {
+        Row: {
+          tenant_id: string
+          phone_number_id: string
+          whatsapp_business_account_id: string | null
+          webhook_url: string | null
+          access_token: string | null
+          webhook_verify_token: string | null
+          is_active: boolean | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          tenant_id: string
+          phone_number_id: string
+          whatsapp_business_account_id?: string | null
+          webhook_url?: string | null
+          access_token?: string | null
+          webhook_verify_token?: string | null
+          is_active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          tenant_id?: string
+          phone_number_id?: string
+          whatsapp_business_account_id?: string | null
+          webhook_url?: string | null
+          access_token?: string | null
+          webhook_verify_token?: string | null
+          is_active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_whatsapp_config_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      user_last_tenant: {
+        Row: {
+          phone_norm: string
+          tenant_id: string
+          last_seen_at: string
+          created_at: string | null
+        }
+        Insert: {
+          phone_norm: string
+          tenant_id: string
+          last_seen_at?: string
+          created_at?: string | null
+        }
+        Update: {
+          phone_norm?: string
+          tenant_id?: string
+          last_seen_at?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_last_tenant_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

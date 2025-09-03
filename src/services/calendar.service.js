@@ -4,7 +4,7 @@ exports.CalendarService = void 0;
 const googleapis_1 = require("googleapis");
 const database_1 = require("../config/database");
 const EncryptionService = require("../utils/encryption.service");
-const { ensureFreshGoogleToken } = require("../utils/google-token");
+const { ensureFreshGoogleToken } = require("../utils/google-token"); // ✅ NOVO
 class CalendarService {
     constructor() {
         this.initializeGoogleAuth();
@@ -38,15 +38,6 @@ class CalendarService {
             
             // Handle both direct professional_id and nested professional object
             const professionalId = appointment.professional_id || appointment.professional?.id;
-
-            // ✅ Garante token fresco antes de obter auth client
-            if (professionalId) {
-                try {
-                    await ensureFreshGoogleToken({ professionalId });
-                } catch (e) {
-                    console.warn('⚠️ Falha ao atualizar token (seguindo assim mesmo):', e?.message || e);
-                }
-            }
             
             const authClient = await this.getAuthClientForProfessional(professionalId);
             if (!authClient) throw new Error("Credenciais do profissional não configuradas para o Google Calendar.");
@@ -670,13 +661,6 @@ class CalendarService {
                 return [];
             }
 
-            // ✅ Garante token fresco para este profissional
-            try {
-                await ensureFreshGoogleToken({ professionalId });
-            } catch (e) {
-                console.warn('⚠️ Falha ao atualizar token (seguindo assim mesmo):', e?.message || e);
-            }
-
             // Usar o cliente autenticado existente
             const authClient = await this.getAuthClientForProfessional(professionalId);
             if (!authClient) {
@@ -762,8 +746,13 @@ class CalendarService {
             console.log(`👥 Encontrados ${professionals.length} profissionais com calendário`);
 
             // Buscar configuração de horário do tenant
-            // Use default business hours since business_config column doesn't exist
-            const businessHours = { start: "09:00", end: "18:00" };
+            const { data: tenant } = await database_1.supabaseAdmin
+                .from('tenants')
+                .select('business_config')
+                .eq('id', tenantId)
+                .single();
+
+            const businessHours = tenant?.business_config?.business_hours || { start: "09:00", end: "18:00" };
 
             // Consultar horários para cada profissional
             const allSlots = [];

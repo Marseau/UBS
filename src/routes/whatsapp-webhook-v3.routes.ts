@@ -991,7 +991,7 @@ class ValidationService {
     if (forcedTenantId) {
       logger.info('🎭 [GET-TENANT-DATA] Using forced tenantId for demo', { forcedTenantId });
       
-      // Buscar dados reais do tenant
+      // Buscar dados reais do tenant COM serviços (igual ao modo produção)
       const tenant = await supabaseAdmin
         .from('tenants')
         .select('*')
@@ -1003,9 +1003,18 @@ class ValidationService {
         return null;
       }
       
+      // CARREGAR SERVIÇOS (igual ao getTenantFromCache)
+      const services = await DatabaseService.listServices(forcedTenantId);
+      
+      // Criar objeto tenant com serviços (exatamente como em produção)
+      const tenantWithServices = {
+        ...tenant.data,
+        services
+      };
+      
       return {
-        tenant: tenant.data,
-        user: null, // Demo mode não tem user específico
+        tenant: tenantWithServices,
+        user: null, 
         appointments: []
       };
     }
@@ -1353,25 +1362,28 @@ class ValidationService {
 
     logger.info('Processing message', { from: userPhone, to: phoneNumberId, textLength: text.length, sessionKey });
 
-    // 🚨 DEMO MODE: Usar tenantId do token, não phoneNumberId
-    const demoPayload = (req as any)?.demoMode;
-    let actualTenantId = demoPayload?.tenantId;
+    // 🚨 TENANT RESOLUTION: Usar tenant resolvido pelo middleware
+    const resolvedTenantId = (req as any).tenant_id;
+    const tenantResolutionWarning = (req as any).tenant_resolution_warning;
     
-    // Se não é demo mode, resolver tenantId pelo phoneNumberId
-    if (!actualTenantId) {
-      try {
-        const tenant = await DatabaseService.findTenantByBusinessPhone(phoneNumberId);
-        actualTenantId = tenant?.id;
-      } catch (error) {
-        logger.error('Failed to resolve tenant from phoneNumberId', { phoneNumberId, error });
-      }
+    if (!resolvedTenantId) {
+      logger.error('❌ Nenhum tenant resolvido pelo middleware', { userPhone, phoneNumberId });
+      return res.status(500).json({ error: 'tenant_resolution_failed' });
     }
     
-    // Fallback para phoneNumberId se não encontrar tenant (desenvolvimento)
-    if (!actualTenantId) {
-      actualTenantId = phoneNumberId;
-      logger.warn('Using phoneNumberId as tenantId fallback', { phoneNumberId });
+    // Verificar se precisa notificar sobre resolução ambígua
+    if (tenantResolutionWarning && tenantResolutionWarning === 'ambiguous_phone_multiple_tenants_fallback') {
+      logger.warn('⚠️ Tenant resolvido via fallback devido a ambiguidade', { 
+        userPhone, 
+        resolvedTenantId,
+        warning: tenantResolutionWarning 
+      });
     }
+    
+    // LEGACY: Manter compatibilidade temporária
+    const actualTenantId = resolvedTenantId;
+    
+    // Tenant já foi resolvido pelo middleware - remover código legacy
     
     // 🔧 CRITICAL FIX: Criar usuário antes do orchestrator para evitar loop de onboarding
     try {
@@ -1394,7 +1406,7 @@ class ValidationService {
       userPhone,
       actualTenantId,
       { domain: 'whatsapp', services: [], policies: {} },
-      { session_id: sessionKey, demoMode: demoPayload }
+      { session_id: sessionKey, demoMode: null }
     );
     
     // 🚀 OTIMIZAÇÃO #1: RESPOSTA PRIMEIRO, BANCO DEPOIS

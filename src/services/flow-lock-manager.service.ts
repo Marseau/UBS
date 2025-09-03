@@ -10,13 +10,14 @@ export class FlowLockManagerService {
   private readonly FLOW_TIMEOUTS = {
     // Timeouts específicos por tipo de fluxo (em ms)
     onboarding: 120000,   // 2 min
+    returning_user: 480000, // 8 min - Safe timeout for user data collection (cronjob runs every 15 min)
     booking: 300000,      // 5 min  
     reschedule: 180000,   // 3 min
     cancel: 60000,        // 1 min
     pricing: 90000,       // 1.5 min
     institutional: 30000, // 30s
     handoff: 300000,      // 5 min
-    general: 60000        // 1 min
+    general: 300000       // 5 min - Post-onboarding conversations
   };
 
   private readonly STEP_TIMEOUTS = {
