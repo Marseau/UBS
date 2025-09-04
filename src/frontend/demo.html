@@ -1426,6 +1426,9 @@
                 this.businessExists = false;
                 this.existingBusinessData = null;
                 this.userConnected = false;
+                this.whatsappNumber = null;
+                this.userPhone = null;
+                this.demoToken = null;
                 
                 this.initializeEventListeners();
                 this.initializeDomainSelector();
@@ -2096,6 +2099,10 @@
                 input.value = value;
             }
 
+            cleanPhoneNumber(phoneNumber) {
+                return String(phoneNumber || '').replace(/\D/g, '');
+            }
+
             async createDemo() {
                 const button = document.getElementById('createDemoBtn');
                 const originalText = button.innerHTML;
@@ -2211,15 +2218,15 @@
                         return;
                     }
 
-                    // Ajustar campos da nova API /create
-                    this.demoData = {
-                        ...result,
-                        tenantId: result.tenant_id, // Compatibilidade
-                        demoToken: result.demo_token, // Token para chat
-                        userNumber: document.getElementById('userNumber')?.value,
-                        businessName: businessName,
-                        domain: this.selectedDomain
-                    };
+                    if (result.success) {
+                        this.demoData = result;
+                        this.chatActive = true;
+
+                        // 👉 GUARDE whatsappNumber e demo_token para reuso no chat
+                        this.whatsappNumber = this.cleanPhoneNumber(result.whatsappNumber);
+                        this.demoToken = result.demo_token;
+                        this.userPhone = this.cleanPhoneNumber(document.getElementById('userNumber').value.trim());
+                    }
                     
                     console.log('✅ Demo criado com sucesso:', this.demoData);
                     
@@ -2486,6 +2493,17 @@ Por favor, me conte um pouco sobre você e o que precisa! 😊`
                 
                 if (!message || !this.chatActive) return;
 
+                // 🔴 Validação dos campos obrigatórios
+                if (!this.whatsappNumber || !this.userPhone || !this.demoToken) {
+                    console.warn('Campos faltando para o chat:', {
+                        whatsappNumber: this.whatsappNumber,
+                        userPhone: this.userPhone,
+                        demoToken: !!this.demoToken
+                    });
+                    this.addMessage('ai', '⚠️ Erro de configuração. Clique em "Começar Teste" novamente.');
+                    return;
+                }
+
                 // Add user message
                 this.addMessage('user', message);
                 input.value = '';
@@ -2495,18 +2513,21 @@ Por favor, me conte um pouco sobre você e o que precisa! 😊`
                 this.showTypingIndicator();
 
                 try {
-                    // Send to AI API
+                    const payload = {
+                        text: message,
+                        userPhone: this.userPhone,
+                        whatsappNumber: this.whatsappNumber
+                    };
+
+                    console.log('▶️ Enviando para /api/demo/chat:', payload);
+
                     const response = await fetch('/api/demo/chat', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'x-demo-token': 'fixed-secret-for-load-test-2025'
+                            'Authorization': `Bearer ${this.demoToken}`
                         },
-                        body: JSON.stringify({
-                            tenantId: this.demoData.tenantId,
-                            userPhone: this.demoData.userNumber || '5511999999999',
-                            text: message
-                        })
+                        body: JSON.stringify(payload)
                     });
 
                     const result = await response.json();
@@ -2520,7 +2541,7 @@ Por favor, me conte um pouco sobre você e o que precisa! 😊`
                     
                     // Remove typing indicator and add AI response
                     this.removeTypingIndicator();
-                    this.addMessage('ai', result.response);
+                    this.addMessage('ai', result.aiResponse);
 
                 } catch (error) {
                     console.error('Erro ao enviar mensagem:', error);
@@ -2542,7 +2563,7 @@ Por favor, me conte um pouco sobre você e o que precisa! 😊`
 
                 messageDiv.innerHTML = `
                     <div class="message-bubble">
-                        ${text.replace(/\n/g, '<br>')}
+                        ${(text || '').replace(/\n/g, '<br>')}
                         <div class="message-time">${timeString}</div>
                     </div>
                 `;
