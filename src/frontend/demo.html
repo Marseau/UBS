@@ -1419,7 +1419,7 @@
     <script>
         class DemoInterativa {
             constructor() {
-                console.log('🔧 DemoInterativa constructor called');
+                console.log('DemoInterativa constructor called');
                 this.demoData = null;
                 this.chatActive = false;
                 this.selectedDomain = null;
@@ -1436,15 +1436,15 @@
             }
 
             initializeEventListeners() {
-                console.log('🎯 initializeEventListeners called');
+                console.log('initializeEventListeners called');
                 
                 // Form submission
                 const demoForm = document.getElementById('demoForm');
-                console.log('📝 Demo form element:', demoForm);
+                console.log('Demo form element:', demoForm);
                 
                 if (demoForm) {
                     demoForm.addEventListener('submit', (e) => {
-                        console.log('📤 FORM SUBMIT EVENT TRIGGERED!');
+                        console.log("FORM SUBMIT EVENT TRIGGERED!"); FORM SUBMIT EVENT TRIGGERED!');
                         e.preventDefault();
                         this.createDemo();
                     });
@@ -1455,12 +1455,12 @@
                 
                 // Button direct listener as backup
                 const createBtn = document.getElementById('createDemoBtn');
-                console.log('🔘 Create button element:', createBtn);
+                console.log('Create button element:', createBtn);
                 
                 if (createBtn) {
                     createBtn.addEventListener('click', (e) => {
-                        console.log('🖱️ BUTTON CLICK EVENT TRIGGERED!');
-                        console.log('🔘 Button disabled:', createBtn.disabled);
+                        console.log("BUTTON CLICK EVENT TRIGGERED!");
+                        console.log("Button disabled:", createBtn.disabled);
                         if (!createBtn.disabled) {
                             e.preventDefault();
                             this.createDemo();
@@ -2519,7 +2519,7 @@ Por favor, me conte um pouco sobre você e o que precisa! 😊`
                         whatsappNumber: this.whatsappNumber
                     };
 
-                    console.log('▶️ Enviando para /api/demo/chat:', payload);
+                    console.log("Enviando para /api/demo/chat:", payload);
 
                     const response = await fetch('/api/demo/chat', {
                         method: 'POST',
