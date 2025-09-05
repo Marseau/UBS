@@ -5,7 +5,6 @@ import bcrypt from "bcrypt";
 import { createClient } from "@supabase/supabase-js";
 import { handleIncomingMessage } from "../services/message-handler"; 
 import verifyDemoToken, { generateDemoToken } from "../utils/demo-token-validator";
-// Removed static import - using dynamic import to avoid startup dependency issues
 
 const router = express.Router();
 
@@ -23,30 +22,6 @@ const TZ = 'America/Sao_Paulo';
 // -----------------------------------------------------
 router.get('/_demo/health', (_req, res) => {
   res.json({ ok: true, build: process.env.BUILD_ID || 'dev', route: 'demo-apis.ts' });
-});
-
-// Endpoint temporário para consultar usuários existentes
-router.get('/_demo/users', async (req, res) => {
-  try {
-    const { tenantId } = req.query;
-    const { data: users } = await supabase
-      .from('users')
-      .select('phone, name, email, id')
-      .limit(10);
-    
-    if (tenantId) {
-      const { data: userTenants } = await supabase
-        .from('user_tenants')
-        .select('user_id, tenant_id')
-        .eq('tenant_id', tenantId);
-      
-      res.json({ users, userTenants, tenantId });
-    } else {
-      res.json({ users });
-    }
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao buscar usuários', details: err });
-  }
 });
 
 // Helpers
@@ -711,76 +686,168 @@ router.post("/chat", async (req, res) => {
     // 🆔 Capturar sessão demo para isolamento de primeira vez
     const demoSession = req.headers["x-demo-session"] as string || "";
     
-    // 🎯 CORREÇÃO CRÍTICA: Usar DIRETO o flow orchestrator (sem proxy HTTP)
-    console.log('🔄 [DEMO-DIRECT] Demo chamando diretamente o flow orchestrator', { 
-      demoSession: !!demoSession, 
-      userPhone, 
-      tenantId,
-      phoneType: typeof userPhone,
-      phoneValue: userPhone 
+    // 🎯 REDIRECIONAR PARA WEBHOOK V3 (que tem persistência completa)
+    console.log('🔄 Demo redirecionando para webhook v3 com persistência', { demoSession: !!demoSession });
+    
+    // Fazer uma requisição HTTP interna para o webhook v3
+    const http = require('http');
+    const querystring = require('querystring');
+    
+    // 🔑 Gerar token HMAC válido para webhook v3
+    const { DemoTokenValidator } = require('../utils/demo-token-validator');
+    const validator = new DemoTokenValidator();
+    const validDemoToken = validator.generateToken({ 
+      source: 'demo_ui', 
+      tenantId 
     });
     
-    // 🎯 CORREÇÃO CRÍTICA: Usar dynamic import para evitar problemas de dependência no startup
-    try {
-      const { WebhookFlowOrchestratorService } = await import('../services/webhook-flow-orchestrator.service');
-      const orchestrator = new WebhookFlowOrchestratorService();
+    // Payload do WhatsApp Business API
+    const whatsappPayload = {
+      object: "whatsapp_business_account",
+      entry: [{
+        id: "demo-entry",
+        changes: [{
+          value: {
+            messaging_product: "whatsapp",
+            metadata: {
+              display_phone_number: "Demo Phone",
+              phone_number_id: demoSession ? `demo_session_${demoSession}` : "demo_phone_id"
+            },
+            messages: [{
+              id: `demo_msg_${Date.now()}`,
+              from: userPhone,
+              timestamp: Math.floor(Date.now() / 1000).toString(),
+              type: "text",
+              text: {
+                body: text
+              }
+            }]
+          },
+          field: "messages"
+        }]
+      }]
+    };
+
+    const postData = JSON.stringify(whatsappPayload);
+    console.log('🔗 Preparando requisição HTTP para webhook v3:', {
+      demoSession: !!demoSession,
+      payloadSize: postData.length,
+      tenantId
+    });
+    
+    const options = {
+      hostname: 'localhost',
+      port: process.env.PORT || 3000,
+      path: '/api/whatsapp/webhook',  // 🔧 CORREÇÃO: Usar endpoint v3 oficial
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+        'x-demo-token': validDemoToken, // Usar token HMAC válido
+        'x-demo-tenant-id': tenantId // Forçar tenantId para demo
+      }
+    };
+
+    const proxyReq = http.request(options, (proxyRes: any) => {
+      let data = '';
       
-      // 🔧 REMOVIDO: upsertUserForTenant estava limpando o contexto existente
-      // Isso quebrava o flow_lock entre mensagens consecutivas no consent flow
-      // O orchestrator já cria/atualiza usuário conforme necessário
+      proxyRes.on('data', (chunk: any) => {
+        data += chunk;
+      });
       
-      // Chamar direto o orchestrator (mesmo fluxo do webhook)
-      // 🎯 CORREÇÃO CRÍTICA: session_id deve ser consistente para preservar flow_lock entre mensagens
-      const result = await orchestrator.orchestrateWebhookFlow(
-        text,
-        userPhone,
-        tenantId,
-        { domain: 'demo', services: [], policies: {} },
-        { session_id: `demo_${userPhone}_${tenantId}`, demoMode: { source: 'demo_ui', tenantId } }
-      );
-      
-      // Retornar resposta no formato esperado pela demo UI
-      const finalResponse = {
-        status: 'success',
-        response: result.aiResponse,
-        telemetry: {
-          ...result.telemetryData,
-          intent: result.telemetryData?.intent || 'unknown',
-          confidence: result.telemetryData?.confidence || 0,
-          decision_method: result.telemetryData?.decision_method || 'direct_orchestrator',
-          flow_lock_active: !!result.updatedContext?.flow_lock,
-          processing_time_ms: result.telemetryData?.processing_time_ms || 0,
-          tokens_used: result.llmMetrics?.total_tokens || 0,
-          api_cost_usd: result.llmMetrics?.api_cost_usd || 0
+      proxyRes.on('end', () => {
+        try {
+          console.log('📤 Response do webhook v3:', data);
+          console.log('🔍 Response status:', proxyRes.statusCode);
+          console.log('🔍 Response headers:', proxyRes.headers);
+          
+          // Tentar usar a resposta real do webhook v3
+          if (data && data.trim()) {
+            try {
+              const webhookResponse = JSON.parse(data);
+              if (webhookResponse && (webhookResponse.response || webhookResponse.aiResponse)) {
+                // ✅ Usar resposta real do webhook v3
+                const finalResponse = {
+                  status: 'success',
+                  response: webhookResponse.response || webhookResponse.aiResponse,
+                  telemetry: webhookResponse.telemetry || {
+                    intent: 'unknown',
+                    confidence: 0,
+                    decision_method: 'webhook_v3_success',
+                    flow_lock_active: false,
+                    processing_time_ms: 0
+                  }
+                };
+                res.status(200).json(finalResponse);
+                return;
+              }
+            } catch (parseError: any) {
+              console.log('⚠️ Webhook v3 retornou dados não-JSON, usando fallback:', parseError?.message || 'Erro desconhecido');
+            }
+          }
+          
+          // Fallback apenas se webhook v3 não retornou dados válidos
+          const demoResponse = {
+            status: 'success',
+            response: 'Mensagem processada com sucesso via webhook v3.',
+            telemetry: {
+              intent_detected: 'general',
+              processingTime: 0,
+              tokens_used: 0,
+              api_cost_usd: 0,
+              confidence: null,
+              decision_method: 'webhook_v3_proxy_fallback',
+              flow_lock_active: false,
+              processing_time_ms: 0,
+              model_used: 'unknown'
+            }
+          };
+          
+          res.status(200).json(demoResponse);
+        } catch (parseError) {
+          console.error('❌ Erro ao processar resposta do webhook v3:', parseError);
+          res.status(200).json({
+            status: 'success',
+            response: 'Mensagem recebida e está sendo processada.',
+            telemetry: {
+              intent_detected: 'general',
+              processingTime: 0,
+              tokens_used: 0,
+              api_cost_usd: 0,
+              confidence: null,
+              decision_method: 'webhook_v3_proxy_error',
+              flow_lock_active: false,
+              processing_time_ms: 0,
+              model_used: 'unknown'
+            }
+          });
         }
-      };
-      
-      return res.status(200).json(finalResponse);
-      
-    } catch (orchestratorErr) {
-      console.error("❌ Erro ao carregar/executar orchestrator:", orchestratorErr);
-      
-      // Fallback para erro do orchestrator
-      const errorResponse = {
-        status: 'error',
-        response: 'Serviço temporariamente indisponível. Nossa equipe foi notificada.',
+      });
+    });
+
+    proxyReq.on('error', (error: any) => {
+      console.error('❌ Erro na chamada para webhook v3:', error);
+      res.status(200).json({
+        status: 'success',
+        response: 'Mensagem recebida e está sendo processada.',
         telemetry: {
           intent_detected: 'general',
           processingTime: 0,
           tokens_used: 0,
           api_cost_usd: 0,
           confidence: null,
-          decision_method: 'orchestrator_error',
+          decision_method: 'webhook_v3_proxy_error',
           flow_lock_active: false,
           processing_time_ms: 0,
-          model_used: 'error',
-          error_type: (orchestratorErr as any)?.name || 'OrchestratorError',
-          error_message: (orchestratorErr as any)?.message || 'Erro ao carregar orchestrator'
+          model_used: 'unknown'
         }
-      };
+      });
+    });
 
-      return res.status(500).json(errorResponse);
-    }
+    proxyReq.write(postData);
+    proxyReq.end();
+    
+    return; // Explicit return for TypeScript
   } catch (err) {
     console.error("❌ Erro no chat demo:", err);
     

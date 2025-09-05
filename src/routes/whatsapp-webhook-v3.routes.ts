@@ -1,3 +1,11 @@
+
+// 🔎 Helper para determinar contexto de usuário (novo, novo_no_tenant, existente)
+async function determineUserContext(user: any, tenantId: string) {
+  if (!user) return 'novo_user';
+  if (user && !(user.tenants || []).includes(tenantId)) return 'novo_no_tenant';
+  return 'existente';
+}
+
 // whatsapp-webhook.router.ts
 import express from 'express';
 import path from 'path';
@@ -52,8 +60,8 @@ function mapIntentToConversationOutcome(
   }
 
   // Padrões diretos no texto
-  const isCancel = /cancelar\s+([0-9a-fA-F\-]{8,})/i.test(text);
-  const isReschedule = /remarcar\s+([0-9a-fA-F\-]{8,})/i.test(text);
+  const isCancel = /cancelar\s+([0-9a-fA-F-]{8,})/i.test(text);
+  const isReschedule = /remarcar\s+([0-9a-fA-F-]{8,})/i.test(text);
 
   if (shouldSendWhatsApp && isCancel) {
     console.log('🔧 MAP DEBUG: appointment_cancelled');
@@ -97,7 +105,7 @@ function mapIntentToConversationOutcome(
 const logger = (() => {
     try {
         // Use pino if available at runtime; fallback to console otherwise
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
         const pino = require('pino');
         return pino({
             level: process.env.LOG_LEVEL || 'info',
@@ -115,14 +123,7 @@ const logger = (() => {
 const config = {
     openai: {
         apiKey: process.env.OPENAI_API_KEY || '',
-        model: (() => {
-            const raw = (process.env.OPENAI_MODEL?.trim() || 'gpt-4');
-            if (!/^gpt-4/i.test(raw)) {
-                console.warn(`OPENAI_MODEL='${raw}' não é gpt-4*. Forçando 'gpt-4'.`);
-                return 'gpt-4';
-            }
-            return raw;
-        })(),
+        model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
         maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '180'), // 🚀 OTIMIZAÇÃO #3: Reduzir tokens
         temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.6'),
         promptCostPer1k: parseFloat(process.env.OPENAI_PROMPT_COST_PER_1K || '0'),
@@ -167,7 +168,7 @@ function loadAgentSystemPromptByDomain(domain?: string): string | null {
         if (!meta) return null;
         const distAgentsDir = path.join(__dirname, '../services/agents');
         const agentPath = path.join(distAgentsDir, meta.file);
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
         const mod = require(agentPath);
         const AgentCtor = mod && meta.className ? mod[meta.className] : null;
         if (!AgentCtor) return null;
@@ -395,7 +396,7 @@ class ValidationService {
       try {
       const digits = String(phoneNumberId || '').replace(/\D/g, '');
       const plusDigits = `+${digits}`;
-        let { data: tenant, error } = await supabaseAdmin
+        const { data: tenant, error } = await supabaseAdmin
         .from('tenants').select('*')
         .or(`whatsapp_phone.eq.${digits},whatsapp_phone.eq.${plusDigits}`)
         .single();
@@ -496,17 +497,22 @@ class ValidationService {
         const digits = raw.replace(/\D/g, '');
         const candidatesSet = new Set<string>();
         if (digits) {
+          // Priorizar match exato primeiro
           candidatesSet.add(digits);
           candidatesSet.add(`+${digits}`);
-          if (digits.startsWith('55')) {
-            const local = digits.slice(2);
-            if (local) {
-              candidatesSet.add(local);
-              candidatesSet.add(`+${local}`);
+          
+          // Apenas adicionar variações se o número for válido (11+ dígitos)
+          if (digits.length >= 11) {
+            if (digits.startsWith('55')) {
+              const local = digits.slice(2);
+              if (local && local.length >= 10) {
+                candidatesSet.add(local);
+                candidatesSet.add(`+${local}`);
+              }
+            } else if (digits.length >= 10) {
+              candidatesSet.add(`55${digits}`);
+              candidatesSet.add(`+55${digits}`);
             }
-          } else {
-            candidatesSet.add(`55${digits}`);
-            candidatesSet.add(`+55${digits}`);
           }
         }
         const candidates = Array.from(candidatesSet);
@@ -520,7 +526,7 @@ class ValidationService {
         const payload: any = {
           name: session.name || existing.data?.name || null,
           email: session.email || existing.data?.email || null,
-          phone: existing.data?.phone || (digits ? `+${digits}` : null),
+          phone: digits ? `+${digits}` : (existing.data?.phone || null),
           gender: session.gender || (existing.data as any)?.gender || null
         };
         if (!userId) {
@@ -631,7 +637,7 @@ class ValidationService {
     return 'Data não disponível';
     }
     static parseDateTime(input: string): string | undefined {
-    const m = input.match(/(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\s+(\d{1,2}):(\d{2})/);
+    const m = input.match(/(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\s+(\d{1,2}):(\d{2})/);
     if (!m) return undefined;
     const [, d, mo, y, h, mi] = m;
     const year = y ? (y.length === 2 ? Number(`20${y}`) : Number(y)) : new Date().getFullYear();
@@ -731,7 +737,7 @@ class ValidationService {
         // 4) Intent - REMOVIDO: agora será detectado pelo Flow Lock System
         // let intent = ValidationService.detectIntent(text);
         // Detecção de intent movida para flowIntegration.processWithFlowLockOrFallback()
-        let intent = 'general'; // Placeholder - será sobrescrito pelo Flow Lock
+        const intent = null; // Forçar detecção correta de intent - sem placeholders
         // Confirmação explícita (confirmo/ciente/de acordo/ok/👍/✅) quando há pendingConfirmation
         if (/\b(confirm(o|ado)?|ciente|de acordo|ok)\b|[👍✅]/i.test(text)) {
           if (session.pendingConfirmation?.appointmentId) {
@@ -744,7 +750,7 @@ class ValidationService {
         }
         
         // 5) Direct commands (cancel/remarcar/address/payments)
-        const direct = await this.processDirectCommands(sessionKey, text, phoneNumberId, intent, session);
+        const direct = await this.processDirectCommands(sessionKey, text, phoneNumberId, intent || 'unknown', session);
         if (direct) {
         this.captureUsageOnlyAsync(sessionKey, session, text);
         await this.updateSessionHistory(sessionKey, session, text, direct.response);
@@ -752,9 +758,10 @@ class ValidationService {
         }
         
         // 6) Tenant & user context (with forced tenantId from demo token)
-        const tenantData = await this.getTenantData(phoneNumberId, intent, userPhone, forcedTenantId);
+        const tenantData = await this.getTenantData(phoneNumberId, intent || 'unknown', userPhone, forcedTenantId);
         // 6.1) Forçar saudação com nome quando usuário existir
-        if (intent === 'greeting' && tenantData?.tenant?.id) {
+        // Detectar saudação por conteúdo da mensagem
+        if (/\b(ol[aá]|oi|bom\s+dia|boa\s+tarde|boa\s+noite|hey|hello)/i.test(text) && tenantData?.tenant?.id) {
           const user = await DatabaseService.findUserByPhone(tenantData.tenant.id, userPhone);
           const firstName = (user?.name || session.name || '').split(/\s+/)[0] || '';
           if (firstName) {
@@ -767,7 +774,8 @@ class ValidationService {
         
         // 7) Availability (fallback) precompute
         let availabilityBlock = '';
-        if (intent === 'availability') {
+        // Detectar consulta de disponibilidade por conteúdo
+        if (/\b(disponibilidade|dispon[íi]vel|hor[aá]rio|agenda|vaga|marcar)/i.test(text)) {
         const { dateISO, window } = inferDateAndWindow(text);
         if (window && !session.preferredWindow) session.preferredWindow = window;
         if (dateISO && !session.preferredDayISO) session.preferredDayISO = dateISO;
@@ -793,7 +801,9 @@ class ValidationService {
             tenantData.user = { id: ensuredUserId, name: session.name, email: session.email, phone: userPhone, gender: session.gender };
           }
         }
-      } catch {}
+      } catch {
+        // Ignore user initialization errors
+      }
 
       // 11) LLM response
       console.log('🔍 [DEBUG] Antes de processWithFlowLockOrFallback:', {
@@ -815,7 +825,8 @@ class ValidationService {
       await this.updateSessionHistory(sessionKey, session, text, llmResponse);
       // (revertido) watchdog de inatividade removido
       // 12.1) Se houve remarcação direta, preparar pendingConfirmation
-      if (intent === 'reschedule' && (tenantData?.tenant?.id)) {
+      // Detectar intenção de remarcação por conteúdo
+      if (/\b(remarc|reagend|mud[ao]|altera|trocar|desmarca)/i.test(text) && (tenantData?.tenant?.id)) {
         const meta = (await cache.getSession(sessionKey) as any) || {};
         const md = (meta as any);
         // se a etapa anterior definiu metadata na rota, será usada no persist abaixo
@@ -876,7 +887,7 @@ class ValidationService {
       if (!tenant) return null;
       
       // Cancelamento direto
-		const __cancelMatch = text.match(/cancelar\s+([0-9a-fA-F\-]{8,})/i);
+		const __cancelMatch = text.match(/cancelar\s+([0-9a-fA-F-]{8,})/i);
 		if (__cancelMatch) {
 			const __id: string | undefined = __cancelMatch[1] ? String(__cancelMatch[1]) : undefined;
 			if (__id) {
@@ -885,7 +896,7 @@ class ValidationService {
 			}
 		}
 		// Remarcação direta
-		const __rescheduleMatch = text.match(/remarcar\s+([0-9a-fA-F\-]{8,}).*?(?:para|em|->)\s*([\d\/:\-\s]{5,})/i);
+		const __rescheduleMatch = text.match(/remarcar\s+([0-9a-fA-F-]{8,}).*?(?:para|em|->)\s*([\d/:.\-\s]{5,})/i);
 		if (__rescheduleMatch) {
 			const __id: string | undefined = __rescheduleMatch[1] ? String(__rescheduleMatch[1]) : undefined;
 			const __whenText: string | undefined = __rescheduleMatch[2] ? String(__rescheduleMatch[2]) : undefined;
@@ -1192,7 +1203,7 @@ class ValidationService {
         const code = e?.code || e?.error?.code || '';
         if (/model_not_found/i.test(code + ' ' + msg) || /does not have access to model/i.test(msg)) {
           completion = await this.openai.chat.completions.create({
-            model: 'gpt-4',
+            model: config.openai.model,
             temperature: config.openai.temperature,
             max_tokens: config.openai.maxTokens,
             messages
@@ -1442,7 +1453,7 @@ class ValidationService {
     const __persist_totalTokens: number = __persist_llm.total_tokens ?? 0;
     const __persist_apiCostUsd: number = __persist_llm.api_cost_usd ?? 0;
     const __persist_processingCostUsd: number = __persist_llm.processing_cost_usd ?? 0;
-    const __persist_modelUsed: string | null = __persist_llm.model_used ?? (process.env.OPENAI_MODEL || 'gpt-4');
+    const __persist_modelUsed: string | null = __persist_llm.model_used ?? config.openai.model;
     const __persist_aiConfidence: number = result?.telemetryData?.confidence ?? 0;
 
     const __persist_intent: string | undefined = result?.telemetryData?.intent ?? undefined;
