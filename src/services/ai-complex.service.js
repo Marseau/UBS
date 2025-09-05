@@ -12,67 +12,30 @@ const media_processor_service_1 = require("./media-processor.service");
 const { ConversationOutcomeService } = require("./conversation-outcome.service");
 
 // ==== INTENTS ALLOWLIST (sem outcomes) ====
-const ALLOWED_INTENTS = new Set([
-  'greeting','services','pricing','availability','my_appointments','address','payments',
-  'business_hours','cancel','reschedule','confirm','modify_appointment','policies',
-  'wrong_number','test_message','booking_abandoned','noshow_followup'
-]);
-
-function clamp(num, min, max) { return Math.max(min, Math.min(max, num)); }
-
-// Normalização conservadora para LLM
-function normalizeLLMConfidence(raw) {
-  if (typeof raw !== 'number' || Number.isNaN(raw)) return 0.6;
-  // corta topos: nunca 1.0; nunca <0.3
-  return clamp(raw, 0.3, 0.85);
-}
-
-exports.classifyIntentWithLLM = async function classifyIntentWithLLM(openai, model, text) {
-  const system = [
-    'Você é um CLASSIFICADOR DE INTENÇÃO em um SaaS de agendamento.',
-    'Responda com APENAS UMA chave EXATA dentre as opções válidas.',
-    'Se não tiver certeza, retorne exatamente: "unknown".',
-    '',
-    'PADRÕES ESPECIAIS:',
-    '- Adiamento/postpone → "booking_abandoned"',
-    '- Agradecimentos/elogios → "greeting"',
-    '- Requisitos/procedimentos (docs, tempo) → "services"',
-    '- Contexto empresarial genérico → "services"',
-    '',
-    'EXEMPLOS:',
-    '- "Entendi, vou verificar e retorno" → booking_abandoned',
-    '- "Obrigada pela flexibilidade!" → greeting',
-    '- "É necessário experiência prévia?" → services',
-    '- "Que documentos preciso levar?" → services',
-    '- "Vou enviar o contrato por email" → services',
-    '',
-    'Opções válidas:',
-    Array.from(ALLOWED_INTENTS).join(', ')
-  ].join('\n');
-
-  const completion = await openai.chat.completions.create({
-    model,
-    temperature: 0,
-    max_tokens: 8,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: text }
-    ]
-  });
-
-  const raw = (completion.choices?.[0]?.message?.content || '').trim().toLowerCase();
-  const intent = raw.replace(/[^a-z_]/g, ''); // sanitiza
-  
-  if (intent === 'unknown') return { intent: null, confidence: 0.0, decision_method: 'llm' };
-  if (!ALLOWED_INTENTS.has(intent)) return { intent: null, confidence: 0.0, decision_method: 'llm' };
-
-  return { intent, confidence: normalizeLLMConfidence(completion?.usage?.prompt_tokens ? 0.7 : 0.6), decision_method: 'llm' };
-};
+const ALLOWED_INTENTS = [
+  'greeting',
+  'services',
+  'pricing',
+  'availability',
+  'my_appointments',
+  'address',
+  'payments',
+  'business_hours',
+  'cancel',
+  'reschedule',
+  'confirm',
+  'modify_appointment',
+  'policies',
+  'wrong_number',
+  'test_message',
+  'booking_abandoned',
+  'noshow_followup'
+];
 class AIService {
     constructor() {
         this.config = {
             openaiApiKey: process.env.OPENAI_API_KEY || '',
-            models: ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4'], // Sistema de fallback
+            model: process.env.OPENAI_MODEL || 'gpt-4-turbo-preview',
             temperature: parseFloat(process.env.AI_TEMPERATURE || '0.7'),
             maxTokens: parseInt(process.env.AI_MAX_TOKENS || '2048'),
             timeout: parseInt(process.env.AI_TIMEOUT || '30000'),
@@ -314,33 +277,15 @@ class AIService {
         return prompt;
     }
     buildIntentRecognitionPrompt(message, context) {
-        return `Você é um CLASSIFICADOR DE INTENÇÃO em um sistema de agendamento de serviços (SaaS).
-Analise a mensagem do usuário no CONTEXTO DA CONVERSA e escolha EXATAMENTE UMA das intenções abaixo.
+        return `Você é um CLASSIFICADOR DE INTENÇÃO. Sua tarefa é escolher EXATAMENTE UMA chave de intenção para a mensagem do usuário, usando SOMENTE a lista permitida abaixo. Se não houver confiança suficiente, retorne intent = null.
 
-INTENTS PERMITIDAS:
-- ${ALLOWED_INTENTS.join('\n- ')}
-
-Regras obrigatórias:
-1) Responda APENAS em JSON válido, sem texto extra.
-2) Formato exato: {"intent": "<uma-das-chaves-ou-null>", "confidence": 0.0}
-3) Se não tiver certeza, use {"intent": null, "confidence": 0.0}.
-4) Nunca invente intenções fora da lista.
-5) Nunca retorne múltiplas intenções.
-
-Mensagem do usuário (pt-BR):
-"${message}"
+Mensagem do usuário (pt-BR):\n"${message}"
 
 Domínio do negócio: ${context.tenantConfig?.domain || 'geral'}
 
-Exemplos:
-Usuário: "Tenho disponibilidade na próxima semana"
-→ {"intent":"availability","confidence":0.9}
+INTENTS PERMITIDAS:\n- ${ALLOWED_INTENTS.join('\n- ')}
 
-Usuário: "Não compareci ontem, quero remarcar"
-→ {"intent":"noshow_followup","confidence":0.95}
-
-Usuário: "Quais serviços vocês oferecem?"
-→ {"intent":"services","confidence":0.95}`;
+Regras obrigatórias:\n1) Responda APENAS em JSON, sem texto extra.\n2) Formato exato: {"intent": "<uma-das-chaves-ou-null>", "confidence": 0.0}\n3) Se não tiver certeza, use intent = null e confidence <= 0.5.\n4) Não invente chaves fora da lista.\n`;
     }
     parseIntentResult(result) {
         try {

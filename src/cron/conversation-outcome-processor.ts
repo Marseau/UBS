@@ -23,11 +23,11 @@ export class ConversationOutcomeProcessor {
 
   /**
    * INICIAR CRONJOB
-   * Executa a cada 15 minutos para processar conversas finalizadas
+   * Executa a cada 10 minutos para processar conversas finalizadas
    */
   start(): void {
-    // Executar a cada 15 minutos: */15 * * * *
-    cron.schedule('*/15 * * * *', async () => {
+    // Executar a cada 10 minutos: */10 * * * *
+    cron.schedule('*/10 * * * *', async () => {
       if (this.isProcessing) {
         logger.info('⚠️ Conversation outcome processing already in progress, skipping...');
         return;

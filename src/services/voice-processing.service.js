@@ -430,13 +430,13 @@ Clique no horário desejado:
                     ]
                 },
                 {
-                    user: "[Grava mensagem de voz: 'Maria Silva, 11999999999']",
-                    ai: `🎤 **Entendi:** "Maria Silva, 11999999999"
+                    user: "[Grava mensagem de voz: '{{USER_NAME}}, {{USER_PHONE}}']",
+                    ai: `🎤 **Entendi:** "{{USER_NAME}}, {{USER_PHONE}}"
 
 ✨ **AGENDAMENTO CONFIRMADO!** ✨
 
 💇‍♀️ **Serviço:** Serviço de Beleza
-👤 **Cliente:** Maria Silva
+👤 **Cliente:** {{USER_NAME}}
 📅 **Data:** terça-feira, 16 de janeiro de 2024
 🕐 **Horário:** 14:00
 💰 **Valor:** R$ 80.00

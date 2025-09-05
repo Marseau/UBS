@@ -200,13 +200,13 @@ router.get('/analytics/system-dashboard', adminAuth.verifyToken, adminAuth.requi
             },
             rankings: {
                 topTenants: [
-                    { name: 'Salão Bella Vista', domain: 'Beleza', revenue: 45000, growth: 12.5 },
-                    { name: 'Clínica Dr. Silva', domain: 'Saúde', revenue: 38000, growth: 8.2 },
-                    { name: 'Advocacia Santos', domain: 'Jurídico', revenue: 32000, growth: 15.1 }
+                    { name: '{{TENANT_NAME_1}}', domain: '{{DOMAIN_1}}', revenue: 45000, growth: 12.5 },
+                    { name: '{{TENANT_NAME_2}}', domain: '{{DOMAIN_2}}', revenue: 38000, growth: 8.2 },
+                    { name: '{{TENANT_NAME_3}}', domain: '{{DOMAIN_3}}', revenue: 32000, growth: 15.1 }
                 ],
                 atRiskTenants: [
-                    { name: 'Studio Fitness', lastActivity: '2024-01-15', riskScore: 75, status: 'At Risk' },
-                    { name: 'Clínica ABC', lastActivity: '2024-01-10', riskScore: 85, status: 'High Risk' }
+                    { name: '{{TENANT_NAME_4}}', lastActivity: '2024-01-15', riskScore: 75, status: 'At Risk' },
+                    { name: '{{TENANT_NAME_5}}', lastActivity: '2024-01-10', riskScore: 85, status: 'High Risk' }
                 ]
             },
             period,
@@ -759,7 +759,7 @@ router.get('/conversations/real-time', adminAuth.verifyToken, async (req, res) =
                 tenants: [
                     {
                         id: 'tenant1',
-                        name: 'Salão Bella Vista',
+                        name: '{{TENANT_NAME_1}}',
                         domain: 'beauty',
                         activeConversations: 3,
                         conversations: [
@@ -770,7 +770,7 @@ router.get('/conversations/real-time', adminAuth.verifyToken, async (req, res) =
                     },
                     {
                         id: 'tenant2',
-                        name: 'Clínica Dr. Silva',
+                        name: '{{TENANT_NAME_2}}',
                         domain: 'healthcare',
                         activeConversations: 2,
                         conversations: [

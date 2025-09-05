@@ -67,6 +67,7 @@ app.use('/api/whatsapp/webhook', express.raw({ type: '*/*' }));
 
 // 2) JSON global, exceto nos webhooks
 const jsonParser = express.json();
+const urlencodedParser = express.urlencoded({ extended: true });
 app.use((req, res, next) => {
   if (req.path === '/api/whatsapp-v3/webhook' || req.path === '/api/whatsapp/webhook') {
     return next();
@@ -74,7 +75,15 @@ app.use((req, res, next) => {
   return jsonParser(req, res, next);
 });
 
-// 3) Resolução determinística de tenant (aplicar aos webhooks)
+// 3) URLEncoded parser para forms, exceto nos webhooks
+app.use((req, res, next) => {
+  if (req.path === '/api/whatsapp-v3/webhook' || req.path === '/api/whatsapp/webhook') {
+    return next();
+  }
+  return urlencodedParser(req, res, next);
+});
+
+// 4) Resolução determinística de tenant (aplicar aos webhooks)
 import { resolveTenant } from './middleware/resolve-tenant';
 app.use('/api/whatsapp-v3/webhook', resolveTenant);
 app.use('/api/whatsapp/webhook', resolveTenant);
@@ -290,6 +299,16 @@ try {
 } catch (error) {
   console.error("❌ Failed to load demo routes:", error);
 }
+
+// REMOVED: Consent flow test routes
+// try {
+//   const consentFlowTestRoutes = require('./routes/consent-flow-test');
+//   const consentFlowTestRouter = consentFlowTestRoutes.default || consentFlowTestRoutes;
+//   app.use('/api/test', consentFlowTestRouter);
+//   console.log('✅ Consent flow test routes loaded successfully - CONSENT FLOW TESTING READY');
+// } catch (error) {
+//   console.error("❌ Failed to load consent flow test routes:", error);
+// }
 
 try {
   // Load UNIFIED metrics routes (NEW CONSOLIDATED SYSTEM)
@@ -648,6 +667,19 @@ async function initializeServices() {
       console.error('❌ Failed to initialize New Metrics Cron Service:', error);
     }
     
+    // Initialize Conversation Outcome Processor
+    try {
+      const { conversationOutcomeProcessor } = await import('./cron/conversation-outcome-processor');
+      
+      // Start conversation outcome processor (runs every 15 minutes)
+      conversationOutcomeProcessor.start();
+      
+      console.log('✅ Conversation Outcome Processor initialized successfully');
+      console.log('⏰ Conversation outcome cronjob scheduled for every 15 minutes');
+      
+    } catch (error) {
+      console.error('❌ Failed to initialize Conversation Outcome Processor:', error);
+    }
     
     // Initialize COMPREHENSIVE METRICS SYSTEM (TODAS AS 14+ MÉTRICAS)
     if (process.env.ENABLE_COMPREHENSIVE_METRICS !== 'false') {
@@ -870,8 +902,8 @@ app.listen(PORT, async () => {
     OPENAI_MODEL: process.env.OPENAI_MODEL,
     ENABLE_CRON: process.env.ENABLE_CRON,
     DISABLE_ANALYTICS_CRON: process.env.DISABLE_ANALYTICS_CRON,
-    DISABLE_TENANT_METRICS_CRON: process.env.DISABLE_TENANT_METRICS_CRON,
-    DISABLE_CONVERSATION_BILLING: process.env.DISABLE_CONVERSATION_BILLING,
+    TENANT_METRICS_CRON: process.env.DISABLE_TENANT_METRICS_CRON,
+    CONVERSATION_BILLING: process.env.DISABLE_CONVERSATION_BILLING,
   });
   
   console.log(`📧 Email Service: ${process.env.ENABLE_EMAIL_SERVICE === 'true' ? 'ENABLED' : 'DISABLED'}`);
@@ -882,4 +914,19 @@ app.listen(PORT, async () => {
   
   // Initialize services after server starts
   await initializeServices();
+  // ===== [GARANTIA] Conversation Outcome Processor sempre ativo =====
+  try {
+    // Evita start duplicado em hot-reload ou múltiplas inicializações
+    if (!(global as any).__outcomeCronStarted) {
+      const { conversationOutcomeProcessor } = await import('./cron/conversation-outcome-processor');
+      conversationOutcomeProcessor.start();
+      (global as any).__outcomeCronStarted = true;
+      console.log('✅ [Garantia] Conversation Outcome Processor forçado a rodar a cada 15 minutos');
+    } else {
+      console.log('ℹ️ [Garantia] Conversation Outcome Processor já estava ativo — evitando start duplicado');
+    }
+  } catch (err) {
+    console.error('❌ [Garantia] Falha ao iniciar Conversation Outcome Processor:', err);
+  }
+
 });

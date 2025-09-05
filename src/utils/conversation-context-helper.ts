@@ -180,7 +180,7 @@ export async function mergeEnhancedConversationContext(
       duration_minutes: durationMinutes,
       message_count: (previousContext.message_count || 0) + 1,
       // Manter flow_lock se não foi explicitamente alterado
-      flow_lock: updates.flow_lock || previousContext.flow_lock,
+      flow_lock: updates.flow_lock !== undefined ? updates.flow_lock : previousContext.flow_lock,
       // Atualizar intent_history
       intent_history: [
         ...(previousContext.intent_history || []),
@@ -237,22 +237,27 @@ async function getPreviousEnhancedContext(
   tenantId: string
 ): Promise<EnhancedConversationContext | null> {
   try {
-    // CORREÇÃO: Usar a mesma lógica de busca de telefone do upsertUserForTenant
+    // CORREÇÃO: Usar lógica de busca de telefone mais específica para evitar falsos positivos
     const raw = String(userPhone || '').trim();
     const digits = raw.replace(/\D/g, '');
     const candidatesSet = new Set<string>();
     if (digits) {
+      // Priorizar match exato primeiro
       candidatesSet.add(digits);
       candidatesSet.add(`+${digits}`);
-      if (digits.startsWith('55')) {
-        const local = digits.slice(2);
-        if (local) {
-          candidatesSet.add(local);
-          candidatesSet.add(`+${local}`);
+      
+      // Apenas adicionar variações se o número for válido (11+ dígitos)
+      if (digits.length >= 11) {
+        if (digits.startsWith('55')) {
+          const local = digits.slice(2);
+          if (local && local.length >= 10) {
+            candidatesSet.add(local);
+            candidatesSet.add(`+${local}`);
+          }
+        } else if (digits.length >= 10) {
+          candidatesSet.add(`55${digits}`);
+          candidatesSet.add(`+55${digits}`);
         }
-      } else {
-        candidatesSet.add(`55${digits}`);
-        candidatesSet.add(`+55${digits}`);
       }
     }
     const candidates = Array.from(candidatesSet);
@@ -272,18 +277,17 @@ async function getPreviousEnhancedContext(
       return null;
     }
 
-    // CORREÇÃO: Buscar conversas mais recentes e agrupar por session_id
-    // IMPORTANTE: Excluir conversas que já foram finalizadas pelo cronjob
-    // TESTE RLS: Usar query mais simples para diagnosticar problema de permissão
-    console.log(`🔍 [RLS-TEST] Testando query conversation_history para user_id=${user.id}, tenant_id=${tenantId}`);
+    // SIMPLIFICADO: Buscar apenas conversas sem outcome (query otimizada)
+    console.log(`🔍 [SIMPLE] Buscando conversas ativas para user_id=${user.id}, tenant_id=${tenantId}`);
     
     const { data: recentConversations, error } = await supabaseAdmin
       .from('conversation_history')
       .select('conversation_context, created_at, user_id, tenant_id')
       .eq('user_id', user.id)
       .eq('tenant_id', tenantId)
+      .is('conversation_outcome', null)
       .order('created_at', { ascending: false })
-      .limit(10); // Reduzir limite para debug
+      .limit(1);
 
     console.log(`🔍 [DEBUG] Query conversation_history - UserID: ${user.id}, TenantID: ${tenantId}, Encontrados: ${recentConversations?.length || 0}, Error:`, error);
     console.log(`🔍 [RECOVERY-DEBUG] Query details - SQL: conversation_history WHERE user_id='${user.id}' AND tenant_id='${tenantId}' AND conversation_outcome IS NULL`);

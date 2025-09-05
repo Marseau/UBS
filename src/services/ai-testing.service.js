@@ -331,12 +331,12 @@ class AITestingService {
                 sessionId: `test-${scenario.id}`,
                 userId: 'test-user',
                 tenantId: 'test-tenant',
-                phoneNumber: '+5511999999999',
+                phoneNumber: '{{TEST_PHONE_NUMBER}}',
                 conversationHistory: [],
                 tenantConfig: {
                     id: 'test-tenant',
                     slug: 'test-business',
-                    businessName: 'Test Business',
+                    businessName: '{{TEST_BUSINESS_NAME}}',
                     domain: scenario.domain === 'other' ? 'consulting' : scenario.domain,
                     aiSettings: {
                         greetingMessage: 'Olá! Como posso ajudar?',
@@ -656,7 +656,7 @@ class AITestingService {
                 sessionId: 'health-check',
                 userId: 'test-user',
                 tenantId: 'test-tenant',
-                phoneNumber: '+5511999999999',
+                phoneNumber: '{{TEST_PHONE_NUMBER}}',
                 conversationHistory: [],
                 lastInteraction: new Date()
             };

@@ -241,7 +241,7 @@ export class MetricsAnalysisCorrectedService {
     platformTotals: TenantMetricData;
   }): Promise<boolean> {
     // Somar tenant metrics manualmente para validar platform totals
-    let calculatedTotals = {
+    const calculatedTotals = {
       appointments_total: 0,
       appointments_confirmed: 0,
       appointments_cancelled: 0,

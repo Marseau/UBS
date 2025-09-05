@@ -11,22 +11,6 @@ import { mergeEnhancedConversationContext } from '../utils/conversation-context-
 import { supabaseAdmin } from '../config/database';
 import { EnhancedConversationContext, FlowType } from '../types/flow-lock.types';
 import OpenAI from 'openai';
-import { upsertUserProfile } from './user-profile.service';
-
-// Helper function to get user by phone in a specific tenant
-async function getUserByPhoneInTenant(phone: string, tenantId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('users')
-    .select(`
-      id, name, email,
-      user_tenants!inner(tenant_id)
-    `)
-    .eq('phone', phone)
-    .eq('user_tenants.tenant_id', tenantId)
-    .maybeSingle();
-  
-  return { data, error };
-}
 
 // 🔎 Build marker – aparece no boot/rebuild do servidor
 console.log('🆕 VERSÃO REBUILD ATIVA - data/hora:', new Date().toLocaleString('pt-BR'));
@@ -830,7 +814,12 @@ export class WebhookFlowOrchestratorService {
       
       if (normalizedPhone) {
         try {
-          const userData = await getUserByPhoneInTenant(normalizedPhone, tenantId);
+          const userData = await supabaseAdmin
+            .from('users')
+            .select('name, email')
+            .eq('phone', normalizedPhone)
+            .eq('tenant_id', tenantId)
+            .single();
           userProfile = userData.data;
         } catch (error) {
           // Usuário não existe no banco
@@ -876,8 +865,13 @@ export class WebhookFlowOrchestratorService {
       // Tentar buscar gender do usuário
       if (normalizedPhone) {
         try {
-          // Campo gender não existe na tabela users, vamos inferir do nome
-          userGender = inferGenderFromName(userProfile?.name || undefined);
+          const userGenderData = await supabaseAdmin
+            .from('users')
+            .select('gender')
+            .eq('phone', normalizedPhone)
+            .eq('tenant_id', tenantId)
+            .single();
+          userGender = (userGenderData.data as any)?.gender;
         } catch (genderError) {
           console.log('🔧 Campo gender não disponível, inferindo do nome');
         }
@@ -1126,7 +1120,12 @@ export class WebhookFlowOrchestratorService {
         let gender: string | undefined;
 
         try {
-          const { data } = await getUserByPhoneInTenant(normalizedPhone, tenantId);
+          const { data } = await supabaseAdmin
+            .from('users')
+            .select('name')
+            .eq('phone', normalizedPhone)
+            .eq('tenant_id', tenantId)
+            .single();
           firstName = (data?.name || '').split(' ')[0] || '';
           gender = inferGenderFromName(data?.name || undefined);
         } catch {}
@@ -1196,7 +1195,12 @@ export class WebhookFlowOrchestratorService {
       let userProfile: { name: string | null } | null = null;
       try {
         const normalizedPhone = userPhone.replace(/[\s\-\(\)]/g, '');
-        const { data } = await getUserByPhoneInTenant(normalizedPhone, tenantId);
+        const { data } = await supabaseAdmin
+          .from('users')
+          .select('name')
+          .eq('phone', normalizedPhone)
+          .eq('tenant_id', tenantId)
+          .single();
         userProfile = data || null;
       } catch (error) {
         userProfile = null;
@@ -1221,8 +1225,13 @@ export class WebhookFlowOrchestratorService {
         let userGender: string | undefined = undefined;
         
         try {
-          // Campo gender não existe na tabela users, vamos inferir do nome
-          userGender = inferGenderFromName(userProfile?.name || undefined);
+          const userGenderData = await supabaseAdmin
+            .from('users')
+            .select('gender')
+            .eq('phone', normalizedPhone)
+            .eq('tenant_id', tenantId)
+            .single();
+          userGender = (userGenderData.data as any)?.gender;
         } catch (genderError) {
           userGender = inferGenderFromName(userProfile?.name || undefined);
         }
@@ -1254,12 +1263,11 @@ export class WebhookFlowOrchestratorService {
       if (extractedEmail) {
         // Salvar email
         const normalizedPhone = userPhone.replace(/[\s\-\(\)]/g, '');
-        // Usar user-profile.service para atualizar o email corretamente
-        await upsertUserProfile({
-          tenantId: tenantId,
-          userPhone: normalizedPhone,
-          email: extractedEmail
-        });
+        await supabaseAdmin
+          .from('users')
+          .update({ email: extractedEmail })
+          .eq('phone', normalizedPhone)
+          .eq('tenant_id', tenantId);
         
         // Saudação personalizada após salvar email
         const normalizedPhoneGender = userPhone?.replace(/[\s\-\(\)]/g, '');
@@ -1548,12 +1556,14 @@ export class WebhookFlowOrchestratorService {
         const startTime = Date.now();
         
         const result = await Promise.race([
-          upsertUserProfile({
-            tenantId: tenantId,
-            userPhone: normalizedPhoneForUpsert,
-            name: maybeName,
-            gender: inferredGender
-          }),
+          supabaseAdmin
+            .from('users')
+            .upsert({ 
+              phone: normalizedPhoneForUpsert, 
+              name: maybeName,
+              gender: inferredGender,
+              tenant_id: tenantId 
+            }, { onConflict: 'phone' }),
           new Promise((_, reject) => 
             setTimeout(() => reject(new Error('UPSERT_TIMEOUT_10S')), 10000)
           )
@@ -1563,11 +1573,20 @@ export class WebhookFlowOrchestratorService {
         console.log(`⏱️ UPSERT DURATION: ${duration}ms`);
         
         console.log('🔍 RESULT TYPE:', typeof result);
+        console.log('🔍 RESULT KEYS:', Object.keys(result || {}));
         
-        if (result) {
-          console.log('✅ UPSERT SUCCESS - USER ID:', result);
+        const { data, error } = result as any;
+        
+        console.log('📊 HAS DATA:', !!data, 'HAS ERROR:', !!error);
+        
+        if (error) {
+          console.error('❌ UPSERT ERROR CODE:', error.code);
+          console.error('❌ UPSERT ERROR MESSAGE:', error.message);
+          console.error('❌ UPSERT ERROR DETAILS:', error.details);
+        } else if (data) {
+          console.log('✅ UPSERT SUCCESS - ROWS AFFECTED:', Array.isArray(data) ? data.length : 'N/A');
         } else {
-          console.log('⚠️ UPSERT COMPLETED BUT NO USER ID RETURNED');
+          console.log('⚠️ UPSERT COMPLETED BUT NO DATA/ERROR');
         }
       } catch (catchError: any) {
         console.error('❌ UPSERT EXCEPTION:', catchError?.message || catchError);
@@ -1635,11 +1654,9 @@ export class WebhookFlowOrchestratorService {
 
       // Persistir E-MAIL agora
       const normalizedPhoneForEmail = userPhone.replace(/[\s\-\(\)]/g, '');
-      await upsertUserProfile({
-        tenantId: tenantId,
-        userPhone: normalizedPhoneForEmail,
-        email: maybeEmail
-      });
+      await supabaseAdmin
+        .from('users')
+        .upsert({ phone: normalizedPhoneForEmail, email: maybeEmail, tenant_id: tenantId }, { onConflict: 'phone' });
 
       // Avançar para PERGUNTA OPCIONAL
       const nextLock = this.flowManager.startFlowLock('onboarding', 'ask_additional_data');
@@ -1801,16 +1818,11 @@ export class WebhookFlowOrchestratorService {
         };
       }
 
-      // Skip birth_date - tabela users não possui esta coluna
+      // Persistir data de aniversário
       const normalizedPhoneForBirthday = userPhone.replace(/[\s\-\(\)]/g, '');
-      
-      // Apenas garantir que o usuário existe via user-profile.service
-      await upsertUserProfile({
-        tenantId: tenantId,
-        userPhone: normalizedPhoneForBirthday
-      });
-      
-      console.log(`ℹ️ Data de nascimento ${maybeBirthDate} seria salva se houvesse coluna birth_date`);
+      await supabaseAdmin
+        .from('users')
+        .upsert({ phone: normalizedPhoneForBirthday, birth_date: maybeBirthDate, tenant_id: tenantId }, { onConflict: 'phone' });
 
       // Avançar para ENDEREÇO
       const nextLock = this.flowManager.startFlowLock('onboarding', 'need_address');
@@ -1862,17 +1874,13 @@ export class WebhookFlowOrchestratorService {
         };
       }
 
-      // Skip address - tabela users não possui esta coluna
+      // Persistir endereço como JSON
       const normalizedPhoneForAddress = userPhone.replace(/[\s\-\(\)]/g, '');
       const addressData = { full_address: address, created_at: new Date().toISOString() };
       
-      // Apenas garantir que o usuário existe via user-profile.service
-      await upsertUserProfile({
-        tenantId: tenantId,
-        userPhone: normalizedPhoneForAddress
-      });
-      
-      console.log(`ℹ️ Endereço ${JSON.stringify(addressData)} seria salvo se houvesse coluna address`);
+      await supabaseAdmin
+        .from('users')
+        .upsert({ phone: normalizedPhoneForAddress, address: addressData, tenant_id: tenantId }, { onConflict: 'phone' });
 
       // Finalizar onboarding completo
       const cleanedContext = await mergeEnhancedConversationContext(
@@ -1885,14 +1893,24 @@ export class WebhookFlowOrchestratorService {
       let userGender: string | undefined = undefined;
       
       try {
-        // Primeiro tentar buscar apenas o nome via helper correto
-        const userNameData = await getUserByPhoneInTenant(normalizedPhone, tenantId);
+        // Primeiro tentar buscar apenas o nome (que sabemos que existe)
+        const userNameData = await supabaseAdmin
+          .from('users')
+          .select('name')
+          .eq('phone', normalizedPhone)
+          .eq('tenant_id', tenantId)
+          .single();
         userName = userNameData.data?.name || '';
 
         // Tentar buscar gender apenas se necessário
         try {
-          // Campo gender não existe na tabela users, vamos inferir do nome
-          userGender = inferGenderFromName(userName || undefined);
+          const userGenderData = await supabaseAdmin
+            .from('users')
+            .select('gender')
+            .eq('phone', normalizedPhone)
+            .eq('tenant_id', tenantId)
+            .single();
+          userGender = (userGenderData.data as any)?.gender;
         } catch (genderError) {
           // Ignora erro se gender não existir - será inferido do nome
           console.log('🔧 Campo gender não disponível, inferindo do nome');
@@ -2311,7 +2329,7 @@ ${flowCtx}`;
 
     try {
       const completion = await this.openai.chat.completions.create({
-        model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+        model: process.env.OPENAI_MODEL || 'gpt-4',
         temperature: 0.7,
         max_tokens: 300,
         logprobs: true,
@@ -2482,7 +2500,7 @@ Regras:
 
     try {
       const completion = await this.openai.chat.completions.create({
-        model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         temperature: 0,
         top_p: 0,
         max_tokens: 20,

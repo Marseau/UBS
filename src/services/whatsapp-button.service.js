@@ -384,7 +384,7 @@ class WhatsAppButtonService {
             
             // Enviar mensagem com botões
             const result = await this.sendInteractiveMessage(
-                '5511999999999', 
+                '{{TEST_PHONE_NUMBER}}', 
                 message, 
                 exampleButtons
             );

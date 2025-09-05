@@ -30,10 +30,11 @@ async function getTenantByDemoToken(token: string, demoTenantId?: string, routeT
   // 1) Tentar validar como token HMAC primeiro
   try {
     const validator = new DemoTokenValidator();
-    const isValidToken = validator.validateToken(token);
-    if (isValidToken) {
-      console.log('✅ [getTenantByDemoToken] Token HMAC válido');
-      const tenantId = demoTenantId || routeTenantId;
+    const payload = validator.validateToken(token);
+    if (payload) {
+      console.log('✅ [getTenantByDemoToken] Token HMAC válido', { source: payload.source, tenantId: payload.tenantId });
+      // O tenant ID pode vir do payload HMAC, do header, ou da rota
+      const tenantId = payload.tenantId || demoTenantId || routeTenantId;
       if (tenantId) {
         console.log(`✅ [getTenantByDemoToken] Sucesso com tenant: ${tenantId}`);
         return { id: tenantId };
@@ -42,7 +43,7 @@ async function getTenantByDemoToken(token: string, demoTenantId?: string, routeT
       return null;
     }
   } catch (error) {
-    console.log('🔍 [getTenantByDemoToken] Token não é HMAC válido, tentando tokens simples');
+    console.log('🔍 [getTenantByDemoToken] Token não é HMAC válido, tentando tokens simples', error);
   }
   
   // 2) Fallback para tokens simples (para compatibilidade)

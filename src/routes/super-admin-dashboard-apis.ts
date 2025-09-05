@@ -1936,7 +1936,7 @@ router.get("/risk-alerts", async (req, res) => {
     const alerts: any[] = [];
     let churnRisk = 0;
     let decreasingUsage = 0;
-    let paymentIssues = 0;
+    const paymentIssues = 0;
     let lowEfficiency = 0;
 
     // Analisar cada tenant para identificar riscos

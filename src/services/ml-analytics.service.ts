@@ -335,7 +335,7 @@ export class MLAnalyticsService {
 
     const avgEfficiency = efficiencyData.reduce((sum, val) => sum + val, 0) / efficiencyData.length;
     
-    let insight = null;
+    const insight = null;
 
     if (avgEfficiency < 70) {
       return {

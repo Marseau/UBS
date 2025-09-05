@@ -223,11 +223,11 @@ class AIEnhancedService {
 • Alguma observação especial?`
                 },
                 {
-                    user: "Maria Silva, 11999999999",
+                    user: "{{USER_NAME}}, {{USER_PHONE}}",
                     ai: `✨ **AGENDAMENTO CONFIRMADO!** ✨
 
 💇‍♀️ **Serviço:** Corte Feminino
-👤 **Cliente:** Maria Silva
+👤 **Cliente:** {{USER_NAME}}
 📅 **Data:** terça-feira, 16 de janeiro de 2024
 🕐 **Horário:** 14:00
 ⏱️ **Duração:** 60 minutos
@@ -308,11 +308,11 @@ Clique no horário desejado:
                     ]
                 },
                 {
-                    user: "Maria Silva, 11999999999",
+                    user: "{{USER_NAME}}, {{USER_PHONE}}",
                     ai: `✨ **AGENDAMENTO CONFIRMADO!** ✨
 
 💇‍♀️ **Serviço:** Serviço de Beleza
-👤 **Cliente:** Maria Silva
+👤 **Cliente:** {{USER_NAME}}
 📅 **Data:** terça-feira, 16 de janeiro de 2024
 🕐 **Horário:** 14:00
 ⏱️ **Duração:** 60 minutos
