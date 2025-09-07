@@ -108,7 +108,6 @@ interface OutcomeFinalizeResult {
   outcome: ConversationOutcome;
   conversation_id: string;
   finalized_at: string;
-  metadata?: Record<string, any>;
 }
 
 export class ConversationOutcomeAnalyzerService {
@@ -243,7 +242,7 @@ export class ConversationOutcomeAnalyzerService {
         regexResult.context = context;
         
         console.log(`✅ [INTENT] Detectado via REGEX: ${regexResult.intent} (${regexResult.confidence}) - Urgência: ${urgency}, Prioridade: ${priority}`);
-        await this.persistMessageIntent(conversationId, regexResult.intent, regexResult.method, regexResult.metadata, urgency, priority, context);
+        await this.persistMessageIntent(conversationId, regexResult.intent, regexResult.method, urgency, priority, context);
         return regexResult;
       }
 
@@ -257,7 +256,7 @@ export class ConversationOutcomeAnalyzerService {
         llmResult.context = context;
         
         console.log(`✅ [INTENT] Detectado via LLM: ${llmResult.intent} (${llmResult.confidence}) - Urgência: ${urgency}, Prioridade: ${priority}`);
-        await this.persistMessageIntent(conversationId, llmResult.intent, llmResult.method, llmResult.metadata, urgency, priority, context);
+        await this.persistMessageIntent(conversationId, llmResult.intent, llmResult.method, urgency, priority, context);
         return llmResult;
       }
 
@@ -270,7 +269,7 @@ export class ConversationOutcomeAnalyzerService {
       fallbackResult.context = context;
       
       console.log(`✅ [INTENT] Fallback determinístico: ${fallbackResult.intent} (${fallbackResult.confidence}) - Urgência: ${urgency}, Prioridade: ${priority}`);
-      await this.persistMessageIntent(conversationId, fallbackResult.intent, fallbackResult.method, fallbackResult.metadata, urgency, priority, context);
+      await this.persistMessageIntent(conversationId, fallbackResult.intent, fallbackResult.method, urgency, priority, context);
       return fallbackResult;
 
     } catch (error) {
@@ -288,7 +287,7 @@ export class ConversationOutcomeAnalyzerService {
           emotionalState: 'calm'
         }
       };
-      await this.persistMessageIntent(conversationId, fallbackResult.intent, fallbackResult.method, fallbackResult.metadata, fallbackResult.urgency, fallbackResult.priority, fallbackResult.context);
+      await this.persistMessageIntent(conversationId, fallbackResult.intent, fallbackResult.method, fallbackResult.urgency, fallbackResult.priority, fallbackResult.context);
       return fallbackResult;
     }
   }
@@ -298,21 +297,20 @@ export class ConversationOutcomeAnalyzerService {
    * Outcome é persistido APENAS na última mensagem da conversa
    */
   async finalizeOutcome(
-    conversationId: string, 
-    outcome: ConversationOutcome,
-    metadata?: Record<string, any>
+    sessionId: string, 
+    outcome: ConversationOutcome
   ): Promise<OutcomeFinalizeResult> {
     try {
-      console.log(`🎯 [OUTCOME] Finalizando conversa ${conversationId} com outcome: ${outcome}`);
+      console.log(`🎯 [OUTCOME] Finalizando conversa ${sessionId} com outcome: ${outcome}`);
 
       const now = new Date().toISOString();
 
-      // Atualizar APENAS a última mensagem da conversação com o outcome
+      // Atualizar APENAS a última mensagem da sessão com o outcome
       const { data: lastMessage, error: findError } = await supabaseAdmin
         .from('conversation_history')
-        .select('id, message_timestamp')
-        .eq('conversation_id', conversationId)
-        .order('message_timestamp', { ascending: false })
+        .select('id, created_at')
+        .eq('session_id_uuid', sessionId)
+        .order('created_at', { ascending: false })
         .limit(1)
         .single();
 
@@ -321,7 +319,7 @@ export class ConversationOutcomeAnalyzerService {
         return {
           success: false,
           outcome,
-          conversation_id: conversationId,
+          conversation_id: sessionId,
           finalized_at: now
         };
       }
@@ -330,9 +328,7 @@ export class ConversationOutcomeAnalyzerService {
       const { error: updateError } = await supabaseAdmin
         .from('conversation_history')
         .update({
-          conversation_outcome: outcome,
-          outcome_finalized_at: now,
-          outcome_metadata: metadata || {}
+          conversation_outcome: outcome
         })
         .eq('id', lastMessage.id);
 
@@ -341,7 +337,7 @@ export class ConversationOutcomeAnalyzerService {
         return {
           success: false,
           outcome,
-          conversation_id: conversationId,
+          conversation_id: sessionId,
           finalized_at: now
         };
       }
@@ -350,9 +346,8 @@ export class ConversationOutcomeAnalyzerService {
       return {
         success: true,
         outcome,
-        conversation_id: conversationId,
-        finalized_at: now,
-        metadata
+        conversation_id: sessionId,
+        finalized_at: now
       };
 
     } catch (error) {
@@ -360,7 +355,7 @@ export class ConversationOutcomeAnalyzerService {
       return {
         success: false,
         outcome,
-        conversation_id: conversationId,
+        conversation_id: sessionId,
         finalized_at: new Date().toISOString()
       };
     }
@@ -414,67 +409,6 @@ export class ConversationOutcomeAnalyzerService {
     return { shouldFinalize: false, suggestedOutcome: 'conversation_ongoing' };
   }
 
-  /**
-   * Analisa conversações abandonadas por timeout e finaliza outcomes
-   */
-  async analyzeTimeoutAbandonments(tenantId: string): Promise<void> {
-    try {
-      console.log(`🔍 [TIMEOUT] Analisando conversações abandonadas para tenant ${tenantId}`);
-
-      // Buscar conversações sem outcome há mais de 30 minutos
-      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-      
-      const { data: abandonedConversations, error } = await supabaseAdmin
-        .from('conversation_history')
-        .select('conversation_id, flow_type, flow_step, message_timestamp')
-        .eq('tenant_id', tenantId)
-        .is('conversation_outcome', null)
-        .lt('message_timestamp', thirtyMinutesAgo)
-        .order('message_timestamp', { ascending: false });
-
-      if (error) {
-        console.error('❌ [TIMEOUT] Erro ao buscar conversações abandonadas:', error);
-        return;
-      }
-
-      if (!abandonedConversations || abandonedConversations.length === 0) {
-        console.log('✅ [TIMEOUT] Nenhuma conversação abandonada encontrada');
-        return;
-      }
-
-      console.log(`🔍 [TIMEOUT] Encontradas ${abandonedConversations.length} conversações abandonadas`);
-
-      // Agrupar por conversation_id (pegar apenas a mais recente de cada conversa)
-      const conversationMap = new Map();
-      abandonedConversations.forEach(conv => {
-        if (!conversationMap.has(conv.conversation_id) || 
-            new Date(conv.message_timestamp) > new Date(conversationMap.get(conv.conversation_id).message_timestamp)) {
-          conversationMap.set(conv.conversation_id, conv);
-        }
-      });
-
-      // Finalizar outcome para cada conversação abandonada
-      for (const [conversationId, conversation] of conversationMap) {
-        const { shouldFinalize, suggestedOutcome } = this.shouldFinalizeOutcome(
-          conversation.flow_type,
-          conversation.flow_step,
-          conversation.message_timestamp
-        );
-
-        if (shouldFinalize) {
-          await this.finalizeOutcome(conversationId, suggestedOutcome, {
-            abandoned_reason: 'timeout',
-            last_activity: conversation.message_timestamp,
-            flow_type: conversation.flow_type,
-            flow_step: conversation.flow_step
-          });
-        }
-      }
-
-    } catch (error) {
-      console.error('❌ [TIMEOUT] Erro ao analisar timeouts:', error);
-    }
-  }
 
   /**
    * Detecção de intent por REGEX (Fase 1 - mais rápida)
@@ -937,7 +871,6 @@ export class ConversationOutcomeAnalyzerService {
     conversationId: string,
     intent: MessageIntent,
     method: string,
-    metadata?: Record<string, any>,
     urgency?: UrgencyLevel,
     priority?: PriorityLevel,
     context?: ContextualInfo
@@ -963,6 +896,76 @@ export class ConversationOutcomeAnalyzerService {
       }
     } catch (error) {
       console.error('❌ [INTENT] Erro interno ao persistir intent:', error);
+    }
+  }
+
+  /**
+   * VERIFICAR SE CONVERSA ESTÁ FINALIZADA
+   * (para ser chamado periodicamente)
+   */
+  async checkForFinishedConversations(): Promise<void> {
+    try {
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      
+      // Buscar sessões sem outcome nas últimas 10 minutos (última mensagem pode ser do usuário OU da IA)
+      const { data, error } = await supabaseAdmin
+        .from('conversation_history')
+        .select('session_id_uuid, created_at')
+        .is('conversation_outcome', null)
+        .lt('created_at', tenMinutesAgo)
+        .order('created_at', { ascending: false })
+        .limit(500);
+
+      if (error || !data) {
+        console.warn('⚠️ No sessions fetched for outcome scan', error);
+        return;
+      }
+
+      // Deduplicar por sessão (ignorar nulos)
+      const uniqueSessions = [...new Set(
+        data
+          .map((row: any) => row.session_id_uuid)
+          .filter((s: string | null) => !!s)
+      )];
+
+      console.info(`🔍 Checking ${uniqueSessions.length} sessions for timeout outcomes`);
+
+      for (const sessionId of uniqueSessions) {
+        console.log(`🔍 [SESSION] Analisando sessão: ${sessionId}`);
+        
+        // Buscar contexto da sessão para determinar outcome
+        const { data: sessionData, error: sessionError } = await supabaseAdmin
+          .from('conversation_history')
+          .select('conversation_context, created_at')
+          .eq('session_id_uuid', sessionId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (sessionError || !sessionData) {
+          console.warn(`⚠️ Could not fetch session data for ${sessionId}`);
+          continue;
+        }
+
+        const flowType = sessionData.conversation_context?.flow_type || null;
+        const flowStep = sessionData.conversation_context?.flow_step || null;
+        
+        const { shouldFinalize, suggestedOutcome } = this.shouldFinalizeOutcome(
+          flowType,
+          flowStep,
+          sessionData.created_at
+        );
+
+        if (shouldFinalize) {
+          console.log(`🎯 [OUTCOME] Finalizando sessão ${sessionId} com outcome: ${suggestedOutcome}`);
+          await this.finalizeOutcome(sessionId, suggestedOutcome);
+        } else {
+          console.log(`⏳ [OUTCOME] Sessão ${sessionId} ainda não precisa ser finalizada`);
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ Failed to check finished conversations', error);
     }
   }
 }

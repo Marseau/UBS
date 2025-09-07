@@ -18,8 +18,9 @@ import { AppointmentActionablesService } from './appointment-actionables.service
 import { MapsLocationService } from './maps-location.service';
 import { RescheduleConflictManagerService } from './reschedule-conflict-manager.service';
 import { ContextualPoliciesService } from './contextual-policies.service';
-import { RedisCacheService } from './redis-cache.service';
+import { RedisCacheService, redisCacheService } from './redis-cache.service';
 import { IntentOutcomeTelemetryService } from './intent-outcome-telemetry.service';
+import { ConversationOutcomeAnalyzerService } from './conversation-outcome-analyzer.service';
 
 // Estados de coleta progressiva de dados
 export enum DataCollectionState {
@@ -178,6 +179,7 @@ export class WebhookFlowOrchestratorService {
   private contextualPolicies: ContextualPoliciesService;
   private redisCacheService: RedisCacheService;
   private telemetryService: IntentOutcomeTelemetryService;
+  private outcomeAnalyzer: ConversationOutcomeAnalyzerService;
   private openai: OpenAI;
 
   constructor() {
@@ -187,8 +189,9 @@ export class WebhookFlowOrchestratorService {
     this.flowManager = new FlowLockManagerService();
     this.dataCollector = new ProgressiveDataCollectorService();
     this.contextualPolicies = new ContextualPoliciesService();
-    this.redisCacheService = RedisCacheService.getInstance();
+    this.redisCacheService = redisCacheService;
     this.telemetryService = new IntentOutcomeTelemetryService();
+    this.outcomeAnalyzer = new ConversationOutcomeAnalyzerService();
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY || ''
     });
@@ -3392,11 +3395,36 @@ ${flowCtx}`;
    * Detecta se a conversa está finalizada e deve persistir outcome
    * Retorna null se conversa ainda está em andamento
    */
-  private shouldPersistOutcome(intent: string | null, _response: string, _context: EnhancedConversationContext): string | null {
-    const finalizers = ['booking_confirm', 'cancel_confirm', 'reschedule_confirm'];
-    if (intent && finalizers.includes(intent)) {
+  private shouldPersistOutcome(intent: string | null, _response: string, context: EnhancedConversationContext): string | null {
+    // Outcomes finalizadores diretos
+    const directFinalizers = ['booking_confirm', 'cancel_confirm', 'reschedule_confirm'];
+    if (intent && directFinalizers.includes(intent)) {
       return this.determineConversationOutcome(intent, _response);
     }
+
+    // Outcomes informativos também devem ser finalizados
+    const informationalFinalizers = ['pricing', 'services', 'address', 'business_hours', 'policies'];
+    if (intent && informationalFinalizers.includes(intent)) {
+      return 'information_provided';
+    }
+
+    // Outcomes de erro ou problemas
+    const errorFinalizers = ['wrong_number', 'test_message'];
+    if (intent && errorFinalizers.includes(intent)) {
+      return intent === 'wrong_number' ? 'wrong_number' : 'test_message';
+    }
+
+    // Verificar se há flow lock finalizado baseado no step
+    if (context.flow_lock?.step === 'complete') {
+      const flowType = context.flow_lock.active_flow;
+      if (flowType === 'booking') return 'appointment_created';
+      if (flowType === 'reschedule') return 'appointment_rescheduled';  
+      if (flowType === 'cancel') return 'appointment_cancelled';
+    }
+
+    // Por agora, removemos a verificação de abandonment por step pois os valores não existem
+    // Isso será tratado por timeout no analyzer
+
     return null;
   }
 
@@ -3427,16 +3455,13 @@ ${flowCtx}`;
 
   async processFinishedConversations(): Promise<void> {
     try {
-      // TODO: Implementar análise de conversações finalizadas usando analyzeTimeoutAbandonments
-      console.log('🔍 Processing finished conversations - method needs implementation');
+      await this.outcomeAnalyzer.checkForFinishedConversations();
     } catch (error) {
       console.error('❌ Failed to process finished conversations:', error);
     }
   }
-
   /**
-   * ✨ SISTEMA DE 3 CAMADAS OTIMIZADO - Detecção de Intent
-   * Camada 1: REGEX (gratuito) → Camada 2: LLM Mini/3.5/4 (escalonado) → Camada 3: Desambiguação
+   * ANALISAR contexto completo da conversa para determinar outcome
    */
   private async detectIntentThreeLayers(
     messageText: string,

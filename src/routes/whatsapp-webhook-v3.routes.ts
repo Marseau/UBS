@@ -25,6 +25,7 @@ import { supabaseAdmin } from '../config/database';
 import { handleIncomingMessage } from "../services/message-handler";
 import { WebhookV3FlowIntegrationService } from '../services/webhook-v3-flow-integration.service';
 import { WebhookFlowOrchestratorService } from '../services/webhook-flow-orchestrator.service';
+import { ConversationOutcomeAnalyzerService } from '../services/conversation-outcome-analyzer.service';
 import { demoTokenValidator } from '../utils/demo-token-validator';
 import { VALID_CONVERSATION_OUTCOMES } from '../types/billing-cron.types';
 
@@ -1696,6 +1697,7 @@ class ValidationService {
     // ===== Init Services =====
     const cache = new CacheService();
     const orchestrator = new WebhookFlowOrchestratorService();
+    const outcomeAnalyzer = new ConversationOutcomeAnalyzerService();
     
     // ===== Middlewares =====
     router.use(demoTokenValidator.middleware());
@@ -2075,8 +2077,12 @@ class ValidationService {
           confidence_score: null // Confidence não se aplica à resposta
         };
 
-        // 6) Inserir (sem validação prévia equivocada)
-        const { error: chError } = await supabaseAdmin.from('conversation_history').insert([userRow, aiRow]);
+        // 6) Inserir com retorno do ID
+        const { data: insertedRows, error: chError } = await supabaseAdmin
+          .from('conversation_history')
+          .insert([userRow, aiRow])
+          .select('id');
+        
         if (chError) {
           logger.error('🚨 Insert conversation_history falhou', { error: chError });
           return;
@@ -2089,6 +2095,27 @@ class ValidationService {
           intent: __persist_intent,
           tokensUsed: __persist_intentTokens
         });
+
+        // 🎯 FINALIZAR OUTCOME se conversa foi finalizada
+        if (result.conversationOutcome && result.conversationOutcome !== null && insertedRows && insertedRows.length > 1) {
+          try {
+            console.log(`🎯 [OUTCOME] Finalizando conversa com outcome: ${result.conversationOutcome}`);
+            
+            // Usar sessionKey (session_id_uuid) para finalizar outcome
+            const outcomeResult = await outcomeAnalyzer.finalizeOutcome(
+              sessionKey,
+              result.conversationOutcome as any // cast para o tipo esperado
+            );
+
+            if (outcomeResult.success) {
+              console.log(`✅ [OUTCOME] Outcome finalizado: ${result.conversationOutcome}`);
+            } else {
+              console.error(`❌ [OUTCOME] Falha ao finalizar outcome: ${result.conversationOutcome}`);
+            }
+          } catch (outcomeError) {
+            console.error('❌ [OUTCOME] Erro ao finalizar outcome:', outcomeError);
+          }
+        }
       } catch (e) {
         logger.error('Failed to persist conversation_history', { error: e });
       }

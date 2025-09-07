@@ -21,7 +21,6 @@ export interface ConversationMessage {
   isFromUser: boolean;
   messageSource: string;
   intent?: string;
-  outcome?: string;
   phoneNumberId?: string;
   conversationContext?: any;
   modelUsed?: string;
@@ -45,7 +44,6 @@ export interface ConversationHistoryRecord {
   message_source: string;
   session_id_uuid: string;
   intent?: string;
-  outcome?: string;
   phone_number_id?: string;
   conversation_context?: any;
   model_used?: string;
@@ -95,7 +93,6 @@ export class ConversationHistoryPersistence {
         message_source: userMessage.messageSource,
         session_id_uuid: userMessage.sessionId,
         intent: userMessage.intent,
-        outcome: null as any, // NEVER persist outcome in user messages
         phone_number_id: userMessage.phoneNumberId,
         conversation_context: userMessage.conversationContext,
         model_used: undefined, // User messages não têm model_used
@@ -110,7 +107,6 @@ export class ConversationHistoryPersistence {
         message_source: assistantMessage.messageSource,
         session_id_uuid: assistantMessage.sessionId,
         intent: assistantMessage.intent,
-        outcome: null as any, // Outcome will be set ONLY when conversation is finished via ConversationOutcomeAnalyzerService
         phone_number_id: assistantMessage.phoneNumberId,
         conversation_context: assistantMessage.conversationContext,
         model_used: assistantMessage.modelUsed || 'gpt-3.5-turbo',
@@ -191,7 +187,6 @@ export class ConversationHistoryPersistence {
         message_source: message.messageSource,
         session_id_uuid: message.sessionId,
         intent: message.intent,
-        outcome: null as any, // Outcome will be set ONLY when conversation is finished via ConversationOutcomeAnalyzerService
         phone_number_id: message.phoneNumberId,
         conversation_context: message.conversationContext,
         model_used: message.isFromUser ? undefined : (message.modelUsed || 'gpt-3.5-turbo'),
