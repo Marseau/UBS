@@ -25,6 +25,8 @@ export type FlowStep =
   | 'collect_gender'
   | 'collect_confirmation'
   | 'show_slots'
+  | 'select_time_slot'
+  | 'confirm_cancel'
   | 'confirm'
   | 'complete'
   | 'abandoned'
@@ -33,6 +35,7 @@ export type FlowStep =
   | 'need_gender'
   | 'ask_additional_data'
   | 'need_birthday'
+  | 'need_birth_date'
   | 'need_address'
   | 'finish';
 
@@ -63,6 +66,11 @@ export interface EnhancedConversationContext {
   
   // Extensões para Flow Lock
   flow_lock?: FlowLock | null;
+  
+  // Sistema de Coleta Progressiva de Dados
+  last_data_collection_attempt?: string;
+  last_data_collection_success?: string;
+  awaiting_data_fields?: string[];
   
   // Estatísticas de intent
   intent_history: {

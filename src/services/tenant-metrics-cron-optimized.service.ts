@@ -317,46 +317,75 @@ export class TenantMetricsCronOptimizedService {
                 enhancements: ['retry_mechanism', 'protected_calculations', 'storage_verification']
             });
 
-            // Execute our DEFINITIVA TOTAL FIXED v5.0 procedure for ALL tenants at once
-            const result = await this.dbPool.withConnection(async (client) => {
-                const { data, error } = await (client as any)
-                    .rpc('calculate_tenant_metrics_definitiva_total_fixed_v5', {
-                        p_calculation_date: new Date().toISOString().split('T')[0],
-                        p_tenant_id: null // NULL = process ALL active tenants
-                    });
-
-                if (error) {
-                    this.logger.error('DEFINITIVA TOTAL v5.0 procedure failed', {
-                        error: error.message,
-                        code: error.code,
-                        version: 'v5.0'
-                    });
-                    throw error;
-                }
-
-                return data;
+            // Process tenants in batches for 10k+ scale (5-10 tenants per batch)
+            const batchSize = Math.min(10, Math.max(5, tenants.length));
+            let totalProcessed = 0;
+            let totalErrors = 0;
+            
+            this.logger.info(`Processing ${tenants.length} tenants in batches of ${batchSize}`, {
+                maxConcurrency: 3,
+                estimatedBatches: Math.ceil(tenants.length / batchSize)
             });
+            
+            // Use ConcurrencyManager for intelligent batch processing
+            const processingResults = await this.concurrencyManager.processWithConcurrency(
+                tenants,
+                async (tenant) => {
+                    return await this.processSingleTenant(tenant.id, startTime);
+                },
+                {
+                    maxConcurrency: 3, // Conservative for database load
+                    batchSize: batchSize,
+                    retryAttempts: 2
+                }
+            );
 
+            totalProcessed = processingResults.successes.length;
+            totalErrors = processingResults.failures.length;
+            
             const duration = Date.now() - startTime;
             
-            this.logger.info('DEFINITIVA TOTAL v5.0 procedure completed successfully', {
+            // Build comprehensive result object
+            const result = {
+                success: totalErrors === 0,
+                processed_tenants: totalProcessed,
+                failed_tenants: totalErrors,
+                total_tenants: tenants.length,
+                periods_processed: [7, 30, 90], // Standard periods
+                total_metrics_created: totalProcessed * 3, // 3 periods per tenant
+                execution_time_ms: duration,
+                version: 'DEFINITIVA_TOTAL_v5.0_BATCH_PROCESSING',
+                features_implemented: [
+                    'batch_processing',
+                    'concurrency_management', 
+                    'error_resilience',
+                    'scalable_architecture'
+                ]
+            };
+            
+            this.logger.info('DEFINITIVA TOTAL v5.0 batch processing completed', {
                 result: {
-                    success: result?.success,
-                    processed_tenants: result?.processed_tenants,
-                    periods_processed: result?.periods_processed,
-                    total_metrics_created: result?.total_metrics_created,
-                    execution_time_ms: result?.execution_time_ms,
-                    version: result?.version,
-                    features_implemented: result?.features_implemented
+                    success: result.success,
+                    processed_tenants: result.processed_tenants,
+                    failed_tenants: result.failed_tenants,
+                    periods_processed: result.periods_processed,
+                    total_metrics_created: result.total_metrics_created,
+                    execution_time_ms: result.execution_time_ms,
+                    version: result.version,
+                    features_implemented: result.features_implemented
                 },
-                totalDuration: duration
+                performance: {
+                    avgTimePerTenant: totalProcessed > 0 ? Math.round(duration / totalProcessed) : 0,
+                    throughputPerSecond: totalProcessed > 0 ? (totalProcessed / (duration / 1000)).toFixed(2) : 0
+                }
             });
 
             // Return results in expected format
-            const processed = result?.processed_tenants || 0;
-            const errors = result?.success ? 0 : 1;
-
-            return { processed, errors, duration };
+            return { 
+                processed: result.processed_tenants, 
+                errors: result.failed_tenants, 
+                duration: result.execution_time_ms 
+            };
 
         } catch (error) {
             const duration = Date.now() - startTime;
@@ -467,6 +496,64 @@ export class TenantMetricsCronOptimizedService {
             this.logger.error('Error in sample metrics calculation', {
                 error: error instanceof Error ? error.message : 'Unknown error'
             });
+        }
+    }
+
+    /**
+     * Process single tenant with DEFINITIVA TOTAL v5.0 procedure
+     * Optimized for batch processing and error resilience
+     */
+    private async processSingleTenant(tenantId: string, startTime: number): Promise<any> {
+        const client = await this.dbPool.acquire();
+        
+        try {
+            this.logger.debug('Processing single tenant with DEFINITIVA TOTAL v5.0', { 
+                tenantId: tenantId.substring(0, 8) + '...', 
+                version: 'v5.0_single_tenant' 
+            });
+            
+            // Call the procedure for single tenant
+            const { data, error } = await (client as any)
+                .rpc('calculate_tenant_metrics_definitiva_total_fixed_v5', {
+                    p_calculation_date: new Date().toISOString().split('T')[0],
+                    p_tenant_id: tenantId // Process single tenant
+                });
+
+            if (error) {
+                this.logger.error('DEFINITIVA TOTAL v5.0 procedure failed for tenant', {
+                    tenantId: tenantId.substring(0, 8) + '...',
+                    error: error.message,
+                    code: error.code,
+                    version: 'v5.0'
+                });
+                throw error;
+            }
+
+            const processingTime = Date.now() - startTime;
+            this.logger.debug('Tenant processed successfully', {
+                tenantId: tenantId.substring(0, 8) + '...',
+                processingTime: processingTime,
+                success: data?.success,
+                periodsProcessed: data?.periods_processed
+            });
+
+            return {
+                tenantId,
+                success: true,
+                data,
+                processingTime
+            };
+
+        } catch (error) {
+            this.logger.error('Error processing tenant', {
+                tenantId: tenantId.substring(0, 8) + '...',
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
+            
+            throw error; // Let ConcurrencyManager handle retry logic
+            
+        } finally {
+            this.dbPool.release(client);
         }
     }
 

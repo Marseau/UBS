@@ -231,13 +231,30 @@ export class AdvancedMonitoringService {
     const start = Date.now();
     
     try {
-      // Como não temos Redis configurado, assumir como degraded por padrão
+      // Testar conexão Redis real se disponível
+      const Redis = require('ioredis');
+      const redis = new Redis({
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        db: parseInt(process.env.REDIS_DB || '0'),
+        retryDelayOnFailover: 50,
+        maxRetriesPerRequest: 1,
+        lazyConnect: true,
+        connectTimeout: 2000,
+        commandTimeout: 1000
+      });
+
+      // Testar conexão com PING
+      await redis.ping();
       const responseTime = Date.now() - start;
       
+      // Fechar conexão
+      redis.disconnect();
+      
       return {
-        status: 'degraded',
+        status: 'healthy',
         response_time: responseTime,
-        details: 'Redis not configured - using fallback caching',
+        details: `Redis connected successfully (${responseTime}ms response)`,
         last_check: new Date().toISOString()
       };
       

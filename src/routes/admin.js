@@ -4619,6 +4619,33 @@ router.put('/appointments/:appointmentId/status', adminAuth.verifyToken, async (
 
         console.log(`✅ [UPDATE] Appointment ${appointmentId} status updated to ${status}`);
 
+        // 📧📱 Disparar notificações baseadas no novo status
+        try {
+            const { AppointmentNotificationsService } = require('../services/appointment-notifications.service');
+            const notificationService = new AppointmentNotificationsService();
+
+            if (status === 'no_show') {
+                const notificationResult = await notificationService.sendNoShow(appointmentId);
+                console.log('🔔 No-show notification sent:', notificationResult);
+            } else if (status === 'cancelled') {
+                const notificationResult = await notificationService.sendCancellation(appointmentId, cancel_reason);
+                console.log('🔔 Cancellation notification sent:', notificationResult);
+            } else if (status === 'completed') {
+                // Aguardar 1 hora após completar para enviar feedback
+                setTimeout(async () => {
+                    try {
+                        const feedbackResult = await notificationService.sendFeedbackRequest(appointmentId);
+                        console.log('🔔 Feedback request sent (delayed):', feedbackResult);
+                    } catch (err) {
+                        console.error('Error sending delayed feedback:', err);
+                    }
+                }, 60 * 60 * 1000); // 1 hora
+            }
+        } catch (notificationError) {
+            console.error('⚠️ Error sending status change notification:', notificationError);
+            // Continue sem falhar - notificação é não-crítica
+        }
+
         res.json({
             success: true,
             message: 'Appointment status updated successfully',

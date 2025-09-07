@@ -4,9 +4,11 @@ exports.BeautyAgent = void 0;
 const database_1 = require("../../config/database");
 const validation_helpers_1 = require("../../utils/validation-helpers");
 const { ConversationOutcomeService } = require("../conversation-outcome.service");
+const { AppointmentNotificationsService } = require("../appointment-notifications.service");
 class BeautyAgent {
     constructor() {
         this.conversationOutcomeService = new ConversationOutcomeService();
+        this.appointmentNotifications = new AppointmentNotificationsService();
         this.agent = {
             id: 'beauty_agent',
             name: 'Agente de Beleza e Estética',
@@ -455,6 +457,15 @@ Sempre priorize a satisfação da cliente e a qualidade dos serviços!`;
             // Marcar a conversa como appointment_created para cobrança correta
             if (context.conversationId && appointment?.id) {
                 await this.conversationOutcomeService.markAppointmentCreated(context.conversationId, appointment.id);
+                
+                // 📧📱 Enviar notificação de confirmação do agendamento
+                try {
+                    const notificationResult = await this.appointmentNotifications.sendConfirmation(appointment.id);
+                    console.log('🔔 Notification sent:', notificationResult);
+                } catch (error) {
+                    console.error('❌ Error sending confirmation notification:', error);
+                    // Continue mesmo se a notificação falhar - não deve quebrar o fluxo
+                }
             }
             const dateFormatted = new Date(args.date).toLocaleDateString('pt-BR', {
                 weekday: 'long',

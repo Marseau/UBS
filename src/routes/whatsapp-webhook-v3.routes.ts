@@ -13,6 +13,13 @@ import rateLimit from 'express-rate-limit';
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import crypto from 'crypto';
+import { RealAvailabilityService } from '../services/real-availability.service';
+import { BusinessHoursService } from '../services/business-hours.service';
+import { ContextualUpsellService } from '../services/contextual-upsell.service';
+import { RetentionStrategyService, RetentionOffer } from '../services/retention-strategy.service';
+import { ContextualSuggestionsService, SuggestionContext } from '../services/contextual-suggestions.service';
+import { AppointmentActionablesService } from '../services/appointment-actionables.service';
+import { MapsLocationService } from '../services/maps-location.service';
 import Redis from 'ioredis';
 import { supabaseAdmin } from '../config/database';
 import { handleIncomingMessage } from "../services/message-handler";
@@ -200,11 +207,17 @@ interface SessionData {
     spamScore: number;
     history: { role: 'user' | 'assistant'; content: string; timestamp: number }[];
     demoMode?: any; // Demo mode payload from token
+    onboardingCompleted?: boolean; // Track if onboarding is complete
     pendingConfirmation?: {
         type: 'create' | 'reschedule';
         appointmentId: string;
         dateTimeISO?: string;
         display?: string;
+    };
+    pendingRetention?: {
+        appointmentId: string;
+        offers: RetentionOffer[];
+        attempts: number;
     };
 }
 
@@ -222,7 +235,7 @@ interface TenantCache {
 interface ProcessingResult {
     success: boolean;
     response: string;
-    action?: 'direct_response'|'llm_required'|'spam_detected'|'rate_limited';
+    action?: 'direct_response'|'llm_required'|'spam_detected'|'rate_limited'|'contextual_suggestion';
     metadata?: Record<string, any>;
 }
 
@@ -661,22 +674,39 @@ class ValidationService {
         return { window };
         }
         
-        function suggestSlots(dateISO?: string, window?: 'manha'|'tarde'|'noite'): string[] {
-		const base = dateISO ? new Date(dateISO) : new Date(Date.now()+2*3600*1000);
-		const presets: Array<[number, number]> = window==='manha' ? [[9,0],[10,30],[11,30]]
-				: window==='tarde' ? [[14,0],[15,30],[16,30]]
-				: window==='noite' ? [[18,0],[19,0],[20,0]]
-				: [[10,0],[14,0],[16,0]];
-		const out: string[] = presets.map(([h,m]: [number, number]) => {
-		const d = new Date(base); d.setHours(h,m,0,0);
-		return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-		});
-		if (out.length<5) {
-		const e = new Date(base); e.setDate(e.getDate()+1); e.setHours(15,0,0,0);
-		out.push(e.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}));
-		}
-		return out.slice(0,5);
-		}
+        // ✅ NOVO: Sistema REAL de availability - sem hardcoded!
+        async function getRealAvailableSlots(tenantId: string, dateISO?: string, window?: 'manha'|'tarde'|'noite'): Promise<{
+          success: boolean;
+          slots: string[];
+          message: string;
+        }> {
+          try {
+            const availabilityService = new RealAvailabilityService();
+            const result = await availabilityService.getRealAvailableSlots(tenantId, dateISO, window);
+            
+            if (result.success && result.slots.length > 0) {
+              const slotsFormatted = result.slots.map(slot => slot.formatted);
+              return {
+                success: true,
+                slots: slotsFormatted,
+                message: availabilityService.formatSlotsForChat(result.slots)
+              };
+            } else {
+              return {
+                success: false,
+                slots: [],
+                message: result.message
+              };
+            }
+          } catch (error) {
+            console.error('❌ [WEBHOOK] Erro ao buscar slots reais:', error);
+            return {
+              success: false,
+              slots: [],
+              message: 'Erro ao consultar disponibilidade. Tente novamente.'
+            };
+          }
+        }
         
         function fuzzyService(q: string, services: {name:string}[]): string | undefined {
         const s = q.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'');
@@ -748,6 +778,51 @@ class ValidationService {
             return { success: true, response: `Confirmação registrada: ${display}. Nos vemos lá!`, action: 'direct_response', metadata: { intent: 'confirm', outcome: 'appointment_confirmed' } };
           }
         }
+
+        // Processar respostas às ofertas de retenção
+        if (session.pendingRetention?.appointmentId) {
+          const retentionResponse = this.processRetentionResponse(text, session.pendingRetention);
+          if (retentionResponse) {
+            if (retentionResponse.action === 'accept_offer') {
+              // Cliente aceitou uma oferta - cancelar retenção
+              session.pendingRetention = undefined;
+              await cache.setSession(sessionKey, session);
+              return { 
+                success: true, 
+                response: retentionResponse.message, 
+                action: 'direct_response', 
+                metadata: { intent: 'retention_accepted', outcome: 'retention_successful' }
+              };
+            } else if (retentionResponse.action === 'decline_all') {
+              // Cliente recusou todas as ofertas - proceder com cancelamento
+              const appointmentId = session.pendingRetention.appointmentId;
+              const tenant = await this.getTenantFromCache(phoneNumberId);
+              
+              if (tenant) {
+                const ok = await DatabaseService.cancelAppointment(tenant.id, appointmentId);
+                
+                // Log retenção falhada
+                const retentionService = new RetentionStrategyService();
+                await retentionService.logRetentionAttempt(
+                  { tenantId: tenant.id, appointmentId }, 
+                  session.pendingRetention.offers, 
+                  'lost'
+                );
+                
+                session.pendingRetention = undefined;
+                await cache.setSession(sessionKey, session);
+                
+                return { 
+                  success: ok, 
+                  response: ok ? `Agendamento [ID ${appointmentId}] cancelado. Esperamos te ver em breve! 😊` : `Erro ao cancelar. Tente novamente.`, 
+                  action: 'direct_response',
+                  metadata: { intent: 'cancel_confirmed', outcome: 'appointment_cancelled' }
+                };
+              }
+            }
+            // Se não foi uma resposta definitiva, continuar processamento normal
+          }
+        }
         
         // 5) Direct commands (cancel/remarcar/address/payments)
         const direct = await this.processDirectCommands(sessionKey, text, phoneNumberId, intent || 'unknown', session);
@@ -759,6 +834,68 @@ class ValidationService {
         
         // 6) Tenant & user context (with forced tenantId from demo token)
         const tenantData = await this.getTenantData(phoneNumberId, intent || 'unknown', userPhone, forcedTenantId);
+        
+        // 6.1) Interceptar MY_APPOINTMENTS para usar actionables estruturados
+        const intentCheck = ValidationService.detectIntent(text);
+        
+        // Verificar se é uma ação de agendamento (cancelar_123, remarcar_456, etc.)
+        const actionMatch = text.match(/^(cancelar|remarcar|detalhes|confirmar)_([a-f0-9-]{36})/i);
+        if (actionMatch && tenantData?.tenant?.id && tenantData?.user?.id) {
+          const [, action, appointmentId] = actionMatch;
+          console.log('🎯 [APPOINTMENT_ACTION] Processando ação estruturada:', { action, appointmentId });
+          try {
+            const actionablesService = new AppointmentActionablesService();
+            const actionResult = await actionablesService.processSelectedAction(
+              tenantData.tenant.id,
+              tenantData.user.id,
+              appointmentId || '',
+              (action || '').toLowerCase()
+            );
+            
+            if (actionResult.success) {
+              await this.updateSessionHistory(sessionKey, session, text, actionResult.message);
+              return { 
+                success: true, 
+                response: actionResult.message, 
+                action: 'direct_response', 
+                metadata: { intent: `appointment_${action}`, tenantId: tenantData.tenant.id } 
+              };
+            }
+          } catch (error) {
+            console.error('❌ [APPOINTMENT_ACTION] Erro ao processar ação:', error);
+            // Continua para o Flow Lock como fallback
+          }
+        }
+        
+        // Interceptar MY_APPOINTMENTS para listar agendamentos
+        if (intentCheck === 'my_appointments' && tenantData?.tenant?.id && tenantData?.user?.id) {
+          console.log('🗓️ [MY_APPOINTMENTS] Interceptado para actionables estruturados');
+          try {
+            const actionablesService = new AppointmentActionablesService();
+            const actionablesResult = await actionablesService.getAppointmentsWithActionables(
+              tenantData.tenant.id,
+              tenantData.user.id
+            );
+            
+            if (actionablesResult.success) {
+              await this.updateSessionHistory(sessionKey, session, text, actionablesResult.message);
+              return { 
+                success: true, 
+                response: actionablesResult.message, 
+                action: 'direct_response', 
+                metadata: { intent: 'my_appointments', tenantId: tenantData.tenant.id } 
+              };
+            }
+          } catch (error) {
+            console.error('❌ [MY_APPOINTMENTS] Erro ao processar actionables:', error);
+            // Continua para o Flow Lock como fallback
+          }
+        }
+        
+        // 6.5) Pre-declare variables for context blocks
+        let availabilityBlock = '';
+        let businessHoursBlock = '';
+        let upsellBlock = '';
         // 6.1) Forçar saudação com nome quando usuário existir
         // Detectar saudação por conteúdo da mensagem
         if (/\b(ol[aá]|oi|bom\s+dia|boa\s+tarde|boa\s+noite|hey|hello)/i.test(text) && tenantData?.tenant?.id) {
@@ -773,17 +910,72 @@ class ValidationService {
         }
         
         // 7) Availability (fallback) precompute
-        let availabilityBlock = '';
         // Detectar consulta de disponibilidade por conteúdo
         if (/\b(disponibilidade|dispon[íi]vel|hor[aá]rio|agenda|vaga|marcar)/i.test(text)) {
-        const { dateISO, window } = inferDateAndWindow(text);
-        if (window && !session.preferredWindow) session.preferredWindow = window;
-        if (dateISO && !session.preferredDayISO) session.preferredDayISO = dateISO;
-        const slots = suggestSlots(session.preferredDayISO, session.preferredWindow);
-        if (slots?.length) availabilityBlock = `Tenho: ${slots.join(', ')}. Algum funciona?`;
-      }
+          const { dateISO, window } = inferDateAndWindow(text);
+          if (window && !session.preferredWindow) session.preferredWindow = window;
+          if (dateISO && !session.preferredDayISO) session.preferredDayISO = dateISO;
+          
+          // Usar sistema real de availability (não hardcoded)
+          const realAvailability = new RealAvailabilityService();
+          const availabilityResult = await realAvailability.getRealAvailableSlots(
+            tenantData?.tenant?.id || '',
+            session.preferredDayISO,
+            session.preferredWindow
+          );
+          
+          if (availabilityResult.success && availabilityResult.slots.length > 0) {
+            const slots = availabilityResult.slots.map(slot => slot.formatted);
+            availabilityBlock = `Tenho: ${slots.join(', ')}. Algum funciona?`;
+          }
+        }
+
+        // 8) Business Hours (precompute real hours)
+        // Detectar consulta de horários de funcionamento
+        if (/(hor[áa]rios? de funcion|hor[áa]rios? de atend|hor[áa]rio de funcion|hor[áa]rio de atend|que horas (abre|fecha|funciona)|quando (abre|fecha|funciona))/i.test(text)) {
+          const businessHoursService = new BusinessHoursService();
+          const businessHoursResult = await businessHoursService.getBusinessHours(
+            tenantData?.tenant?.id || ''
+          );
+          
+          if (businessHoursResult.success) {
+            businessHoursBlock = businessHoursResult.formatted_message;
+          }
+        }
+
+        // 9) Contextual Upsell (precompute when services are mentioned)
+        if (/(serviço|preço|valor|custo|quanto custa|lista|opções)/i.test(text) && tenantData?.tenant?.services?.length) {
+          const upsellService = new ContextualUpsellService();
+          
+          // Verificar elegibilidade para upsell
+          const isEligible = tenantData?.user?.id ? 
+            await upsellService.isEligibleForUpsell(tenantData.tenant.id, tenantData.user.id) : 
+            true;
+
+          if (isEligible) {
+            const upsellContext = {
+              tenantId: tenantData.tenant.id,
+              userId: tenantData?.user?.id,
+              currentService: session.inferredService,
+              userProfile: {
+                gender: session.gender,
+                previousServices: [], // TODO: implementar histórico
+                spendingPattern: 'standard' as const // TODO: analisar padrão baseado em histórico
+              },
+              sessionContext: {
+                mentionedServices: session.inferredService ? [session.inferredService] : [],
+                timeWindow: session.preferredWindow
+              }
+            };
+
+            const upsellResult = await upsellService.detectUpsellOpportunities(upsellContext);
+            if (upsellResult.success && upsellResult.opportunities.length > 0) {
+              upsellBlock = upsellResult.contextualMessage;
+            }
+          }
+        }
       
-      // 8) Fuzzy service inference
+      // 10) Fuzzy service inference
       if ((tenantData?.tenant as any)?.services?.length) {
         const f = fuzzyService(text, (tenantData!.tenant as any).services);
         if (f) session.inferredService = f;
@@ -793,16 +985,78 @@ class ValidationService {
       // TODO: Aplicar onboarding apenas para intents greeting/general
 
       // 10) Garantir usuário no tenant após concluir onboarding (completo)
+      let onboardingJustCompleted = false;
       try {
         const inferredGenderForUpsert = ValidationService.inferGenderFromName(session.name || '');
         if (tenantData?.tenant?.id && session.name && session.email && (session.gender || inferredGenderForUpsert)) {
+          // Verificar se o onboarding acabou de ser completado
+          const wasIncomplete = !session.onboardingCompleted;
+          
           const ensuredUserId = await DatabaseService.upsertUserForTenant(tenantData.tenant.id, userPhone, session);
           if (ensuredUserId) {
             tenantData.user = { id: ensuredUserId, name: session.name, email: session.email, phone: userPhone, gender: session.gender };
+            
+            // Marcar onboarding como completo
+            if (wasIncomplete) {
+              session.onboardingCompleted = true;
+              onboardingJustCompleted = true;
+              console.log('🎯 [CONTEXTUAL-SUGGESTIONS] Onboarding completado - ativando sugestões contextuais');
+            }
           }
         }
       } catch {
         // Ignore user initialization errors
+      }
+
+      // 10.1) Sistema de Sugestões Contextuais Inteligentes (pós-onboarding)
+      if (onboardingJustCompleted && intent === 'greeting' && tenantData?.tenant?.id && tenantData?.user?.id) {
+        console.log('🌟 [CONTEXTUAL-SUGGESTIONS] Gerando sugestões pós-onboarding');
+        
+        try {
+          const suggestionsService = new ContextualSuggestionsService();
+          
+          // Construir contexto para sugestões
+          const suggestionContext: SuggestionContext = {
+            tenantId: tenantData.tenant.id,
+            userId: tenantData.user.id,
+            userName: session.name || 'Usuário',
+            userGender: session.gender,
+            tenantDomain: tenantData.tenant.domain || 'general',
+            isBusinessHours: this.isWithinBusinessHours(),
+            currentHour: new Date().getHours(),
+            dayOfWeek: new Date().getDay(),
+            tenantServices: (tenantData.tenant as any).services || [],
+            userHistory: await suggestionsService.getUserHistory(tenantData.tenant.id, tenantData.user.id),
+            activePromotions: await suggestionsService.getActivePromotions(tenantData.tenant.id)
+          };
+
+          const contextualSuggestion = await suggestionsService.generateContextualSuggestions(suggestionContext);
+          const formattedSuggestion = suggestionsService.formatSuggestionForMessage(contextualSuggestion);
+
+          console.log('✨ [CONTEXTUAL-SUGGESTIONS] Sugestão gerada:', {
+            urgency: contextualSuggestion.urgencyLevel,
+            showAvailability: contextualSuggestion.shouldShowAvailability,
+            preview: formattedSuggestion.substring(0, 100) + '...'
+          });
+
+          // Retornar sugestão contextual em vez de processar com LLM
+          await this.updateSessionHistory(sessionKey, session, text, formattedSuggestion);
+          return { 
+            success: true, 
+            response: formattedSuggestion, 
+            action: 'contextual_suggestion', 
+            metadata: { 
+              intent, 
+              tenantId: tenantData.tenant.id,
+              suggestionType: 'post_onboarding',
+              urgencyLevel: contextualSuggestion.urgencyLevel
+            }
+          };
+          
+        } catch (error) {
+          console.warn('⚠️ [CONTEXTUAL-SUGGESTIONS] Erro ao gerar sugestões, usando LLM fallback:', error);
+          // Continuar com fluxo normal se der erro
+        }
       }
 
       // 11) LLM response
@@ -813,7 +1067,7 @@ class ValidationService {
         text: text.substring(0, 50)
       });
       const llmResponse = await this.flowIntegration.processWithFlowLockOrFallback(
-      session, text, intent, tenantData, availabilityBlock,
+      session, text, intent, tenantData, availabilityBlock, businessHoursBlock, upsellBlock,
       this.generateLLMResponse.bind(this)
     );
       console.log('🔍 [DEBUG] Após processWithFlowLockOrFallback:', {
@@ -882,17 +1136,140 @@ class ValidationService {
         }
       }
       
+      /**
+       * Processar resposta do usuário às ofertas de retenção
+       */
+      private processRetentionResponse(text: string, pendingRetention: { appointmentId: string; offers: RetentionOffer[]; attempts: number }): { action: 'accept_offer' | 'decline_all' | 'unclear'; message: string } | null {
+        const normalizedText = text.toLowerCase().trim();
+
+        // PRIMEIRO: Verificar respostas negativas EXPLÍCITAS (incluir "mesmo assim") - EXCLUINDO ambíguas
+        if (/\b(nao|recuso|prefiro cancelar|quero cancelar|mesmo assim.*cancelar|mesmo assim.*vou cancelar)\b/.test(normalizedText) ||
+            (/\b(não)\b/.test(normalizedText) && !/\b(não sei)\b/.test(normalizedText))) {
+          return {
+            action: 'decline_all',
+            message: ''
+          };
+        }
+
+        // SEGUNDO: Respostas positivas (aceitar ofertas) - excluindo aquelas que contêm negação
+        if (/\b(sim|aceito|quero|vou|gostaria|me interessa|opção\s*[123]|reagendar|remarcar)\b/.test(normalizedText) && !/\b(mesmo assim|não|nao)\b/.test(normalizedText)) {
+          // Detectar qual oferta específica
+          let selectedOffer: RetentionOffer | undefined = undefined;
+          if (/\b(opção\s*1|primeira|1)\b/.test(normalizedText) && pendingRetention.offers.length >= 1) {
+            selectedOffer = pendingRetention.offers[0];
+          } else if (/\b(opção\s*2|segunda|2)\b/.test(normalizedText) && pendingRetention.offers.length >= 2) {
+            selectedOffer = pendingRetention.offers[1];
+          } else if (/\b(opção\s*3|terceira|3)\b/.test(normalizedText) && pendingRetention.offers.length >= 3) {
+            selectedOffer = pendingRetention.offers[2];
+          } else if (pendingRetention.offers.length > 0) {
+            // Se não especificou, usar primeira oferta
+            selectedOffer = pendingRetention.offers[0];
+          }
+
+          if (selectedOffer) {
+            return {
+              action: 'accept_offer',
+              message: `Perfeito! ${selectedOffer.title} foi aplicado ao seu agendamento. Nossa equipe entrará em contato para finalizar os detalhes. Obrigado por continuar conosco! 🤝`
+            };
+          }
+        }
+
+        // TERCEIRO: Respostas ambíguas/incertas (primeira tentativa) 
+        if (/\b(não sei|talvez|outro|outra hora|depois|mais tarde|pensar)\b/.test(normalizedText)) {
+          if (pendingRetention.attempts < 2) {
+            return null; // Deixar processar normalmente e tentar entender novamente
+          } else {
+            // Após 2 tentativas com respostas ambíguas, assumir cancelamento
+            return {
+              action: 'decline_all',
+              message: ''
+            };
+          }
+        }
+
+        // QUARTO: Outras respostas não compreendidas
+        if (pendingRetention.attempts < 2) {
+          return null; // Deixar processar normalmente e tentar entender novamente
+        }
+
+        // Se já tentou 2x e não compreendeu, assumir que quer cancelar
+        return {
+          action: 'decline_all',
+          message: ''
+        };
+      }
+
       private async processDirectCommands(sessionKey: string, text: string, phoneNumberId: string, intent: string, session: SessionData): Promise<ProcessingResult | null> {
       const tenant = await this.getTenantFromCache(phoneNumberId);
       if (!tenant) return null;
       
-      // Cancelamento direto
+      // Sistema de retenção em cancelamentos
 		const __cancelMatch = text.match(/cancelar\s+([0-9a-fA-F-]{8,})/i);
 		if (__cancelMatch) {
 			const __id: string | undefined = __cancelMatch[1] ? String(__cancelMatch[1]) : undefined;
 			if (__id) {
-				const ok = await DatabaseService.cancelAppointment(tenant.id, __id);
-				return { success: ok, response: ok ? `Agendamento [ID ${__id}] cancelado. Precisa de mais algo?` : `Não consegui cancelar [ID ${__id}]. Confira o ID e tente novamente.`, action: 'direct_response' };
+				// Primeiro, obter detalhes do agendamento
+				const { data: appointmentData } = await supabaseAdmin
+					.from('appointments')
+					.select('id, service_id, professional_id, start_time, user_id, services(name, base_price)')
+					.eq('tenant_id', tenant.id)
+					.eq('id', __id)
+					.single();
+
+				if (!appointmentData) {
+					return { success: false, response: `Não consegui localizar o agendamento [ID ${__id}]. Confira o ID e tente novamente.`, action: 'direct_response' };
+				}
+
+				// Buscar informações do usuário
+				const { data: userData } = await supabaseAdmin
+					.from('users')
+					.select('id, name, email, phone')
+					.eq('id', appointmentData.user_id)
+					.single();
+
+				// Configurar contexto de retenção
+				const retentionService = new RetentionStrategyService();
+				const retentionContext = {
+					tenantId: tenant.id,
+					userId: appointmentData.user_id,
+					appointmentId: __id,
+					appointmentDetails: {
+						service: appointmentData.services?.name || 'Serviço',
+						professional: 'Profissional', // Pode buscar depois se necessário
+						datetime: new Date(appointmentData.start_time),
+						value: parseFloat(String(appointmentData.services?.base_price || '0'))
+					}
+				};
+
+				// Gerar estratégia de retenção
+				const retentionResult = await retentionService.generateRetentionStrategy(retentionContext);
+
+				if (retentionResult.shouldAttemptRetention) {
+					// Tentar retenção - apresentar ofertas
+					console.log(`🎯 [RETENTION] Tentativa de retenção para ${__id}`);
+					
+					// Marcar na sessão que há uma tentativa de retenção pendente
+					session.pendingRetention = {
+						appointmentId: __id,
+						offers: retentionResult.offers,
+						attempts: 1
+					};
+					await cache.setSession(sessionKey, session);
+
+					return { 
+						success: true, 
+						response: retentionResult.retentionMessage, 
+						action: 'direct_response',
+						metadata: { intent: 'cancel_retention', outcome: 'retention_attempted' }
+					};
+				} else {
+					// Proceder com cancelamento normal
+					const ok = await DatabaseService.cancelAppointment(tenant.id, __id);
+					if (ok) {
+						await retentionService.logRetentionAttempt(retentionContext, [], 'lost');
+					}
+					return { success: ok, response: ok ? `Agendamento [ID ${__id}] cancelado. Precisa de mais algo?` : `Não consegui cancelar [ID ${__id}]. Confira o ID e tente novamente.`, action: 'direct_response' };
+				}
 			}
 		}
 		// Remarcação direta
@@ -1048,7 +1425,7 @@ class ValidationService {
     return `${g}${who}${biz}`;
       }
       
-      private async generateLLMResponse(session: SessionData, text: string, intent: string, tenantData: any, availabilityBlock: string): Promise<string> {
+      private async generateLLMResponse(session: SessionData, text: string, intent: string, tenantData: any, availabilityBlock: string, businessHoursBlock: string, upsellBlock: string): Promise<string> {
       const personas = {
       beauty: 'Tom acolhedor e elegante, foco em bem-estar estético.',
       healthcare: 'Calmo e responsável, foco em segurança.',
@@ -1080,6 +1457,8 @@ class ValidationService {
       if (p) contextBlocks.push(`POLÍTICAS:\n• Remarcação: ${p.reschedule}\n• Cancelamento: ${p.cancel}\n• No-show: ${p.no_show}`);
     }
     if (availabilityBlock) contextBlocks.push(`DISPONIBILIDADE:\n${availabilityBlock}`);
+    if (businessHoursBlock) contextBlocks.push(`HORÁRIOS DE FUNCIONAMENTO:\n${businessHoursBlock}`);
+    if (upsellBlock) contextBlocks.push(`OPORTUNIDADE ESPECIAL:\n${upsellBlock}`);
     // Bloco ENDEREÇO (se disponível via address string ou business_address JSON)
     try {
       const addrObj: any = (tenantData?.tenant as any)?.business_address;
@@ -1164,7 +1543,7 @@ class ValidationService {
       confirm: 'Aceite confirmações como "confirmo", "ciente", "ok", "✅".',
       address: 'Use endereço real do BD. Se não houver → frase honesta padrão.',
       payments: 'Liste métodos reais. Se não houver → frase honesta padrão.',
-      business_hours: 'Use horários reais. Se não houver → frase honesta padrão.',
+      business_hours: businessHoursBlock ? `Use os horários pré-computados disponíveis no contexto "HORÁRIOS DE FUNCIONAMENTO".` : 'Informe: "Os horários não estão configurados no sistema. Entre em contato para mais informações."',
       policies: 'Mostre políticas reais. Se não houver → frase honesta padrão.',
       handoff: 'Se houver outros canais (ex.: e-mail, telefone) → informe-os. Se não → frase honesta padrão.',
       noshow_followup: 'Explique brevemente a política cadastrada (se não houver → frase honesta padrão).',
@@ -1297,6 +1676,21 @@ class ValidationService {
           }
         });
       }
+
+      /**
+       * Verificar se estamos dentro do horário comercial (método simples)
+       */
+      private isWithinBusinessHours(): boolean {
+        const now = new Date();
+        const currentHour = now.getHours();
+        const currentDay = now.getDay(); // 0 = domingo, 1 = segunda, etc.
+        
+        // Horário comercial padrão: Segunda a Sexta, 8h às 18h
+        const isWeekday = currentDay >= 1 && currentDay <= 5;
+        const isBusinessHour = currentHour >= 8 && currentHour < 18;
+        
+        return isWeekday && isBusinessHour;
+      }
     }
       
     // ===== Init Services =====
@@ -1411,6 +1805,108 @@ class ValidationService {
     } catch (error) {
       logger.error('Failed to create user before orchestrator', { error, userPhone, actualTenantId });
     }
+
+    // 🗓️ INTERCEPTAR MY_APPOINTMENTS para actionables estruturados (antes do orchestrator)
+    const intentCheck = ValidationService.detectIntent(text);
+    
+    // Verificar se é uma ação de agendamento estruturada (cancelar_123, remarcar_456, etc.)
+    const actionMatch = text.match(/^(cancelar|remarcar|detalhes|confirmar)_([a-f0-9-]{36})/i);
+    if (actionMatch && actualTenantId) {
+      const [, action, appointmentId] = actionMatch;
+      logger.info('🎯 [APPOINTMENT_ACTION] Processando ação estruturada', { action, appointmentId, tenantId: actualTenantId });
+      
+      try {
+        // Buscar usuário para esta ação
+        const user = await DatabaseService.findUserByPhone(actualTenantId, userPhone);
+        if (user?.id) {
+          const actionablesService = new AppointmentActionablesService();
+          const actionResult = await actionablesService.processSelectedAction(
+            actualTenantId,
+            user.id,
+            appointmentId || '',
+            (action || '').toLowerCase()
+          );
+          
+          if (actionResult.success) {
+            logger.info('✅ [APPOINTMENT_ACTION] Ação processada com sucesso', { action, appointmentId });
+            return res.status(200).json({
+              status: 'success',
+              response: actionResult.message,
+              telemetry: { 
+                intent: `appointment_${action}`, 
+                confidence: 1.0,
+                decision_method: 'appointment_actionables',
+                processingTime: Date.now() - startTime
+              }
+            });
+          }
+        }
+      } catch (error) {
+        logger.error('❌ [APPOINTMENT_ACTION] Erro ao processar ação', { error, action, appointmentId });
+        // Continua para o orchestrator como fallback
+      }
+    }
+    
+    // Interceptar MY_APPOINTMENTS para listar agendamentos estruturados
+    if (intentCheck === 'my_appointments' && actualTenantId) {
+      logger.info('🗓️ [MY_APPOINTMENTS] Interceptado para actionables estruturados', { tenantId: actualTenantId });
+      
+      try {
+        // Buscar usuário para listar agendamentos
+        const user = await DatabaseService.findUserByPhone(actualTenantId, userPhone);
+        if (user?.id) {
+          const actionablesService = new AppointmentActionablesService();
+          const actionablesResult = await actionablesService.getAppointmentsWithActionables(
+            actualTenantId,
+            user.id
+          );
+          
+          if (actionablesResult.success) {
+            logger.info('✅ [MY_APPOINTMENTS] Actionables gerados com sucesso', { appointmentCount: actionablesResult.appointments?.length || 0 });
+            return res.status(200).json({
+              status: 'success',
+              response: actionablesResult.message,
+              telemetry: { 
+                intent: 'my_appointments', 
+                confidence: 1.0,
+                decision_method: 'appointment_actionables',
+                processingTime: Date.now() - startTime
+              }
+            });
+          }
+        }
+      } catch (error) {
+        logger.error('❌ [MY_APPOINTMENTS] Erro ao processar actionables', { error });
+        // Continua para o orchestrator como fallback
+      }
+    }
+
+    // 🗺️ INTERCEPTAR ADDRESS para Maps funcionais
+    if (intentCheck === 'address' && actualTenantId) {
+      logger.info('📍 [ADDRESS] Interceptado para Maps funcionais', { tenantId: actualTenantId });
+      
+      try {
+        const mapsService = new MapsLocationService();
+        const locationResult = await mapsService.processLocationRequest(actualTenantId, text);
+        
+        if (locationResult.success) {
+          logger.info('✅ [ADDRESS] Maps processado com sucesso', { hasLocation: locationResult.hasLocation });
+          return res.status(200).json({
+            status: 'success',
+            response: locationResult.message,
+            telemetry: { 
+              intent: 'address', 
+              confidence: 1.0,
+              decision_method: 'maps_integration',
+              processingTime: Date.now() - startTime
+            }
+          });
+        }
+      } catch (error) {
+        logger.error('❌ [ADDRESS] Erro ao processar Maps', { error });
+        // Continua para o orchestrator como fallback
+      }
+    }
     
     const result = await orchestrator.orchestrateWebhookFlow(
       text,
@@ -1448,15 +1944,20 @@ class ValidationService {
     const __persist_aiContent: string = (aiResponse ?? '').toString();
     const __persist_userPhone: string = (messagePhone ?? '').toString();
 
-    const __persist_llm = (result?.llmMetrics as any) || {}
-    ;
-    const __persist_totalTokens: number = __persist_llm.total_tokens ?? 0;
-    const __persist_apiCostUsd: number = __persist_llm.api_cost_usd ?? 0;
-    const __persist_processingCostUsd: number = __persist_llm.processing_cost_usd ?? 0;
-    const __persist_modelUsed: string | null = __persist_llm.model_used ?? config.openai.model;
+    // SEPARAÇÃO: Métricas de Intent Detection (para linha do usuário)
+    const __persist_intentLlm = (result?.llmMetrics as any) || {};
+    const __persist_intentTokens: number = __persist_intentLlm.total_tokens ?? 0;
+    const __persist_intentApiCost: number = __persist_intentLlm.api_cost_usd ?? 0;
+    const __persist_intentProcessingCost: number = __persist_intentLlm.processing_cost_usd ?? 0;
+    const __persist_intentModelUsed: string | null = __persist_intentLlm.model_used ?? null;
     const __persist_aiConfidence: number = result?.telemetryData?.confidence ?? 0;
-
     const __persist_intent: string | undefined = result?.telemetryData?.intent ?? undefined;
+
+    // SEPARAÇÃO: Métricas de Response Generation (para linha da IA) - FUTURO: implementar
+    const __persist_responseTokens: number = 0; // TODO: capturar tokens da resposta
+    const __persist_responseApiCost: number = 0; // TODO: capturar custo da resposta
+    const __persist_responseProcessingCost: number = 0.00003; // Custo mínimo por enquanto
+    const __persist_responseModelUsed: string | null = config.openai.model;
     // === Captura demo token payload para persistência assíncrona ===
     const __persist_demoPayload = (req as any)?.demoMode ?? undefined;
 
@@ -1531,38 +2032,47 @@ class ValidationService {
           conversation_context: { session_id: sessionUuid, duration_minutes: durationMinutes }
         } as const;
 
+        // Ajuste de custo de processamento para Intent Detection (linha usuário)
+        let __effective_intentProcessingCost = __persist_intentProcessingCost;
+        if (!__persist_intentTokens || __persist_intentTokens === 0) {
+          // custo mínimo de infra + inserts no BD para intent determinística
+          __effective_intentProcessingCost = 0.00003; // 0.00002 infra + 0.00001 DB
+        }
+
+        // Ajuste de custo de processamento para Response Generation (linha IA)
+        let __effective_responseProcessingCost = __persist_responseProcessingCost;
+        if (!__persist_responseTokens || __persist_responseTokens === 0) {
+          // custo mínimo de infra + inserts no BD para resposta
+          __effective_responseProcessingCost = 0.00003; // 0.00002 infra + 0.00001 DB
+        }
+
         // 5) Compor linhas finais
+        // LINHA USUÁRIO: Métricas de Intent Detection (3 camadas)
         const userRow = {
           ...commonBase,
           content: __persist_userContent,
           is_from_user: true,
           message_type: 'text',
           intent_detected: __persist_intent ?? null,
-          tokens_used: 0,
-          api_cost_usd: 0,
-          processing_cost_usd: 0,
-          model_used: null,
-          confidence_score: null
+          tokens_used: __persist_intentTokens, // Tokens da detecção de intent
+          api_cost_usd: __persist_intentApiCost, // Custo LLM da detecção
+          processing_cost_usd: __effective_intentProcessingCost, // Custo processamento intent
+          model_used: __persist_intentModelUsed,
+          confidence_score: __persist_aiConfidence
         };
 
-        // Ajuste de custo de processamento quando não há LLM (resposta determinística)
-        let __effective_processingCostUsd = __persist_processingCostUsd;
-        if (!__persist_totalTokens || __persist_totalTokens === 0) {
-          // custo mínimo de infra + inserts no BD
-          __effective_processingCostUsd = 0.00003; // 0.00002 infra + 0.00001 DB
-        }
-
+        // LINHA IA: Métricas de Response Generation
         const aiRow = {
           ...commonBase,
           content: __persist_aiContent,
           is_from_user: false,
           message_type: 'text',
-          intent_detected: __persist_intent ?? null,
-          tokens_used: __persist_totalTokens,
-          api_cost_usd: __persist_apiCostUsd,
-          processing_cost_usd: __effective_processingCostUsd,
-          model_used: __persist_modelUsed,
-          confidence_score: __persist_aiConfidence
+          intent_detected: null, // Intent não é detectada na resposta da IA
+          tokens_used: __persist_responseTokens, // Tokens da geração da resposta (futuro)
+          api_cost_usd: __persist_responseApiCost, // Custo LLM da resposta (futuro)
+          processing_cost_usd: __effective_responseProcessingCost, // Custo processamento resposta
+          model_used: __persist_responseModelUsed,
+          confidence_score: null // Confidence não se aplica à resposta
         };
 
         // 6) Inserir (sem validação prévia equivocada)
@@ -1577,7 +2087,7 @@ class ValidationService {
           tenantId,
           userId,
           intent: __persist_intent,
-          tokensUsed: __persist_totalTokens
+          tokensUsed: __persist_intentTokens
         });
       } catch (e) {
         logger.error('Failed to persist conversation_history', { error: e });

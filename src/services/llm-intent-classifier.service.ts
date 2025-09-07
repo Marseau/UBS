@@ -13,6 +13,14 @@ export interface LLMClassificationResult {
   confidence: number;
   processing_time_ms: number;
   model_used?: string;
+  // ✅ ADICIONAR MÉTRICAS OPENAI COMPLETAS
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+  api_cost_usd?: number;
+  raw_response?: any;
 }
 
 export class LLMIntentClassifierService {
@@ -41,7 +49,7 @@ export class LLMIntentClassifierService {
     userText: string,
     systemPrompt: string,
     minConfidence = 0.75
-  ): Promise<{ intent: string | null; confidence: number; model_used: string; raw?: any }> {
+  ): Promise<{ intent: string | null; confidence: number; model_used: string; raw?: any; usage?: any }> {
     const models = (this.config?.openai?.models && this.config.openai.models.length > 0)
       ? this.config.openai.models
       : ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4'];
@@ -70,7 +78,13 @@ export class LLMIntentClassifierService {
         const confidence = classifiedIntent ? 0.8 : 0.0; // 80% para LLM válida, 0% para null
 
         if (classifiedIntent && confidence >= minConfidence) {
-          return { intent: classifiedIntent, confidence, model_used: model, raw: resp };
+          return { 
+            intent: classifiedIntent, 
+            confidence, 
+            model_used: model, 
+            raw: resp,
+            usage: resp.usage
+          };
         }
         // baixa confiança → tenta próximo modelo
       } catch (err) {
@@ -80,7 +94,13 @@ export class LLMIntentClassifierService {
     }
 
     // Se todos falharam/baixa confiança → retorna nulo com último modelo
-    return { intent: null, confidence: 0, model_used: models[models.length - 1], raw: lastError };
+    return { 
+      intent: null, 
+      confidence: 0, 
+      model_used: models[models.length - 1], 
+      raw: lastError,
+      usage: undefined 
+    };
   }
 
   /**
@@ -96,19 +116,25 @@ export class LLMIntentClassifierService {
       console.log('🤖 [LLM-CLASSIFIER] Chamando OpenAI para classificação fechada com escalonamento');
 
       // Usar escalonamento de modelos
-      const { intent, confidence, model_used } = 
+      const { intent, confidence, model_used, usage, raw } = 
         await this.classifyWithEscalation(userPrompt, systemPrompt, 0.75);
 
       const processingTime = Date.now() - startTime;
       
-      console.log(`🤖 [LLM-CLASSIFIER] Intent classificada: ${intent} (${processingTime}ms) [${model_used}]`);
+      // ✅ CALCULAR CUSTO DA API
+      const apiCost = this.calculateOpenAICost(usage, model_used);
+      
+      console.log(`🤖 [LLM-CLASSIFIER] Intent classificada: ${intent} (${processingTime}ms) [${model_used}] - R$ ${(apiCost || 0).toFixed(6)}`);
 
       return {
         intent,
         decision_method: 'llm_classification',
         confidence,
         processing_time_ms: processingTime,
-        model_used
+        model_used,
+        usage,
+        api_cost_usd: apiCost || undefined,
+        raw_response: raw
       };
 
     } catch (error) {
@@ -193,6 +219,31 @@ Classifique.`;
   }
 
   /**
+   * ✅ Calcula custo estimado da chamada OpenAI
+   */
+  private calculateOpenAICost(usage: any, model?: string): number | null {
+    if (!usage || !usage.prompt_tokens || !usage.completion_tokens) {
+      return null;
+    }
+
+    // 💰 CUSTOS CORRETOS POR MODELO (por 1K tokens)
+    const modelCosts: Record<string, { prompt: number; completion: number }> = {
+      'gpt-4o-mini': { prompt: 0.00015, completion: 0.0006 },
+      'gpt-3.5-turbo': { prompt: 0.0015, completion: 0.002 },
+      'gpt-4': { prompt: 0.03, completion: 0.06 },
+      'gpt-4o': { prompt: 0.005, completion: 0.015 }
+    };
+
+    // Detectar modelo atual ou usar fallback genérico
+    const costs = modelCosts[model || 'gpt-4o-mini'] || modelCosts['gpt-4o-mini'];
+    
+    const promptCost = (usage.prompt_tokens / 1000) * costs!.prompt;
+    const completionCost = (usage.completion_tokens / 1000) * costs!.completion;
+    
+    return Math.round((promptCost + completionCost) * 1000000) / 1000000; // 6 casas decimais para precisão
+  }
+
+  /**
    * Método utilitário para testar a classificação
    */
   async testClassification(testMessages: string[]): Promise<void> {
@@ -200,7 +251,7 @@ Classifique.`;
     
     for (const message of testMessages) {
       const result = await this.classifyIntent(message);
-      console.log(`📝 "${message}" → ${result.intent || 'null'} (${result.processing_time_ms}ms)`);
+      console.log(`📝 "${message}" → ${result.intent || 'null'} (${result.processing_time_ms}ms) - R$ ${(result.api_cost_usd || 0).toFixed(6)}`);
     }
   }
 }

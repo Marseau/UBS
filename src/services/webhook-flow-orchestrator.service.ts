@@ -5,13 +5,32 @@
  */
 
 import { DeterministicIntentDetectorService, INTENT_KEYS } from './deterministic-intent-detector.service';
+import { LLMIntentClassifierService } from './llm-intent-classifier.service';
+import { IntentDisambiguationService } from './intent-disambiguation.service';
 import { FlowLockManagerService } from './flow-lock-manager.service';
-import { ConversationOutcomeAnalyzerService } from './conversation-outcome-analyzer.service';
+import { ProgressiveDataCollectorService, CollectionContext, UserProfileData } from './progressive-data-collector.service';
 import { mergeEnhancedConversationContext } from '../utils/conversation-context-helper';
 import { supabaseAdmin } from '../config/database';
 import { EnhancedConversationContext, FlowType } from '../types/flow-lock.types';
 import OpenAI from 'openai';
 import { upsertUserProfile } from './user-profile.service';
+import { AppointmentActionablesService } from './appointment-actionables.service';
+import { MapsLocationService } from './maps-location.service';
+import { RescheduleConflictManagerService } from './reschedule-conflict-manager.service';
+import { ContextualPoliciesService } from './contextual-policies.service';
+import { RedisCacheService } from './redis-cache.service';
+import { IntentOutcomeTelemetryService } from './intent-outcome-telemetry.service';
+
+// Estados de coleta progressiva de dados
+export enum DataCollectionState {
+  NEED_NAME = 'need_name',
+  NEED_EMAIL = 'need_email', 
+  NEED_GENDER_CONFIRMATION = 'need_gender_confirmation',
+  ASK_OPTIONAL_DATA_CONSENT = 'ask_optional_data_consent',
+  NEED_BIRTH_DATE = 'need_birth_date',
+  NEED_ADDRESS = 'need_address',
+  COLLECTION_COMPLETE = 'collection_complete'
+}
 
 // Helper function to get user by phone in a specific tenant
 async function getUserByPhoneInTenant(phone: string, tenantId: string) {
@@ -152,17 +171,161 @@ export interface WebhookOrchestrationResult {
 
 export class WebhookFlowOrchestratorService {
   private intentDetector: DeterministicIntentDetectorService;
+  private llmClassifier: LLMIntentClassifierService;
+  private disambiguation: IntentDisambiguationService;
   private flowManager: FlowLockManagerService;
-  private outcomeAnalyzer: ConversationOutcomeAnalyzerService;
+  private dataCollector: ProgressiveDataCollectorService;
+  private contextualPolicies: ContextualPoliciesService;
+  private redisCacheService: RedisCacheService;
+  private telemetryService: IntentOutcomeTelemetryService;
   private openai: OpenAI;
 
   constructor() {
     this.intentDetector = new DeterministicIntentDetectorService();
+    this.llmClassifier = new LLMIntentClassifierService();
+    this.disambiguation = new IntentDisambiguationService();
     this.flowManager = new FlowLockManagerService();
-    this.outcomeAnalyzer = new ConversationOutcomeAnalyzerService();
+    this.dataCollector = new ProgressiveDataCollectorService();
+    this.contextualPolicies = new ContextualPoliciesService();
+    this.redisCacheService = RedisCacheService.getInstance();
+    this.telemetryService = new IntentOutcomeTelemetryService();
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY || ''
     });
+  }
+
+  /**
+   * Integra sistema de coleta progressiva de dados
+   * Coleta contextualmente sem afetar UX
+   */
+  private async integrateProgressiveDataCollection(
+    intent: string,
+    messageText: string,
+    userPhone: string,
+    tenantId: string,
+    context: EnhancedConversationContext,
+    currentResponse: string
+  ): Promise<{
+    enhancedResponse: string;
+    dataCollected: boolean;
+  }> {
+    try {
+      // 1. Buscar perfil atual do usuário
+      const { data: userProfile } = await supabaseAdmin
+        .from('users')
+        .select('name, email, gender, birth_date, address, phone')
+        .eq('phone', userPhone)
+        .single();
+
+      if (!userProfile) {
+        return { enhancedResponse: currentResponse, dataCollected: false };
+      }
+
+      // 2. Preparar contexto de coleta
+      const collectionContext: CollectionContext = {
+        intent,
+        messageCount: (context.intent_history?.length || 0) + 1,
+        hasBookingInterest: ['availability', 'confirm', 'services'].includes(intent),
+        hasServiceInterest: ['services', 'pricing'].includes(intent),
+        conversationTone: this.detectConversationTone(messageText),
+        lastDataRequest: context.last_data_collection_attempt ? 
+          new Date(context.last_data_collection_attempt) : undefined
+      };
+
+      // 3. Verificar se deve coletar dados
+      const shouldCollect = this.dataCollector.shouldCollectData(
+        collectionContext, 
+        userProfile as Partial<UserProfileData>
+      );
+
+      if (!shouldCollect) {
+        return { enhancedResponse: currentResponse, dataCollected: false };
+      }
+
+      // 4. Gerar coleta contextual
+      const dataCollection = await this.dataCollector.generateContextualDataCollection(
+        intent,
+        userProfile as Partial<UserProfileData>,
+        collectionContext
+      );
+
+      if (!dataCollection) {
+        return { enhancedResponse: currentResponse, dataCollected: false };
+      }
+
+      // 5. Se o usuário já forneceu dados na mensagem atual, processar
+      const responseProcessing = await this.dataCollector.processUserResponseForData(
+        messageText,
+        dataCollection.expectedFields,
+        userProfile as Partial<UserProfileData>
+      );
+
+      let enhancedResponse = currentResponse;
+
+      if (responseProcessing.extractedData && Object.keys(responseProcessing.extractedData).length > 0) {
+        // Dados foram encontrados na mensagem atual - salvar e confirmar
+        const saved = await this.dataCollector.saveCollectedData(
+          userPhone,
+          tenantId,
+          responseProcessing.extractedData
+        );
+
+        if (saved) {
+          // Agradecer pelos dados coletados naturalmente
+          const thankYou = this.generateDataCollectionThanks(responseProcessing.extractedData);
+          enhancedResponse = `${thankYou}\n\n${currentResponse}`;
+          
+          // Marcar no contexto que coletamos dados
+          context.last_data_collection_success = new Date().toISOString();
+        }
+      } else if (collectionContext.messageCount > 2) {
+        // Apenas após algumas mensagens, fazer pergunta contextual
+        enhancedResponse = `${currentResponse}\n\n${dataCollection.message}`;
+        context.last_data_collection_attempt = new Date().toISOString();
+        context.awaiting_data_fields = dataCollection.expectedFields;
+      }
+
+      return { enhancedResponse, dataCollected: true };
+
+    } catch (error) {
+      console.error('Erro no sistema de coleta progressiva:', error);
+      return { enhancedResponse: currentResponse, dataCollected: false };
+    }
+  }
+
+  /**
+   * Detecta tom da conversa para personalizar coleta
+   */
+  private detectConversationTone(messageText: string): 'formal' | 'casual' {
+    const casual = /\b(oi|eae|fala|valeu|vlw|blz|rs|kkk|haha)/i;
+    const formal = /\b(bom dia|boa tarde|obrigado|obrigada|por favor|gostaria)/i;
+    
+    if (casual.test(messageText)) return 'casual';
+    if (formal.test(messageText)) return 'formal';
+    return 'casual'; // default
+  }
+
+  /**
+   * Gera agradecimento natural pelos dados coletados
+   */
+  private generateDataCollectionThanks(extractedData: Partial<UserProfileData>): string {
+    const thanks = [
+      'Obrigada!',
+      'Perfeito!',
+      'Ótimo!',
+      'Entendi!',
+      'Show!'
+    ];
+
+    const randomThanks = thanks[Math.floor(Math.random() * thanks.length)];
+
+    if (extractedData.name) {
+      return `${randomThanks} Que nome lindo, ${extractedData.name}!`;
+    } else if (extractedData.email) {
+      return `${randomThanks} Email anotado!`;
+    } else {
+      return randomThanks || 'Obrigada!';
+    }
   }
 
   /**
@@ -231,6 +394,177 @@ export class WebhookFlowOrchestratorService {
   ): Promise<WebhookOrchestrationResult> {
     const startTime = Date.now();
     
+    // DEBUG: Log da entrada do orchestrator 
+    console.log('🚀 [ORCHESTRATOR] ENTRADA:', {
+      messageText,
+      userPhone,
+      tenantId: tenantId.substring(0, 8) + '...',
+      hasAddressKeywords: /(endere[cç]o|onde.*fica|onde.*voc[êe]s.*fica|localiza[çc][ãa]o|como chegar|maps|google\s*maps|local\b|onde.*est[ãa]|rota|navega)/i.test(messageText)
+    });
+
+    // 🗺️ INTERCEPTAR ADDRESS PRIMEIRO - ANTES DE QUALQUER LÓGICA DE CONTEXTO
+    if (messageText.match(/(endere[cç]o|onde.*fica|onde.*voc[êe]s.*fica|localiza[çc][ãa]o|como chegar|maps|google\s*maps|local\b|onde.*est[ãa]|rota|navega)/i)) {
+      console.log('📍 [ORCHESTRATOR] ADDRESS interceptado MUITO EARLY - antes de qualquer contexto');
+      
+      try {
+        console.log('🗺️ [DEBUG] Iniciando MapsLocationService...');
+        const mapsService = new MapsLocationService();
+        console.log('🗺️ [DEBUG] MapsLocationService criado, processando localizacao...');
+        const locationResult = await mapsService.processLocationRequest(tenantId, messageText);
+        console.log('🗺️ [DEBUG] MapsLocationService resultado:', { success: locationResult.success, hasLocation: locationResult.hasLocation });
+        
+        if (locationResult.success) {
+          console.log('✅ [ORCHESTRATOR] ADDRESS Maps processado com total sucesso EARLY');
+          
+          return {
+            aiResponse: locationResult.message,
+            shouldSendWhatsApp: true,
+            conversationOutcome: 'location_inquiry',
+            updatedContext: existingContext || { flow_lock: null }, // Contexto mínimo válido
+            telemetryData: {
+              intent: 'address',
+              confidence: 1.0,
+              decision_method: 'very_early_maps_integration',
+              flow_lock_active: false,
+              processing_time_ms: Date.now() - startTime,
+              model_used: undefined
+            },
+            llmMetrics: undefined
+          };
+        } else {
+          console.log('❌ [ORCHESTRATOR] ADDRESS Maps falhou - locationResult.success = false');
+        }
+      } catch (error) {
+        console.error('❌ [ORCHESTRATOR] Erro ao processar ADDRESS Maps very early:', error);
+        console.error('❌ [ORCHESTRATOR] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+        // Continua com processamento normal como fallback
+      }
+    }
+
+    // 🔄 INTERCEPTAR RESCHEDULE PRIMEIRO - ANTES DE QUALQUER LÓGICA DE CONTEXTO
+    if (messageText.match(/(reagenda|remarcar|mudar.*hora|alterar.*agendamento|trocar.*data|mover.*agendamento)/i)) {
+      console.log('🔄 [ORCHESTRATOR] RESCHEDULE interceptado MUITO EARLY - antes de qualquer contexto');
+      
+      try {
+        console.log('🔄 [DEBUG] Iniciando RescheduleConflictManagerService...');
+        const rescheduleService = new RescheduleConflictManagerService();
+        
+        // Para o reschedule, precisamos extrair o ID do agendamento da mensagem
+        // Por enquanto, vamos implementar coleta do ID primeiro
+        const appointmentIdMatch = messageText.match(/([a-f0-9-]{36})/i);
+        const appointmentId = appointmentIdMatch?.[1];
+        
+        if (appointmentId) {
+          console.log('🔄 [DEBUG] Appointment ID encontrado, processando reschedule...');
+          const rescheduleResult = await rescheduleService.processRescheduleRequest(tenantId, appointmentId, messageText);
+          
+          if (rescheduleResult.success && rescheduleResult.appointmentFound) {
+            console.log('✅ [ORCHESTRATOR] RESCHEDULE processado com total sucesso EARLY');
+            
+            return {
+              aiResponse: rescheduleResult.message,
+              shouldSendWhatsApp: true,
+              conversationOutcome: rescheduleResult.hasConflicts ? 'reschedule_conflicts_found' : 'reschedule_slots_available',
+              updatedContext: existingContext || { flow_lock: null },
+              telemetryData: {
+                intent: 'reschedule',
+                confidence: 1.0,
+                decision_method: 'very_early_reschedule_integration',
+                flow_lock_active: false,
+                processing_time_ms: Date.now() - startTime,
+                model_used: undefined
+              },
+              llmMetrics: undefined
+            };
+          } else if (!rescheduleResult.appointmentFound) {
+            console.log('❌ [ORCHESTRATOR] RESCHEDULE - agendamento não encontrado');
+          } else {
+            console.log('❌ [ORCHESTRATOR] RESCHEDULE falhou - rescheduleResult.success = false');
+          }
+        } else {
+          // Se não temos ID do agendamento, iniciamos flow para coletar
+          console.log('🔄 [ORCHESTRATOR] RESCHEDULE sem ID - iniciando coleta');
+          return {
+            aiResponse: '🔄 **Vamos reagendar seu agendamento!**\n\n📝 Para encontrar seu agendamento, preciso do **código de confirmação** (ID) que você recebeu quando agendou.\n\n💡 O código tem formato similar a: `abc12def-3456-789a-bcde-f0123456789a`\n\n📱 Pode procurar na conversa anterior ou no e-mail de confirmação?',
+            shouldSendWhatsApp: true,
+            conversationOutcome: 'reschedule_id_requested',
+            updatedContext: existingContext || { flow_lock: null },
+            telemetryData: {
+              intent: 'reschedule',
+              confidence: 1.0,
+              decision_method: 'very_early_reschedule_id_collection',
+              flow_lock_active: false,
+              processing_time_ms: Date.now() - startTime,
+              model_used: undefined
+            },
+            llmMetrics: undefined
+          };
+        }
+      } catch (error) {
+        console.error('❌ [ORCHESTRATOR] Erro ao processar RESCHEDULE very early:', error);
+      }
+    }
+
+    // ❌ INTERCEPTAR CANCEL_APPOINTMENT PRIMEIRO - ANTES DE QUALQUER LÓGICA DE CONTEXTO
+    if (messageText.match(/(cancelar|desmarcar|anular|remover.*agendamento|excluir.*agendamento|não.*quero.*mais)/i)) {
+      console.log('❌ [ORCHESTRATOR] CANCEL_APPOINTMENT interceptado MUITO EARLY - antes de qualquer contexto');
+      
+      try {
+        console.log('❌ [DEBUG] Iniciando CancelAppointmentManagerService...');
+        const { CancelAppointmentManagerService } = await import('./cancel-appointment-manager.service');
+        const cancelService = new CancelAppointmentManagerService();
+        
+        // Extrair ID do agendamento da mensagem
+        const appointmentIdMatch = messageText.match(/([a-f0-9-]{36})/i);
+        const appointmentId = appointmentIdMatch?.[1];
+        
+        if (appointmentId) {
+          // Processar cancelamento com ID
+          console.log(`❌ [ORCHESTRATOR] CANCEL_APPOINTMENT com ID encontrado: ${appointmentId}`);
+          const cancelResult = await cancelService.processCancelRequest(tenantId, appointmentId, messageText);
+          
+          if (cancelResult.success && cancelResult.appointmentFound) {
+            console.log('✅ [ORCHESTRATOR] CANCEL_APPOINTMENT processado com sucesso EARLY');
+            return {
+              aiResponse: cancelResult.message,
+              shouldSendWhatsApp: true,
+              conversationOutcome: cancelResult.requiresConfirmation ? 'cancel_confirmation_pending' : 'cancel_processed',
+              updatedContext: existingContext || { flow_lock: null },
+              telemetryData: {
+                intent: 'cancel_appointment',
+                confidence: 1.0,
+                decision_method: 'very_early_cancel_with_id',
+                flow_lock_active: false,
+                processing_time_ms: Date.now() - startTime
+              },
+              llmMetrics: undefined
+            };
+          } else {
+            console.log('❌ [ORCHESTRATOR] CANCEL_APPOINTMENT - agendamento não encontrado ou não pode cancelar');
+          }
+        } else {
+          // Se não temos ID do agendamento, iniciamos flow para coletar
+          console.log('❌ [ORCHESTRATOR] CANCEL_APPOINTMENT sem ID - iniciando coleta');
+          return {
+            aiResponse: '❌ **Vamos cancelar seu agendamento!**\n\n📝 Para encontrar seu agendamento, preciso do **código de confirmação** (ID) que você recebeu quando agendou.\n\n💡 O código tem formato similar a: `abc12def-3456-789a-bcde-f0123456789a`\n\n📱 Pode procurar na conversa anterior ou no e-mail de confirmação?',
+            shouldSendWhatsApp: true,
+            conversationOutcome: 'cancel_id_requested',
+            updatedContext: existingContext || { flow_lock: null },
+            telemetryData: {
+              intent: 'cancel_appointment',
+              confidence: 1.0,
+              decision_method: 'very_early_cancel_id_collection',
+              flow_lock_active: false,
+              processing_time_ms: Date.now() - startTime,
+              model_used: undefined
+            },
+            llmMetrics: undefined
+          };
+        }
+      } catch (error) {
+        console.error('❌ [ORCHESTRATOR] Erro ao processar CANCEL_APPOINTMENT very early:', error);
+      }
+    }
     
     // Normalizar userPhone para usar consistentemente
     const normalizedUserPhone = userPhone.replace(/[\s\-\(\)]/g, '');
@@ -244,6 +578,26 @@ export class WebhookFlowOrchestratorService {
         existingContext
       );
 
+      // 🔍 INTENT DETECTION - Sistema simples original
+      console.log('🔍 [INTENT] Detectando intent para mensagem:', messageText.substring(0, 50) + '...');
+      const primaryIntent = this.intentDetector.detectPrimaryIntent(messageText);
+      console.log(`✅ [INTENT] Intent detectado: ${primaryIntent}`);
+      
+      // 📊 STRUCTURED TELEMETRY: Capturar intent detected
+      try {
+        if (primaryIntent) {
+          await this.telemetryService.recordIntentDetected(
+            tenantId,
+            context.session_id,
+            userPhone,
+            primaryIntent
+          );
+          console.log(`📊 [TELEMETRY] Intent structured captured: ${primaryIntent} for session ${context.session_id}`);
+        }
+      } catch (telemetryError) {
+        console.error('⚠️ [TELEMETRY] Failed to record intent:', telemetryError);
+      }
+
       // Log para diagnosticar contexto
       console.log('CTX-KEY', {
         rawPhone: userPhone,
@@ -253,6 +607,7 @@ export class WebhookFlowOrchestratorService {
         step: context.flow_lock?.step,
         awaiting_intent: (context as any)?.awaiting_intent
       });
+
 
       // 2) Contexto ativo encontrado - continuamos o fluxo (timeout controlado pelo cronjob)
       const activeContext = context;
@@ -277,6 +632,14 @@ export class WebhookFlowOrchestratorService {
         console.log('➡️ ROUTING TO: handleReturningUserFlow with step:', currentStep);
         // Pass the actual currentStep instead of defaulting to need_email
         return await this.handleReturningUserFlow({ messageText, userPhone, tenantId, context, tenantConfig, currentStep: currentStep || 'need_email' });
+      }
+      if (activeFlow === 'reschedule') {
+        console.log('➡️ ROUTING TO: handleRescheduleFlow with step:', currentStep);
+        return await this.handleRescheduleFlow({ messageText, userPhone, tenantId, context, tenantConfig, currentStep: currentStep || 'collect_id' });
+      }
+      if (activeFlow === 'cancel') {
+        console.log('➡️ ROUTING TO: handleCancelAppointmentFlow with step:', currentStep);
+        return await this.handleCancelAppointmentFlow({ messageText, userPhone, tenantId, context, tenantConfig, currentStep: currentStep || 'collect_id' });
       }
 
       // 2.5) Se estamos aguardando escolha de intenção (desambiguação) e NÃO há flow ativo, resolva primeiro
@@ -315,130 +678,19 @@ export class WebhookFlowOrchestratorService {
       
       const userProfile = userStatus.userProfile;
 
-      // === NOVA LÓGICA DE SAUDAÇÃO BASEADA NO STATUS CORRETO ===
+      // === GATEWAY DE SAUDAÇÃO INTELIGENTE ===
       const isGreeting = this.intentDetector.detectPrimaryIntent(messageText) === 'greeting';
       console.log(`🔍 [GREETING CHECK] Message is greeting: ${isGreeting}, User status: ${userStatus.type}`);
       
       if (isGreeting) {
-        if (userStatus.type === 'new_to_app' || userStatus.type === 'new_to_tenant') {
-          // USUÁRIO NOVO - Saudação "primeira vez"
-          console.log(`🎯 [NEW USER] Saudação de primeira vez - ${userStatus.type}`);
-          const welcomeMessage = this.generateWelcomeMessage(userStatus.type, tenantConfig);
-          
-          return {
-            aiResponse: welcomeMessage,
-            shouldSendWhatsApp: true,
-            conversationOutcome: null,
-            updatedContext: context,
-            telemetryData: {
-              intent: 'greeting',
-              confidence: 1.0,
-              decision_method: 'intent_detection',
-              flow_lock_active: false,
-              processing_time_ms: 0
-            },
-            llmMetrics: undefined
-          };
-          
-        } else if (userStatus.type === 'existing_user') {
-          // USUÁRIO EXISTENTE - Saudação personalizada com validação de perfil completo
-          console.log(`🎯 [RETURNING USER] Saudação personalizada para ${userProfile?.name || 'usuário existente'}`);
-          
-          // A) Regras de perfil completo com campos obrigatórios
-          const isMissingAddress = (addr: any) =>
-            !addr ||
-            (typeof addr === 'object' && Object.keys(addr || {}).length === 0) ||
-            (typeof addr === 'string' && addr.trim() === '');
-          
-          const requiredFields = (tenantConfig?.required_profile_fields as string[]) 
-            || ['name', 'email', 'birth_date', 'address'];
-          
-          const missingFields: string[] = [];
-          
-          if (requiredFields.includes('name') && !userProfile?.name) {
-            missingFields.push('name');
-          }
-          if (requiredFields.includes('email') && !userProfile?.email) {
-            missingFields.push('email');
-          }
-          if (requiredFields.includes('birth_date') && !userProfile?.birth_date) {
-            missingFields.push('birth_date');
-          }
-          if (requiredFields.includes('address') && isMissingAddress(userProfile?.address)) {
-            missingFields.push('address');
-          }
-          
-          // B) Se há campos faltantes, rotear para coleta de dados
-          if (missingFields.length > 0) {
-            console.log(`🔄 [PROFILE_INCOMPLETE] Usuário tem campos faltantes: ${missingFields.join(', ')}`);
-            return await this.handleReturningUserGreeting({
-              messageText: messageText,
-              userPhone: userPhone,
-              tenantId: tenantId,
-              context: context,
-              tenantConfig: tenantConfig,
-              userProfile: userProfile
-            });
-          }
-          
-          if (!userProfile?.name) {
-            // Usuário existente mas sem nome - pedir nome
-            const greetingMessage = `Olá! Que bom ter você aqui! 😊\n\nPara te ajudar melhor, preciso saber seu nome. Como posso te chamar?`;
-            
-            return {
-              aiResponse: greetingMessage,
-              shouldSendWhatsApp: true,
-              conversationOutcome: null,
-              updatedContext: context,
-              telemetryData: {
-                intent: 'greeting',
-                confidence: 1.0,
-                decision_method: 'intent_detection',
-                flow_lock_active: false,
-                processing_time_ms: 0
-              },
-              llmMetrics: undefined
-            };
-            
-          } else if (!userProfile?.email) {
-            // Tem nome mas não tem email - coletar email
-            const greetingMessage = `Oi ${userProfile.name}! Como vai! Que bom ter você de volta! 😊\n\nPara completar seu perfil, preciso do seu e-mail. Pode me passar?`;
-            
-            return {
-              aiResponse: greetingMessage,
-              shouldSendWhatsApp: true,
-              conversationOutcome: null,
-              updatedContext: context,
-              telemetryData: {
-                intent: 'greeting',
-                confidence: 1.0,
-                decision_method: 'intent_detection',
-                flow_lock_active: false,
-                processing_time_ms: 0
-              },
-              llmMetrics: undefined
-            };
-            
-          } else {
-            // Perfil completo - saudação final personalizada
-            const greetingMessage = `Oi ${userProfile.name}, como vai! Que bom ter você de volta! 😊\n\nComo posso ajudá-la hoje?`;
-            
-            return {
-              aiResponse: greetingMessage,
-              shouldSendWhatsApp: true,
-              conversationOutcome: null,
-              updatedContext: context,
-              telemetryData: {
-                intent: 'greeting',
-                confidence: 1.0,
-                decision_method: 'intent_detection',
-                flow_lock_active: false,
-                processing_time_ms: 0
-              },
-              llmMetrics: undefined
-            };
-          }
-        }
+        return await this.handleIntelligentGreeting({
+          userStatus,
+          userProfile,
+          tenantConfig,
+          context,
+          userPhone,
+          tenantId
+        });
       }
 
       // === ONBOARDING GATE (após verificar returning user greetings) ===
@@ -489,13 +741,117 @@ export class WebhookFlowOrchestratorService {
       }
       // === FIM DO GATE ===
 
-      // 3) Detecção determinística de intenção
-      const primary = this.intentDetector.detectPrimaryIntent(messageText); // string | null
-      let finalIntent: string | null = primary;
+      // 3) ✨ SISTEMA DE 3 CAMADAS OTIMIZADO - Detecção de Intent
+      let intentResult = await this.detectIntentThreeLayers(
+        messageText, 
+        context,
+        existingContext?.session_id || userPhone
+      );
+      
+      // 3.1) Se está aguardando desambiguação, processar resposta
+      if (this.disambiguation.isAwaitingIntent(context)) {
+        const disambiguationResult = this.disambiguation.processDisambiguationResponse(messageText);
+        
+        if (disambiguationResult.resolvedIntent) {
+          // Intent resolvida via desambiguação
+          intentResult = {
+            ...intentResult,
+            intent: disambiguationResult.resolvedIntent,
+            confidence: 0.9,
+            decision_method: 'llm_classification' as any // Via desambiguação
+          };
+          
+          // Limpar estado de aguardando - criar novo contexto
+          const clearedContext = this.disambiguation.clearAwaitingIntent(context);
+          // Atualizar contexto local
+          Object.assign(context, clearedContext);
+          
+          console.log(`🎯 [INTENT-3LAYER] Intent resolvida via desambiguação: ${intentResult.intent}`);
+        }
+      }
 
-      // 3.1) fallback com LLM se não determinístico
-      if (!finalIntent) {
-        finalIntent = await this.classifyIntentWithLLM(messageText);
+      // 3.2) Se ainda não tem intent, ativar desambiguação (Camada 3)
+      if (!intentResult.intent && !this.disambiguation.isAwaitingIntent(context)) {
+        console.log('❓ [INTENT-3LAYER] Ativando desambiguação (Camada 3)');
+        
+        const disambiguationResult = this.disambiguation.generateDisambiguationQuestion();
+        const updatedContextWithAwaiting = this.disambiguation.markAwaitingIntent(context);
+        
+        // Mesclar contexto atualizado 
+        const finalContext = await mergeEnhancedConversationContext(
+          userPhone,
+          tenantId,
+          updatedContextWithAwaiting,
+          {
+            intent: 'disambiguation_request',
+            confidence: 0.0,
+            decision_method: 'llm' as any
+          }
+        );
+        
+        return {
+          aiResponse: disambiguationResult.disambiguationQuestion!,
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext: finalContext,
+          telemetryData: {
+            intent: null,
+            confidence: 0.0,
+            decision_method: 'llm' as any,
+            flow_lock_active: false,
+            processing_time_ms: Date.now() - startTime
+          }
+        };
+      }
+
+      let finalIntent: string | null = intentResult.intent;
+
+      // 3.1.5) 🔐 POLÍTICAS CONTEXTUAIS - Aplicar antes de processar o intent
+      if (finalIntent) {
+        console.log(`🔐 [POLICIES] Aplicando políticas para intent '${finalIntent}'`);
+        const policyDecision = await this.contextualPolicies.applyPolicies(
+          finalIntent as any,
+          userPhone,
+          tenantId,
+          context,
+          messageText
+        );
+
+        console.log(`🔐 [POLICIES] Decisão: ${policyDecision.actionRequired} - ${policyDecision.reasonCode}`);
+
+        // Processar decisão da política
+        switch (policyDecision.actionRequired) {
+          case 'block':
+            console.log(`🚫 [POLICIES] Intent bloqueado: ${finalIntent}`);
+            return {
+              aiResponse: policyDecision.suggestedResponse || 'Ação não permitida no momento.',
+              shouldSendWhatsApp: true,
+              conversationOutcome: 'policy_blocked',
+              updatedContext: context,
+              telemetryData: {
+                intent: finalIntent,
+                confidence: 0,
+                decision_method: 'contextual_policy_blocked',
+                flow_lock_active: false,
+                processing_time_ms: Date.now() - startTime
+              }
+            };
+
+          case 'redirect':
+            console.log(`🔄 [POLICIES] Intent redirecionado: ${finalIntent} → ${policyDecision.modifiedIntent}`);
+            finalIntent = policyDecision.modifiedIntent || finalIntent;
+            break;
+
+          case 'modify':
+          case 'enhance':
+            console.log(`✨ [POLICIES] Intent aprimorado: ${finalIntent}`);
+            // Contexto será aplicado na resposta final
+            break;
+
+          default:
+            console.log(`✅ [POLICIES] Intent permitido sem restrições: ${finalIntent}`);
+            break;
+        }
       }
 
       // 3.2) se ainda null → desambiguação
@@ -524,13 +880,108 @@ export class WebhookFlowOrchestratorService {
         };
       }
 
-      // Adapter de intenção unificada
-      const intentResult = {
-        intent: finalIntent,
-        confidence: finalIntent ? 0.95 : 0.0,
-        decision_method: finalIntent === primary ? 'deterministic_regex' : 'llm_classification',
-        allowed_by_flow_lock: true
-      } as const;
+      // 🗓️ INTERCEPTAR MY_APPOINTMENTS para actionables estruturados (funciona na demo e WhatsApp)
+      if (finalIntent === 'my_appointments' || messageText.match(/(meus agendamentos|tenho.*agendamento|o que marquei|ver agendamentos)/i)) {
+        console.log('🗓️ [ORCHESTRATOR] MY_APPOINTMENTS interceptado para actionables estruturados');
+        
+        try {
+          // Buscar usuário pelo telefone no tenant
+          const userResult = await getUserByPhoneInTenant(userPhone, tenantId);
+          if (userResult.data?.id) {
+            const actionablesService = new AppointmentActionablesService();
+            const actionablesResult = await actionablesService.getAppointmentsWithActionables(
+              tenantId,
+              userResult.data.id
+            );
+            
+            if (actionablesResult.success) {
+              console.log('✅ [ORCHESTRATOR] MY_APPOINTMENTS actionables gerados com sucesso');
+              
+              // Atualizar contexto
+              const updatedContext = await mergeEnhancedConversationContext(
+                toCtxId(userPhone),
+                tenantId,
+                context,
+                { intent: 'my_appointments', confidence: 1.0, decision_method: 'regex' }
+              );
+              
+              return {
+                aiResponse: actionablesResult.message,
+                shouldSendWhatsApp: true,
+                conversationOutcome: 'appointment_inquiry',
+                updatedContext,
+                telemetryData: {
+                  intent: 'my_appointments',
+                  confidence: 1.0,
+                  decision_method: 'appointment_actionables',
+                  flow_lock_active: false,
+                  processing_time_ms: Date.now() - startTime,
+                  model_used: undefined
+                },
+                llmMetrics: undefined
+              };
+            }
+          }
+        } catch (error) {
+          console.error('❌ [ORCHESTRATOR] Erro ao processar MY_APPOINTMENTS actionables:', error);
+          // Continua com processamento normal como fallback
+        }
+      }
+
+      // Verificar se é uma ação de agendamento estruturada (cancelar_123, remarcar_456, etc.)
+      const actionMatch = messageText.match(/^(cancelar|remarcar|detalhes|confirmar)_([a-f0-9-]{36})/i);
+      if (actionMatch) {
+        const [, action, appointmentId] = actionMatch;
+        console.log('🎯 [ORCHESTRATOR] Ação de agendamento estruturada detectada:', { action, appointmentId });
+        
+        try {
+          // Buscar usuário pelo telefone no tenant
+          const userResult = await getUserByPhoneInTenant(userPhone, tenantId);
+          if (userResult.data?.id) {
+            const actionablesService = new AppointmentActionablesService();
+            const actionResult = await actionablesService.processSelectedAction(
+              tenantId,
+              userResult.data.id,
+              appointmentId || '',
+              (action || '').toLowerCase()
+            );
+            
+            if (actionResult.success) {
+              console.log('✅ [ORCHESTRATOR] Ação de agendamento processada com sucesso');
+              
+              // Atualizar contexto
+              const updatedContext = await mergeEnhancedConversationContext(
+                toCtxId(userPhone),
+                tenantId,
+                context,
+                { intent: `appointment_${action}`, confidence: 1.0, decision_method: 'regex' }
+              );
+              
+              return {
+                aiResponse: actionResult.message,
+                shouldSendWhatsApp: true,
+                conversationOutcome: action === 'cancelar' ? 'appointment_cancelled' : action === 'remarcar' ? 'appointment_rescheduled' : 'appointment_inquiry',
+                updatedContext,
+                telemetryData: {
+                  intent: `appointment_${action}`,
+                  confidence: 1.0,
+                  decision_method: 'appointment_actionables',
+                  flow_lock_active: false,
+                  processing_time_ms: Date.now() - startTime,
+                  model_used: undefined
+                },
+                llmMetrics: undefined
+              };
+            }
+          }
+        } catch (error) {
+          console.error('❌ [ORCHESTRATOR] Erro ao processar ação de agendamento:', error);
+          // Continua com processamento normal como fallback
+        }
+      }
+
+
+      // ✅ intentResult já foi criado pelo sistema de 3 camadas acima
 
       // 4) Flow Lock — permissão
       if (!intentResult.allowed_by_flow_lock) {
@@ -563,11 +1014,23 @@ export class WebhookFlowOrchestratorService {
       // 8) Persistir outcome apenas quando conversa finaliza
       const finalOutcome = this.shouldPersistOutcome(intentResult.intent, result.response, updatedContext);
 
+      // ✅ MESCLAR MÉTRICAS: Intent Classification + AI Response
+      const combinedLLMMetrics = {
+        // Métricas do AI Response (se houver)
+        prompt_tokens: (result.llmMetrics?.prompt_tokens || 0) + ((intentResult as any).llmMetrics?.prompt_tokens || 0),
+        completion_tokens: (result.llmMetrics?.completion_tokens || 0) + ((intentResult as any).llmMetrics?.completion_tokens || 0),
+        total_tokens: (result.llmMetrics?.total_tokens || 0) + ((intentResult as any).llmMetrics?.total_tokens || 0),
+        api_cost_usd: (result.llmMetrics?.api_cost_usd || 0) + ((intentResult as any).llmMetrics?.api_cost_usd || 0),
+        processing_cost_usd: (result.llmMetrics?.processing_cost_usd || 0) + ((intentResult as any).llmMetrics?.processing_cost_usd || 0),
+        confidence_score: (intentResult as any).llmMetrics?.confidence_score || result.llmMetrics?.confidence_score || intentResult.confidence,
+        latency_ms: (result.llmMetrics?.latency_ms || 0) + ((intentResult as any).llmMetrics?.latency_ms || 0)
+      };
+
       return {
         aiResponse: result.response,
         shouldSendWhatsApp: true,
         conversationOutcome: finalOutcome,
-        llmMetrics: result.llmMetrics,
+        llmMetrics: combinedLLMMetrics, // ✅ MÉTRICAS COMBINADAS
         updatedContext,
         telemetryData: {
           intent: intentResult.intent,
@@ -575,7 +1038,7 @@ export class WebhookFlowOrchestratorService {
           decision_method: intentResult.decision_method,
           flow_lock_active: !!updatedContext.flow_lock?.active_flow,
           processing_time_ms: Date.now() - startTime,
-          model_used: (intentResult as any).model_used
+          model_used: (intentResult as any).model_used || result.llmMetrics?.model_used
         }
       };
 
@@ -1334,6 +1797,485 @@ export class WebhookFlowOrchestratorService {
   }
 
   /**
+   * Handler para o fluxo de reagendamento com validação de conflitos
+   */
+  private async handleRescheduleFlow({
+    messageText,
+    userPhone,
+    tenantId,
+    context,
+    tenantConfig,
+    currentStep
+  }: {
+    messageText: string;
+    userPhone: string;
+    tenantId: string;
+    context: EnhancedConversationContext;
+    tenantConfig: any;
+    currentStep: string;
+  }): Promise<WebhookOrchestrationResult> {
+    
+    console.log('🔄 RESCHEDULE-FLOW:', {
+      userPhone: userPhone.substring(0, 8) + '***',
+      currentStep,
+      messageText: messageText?.substring(0, 30)
+    });
+
+    const rescheduleService = new RescheduleConflictManagerService();
+
+    if (currentStep === 'collect_id') {
+      console.log('🔄 [RESCHEDULE-FLOW] Coletando ID do agendamento');
+      
+      // Tentar extrair ID do agendamento da mensagem
+      const appointmentIdMatch = messageText.match(/([a-f0-9-]{36})/i);
+      const appointmentId = appointmentIdMatch?.[1];
+      
+      if (appointmentId) {
+        console.log('🔄 [RESCHEDULE-FLOW] ID encontrado:', appointmentId);
+        
+        try {
+          const rescheduleResult = await rescheduleService.processRescheduleRequest(tenantId, appointmentId, messageText);
+          
+          if (rescheduleResult.success && rescheduleResult.appointmentFound) {
+            // Avançar para step de seleção de horário se há slots disponíveis
+            const nextStep = rescheduleResult.hasConflicts ? 'collect_id' : 'select_time_slot'; // Se não há conflitos, mostrar slots
+            const advancedLock = this.flowManager.advanceStep(context, nextStep, { appointmentId, availableSlots: rescheduleResult.availableSlots });
+            
+            const updatedContext = await this.updateContextWithFlowState(
+              toCtxId(userPhone),
+              tenantId,
+              context,
+              advancedLock,
+              { intent: 'reschedule', confidence: 1.0, decision_method: 'id_collected' }
+            );
+            
+            return {
+              aiResponse: rescheduleResult.message,
+              shouldSendWhatsApp: true,
+              conversationOutcome: rescheduleResult.hasConflicts ? 'reschedule_no_slots' : 'reschedule_slots_shown',
+              updatedContext,
+              telemetryData: {
+                intent: 'reschedule',
+                confidence: 1.0,
+                decision_method: 'appointment_id_processed',
+                flow_lock_active: !rescheduleResult.hasConflicts, // Continue flow if has slots
+                processing_time_ms: 0,
+                model_used: undefined
+              },
+              llmMetrics: undefined
+            };
+          } else if (!rescheduleResult.appointmentFound) {
+            return {
+              aiResponse: '❌ **Agendamento não encontrado**\n\nO código informado não corresponde a nenhum agendamento ativo.\n\n🔍 Verifique se:\n• O código está correto (formato: abc12def-3456-789a-bcde-f0123456789a)\n• O agendamento não foi cancelado\n• Você está no tenant correto\n\n📝 Pode tentar novamente com outro código?',
+              shouldSendWhatsApp: true,
+              conversationOutcome: null,
+              updatedContext: context, // Manter no mesmo step
+              telemetryData: {
+                intent: 'reschedule',
+                confidence: 1.0,
+                decision_method: 'appointment_not_found',
+                flow_lock_active: true,
+                processing_time_ms: 0,
+                model_used: undefined
+              },
+              llmMetrics: undefined
+            };
+          } else {
+            return {
+              aiResponse: '❌ **Erro no sistema**\n\nOcorreu um problema ao processar seu reagendamento.\n\n🔄 Tente novamente em alguns instantes ou entre em contato conosco.',
+              shouldSendWhatsApp: true,
+              conversationOutcome: 'reschedule_error',
+              updatedContext: await mergeEnhancedConversationContext(toCtxId(userPhone), tenantId, { ...context, flow_lock: null }),
+              telemetryData: {
+                intent: 'reschedule',
+                confidence: 1.0,
+                decision_method: 'system_error',
+                flow_lock_active: false,
+                processing_time_ms: 0,
+                model_used: undefined
+              },
+              llmMetrics: undefined
+            };
+          }
+        } catch (error) {
+          console.error('❌ [RESCHEDULE-FLOW] Erro ao processar ID:', error);
+          return {
+            aiResponse: '❌ **Erro interno**\n\nOcorreu um problema ao verificar o agendamento. Tente novamente.',
+            shouldSendWhatsApp: true,
+            conversationOutcome: 'reschedule_error',
+            updatedContext: await mergeEnhancedConversationContext(toCtxId(userPhone), tenantId, { ...context, flow_lock: null }),
+            telemetryData: {
+              intent: 'reschedule',
+              confidence: 1.0,
+              decision_method: 'exception_error',
+              flow_lock_active: false,
+              processing_time_ms: 0,
+              model_used: undefined
+            },
+            llmMetrics: undefined
+          };
+        }
+      } else {
+        // ID não reconhecido - pedir novamente
+        return {
+          aiResponse: '🔍 **Código não encontrado**\n\nNão consegui identificar o código do agendamento na sua mensagem.\n\n💡 O código deve ter o formato: `abc12def-3456-789a-bcde-f0123456789a`\n\n📱 Por favor, copie e cole o código exato que você recebeu no e-mail de confirmação.',
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext: context, // Manter no mesmo step
+          telemetryData: {
+            intent: 'reschedule',
+            confidence: 1.0,
+            decision_method: 'id_not_recognized',
+            flow_lock_active: true,
+            processing_time_ms: 0,
+            model_used: undefined
+          },
+          llmMetrics: undefined
+        };
+      }
+    }
+
+    if (currentStep === 'select_time_slot') {
+      console.log('🔄 [RESCHEDULE-FLOW] Processando seleção de horário');
+      
+      // Recuperar appointment ID do contexto
+      const appointmentId = (context.flow_lock as any)?.data?.appointmentId;
+      
+      if (!appointmentId) {
+        return {
+          aiResponse: '❌ **Sessão expirou**\n\nPreciso que você inicie o reagendamento novamente. Digite "reagendar" para começar.',
+          shouldSendWhatsApp: true,
+          conversationOutcome: 'reschedule_session_expired',
+          updatedContext: await mergeEnhancedConversationContext(toCtxId(userPhone), tenantId, { ...context, flow_lock: null }),
+          telemetryData: {
+            intent: 'reschedule',
+            confidence: 1.0,
+            decision_method: 'session_expired',
+            flow_lock_active: false,
+            processing_time_ms: 0,
+            model_used: undefined
+          },
+          llmMetrics: undefined
+        };
+      }
+      
+      try {
+        const selectionResult = await rescheduleService.processTimeSlotSelection(tenantId, appointmentId, messageText);
+        
+        if (selectionResult.success && selectionResult.isCompleted) {
+          // Reagendamento concluído com sucesso
+          const completedLock = this.flowManager.completeFlow(context, 'appointment_rescheduled');
+          
+          const updatedContext = await this.updateContextWithFlowState(
+            toCtxId(userPhone),
+            tenantId,
+            context,
+            completedLock,
+            { intent: 'reschedule_completed', confidence: 1.0, decision_method: 'slot_selected' }
+          );
+          
+          return {
+            aiResponse: selectionResult.message,
+            shouldSendWhatsApp: true,
+            conversationOutcome: 'appointment_rescheduled',
+            updatedContext,
+            telemetryData: {
+              intent: 'reschedule_completed',
+              confidence: 1.0,
+              decision_method: 'time_slot_selected',
+              flow_lock_active: false,
+              processing_time_ms: 0,
+              model_used: undefined
+            },
+            llmMetrics: undefined
+          };
+        } else {
+          // Seleção inválida ou erro
+          return {
+            aiResponse: selectionResult.message,
+            shouldSendWhatsApp: true,
+            conversationOutcome: null,
+            updatedContext: context, // Manter no mesmo step para nova tentativa
+            telemetryData: {
+              intent: 'reschedule',
+              confidence: 1.0,
+              decision_method: 'invalid_slot_selection',
+              flow_lock_active: true,
+              processing_time_ms: 0,
+              model_used: undefined
+            },
+            llmMetrics: undefined
+          };
+        }
+      } catch (error) {
+        console.error('❌ [RESCHEDULE-FLOW] Erro ao processar seleção:', error);
+        return {
+          aiResponse: '❌ **Erro ao processar seleção**\n\nOcorreu um problema. Tente selecionar novamente ou digite "cancelar" para sair.',
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext: context,
+          telemetryData: {
+            intent: 'reschedule',
+            confidence: 1.0,
+            decision_method: 'selection_error',
+            flow_lock_active: true,
+            processing_time_ms: 0,
+            model_used: undefined
+          },
+          llmMetrics: undefined
+        };
+      }
+    }
+
+    // Fallback para steps não reconhecidos
+    return {
+      aiResponse: '❌ **Estado inválido**\n\nOcorreu um problema no fluxo de reagendamento. Vou reiniciar o processo.\n\nDigite "reagendar" para começar novamente.',
+      shouldSendWhatsApp: true,
+      conversationOutcome: 'reschedule_flow_error',
+      updatedContext: await mergeEnhancedConversationContext(toCtxId(userPhone), tenantId, { ...context, flow_lock: null }),
+      telemetryData: {
+        intent: 'reschedule',
+        confidence: 1.0,
+        decision_method: 'unknown_step_fallback',
+        flow_lock_active: false,
+        processing_time_ms: 0,
+        model_used: undefined
+      },
+      llmMetrics: undefined
+    };
+  }
+
+  /**
+   * Handler para o fluxo de cancelamento de agendamento
+   */
+  private async handleCancelAppointmentFlow({
+    messageText,
+    userPhone,
+    tenantId,
+    context,
+    tenantConfig,
+    currentStep
+  }: {
+    messageText: string;
+    userPhone: string;
+    tenantId: string;
+    context: EnhancedConversationContext;
+    tenantConfig: any;
+    currentStep: string;
+  }): Promise<WebhookOrchestrationResult> {
+    
+    console.log('❌ CANCEL-FLOW:', {
+      userPhone: userPhone.substring(0, 8) + '***',
+      currentStep,
+      messageText: messageText?.substring(0, 30)
+    });
+
+    const { CancelAppointmentManagerService } = await import('./cancel-appointment-manager.service');
+    const cancelService = new CancelAppointmentManagerService();
+
+    if (currentStep === 'collect_id') {
+      console.log('❌ [CANCEL-FLOW] Coletando ID do agendamento');
+      
+      // Tentar extrair ID do agendamento da mensagem
+      const appointmentIdMatch = messageText.match(/([a-f0-9-]{36})/i);
+      const appointmentId = appointmentIdMatch?.[1];
+      
+      if (appointmentId) {
+        console.log('❌ [CANCEL-FLOW] ID encontrado:', appointmentId);
+        
+        try {
+          const cancelResult = await cancelService.processCancelRequest(tenantId, appointmentId, messageText);
+          
+          if (cancelResult.success && cancelResult.appointmentFound && cancelResult.canCancel) {
+            // Avançar para step de confirmação
+            const advancedLock = this.flowManager.advanceStep(context, 'confirm_cancel', { appointmentId });
+            
+            const updatedContext = await this.updateContextWithFlowState(
+              toCtxId(userPhone),
+              tenantId,
+              context,
+              advancedLock,
+              'cancel_confirmation_pending'
+            );
+
+            return {
+              aiResponse: cancelResult.message,
+              shouldSendWhatsApp: true,
+              conversationOutcome: 'cancel_confirmation_pending',
+              updatedContext,
+              telemetryData: {
+                intent: 'cancel_appointment',
+                confidence: 1.0,
+                decision_method: 'flow_cancel_confirmation_required',
+                flow_lock_active: true,
+                processing_time_ms: 0,
+                model_used: undefined
+              },
+              llmMetrics: undefined
+            };
+            
+          } else {
+            // Não pode cancelar ou agendamento não encontrado
+            const clearedLock = this.flowManager.completeFlow(context, cancelResult.appointmentFound ? 'cannot_cancel' : 'appointment_not_found');
+            const clearedContext = await this.updateContextWithFlowState(
+              toCtxId(userPhone),
+              tenantId,
+              context,
+              clearedLock,
+              cancelResult.appointmentFound ? 'cannot_cancel' : 'appointment_not_found'
+            );
+
+            return {
+              aiResponse: cancelResult.message,
+              shouldSendWhatsApp: true,
+              conversationOutcome: cancelResult.appointmentFound ? 'cannot_cancel' : 'appointment_not_found',
+              updatedContext: clearedContext,
+              telemetryData: {
+                intent: 'cancel_appointment',
+                confidence: 1.0,
+                decision_method: 'flow_cancel_rejected',
+                flow_lock_active: false,
+                processing_time_ms: 0,
+                model_used: undefined
+              },
+              llmMetrics: undefined
+            };
+          }
+          
+        } catch (error) {
+          console.error('❌ [CANCEL-FLOW] Erro ao processar cancelamento:', error);
+        }
+      } else {
+        console.log('❌ [CANCEL-FLOW] ID não encontrado na mensagem, pedindo novamente');
+        return {
+          aiResponse: '❌ **Código não encontrado**\n\n📝 Preciso do **código de confirmação** do seu agendamento para cancelá-lo.\n\n💡 O código tem formato similar a: `abc12def-3456-789a-bcde-f0123456789a`\n\n📱 Pode procurar na conversa anterior ou no e-mail de confirmação?',
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext: context,
+          telemetryData: {
+            intent: 'cancel_appointment',
+            confidence: 1.0,
+            decision_method: 'flow_id_not_found',
+            flow_lock_active: true,
+            processing_time_ms: 0,
+            model_used: undefined
+          },
+          llmMetrics: undefined
+        };
+      }
+    }
+
+    if (currentStep === 'confirm_cancel') {
+      console.log('❌ [CANCEL-FLOW] Processando confirmação de cancelamento');
+      
+      // Recuperar appointment ID do contexto
+      const appointmentId = (context.flow_lock as any)?.data?.appointmentId;
+      
+      if (!appointmentId) {
+        return {
+          aiResponse: '❌ **Sessão expirou**\n\nPreciso que você inicie o cancelamento novamente. Digite "cancelar" para começar.',
+          shouldSendWhatsApp: true,
+          conversationOutcome: 'cancel_session_expired',
+          updatedContext: await mergeEnhancedConversationContext(toCtxId(userPhone), tenantId, { ...context, flow_lock: null }),
+          telemetryData: {
+            intent: 'cancel_appointment',
+            confidence: 1.0,
+            decision_method: 'session_expired',
+            flow_lock_active: false,
+            processing_time_ms: 0,
+            model_used: undefined
+          },
+          llmMetrics: undefined
+        };
+      }
+      
+      try {
+        const confirmationResult = await cancelService.processConfirmation(tenantId, appointmentId, messageText);
+        
+        if (confirmationResult.success) {
+          // Cancelamento processado (confirmado ou abortado)
+          const completedLock = this.flowManager.completeFlow(context, confirmationResult.cancelled ? 'appointment_cancelled' : 'cancel_aborted');
+          
+          const completedContext = await this.updateContextWithFlowState(
+            toCtxId(userPhone),
+            tenantId,
+            context,
+            completedLock,
+            confirmationResult.cancelled ? 'appointment_cancelled' : 'cancel_aborted'
+          );
+
+          return {
+            aiResponse: confirmationResult.message,
+            shouldSendWhatsApp: true,
+            conversationOutcome: confirmationResult.cancelled ? 'appointment_cancelled' : 'cancel_aborted',
+            updatedContext: completedContext,
+            telemetryData: {
+              intent: 'cancel_appointment',
+              confidence: 1.0,
+              decision_method: confirmationResult.cancelled ? 'flow_cancel_confirmed' : 'flow_cancel_aborted',
+              flow_lock_active: false,
+              processing_time_ms: 0,
+              model_used: undefined
+            },
+            llmMetrics: undefined
+          };
+        } else {
+          return {
+            aiResponse: confirmationResult.message,
+            shouldSendWhatsApp: true,
+            conversationOutcome: null,
+            updatedContext: context,
+            telemetryData: {
+              intent: 'cancel_appointment',
+              confidence: 1.0,
+              decision_method: 'flow_cancel_error',
+              flow_lock_active: true,
+              processing_time_ms: 0,
+              model_used: undefined
+            },
+            llmMetrics: undefined
+          };
+        }
+        
+      } catch (error) {
+        console.error('❌ [CANCEL-FLOW] Erro ao processar confirmação:', error);
+        return {
+          aiResponse: '❌ **Erro ao processar confirmação**\n\nOcorreu um problema. Tente responder novamente com "SIM" ou "NÃO".',
+          shouldSendWhatsApp: true,
+          conversationOutcome: null,
+          updatedContext: context,
+          telemetryData: {
+            intent: 'cancel_appointment',
+            confidence: 1.0,
+            decision_method: 'confirmation_error',
+            flow_lock_active: true,
+            processing_time_ms: 0,
+            model_used: undefined
+          },
+          llmMetrics: undefined
+        };
+      }
+    }
+
+    // Fallback para steps não reconhecidos
+    return {
+      aiResponse: '❌ **Estado inválido**\n\nOcorreu um problema no fluxo de cancelamento. Vou reiniciar o processo.\n\nDigite "cancelar" para começar novamente.',
+      shouldSendWhatsApp: true,
+      conversationOutcome: 'cancel_flow_error',
+      updatedContext: await mergeEnhancedConversationContext(toCtxId(userPhone), tenantId, { ...context, flow_lock: null }),
+      telemetryData: {
+        intent: 'cancel_appointment',
+        confidence: 1.0,
+        decision_method: 'unknown_step_fallback',
+        flow_lock_active: false,
+        processing_time_ms: 0,
+        model_used: undefined
+      },
+      llmMetrics: undefined
+    };
+  }
+
+  /**
    * Handler para usuários com perfil completo (nome + email) que enviam saudação
    * Retorna saudação personalizada imediata com gênero apropriado
    */
@@ -1457,7 +2399,7 @@ export class WebhookFlowOrchestratorService {
     tenantId: string;
     context: EnhancedConversationContext;
     tenantConfig: any;
-    currentStep: 'need_name' | 'need_email';
+    currentStep: 'need_name' | 'need_email' | 'need_birth_date' | 'need_address' | 'ask_additional_data';
     greetFirst: boolean;
     existingUserData?: { id: string; name: string | null; email: string | null; } | null;
   }): Promise<WebhookOrchestrationResult> {
@@ -1775,11 +2717,11 @@ export class WebhookFlowOrchestratorService {
     }
 
     // === PASSO 4 — ANIVERSÁRIO ===
-    if (currentStep === 'need_birthday') {
+    if (currentStep === 'need_birth_date') {
       const maybeBirthDate = extractBirthDate(messageText);
 
       if (!maybeBirthDate) {
-        const lock = this.flowManager.startFlowLock('onboarding', 'need_birthday');
+        const lock = this.flowManager.startFlowLock('onboarding', 'need_birth_date');
         const updatedContext = await mergeEnhancedConversationContext(
           toCtxId(userPhone), tenantId, { ...context, flow_lock: lock }
         );
@@ -2280,9 +3222,11 @@ export class WebhookFlowOrchestratorService {
     const start = Date.now();
 
     const businessInfo = this.buildBusinessContext(tenantConfig);
+    const domainContext = this.buildDomainSpecificPrompt(tenantConfig?.domain || 'other');
     const flowCtx = this.buildFlowContext(currentFlow, currentStep, intent);
 
     const systemPrompt = `Você é a assistente oficial do ${tenantConfig?.name || 'negócio'}. Seu papel é atender com clareza, honestidade e objetividade, sempre em tom natural.
+${domainContext}
 
 ⚠️ REGRAS DE HONESTIDADE ABSOLUTA - OBRIGATÓRIAS:
 - NUNCA invente dados. NUNCA prometa retorno. NUNCA mencione atendente humano.
@@ -2367,6 +3311,48 @@ ${flowCtx}`;
     }
   }
 
+  private buildDomainSpecificPrompt(domain: string): string {
+    const domainPrompts: Record<string, string> = {
+      healthcare: `
+💊 CONTEXTO HEALTHCARE - Linguagem profissional mas acessível:
+- Use termos como "consulta", "procedimento", "profissional de saúde"
+- Seja empático com questões de saúde e urgência
+- Mencione sempre a importância de confirmação prévia`,
+      
+      legal: `
+⚖️ CONTEXTO JURÍDICO - Linguagem formal e precisa:
+- Use "advogado(a)", "consulta jurídica", "orientação legal"
+- Mantenha tom respeitoso e profissional
+- Enfatize confidencialidade e agendamento prévio`,
+      
+      beauty: `
+💅 CONTEXTO BELEZA - Tom acolhedor e personalizado:
+- Use "tratamento", "sessão", "cuidado estético"
+- Seja carinhoso e incentive o autocuidado
+- Mencione resultados e bem-estar`,
+      
+      education: `
+📚 CONTEXTO EDUCACIONAL - Tom educativo e motivador:
+- Use "aula", "sessão de aprendizado", "orientação acadêmica"
+- Seja encorajador e profissional
+- Enfatize crescimento e desenvolvimento`,
+      
+      sports: `
+🏃 CONTEXTO ESPORTIVO - Tom energético e motivador:
+- Use "treino", "sessão", "atividade física"
+- Seja dinâmico e incentivador
+- Mencione performance e objetivos`,
+      
+      consulting: `
+💼 CONTEXTO CONSULTORIA - Tom estratégico e profissional:
+- Use "reunião", "consultoria", "análise estratégica"
+- Seja objetivo e focado em resultados
+- Enfatize valor agregado e expertise`
+    };
+    
+    return domainPrompts[domain] || '';
+  }
+
   private buildBusinessContext(tenantConfig: any): string {
     const services = tenantConfig?.services?.slice(0, 5) || [];
     const policies = tenantConfig?.policies || {};
@@ -2432,11 +3418,8 @@ ${flowCtx}`;
     trigger: 'timeout' | 'flow_completion' | 'appointment_action' | 'user_exit' = 'flow_completion'
   ): Promise<void> {
     try {
-      const analysis = await this.outcomeAnalyzer.analyzeConversationOutcome(sessionId, trigger);
-      if (analysis) {
-        const success = await this.outcomeAnalyzer.persistOutcomeToFinalMessage(analysis);
-        if (success) console.log(`🎯 Conversation outcome persisted: ${analysis.outcome} (${analysis.confidence})`);
-      }
+      // Usar nova API de finalização de outcome
+      console.log(`🎯 Conversation timeout abandoned for session ${sessionId}`);
     } catch (error) {
       console.error('❌ Failed to check conversation outcome:', error);
     }
@@ -2444,14 +3427,100 @@ ${flowCtx}`;
 
   async processFinishedConversations(): Promise<void> {
     try {
-      await this.outcomeAnalyzer.checkForFinishedConversations();
+      // TODO: Implementar análise de conversações finalizadas usando analyzeTimeoutAbandonments
+      console.log('🔍 Processing finished conversations - method needs implementation');
     } catch (error) {
       console.error('❌ Failed to process finished conversations:', error);
     }
   }
 
   /**
-   * Classificação LLM determinística e fechada
+   * ✨ SISTEMA DE 3 CAMADAS OTIMIZADO - Detecção de Intent
+   * Camada 1: REGEX (gratuito) → Camada 2: LLM Mini/3.5/4 (escalonado) → Camada 3: Desambiguação
+   */
+  private async detectIntentThreeLayers(
+    messageText: string,
+    context: any,
+    sessionId: string
+  ) {
+    const startTime = Date.now();
+    
+    // CAMADA 1: Determinística (100% gratuita)
+    console.log('🔍 [INTENT-3LAYER] Camada 1: Detector determinístico');
+    const primaryIntent = this.intentDetector.detectPrimaryIntent(messageText);
+    
+    if (primaryIntent) {
+      console.log(`✅ [INTENT-3LAYER] Camada 1 SUCCESS: ${primaryIntent}`);
+      return {
+        intent: primaryIntent,
+        confidence: 1.0, // 100% de confiança em matches determinísticos
+        decision_method: 'deterministic_regex',
+        allowed_by_flow_lock: true,
+        // ✅ Métricas para REGEX (gratuita)
+        llmMetrics: {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0,
+          api_cost_usd: 0.0,
+          processing_cost_usd: 0.0,
+          confidence_score: 1.0,
+          latency_ms: Date.now() - startTime
+        },
+        model_used: 'deterministic_regex'
+      };
+    }
+    
+    console.log('❌ [INTENT-3LAYER] Camada 1 FALHOU - tentando Camada 2');
+    
+    // CAMADA 2: LLM com Escalonamento (mini → 3.5 → 4.0)
+    console.log('🤖 [INTENT-3LAYER] Camada 2: Classificador LLM com escalonamento');
+    const llmResult = await this.llmClassifier.classifyIntent(messageText);
+    
+    if (llmResult.intent) {
+      console.log(`✅ [INTENT-3LAYER] Camada 2 SUCCESS: ${llmResult.intent} (${llmResult.processing_time_ms}ms) [${llmResult.model_used}] - R$ ${(llmResult.api_cost_usd || 0).toFixed(6)}`);
+      return {
+        intent: llmResult.intent,
+        confidence: llmResult.confidence,
+        decision_method: llmResult.decision_method,
+        allowed_by_flow_lock: true,
+        // ✅ Métricas completas do LLM
+        llmMetrics: {
+          prompt_tokens: llmResult.usage?.prompt_tokens || 0,
+          completion_tokens: llmResult.usage?.completion_tokens || 0,
+          total_tokens: llmResult.usage?.total_tokens || 0,
+          api_cost_usd: llmResult.api_cost_usd || 0.0,
+          processing_cost_usd: (llmResult.api_cost_usd || 0) * 1.15, // +15% overhead
+          confidence_score: llmResult.confidence,
+          latency_ms: llmResult.processing_time_ms
+        },
+        model_used: llmResult.model_used
+      };
+    }
+    
+    console.log('❌ [INTENT-3LAYER] Camada 2 FALHOU - Camada 3 será acionada');
+    
+    // CAMADA 3: Será tratada no fluxo principal (desambiguação)
+    return {
+      intent: null,
+      confidence: 0.0,
+      decision_method: 'needs_disambiguation',
+      allowed_by_flow_lock: true,
+      // ✅ Métricas para desambiguação (gratuita)
+      llmMetrics: {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+        api_cost_usd: 0.0,
+        processing_cost_usd: 0.0,
+        confidence_score: 0.0,
+        latency_ms: Date.now() - startTime
+      },
+      model_used: 'disambiguation_required'
+    };
+  }
+
+  /**
+   * Classificação LLM determinística e fechada (MÉTODO LEGADO - MANTER PARA COMPATIBILIDADE)
    */
   private async classifyIntentWithLLM(text: string): Promise<string | null> {
     const SYSTEM_PROMPT = `Você é um classificador de intenção. Classifique a mensagem do usuário em EXATAMENTE UMA das chaves abaixo e nada além disso.
@@ -2625,6 +3694,253 @@ Regras:
   }
 
   /**
+   * 🔍 DETECTA PRÓXIMO ESTADO DA COLETA DE DADOS
+   */
+  private async getNextDataCollectionState(userProfile: any, tenantConfig: any): Promise<DataCollectionState> {
+    // 1. Nome obrigatório
+    if (!userProfile?.name) {
+      return DataCollectionState.NEED_NAME;
+    }
+    
+    // 2. Email obrigatório  
+    if (!userProfile?.email) {
+      return DataCollectionState.NEED_EMAIL;
+    }
+    
+    // 3. Gênero (se não conseguir inferir do nome)
+    const inferredGender = await this.inferGenderFromName(userProfile.name);
+    if (!userProfile?.gender && !inferredGender) {
+      return DataCollectionState.NEED_GENDER_CONFIRMATION;
+    }
+    
+    // 4. Perguntar consentimento para dados opcionais
+    const requiredOptionalFields = tenantConfig?.required_profile_fields || [];
+    const needsBirthDate = requiredOptionalFields.includes('birth_date') && !userProfile?.birth_date;
+    const needsAddress = requiredOptionalFields.includes('address') && !userProfile?.address;
+    
+    if ((needsBirthDate || needsAddress) && !userProfile?.optional_data_consent) {
+      return DataCollectionState.ASK_OPTIONAL_DATA_CONSENT;
+    }
+    
+    // 5. Data de nascimento (se consentiu)
+    if (needsBirthDate && userProfile?.optional_data_consent === 'yes') {
+      return DataCollectionState.NEED_BIRTH_DATE;
+    }
+    
+    // 6. Endereço (se consentiu)
+    if (needsAddress && userProfile?.optional_data_consent === 'yes') {
+      return DataCollectionState.NEED_ADDRESS;
+    }
+    
+    // 7. Coleta completa
+    return DataCollectionState.COLLECTION_COMPLETE;
+  }
+
+  /**
+   * 🧠 INFERE GÊNERO A PARTIR DO NOME - SOLUÇÃO GLOBAL COM LLM
+   */
+  private async inferGenderFromName(name: string): Promise<'male' | 'female' | null> {
+    if (!name) return null;
+    
+    const firstName = name.split(' ')[0]?.trim();
+    if (!firstName) return null;
+    
+    try {
+      const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY
+      });
+
+      const prompt = `Based on the first name "${firstName}", determine if it's typically:
+- male
+- female  
+- unknown (if unclear or neutral)
+
+Respond with only one word: male, female, or unknown`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 10,
+        temperature: 0
+      });
+      
+      const result = response.choices[0]?.message?.content?.toLowerCase()?.trim();
+      
+      if (result === 'male' || result === 'female') {
+        console.log(`🧠 [GENDER_INFERENCE] ${firstName} → ${result}`);
+        return result;
+      }
+      
+      console.log(`🤷 [GENDER_INFERENCE] ${firstName} → unknown, will ask user`);
+      return null;
+      
+    } catch (error) {
+      console.error('❌ [GENDER_INFERENCE] Error inferring gender:', error);
+      return null; // Fallback: perguntará ao usuário
+    }
+  }
+
+  /**
+   * 🎯 GATEWAY DE SAUDAÇÃO INTELIGENTE
+   * Sistema humanizado que reconhece contexto e coleta dados delicadamente
+   */
+  private async handleIntelligentGreeting({
+    userStatus,
+    userProfile,
+    tenantConfig,
+    context,
+    userPhone,
+    tenantId
+  }: {
+    userStatus: any;
+    userProfile: any;
+    tenantConfig: any;
+    context: EnhancedConversationContext;
+    userPhone: string;
+    tenantId: string;
+  }): Promise<WebhookOrchestrationResult> {
+    
+    console.log(`🌟 [INTELLIGENT_GREETING] Iniciando gateway para ${userStatus.type}`);
+    
+    // === CATEGORIA 1: USUÁRIO COMPLETAMENTE NOVO ===
+    if (userStatus.type === 'new_to_app' || userStatus.type === 'new_to_tenant') {
+      const isNewToApp = userStatus.type === 'new_to_app';
+      
+      const businessName = tenantConfig?.business_name || 'nossa empresa';
+      
+      const welcomeMessage = isNewToApp 
+        ? `Olá! Seja bem-vindo(a)! 😊\n\nSou da UBS em nome da ${businessName}, e sou responsável pelos seus agendamentos.\n\nPara começar, como posso te chamar?`
+        : `Olá! Seja bem-vindo(a)! 😊\n\nSou da UBS em nome da ${businessName}. É sua primeira vez em nosso serviço, e sou responsável pelos seus agendamentos.\n\nComo posso te chamar?`;
+      
+      return this.createGreetingResponse(welcomeMessage, context, 'new_user_welcome');
+    }
+    
+    // === CATEGORIA 2: USUÁRIO EXISTENTE - COLETA PROGRESSIVA ===
+    if (userStatus.type === 'existing_user') {
+      const nextState = await this.getNextDataCollectionState(userProfile, tenantConfig);
+      
+      switch (nextState) {
+        case DataCollectionState.NEED_NAME:
+          const message = `Olá! Que bom ter você de volta! 😊\n\nPara um atendimento mais personalizado, como posso te chamar?`;
+          return this.createDataCollectionResponse(message, context, nextState);
+          
+        case DataCollectionState.NEED_EMAIL:
+          const emailMessage = `${userProfile.name}! Que bom ter você de volta! 😊\n\nPara completar seu perfil, pode me informar seu e-mail?`;
+          return this.createDataCollectionResponse(emailMessage, context, nextState);
+          
+        case DataCollectionState.NEED_GENDER_CONFIRMATION:
+          const genderMessage = `${userProfile.name}! Que bom ter você de volta! 😊\n\nPara personalizar melhor o atendimento, você prefere ser tratado como Sr. ou Sra.?`;
+          return this.createDataCollectionResponse(genderMessage, context, nextState);
+          
+        case DataCollectionState.ASK_OPTIONAL_DATA_CONSENT:
+          const consentMessage = `${userProfile.name}, para oferecer um serviço ainda melhor, você se incomoda de informar mais alguns dados? Pode escolher sim ou não, sem problema algum.`;
+          return this.createDataCollectionResponse(consentMessage, context, nextState);
+          
+        case DataCollectionState.NEED_BIRTH_DATE:
+          const birthMessage = `Obrigado! Qual sua data de nascimento?`;
+          return this.createDataCollectionResponse(birthMessage, context, nextState);
+          
+        case DataCollectionState.NEED_ADDRESS:
+          const addressMessage = `Obrigado! E qual seu endereço ou bairro?`;
+          return this.createDataCollectionResponse(addressMessage, context, nextState);
+          
+        case DataCollectionState.COLLECTION_COMPLETE:
+        default:
+          const timeOfDay = this.getTimeGreeting();
+          const completeMessage = `${userProfile.name}! ${timeOfDay} 😊\n\nComo posso te ajudar hoje?`;
+          return this.createGreetingResponse(completeMessage, context, 'returning_complete_profile');
+      }
+    }
+    
+    // === FALLBACK ===
+    const businessName = tenantConfig?.business_name || 'nossa empresa';
+    const message = `Olá! Seja bem-vindo(a)! 😊\n\nSou da UBS em nome da ${businessName}, e sou responsável pelos seus agendamentos.\n\nComo posso te chamar?`;
+    return this.createGreetingResponse(message, context, 'fallback_greeting');
+  }
+
+  /**
+   * Analisa completude do perfil do usuário
+   */
+  private analyzeUserProfile(userProfile: any, tenantConfig: any) {
+    const requiredFields = tenantConfig?.required_profile_fields || ['name', 'email'];
+    
+    return {
+      needsBasicData: !userProfile?.name,
+      needsEmail: userProfile?.name && !userProfile?.email,
+      needsAdditionalData: userProfile?.name && userProfile?.email && 
+        requiredFields.some((field: string) => !userProfile?.[field]),
+      isComplete: requiredFields.every((field: string) => userProfile?.[field])
+    };
+  }
+
+  /**
+   * Retorna saudação baseada no horário
+   */
+  private getTimeGreeting(): string {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Bom dia!';
+    if (hour < 18) return 'Boa tarde!';
+    return 'Boa noite!';
+  }
+
+  /**
+   * Cria resposta padronizada para greeting
+   */
+  private createGreetingResponse(
+    message: string, 
+    context: EnhancedConversationContext, 
+    greetingType: string
+  ): WebhookOrchestrationResult {
+    return {
+      aiResponse: message,
+      shouldSendWhatsApp: true,
+      conversationOutcome: null,
+      updatedContext: context,
+      telemetryData: {
+        intent: 'greeting',
+        confidence: 1.0,
+        decision_method: `intelligent_gateway_${greetingType}`,
+        flow_lock_active: false,
+        processing_time_ms: 0,
+        model_used: undefined
+      },
+      llmMetrics: undefined
+    };
+  }
+
+  /**
+   * Cria resposta padronizada para coleta de dados
+   */
+  private createDataCollectionResponse(
+    message: string, 
+    context: EnhancedConversationContext, 
+    collectionState: DataCollectionState
+  ): WebhookOrchestrationResult {
+    // Salvar estado atual no contexto para próxima mensagem
+    const updatedContext = {
+      ...context,
+      data_collection_state: collectionState,
+      awaiting_data_input: true
+    };
+
+    return {
+      aiResponse: message,
+      shouldSendWhatsApp: true,
+      conversationOutcome: null,
+      updatedContext: updatedContext,
+      telemetryData: {
+        intent: 'data_collection',
+        confidence: 1.0,
+        decision_method: `progressive_collection_${collectionState}`,
+        flow_lock_active: true,
+        processing_time_ms: 0,
+        model_used: undefined
+      },
+      llmMetrics: undefined
+    };
+  }
+
+  /**
    * Gera mensagem de boas-vindas baseada no tipo de usuário
    */
   private generateWelcomeMessage(userType: 'new_to_app' | 'new_to_tenant', tenantConfig: any): string {
@@ -2632,6 +3948,189 @@ Regras:
       return `Olá! 😊 Vejo que é a primeira vez que você usa nosso sistema. Seja muito bem-vindo(a)!\n\nPara começar, preciso saber seu nome. Como posso te chamar?`;
     } else {
       return `Olá! 😊 Vejo que é a primeira vez neste serviço. Que bom ter você aqui!\n\nPara te ajudar melhor, preciso saber seu nome. Como posso te chamar?`;
+    }
+  }
+
+  /**
+   * GUARDRAIL: Finaliza outcome da conversa de forma controlada
+   * Evita sobrescrita acidental e duplicação de outcomes
+   */
+  async finalizeConversationOutcome(
+    sessionId: string | null, 
+    userPhone: string,
+    tenantId: string,
+    outcome: string, 
+    reason: string
+  ): Promise<{ success: boolean; action: 'created' | 'overwritten' | 'ignored'; reason: string }> {
+    try {
+      // 🛡️ GUARDRAILS DE VALIDAÇÃO
+      
+      // 1. Validar parâmetros obrigatórios
+      if (!userPhone || !tenantId || !outcome || !reason) {
+        console.error(`🚫 [OUTCOME-GUARD] Parâmetros obrigatórios ausentes:`, {
+          userPhone: !!userPhone,
+          tenantId: !!tenantId, 
+          outcome: !!outcome,
+          reason: !!reason
+        });
+        return { success: false, action: 'ignored', reason: 'invalid_parameters' };
+      }
+
+      // 2. Validar formato do telefone
+      if (!userPhone.match(/^\+\d{10,15}$/)) {
+        console.error(`🚫 [OUTCOME-GUARD] Formato de telefone inválido: ${userPhone}`);
+        return { success: false, action: 'ignored', reason: 'invalid_phone_format' };
+      }
+
+      // 3. Validar outcomes permitidos
+      const validOutcomes = [
+        'appointment_created', 'appointment_confirmed', 'appointment_rescheduled',
+        'appointment_cancelled', 'appointment_modified', 'info_request_fulfilled',
+        'booking_abandoned', 'timeout_abandoned', 'wrong_number', 'spam_detected'
+      ];
+      
+      if (!validOutcomes.includes(outcome)) {
+        console.error(`🚫 [OUTCOME-GUARD] Outcome não permitido: ${outcome}`);
+        return { success: false, action: 'ignored', reason: 'invalid_outcome_type' };
+      }
+
+      // 4. Rate limiting - máximo 5 outcomes por minuto por usuário
+      const rateLimitKey = `outcome_rate:${userPhone}:${tenantId}`;
+      const currentCount = await this.redisCacheService.get(rateLimitKey);
+      
+      if (currentCount && parseInt(currentCount) >= 5) {
+        console.warn(`⚠️ [OUTCOME-GUARD] Rate limit excedido para ${userPhone} - tentativas: ${currentCount}`);
+        return { success: false, action: 'ignored', reason: 'rate_limit_exceeded' };
+      }
+
+      // 5. Incrementar contador rate limit
+      const newCount = currentCount ? parseInt(currentCount) + 1 : 1;
+      await this.redisCacheService.set(rateLimitKey, newCount.toString(), 60);
+
+      console.log(`🎯 [OUTCOME] Guardrails OK - finalizando outcome: ${outcome} para ${userPhone}`);
+      console.log(`📊 [OUTCOME] Rate limit: ${newCount}/5 tentativas no último minuto`);
+      
+      // 1. Obter user_id a partir do telefone  
+      const { data: userData, error: userError } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('phone', userPhone)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+        
+      if (userError || !userData) {
+        console.error(`❌ [OUTCOME-GUARD] Usuário não encontrado: ${userPhone} no tenant ${tenantId}`, userError);
+        return { success: false, action: 'ignored', reason: 'user_not_found' };
+      }
+      
+      // 2. Verificar se já existe outcome terminal para esta conversa
+      const { data: existingOutcome, error: queryError } = await supabaseAdmin
+        .from('conversation_history')
+        .select('conversation_outcome, created_at')
+        .eq('user_id', userData.id)
+        .eq('tenant_id', tenantId)
+        .not('conversation_outcome', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (queryError) {
+        console.error(`❌ [OUTCOME] Erro ao verificar outcome existente:`, queryError);
+        return { success: false, action: 'ignored', reason: 'database_error' };
+      }
+
+      // 2. Definir outcomes terminais (não podem ser sobrescritos) 
+      const terminalOutcomes = [
+        'appointment_created',
+        'appointment_confirmed', 
+        'appointment_cancelled',
+        'appointment_rescheduled',
+        'wrong_number',
+        'spam_detected'
+      ];
+
+      // 3. Definir hierarquia de outcome (outcomes mais importantes)
+      const outcomeHierarchy: Record<string, number> = {
+        'appointment_created': 10,
+        'appointment_confirmed': 9,
+        'appointment_rescheduled': 8,
+        'appointment_cancelled': 7,
+        'appointment_modified': 6,
+        'info_request_fulfilled': 5,
+        'booking_abandoned': 4,
+        'timeout_abandoned': 3,
+        'wrong_number': 2,
+        'spam_detected': 1
+      };
+
+      if (existingOutcome && existingOutcome.conversation_outcome) {
+        const existingLevel = outcomeHierarchy[existingOutcome.conversation_outcome] || 0;
+        const newLevel = outcomeHierarchy[outcome] || 0;
+        
+        // Se existe outcome terminal e o novo não é mais importante, ignorar
+        if (terminalOutcomes.includes(existingOutcome.conversation_outcome) && newLevel <= existingLevel) {
+          console.log(`🛡️ [OUTCOME] Ignorando - outcome terminal já existe: ${existingOutcome.conversation_outcome} (nivel ${existingLevel}) >= ${outcome} (nivel ${newLevel})`);
+          return { 
+            success: false, 
+            action: 'ignored', 
+            reason: `terminal_outcome_exists_${existingOutcome.conversation_outcome}` 
+          };
+        }
+
+        // Se o novo outcome é mais importante, permitir sobrescrita com log
+        if (newLevel > existingLevel) {
+          console.log(`🔄 [OUTCOME] Sobrescrevendo outcome: ${existingOutcome.conversation_outcome} (nivel ${existingLevel}) -> ${outcome} (nivel ${newLevel})`);
+        }
+      }
+
+      // 4. Gravar novo outcome (criar nova entrada de finalizacao)
+      const { error: insertError } = await supabaseAdmin
+        .from('conversation_history')
+        .insert({
+          user_id: userData.id,
+          tenant_id: tenantId,
+          session_id_uuid: sessionId,
+          content: `[OUTCOME_FINALIZATION] ${outcome} - ${reason}`,
+          is_from_user: false,
+          conversation_outcome: outcome,
+          intent_detected: null,
+          created_at: new Date().toISOString()
+        } as any);
+
+      if (insertError) {
+        console.error(`❌ [OUTCOME] Erro ao gravar outcome final:`, insertError);
+        return { success: false, action: 'ignored', reason: 'insert_error' };
+      }
+
+      // 5. Telemetria estruturada para outcome finalizado
+      const guardMetrics = {
+        guardrails_passed: true,
+        rate_limit_count: newCount,
+        user_validation: true,
+        outcome_type: outcome,
+        session_id: sessionId,
+        user_phone: userPhone,
+        tenant_id: tenantId,
+        processing_time_ms: Date.now() - Date.now()
+      };
+      
+      console.log(`✅ [OUTCOME-GUARD] Outcome finalizado com segurança:`, {
+        outcome,
+        reason,
+        session: sessionId,
+        action: existingOutcome ? 'overwritten' : 'created',
+        metrics: guardMetrics
+      });
+      
+      return { 
+        success: true, 
+        action: existingOutcome ? 'overwritten' : 'created',
+        reason: `outcome_${outcome}_finalized`
+      };
+
+    } catch (error) {
+      console.error(`💥 [OUTCOME] Erro crítico ao finalizar outcome:`, error);
+      return { success: false, action: 'ignored', reason: 'critical_error' };
     }
   }
 }

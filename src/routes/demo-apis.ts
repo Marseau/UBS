@@ -474,7 +474,8 @@ router.post('/chat', async (req: Request, res: Response) => {
     const xDemo = (req.headers['x-demo-token'] as string) || '';
     const demoToken = bearer || xDemo;
 
-    if (!demoTokenValidator.validateToken(demoToken)) {
+    const tokenPayload = demoTokenValidator.validateToken(demoToken);
+    if (!tokenPayload) {
       return res.status(401).json({ success: false, error: 'invalid_demo_token' });
     }
 

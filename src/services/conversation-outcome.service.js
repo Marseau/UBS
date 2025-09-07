@@ -7,10 +7,12 @@
 
 const { supabaseAdmin } = require('../config/database');
 const { AppointmentConversationDetectorService } = require('./appointment-conversation-detector.service');
+const { IntentOutcomeTelemetryService } = require('./intent-outcome-telemetry.service');
 
 class ConversationOutcomeService {
     constructor() {
         this.appointmentDetector = new AppointmentConversationDetectorService();
+        this.telemetryService = new IntentOutcomeTelemetryService();
         this.validOutcomes = [
             // OUTCOMES INICIAIS (primeira interação)
             'appointment_created',        // Criou novo agendamento ✅
@@ -36,26 +38,20 @@ class ConversationOutcomeService {
 
     /**
      * REGISTRAR OUTCOME quando appointment é criado
+     * CENTRALIZADO: Usa updateConversationOutcome() para garantir consistência
      */
     async markAppointmentCreated(conversationId, appointmentId) {
         try {
-            console.log(`✅ Marcando conversa ${conversationId} como appointment_created`);
+            console.log(`✅ Marcando conversa ${conversationId} como appointment_created (appointment: ${appointmentId})`);
             
-            const { error } = await supabaseAdmin
-                .from('conversation_history')
-                .update({ 
-                    conversation_outcome: 'appointment_created',
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', conversationId);
-
-            if (error) {
-                console.error('❌ Erro ao marcar appointment_created:', error);
-                return false;
+            // Centralizar na função que garante última mensagem + idempotência + telemetria
+            const result = await this.updateConversationOutcome(conversationId, 'appointment_created');
+            
+            if (result) {
+                console.log(`🎯 Appointment ${appointmentId} registrado com outcome appointment_created`);
             }
-
-            console.log(`🎯 Conversa marcada como appointment_created (appointment: ${appointmentId})`);
-            return true;
+            
+            return result;
             
         } catch (error) {
             console.error('❌ Erro ao registrar appointment_created:', error);
@@ -65,29 +61,41 @@ class ConversationOutcomeService {
 
     /**
      * REGISTRAR OUTCOME quando conversa é abandonada por timeout
+     * CORRIGIDO: Processa por sessão para manter "1 outcome por conversa"
      */
     async markTimeoutAbandoned(tenantId, userId) {
         try {
             console.log(`⏰ Marcando conversas como timeout_abandoned para user ${userId}`);
             
-            // Marcar todas as conversas recentes sem outcome como abandonadas
-            const { error } = await supabaseAdmin
+            // Buscar sessões ativas (sem outcome) para este usuário
+            const { data: activeSessions, error: sessionError } = await supabaseAdmin
                 .from('conversation_history')
-                .update({ 
-                    conversation_outcome: 'timeout_abandoned',
-                    updated_at: new Date().toISOString()
-                })
+                .select('session_id_uuid, user_id, tenant_id, MAX(id) as last_message_id')
                 .eq('tenant_id', tenantId)
                 .eq('user_id', userId)
                 .is('conversation_outcome', null)
-                .gte('created_at', new Date(Date.now() - 300000).toISOString()); // Últimos 5 min
+                .gte('created_at', new Date(Date.now() - 300000).toISOString()) // Últimos 5 min
+                .group('session_id_uuid, user_id, tenant_id');
 
-            if (error) {
-                console.error('❌ Erro ao marcar timeout_abandoned:', error);
-                return false;
+            if (sessionError || !activeSessions?.length) {
+                console.log(`⚠️ Nenhuma sessão ativa para marcar como timeout_abandoned`);
+                return true;
             }
 
-            console.log(`🎯 Conversas marcadas como timeout_abandoned`);
+            // Processar cada sessão individualmente usando updateConversationOutcome
+            let processedSessions = 0;
+            for (const session of activeSessions) {
+                // Usar updateConversationOutcome para garantir consistência
+                const result = await this.updateConversationOutcome(session.last_message_id, 'timeout_abandoned');
+                
+                if (result) {
+                    processedSessions++;
+                } else {
+                    console.error(`❌ Erro ao marcar sessão ${session.session_id_uuid} como timeout_abandoned`);
+                }
+            }
+
+            console.log(`🎯 ${processedSessions}/${activeSessions.length} sessões marcadas como timeout_abandoned`);
             return true;
             
         } catch (error) {
@@ -216,6 +224,7 @@ class ConversationOutcomeService {
 
     /**
      * ATUALIZAR outcome de uma conversa específica
+     * CORRIGIDO: Garante aplicação na última mensagem da sessão com idempotência
      */
     async updateConversationOutcome(conversationId, outcome) {
         if (!this.validOutcomes.includes(outcome)) {
@@ -224,20 +233,102 @@ class ConversationOutcomeService {
         }
 
         try {
-            const { error } = await supabaseAdmin
+            // Primeiro, buscar dados da conversa para telemetria estruturada
+            const { data: conversationData, error: fetchError } = await supabaseAdmin
+                .from('conversation_history')
+                .select('session_id_uuid, user_id, tenant_id, conversation_outcome')
+                .eq('id', conversationId)
+                .single();
+
+            if (fetchError || !conversationData) {
+                console.error('❌ Erro ao buscar dados da conversa:', fetchError);
+                return false;
+            }
+
+            // ✅ IDEMPOTÊNCIA: Verificar se já tem outcome
+            if (conversationData.conversation_outcome) {
+                console.log(`⚠️ [IDEMPOTENCIA] Conversa ${conversationId} já tem outcome: ${conversationData.conversation_outcome}`);
+                return true; // Não reprocessar
+            }
+
+            // 🎯 GARANTIA: Buscar última mensagem da sessão para aplicar outcome
+            const { data: lastMessage, error: lastMessageError } = await supabaseAdmin
+                .from('conversation_history')
+                .select('id')
+                .eq('session_id_uuid', conversationData.session_id_uuid)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (lastMessageError || !lastMessage) {
+                console.error('❌ Erro ao buscar última mensagem da sessão:', lastMessageError);
+                return false;
+            }
+
+            // Se conversationId não é a última mensagem, aplicar na última
+            const targetMessageId = lastMessage.id;
+            if (conversationId !== targetMessageId) {
+                console.log(`🔄 [AJUSTE] Aplicando outcome na última mensagem ${targetMessageId} em vez de ${conversationId}`);
+            }
+
+            // ✅ IDEMPOTÊNCIA RIGOROSA: Atualizar apenas se linha ainda não tem outcome
+            const { data: updated, error } = await supabaseAdmin
                 .from('conversation_history')
                 .update({ 
                     conversation_outcome: outcome,
                     updated_at: new Date().toISOString()
                 })
-                .eq('id', conversationId);
+                .eq('id', targetMessageId)
+                .is('conversation_outcome', null)
+                .select('id'); // Força retorno para verificar se atualizou algo
 
             if (error) {
                 console.error('❌ Erro ao atualizar outcome:', error);
                 return false;
             }
 
-            console.log(`🎯 Conversa ${conversationId} marcada como: ${outcome}`);
+            // ⚠️ VERIFICAÇÃO: Se nenhuma linha foi afetada, não emitir telemetria
+            if (!updated || updated.length === 0) {
+                console.log(`⚠️ [IDEMPOTENCIA] Nenhuma linha afetada; não emitir telemetria. Conversa ${targetMessageId} já processada.`);
+                return true; // Nada a fazer, mas não é erro
+            }
+
+            console.log(`🎯 Conversa ${targetMessageId} (sessão ${conversationData.session_id_uuid}) marcada como: ${outcome}`);
+
+            // 📊 STRUCTURED TELEMETRY: Capturar outcome finalizado com enriquecimento completo
+            // SÓ EMITE se realmente atualizou uma linha
+            try {
+                // Para abandonment outcomes, usar recordConversationAbandoned
+                if (outcome.includes('abandoned')) {
+                    const reason = outcome === 'timeout_abandoned' ? 'timeout'
+                                 : outcome === 'booking_abandoned' ? 'booking_flow'
+                                 : 'unknown';
+
+                    await this.telemetryService.recordConversationAbandoned({
+                        session_id: conversationData.session_id_uuid,
+                        tenant_id: conversationData.tenant_id,
+                        user_id: conversationData.user_id,
+                        conversation_id: targetMessageId,
+                        reason,
+                        outcome,
+                        source: 'ConversationOutcomeService.updateConversationOutcome'
+                    });
+                    console.log(`📊 [TELEMETRY] Abandonment captured: ${outcome} [${reason}] for tenant ${conversationData.tenant_id} session ${conversationData.session_id_uuid}`);
+                } else {
+                    await this.telemetryService.recordOutcomeFinalized({
+                        session_id: conversationData.session_id_uuid,
+                        tenant_id: conversationData.tenant_id,
+                        user_id: conversationData.user_id,
+                        conversation_id: targetMessageId,
+                        outcome_new: outcome,
+                        source: 'ConversationOutcomeService.updateConversationOutcome'
+                    });
+                    console.log(`📊 [TELEMETRY] Outcome captured: ${outcome} for tenant ${conversationData.tenant_id} session ${conversationData.session_id_uuid}`);
+                }
+            } catch (telemetryError) {
+                console.error('⚠️ [TELEMETRY] Failed to record outcome:', telemetryError);
+            }
+
             return true;
             
         } catch (error) {
@@ -248,27 +339,42 @@ class ConversationOutcomeService {
 
     /**
      * MARCAR conversas antigas sem outcome (cleanup)
+     * CORRIGIDO: Processa por sessão e inclui telemetria
      */
     async markBookingAbandoned() {
         try {
             console.log('🔄 Marcando booking abandonados...');
             
-            // Conversas com booking_request sem appointment criado há mais de 1 hora
+            // Buscar sessões com booking_request sem appointment há mais de 1 hora
             const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
             
-            const { error } = await supabaseAdmin
+            const { data: abandonedSessions, error: fetchError } = await supabaseAdmin
                 .from('conversation_history')
-                .update({ conversation_outcome: 'booking_abandoned' })
+                .select('session_id_uuid, user_id, tenant_id, MAX(id) as last_message_id')
                 .eq('intent_detected', 'booking_request')
                 .is('conversation_outcome', null)
-                .lt('created_at', oneHourAgo);
+                .lt('created_at', oneHourAgo)
+                .group('session_id_uuid, user_id, tenant_id');
 
-            if (error) {
-                console.error('❌ Erro ao marcar booking abandonados:', error);
-                return false;
+            if (fetchError || !abandonedSessions?.length) {
+                console.log('⚠️ Nenhuma sessão de booking para marcar como abandonada');
+                return true;
             }
 
-            console.log('✅ Booking abandonados marcados');
+            // Processar cada sessão individualmente usando updateConversationOutcome
+            let processedSessions = 0;
+            for (const session of abandonedSessions) {
+                // Usar updateConversationOutcome para garantir consistência
+                const result = await this.updateConversationOutcome(session.last_message_id, 'booking_abandoned');
+                
+                if (result) {
+                    processedSessions++;
+                } else {
+                    console.error(`❌ Erro ao marcar sessão ${session.session_id_uuid} como booking_abandoned`);
+                }
+            }
+
+            console.log(`✅ ${processedSessions}/${abandonedSessions.length} sessões marcadas como booking_abandoned`);
             return true;
             
         } catch (error) {

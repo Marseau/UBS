@@ -15,6 +15,7 @@
   "exclude": [
     "src/frontend/js/**/*",
     "src/services/subscription-monitor-enhanced.service.ts",
+    "src/routes/whatsapp-webhook-v3.routes.backup.ts",
     "scripts/**/*",
     "node_modules",
     "dist",

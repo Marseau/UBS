@@ -54,6 +54,8 @@ export class WebhookV3FlowIntegrationService {
     intent: string | null,
     tenantData: any,
     availabilityBlock?: any,
+    businessHoursBlock?: string,
+    upsellBlock?: string,
     legacyGenerateLLMResponse?: Function
   ): Promise<string> {
     
@@ -61,7 +63,7 @@ export class WebhookV3FlowIntegrationService {
     if (!this.shouldUseFlowLock(session, tenantData)) {
       console.log(`🔄 [FLOW-INTEGRATION] Usando sistema legado - tenant: ${tenantData?.tenant?.id}`);
       return legacyGenerateLLMResponse ? 
-        await legacyGenerateLLMResponse(session, text, intent, tenantData, availabilityBlock) :
+        await legacyGenerateLLMResponse(session, text, intent, tenantData, availabilityBlock, businessHoursBlock || '', upsellBlock || '') :
         'Sistema legado não disponível.';
     }
 
@@ -86,7 +88,7 @@ export class WebhookV3FlowIntegrationService {
       // 5. Log comparação se habilitado
       if (this.config.logComparisons && legacyGenerateLLMResponse) {
         await this.logComparison(
-          session, text, intent, tenantData, availabilityBlock,
+          session, text, intent, tenantData, availabilityBlock, businessHoursBlock || '', upsellBlock || '',
           result.aiResponse,
           legacyGenerateLLMResponse
         );
@@ -100,7 +102,7 @@ export class WebhookV3FlowIntegrationService {
       // Fallback para sistema legado se habilitado
       if (this.config.fallbackToLegacy && legacyGenerateLLMResponse) {
         console.log('🔄 [FLOW-INTEGRATION] Fallback para sistema legado');
-        return await legacyGenerateLLMResponse(session, text, intent, tenantData, availabilityBlock);
+        return await legacyGenerateLLMResponse(session, text, intent, tenantData, availabilityBlock, businessHoursBlock || '', upsellBlock || '');
       }
       
       return 'Desculpe, ocorreu um erro interno. Tente novamente.';
@@ -263,12 +265,14 @@ export class WebhookV3FlowIntegrationService {
     intent: string | null,
     tenantData: any,
     availabilityBlock: any,
+    businessHoursBlock: string,
+    upsellBlock: string,
     flowLockResponse: string,
     legacyGenerateLLMResponse: Function
   ) {
     try {
       // Executar sistema legado para comparação
-      const legacyResponse = await legacyGenerateLLMResponse(session, text, intent, tenantData, availabilityBlock);
+      const legacyResponse = await legacyGenerateLLMResponse(session, text, intent, tenantData, availabilityBlock, businessHoursBlock, upsellBlock);
       
       const comparison = {
         tenant_id: tenantData?.tenant?.id,
