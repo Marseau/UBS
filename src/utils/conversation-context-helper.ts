@@ -224,6 +224,7 @@ export async function mergeEnhancedConversationContext(
   }
   
   console.log(`🔒 Enhanced Context: Session ${(finalContext.session_id || 'unknown').substring(0,8)}... | Flow: ${finalContext.flow_lock?.active_flow || 'none'} | Step: ${finalContext.flow_lock?.step || 'none'}`);
+  console.log(`🔒 [PERSIST-DEBUG] Flow lock being saved:`, JSON.stringify(finalContext.flow_lock, null, 2));
   
   return finalContext;
 }

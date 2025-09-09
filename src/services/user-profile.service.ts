@@ -17,6 +17,7 @@ export interface UserProfileData {
   name?: string;
   email?: string;
   gender?: string;
+  birth_date?: string;
 }
 
 export interface ConversationState {
@@ -34,18 +35,20 @@ export async function upsertUserProfile({
   userPhone, 
   name, 
   email, 
-  gender 
+  gender,
+  birth_date 
 }: UserProfileData): Promise<string> {
   const phone = normalizeE164(userPhone);
   
   console.log(`🔧 [UPSERT] Persistindo usuário ${phone} no Supabase`);
-  console.log(`🔧 [UPSERT PARAMS] name: "${name}", email: "${email}", gender: "${gender}"`);
+  console.log(`🔧 [UPSERT PARAMS] name: "${name}", email: "${email}", gender: "${gender}", birth_date: "${birth_date}"`);
   
   // Build payload only with defined values to avoid overwriting with null
   const userPayload: any = { phone };
   if (name) userPayload.name = name;
   if (email) userPayload.email = email;
   if (gender) userPayload.gender = gender;
+  if (birth_date) userPayload.birth_date = birth_date;
   
   // Upsert user in Supabase
   const { data: user, error: userError } = await supabase

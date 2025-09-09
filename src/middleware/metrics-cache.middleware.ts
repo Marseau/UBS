@@ -196,7 +196,7 @@ class MetricsCacheService {
     let removedCount = 0;
     const keysToRemove: string[] = [];
 
-    for (const [key] of this.cache) {
+    for (const [key] of Array.from(this.cache)) {
       if (key.includes(pattern)) {
         keysToRemove.push(key);
       }
@@ -248,7 +248,7 @@ class MetricsCacheService {
     const now = Date.now();
     const keysToRemove: string[] = [];
 
-    for (const [key, entry] of this.cache) {
+    for (const [key, entry] of Array.from(this.cache)) {
       if (now - entry.timestamp >= entry.ttl) {
         keysToRemove.push(key);
       }
@@ -333,7 +333,7 @@ class MetricsCacheService {
    */
   private static updateMemoryUsage(): void {
     let totalSize = 0;
-    for (const [key, entry] of this.cache) {
+    for (const [key, entry] of Array.from(this.cache)) {
       totalSize += key.length * 2; // String characters (UTF-16)
       totalSize += JSON.stringify(entry.data).length * 2; // Data size
       totalSize += 64; // Entry metadata overhead

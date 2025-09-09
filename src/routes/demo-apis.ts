@@ -44,6 +44,50 @@ router.get('/_demo/health', (_req, res) => {
   res.json({ ok: true, route: 'demo-apis.ts', build: process.env.BUILD_ID || 'dev' });
 });
 
+// ========================= Generate Token Endpoint =========================
+router.post('/_demo/generate-token', (_req, res) => {
+  try {
+    const token = demoTokenValidator.generateToken({ source: 'demo_ui' });
+    res.json({ 
+      success: true, 
+      token,
+      message: 'Token HMAC válido gerado usando o mesmo secret do servidor'
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to generate token',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// ========================= Debug Token Endpoint =========================
+router.post('/_demo/debug-token', (req, res) => {
+  try {
+    const token = req.body.token;
+    if (!token) {
+      return res.json({ error: 'Token required in body' });
+    }
+    
+    const validation = demoTokenValidator.validateToken(token);
+    return res.json({ 
+      success: true,
+      token,
+      validation,
+      valid: validation !== null,
+      message: validation ? 'Token válido' : 'Token inválido'
+    });
+  } catch (error) {
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Debug failed',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+
 // ========================= Check Business =========================
 // Verifica se já existe tenant com este whatsappNumber (phone do negócio)
 router.get('/check-business', async (req: Request, res: Response) => {
@@ -433,7 +477,7 @@ router.get('/evidence/:tenantId', async (req: Request, res: Response) => {
     // 5. CONVERSATION_HISTORY TABLE
     const { data: conversations, error: conversationError } = await supabase
       .from('conversation_history')
-      .select('id, user_id, tenant_id, content, is_from_user, intent_detected, created_at')
+      .select('id, user_id, tenant_id, content, is_from_user, intent_detected, processing_cost_usd, api_cost_usd, tokens_used, model_used, created_at')
       .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false })
       .limit(10); // Limitar a 10 mensagens mais recentes
@@ -465,8 +509,9 @@ router.get('/evidence/:tenantId', async (req: Request, res: Response) => {
 });
 
 // ========================= Chat (WhatsApp-like payload) =========================
-// Encaminha a mensagem para o mesmo orquestrador do WhatsApp real, usando bypass por token
+// PROXY VERDADEIRO: Chama A MESMA ROTA /api/whatsapp/webhook internamente
 router.post('/chat', async (req: Request, res: Response) => {
+  console.log('🚀 [DEMO PROXY] INICIANDO PROXY VERDADEIRO');
   try {
     // auth: demo bypass
     const auth = req.headers.authorization || '';
@@ -474,6 +519,7 @@ router.post('/chat', async (req: Request, res: Response) => {
     const xDemo = (req.headers['x-demo-token'] as string) || '';
     const demoToken = bearer || xDemo;
 
+    // Usar validação HMAC apropriada para produção
     const tokenPayload = demoTokenValidator.validateToken(demoToken);
     if (!tokenPayload) {
       return res.status(401).json({ success: false, error: 'invalid_demo_token' });
@@ -495,7 +541,7 @@ router.post('/chat', async (req: Request, res: Response) => {
     const userDigits = onlyDigits(userPhone);
     const tenantDigits = normalizeE164BR(whatsappNumber);
 
-    // Buscar tenantId real pelo telefone
+    // Buscar tenantId para validar tenant existe
     const { data: tenant, error: tenantErr } = await supabase
       .from('tenants')
       .select('id')
@@ -510,111 +556,76 @@ router.post('/chat', async (req: Request, res: Response) => {
       });
     }
 
-    const tenantId = tenant.id;
+    // ===== CHAMAR A MESMA ROTA DO WHATSAPP =====
+    
+    // 1) Criar payload WhatsApp webhook format
+    const webhookPayload = {
+      object: 'whatsapp_business_account',
+      entry: [{
+        id: `demo_entry_${Date.now()}`,
+        changes: [{
+          value: {
+            messaging_product: 'whatsapp',
+            metadata: {
+              display_phone_number: whatsappNumber,
+              phone_number_id: tenantDigits
+            },
+            messages: [{
+              from: userDigits,
+              id: `demo_msg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+              timestamp: Math.floor(Date.now() / 1000).toString(),
+              text: {
+                body: message
+              },
+              type: 'text'
+            }]
+          },
+          field: 'messages'
+        }]
+      }]
+    };
 
-    // Lazy import para evitar ciclos durante build
-    const { WebhookFlowOrchestratorService } = await import('../services/webhook-flow-orchestrator.service');
-    const orchestrator = new WebhookFlowOrchestratorService();
+    // 2) Fazer requisição HTTP interna para A MESMA ROTA
+    console.log('🎯 [DEMO PROXY] CHAMANDO A MESMA ROTA: /api/whatsapp/webhook');
+    const fetch = (await import('node-fetch')).default;
+    const webhookResponse = await fetch('http://localhost:3000/api/whatsapp/webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-demo-token': demoToken, // Passar demo token para middleware
+        'x-hub-signature-256': 'sha256=demo_signature' // Bypass signature validation
+      },
+      body: JSON.stringify(webhookPayload)
+    });
 
-    const out = await orchestrator.orchestrateWebhookFlow(
-      String(message),
-      userDigits,         // from
-      tenantId,           // tenantId UUID correto
-      { domain: 'demo' },
-      {
-        session_id: `demo_${tenantDigits}:${userDigits}`,
-        demoMode: { source: 'demo_ui', tenantPhone: tenantDigits, tenantId: tenantId } // Usar tenantId UUID real
-      }
-    );
-    // ===== PERSISTÊNCIA SÍNCRONA DE CONVERSAÇÃO =====
-    try {
-      // 1) Encontrar ou criar usuário
-      let userId: string | null = null;
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('id')
-        .or(`phone.eq.${userDigits},phone.eq.+${userDigits}`)
-        .maybeSingle();
-      
-      if (existingUser?.id) {
-        userId = existingUser.id;
-      } else {
-        // Criar novo usuário
-        const { data: newUser } = await supabase
-          .from('users')
-          .insert([{
-            phone: `+${userDigits}`,
-            name: null,
-            email: null
-          }])
-          .select('id')
-          .single();
-        
-        if (newUser?.id) {
-          userId = newUser.id;
-          // Vincular ao tenant na tabela user_tenants
-          await supabase
-            .from('user_tenants')
-            .insert([{ tenant_id: tenantId, user_id: userId }]);
-        }
-      }
-
-      if (userId) {
-        // 2) Gerar conversation context
-        const sessionId = crypto.randomUUID();
-        const commonBase = {
-          tenant_id: tenantId,
-          user_id: userId,
-          message_source: 'whatsapp_demo',
-          created_at: new Date().toISOString(),
-          conversation_outcome: null,
-          conversation_context: { session_id: sessionId, duration_minutes: 0 }
-        };
-
-        // 3) Persistir mensagem do usuário e resposta da IA
-        const userRow = {
-          ...commonBase,
-          content: String(message),
-          is_from_user: true,
-          message_type: 'text',
-          intent_detected: out.telemetryData?.intent || null,
-          tokens_used: 0,
-          api_cost_usd: 0,
-          processing_cost_usd: 0,
-          model_used: null,
-          confidence_score: out.telemetryData?.confidence || null
-        };
-
-        const aiRow = {
-          ...commonBase,
-          content: String(out.aiResponse),
-          is_from_user: false,
-          message_type: 'text',
-          intent_detected: out.telemetryData?.intent || null,
-          tokens_used: out.llmMetrics?.total_tokens || 0,
-          api_cost_usd: out.llmMetrics?.api_cost_usd || 0,
-          processing_cost_usd: out.llmMetrics?.processing_cost_usd || 0,
-          model_used: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
-          confidence_score: out.telemetryData?.confidence || null
-        };
-
-        // 4) Inserir ambas as mensagens
-        await supabase
-          .from('conversation_history')
-          .insert([userRow, aiRow]);
-      }
-    } catch (error) {
-      console.error('❌ [DEMO] Erro na persistência:', error);
+    if (!webhookResponse.ok) {
+      console.error('❌ [DEMO PROXY] Webhook call failed:', webhookResponse.status, await webhookResponse.text());
+      return res.status(500).json({ 
+        success: false, 
+        error: 'webhook_proxy_failed',
+        details: `Webhook returned ${webhookResponse.status}`
+      });
     }
 
-    return res.json({
+    const webhookResult = await webhookResponse.json();
+    console.log('✅ [DEMO PROXY] Webhook call successful:', webhookResult);
+
+    // 3) Retornar resposta real do webhook com telemetria adicional
+    // ✅ Padronizar saída
+    const result = {
       success: true,
-      aiResponse: out.aiResponse,
-      telemetry: out.telemetryData ?? {}
-    });
+      message: webhookResult.message ?? webhookResult.content ?? webhookResult.response ?? '',
+      intent: webhookResult.intent ?? null,
+      outcome: webhookResult.outcome ?? null,
+      decision_method: webhookResult.decision_method ?? 'unknown',
+      flow_state: webhookResult.flow_state ?? null,
+    };
+
+    return res.json(result);
+    
   } catch (err) {
-    console.error('demo/chat error:', err);
-    return res.status(500).json({ success: false, error: 'internal_error' });
+    console.error('❌ [DEMO PROXY] Error:', err);
+    return res.status(500).json({ success: false, error: 'internal_error', details: (err as Error).message });
   }
 });
 

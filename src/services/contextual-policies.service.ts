@@ -647,7 +647,7 @@ export class ContextualPoliciesService {
     if (userContext.is_new_user && intent !== 'greeting' && intent !== 'services') {
       return {
         allowIntent: false,
-        modifiedIntent: 'services',
+        modifiedIntent: 'services' as any, // TODO: Fix after UserIntent import
         contextualMessage: '👋 Olá! Como é sua primeira vez, que tal conhecer nossos serviços primeiro?',
         actionRequired: 'redirect',
         priority: 'medium',

@@ -150,33 +150,58 @@ export class LLMIntentClassifierService {
   }
 
   /**
-   * Constrói prompt system para classificação fechada
+   * Constrói prompt system para classificação fechada MULTI-IDIOMA
    */
   private buildSystemPrompt(): string {
     const allowedIntents = INTENT_KEYS.join('\n- ');
     
-    return `Você é um classificador de intenção. Classifique a mensagem do usuário em EXATAMENTE UMA das chaves abaixo e nada além disso.
+    return `You are a multilingual intent classifier. Classify the user message into EXACTLY ONE of the keys below and nothing else.
+Você é um classificador de intenção multi-idioma. Classifique a mensagem em EXATAMENTE UMA das chaves abaixo.
+Eres un clasificador de intención multiidioma. Clasifica el mensaje en EXACTAMENTE UNA de las claves siguientes.
+Vous êtes un classificateur d'intention multilingue. Classifiez le message en EXACTEMENT UNE des clés ci-dessous.
 
-INTENTS PERMITIDAS:
+SUPPORTED LANGUAGES / IDIOMAS SUPORTADOS:
+🇧🇷 Português | 🇺🇸 English | 🇪🇸 Español | 🇫🇷 Français
+
+ALLOWED INTENTS / INTENTS PERMITIDAS:
 - ${allowedIntents}
 
-Regras:
-1) Responda SOMENTE com JSON no formato: {"intent":"<uma-das-chaves>"}.
-2) Se NÃO for possível classificar com segurança, responda exatamente: {"intent":null}.
-3) Não explique. Não inclua texto extra. Sem sinônimos fora da lista.
-4) Use APENAS as chaves exatas da lista acima.
-5) Se houver múltiplas possibilidades, escolha a mais provável.`;
+UNIVERSAL RULES / REGRAS UNIVERSAIS:
+1) Respond ONLY with JSON: {"intent":"<exact-key>"} | Responda SOMENTE com JSON: {"intent":"<chave-exata>"}
+2) If cannot classify safely, respond: {"intent":null} | Se NÃO conseguir classificar, responda: {"intent":null}
+3) No explanations. No extra text. | Sem explicações. Sem texto extra.
+4) Use ONLY exact keys from list above. | Use APENAS as chaves exatas da lista acima.
+5) If multiple possibilities, choose most likely. | Se múltiplas possibilidades, escolha a mais provável.
+6) Detect language automatically and classify accordingly. | Detecte o idioma automaticamente e classifique adequadamente.
+
+MULTILINGUAL PATTERNS EXAMPLES / EXEMPLOS MULTI-IDIOMA:
+- greeting: "hi", "oi", "hola", "bonjour"
+- services: "services", "serviços", "servicios", "services"
+- pricing: "price", "preço", "precio", "prix"
+- availability: "availability", "disponibilidade", "disponibilidad", "disponibilité"`;
   }
 
   /**
-   * Constrói prompt user com a mensagem
+   * Constrói prompt user com a mensagem MULTI-IDIOMA
    */
   private buildUserPrompt(text: string): string {
-    return `Mensagem do usuário (pt-BR):
+    // TODO: Detectar idioma automaticamente usando o sistema determinístico
+    // import('./deterministic-intent-detector.service').then(({ detectLanguage }) => {
+    //   const langDetection = detectLanguage(text);
+    //   console.log(`🌍 [LLM-CLASSIFIER] Idioma detectado: ${langDetection.language} (${(langDetection.confidence * 100).toFixed(1)}%)`);
+    // }).catch(() => {
+    //   // fallback silencioso se não conseguir importar
+    // });
+    
+    return `User message / Mensagem do usuário / Mensaje del usuario / Message de l'utilisateur:
 ---
 ${text}
 ---
-Classifique.`;
+
+Classify this message into one of the allowed intents. Detect the language automatically and classify accordingly.
+Classifique esta mensagem em uma das intents permitidas. Detecte o idioma automaticamente.
+Clasifica este mensaje en una de las intenciones permitidas. Detecta el idioma automáticamente.
+Classifiez ce message dans l'une des intentions autorisées. Détectez la langue automatiquement.`;
   }
 
   /**

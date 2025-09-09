@@ -1618,13 +1618,9 @@
                 clearTimeout(userTO);
                 const n = this.cleanPhoneNumber(e.target.value);
                 if (n.length >= 10) {
-                  userTO = setTimeout(async () => {
-                    if (this.existingBusinessData?.id) {
-                      await this.checkUser(n, this.existingBusinessData.id);
-                    } else {
-                      this.userConnected = true;
-                      this.updateButtonState();
-                    }
+                  userTO = setTimeout(() => {
+                    this.userConnected = true;
+                    this.updateButtonState();
                   }, 800);
                 } else {
                   this.userConnected = false;
@@ -1672,22 +1668,6 @@
             }
           }
         
-          async checkUser(userNumber, tenantId) {
-            try {
-              const clean = this.cleanPhoneNumber(userNumber);
-              const resp = await fetch(`/api/demo/check-user?userPhone=${encodeURIComponent(clean)}&tenantId=${encodeURIComponent(tenantId)}`);
-              const result = await resp.json();
-              this.userExists = !!(result.success && result.exists);
-              this.userConnected = true;
-              this.updateButtonState();
-              return this.userExists;
-            } catch {
-              this.userExists = false;
-              this.userConnected = true;
-              this.updateButtonState();
-              return false;
-            }
-          }
         
           /* ===================== UI CONDICIONAL ===================== */
           hideAllConditionalFields() {
@@ -1705,6 +1685,17 @@
             if (this.existingBusinessData?.domain) {
               this.selectedDomain = this.existingBusinessData.domain;
               const hid = document.getElementById('selectedDomain'); if (hid) hid.value = this.selectedDomain;
+            }
+            
+            // Popular campos obrigatórios com dados do negócio existente
+            if (this.existingBusinessData) {
+              const nameField = document.getElementById('businessName');
+              const emailField = document.getElementById('businessEmail');
+              if (nameField) nameField.value = this.existingBusinessData.business_name || '';
+              if (emailField) emailField.value = this.existingBusinessData.email || '';
+              
+              // Trigger validation após popular os campos
+              setTimeout(() => this.updateButtonState(), 100);
             }
             const svc = document.getElementById('servicesSection'); if (svc) svc.style.display = 'none';
             const col = document.getElementById('collaboratorsSection'); if (col) col.style.display = 'none';
@@ -1916,7 +1907,7 @@
                 })
               });
               const data = await resp.json();
-              if (data.success && data.aiResponse) this.addMessage(data.aiResponse, 'ai');
+              if (data.success && data.message) this.addMessage(data.message, 'ai');
               else this.addMessage('⚠️ Erro ao processar resposta da IA', 'ai');
             } catch (e) {
               this.addMessage('⚠️ Falha de conexão com o servidor demo', 'ai');

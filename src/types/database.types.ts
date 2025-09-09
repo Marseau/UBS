@@ -517,6 +517,11 @@ export type Database = {
           phone: string
           preferences: Json | null
           updated_at: string | null
+          address: Json | null
+          birth_date: string | null
+          gender: string | null
+          emergency_contact: Json | null
+          account_type: string | null
         }
         Insert: {
           created_at?: string | null
@@ -526,6 +531,11 @@ export type Database = {
           phone: string
           preferences?: Json | null
           updated_at?: string | null
+          address?: Json | null
+          birth_date?: string | null
+          gender?: string | null
+          emergency_contact?: Json | null
+          account_type?: string | null
         }
         Update: {
           created_at?: string | null
@@ -535,6 +545,11 @@ export type Database = {
           phone?: string
           preferences?: Json | null
           updated_at?: string | null
+          address?: Json | null
+          birth_date?: string | null
+          gender?: string | null
+          emergency_contact?: Json | null
+          account_type?: string | null
         }
         Relationships: []
       }

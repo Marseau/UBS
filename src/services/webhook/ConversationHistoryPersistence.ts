@@ -20,7 +20,7 @@ export interface ConversationMessage {
   content: string;
   isFromUser: boolean;
   messageSource: string;
-  intent?: string;
+  intent_detected?: string;
   phoneNumberId?: string;
   conversationContext?: any;
   modelUsed?: string;
@@ -37,17 +37,23 @@ export interface PersistenceResult {
 
 export interface ConversationHistoryRecord {
   id?: string;
-  user_phone: string;
   tenant_id: string;
+  user_id: string;
   content: string;
   is_from_user: boolean;
-  message_source: string;
-  session_id_uuid: string;
-  intent?: string;
-  phone_number_id?: string;
+  message_type?: string;
+  intent_detected?: string;
+  confidence_score?: number;
   conversation_context?: any;
-  model_used?: string;
   created_at?: string;
+  // LLM Metrics Fields (existem no schema real)
+  tokens_used?: number;
+  api_cost_usd?: number;
+  model_used?: string;
+  message_source?: string;
+  processing_cost_usd?: number;
+  conversation_outcome?: string;
+  session_id_uuid?: string;
 }
 
 export class ConversationHistoryPersistence {
@@ -86,30 +92,32 @@ export class ConversationHistoryPersistence {
 
       // Construir records para inserção
       const userRecord: ConversationHistoryRecord = {
-        user_phone: userMessage.userPhone,
+        user_id: userMessage.userPhone, // Mapeando user_phone para user_id
         tenant_id: userMessage.tenantId,
         content: userMessage.content,
         is_from_user: true,
         message_source: userMessage.messageSource,
         session_id_uuid: userMessage.sessionId,
-        intent: userMessage.intent,
-        phone_number_id: userMessage.phoneNumberId,
-        conversation_context: userMessage.conversationContext,
+        intent_detected: userMessage.intent_detected,
+        conversation_context: userMessage.conversationContext ? 
+          { ...userMessage.conversationContext, flow_lock: undefined } : 
+          userMessage.conversationContext,
         model_used: undefined, // User messages não têm model_used
         created_at: timestamp
       };
 
       const assistantRecord: ConversationHistoryRecord = {
-        user_phone: assistantMessage.userPhone,
+        user_id: assistantMessage.userPhone, // Mapeando user_phone para user_id
         tenant_id: assistantMessage.tenantId,
         content: assistantMessage.content,
         is_from_user: false,
         message_source: assistantMessage.messageSource,
         session_id_uuid: assistantMessage.sessionId,
-        intent: assistantMessage.intent,
-        phone_number_id: assistantMessage.phoneNumberId,
-        conversation_context: assistantMessage.conversationContext,
-        model_used: assistantMessage.modelUsed || 'gpt-3.5-turbo',
+        intent_detected: assistantMessage.intent_detected,
+        conversation_context: assistantMessage.conversationContext ? 
+          { ...assistantMessage.conversationContext, flow_lock: undefined } : 
+          assistantMessage.conversationContext,
+        model_used: assistantMessage.modelUsed || process.env.OPENAI_MODEL || 'gpt-4o-mini',
         created_at: timestamp
       };
 
@@ -180,16 +188,17 @@ export class ConversationHistoryPersistence {
       });
 
       const record: ConversationHistoryRecord = {
-        user_phone: message.userPhone,
+        user_id: message.userPhone, // Mapeando user_phone para user_id
         tenant_id: message.tenantId,
         content: message.content,
         is_from_user: message.isFromUser,
         message_source: message.messageSource,
         session_id_uuid: message.sessionId,
-        intent: message.intent,
-        phone_number_id: message.phoneNumberId,
-        conversation_context: message.conversationContext,
-        model_used: message.isFromUser ? undefined : (message.modelUsed || 'gpt-3.5-turbo'),
+        intent_detected: message.intent_detected,
+        conversation_context: message.conversationContext ? 
+          { ...message.conversationContext, flow_lock: undefined } : 
+          message.conversationContext,
+        model_used: message.isFromUser ? undefined : (message.modelUsed || process.env.OPENAI_MODEL || 'gpt-4o-mini'),
         created_at: timestamp
       };
 
@@ -271,12 +280,12 @@ export class ConversationHistoryPersistence {
 
       const history: ConversationMessage[] = (data || []).map((record: any) => ({
         sessionId: record.session_id_uuid,
-        userPhone: record.user_phone,
+        userPhone: record.user_id, // Mapeando user_id para userPhone
         tenantId: record.tenant_id,
         content: record.content,
         isFromUser: record.is_from_user,
         messageSource: record.message_source,
-        intent: record.intent,
+        intent_detected: record.intent_detected,
         outcome: record.outcome,
         phoneNumberId: record.phone_number_id,
         conversationContext: record.conversation_context,
@@ -317,7 +326,7 @@ export class ConversationHistoryPersistence {
       const { data, error } = await this.supabase
         .from('conversation_history')
         .select('session_id_uuid')
-        .eq('user_phone', userPhone)
+        .eq('user_id', userPhone) // Mapeando user_phone para user_id
         .eq('tenant_id', tenantId)
         .gte('created_at', twoHoursAgo)
         .order('created_at', { ascending: false })

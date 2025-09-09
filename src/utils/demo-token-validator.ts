@@ -1,4 +1,4 @@
-import crypto from "crypto";
+import * as crypto from "crypto";
 
 const DEMO_SECRET = process.env.DEMO_MODE_TOKEN || "fixed-secret-for-load-test-2025";
 
@@ -110,6 +110,7 @@ export class DemoTokenValidator {
 
       // Parse payload
       const payload: DemoTokenPayload = JSON.parse(payloadStr);
+      console.log('📋 [DemoTokenValidator] Payload parsed:', payload);
 
       // Check expiration
       const age = Date.now() - payload.timestamp;
@@ -118,7 +119,7 @@ export class DemoTokenValidator {
         return null;
       }
 
-      console.log('✅ Token válido:', { source: payload.source, age: `${Math.round(age/1000)}s` });
+      console.log('✅ Token válido:', { source: payload.source, tenantId: payload.tenantId, age: `${Math.round(age/1000)}s` });
       return payload;
 
     } catch (error) {
@@ -164,8 +165,16 @@ export class DemoTokenValidator {
   }
 }
 
-// Singleton instance
-export const demoTokenValidator = new DemoTokenValidator();
+// Singleton instance - garante instância única global
+let _demoTokenValidatorInstance: DemoTokenValidator | null = null;
+
+export const demoTokenValidator = (() => {
+  if (!_demoTokenValidatorInstance) {
+    _demoTokenValidatorInstance = new DemoTokenValidator();
+    console.log('🔑 DemoTokenValidator singleton criado');
+  }
+  return _demoTokenValidatorInstance;
+})();
 
 /**
  * Utility para gerar tokens de demo na CLI

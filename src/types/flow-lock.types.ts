@@ -71,6 +71,8 @@ export interface EnhancedConversationContext {
   last_data_collection_attempt?: string;
   last_data_collection_success?: string;
   awaiting_data_fields?: string[];
+  data_collection_state?: string;
+  awaiting_data_input?: boolean;
   
   // Estatísticas de intent
   intent_history: {

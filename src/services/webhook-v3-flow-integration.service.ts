@@ -314,7 +314,7 @@ export class WebhookV3FlowIntegrationService {
     try {
       // Mock data para demonstração (tabela ainda não criada)
       const mockTelemetryData = [
-        { event_data: { processing_time_ms: 150, decision_method: 'command', intent: 'booking', flow_lock_active: true } },
+        { event_data: { processing_time_ms: 150, decision_method: 'flow_lock', intent: null, flow_lock_active: true } },
         { event_data: { processing_time_ms: 89, decision_method: 'regex', intent: 'pricing', flow_lock_active: false } }
       ];
 

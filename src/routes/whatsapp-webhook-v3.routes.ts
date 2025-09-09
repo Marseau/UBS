@@ -29,26 +29,22 @@ import { ConversationOutcomeAnalyzerService } from '../services/conversation-out
 import { demoTokenValidator } from '../utils/demo-token-validator';
 import { VALID_CONVERSATION_OUTCOMES } from '../types/billing-cron.types';
 
-// ===== INTENT ALLOWLIST (100% precisão via regex → LLM → validador) =====
+// ===== INTENT ALLOWLIST - Apenas UserIntents reais =====
 const ALLOWED_INTENTS = new Set<string>([
   'greeting',
-  'services',
+  'services', 
   'pricing',
   'availability',
   'my_appointments',
   'address',
-  'payments',
   'business_hours',
-  'cancel',
+  'cancel_appointment',  // Corrigido: 'cancel' → 'cancel_appointment'
   'reschedule',
   'confirm',
-  'modify_appointment',
-  'policies',
-  'handoff',
-  'wrong_number',
-  'test_message',
-  'booking_abandoned',
-  'noshow_followup'
+  'booking',             // Adicionado: core intent
+  'error',
+  'unknown',
+  'general_inquiry'      // Fallback
 ]);
 
 
@@ -131,7 +127,7 @@ const logger = (() => {
 const config = {
     openai: {
         apiKey: process.env.OPENAI_API_KEY || '',
-        model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '180'), // 🚀 OTIMIZAÇÃO #3: Reduzir tokens
         temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.6'),
         promptCostPer1k: parseFloat(process.env.OPENAI_PROMPT_COST_PER_1K || '0'),
@@ -1921,24 +1917,26 @@ class ValidationService {
     // 🚀 OTIMIZAÇÃO #1: RESPOSTA PRIMEIRO, BANCO DEPOIS
     const processingTime = Date.now() - startTime;
     const response = {
-      status: 'success',
-      response: result.aiResponse,
-      telemetry: { 
-        ...result.telemetryData, 
-        processingTime,
-        tokens_used: result.llmMetrics?.total_tokens || 0 // ✅ INCLUIR tokens_used na resposta
-      }
+      success: true,
+      message: result.aiResponse,
+      intent: result.telemetryData?.intent ?? null,
+      outcome: null,
+      decision_method: result.telemetryData?.decision_method ?? 'unknown',
+      flow_state: null,
     };
     
     // Enviar resposta IMEDIATAMENTE
     res.status(200).json(response);
 
     console.log('🔍 ANTES do setImmediate - sobre para executar persistência');
+    console.log('🔍 [DEBUG] CHAT RESPONSE:', response.message.substring(0, 100) + '...');
     
     // Capturar variáveis antes do setImmediate para evitar problemas de escopo
     const messageText = text;
-    const aiResponse = result.aiResponse;
+    const aiResponse = result.aiResponse; // ✅ INTERFACE: usar result.aiResponse conforme interface
     const messagePhone = userPhone;
+    
+    console.log('🔍 [DEBUG] PERSIST CAPTURE:', aiResponse.substring(0, 100) + '...');
     
     // ===== Persistência ASSÍNCRONA em conversation_history (fire-and-forget) =====
     // ===== Capturas para persistência assíncrona (evitar undefined em escopo) =====
@@ -1948,18 +1946,44 @@ class ValidationService {
 
     // SEPARAÇÃO: Métricas de Intent Detection (para linha do usuário)
     const __persist_intentLlm = (result?.llmMetrics as any) || {};
+    
+    // 🔍 DEBUG: Log estrutura das métricas para identificar problemas
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 [METRICS DEBUG] LLM Metrics:', {
+        llmMetrics: result?.llmMetrics,
+        telemetryData: result?.telemetryData,
+        intentDetected: result?.telemetryData?.intent,
+        decisionMethod: result?.telemetryData?.decision_method
+      });
+    }
+    
     const __persist_intentTokens: number = __persist_intentLlm.total_tokens ?? 0;
     const __persist_intentApiCost: number = __persist_intentLlm.api_cost_usd ?? 0;
     const __persist_intentProcessingCost: number = __persist_intentLlm.processing_cost_usd ?? 0;
     const __persist_intentModelUsed: string | null = __persist_intentLlm.model_used ?? null;
     const __persist_aiConfidence: number = result?.telemetryData?.confidence ?? 0;
+    // ✅ CORREÇÃO: Flow Lock não deve anular persistência de intent
+    // Intent Detection e Flow Lock são sistemas separados com responsabilidades distintas
     const __persist_intent: string | undefined = result?.telemetryData?.intent ?? undefined;
+    
+    // ✅ ADICIONAL: Persiste flow_state separadamente para analytics de fluxo
+    const __persist_flow_state: string | undefined = result?.updatedContext?.flow_lock?.active_flow ?? undefined;
 
-    // SEPARAÇÃO: Métricas de Response Generation (para linha da IA) - FUTURO: implementar
-    const __persist_responseTokens: number = 0; // TODO: capturar tokens da resposta
-    const __persist_responseApiCost: number = 0; // TODO: capturar custo da resposta
-    const __persist_responseProcessingCost: number = 0.00003; // Custo mínimo por enquanto
-    const __persist_responseModelUsed: string | null = config.openai.model;
+    // SEPARAÇÃO: Métricas de Response Generation (para linha da IA) - IMPLEMENTADO
+    const __persist_responseTokens: number = result.llmMetrics?.total_tokens || 0;
+    const __persist_responseApiCost: number = result.llmMetrics?.api_cost_usd || 0;
+    const __persist_responseProcessingCost: number = result.llmMetrics?.processing_cost_usd || 0.00003;
+    const __persist_responseModelUsed: string | null = result.telemetryData?.model_used || config.openai.model;
+    
+    // DEBUG: Verificar se as métricas estão chegando
+    console.log('🔍 [METRICS DEBUG] AI Response Metrics:', {
+      responseTokens: __persist_responseTokens,
+      responseApiCost: __persist_responseApiCost,
+      responseProcessingCost: __persist_responseProcessingCost,
+      responseModelUsed: __persist_responseModelUsed,
+      llmMetrics: result.llmMetrics
+    });
+    
     // === Captura demo token payload para persistência assíncrona ===
     const __persist_demoPayload = (req as any)?.demoMode ?? undefined;
 
@@ -2031,7 +2055,11 @@ class ValidationService {
           message_source: __persist_demoPayload ? 'whatsapp_demo' : 'whatsapp',
           created_at: new Date().toISOString(),
           conversation_outcome: null, // outcome final é resolvido por analisador/cron
-          conversation_context: { session_id: sessionUuid, duration_minutes: durationMinutes }
+          conversation_context: { 
+            session_id: sessionUuid, 
+            duration_minutes: durationMinutes,
+            flow_state: __persist_flow_state 
+          }
         } as const;
 
         // Ajuste de custo de processamento para Intent Detection (linha usuário)
@@ -2064,6 +2092,7 @@ class ValidationService {
         };
 
         // LINHA IA: Métricas de Response Generation
+        console.log('🔍 [DEBUG] DB INSERT AI CONTENT:', __persist_aiContent.substring(0, 100) + '...');
         const aiRow = {
           ...commonBase,
           content: __persist_aiContent,
@@ -2125,7 +2154,7 @@ class ValidationService {
         sessionKey,
         success: true,
         shouldSendWhatsApp: result.shouldSendWhatsApp,
-        intent: result.telemetryData?.intent,
+        intent: result.telemetryData?.decision_method === 'flow_lock' ? null : result.telemetryData?.intent,
         tenantId: result.updatedContext?.tenant_id,
         model: config.openai.model
       });
@@ -2197,7 +2226,7 @@ export default router;
             content: 'Você ainda está aí? Se preferir, posso encerrar por aqui e retomamos quando quiser.',
             is_from_user: false,
             message_type: 'text',
-            intent_detected: 'general',
+            intent_detected: 'general_inquiry',
             conversation_outcome: null, // OUTCOMES DETERMINADOS PELO ConversationOutcomeAnalyzerService
             message_source: 'whatsapp_demo',
             model_used: 'system',
@@ -2219,7 +2248,7 @@ export default router;
             content: 'Conversa encerrada por inatividade. Podemos retomar quando quiser.',
             is_from_user: false,
             message_type: 'text',
-            intent_detected: 'general',
+            intent_detected: 'general_inquiry',
             conversation_outcome: null, // OUTCOMES DETERMINADOS PELO ConversationOutcomeAnalyzerService
             message_source: 'whatsapp_demo',
             model_used: 'system',

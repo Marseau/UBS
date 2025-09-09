@@ -2,7 +2,7 @@
  * ConversationOutcomeAnalyzerService
  * 
  * Sistema para separação completa entre Intent e Outcome:
- * - Intent: Detectado e persistido a nível de mensagem (conversation_history.intent)
+ * - Intent: Detectado e persistido a nível de mensagem (conversation_history.intent_detected)
  * - Outcome: Persistido apenas a nível de conversação quando fluxos são finalizados (conversation_history.conversation_outcome)
  * 
  * Regras fundamentais:
@@ -14,6 +14,9 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
+import { BusinessIntent, UserIntent, SystemFlowState, MessageIntent, UnifiedIntent, isValidIntent } from '../types/intent.types';
+import { schemaValidator } from './schema-validator.service';
+import { intentCascadeMonitor } from './intent-cascade-monitor.service';
 
 const SUPABASE_URL = process.env.SUPABASE_URL as string;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
@@ -22,50 +25,7 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false }
 });
 
-// Tipos para Intent (nível de mensagem)
-export type MessageIntent = 
-  | 'booking'           // Quer agendar
-  | 'reschedule'        // Quer reagendar  
-  | 'cancel'            // Quer cancelar
-  | 'availability'      // Consulta disponibilidade
-  | 'services'          // Pergunta sobre serviços
-  | 'pricing'           // Consulta preços
-  | 'my_appointments'   // Consulta seus agendamentos
-  | 'address'           // Pergunta localização
-  | 'contact'           // Informações contato
-  | 'greeting'          // Cumprimento inicial
-  | 'general'           // Conversa geral
-  // Novos intents identificados
-  | 'emergency'         // Situação de emergência (saúde mental, urgência médica)
-  | 'complaint'         // Reclamação ou problema
-  | 'compliment'        // Elogio ou feedback positivo
-  | 'professional_preference' // Preferência por profissional específico
-  | 'treatment_info'    // Informações sobre tratamentos específicos
-  | 'follow_up'         // Acompanhamento pós-atendimento
-  | 'insurance'         // Questões sobre convênio/plano de saúde
-  | 'payment'           // Forma de pagamento
-  | 'confirmation'      // Confirmação de agendamento
-  | 'waiting_list'      // Lista de espera
-  | 'group_booking'     // Agendamento em grupo/família
-  | 'package_deal'      // Pacotes de serviços
-  | 'loyalty_program'   // Programa de fidelidade
-  | 'referral'          // Indicação/recomendação
-  | 'special_needs'     // Necessidades especiais/acessibilidade
-  // Intents específicos por domínio
-  | 'healthcare_emergency'   // Emergência de saúde mental
-  | 'healthcare_therapy'     // Tipos de terapia específicos
-  | 'healthcare_medication'  // Relacionado a medicamentos
-  | 'beauty_treatment'       // Tratamentos específicos de beleza
-  | 'beauty_combo'          // Combos de beleza
-  | 'legal_consultation'    // Consulta jurídica
-  | 'legal_document'        // Documentos legais
-  | 'sports_training'       // Treinamento esportivo
-  | 'sports_injury'         // Lesão esportiva
-  | 'education_course'      // Cursos educacionais
-  | 'education_assessment'  // Avaliações educacionais
-  | 'consulting_strategy'   // Consultoria estratégica
-  | 'consulting_analysis'   // Análise de negócios
-  | null;
+// REMOVIDO: Definição duplicada de MessageIntent - agora usa o sistema unificado de ../types/intent.types.ts
 
 // Tipos para Outcome (nível de conversação)
 export type ConversationOutcome = 
@@ -198,16 +158,8 @@ export class ConversationOutcomeAnalyzerService {
       specialNeeds.push(...specialMatches);
     }
 
-    // Ajustar urgência baseada no intent
-    if (intent === 'emergency' || intent === 'healthcare_emergency') {
-      urgency = 'critical';
-      priority = 'immediate';
-    } else if (intent === 'complaint') {
-      urgency = urgency === 'low' ? 'medium' : urgency;
-      if (priority === 'week') {
-        priority = 'same_day';
-      }
-    }
+    // Ajustar urgência baseada no intent (removido emergency/healthcare/complaint - não existem em produção)
+    // Mantém apenas urgência padrão baseada em padrões de texto
 
     const context: ContextualInfo = {
       isEmergency: urgency === 'critical',
@@ -244,6 +196,13 @@ export class ConversationOutcomeAnalyzerService {
         console.log(`✅ [INTENT] Detectado via REGEX: ${regexResult.intent} (${regexResult.confidence}) - Urgência: ${urgency}, Prioridade: ${priority}`);
         await this.persistMessageIntent(conversationId, regexResult.intent, regexResult.method, urgency, priority, context);
         return regexResult;
+      } else {
+        // Registrar falha na camada REGEX para monitoramento
+        await intentCascadeMonitor.recordRegexFailure(
+          tenantId, 
+          messageText, 
+          `Low confidence: ${regexResult.confidence || 0} (intent: ${regexResult.intent || 'none'})`
+        );
       }
 
       // Fase 2: Detecção por LLM (mais contextual)
@@ -258,10 +217,22 @@ export class ConversationOutcomeAnalyzerService {
         console.log(`✅ [INTENT] Detectado via LLM: ${llmResult.intent} (${llmResult.confidence}) - Urgência: ${urgency}, Prioridade: ${priority}`);
         await this.persistMessageIntent(conversationId, llmResult.intent, llmResult.method, urgency, priority, context);
         return llmResult;
+      } else {
+        // Registrar falha na camada LLM para monitoramento
+        await intentCascadeMonitor.recordLlmFailure(
+          tenantId, 
+          messageText, 
+          `Low confidence: ${llmResult.confidence || 0} (intent: ${llmResult.intent || 'none'})`,
+          llmResult.confidence
+        );
       }
 
       // Fase 3: Fallback determinístico
       const fallbackResult = this.detectIntentDeterministic(messageText);
+      
+      // Registrar uso de fallback para monitoramento (indica degradação do sistema)
+      await intentCascadeMonitor.recordFallbackUsage(tenantId, messageText, fallbackResult.intent);
+      
       // Analisar urgência e contexto
       const { urgency, priority, context } = this.analyzeUrgencyAndContext(messageText, fallbackResult.intent);
       fallbackResult.urgency = urgency;
@@ -275,7 +246,7 @@ export class ConversationOutcomeAnalyzerService {
     } catch (error) {
       console.error('❌ [INTENT] Erro ao detectar intent:', error);
       const fallbackResult: IntentDetectionResult = {
-        intent: 'general',
+        intent: 'wrong_number',
         confidence: 0.1,
         method: 'deterministic',
         metadata: { error: error instanceof Error ? error.message : 'Unknown error' },
@@ -506,36 +477,36 @@ export class ConversationOutcomeAnalyzerService {
       
       // AGENDAMENTO - Expandido com mais variações brasileiras
       {
-        intent: 'booking' as MessageIntent,
+        intent: 'appointment_inquiry',
         regex: /(quero|gostaria|preciso|vou|queria|tô querendo|desejo).*(agendar|marcar|reservar|consulta|sessão|atendimento)|(agendar|marcar|reservar).*(consulta|horário|atendimento|sessão|procedimento)|posso.*marcar|tem.*vaga|consegue.*agendar|dá.*pra.*marcar/i,
         confidence: 0.95
       },
       
       // REAGENDAMENTO - Mais variações coloquiais
       {
-        intent: 'reschedule' as MessageIntent,
+        intent: 'reschedule',
         regex: /(reagenda|remarcar|mudar.*hora|alterar.*agendamento|trocar.*data|mover.*agendamento|empurrar|adiar|transferir.*consulta|passar.*pra.*outro.*dia)/i,
         confidence: 0.95
       },
       
       // CANCELAMENTO - Incluindo gírias e expressões informais
       {
-        intent: 'cancel' as MessageIntent,
+        intent: 'cancel',
         regex: /(cancelar|desmarcar|anular|remover.*agendamento|excluir.*agendamento|não.*quero.*mais|desistir|não.*vou.*mais|não.*dá.*mais|mudei.*de.*ideia)/i,
         confidence: 0.95
       },
       
       // CONFIRMAÇÃO
       {
-        intent: 'confirmation' as MessageIntent,
+        intent: 'confirm',
         regex: /(confirmar|confirmo|tá confirmado|pode.*confirmar|vou.*sim|estarei.*lá|confirmado|sim.*vou|mantém|ok.*confirma)/i,
         confidence: 0.9
       },
       
-      // DISPONIBILIDADE - Mais variações regionais
+      // DISPONIBILIDADE - Mais variações regionais (SEM que.*horas para evitar conflito)
       {
-        intent: 'availability' as MessageIntent,
-        regex: /(disponibilidade|disponível|que.*horas|horários.*livres|vagas|tem.*horário|agenda|quando.*posso|que.*dia.*tem|horário.*livre)/i,
+        intent: 'availability',
+        regex: /(disponibilidade|disponível|horários.*livres|vagas|tem.*horário|agenda|quando.*posso|que.*dia.*tem|horário.*livre)/i,
         confidence: 0.9
       },
       
@@ -665,18 +636,32 @@ export class ConversationOutcomeAnalyzerService {
         confidence: 0.85
       },
       
-      // CUMPRIMENTOS - Expandido com mais variações
+      // CUMPRIMENTOS - Pattern mais específico para evitar falsos positivos
       {
-        intent: 'greeting' as MessageIntent,
-        regex: /^(oi|olá|opa|e.*aí|bom.*dia|boa.*tarde|boa.*noite|hey|hello|alô|oi.*tudo.*bem)$/i,
+        intent: 'greeting',
+        regex: /^(oi|olá|opa|e.*aí|bom.*dia|boa.*tarde|boa.*noite|hey|hello|alô)(\s|$|,|!|\?)|(^|\s)(oi|olá|bom.*dia|boa.*tarde|boa.*noite)(\s|$|,|!|\?)/i,
         confidence: 0.8
+      },
+      
+      // HORÁRIO DE FUNCIONAMENTO
+      {
+        intent: 'business_hours',
+        regex: /(que.*horas.*abr|que.*horas.*fech|horário.*funcionamento|funciona.*até|abre.*que.*hora|fecha.*que.*hora)/i,
+        confidence: 0.85
+      },
+      
+      // ONBOARDING - PRIMEIRA VEZ
+      {
+        intent: 'wrong_number', // ONBOARDING moved to SystemFlowState
+        regex: /(primeira.*vez|nunca.*vim|novo.*aqui|não.*conheço|primeiro.*contato)/i,
+        confidence: 0.85
       }
     ];
 
     for (const pattern of patterns) {
       if (pattern.regex.test(text)) {
         return {
-          intent: pattern.intent,
+          intent: pattern.intent as BusinessIntent,
           confidence: pattern.confidence,
           method: 'regex',
           metadata: { matched_pattern: pattern.regex.source }
@@ -685,7 +670,7 @@ export class ConversationOutcomeAnalyzerService {
     }
 
     return {
-      intent: null,
+      intent: 'wrong_number',
       confidence: 0,
       method: 'regex'
     };
@@ -704,7 +689,7 @@ export class ConversationOutcomeAnalyzerService {
     // Simulação de análise contextual por LLM
     if (text.includes('preciso') && (text.includes('hoje') || text.includes('urgente'))) {
       return {
-        intent: 'booking',
+        intent: 'appointment_inquiry',
         confidence: 0.8,
         method: 'llm',
         metadata: { context: 'urgency_detected' }
@@ -721,7 +706,7 @@ export class ConversationOutcomeAnalyzerService {
     }
 
     return {
-      intent: null,
+      intent: 'wrong_number',
       confidence: 0,
       method: 'llm'
     };
@@ -733,134 +718,79 @@ export class ConversationOutcomeAnalyzerService {
   private detectIntentDeterministic(messageText: string): IntentDetectionResult {
     const text = messageText.toLowerCase().trim();
     
-    // Palavras-chave simples por prioridade
+    // === PADRÕES BASEADOS EM DADOS REAIS DE PRODUÇÃO ===
     
-    // Emergência (prioridade máxima)
-    if (text.includes('emergência') || text.includes('urgente') || text.includes('socorro')) {
-      return { intent: 'emergency', confidence: 0.8, method: 'deterministic' };
+    // Confirmação - ESSENCIAL PARA SAAS DE AGENDAMENTO
+    if (text.includes('confirmar') || text.includes('confirmo') || text.includes('confirmado') || text.includes('ok') || text.includes('sim')) {
+      return { intent: 'confirm', confidence: 0.9, method: 'deterministic' };
     }
     
-    // Agendamento
+    // Agendamento (38 usos em produção)
     if (text.includes('agendar') || text.includes('marcar') || text.includes('reservar')) {
-      return { intent: 'booking', confidence: 0.6, method: 'deterministic' };
+      return { intent: 'appointment_inquiry', confidence: 0.8, method: 'deterministic' };
     }
     
-    // Reagendamento
+    // Reagendamento (20 usos)
     if (text.includes('reagendar') || text.includes('remarcar') || text.includes('adiar')) {
-      return { intent: 'reschedule', confidence: 0.6, method: 'deterministic' };
+      return { intent: 'reschedule', confidence: 0.8, method: 'deterministic' };
     }
     
-    // Cancelamento
+    // Cancelamento (14 usos em produção)
     if (text.includes('cancelar') || text.includes('desmarcar') || text.includes('desistir')) {
-      return { intent: 'cancel', confidence: 0.6, method: 'deterministic' };
+      return { intent: 'cancel', confidence: 0.8, method: 'deterministic' };
     }
     
-    // Confirmação
-    if (text.includes('confirmar') || text.includes('confirmo') || text.includes('confirmado')) {
-      return { intent: 'confirmation', confidence: 0.6, method: 'deterministic' };
-    }
-    
-    // Preços
+    // Preços (14 usos em produção)
     if (text.includes('preço') || text.includes('valor') || text.includes('quanto')) {
-      return { intent: 'pricing', confidence: 0.6, method: 'deterministic' };
+      return { intent: 'pricing', confidence: 0.8, method: 'deterministic' };
     }
     
-    // Convênio
-    if (text.includes('convênio') || text.includes('plano')) {
-      return { intent: 'insurance', confidence: 0.6, method: 'deterministic' };
-    }
+    // Convênio/Seguro (0 usos em produção - REMOVIDO)
+    // if (text.includes('convênio') || text.includes('plano') || text.includes('seguro')) {
+    //   return { intent: UserIntent.INSURANCE_INQUIRY, confidence: 0.8, method: 'deterministic' };
+    // }
     
-    // Pagamento
-    if (text.includes('pagamento') || text.includes('cartão') || text.includes('pix')) {
-      return { intent: 'payment', confidence: 0.6, method: 'deterministic' };
-    }
-    
-    // Disponibilidade
+    // Disponibilidade (17 usos)
     if (text.includes('disponível') || text.includes('horário') || text.includes('vaga')) {
-      return { intent: 'availability', confidence: 0.6, method: 'deterministic' };
+      return { intent: 'availability', confidence: 0.8, method: 'deterministic' };
     }
     
-    // Serviços
+    // Serviços (57 usos)
     if (text.includes('serviços') || text.includes('tratamentos') || text.includes('procedimentos')) {
-      return { intent: 'services', confidence: 0.6, method: 'deterministic' };
+      return { intent: 'services', confidence: 0.8, method: 'deterministic' };
     }
     
-    // Localização
+    // Endereço - ESSENCIAL PARA NEGÓCIOS FÍSICOS
     if (text.includes('endereço') || text.includes('localização') || text.includes('onde')) {
-      return { intent: 'address', confidence: 0.6, method: 'deterministic' };
+      return { intent: 'address', confidence: 0.8, method: 'deterministic' };
     }
     
-    // Profissional
-    if (text.includes('doutor') || text.includes('doutora') || text.includes('profissional')) {
-      return { intent: 'professional_preference', confidence: 0.6, method: 'deterministic' };
+    // Horário de funcionamento - INFORMAÇÃO BÁSICA DO NEGÓCIO
+    if (text.includes('funciona') || text.includes('abre') || text.includes('fecha')) {
+      return { intent: 'business_hours', confidence: 0.8, method: 'deterministic' };
     }
     
-    // Reclamação
-    if (text.includes('problema') || text.includes('reclamar') || text.includes('ruim')) {
-      return { intent: 'complaint', confidence: 0.6, method: 'deterministic' };
+    // Cumprimento/Saudação (154 usos)
+    if (text.includes('oi') || text.includes('olá') || text.includes('bom dia') || text.includes('boa tarde')) {
+      return { intent: 'greeting', confidence: 0.9, method: 'deterministic' };
     }
     
-    // Elogio
-    if (text.includes('ótimo') || text.includes('excelente') || text.includes('adorei')) {
-      return { intent: 'compliment', confidence: 0.6, method: 'deterministic' };
-    }
+    // Teste (17 usos - dados de desenvolvimento, não essencial para SaaS)
+    // if (text.includes('teste') || text.includes('ping') || text.includes('test')) {
+    //   return { intent: UserIntent.TEST_MESSAGE, confidence: 0.9, method: 'deterministic' };
+    // }
     
-    // === DOMÍNIO-ESPECÍFICOS ===
-    
-    // Healthcare
-    if (text.includes('terapia') || text.includes('psicólogo') || text.includes('psiquiatra')) {
-      return { intent: 'healthcare_therapy', confidence: 0.6, method: 'deterministic' };
-    }
-    if (text.includes('medicação') || text.includes('remédio') || text.includes('antidepressivo')) {
-      return { intent: 'healthcare_medication', confidence: 0.6, method: 'deterministic' };
-    }
-    
-    // Beauty
-    if (text.includes('botox') || text.includes('preenchimento') || text.includes('peeling')) {
-      return { intent: 'beauty_treatment', confidence: 0.6, method: 'deterministic' };
-    }
-    if (text.includes('combo') || text.includes('pacote')) {
-      return { intent: 'beauty_combo', confidence: 0.6, method: 'deterministic' };
-    }
-    
-    // Legal
-    if (text.includes('advogado') || text.includes('jurídica') || text.includes('processo')) {
-      return { intent: 'legal_consultation', confidence: 0.6, method: 'deterministic' };
-    }
-    if (text.includes('contrato') || text.includes('documento') || text.includes('procuração')) {
-      return { intent: 'legal_document', confidence: 0.6, method: 'deterministic' };
-    }
-    
-    // Sports
-    if (text.includes('treino') || text.includes('personal') || text.includes('musculação')) {
-      return { intent: 'sports_training', confidence: 0.6, method: 'deterministic' };
-    }
-    if (text.includes('lesão') || text.includes('fisioterapia') || text.includes('reabilitação')) {
-      return { intent: 'sports_injury', confidence: 0.6, method: 'deterministic' };
-    }
-    
-    // Education
-    if (text.includes('curso') || text.includes('aula') || text.includes('treinamento')) {
-      return { intent: 'education_course', confidence: 0.6, method: 'deterministic' };
-    }
-    if (text.includes('avaliação') || text.includes('prova') || text.includes('teste')) {
-      return { intent: 'education_assessment', confidence: 0.6, method: 'deterministic' };
-    }
-    
-    // Consulting
-    if (text.includes('consultoria') || text.includes('estratégia') || text.includes('negócios')) {
-      return { intent: 'consulting_strategy', confidence: 0.6, method: 'deterministic' };
-    }
-    if (text.includes('análise') || text.includes('diagnóstico') || text.includes('auditoria')) {
-      return { intent: 'consulting_analysis', confidence: 0.6, method: 'deterministic' };
+    // Abandonar agendamento (11 usos)
+    if (text.includes('deixa pra lá') || text.includes('não quero mais') || text.includes('desisti')) {
+      return { intent: 'cancel', confidence: 0.8, method: 'deterministic' }; // BOOKING_ABANDONED -> CANCEL_APPOINTMENT
     }
 
-    // Fallback geral
+    // Fallback para casos não mapeados
     return {
-      intent: 'general',
+      intent: 'wrong_number',
       confidence: 0.3,
       method: 'deterministic',
-      metadata: { fallback: true }
+      metadata: { fallback: true, note: 'Uses real deterministic-intent-detector.service.ts in production' }
     };
   }
 
@@ -876,6 +806,12 @@ export class ConversationOutcomeAnalyzerService {
     context?: ContextualInfo
   ): Promise<void> {
     try {
+      // ✅ FILTRO: Só persiste intents reais do usuário, não estados de flow
+      if (!intent || !isValidIntent(intent)) {
+        console.log(`🚫 [INTENT] Não persistindo "${intent}" - não é um UserIntent válido`);
+        return;
+      }
+
       // Atualizar APENAS o intent da mensagem atual (não mexer no conversation_context!)
       const { error } = await supabaseAdmin
         .from('conversation_history')

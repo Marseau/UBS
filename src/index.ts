@@ -10,6 +10,7 @@ import { AdminAuthMiddleware } from './middleware/admin-auth';
 import { verifyActiveSubscription } from './middleware/subscription-auth';
 import { redisCacheService } from './services/redis-cache.service';
 import { validateProductionModel } from './utils/ai-config';
+import { schemaValidator } from './services/schema-validator.service';
 
 // Load environment variables
 dotenv.config();
@@ -162,6 +163,24 @@ try {
   console.log('✅ Admin routes loaded successfully - NAVEGAÇÃO CORRIGIDA - APPOINTMENTS AGORA INTERNO');
 } catch (error) {
   console.error("❌ Failed to load admin routes:", error);
+}
+
+try {
+  // Load schema validation routes (critical for system integrity)
+  const schemaValidationRoutes = require('./routes/schema-validation.routes');
+  app.use('/api/schema', 'default' in schemaValidationRoutes ? schemaValidationRoutes.default : schemaValidationRoutes);
+  console.log('✅ Schema validation routes loaded successfully - SYSTEM INTEGRITY MONITORING READY');
+} catch (error) {
+  console.error("❌ Failed to load schema validation routes:", error);
+}
+
+try {
+  // Load intent monitoring routes - CASCADE FAILURE DETECTION SYSTEM
+  const intentMonitoringRoutes = require('./routes/intent-monitoring.routes');
+  app.use('/api/intent-monitoring', 'default' in intentMonitoringRoutes ? intentMonitoringRoutes.default : intentMonitoringRoutes);
+  console.log('✅ Intent monitoring routes loaded successfully - CASCADE FAILURE DETECTION READY');
+} catch (error) {
+  console.error("❌ Failed to load intent monitoring routes:", error);
 }
 
 try {
@@ -927,6 +946,26 @@ async function initializeServices() {
 
 app.listen(PORT, async () => {
   console.log(`🌐 Server running on http://localhost:${PORT}`);
+  
+  // 🔍 SCHEMA VALIDATION: Verificar integridade do banco na inicialização
+  try {
+    console.log('🔍 [STARTUP] Iniciando validação de schemas críticos...');
+    const schemaIsValid = await schemaValidator.initializeValidation();
+    
+    if (!schemaIsValid) {
+      console.warn('⚠️ [STARTUP] Schema validation detectou problemas - sistema pode ter comportamento instável');
+      
+      if (process.env.NODE_ENV === 'production') {
+        console.error('🚨 [STARTUP] PRODUÇÃO COM SCHEMAS INVÁLIDOS - Revisar estrutura do banco!');
+        // Em produção crítica, poderia até interromper o startup
+        // process.exit(1);
+      }
+    } else {
+      console.log('✅ [STARTUP] Todos os schemas críticos validados com sucesso');
+    }
+  } catch (error) {
+    console.error('❌ [STARTUP] Erro na validação de schemas:', error);
+  }
   
   // ENV Sanity Check
   console.log('🔎 ENV SANITY', {

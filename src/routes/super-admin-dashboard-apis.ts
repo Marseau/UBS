@@ -1462,7 +1462,7 @@ router.get("/charts/ai-costs-analysis", async (req, res) => {
 
     if (conversationData && conversationData.length > 0) {
       conversationData.forEach((conv: any) => {
-        const model = conv.model_used || "gpt-3.5-turbo";
+        const model = conv.model_used || process.env.OPENAI_MODEL || "gpt-4o-mini";
         const cost = parseFloat(conv.api_cost_usd || "0");
         const tokens = parseInt(conv.tokens_used || "0");
         const outcome = conv.conversation_outcome || "unknown";

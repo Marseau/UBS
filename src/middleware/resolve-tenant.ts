@@ -19,7 +19,8 @@ interface TenantResolutionRequest extends Request {
  */
 async function getTenantByDemoToken(token: string, demoTenantId?: string, routeTenantId?: string): Promise<{ id: string } | null> {
   console.log('🔍 [getTenantByDemoToken] Debug:', { 
-    token, 
+    token: token.substring(0, 50) + '...', 
+    tokenLength: token.length,
     demoTenantId, 
     routeTenantId,
     envToken: process.env.DEMO_MODE_TOKEN,
@@ -32,14 +33,30 @@ async function getTenantByDemoToken(token: string, demoTenantId?: string, routeT
     const validator = new DemoTokenValidator();
     const payload = validator.validateToken(token);
     if (payload) {
-      console.log('✅ [getTenantByDemoToken] Token HMAC válido', { source: payload.source, tenantId: payload.tenantId });
+      console.log('✅ [getTenantByDemoToken] Token HMAC válido', { 
+        source: payload.source, 
+        tenantId: payload.tenantId,
+        fullPayload: payload,
+        demoTenantId,
+        routeTenantId
+      });
       // O tenant ID pode vir do payload HMAC, do header, ou da rota
       const tenantId = payload.tenantId || demoTenantId || routeTenantId;
+      console.log('🔍 [getTenantByDemoToken] Tentativa de resolução tenant:', {
+        payloadTenantId: payload.tenantId,
+        demoTenantId,
+        routeTenantId,
+        finalTenantId: tenantId
+      });
       if (tenantId) {
         console.log(`✅ [getTenantByDemoToken] Sucesso com tenant: ${tenantId}`);
         return { id: tenantId };
       }
-      console.error('❌ [TENANT-RESOLUTION] Demo token HMAC válido mas sem tenant específico!');
+      console.error('❌ [TENANT-RESOLUTION] Demo token HMAC válido mas sem tenant específico!', {
+        payload,
+        demoTenantId,
+        routeTenantId
+      });
       return null;
     }
   } catch (error) {
@@ -65,13 +82,15 @@ async function getTenantByDemoToken(token: string, demoTenantId?: string, routeT
  * Obter tenant por WABA phone_number_id
  */
 async function getTenantByWabaNumberId(phoneNumberId: string): Promise<{ id: string } | null> {
-  const { data } = await supabaseAdmin
-    .from('tenant_whatsapp_config')
-    .select('tenant_id')
-    .eq('phone_number_id', phoneNumberId)
-    .single();
-  
-  return data ? { id: data.tenant_id } : null;
+  // TODO: Fix this when tenant_whatsapp_config table is created
+  // const { data } = await supabaseAdmin
+  //   .from('tenant_whatsapp_config')
+  //   .select('tenant_id')
+  //   .eq('phone_number_id', phoneNumberId)
+  //   .single();
+  // 
+  // return data ? { id: data.tenant_id } : null;
+  return null;
 }
 
 /**

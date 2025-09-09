@@ -7,7 +7,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 
 // Estender interface do Request para incluir dados do usuário
 interface AuthenticatedRequest extends Request {
