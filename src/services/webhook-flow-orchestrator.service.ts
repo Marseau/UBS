@@ -4,6 +4,8 @@
  * Revisão consolidada com Onboarding determinístico e sem duplicações
  */
 
+import crypto from 'crypto';
+import { finalizeAndRespond } from '../core/finalize';
 import { DeterministicIntentDetectorService, INTENT_KEYS } from './deterministic-intent-detector.service';
 import { LLMIntentClassifierService } from './llm-intent-classifier.service';
 import { IntentDisambiguationService } from './intent-disambiguation.service';
@@ -18,11 +20,31 @@ import { upsertUserProfile } from './user-profile.service';
 import { AppointmentActionablesService } from './appointment-actionables.service';
 import { MapsLocationService } from './maps-location.service';
 import { RescheduleConflictManagerService } from './reschedule-conflict-manager.service';
+import { ConversationHistoryPersistence } from './conversation-history-persistence.service';
+import { ConversationRepository } from '../repositories/conversation.repository';
+import { TelemetryService } from './telemetry.service';
+import { OutcomeAnalyzer } from './outcome-analyzer.service';
 import { ContextualPoliciesService } from './contextual-policies.service';
 import { RedisCacheService, redisCacheService } from './redis-cache.service';
 import { IntentOutcomeTelemetryService } from './intent-outcome-telemetry.service';
 import { ConversationOutcomeAnalyzerService } from './conversation-outcome-analyzer.service';
+import { ConversationOutcomeService } from './conversation-outcome.service';
 import { sanitizeIntentForPersistence, detectIntentFromMessage, logIntentCleanup } from '../utils/intent-validator.util';
+import { recordLLMMetrics } from './telemetry/llm-telemetry.service';
+
+// NOVO: entrada padronizada
+type OrchestratorInput = {
+  messageText: string;
+  userPhone: string;
+  whatsappNumber?: string;
+  tenantId?: string;            // quando disponível
+  messageSource: 'whatsapp' | 'demo';
+};
+
+// IntentDecision será redefinida abaixo para compatibilidade
+
+// pequena ajuda utilitária para contexto
+const ctx = (extra: Record<string, any> = {}) => ({ ...extra });
 
 // Estados de coleta progressiva de dados
 export enum DataCollectionState {
@@ -151,12 +173,24 @@ export interface WebhookOrchestrationResult {
   updatedContext: EnhancedConversationContext;
   telemetryData: {
     intent: string | null;
-    confidence: number;
+    confidence_score: number | null;
     decision_method: string;
     flow_lock_active: boolean;
     processing_time_ms: number;
     model_used?: string;
   };
+  // ✅ NOVO: Métricas da classificação de intent (do intentResult.llmMetrics)
+  intentMetrics?: {
+    prompt_tokens: number | null;
+    completion_tokens: number | null;
+    total_tokens: number | null;
+    api_cost_usd: number | null;
+    processing_cost_usd: number | null;
+    confidence_score: number | null;
+    latency_ms: number | null;
+    model_used?: string;
+  };
+  // ✅ EXISTENTE: Métricas da geração de resposta (do generateAIResponseWithFlowContext)
   llmMetrics?: {
     prompt_tokens: number | null;
     completion_tokens: number | null;
@@ -165,7 +199,44 @@ export interface WebhookOrchestrationResult {
     processing_cost_usd: number | null;
     confidence_score: number | null;
     latency_ms: number | null;
+    model_used?: string;
   };
+}
+
+// ----------------------------------------------------------------------------
+// Tipos auxiliares para refatoração estrutural
+// ----------------------------------------------------------------------------
+
+interface OrchestratorContext {
+  message: string;
+  userPhone: string;
+  tenantId: string;
+  tenantConfig: any;
+  priorContext: any;
+  sessionId: string;
+  userId: string;
+  isDemo?: boolean; // Detecta se é modo demo
+}
+
+interface FlowDecision {
+  intent: string | null;
+  response: string;
+  confidence: number | null;
+  reason: string;
+  decisionMethod?: 'flow_lock';
+}
+
+interface IntentDecision {
+  intent: string | null;
+  source: 'flow_lock' | 'regex' | 'llm';
+  decisionMethod?: 'flow_lock' | 'regex' | 'llm';
+  confidence: number | null;
+  reason: string;
+  responseOverride?: string;
+  tokensUsed?: number | null;
+  modelUsed?: string | null;
+  apiCostUsd?: number | null;
+  processingCostUsd?: number | null; // ADICIONADO: Custo de processamento
 }
 
 // ----------------------------------------------------------------------------
@@ -182,6 +253,11 @@ export class WebhookFlowOrchestratorService {
   private redisCacheService: RedisCacheService;
   private telemetryService: IntentOutcomeTelemetryService;
   private outcomeAnalyzer: ConversationOutcomeAnalyzerService;
+  private conversationHistoryPersistence: ConversationHistoryPersistence;
+  private telemetry: TelemetryService;
+  private outcomeAnalyzerService: OutcomeAnalyzer;
+  private conversationOutcomeService: ConversationOutcomeService;
+  private latency: any; // TODO: Implementar LatencyTracker
   private openai: OpenAI;
 
   constructor() {
@@ -194,9 +270,443 @@ export class WebhookFlowOrchestratorService {
     this.redisCacheService = redisCacheService;
     this.telemetryService = new IntentOutcomeTelemetryService();
     this.outcomeAnalyzer = new ConversationOutcomeAnalyzerService();
+    this.conversationHistoryPersistence = new ConversationHistoryPersistence(new ConversationRepository());
+    this.telemetry = new TelemetryService();
+    this.outcomeAnalyzerService = new OutcomeAnalyzer();
+    this.conversationOutcomeService = new ConversationOutcomeService();
+    this.latency = this.createLatencyTracker(); // Implementação simples
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY || ''
     });
+  }
+
+  /**
+   * Cria um tracker simples de latência para telemetria
+   */
+  private createLatencyTracker() {
+    const turnStarts = new Map<string, number>();
+    
+    return {
+      now: () => Date.now(),
+      turnStart: (sessionId: string) => {
+        const start = Date.now();
+        turnStarts.set(sessionId, start);
+        return start;
+      },
+      getTurnDuration: (sessionId: string) => {
+        const start = turnStarts.get(sessionId);
+        if (!start) return 0;
+        return Date.now() - start;
+      },
+      clearTurn: (sessionId: string) => {
+        turnStarts.delete(sessionId);
+      }
+    };
+  }
+
+  /**
+   * Decide a intenção do usuário usando sistema de 3 camadas:
+   * 1. Flow Lock (ativo?) 
+   * 2. Deterministic (regex)
+   * 3. LLM Classification
+   */
+  private async decideIntent(context: OrchestratorContext): Promise<IntentDecision> {
+    const { message, userPhone, tenantId } = context;
+
+    // LAYER 1: Flow Lock Check (curto-circuito se ativo)
+    console.log('🔒 [INTENT] Layer 1: Flow Lock check...');
+    const conversationContext = await mergeEnhancedConversationContext(userPhone, tenantId, {});
+    
+    if (conversationContext?.flow_lock?.active_flow) {
+      const flowLock = conversationContext.flow_lock;
+      const timeoutStatus = this.flowManager.checkTimeoutStatus(conversationContext);
+      
+      if (timeoutStatus.status !== 'expired') {
+        console.log(`🔒 [INTENT] Flow Lock ativo: ${flowLock.active_flow} | Step: ${flowLock.step}`);
+        return {
+          intent: null, // Flow Lock não gera intent
+          source: 'flow_lock',
+          decisionMethod: 'flow_lock',
+          confidence: null,
+          reason: `Flow Lock ${flowLock.active_flow} is active at step ${flowLock.step}`,
+          responseOverride: `Vamos completar o que começamos (${flowLock.active_flow}) antes de prosseguir. Como posso ajudar com isso?`
+        };
+      } else {
+        console.log(`⏰ [INTENT] Flow Lock ${flowLock.active_flow} expirado - prosseguindo`);
+      }
+    }
+    
+    // LAYER 2: Deterministic Intent Detection (regex)
+    console.log('🔍 [INTENT] Layer 2: Deterministic detection...');
+    const { detectIntentByRegex } = await import('./deterministic-intent-detector.service');
+    const deterministicResult = detectIntentByRegex(message);
+    
+    if (deterministicResult.intent && deterministicResult.confidence_score >= 0.8) {
+      console.log(`✅ [INTENT] Deterministic match: ${deterministicResult.intent} (${deterministicResult.confidence_score})`);
+      return {
+        intent: deterministicResult.intent,
+        source: 'regex',
+        decisionMethod: 'regex',
+        confidence: deterministicResult.confidence_score,
+        reason: 'High confidence deterministic match'
+      };
+    }
+    
+    // LAYER 3: LLM Intent Classification
+    console.log('🤖 [INTENT] Layer 3: LLM classification...');
+    try {
+      const llmResult = await this.llmClassifier.classifyIntent(message);
+      
+      if (llmResult.intent && llmResult.confidence_score >= 0.7) {
+        console.log(`✅ [INTENT] LLM match: ${llmResult.intent} (${llmResult.confidence_score})`);
+        return {
+          intent: llmResult.intent,
+          source: 'llm',
+          decisionMethod: 'llm',
+          confidence: llmResult.confidence_score,
+          reason: 'LLM classification with high confidence',
+          tokensUsed: llmResult.usage?.total_tokens || null,
+          modelUsed: llmResult.model_used || null,
+          apiCostUsd: llmResult.api_cost_usd || null,
+          processingCostUsd: llmResult.processing_cost_usd || null // ADICIONADO: Custo de processamento
+        };
+      }
+      
+      // Fallback: Use LLM result even with lower confidence
+      if (llmResult.intent) {
+        console.log(`⚠️ [INTENT] Low confidence LLM fallback: ${llmResult.intent} (${llmResult.confidence_score})`);
+        return {
+          intent: llmResult.intent,
+          source: 'llm',
+          decisionMethod: 'llm',
+          confidence: llmResult.confidence_score,
+          reason: 'LLM fallback with low confidence',
+          tokensUsed: llmResult.usage?.total_tokens || null,
+          modelUsed: llmResult.model_used || null,
+          apiCostUsd: llmResult.api_cost_usd || null,
+          processingCostUsd: llmResult.processing_cost_usd || null // ADICIONADO: Custo de processamento
+        };
+      }
+      
+    } catch (llmError) {
+      console.error('❌ [INTENT] LLM classification failed:', llmError);
+    }
+    
+    // Final fallback: No intent detected
+    console.log('❓ [INTENT] No intent detected - returning null');
+    return {
+      intent: null,
+      source: 'regex',
+      decisionMethod: 'regex',
+      confidence: 0,
+      reason: 'No intent could be detected through any layer'
+    };
+  }
+
+
+  /**
+   * Produz resposta (usa override do FlowLock, senão templates/LLM)
+   */
+  private async produceReply(
+    ctx: OrchestratorContext,
+    decision: IntentDecision
+  ): Promise<string> {
+    
+    // Flow Lock override tem prioridade
+    if (decision.responseOverride) {
+      console.log('🔄 [REPLY] Using Flow Lock response override');
+      return decision.responseOverride;
+    }
+
+    try {
+      console.log(`🤖 [REPLY] Generating response for intent: ${decision.intent}`);
+      
+      // Para intent real, usar geração de resposta AI
+      const mockIntentResult = { intent: decision.intent };
+      const mockFlowDecision = { allow_intent: true };
+      const conversationContext = await mergeEnhancedConversationContext(ctx.userPhone, ctx.tenantId, {});
+      
+      const aiResponse = await this.generateAIResponseWithFlowContext(
+        ctx.message,
+        mockIntentResult,
+        mockFlowDecision,
+        conversationContext,
+        ctx.tenantConfig,
+        ctx.userPhone
+      );
+
+      return aiResponse.response;
+
+    } catch (error) {
+      console.error('❌ [REPLY] Error generating response:', error);
+      return 'Desculpe, ocorreu um erro interno. Como posso ajudar?';
+    }
+  }
+
+  /**
+   * Executa efeitos colaterais (outcomes, sinais de telemetria, etc.)
+   */
+  private async afterReplySideEffects(
+    ctx: OrchestratorContext,
+    decision: IntentDecision,
+    reply: string | { text: string }
+  ): Promise<void> {
+    console.log(`🔧 [SIDE-EFFECTS] Executando efeitos colaterais: intent=${decision.intent}, method=${decision.decisionMethod}`);
+    
+    try {
+      // 1) Telemetria estruturada (sempre)
+      await this.telemetry.recordTurn({
+        tenant_id: ctx.tenantId,
+        session_id: ctx.sessionId,
+        user_phone: ctx.userPhone,
+        decision_method: (decision.decisionMethod as 'flow_lock' | 'regex' | 'llm') || 'regex',
+        intent_detected: decision.decisionMethod === 'flow_lock' ? null : (decision.intent ?? null),
+        confidence: decision.decisionMethod === 'flow_lock' ? null : (decision.confidence ?? null),
+        tokens_used: decision.decisionMethod === 'llm' ? (decision.tokensUsed ?? 0) : 0,
+        api_cost_usd: decision.decisionMethod === 'llm' ? (decision.apiCostUsd ?? 0) : 0,
+        model_used: decision.decisionMethod === 'llm' ? (decision.modelUsed ?? null) : null,
+        response_time_ms: this.latency.getTurnDuration(ctx.sessionId),
+        reply_size_chars: typeof reply === 'string' ? reply.length : (reply.text?.length ?? 0),
+        timestamp: new Date(),
+      });
+
+      // 2) Atualização de outcome (regras por intent/estado)
+      //    Obs.: outcome é decisão da conversa (não da mensagem)
+      const outcome = await this.outcomeAnalyzerService.maybeDeriveOutcome({
+        tenant_id: ctx.tenantId,
+        session_id: ctx.sessionId,
+        intent: decision.decisionMethod === 'flow_lock' ? null : (decision.intent ?? null),
+        decision_method: (decision.decisionMethod as 'flow_lock' | 'regex' | 'llm') || 'regex',
+        context: ctx.priorContext ?? {},
+        reply,
+      });
+
+      if (outcome?.final) {
+        // Se temos ConversationOutcomeService disponível, atualizamos
+        if (this.conversationOutcomeService) {
+          await this.conversationOutcomeService.updateConversationOutcome({
+            tenant_id: ctx.tenantId,
+            session_id: ctx.sessionId,
+            outcome: outcome.value, // ex: 'appointment_created', 'booking_abandoned', etc.
+          });
+        } else {
+          console.log(`🎯 [OUTCOME] Outcome final detectado: ${outcome.value} (${outcome.reason})`);
+        }
+        
+        // Telemetria de outcome finalizado
+        await this.telemetry.recordOutcome({
+          tenant_id: ctx.tenantId,
+          session_id: ctx.sessionId,
+          outcome: outcome.value,
+          reason: outcome.reason ?? null,
+          timestamp: new Date(),
+        });
+      }
+
+      console.log(`✅ [SIDE-EFFECTS] Efeitos colaterais executados com sucesso`);
+
+    } catch (error) {
+      console.error('❌ [SIDE-EFFECTS] Erro nos efeitos colaterais:', error);
+      // Falha graceful - não quebra o fluxo principal
+    } finally {
+      // 3) Limpeza do tracker de latência (sempre executado)
+      this.latency.clearTurn(ctx.sessionId);
+    }
+  }
+
+  /**
+   * Helpers para sessão e usuário (placeholders)
+   */
+  private readonly sessionService = {
+    ensureSession: (userPhone: string, tenantId: string): string => {
+      // Generate a proper UUID for session_id_uuid database field
+      // Note: We lose the semantic meaning of tenant:phone:timestamp, but gain database compatibility
+      return crypto.randomUUID();
+    }
+  };
+
+  private readonly userService = {
+    getOrCreateUserId: async (userPhone: string, tenantId: string): Promise<string> => {
+      // Busca real do user ID no banco de dados usando a mesma lógica do conversation-context-helper
+      const digits = userPhone.replace(/\D/g, '');
+      const candidates: string[] = [];
+      if (digits) {
+        candidates.push(digits);
+        candidates.push(`+${digits}`);
+        if (digits.startsWith('55') && digits.length >= 13) {
+          candidates.push(digits.slice(2));
+          candidates.push(`+${digits.slice(2)}`);
+        } else if (digits.length >= 10) {
+          candidates.push(`55${digits}`);
+          candidates.push(`+55${digits}`);
+        }
+      }
+      
+      if (candidates.length === 0) {
+        throw new Error(`Invalid phone number: ${userPhone}`);
+      }
+      
+      const orClause = candidates.map(c => `phone.eq.${c}`).join(',');
+      
+      const { data: user, error } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .or(orClause)
+        .limit(1)
+        .maybeSingle();
+      
+      if (error || !user) {
+        throw new Error(`User not found for phone ${userPhone} in tenant ${tenantId}`);
+      }
+      
+      return user.id;
+    }
+  };
+
+  /**
+   * NOVO orchestrateWebhookFlow - Fluxo integrado com novos métodos
+   */
+  async orchestrateWebhookFlow(input: {
+    messageText: string;
+    userPhone: string;
+    tenantId: string;
+    tenantConfig?: any;
+    existingContext?: any;
+    isDemo?: boolean;
+  }) {
+    const startTime = Date.now();
+    
+    // 1) Monta o contexto único do turn
+    const ctx: OrchestratorContext = {
+      message: input.messageText,
+      userPhone: input.userPhone,
+      tenantId: input.tenantId,
+      tenantConfig: input.tenantConfig ?? {},
+      priorContext: input.existingContext ?? {},
+      isDemo: input.isDemo ?? false,
+      sessionId: this.sessionService.ensureSession(input.userPhone, input.tenantId),
+      userId: await this.userService.getOrCreateUserId(input.userPhone, input.tenantId),
+    };
+
+    console.log('🔍 [ORCHESTRATOR] Context debug:', {
+      inputIsDemo: input.isDemo,
+      ctxIsDemo: ctx.isDemo,
+      demoModeFromExistingContext: input.existingContext?.demoMode
+    });
+
+    // PERSISTIR MENSAGEM DO USUÁRIO PRIMEIRO (ANTES DE PROCESSAR IA)
+    const { persistConversationMessage } = await import('../services/persistence/conversation-history.persistence');
+    const { ConversationRow } = await import('../contracts/conversation');
+    
+    const userRow = ConversationRow.parse({
+      tenant_id: ctx.tenantId,
+      user_id: ctx.userId,
+      content: ctx.message,
+      is_from_user: true, // MENSAGEM DO USUÁRIO
+      message_type: "text",
+      intent_detected: null, // Será preenchido depois da detecção
+      confidence_score: null,
+      conversation_context: { session_id: ctx.sessionId },
+      model_used: null, // Mensagem do usuário não usa modelo
+      tokens_used: null,
+      api_cost_usd: null,
+      conversation_outcome: null,
+      message_source: ctx.isDemo ? 'whatsapp_demo' : 'whatsapp', // ESSENCIAL: Diferenciar origem
+    });
+
+    await persistConversationMessage(userRow);
+    console.log('✅ [ORCHESTRATOR] User message persisted with source:', ctx.isDemo ? 'whatsapp_demo' : 'whatsapp');
+
+    // Inicia tracking de latência para telemetria
+    this.latency.turnStart(ctx.sessionId);
+
+    console.log(`🚀 [ORCHESTRATOR] NEW FLOW - Session: ${ctx.sessionId.substring(0, 12)}...`);
+
+    // 2) Decide intent (internamente já tenta FlowLock -> Regex -> LLM)
+    const decision = await this.decideIntent(ctx);
+
+    // 3) Gera a resposta (usa override do FlowLock, senão templates/LLM)
+    const reply = await this.produceReply(ctx, decision);
+
+    // 4) Obter conversation context para persistência
+    const conversationContext = await mergeEnhancedConversationContext(
+      ctx.userPhone,
+      ctx.tenantId,
+      {
+        domain: 'general',
+        source: 'whatsapp',
+        mode: 'prod'
+      }
+    );
+
+    // 5) Usar finalizeAndRespond para centralizar persistência e telemetria
+    const finalResponse = await finalizeAndRespond({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      sessionId: ctx.sessionId,
+      requestText: ctx.message,
+      replyText: reply,
+      isFromUser: false,
+      // Isolamento correto: Flow Lock → intentDetected: null
+      intentDetected: decision.decisionMethod === 'flow_lock' ? null : (decision.intent ?? null),
+      // Confidence correta: determinístico = 1.0, LLM = valor real, Flow Lock = null
+      confidence: decision.decisionMethod === 'flow_lock' ? null :
+                  decision.decisionMethod === 'regex' ? 1.0 :
+                  (decision.confidence ?? null),
+      modelUsed: decision.decisionMethod === 'llm' ? (decision.modelUsed ?? null) : 
+                 decision.decisionMethod === 'regex' ? 'deterministic' : 
+                 decision.decisionMethod === 'flow_lock' ? 'flowlock' : null,
+      tokensUsed: decision.decisionMethod === 'llm' ? (decision.tokensUsed ?? null) : null,
+      apiCostUsd: decision.decisionMethod === 'llm' ? (decision.apiCostUsd ?? null) : null,
+      processingCostUsd: (() => {
+        // Para LLM: usar valor calculado pelo classifier
+        if (decision.decisionMethod === 'llm' && decision.processingCostUsd) {
+          return decision.processingCostUsd;
+        }
+        // Para deterministic/flowlock: aplicar fórmula oficial completa
+        const apiCost = decision.apiCostUsd || 0;
+        const pct = apiCost * 0.10;      // 10% overhead
+        const infra = 0.00002;           // Infraestrutura
+        const db = 0.00001;              // Database
+        return Math.round((apiCost + pct + infra + db) * 1000000) / 1000000;
+      })(), // ADICIONADO: Custo de processamento para todos os métodos
+      outcome: null, // SEMPRE null - preenchido pelo cronjob a cada 10min
+      context: {
+        session_id: conversationContext.session_id,
+        duration_minutes: conversationContext.duration_minutes
+      },
+      messageSource: ctx.isDemo ? 'whatsapp_demo' : 'whatsapp'
+    });
+
+    // 6) Efeitos colaterais (outcomes, etc.) - sem duplicar persistência
+    await this.afterReplySideEffects(ctx, decision, reply);
+
+    // 7) Retorna payload final compatível com a rota existente
+    return {
+      aiResponse: finalResponse.text,
+      shouldSendWhatsApp: true,
+      conversationOutcome: null, // SEMPRE null - preenchido pelo cronjob a cada 10min
+      updatedContext: ctx.priorContext,
+      telemetryData: {
+        intent: finalResponse.meta.intent_detected,
+        confidence_score: finalResponse.meta.api_cost_usd ? finalResponse.meta.api_cost_usd : finalResponse.meta.intent_detected ? 1.0 : null,
+        decision_method: decision.decisionMethod || decision.source,
+        flow_lock_active: decision.decisionMethod === 'flow_lock',
+        processing_time_ms: Date.now() - startTime,
+        model_used: finalResponse.meta.model_used || undefined
+      },
+      intentMetrics: finalResponse.meta.model_used ? {
+        prompt_tokens: null,
+        completion_tokens: null,
+        total_tokens: finalResponse.meta.tokens_used || null,
+        api_cost_usd: finalResponse.meta.api_cost_usd || null,
+        processing_cost_usd: finalResponse.meta.processing_cost_usd || null,
+        confidence_score: finalResponse.meta.intent_detected ? 1.0 : null,
+        latency_ms: null,
+        model_used: finalResponse.meta.model_used
+      } : undefined,
+      llmMetrics: undefined
+    };
   }
 
   /**
@@ -387,759 +897,6 @@ export class WebhookFlowOrchestratorService {
     }
   }
 
-  /**
-   * Processamento principal do webhook com Flow Lock
-   */
-  async orchestrateWebhookFlow(
-    messageText: string,
-    userPhone: string,
-    tenantId: string,
-    tenantConfig: any,
-    existingContext?: any
-  ): Promise<WebhookOrchestrationResult> {
-    const startTime = Date.now();
-    
-    // DEBUG: Log da entrada do orchestrator 
-    console.log('🚀 [ORCHESTRATOR] ENTRADA:', {
-      messageText,
-      userPhone,
-      tenantId: tenantId.substring(0, 8) + '...',
-      hasAddressKeywords: /(endere[cç]o|onde.*fica|onde.*voc[êe]s.*fica|localiza[çc][ãa]o|como chegar|maps|google\s*maps|local\b|onde.*est[ãa]|rota|navega)/i.test(messageText)
-    });
-
-    // 🗺️ INTERCEPTAR ADDRESS PRIMEIRO - ANTES DE QUALQUER LÓGICA DE CONTEXTO
-    if (messageText.match(/(endere[cç]o|onde.*fica|onde.*voc[êe]s.*fica|localiza[çc][ãa]o|como chegar|maps|google\s*maps|local\b|onde.*est[ãa]|rota|navega)/i)) {
-      console.log('📍 [ORCHESTRATOR] ADDRESS interceptado MUITO EARLY - antes de qualquer contexto');
-      
-      try {
-        console.log('🗺️ [DEBUG] Iniciando MapsLocationService...');
-        const mapsService = new MapsLocationService();
-        console.log('🗺️ [DEBUG] MapsLocationService criado, processando localizacao...');
-        const locationResult = await mapsService.processLocationRequest(tenantId, messageText);
-        console.log('🗺️ [DEBUG] MapsLocationService resultado:', { success: locationResult.success, hasLocation: locationResult.hasLocation });
-        
-        if (locationResult.success) {
-          console.log('✅ [ORCHESTRATOR] ADDRESS Maps processado com total sucesso EARLY');
-          
-          return {
-            aiResponse: locationResult.message,
-            shouldSendWhatsApp: true,
-            conversationOutcome: 'location_inquiry',
-            updatedContext: existingContext || { flow_lock: null }, // Contexto mínimo válido
-            telemetryData: {
-              intent: 'address',
-              confidence: 1.0,
-              decision_method: 'very_early_maps_integration',
-              flow_lock_active: false,
-              processing_time_ms: Date.now() - startTime,
-              model_used: undefined
-            },
-            llmMetrics: undefined
-          };
-        } else {
-          console.log('❌ [ORCHESTRATOR] ADDRESS Maps falhou - locationResult.success = false');
-        }
-      } catch (error) {
-        console.error('❌ [ORCHESTRATOR] Erro ao processar ADDRESS Maps very early:', error);
-        console.error('❌ [ORCHESTRATOR] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-        // Continua com processamento normal como fallback
-      }
-    }
-
-    // 🔄 INTERCEPTAR RESCHEDULE PRIMEIRO - ANTES DE QUALQUER LÓGICA DE CONTEXTO
-    if (messageText.match(/(reagenda|remarcar|mudar.*hora|alterar.*agendamento|trocar.*data|mover.*agendamento)/i)) {
-      console.log('🔄 [ORCHESTRATOR] RESCHEDULE interceptado MUITO EARLY - antes de qualquer contexto');
-      
-      try {
-        console.log('🔄 [DEBUG] Iniciando RescheduleConflictManagerService...');
-        const rescheduleService = new RescheduleConflictManagerService();
-        
-        // Para o reschedule, precisamos extrair o ID do agendamento da mensagem
-        // Por enquanto, vamos implementar coleta do ID primeiro
-        const appointmentIdMatch = messageText.match(/([a-f0-9-]{36})/i);
-        const appointmentId = appointmentIdMatch?.[1];
-        
-        if (appointmentId) {
-          console.log('🔄 [DEBUG] Appointment ID encontrado, processando reschedule...');
-          const rescheduleResult = await rescheduleService.processRescheduleRequest(tenantId, appointmentId, messageText);
-          
-          if (rescheduleResult.success && rescheduleResult.appointmentFound) {
-            console.log('✅ [ORCHESTRATOR] RESCHEDULE processado com total sucesso EARLY');
-            
-            return {
-              aiResponse: rescheduleResult.message,
-              shouldSendWhatsApp: true,
-              conversationOutcome: rescheduleResult.hasConflicts ? 'reschedule_conflicts_found' : 'reschedule_slots_available',
-              updatedContext: existingContext || { flow_lock: null },
-              telemetryData: {
-                intent: 'reschedule',
-                confidence: 1.0,
-                decision_method: 'very_early_reschedule_integration',
-                flow_lock_active: false,
-                processing_time_ms: Date.now() - startTime,
-                model_used: undefined
-              },
-              llmMetrics: undefined
-            };
-          } else if (!rescheduleResult.appointmentFound) {
-            console.log('❌ [ORCHESTRATOR] RESCHEDULE - agendamento não encontrado');
-          } else {
-            console.log('❌ [ORCHESTRATOR] RESCHEDULE falhou - rescheduleResult.success = false');
-          }
-        } else {
-          // Se não temos ID do agendamento, iniciamos flow para coletar
-          console.log('🔄 [ORCHESTRATOR] RESCHEDULE sem ID - iniciando coleta');
-          return {
-            aiResponse: '🔄 **Vamos reagendar seu agendamento!**\n\n📝 Para encontrar seu agendamento, preciso do **código de confirmação** (ID) que você recebeu quando agendou.\n\n💡 O código tem formato similar a: `abc12def-3456-789a-bcde-f0123456789a`\n\n📱 Pode procurar na conversa anterior ou no e-mail de confirmação?',
-            shouldSendWhatsApp: true,
-            conversationOutcome: 'reschedule_id_requested',
-            updatedContext: existingContext || { flow_lock: null },
-            telemetryData: {
-              intent: 'reschedule',
-              confidence: 1.0,
-              decision_method: 'very_early_reschedule_id_collection',
-              flow_lock_active: false,
-              processing_time_ms: Date.now() - startTime,
-              model_used: undefined
-            },
-            llmMetrics: undefined
-          };
-        }
-      } catch (error) {
-        console.error('❌ [ORCHESTRATOR] Erro ao processar RESCHEDULE very early:', error);
-      }
-    }
-
-    // ❌ INTERCEPTAR CANCEL_APPOINTMENT PRIMEIRO - ANTES DE QUALQUER LÓGICA DE CONTEXTO
-    if (messageText.match(/(cancelar|desmarcar|anular|remover.*agendamento|excluir.*agendamento|não.*quero.*mais)/i)) {
-      console.log('❌ [ORCHESTRATOR] CANCEL_APPOINTMENT interceptado MUITO EARLY - antes de qualquer contexto');
-      
-      try {
-        console.log('❌ [DEBUG] Iniciando CancelAppointmentManagerService...');
-        const { CancelAppointmentManagerService } = await import('./cancel-appointment-manager.service');
-        const cancelService = new CancelAppointmentManagerService();
-        
-        // Extrair ID do agendamento da mensagem
-        const appointmentIdMatch = messageText.match(/([a-f0-9-]{36})/i);
-        const appointmentId = appointmentIdMatch?.[1];
-        
-        if (appointmentId) {
-          // Processar cancelamento com ID
-          console.log(`❌ [ORCHESTRATOR] CANCEL_APPOINTMENT com ID encontrado: ${appointmentId}`);
-          const cancelResult = await cancelService.processCancelRequest(tenantId, appointmentId, messageText);
-          
-          if (cancelResult.success && cancelResult.appointmentFound) {
-            console.log('✅ [ORCHESTRATOR] CANCEL_APPOINTMENT processado com sucesso EARLY');
-            return {
-              aiResponse: cancelResult.message,
-              shouldSendWhatsApp: true,
-              conversationOutcome: cancelResult.requiresConfirmation ? 'cancel_confirmation_pending' : 'cancel_processed',
-              updatedContext: existingContext || { flow_lock: null },
-              telemetryData: {
-                intent: 'cancel_appointment',
-                confidence: 1.0,
-                decision_method: 'very_early_cancel_with_id',
-                flow_lock_active: false,
-                processing_time_ms: Date.now() - startTime
-              },
-              llmMetrics: undefined
-            };
-          } else {
-            console.log('❌ [ORCHESTRATOR] CANCEL_APPOINTMENT - agendamento não encontrado ou não pode cancelar');
-          }
-        } else {
-          // Se não temos ID do agendamento, iniciamos flow para coletar
-          console.log('❌ [ORCHESTRATOR] CANCEL_APPOINTMENT sem ID - iniciando coleta');
-          return {
-            aiResponse: '❌ **Vamos cancelar seu agendamento!**\n\n📝 Para encontrar seu agendamento, preciso do **código de confirmação** (ID) que você recebeu quando agendou.\n\n💡 O código tem formato similar a: `abc12def-3456-789a-bcde-f0123456789a`\n\n📱 Pode procurar na conversa anterior ou no e-mail de confirmação?',
-            shouldSendWhatsApp: true,
-            conversationOutcome: 'cancel_id_requested',
-            updatedContext: existingContext || { flow_lock: null },
-            telemetryData: {
-              intent: 'cancel_appointment',
-              confidence: 1.0,
-              decision_method: 'very_early_cancel_id_collection',
-              flow_lock_active: false,
-              processing_time_ms: Date.now() - startTime,
-              model_used: undefined
-            },
-            llmMetrics: undefined
-          };
-        }
-      } catch (error) {
-        console.error('❌ [ORCHESTRATOR] Erro ao processar CANCEL_APPOINTMENT very early:', error);
-      }
-    }
-    
-    // Normalizar userPhone para usar consistentemente
-    const normalizedUserPhone = userPhone.replace(/[\s\-\(\)]/g, '');
-
-    try {
-      // 1) Resolver contexto enhanced (com flow_lock)
-      const context = await this.resolveEnhancedContext(
-        userPhone,
-        tenantId,
-        tenantConfig,
-        existingContext
-      );
-
-      // 🔍 INTENT DETECTION - Sistema simples original
-      console.log('🔍 [INTENT] Detectando intent para mensagem:', messageText.substring(0, 50) + '...');
-      const primaryIntent = this.intentDetector.detectPrimaryIntent(messageText);
-      console.log(`✅ [INTENT] Intent detectado: ${primaryIntent}`);
-      
-      // 📊 STRUCTURED TELEMETRY: Capturar intent detected
-      try {
-        if (primaryIntent) {
-          await this.telemetryService.recordIntentDetected(
-            tenantId,
-            context.session_id,
-            userPhone,
-            primaryIntent
-          );
-          console.log(`📊 [TELEMETRY] Intent structured captured: ${primaryIntent} for session ${context.session_id}`);
-        }
-      } catch (telemetryError) {
-        console.error('⚠️ [TELEMETRY] Failed to record intent:', telemetryError);
-      }
-
-      // Log para diagnosticar contexto
-      console.log('CTX-KEY', {
-        rawPhone: userPhone,
-        ctxId: toCtxId(userPhone),
-        tenantId,
-        hasFlow: !!context.flow_lock?.active_flow,
-        step: context.flow_lock?.step,
-        awaiting_intent: (context as any)?.awaiting_intent
-      });
-
-
-      // 2) Contexto ativo encontrado - continuamos o fluxo (timeout controlado pelo cronjob)
-      const activeContext = context;
-
-      // 🔁 PRIORIDADE: se existe flow ativo, processe-o já
-      const activeFlow = context.flow_lock?.active_flow || null;
-      const currentStep = (context.flow_lock?.step as any) || null;
-      
-      console.log('🔍 FLOW-ROUTING:', {
-        activeFlow,
-        currentStep,
-        hasFlowLock: !!context.flow_lock,
-        contextId: toCtxId(userPhone),
-        messageText: messageText?.substring(0, 10)
-      });
-      
-      if (activeFlow === 'onboarding') {
-        console.log('➡️ ROUTING TO: handleOnboardingStep');
-        return await this.handleOnboardingStep({ messageText, userPhone, tenantId, context, tenantConfig, currentStep: (currentStep || 'need_name'), greetFirst: false, existingUserData: null });
-      }
-      if (activeFlow === 'returning_user') {
-        console.log('➡️ ROUTING TO: handleReturningUserFlow with step:', currentStep);
-        // Pass the actual currentStep instead of defaulting to need_email
-        return await this.handleReturningUserFlow({ messageText, userPhone, tenantId, context, tenantConfig, currentStep: currentStep || 'need_email' });
-      }
-      if (activeFlow === 'reschedule') {
-        console.log('➡️ ROUTING TO: handleRescheduleFlow with step:', currentStep);
-        return await this.handleRescheduleFlow({ messageText, userPhone, tenantId, context, tenantConfig, currentStep: currentStep || 'collect_id' });
-      }
-      if (activeFlow === 'cancel') {
-        console.log('➡️ ROUTING TO: handleCancelAppointmentFlow with step:', currentStep);
-        return await this.handleCancelAppointmentFlow({ messageText, userPhone, tenantId, context, tenantConfig, currentStep: currentStep || 'collect_id' });
-      }
-
-      // 2.5) Se estamos aguardando escolha de intenção (desambiguação) e NÃO há flow ativo, resolva primeiro
-      else if ((activeContext as any)?.awaiting_intent === true && !activeContext?.flow_lock?.active_flow) {
-        const choice = resolveDisambiguationChoice(messageText);
-        if (choice) {
-          const updatedCtx = await mergeEnhancedConversationContext(
-            toCtxId(userPhone),
-            tenantId,
-            activeContext,
-            { intent: choice, decision_method: 'llm', confidence: 1.0 }
-          );
-          return await this.orchestrateWebhookFlow(messageText, userPhone, tenantId, tenantConfig, updatedCtx);
-        } else {
-          return {
-            aiResponse: 'Só para confirmar: você quer *serviços*, *preços* ou *horários*?',
-            shouldSendWhatsApp: true,
-            conversationOutcome: null,
-            updatedContext: context,
-            telemetryData: {
-              intent: null,
-              confidence: 0,
-              decision_method: 'disambiguation_pending',
-              flow_lock_active: !!context.flow_lock?.active_flow,
-              processing_time_ms: 0,
-              model_used: undefined
-            },
-            llmMetrics: undefined
-          };
-        }
-      }
-
-      // === FALLBACK PARA FLOW LOCK PERDIDO ===
-      // Se não há flow ativo MAS o usuário está em processo de coleta de dados
-      if (!activeFlow) {
-        console.log('🔄 [FLOW-FALLBACK] Flow lock perdido - verificando contexto de coleta...');
-        
-        const userStatus = await this.determineUserStatus(userPhone, tenantId);
-        const userProfile = userStatus.userProfile;
-        
-        if (userProfile?.name && userProfile?.email) {
-          // Tem nome e email, verificar se falta birth_date ou address
-          const missingBirth = !userProfile.birth_date;
-          const missingAddr = !userProfile.address;
-          
-          if (missingBirth || missingAddr) {
-            // Detectar se usuário respondeu "sim" (confirm) 
-            if (primaryIntent === 'confirm') {
-              console.log('✅ [FLOW-FALLBACK] Usuário confirmou coleta - roteando para ask_additional_data');
-              return await this.handleReturningUserFlow({ 
-                messageText, 
-                userPhone, 
-                tenantId, 
-                context, 
-                tenantConfig, 
-                currentStep: 'ask_additional_data' 
-              });
-            }
-            
-            // Detectar se usuário enviou uma data (formato dd/mm/aaaa ou similar)
-            const datePattern = /\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/;
-            if (missingBirth && datePattern.test(messageText)) {
-              console.log('✅ [FLOW-FALLBACK] Data detectada - roteando para need_birthday');
-              return await this.handleReturningUserFlow({ 
-                messageText, 
-                userPhone, 
-                tenantId, 
-                context, 
-                tenantConfig, 
-                currentStep: 'need_birthday' 
-              });
-            }
-            
-            // Detectar se usuário enviou endereço (texto longo ou palavras de endereço)
-            const addressKeywords = /\b(rua|av|avenida|alameda|travessa|praça|numero|n°|cep|bairro|cidade)\b/i;
-            if (missingAddr && (messageText.length > 20 || addressKeywords.test(messageText))) {
-              console.log('✅ [FLOW-FALLBACK] Endereço detectado - roteando para need_address');
-              return await this.handleReturningUserFlow({ 
-                messageText, 
-                userPhone, 
-                tenantId, 
-                context, 
-                tenantConfig, 
-                currentStep: 'need_address' 
-              });
-            }
-          }
-        }
-      }
-
-      // === ANÁLISE DE STATUS DO USUÁRIO (Nova Lógica Correta) ===
-      const userStatus = await this.determineUserStatus(userPhone, tenantId);
-      console.log(`🔍 [USER STATUS] ${userStatus.type} - ${userStatus.description}`);
-      
-      const userProfile = userStatus.userProfile;
-
-      // === GATEWAY DE SAUDAÇÃO INTELIGENTE ===
-      const isGreeting = this.intentDetector.detectPrimaryIntent(messageText) === 'greeting';
-      console.log(`🔍 [GREETING CHECK] Message is greeting: ${isGreeting}, User status: ${userStatus.type}`);
-      
-      if (isGreeting) {
-        return await this.handleIntelligentGreeting({
-          userStatus,
-          userProfile,
-          tenantConfig,
-          context,
-          userPhone,
-          tenantId,
-          messageText
-        });
-      }
-
-      // === ONBOARDING GATE (após verificar returning user greetings) ===
-      // Flow processing moved to top for priority handling
-      
-
-      // === PROFILE COMPLETION CHECK ===
-      const hasCompleteProfile = !!(userProfile?.name && userProfile?.email);
-      if (!hasCompleteProfile) {
-        if (userProfile?.name) {
-          // Usuário EXISTENTE com dados incompletos - usar flow returning_user
-          console.log(`🎯 [EXISTING_INCOMPLETE] Usuário ${userProfile.name} precisa completar dados (birth_date, address)`);
-          
-          if (!activeFlow) {
-            // Iniciar flow de returning user para coleta de dados adicionais
-            // Por enquanto, vou usar returning user greeting para não quebrar
-            return await this.handleReturningUserGreeting({
-              messageText,
-              userPhone,
-              tenantId,
-              context,
-              tenantConfig,
-              userProfile
-            });
-          }
-        } else {
-          // Usuário COMPLETAMENTE NOVO - onboarding tradicional
-          const onboardingLock = this.flowManager.startFlowLock('onboarding', 'need_name');
-          const onboardingCtx = await this.updateContextWithFlowState(
-            toCtxId(userPhone),
-            tenantId,
-            context,
-            onboardingLock,
-            { intent: 'onboarding', confidence: 1.0, decision_method: 'gate_onboarding' }
-          );
-
-          return await this.handleOnboardingStep({
-            messageText,
-            userPhone,
-            tenantId,
-            context: onboardingCtx,
-            tenantConfig,
-            currentStep: 'need_name',
-            greetFirst: true,
-            existingUserData: null
-          });
-        }
-      }
-      // === FIM DO GATE ===
-
-      // 3) ✨ SISTEMA DE 3 CAMADAS OTIMIZADO - Detecção de Intent
-      let intentResult = await this.detectIntentThreeLayers(
-        messageText, 
-        context,
-        existingContext?.session_id || userPhone
-      );
-      
-      // 3.1) Se está aguardando desambiguação, processar resposta
-      if (this.disambiguation.isAwaitingIntent(context)) {
-        const disambiguationResult = this.disambiguation.processDisambiguationResponse(messageText);
-        
-        if (disambiguationResult.resolvedIntent) {
-          // Intent resolvida via desambiguação
-          intentResult = {
-            ...intentResult,
-            intent: disambiguationResult.resolvedIntent,
-            confidence: 0.9,
-            decision_method: 'llm_classification' as any // Via desambiguação
-          };
-          
-          // Limpar estado de aguardando - criar novo contexto
-          const clearedContext = this.disambiguation.clearAwaitingIntent(context);
-          // Atualizar contexto local
-          Object.assign(context, clearedContext);
-          
-          console.log(`🎯 [INTENT-3LAYER] Intent resolvida via desambiguação: ${intentResult.intent}`);
-        }
-      }
-
-      // 3.2) Se ainda não tem intent, ativar desambiguação (Camada 3)
-      if (!intentResult.intent && !this.disambiguation.isAwaitingIntent(context)) {
-        console.log('❓ [INTENT-3LAYER] Ativando desambiguação (Camada 3)');
-        
-        const disambiguationResult = this.disambiguation.generateDisambiguationQuestion();
-        const updatedContextWithAwaiting = this.disambiguation.markAwaitingIntent(context);
-        
-        // Mesclar contexto atualizado 
-        const finalContext = await mergeEnhancedConversationContext(
-          userPhone,
-          tenantId,
-          updatedContextWithAwaiting,
-          {
-            intent: 'disambiguation_request',
-            confidence: 0.0,
-            decision_method: 'llm' as any
-          }
-        );
-        
-        return {
-          aiResponse: disambiguationResult.disambiguationQuestion!,
-          shouldSendWhatsApp: true,
-          conversationOutcome: null,
-          updatedContext: finalContext,
-          telemetryData: {
-            intent: null,
-            confidence: 0.0,
-            decision_method: 'llm' as any,
-            flow_lock_active: false,
-            processing_time_ms: Date.now() - startTime
-          }
-        };
-      }
-
-      let finalIntent: string | null = intentResult.intent;
-
-      // 3.1.5) 🔐 POLÍTICAS CONTEXTUAIS - Aplicar antes de processar o intent
-      if (finalIntent) {
-        console.log(`🔐 [POLICIES] Aplicando políticas para intent '${finalIntent}'`);
-        const policyDecision = await this.contextualPolicies.applyPolicies(
-          finalIntent as any,
-          userPhone,
-          tenantId,
-          context,
-          messageText
-        );
-
-        console.log(`🔐 [POLICIES] Decisão: ${policyDecision.actionRequired} - ${policyDecision.reasonCode}`);
-
-        // Processar decisão da política
-        switch (policyDecision.actionRequired) {
-          case 'block':
-            console.log(`🚫 [POLICIES] Intent bloqueado: ${finalIntent}`);
-            return {
-              aiResponse: policyDecision.suggestedResponse || 'Ação não permitida no momento.',
-              shouldSendWhatsApp: true,
-              conversationOutcome: 'policy_blocked',
-              updatedContext: context,
-              telemetryData: {
-                intent: finalIntent,
-                confidence: 0,
-                decision_method: 'contextual_policy_blocked',
-                flow_lock_active: false,
-                processing_time_ms: Date.now() - startTime
-              }
-            };
-
-          case 'redirect':
-            console.log(`🔄 [POLICIES] Intent redirecionado: ${finalIntent} → ${policyDecision.modifiedIntent}`);
-            finalIntent = policyDecision.modifiedIntent || finalIntent;
-            break;
-
-          case 'modify':
-          case 'enhance':
-            console.log(`✨ [POLICIES] Intent aprimorado: ${finalIntent}`);
-            // Contexto será aplicado na resposta final
-            break;
-
-          default:
-            console.log(`✅ [POLICIES] Intent permitido sem restrições: ${finalIntent}`);
-            break;
-        }
-      }
-
-      // 3.2) se ainda null → desambiguação
-      if (!finalIntent) {
-        const updatedCtx = await mergeEnhancedConversationContext(
-          toCtxId(userPhone),
-          tenantId,
-          context,
-          { intent: 'unknown', confidence: 0, decision_method: 'llm' }
-        );
-
-        return {
-          aiResponse: 'Só para confirmar: você quer *serviços*, *preços* ou *horários*?',
-          shouldSendWhatsApp: true,
-          conversationOutcome: null,
-          updatedContext: updatedCtx,
-          telemetryData: {
-            intent: null,
-            confidence: 0,
-            decision_method: 'disambiguation',
-            flow_lock_active: !!updatedCtx.flow_lock?.active_flow,
-            processing_time_ms: Date.now() - startTime,
-            model_used: undefined
-          },
-          llmMetrics: undefined
-        };
-      }
-
-      // 🗓️ INTERCEPTAR MY_APPOINTMENTS para actionables estruturados (funciona na demo e WhatsApp)
-      if (finalIntent === 'my_appointments' || messageText.match(/(meus agendamentos|tenho.*agendamento|o que marquei|ver agendamentos)/i)) {
-        console.log('🗓️ [ORCHESTRATOR] MY_APPOINTMENTS interceptado para actionables estruturados');
-        
-        try {
-          // Buscar usuário pelo telefone no tenant
-          const userResult = await getUserByPhoneInTenant(userPhone, tenantId);
-          if (userResult.data?.id) {
-            const actionablesService = new AppointmentActionablesService();
-            const actionablesResult = await actionablesService.getAppointmentsWithActionables(
-              tenantId,
-              userResult.data.id
-            );
-            
-            if (actionablesResult.success) {
-              console.log('✅ [ORCHESTRATOR] MY_APPOINTMENTS actionables gerados com sucesso');
-              
-              // Atualizar contexto
-              const updatedContext = await mergeEnhancedConversationContext(
-                toCtxId(userPhone),
-                tenantId,
-                context,
-                { intent: 'my_appointments', confidence: 1.0, decision_method: 'regex' }
-              );
-              
-              return {
-                aiResponse: actionablesResult.message,
-                shouldSendWhatsApp: true,
-                conversationOutcome: 'appointment_inquiry',
-                updatedContext,
-                telemetryData: {
-                  intent: 'my_appointments',
-                  confidence: 1.0,
-                  decision_method: 'appointment_actionables',
-                  flow_lock_active: false,
-                  processing_time_ms: Date.now() - startTime,
-                  model_used: undefined
-                },
-                llmMetrics: undefined
-              };
-            }
-          }
-        } catch (error) {
-          console.error('❌ [ORCHESTRATOR] Erro ao processar MY_APPOINTMENTS actionables:', error);
-          // Continua com processamento normal como fallback
-        }
-      }
-
-      // Verificar se é uma ação de agendamento estruturada (cancelar_123, remarcar_456, etc.)
-      const actionMatch = messageText.match(/^(cancelar|remarcar|detalhes|confirmar)_([a-f0-9-]{36})/i);
-      if (actionMatch) {
-        const [, action, appointmentId] = actionMatch;
-        console.log('🎯 [ORCHESTRATOR] Ação de agendamento estruturada detectada:', { action, appointmentId });
-        
-        try {
-          // Buscar usuário pelo telefone no tenant
-          const userResult = await getUserByPhoneInTenant(userPhone, tenantId);
-          if (userResult.data?.id) {
-            const actionablesService = new AppointmentActionablesService();
-            const actionResult = await actionablesService.processSelectedAction(
-              tenantId,
-              userResult.data.id,
-              appointmentId || '',
-              (action || '').toLowerCase()
-            );
-            
-            if (actionResult.success) {
-              console.log('✅ [ORCHESTRATOR] Ação de agendamento processada com sucesso');
-              
-              // Atualizar contexto
-              const updatedContext = await mergeEnhancedConversationContext(
-                toCtxId(userPhone),
-                tenantId,
-                context,
-                { intent: `appointment_${action}`, confidence: 1.0, decision_method: 'regex' }
-              );
-              
-              return {
-                aiResponse: actionResult.message,
-                shouldSendWhatsApp: true,
-                conversationOutcome: action === 'cancelar' ? 'appointment_cancelled' : action === 'remarcar' ? 'appointment_rescheduled' : 'appointment_inquiry',
-                updatedContext,
-                telemetryData: {
-                  intent: `appointment_${action}`,
-                  confidence: 1.0,
-                  decision_method: 'appointment_actionables',
-                  flow_lock_active: false,
-                  processing_time_ms: Date.now() - startTime,
-                  model_used: undefined
-                },
-                llmMetrics: undefined
-              };
-            }
-          }
-        } catch (error) {
-          console.error('❌ [ORCHESTRATOR] Erro ao processar ação de agendamento:', error);
-          // Continua com processamento normal como fallback
-        }
-      }
-
-
-      // ✅ intentResult já foi criado pelo sistema de 3 camadas acima
-
-      // 4) Flow Lock — permissão
-      if (!intentResult.allowed_by_flow_lock) {
-        return this.handleBlockedIntent(context, intentResult);
-      }
-
-      // 5) Mapear fluxo e decisão
-      const targetFlow = this.mapIntentToFlow(intentResult.intent);
-      const flowDecision = this.flowManager.canStartNewFlow(context, targetFlow);
-
-      // 6) Geração de resposta (sempre via OpenAI, exceto comandos diretos)
-      const result = await this.generateAIResponseWithFlowContext(
-        messageText,
-        intentResult,
-        flowDecision,
-        context,
-        tenantConfig,
-        userPhone
-      );
-
-      // 7) Atualizar contexto com novo estado
-      const updatedContext = await this.updateContextWithFlowState(
-        toCtxId(userPhone),
-        tenantId,
-        context,
-        result.newFlowLock,
-        intentResult
-      );
-
-      // 8) Persistir outcome apenas quando conversa finaliza
-      const finalOutcome = this.shouldPersistOutcome(intentResult.intent, result.response, updatedContext);
-
-      // ✅ MESCLAR MÉTRICAS: Intent Classification + AI Response
-      const combinedLLMMetrics = {
-        // Métricas do AI Response (se houver)
-        prompt_tokens: (result.llmMetrics?.prompt_tokens || 0) + ((intentResult as any).llmMetrics?.prompt_tokens || 0),
-        completion_tokens: (result.llmMetrics?.completion_tokens || 0) + ((intentResult as any).llmMetrics?.completion_tokens || 0),
-        total_tokens: (result.llmMetrics?.total_tokens || 0) + ((intentResult as any).llmMetrics?.total_tokens || 0),
-        api_cost_usd: (result.llmMetrics?.api_cost_usd || 0) + ((intentResult as any).llmMetrics?.api_cost_usd || 0),
-        processing_cost_usd: (result.llmMetrics?.processing_cost_usd || 0) + ((intentResult as any).llmMetrics?.processing_cost_usd || 0),
-        confidence_score: (intentResult as any).llmMetrics?.confidence_score || result.llmMetrics?.confidence_score || intentResult.confidence,
-        latency_ms: (result.llmMetrics?.latency_ms || 0) + ((intentResult as any).llmMetrics?.latency_ms || 0)
-      };
-
-      return {
-        aiResponse: result.response,
-        shouldSendWhatsApp: true,
-        conversationOutcome: finalOutcome,
-        llmMetrics: combinedLLMMetrics, // ✅ MÉTRICAS COMBINADAS
-        updatedContext,
-        telemetryData: {
-          intent: intentResult.intent,
-          confidence: intentResult.confidence,
-          decision_method: intentResult.decision_method,
-          flow_lock_active: !!updatedContext.flow_lock?.active_flow,
-          processing_time_ms: Date.now() - startTime,
-          model_used: (intentResult as any).model_used || result.llmMetrics?.model_used
-        }
-      };
-
-    } catch (error) {
-      console.error('Webhook orchestration error:', error);
-      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-      console.error('Error details:', {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error)
-      });
-
-      const fallbackContext = await this.resolveEnhancedContext(userPhone, tenantId, tenantConfig, existingContext);
-      return {
-        aiResponse: 'Desculpe, ocorreu um erro. Tente novamente.',
-        shouldSendWhatsApp: true,
-        conversationOutcome: 'error',
-        updatedContext: fallbackContext,
-        telemetryData: {
-          intent: 'error',
-          confidence: 0,
-          decision_method: 'error',
-          flow_lock_active: false,
-          processing_time_ms: 0,
-          model_used: undefined
-        },
-        llmMetrics: {
-          prompt_tokens: null,
-          completion_tokens: null,
-          total_tokens: null,
-          api_cost_usd: null,
-          processing_cost_usd: null,
-          confidence_score: null,
-          latency_ms: null
-        }
-      };
-    }
-  }
 
   /**
    * Resolve contexto enhanced (backward compatible)
@@ -1495,12 +1252,15 @@ export class WebhookFlowOrchestratorService {
         updatedContext: context,
         telemetryData: {
           intent: sanitizeIntentForPersistence('returning_user_declined_data', null),
-          confidence: 1.0,
+          confidence_score: 1.0,
           decision_method: 'negative_response_detected',
           flow_lock_active: false,
           processing_time_ms: 0,
           model_used: undefined
         },
+        // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
         llmMetrics: undefined
       };
     }
@@ -1530,7 +1290,19 @@ export class WebhookFlowOrchestratorService {
         shouldSendWhatsApp: true,
         conversationOutcome: null,
         updatedContext,
-        telemetryData: { intent: sanitizeIntentForPersistence('returning_user_need_email', 'greeting'), confidence: 1.0, decision_method: 'returning_user_greeting', flow_lock_active: true, processing_time_ms: 0, model_used: undefined },
+        telemetryData: { 
+          // preserve o intent real detectado; se não houver, fica null
+          intent: null, // Flow Lock não tem acesso ao intentResult aqui
+          // normaliza para confidence_score e NÃO hardcoda 1.0  
+          confidence_score: null, // Flow Lock não tem acesso ao intentResult aqui
+          decision_method: 'flow_lock:returning_user_greeting', 
+          flow_lock_active: true, 
+          processing_time_ms: 0, 
+          model_used: undefined 
+        },
+        // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
         llmMetrics: undefined
       };
     }
@@ -1568,13 +1340,16 @@ export class WebhookFlowOrchestratorService {
         conversationOutcome: null,
         updatedContext,
         telemetryData: {
-          intent: sanitizeIntentForPersistence('returning_user_consent', 'confirm'),
-          confidence: 1.0,
-          decision_method: 'returning_user_greeting',
+          intent: null, // Flow Lock não tem acesso ao intentResult aqui
+          confidence_score: null, // Flow Lock não tem acesso ao intentResult aqui
+          decision_method: 'flow_lock:returning_user_greeting',
           flow_lock_active: true,
           processing_time_ms: 0,
           model_used: undefined
         },
+        // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
         llmMetrics: undefined
       };
     }
@@ -1603,7 +1378,7 @@ export class WebhookFlowOrchestratorService {
       updatedContext: context,
       telemetryData: {
         intent: sanitizeIntentForPersistence('returning_user_complete', 'greeting'),
-        confidence: 1.0,
+        confidence_score: 1.0,
         decision_method: 'returning_user_greeting',
         flow_lock_active: false,
         processing_time_ms: 0,
@@ -1672,13 +1447,16 @@ export class WebhookFlowOrchestratorService {
           updatedContext: cleaned,
           telemetryData: {
             intent: sanitizeIntentForPersistence('returning_user_declined_additional', null),
-            confidence: 1.0,
+            confidence_score: 1.0,
             decision_method: 'consent_declined',
             flow_lock_active: false,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
 
@@ -1693,14 +1471,17 @@ export class WebhookFlowOrchestratorService {
           conversationOutcome: null,
           updatedContext: ctx,
           telemetryData: {
-            intent: 'confirm', // Intent real do usuário ("sim")
-            confidence: 1.0,
-            decision_method: 'consent_accepted',
+            intent: null, // Flow Lock não tem acesso ao intentResult aqui
+            confidence_score: null, // Flow Lock não tem acesso ao intentResult aqui
+            decision_method: 'flow_lock:consent_accepted',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
 
@@ -1711,13 +1492,16 @@ export class WebhookFlowOrchestratorService {
         conversationOutcome: null,
         updatedContext: context,
         telemetryData: {
-          intent: sanitizeIntentForPersistence('returning_user_consent_clarify', null),
-          confidence: 1.0,
-          decision_method: 'unclear_consent',
+          intent: null, // Flow Lock não tem acesso ao intentResult aqui
+          confidence_score: null, // Flow Lock não tem acesso ao intentResult aqui
+          decision_method: 'flow_lock:unclear_consent',
           flow_lock_active: true,
           processing_time_ms: 0,
           model_used: undefined
         },
+        // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
         llmMetrics: undefined
       };
     }
@@ -1769,13 +1553,16 @@ export class WebhookFlowOrchestratorService {
           ),
           telemetryData: {
             intent: sanitizeIntentForPersistence('returning_user_declined_email', null),
-            confidence: 1.0,
+            confidence_score: 1.0,
             decision_method: 'negative_response_detected',
             flow_lock_active: false,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
       
@@ -1818,13 +1605,16 @@ export class WebhookFlowOrchestratorService {
           ),
           telemetryData: {
             intent: sanitizeIntentForPersistence('returning_user_email_saved', null),
-            confidence: 1.0,
+            confidence_score: 1.0,
             decision_method: 'email_extracted_and_saved',
             flow_lock_active: false,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
       
@@ -1835,13 +1625,16 @@ export class WebhookFlowOrchestratorService {
         conversationOutcome: null,
         updatedContext: context,
         telemetryData: {
-          intent: sanitizeIntentForPersistence('returning_user_invalid_email', null),
-          confidence: 1.0,
-          decision_method: 'invalid_email_format',
+          intent: null, // Flow Lock não tem acesso ao intentResult aqui
+          confidence_score: null, // Flow Lock não tem acesso ao intentResult aqui
+          decision_method: 'flow_lock:invalid_email_format',
           flow_lock_active: true,
           processing_time_ms: 0,
           model_used: undefined
         },
+        // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
         llmMetrics: undefined
       };
     }
@@ -1907,14 +1700,17 @@ export class WebhookFlowOrchestratorService {
             conversationOutcome: null,
             updatedContext: ctx,
             telemetryData: {
-              intent: sanitizeIntentForPersistence('data_collection', detectIntentFromMessage(messageText, SystemFlowState.DATA_COLLECTION)),
-              confidence: 1.0,
-              decision_method: 'birthday_saved_need_address',
+              intent: null, // Flow lock - intent não disponível neste escopo
+              confidence_score: null,
+              decision_method: 'flow_lock:birthday_saved_need_address',
               flow_lock_active: true,
               processing_time_ms: 0,
               model_used: undefined
             },
-            llmMetrics: undefined
+            // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
           };
         } else {
           // Dados completos - finalizar coleta
@@ -1927,13 +1723,16 @@ export class WebhookFlowOrchestratorService {
             updatedContext: cleanedContext,
             telemetryData: {
               intent: sanitizeIntentForPersistence('data_collection', 'greeting'),
-              confidence: 1.0,
+              confidence_score: 1.0,
               decision_method: 'birthday_saved_complete',
               flow_lock_active: false,
               processing_time_ms: 0,
               model_used: undefined
             },
-            llmMetrics: undefined
+            // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
           };
         }
       } else {
@@ -1946,14 +1745,17 @@ export class WebhookFlowOrchestratorService {
           conversationOutcome: null,
           updatedContext: context,
           telemetryData: {
-            intent: sanitizeIntentForPersistence('data_collection', null),
-            confidence: 1.0,
-            decision_method: 'birthday_invalid_format',
+            intent: null, // Flow lock - intent não disponível neste escopo
+            confidence_score: null,
+            decision_method: 'flow_lock:birthday_invalid_format',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
     }
@@ -1966,7 +1768,7 @@ export class WebhookFlowOrchestratorService {
       updatedContext: context,
       telemetryData: {
         intent: null, // Não há intent válida - é um erro de estado interno
-        confidence: 0.0,
+        confidence_score: 0.0,
         decision_method: 'unknown_step',
         flow_lock_active: false,
         processing_time_ms: 0,
@@ -2026,7 +1828,7 @@ export class WebhookFlowOrchestratorService {
               tenantId,
               context,
               advancedLock,
-              { intent: 'reschedule', confidence: 1.0, decision_method: 'id_collected' }
+              { intent: 'reschedule', confidence_score: 1.0, decision_method: 'id_collected' }
             );
             
             return {
@@ -2036,13 +1838,16 @@ export class WebhookFlowOrchestratorService {
               updatedContext,
               telemetryData: {
                 intent: 'reschedule',
-                confidence: 1.0,
+                confidence_score: 1.0,
                 decision_method: 'appointment_id_processed',
                 flow_lock_active: !rescheduleResult.hasConflicts, // Continue flow if has slots
                 processing_time_ms: 0,
                 model_used: undefined
               },
-              llmMetrics: undefined
+              // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
             };
           } else if (!rescheduleResult.appointmentFound) {
             return {
@@ -2051,14 +1856,17 @@ export class WebhookFlowOrchestratorService {
               conversationOutcome: null,
               updatedContext: context, // Manter no mesmo step
               telemetryData: {
-                intent: 'reschedule',
-                confidence: 1.0,
-                decision_method: 'appointment_not_found',
+                intent: null, // Flow lock - intent não disponível neste escopo
+                confidence_score: null,
+                decision_method: 'flow_lock:appointment_not_found',
                 flow_lock_active: true,
                 processing_time_ms: 0,
                 model_used: undefined
               },
-              llmMetrics: undefined
+              // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
             };
           } else {
             return {
@@ -2068,13 +1876,16 @@ export class WebhookFlowOrchestratorService {
               updatedContext: await mergeEnhancedConversationContext(toCtxId(userPhone), tenantId, { ...context, flow_lock: null }),
               telemetryData: {
                 intent: 'reschedule',
-                confidence: 1.0,
+                confidence_score: 1.0,
                 decision_method: 'system_error',
                 flow_lock_active: false,
                 processing_time_ms: 0,
                 model_used: undefined
               },
-              llmMetrics: undefined
+              // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
             };
           }
         } catch (error) {
@@ -2086,13 +1897,16 @@ export class WebhookFlowOrchestratorService {
             updatedContext: await mergeEnhancedConversationContext(toCtxId(userPhone), tenantId, { ...context, flow_lock: null }),
             telemetryData: {
               intent: 'reschedule',
-              confidence: 1.0,
+              confidence_score: 1.0,
               decision_method: 'exception_error',
               flow_lock_active: false,
               processing_time_ms: 0,
               model_used: undefined
             },
-            llmMetrics: undefined
+            // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
           };
         }
       } else {
@@ -2103,14 +1917,17 @@ export class WebhookFlowOrchestratorService {
           conversationOutcome: null,
           updatedContext: context, // Manter no mesmo step
           telemetryData: {
-            intent: 'reschedule',
-            confidence: 1.0,
-            decision_method: 'id_not_recognized',
+            intent: null, // Flow lock - intent não disponível neste escopo
+            confidence_score: null,
+            decision_method: 'flow_lock:id_not_recognized',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
     }
@@ -2129,13 +1946,16 @@ export class WebhookFlowOrchestratorService {
           updatedContext: await mergeEnhancedConversationContext(toCtxId(userPhone), tenantId, { ...context, flow_lock: null }),
           telemetryData: {
             intent: 'reschedule',
-            confidence: 1.0,
+            confidence_score: 1.0,
             decision_method: 'session_expired',
             flow_lock_active: false,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
       
@@ -2151,7 +1971,7 @@ export class WebhookFlowOrchestratorService {
             tenantId,
             context,
             completedLock,
-            { intent: 'reschedule_completed', confidence: 1.0, decision_method: 'slot_selected' }
+            { intent: 'reschedule_completed', confidence_score: 1.0, decision_method: 'slot_selected' }
           );
           
           return {
@@ -2161,13 +1981,16 @@ export class WebhookFlowOrchestratorService {
             updatedContext,
             telemetryData: {
               intent: 'reschedule_completed',
-              confidence: 1.0,
+              confidence_score: 1.0,
               decision_method: 'time_slot_selected',
               flow_lock_active: false,
               processing_time_ms: 0,
               model_used: undefined
             },
-            llmMetrics: undefined
+            // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
           };
         } else {
           // Seleção inválida ou erro
@@ -2178,13 +2001,16 @@ export class WebhookFlowOrchestratorService {
             updatedContext: context, // Manter no mesmo step para nova tentativa
             telemetryData: {
               intent: 'reschedule',
-              confidence: 1.0,
+              confidence_score: 1.0,
               decision_method: 'invalid_slot_selection',
               flow_lock_active: true,
               processing_time_ms: 0,
               model_used: undefined
             },
-            llmMetrics: undefined
+            // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
           };
         }
       } catch (error) {
@@ -2196,13 +2022,16 @@ export class WebhookFlowOrchestratorService {
           updatedContext: context,
           telemetryData: {
             intent: 'reschedule',
-            confidence: 1.0,
+            confidence_score: 1.0,
             decision_method: 'selection_error',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
     }
@@ -2215,7 +2044,7 @@ export class WebhookFlowOrchestratorService {
       updatedContext: await mergeEnhancedConversationContext(toCtxId(userPhone), tenantId, { ...context, flow_lock: null }),
       telemetryData: {
         intent: 'reschedule',
-        confidence: 1.0,
+        confidence_score: 1.0,
         decision_method: 'unknown_step_fallback',
         flow_lock_active: false,
         processing_time_ms: 0,
@@ -2285,13 +2114,16 @@ export class WebhookFlowOrchestratorService {
               updatedContext,
               telemetryData: {
                 intent: 'cancel_appointment',
-                confidence: 1.0,
+                confidence_score: 1.0,
                 decision_method: 'flow_cancel_confirmation_required',
                 flow_lock_active: true,
                 processing_time_ms: 0,
                 model_used: undefined
               },
-              llmMetrics: undefined
+              // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
             };
             
           } else {
@@ -2312,13 +2144,16 @@ export class WebhookFlowOrchestratorService {
               updatedContext: clearedContext,
               telemetryData: {
                 intent: 'cancel_appointment',
-                confidence: 1.0,
+                confidence_score: 1.0,
                 decision_method: 'flow_cancel_rejected',
                 flow_lock_active: false,
                 processing_time_ms: 0,
                 model_used: undefined
               },
-              llmMetrics: undefined
+              // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
             };
           }
           
@@ -2334,13 +2169,16 @@ export class WebhookFlowOrchestratorService {
           updatedContext: context,
           telemetryData: {
             intent: 'cancel_appointment',
-            confidence: 1.0,
+            confidence_score: 1.0,
             decision_method: 'flow_id_not_found',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
     }
@@ -2359,13 +2197,16 @@ export class WebhookFlowOrchestratorService {
           updatedContext: await mergeEnhancedConversationContext(toCtxId(userPhone), tenantId, { ...context, flow_lock: null }),
           telemetryData: {
             intent: 'cancel_appointment',
-            confidence: 1.0,
+            confidence_score: 1.0,
             decision_method: 'session_expired',
             flow_lock_active: false,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
       
@@ -2391,13 +2232,16 @@ export class WebhookFlowOrchestratorService {
             updatedContext: completedContext,
             telemetryData: {
               intent: 'cancel_appointment',
-              confidence: 1.0,
+              confidence_score: 1.0,
               decision_method: confirmationResult.cancelled ? 'flow_cancel_confirmed' : 'flow_cancel_aborted',
               flow_lock_active: false,
               processing_time_ms: 0,
               model_used: undefined
             },
-            llmMetrics: undefined
+            // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
           };
         } else {
           return {
@@ -2407,13 +2251,16 @@ export class WebhookFlowOrchestratorService {
             updatedContext: context,
             telemetryData: {
               intent: 'cancel_appointment',
-              confidence: 1.0,
+              confidence_score: 1.0,
               decision_method: 'flow_cancel_error',
               flow_lock_active: true,
               processing_time_ms: 0,
               model_used: undefined
             },
-            llmMetrics: undefined
+            // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
           };
         }
         
@@ -2426,13 +2273,16 @@ export class WebhookFlowOrchestratorService {
           updatedContext: context,
           telemetryData: {
             intent: 'cancel_appointment',
-            confidence: 1.0,
+            confidence_score: 1.0,
             decision_method: 'confirmation_error',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
     }
@@ -2445,7 +2295,7 @@ export class WebhookFlowOrchestratorService {
       updatedContext: await mergeEnhancedConversationContext(toCtxId(userPhone), tenantId, { ...context, flow_lock: null }),
       telemetryData: {
         intent: 'cancel_appointment',
-        confidence: 1.0,
+        confidence_score: 1.0,
         decision_method: 'unknown_step_fallback',
         flow_lock_active: false,
         processing_time_ms: 0,
@@ -2538,7 +2388,7 @@ export class WebhookFlowOrchestratorService {
       },
       {
         intent: 'greeting',
-        confidence: 1.0,
+        confidence_score: 1.0,
         decision_method: 'regex'
       }
     );
@@ -2550,7 +2400,7 @@ export class WebhookFlowOrchestratorService {
       updatedContext,
       telemetryData: {
         intent: 'greeting',
-        confidence: 1.0,
+        confidence_score: 1.0,
         decision_method: 'personalized_complete_user_greeting',
         flow_lock_active: false,
         processing_time_ms: 0,
@@ -2621,14 +2471,17 @@ export class WebhookFlowOrchestratorService {
           conversationOutcome: null,
           updatedContext,
           telemetryData: {
-            intent: sanitizeIntentForPersistence('onboarding', 'greeting'),
-            confidence: 1.0,
-            decision_method: 'onboarding_intro',
+            intent: null, // Flow Lock - preservar intent real do usuário
+            confidence_score: 1.0,
+            decision_method: 'flow_lock',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
 
@@ -2644,14 +2497,17 @@ export class WebhookFlowOrchestratorService {
           conversationOutcome: null,
           updatedContext,
           telemetryData: {
-            intent: sanitizeIntentForPersistence('onboarding', 'greeting'),
-            confidence: 1.0,
-            decision_method: 'ask_name',
+            intent: null, // Flow Lock - preservar intent real do usuário
+            confidence_score: 1.0,
+            decision_method: 'flow_lock',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
 
@@ -2708,12 +2564,15 @@ export class WebhookFlowOrchestratorService {
         updatedContext,
         telemetryData: {
           intent: sanitizeIntentForPersistence('onboarding', 'greeting'),
-          confidence: 1.0,
-          decision_method: 'name_saved',
+          confidence_score: 1.0,
+          decision_method: 'flow_lock',
           flow_lock_active: true,
           processing_time_ms: 0,
           model_used: undefined
         },
+        // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
         llmMetrics: undefined
       };
     }
@@ -2744,14 +2603,17 @@ export class WebhookFlowOrchestratorService {
           conversationOutcome: null,
           updatedContext,
           telemetryData: {
-            intent: sanitizeIntentForPersistence('onboarding', 'greeting'),
-            confidence: 1.0,
-            decision_method: 'ask_email',
+            intent: null, // Flow Lock - preservar intent real do usuário
+            confidence_score: 1.0,
+            decision_method: 'flow_lock',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
 
@@ -2776,12 +2638,15 @@ export class WebhookFlowOrchestratorService {
         updatedContext,
         telemetryData: {
           intent: sanitizeIntentForPersistence('onboarding', 'greeting'),
-          confidence: 1.0,
-          decision_method: 'email_saved_ask_additional',
+          confidence_score: 1.0,
+          decision_method: 'flow_lock',
           flow_lock_active: true,
           processing_time_ms: 0,
           model_used: undefined
         },
+        // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
         llmMetrics: undefined
       };
     }
@@ -2845,14 +2710,17 @@ export class WebhookFlowOrchestratorService {
           conversationOutcome: null,
           updatedContext: contextWithGeneralFlow,
           telemetryData: {
-            intent: sanitizeIntentForPersistence('onboarding_completed', 'greeting'),
-            confidence: 1.0,
-            decision_method: 'user_declines_additional_data',
+            intent: null, // Flow Lock - preservar intent real do usuário
+            confidence_score: 1.0,
+            decision_method: 'flow_lock',
             flow_lock_active: true, // Manter sessão ativa com flow general
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       } else if (response.includes('sim') || response === 's') {
         // Usuário aceita fornecer dados adicionais - ir para aniversário
@@ -2867,14 +2735,17 @@ export class WebhookFlowOrchestratorService {
           conversationOutcome: null,
           updatedContext,
           telemetryData: {
-            intent: sanitizeIntentForPersistence('onboarding', 'greeting'),
-            confidence: 1.0,
-            decision_method: 'user_accepts_additional_data',
+            intent: null, // Flow Lock - preservar intent real do usuário
+            confidence_score: 1.0,
+            decision_method: 'flow_lock',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       } else {
         // Resposta não compreendida - pedir clarificação
@@ -2885,13 +2756,16 @@ export class WebhookFlowOrchestratorService {
           updatedContext: context,
           telemetryData: {
             intent: sanitizeIntentForPersistence('onboarding_clarification', null),
-            confidence: 1.0,
-            decision_method: 'unclear_response',
+            confidence_score: 1.0,
+            decision_method: 'flow_lock',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
     }
@@ -2912,14 +2786,17 @@ export class WebhookFlowOrchestratorService {
           conversationOutcome: null,
           updatedContext,
           telemetryData: {
-            intent: sanitizeIntentForPersistence('onboarding', 'greeting'),
-            confidence: 1.0,
+            intent: null, // Flow Lock - preservar intent real do usuário
+            confidence_score: 1.0,
             decision_method: 'invalid_birthday_format',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
 
@@ -2947,12 +2824,15 @@ export class WebhookFlowOrchestratorService {
         updatedContext,
         telemetryData: {
           intent: sanitizeIntentForPersistence('onboarding', 'greeting'),
-          confidence: 1.0,
+          confidence_score: 1.0,
           decision_method: 'birthday_saved',
           flow_lock_active: true,
           processing_time_ms: 0,
           model_used: undefined
         },
+        // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
         llmMetrics: undefined
       };
     }
@@ -2973,14 +2853,17 @@ export class WebhookFlowOrchestratorService {
           conversationOutcome: null,
           updatedContext,
           telemetryData: {
-            intent: sanitizeIntentForPersistence('onboarding', 'greeting'),
-            confidence: 1.0,
+            intent: null, // Flow Lock - preservar intent real do usuário
+            confidence_score: 1.0,
             decision_method: 'incomplete_address',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
 
@@ -3044,12 +2927,15 @@ export class WebhookFlowOrchestratorService {
         updatedContext: contextWithGeneralFlow,
         telemetryData: {
           intent: sanitizeIntentForPersistence('onboarding_completed', 'greeting'),
-          confidence: 1.0,
-          decision_method: 'complete_onboarding_with_additional_data',
+          confidence_score: 1.0,
+          decision_method: 'flow_lock',
           flow_lock_active: true, // Manter sessão ativa com flow general
           processing_time_ms: 0,
           model_used: undefined
         },
+        // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
         llmMetrics: undefined
       };
     }
@@ -3065,7 +2951,7 @@ export class WebhookFlowOrchestratorService {
       updatedContext: fallbackCtx,
       telemetryData: {
         intent: sanitizeIntentForPersistence('onboarding', 'greeting'),
-        confidence: 1.0,
+        confidence_score: 1.0,
         decision_method: 'fallback',
         flow_lock_active: true,
         processing_time_ms: 0,
@@ -3105,7 +2991,7 @@ export class WebhookFlowOrchestratorService {
       updatedContext: cleanedContext,
       telemetryData: {
         intent: 'greeting',
-        confidence: 1.0,
+        confidence_score: 1.0,
         decision_method: 'auto_restart',
         flow_lock_active: false,
         processing_time_ms: 0,
@@ -3137,13 +3023,16 @@ export class WebhookFlowOrchestratorService {
           updatedContext: context,
           telemetryData: {
             intent: 'greeting',
-            confidence: 0.8,
+            confidence_score: 0.8,
             decision_method: 'auto_restart',
             flow_lock_active: false,
             processing_time_ms: Date.now(),
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
 
@@ -3162,7 +3051,13 @@ export class WebhookFlowOrchestratorService {
       if (primaryIntent === 'greeting') {
         console.log('🔄 [RESTART] Greeting após timeout - delegando para fluxo principal');
         // Reprocessar usando o fluxo principal completo com toda lógica de profile validation
-        return await this.orchestrateWebhookFlow(messageText, userPhone, context.tenant_id, {}, updatedContext);
+        return await this.orchestrateWebhookFlow({
+          messageText,
+          userPhone,
+          tenantId: context.tenant_id,
+          tenantConfig: {},
+          existingContext: updatedContext
+        });
       }
 
       if (primaryIntent === 'services') {
@@ -3173,13 +3068,16 @@ export class WebhookFlowOrchestratorService {
           updatedContext,
           telemetryData: {
             intent: 'services',
-            confidence: 0.9,
+            confidence_score: 0.9,
             decision_method: 'regex',
             flow_lock_active: !!updatedContext.flow_lock?.active_flow,
             processing_time_ms: Date.now(),
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
 
@@ -3191,13 +3089,16 @@ export class WebhookFlowOrchestratorService {
           updatedContext,
           telemetryData: {
             intent: 'pricing',
-            confidence: 0.9,
+            confidence_score: 0.9,
             decision_method: 'regex',
             flow_lock_active: !!updatedContext.flow_lock?.active_flow,
             processing_time_ms: Date.now(),
             model_used: undefined
           },
-          llmMetrics: undefined
+          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
+        llmMetrics: undefined
         };
       }
 
@@ -3210,12 +3111,15 @@ export class WebhookFlowOrchestratorService {
         updatedContext,
         telemetryData: {
           intent: primaryIntent || 'general',
-          confidence: 0.7,
+          confidence_score: 0.7,
           decision_method: 'regex',
           flow_lock_active: !!updatedContext.flow_lock?.active_flow,
           processing_time_ms: Date.now(),
           model_used: undefined
         },
+        // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
         llmMetrics: undefined
       };
       
@@ -3231,12 +3135,15 @@ export class WebhookFlowOrchestratorService {
         updatedContext: context,
         telemetryData: {
           intent: 'greeting',
-          confidence: 0.5,
+          confidence_score: 0.5,
           decision_method: 'error_fallback',
           flow_lock_active: false,
           processing_time_ms: Date.now(),
           model_used: undefined
         },
+        // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
+        intentMetrics: undefined,
+        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
         llmMetrics: undefined
       };
     }
@@ -3250,7 +3157,7 @@ export class WebhookFlowOrchestratorService {
       updatedContext: context,
       telemetryData: {
         intent: sanitizeIntentForPersistence('timeout_warning', null),
-        confidence: 1.0,
+        confidence_score: 1.0,
         decision_method: 'timeout',
         flow_lock_active: !!context.flow_lock?.active_flow,
         processing_time_ms: 0,
@@ -3277,7 +3184,7 @@ export class WebhookFlowOrchestratorService {
       updatedContext,
       telemetryData: {
         intent: sanitizeIntentForPersistence('timeout_checking', null),
-        confidence: 1.0,
+        confidence_score: 1.0,
         decision_method: 'timeout',
         flow_lock_active: !!context.flow_lock?.active_flow,
         processing_time_ms: 0,
@@ -3306,7 +3213,7 @@ export class WebhookFlowOrchestratorService {
       updatedContext,
       telemetryData: {
         intent: sanitizeIntentForPersistence('timeout_finalizing', null),
-        confidence: 1.0,
+        confidence_score: 1.0,
         decision_method: 'timeout',
         flow_lock_active: !!context.flow_lock?.active_flow,
         processing_time_ms: 0,
@@ -3327,7 +3234,7 @@ export class WebhookFlowOrchestratorService {
       updatedContext: context,
       telemetryData: {
         intent: intentResult.intent,
-        confidence: intentResult.confidence,
+        confidence_score: intentResult.confidence_score,
         decision_method: intentResult.decision_method,
         flow_lock_active: true,
         processing_time_ms: 0,
@@ -3471,11 +3378,10 @@ ${flowCtx}`;
         total_tokens: usage?.total_tokens ?? null,
         api_cost_usd: apiCost,
         processing_cost_usd: (() => {
-          if (!apiCost) return 0.00001;
-          const pct = apiCost * 0.10;
-          const infra = 0.00002;
-          const db = 0.00001;
-          return Math.round((apiCost + pct + infra + db) * 100000) / 100000;
+          const pct = (apiCost || 0) * 0.10;   // 10% overhead
+          const infra = 0.00002;               // Infraestrutura
+          const db = 0.00001;                  // Database
+          return Math.round(((apiCost || 0) + pct + infra + db) * 1000000) / 1000000;
         })(),
         confidence_score: aiConfidenceScore,
         latency_ms: latencyMs
@@ -3655,7 +3561,7 @@ ${flowCtx}`;
       console.log(`✅ [INTENT-3LAYER] Camada 1 SUCCESS: ${primaryIntent}`);
       return {
         intent: primaryIntent,
-        confidence: 1.0, // 100% de confiança em matches determinísticos
+        confidence_score: 1.0, // 100% de confiança em matches determinísticos
         decision_method: 'deterministic_regex',
         allowed_by_flow_lock: true,
         // ✅ Métricas para REGEX (gratuita)
@@ -3664,7 +3570,13 @@ ${flowCtx}`;
           completion_tokens: 0,
           total_tokens: 0,
           api_cost_usd: 0.0,
-          processing_cost_usd: 0.0,
+          processing_cost_usd: (() => {
+            const apiCost = 0; // Operações determinísticas não usam API
+            const pct = apiCost * 0.10;      // 10% overhead
+            const infra = 0.00002;           // Infraestrutura
+            const db = 0.00001;              // Database
+            return Math.round((apiCost + pct + infra + db) * 1000000) / 1000000;
+          })(), // Fórmula oficial completa
           confidence_score: 1.0,
           latency_ms: Date.now() - startTime
         },
@@ -3682,7 +3594,7 @@ ${flowCtx}`;
       console.log(`✅ [INTENT-3LAYER] Camada 2 SUCCESS: ${llmResult.intent} (${llmResult.processing_time_ms}ms) [${llmResult.model_used}] - R$ ${(llmResult.api_cost_usd || 0).toFixed(6)}`);
       return {
         intent: llmResult.intent,
-        confidence: llmResult.confidence,
+        confidence_score: llmResult.confidence_score,
         decision_method: llmResult.decision_method,
         allowed_by_flow_lock: true,
         // ✅ Métricas completas do LLM
@@ -3691,8 +3603,14 @@ ${flowCtx}`;
           completion_tokens: llmResult.usage?.completion_tokens || 0,
           total_tokens: llmResult.usage?.total_tokens || 0,
           api_cost_usd: llmResult.api_cost_usd || 0.0,
-          processing_cost_usd: (llmResult.api_cost_usd || 0) * 1.15, // +15% overhead
-          confidence_score: llmResult.confidence,
+          processing_cost_usd: (() => {
+            const apiCost = llmResult.api_cost_usd || 0;
+            const pct = apiCost * 0.10;      // 10% overhead
+            const infra = 0.00002;           // Infraestrutura
+            const db = 0.00001;              // Database
+            return Math.round((apiCost + pct + infra + db) * 1000000) / 1000000;
+          })(), // Fórmula oficial correta
+          confidence_score: llmResult.confidence_score,
           latency_ms: llmResult.processing_time_ms
         },
         model_used: llmResult.model_used
@@ -3704,7 +3622,7 @@ ${flowCtx}`;
     // CAMADA 3: Será tratada no fluxo principal (desambiguação)
     return {
       intent: null,
-      confidence: 0.0,
+      confidence_score: 0.0,
       decision_method: 'needs_disambiguation',
       allowed_by_flow_lock: true,
       // ✅ Métricas para desambiguação (gratuita)
@@ -3713,7 +3631,13 @@ ${flowCtx}`;
         completion_tokens: 0,
         total_tokens: 0,
         api_cost_usd: 0.0,
-        processing_cost_usd: 0.0,
+        processing_cost_usd: (() => {
+          const apiCost = 0; // Desambiguação não usa API
+          const pct = apiCost * 0.10;      // 10% overhead
+          const infra = 0.00002;           // Infraestrutura
+          const db = 0.00001;              // Database
+          return Math.round((apiCost + pct + infra + db) * 1000000) / 1000000;
+        })(), // Fórmula oficial completa
         confidence_score: 0.0,
         latency_ms: Date.now() - startTime
       },
@@ -3804,7 +3728,7 @@ Regras:
       },
       {
         intent: intentResult.intent,
-        confidence: intentResult.confidence,
+        confidence_score: intentResult.confidence_score,
         decision_method: intentResult.decision_method
       }
     );
@@ -4125,7 +4049,7 @@ Respond with only one word: male, female, or unknown`;
       updatedContext: context,
       telemetryData: {
         intent: 'greeting',
-        confidence: 1.0,
+        confidence_score: 1.0,
         decision_method: `intelligent_gateway_${greetingType}`,
         flow_lock_active: false,
         processing_time_ms: 0,
@@ -4158,7 +4082,7 @@ Respond with only one word: male, female, or unknown`;
       updatedContext: updatedContext,
       telemetryData: {
         intent: sanitizeIntentForPersistence('data_collection', detectIntentFromMessage(userMessageText || '', SystemFlowState.DATA_COLLECTION)),
-        confidence: 1.0,
+        confidence_score: 1.0,
         decision_method: `progressive_collection_${collectionState}`,
         flow_lock_active: true,
         processing_time_ms: 0,
@@ -4317,7 +4241,7 @@ Respond with only one word: male, female, or unknown`;
         .insert({
           user_id: userData.id,
           tenant_id: tenantId,
-          session_id_uuid: sessionId,
+          conversation_context: { session_id: sessionId }, // JSONB field that generates session_id_uuid
           content: `[OUTCOME_FINALIZATION] ${outcome} - ${reason}`,
           is_from_user: false,
           conversation_outcome: outcome,
@@ -4361,4 +4285,5 @@ Respond with only one word: male, female, or unknown`;
       return { success: false, action: 'ignored', reason: 'critical_error' };
     }
   }
+
 }

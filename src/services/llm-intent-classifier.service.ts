@@ -10,7 +10,7 @@ import { INTENT_KEYS, IntentKey } from './deterministic-intent-detector.service'
 export interface LLMClassificationResult {
   intent: string | null;
   decision_method: 'llm_classification';
-  confidence: number;
+  confidence_score: number;
   processing_time_ms: number;
   model_used?: string;
   // ✅ ADICIONAR MÉTRICAS OPENAI COMPLETAS
@@ -20,6 +20,7 @@ export interface LLMClassificationResult {
     total_tokens: number;
   };
   api_cost_usd?: number;
+  processing_cost_usd?: number; // ADICIONADO: Custo de processamento
   raw_response?: any;
 }
 
@@ -49,7 +50,7 @@ export class LLMIntentClassifierService {
     userText: string,
     systemPrompt: string,
     minConfidence = 0.75
-  ): Promise<{ intent: string | null; confidence: number; model_used: string; raw?: any; usage?: any }> {
+  ): Promise<{ intent: string | null; confidence_score: number; model_used: string; raw?: any; usage?: any }> {
     const models = (this.config?.openai?.models && this.config.openai.models.length > 0)
       ? this.config.openai.models
       : ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4'];
@@ -80,7 +81,7 @@ export class LLMIntentClassifierService {
         if (classifiedIntent && confidence >= minConfidence) {
           return { 
             intent: classifiedIntent, 
-            confidence, 
+            confidence_score: confidence, 
             model_used: model, 
             raw: resp,
             usage: resp.usage
@@ -96,7 +97,7 @@ export class LLMIntentClassifierService {
     // Se todos falharam/baixa confiança → retorna nulo com último modelo
     return { 
       intent: null, 
-      confidence: 0, 
+      confidence_score: 0, 
       model_used: models[models.length - 1], 
       raw: lastError,
       usage: undefined 
@@ -116,7 +117,7 @@ export class LLMIntentClassifierService {
       console.log('🤖 [LLM-CLASSIFIER] Chamando OpenAI para classificação fechada com escalonamento');
 
       // Usar escalonamento de modelos
-      const { intent, confidence, model_used, usage, raw } = 
+      const { intent, confidence_score, model_used, usage, raw } = 
         await this.classifyWithEscalation(userPrompt, systemPrompt, 0.75);
 
       const processingTime = Date.now() - startTime;
@@ -124,16 +125,26 @@ export class LLMIntentClassifierService {
       // ✅ CALCULAR CUSTO DA API
       const apiCost = this.calculateOpenAICost(usage, model_used);
       
-      console.log(`🤖 [LLM-CLASSIFIER] Intent classificada: ${intent} (${processingTime}ms) [${model_used}] - R$ ${(apiCost || 0).toFixed(6)}`);
+      // ✅ CALCULAR CUSTO DE PROCESSAMENTO (fórmula oficial)
+      const processingCost = (() => {
+        if (!apiCost) return 0.00001;
+        const pct = apiCost * 0.10;      // 10% overhead
+        const infra = 0.00002;           // Infraestrutura
+        const db = 0.00001;              // Database
+        return Math.round((apiCost + pct + infra + db) * 1000000) / 1000000;
+      })();
+      
+      console.log(`🤖 [LLM-CLASSIFIER] Intent classificada: ${intent} (${processingTime}ms) [${model_used}] - API: R$ ${(apiCost || 0).toFixed(6)} | Processing: R$ ${processingCost.toFixed(6)}`);
 
       return {
         intent,
         decision_method: 'llm_classification',
-        confidence,
+        confidence_score: confidence_score,
         processing_time_ms: processingTime,
         model_used,
         usage,
         api_cost_usd: apiCost || undefined,
+        processing_cost_usd: processingCost, // ADICIONADO: Custo de processamento
         raw_response: raw
       };
 
@@ -142,7 +153,7 @@ export class LLMIntentClassifierService {
       return {
         intent: null,
         decision_method: 'llm_classification',
-        confidence: 0.0,
+        confidence_score: 0.0,
         processing_time_ms: Date.now() - startTime,
         model_used: 'error'
       };
