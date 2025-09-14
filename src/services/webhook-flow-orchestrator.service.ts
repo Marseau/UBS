@@ -16,7 +16,7 @@ import { supabaseAdmin } from '../config/database';
 import { EnhancedConversationContext, FlowType } from '../types/flow-lock.types';
 import { SystemFlowState } from '../types/intent.types';
 import OpenAI from 'openai';
-import { upsertUserProfile } from './user-profile.service';
+import { upsertUserProfile, normalizePhone } from './user-profile.service';
 import { AppointmentActionablesService } from './appointment-actionables.service';
 import { MapsLocationService } from './maps-location.service';
 import { RescheduleConflictManagerService } from './reschedule-conflict-manager.service';
@@ -38,7 +38,7 @@ type OrchestratorInput = {
   userPhone: string;
   whatsappNumber?: string;
   tenantId?: string;            // quando disponível
-  messageSource: 'whatsapp' | 'demo';
+  messageSource: 'whatsapp' | 'whatsapp_demo' | 'web' | 'api';
 };
 
 // IntentDecision será redefinida abaixo para compatibilidade
@@ -138,15 +138,18 @@ function extractNameStrict(t: string): string | null {
     t.match(/\bnome\s*:\s*(.+)/i);
 
   let candidate = (m?.[2] || m?.[1] || '').trim();
-  
+
   // Se não achou padrão explícito, tenta padrão genérico CORRIGIDO (aceita nome único)
   if (!candidate) {
     // CORREÇÃO: Aceitar tanto nome único quanto composto
     const genericMatch = t.match(/([A-ZÀ-Ú][a-zA-ZÀ-ÿ''´`-]+(?:\s+[A-ZÀ-Ú][a-zA-ZÀ-ÿ''´`-]+)*)/);
     candidate = genericMatch?.[1]?.trim() || '';
   }
-  
+
   if (!candidate) return null;
+
+  // ✅ NOVO: Cortar sufixos comuns que não fazem parte do nome
+  candidate = candidate.replace(/\s+(e o seu\??|e o teu\??|e vc\??|e você\??|e tu\??)$/i, '');
 
   // CORREÇÃO: Aceitar tanto nome único quanto múltiplo
   const parts = candidate.split(/\s+/).filter(p => p.length >= 2);
@@ -528,7 +531,7 @@ export class WebhookFlowOrchestratorService {
   private readonly userService = {
     getOrCreateUserId: async (userPhone: string, tenantId: string): Promise<string> => {
       // Busca real do user ID no banco de dados usando a mesma lógica do conversation-context-helper
-      const digits = userPhone.replace(/\D/g, '');
+      const digits = normalizePhone(userPhone);
       const candidates: string[] = [];
       if (digits) {
         candidates.push(digits);
@@ -541,24 +544,40 @@ export class WebhookFlowOrchestratorService {
           candidates.push(`+55${digits}`);
         }
       }
-      
+
       if (candidates.length === 0) {
         throw new Error(`Invalid phone number: ${userPhone}`);
       }
-      
+
       const orClause = candidates.map(c => `phone.eq.${c}`).join(',');
-      
+
       const { data: user, error } = await supabaseAdmin
         .from('users')
         .select('id')
         .or(orClause)
         .limit(1)
         .maybeSingle();
-      
-      if (error || !user) {
-        throw new Error(`User not found for phone ${userPhone} in tenant ${tenantId}`);
+
+      if (error) {
+        throw new Error(`Database error querying user for phone ${userPhone}: ${error.message}`);
       }
-      
+
+      // 🔧 CORREÇÃO: Se usuário não existe, CRIAR usando upsertUserProfile
+      if (!user) {
+        console.log(`🆕 [USER] Usuário não existe para ${userPhone}, criando via Flow Lock onboarding`);
+        try {
+          const userId = await upsertUserProfile({
+            tenantId,
+            userPhone: digits
+          });
+          console.log(`✅ [USER] Usuário criado com sucesso: ${userId}`);
+          return userId;
+        } catch (createError: any) {
+          console.error(`❌ [USER] Erro ao criar usuário para ${userPhone}:`, createError);
+          throw new Error(`Failed to create user for phone ${userPhone}: ${createError.message}`);
+        }
+      }
+
       return user.id;
     }
   };
@@ -574,6 +593,12 @@ export class WebhookFlowOrchestratorService {
     existingContext?: any;
     isDemo?: boolean;
   }) {
+    console.log('🚨 [ORCHESTRATOR-METHOD-START] Entrada do método:', {
+      messageText: input.messageText?.substring(0, 30),
+      tenantId: input.tenantId,
+      isDemo: input.isDemo
+    });
+
     const startTime = Date.now();
     
     // 1) Monta o contexto único do turn
@@ -595,27 +620,45 @@ export class WebhookFlowOrchestratorService {
     });
 
     // PERSISTIR MENSAGEM DO USUÁRIO PRIMEIRO (ANTES DE PROCESSAR IA)
-    const { persistConversationMessage } = await import('../services/persistence/conversation-history.persistence');
-    const { ConversationRow } = await import('../contracts/conversation');
-    
-    const userRow = ConversationRow.parse({
-      tenant_id: ctx.tenantId,
-      user_id: ctx.userId,
-      content: ctx.message,
-      is_from_user: true, // MENSAGEM DO USUÁRIO
-      message_type: "text",
-      intent_detected: null, // Será preenchido depois da detecção
-      confidence_score: null,
-      conversation_context: { session_id: ctx.sessionId },
-      model_used: null, // Mensagem do usuário não usa modelo
-      tokens_used: null,
-      api_cost_usd: null,
-      conversation_outcome: null,
-      message_source: ctx.isDemo ? 'whatsapp_demo' : 'whatsapp', // ESSENCIAL: Diferenciar origem
-    });
+    console.log('🔥 [ORCHESTRATOR-DEBUG] INICIO da persistência user message');
 
-    await persistConversationMessage(userRow);
-    console.log('✅ [ORCHESTRATOR] User message persisted with source:', ctx.isDemo ? 'whatsapp_demo' : 'whatsapp');
+    try {
+      const { persistConversationMessage } = await import('../services/persistence/conversation-history.persistence');
+      const { ConversationRow } = await import('../contracts/conversation');
+
+      console.log('🔥 [ORCHESTRATOR-DEBUG] Imports successful, creating user row');
+
+      const userRow = ConversationRow.parse({
+        tenant_id: ctx.tenantId,
+        user_id: ctx.userId,
+        content: ctx.message,
+        is_from_user: true, // MENSAGEM DO USUÁRIO
+        message_type: "text",
+        intent_detected: null, // Será preenchido depois da detecção
+        confidence_score: null,
+        conversation_context: { session_id: ctx.sessionId },
+        model_used: null, // Mensagem do usuário não usa modelo
+        tokens_used: null,
+        api_cost_usd: null,
+        processing_cost_usd: 0.00003, // ADICIONADO: Custo de infraestrutura (servidor + db)
+        conversation_outcome: null,
+        message_source: ctx.isDemo ? 'whatsapp_demo' : 'whatsapp', // ESSENCIAL: Diferenciar origem
+      });
+
+      // DEBUG: Log específico antes de chamar persistConversationMessage
+      console.log('🔍 [ORCHESTRATOR-DEBUG] Antes de persistir user row:', {
+        is_from_user: userRow.is_from_user,
+        processing_cost_usd: userRow.processing_cost_usd,
+        content_preview: userRow.content.substring(0, 30),
+        tenant_id: userRow.tenant_id
+      });
+
+      await persistConversationMessage(userRow);
+      console.log('✅ [ORCHESTRATOR] User message persisted with source:', ctx.isDemo ? 'whatsapp_demo' : 'whatsapp');
+    } catch (error) {
+      console.error('❌ [ORCHESTRATOR-DEBUG] ERRO na persistência user message:', error);
+      throw error;
+    }
 
     // Inicia tracking de latência para telemetria
     this.latency.turnStart(ctx.sessionId);
@@ -1062,11 +1105,37 @@ export class WebhookFlowOrchestratorService {
       const needName  = !(context as any)?.user?.name;
       const needEmail = !(context as any)?.user?.email;
 
+      // 🔎 NOVO: Se já estamos no step need_name, tentar extrair e salvar
+      if (context.flow_lock?.step === 'need_name') {
+        const maybeName = extractNameStrict(messageText);
+        if (maybeName) {
+          console.log(`✅ [ONBOARDING] Nome extraído: ${maybeName}`);
+          const normalizedPhone = normalizePhone(userPhone);
+          await upsertUserProfile({
+            tenantId,
+            userPhone: normalizedPhone,
+            name: maybeName
+          });
+          const nextLock = this.flowManager.advanceStep(context, 'need_email');
+          return {
+            response: `Prazer, ${firstName(maybeName)}! 😊 Agora, qual é seu **email**?`,
+            outcome: 'onboarding_continue',
+            newFlowLock: nextLock
+          };
+        } else {
+          return {
+            response: `Não consegui entender seu nome 😕. Pode me dizer seu **nome completo**?`,
+            outcome: 'onboarding_continue',
+            newFlowLock: context.flow_lock
+          };
+        }
+      }
+
       const businessName = tenantConfig?.name || tenantConfig?.business_name || 'nosso atendimento';
       const intro = `Sou a assistente virtual da ${businessName}.`;
 
       if (needName) {
-        const lock = this.flowManager.startFlowLock('onboarding', 'need_name');
+        const lock = this.flowManager.advanceStep(context, 'need_name');
         return {
           response:
             `Perfeito! ${intro}\n` +
@@ -1077,7 +1146,7 @@ export class WebhookFlowOrchestratorService {
       }
 
       if (needEmail) {
-        const lock = this.flowManager.startFlowLock('onboarding', 'need_email');
+        const lock = this.flowManager.advanceStep(context, 'need_email');
         return {
           response:
             `Obrigado, anotado! ${intro}\n` +
@@ -1131,7 +1200,7 @@ export class WebhookFlowOrchestratorService {
 
       if (needName) {
         // Primeiro contato real: apresente-se e peça o nome completo
-        const lock = this.flowManager.startFlowLock('onboarding', 'need_name');
+        const lock = this.flowManager.advanceStep(context, 'need_name');
         return {
           response:
             `Olá! ${intro} Percebi que é seu primeiro contato por aqui 😊\n` +
@@ -1143,7 +1212,7 @@ export class WebhookFlowOrchestratorService {
 
       if (needEmail) {
         // Já temos nome; peça somente o email
-        const lock = this.flowManager.startFlowLock('onboarding', 'need_email');
+        const lock = this.flowManager.advanceStep(context, 'need_email');
         return {
           response:
             `Obrigado! ${intro}\n` +
@@ -1427,7 +1496,7 @@ export class WebhookFlowOrchestratorService {
       // Negativas primeiro
       if (/\b(não|nao)\b/.test(txt) || ['n', 'nao', 'não'].includes(txt)) {
         // Limpa flow e segue com saudação personalizada
-        const normalizedPhone = userPhone.replace(/[\s\-\(\)]/g, '');
+        const normalizedPhone = normalizePhone(userPhone);
         let firstName = '';
         let gender: string | undefined;
 
@@ -1510,7 +1579,7 @@ export class WebhookFlowOrchestratorService {
       // Buscar dados atuais do usuário
       let userProfile: { name: string | null } | null = null;
       try {
-        const normalizedPhone = userPhone.replace(/[\s\-\(\)]/g, '');
+        const normalizedPhone = normalizePhone(userPhone);
         const { data } = await getUserByPhoneInTenant(normalizedPhone, tenantId);
         userProfile = data || null;
       } catch (error) {
@@ -1571,7 +1640,7 @@ export class WebhookFlowOrchestratorService {
       
       if (extractedEmail) {
         // Salvar email
-        const normalizedPhone = userPhone.replace(/[\s\-\(\)]/g, '');
+        const normalizedPhone = normalizePhone(userPhone);
         // Usar user-profile.service para atualizar o email corretamente
         await upsertUserProfile({
           tenantId: tenantId,
@@ -1668,7 +1737,7 @@ export class WebhookFlowOrchestratorService {
         console.log('✅ [BIRTHDAY-SAVED] Data válida:', birthDate);
         
         // Atualizar usuário com a data
-        const normalizedPhone = userPhone.replace(/[\s\-\(\)]/g, '');
+        const normalizedPhone = normalizePhone(userPhone);
         try {
           await upsertUserProfile({
             tenantId: tenantId,
@@ -2456,9 +2525,9 @@ export class WebhookFlowOrchestratorService {
       console.log('🔍 FLOW DEBUG - nome extraído:', maybeName);
 
       if (greetFirst && !maybeName) {
-        // 🔧 CRITICAL FIX: Só mostrar intro se NÃO extraiu nome da primeira mensagem
+        // Primeira interação e não extraiu nome - apresentar-se e pedir nome
         const intro = `Olá, eu sou a assistente oficial da ${biz}. Percebi que este é seu primeiro contato.`;
-        const ask  = `Para melhor atendê-lo, qual é seu nome completo?`;
+        const ask = `Para melhor atendê-lo, qual é seu nome completo?`;
         const lock = this.flowManager.startFlowLock('onboarding', 'need_name');
 
         const updatedContext = await mergeEnhancedConversationContext(
@@ -2471,21 +2540,20 @@ export class WebhookFlowOrchestratorService {
           conversationOutcome: null,
           updatedContext,
           telemetryData: {
-            intent: null, // Flow Lock - preservar intent real do usuário
+            intent: null,
             confidence_score: 1.0,
             decision_method: 'flow_lock',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
-        intentMetrics: undefined,
-        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
-        llmMetrics: undefined
+          intentMetrics: undefined,
+          llmMetrics: undefined
         };
       }
 
       if (!maybeName) {
+        // Não conseguiu extrair nome - perguntar novamente
         const lock = this.flowManager.startFlowLock('onboarding', 'need_name');
         const updatedContext = await mergeEnhancedConversationContext(
           toCtxId(userPhone), tenantId, { ...context, flow_lock: lock }
@@ -2497,61 +2565,47 @@ export class WebhookFlowOrchestratorService {
           conversationOutcome: null,
           updatedContext,
           telemetryData: {
-            intent: null, // Flow Lock - preservar intent real do usuário
+            intent: null,
             confidence_score: 1.0,
             decision_method: 'flow_lock',
             flow_lock_active: true,
             processing_time_ms: 0,
             model_used: undefined
           },
-          // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
-        intentMetrics: undefined,
-        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
-        llmMetrics: undefined
+          intentMetrics: undefined,
+          llmMetrics: undefined
         };
       }
 
-      // Persistir NOME e GÊNERO agora
-      const normalizedPhoneForUpsert = userPhone.replace(/[\s\-\(\)]/g, '');
+      // ✅ Nome extraído com sucesso - salvar via upsertUserProfile e avançar
+      console.log('✅ Nome extraído com sucesso:', maybeName);
+
+      const normalizedPhoneForUpsert = normalizePhone(userPhone);
       const inferredGender = inferGenderFromName(maybeName);
-      
+
       try {
-        console.log('🔧 UPSERT DEBUG:', {
+        console.log('🔧 Salvando perfil do usuário:', {
           phone: normalizedPhoneForUpsert,
+          name: maybeName,
+          gender: inferredGender,
+          tenantId
+        });
+
+        const upsertResult = await upsertUserProfile({
+          tenantId: tenantId,
+          userPhone: normalizedPhoneForUpsert,
           name: maybeName,
           gender: inferredGender
         });
-        
-        console.log('🚀 INICIANDO UPSERT...');
-        const startTime = Date.now();
-        
-        const result = await Promise.race([
-          upsertUserProfile({
-            tenantId: tenantId,
-            userPhone: normalizedPhoneForUpsert,
-            name: maybeName,
-            gender: inferredGender
-          }),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('UPSERT_TIMEOUT_10S')), 10000)
-          )
-        ]);
 
-        const duration = Date.now() - startTime;
-        console.log(`⏱️ UPSERT DURATION: ${duration}ms`);
-        
-        console.log('🔍 RESULT TYPE:', typeof result);
-        
-        if (result) {
-          console.log('✅ UPSERT SUCCESS - USER ID:', result);
-        } else {
-          console.log('⚠️ UPSERT COMPLETED BUT NO USER ID RETURNED');
-        }
-      } catch (catchError: any) {
-        console.error('❌ UPSERT EXCEPTION:', catchError?.message || catchError);
+        console.log('✅ Perfil salvo com sucesso:', upsertResult);
+
+      } catch (error) {
+        console.error('❌ Erro ao salvar perfil do usuário:', error);
+        // Continua o fluxo mesmo com erro na persistência
       }
 
-      // Avançar para E-MAIL
+      // Avançar para coleta de email
       const nextLock = this.flowManager.startFlowLock('onboarding', 'need_email');
       const updatedContext = await mergeEnhancedConversationContext(
         toCtxId(userPhone), tenantId, { ...context, flow_lock: nextLock }
@@ -2570,9 +2624,7 @@ export class WebhookFlowOrchestratorService {
           processing_time_ms: 0,
           model_used: undefined
         },
-        // ✅ NOVO: intentMetrics pode existir se o classificador LLM rodou (undefined para respostas fixas)
         intentMetrics: undefined,
-        // ✅ EXISTENTE: llmMetrics é undefined (resposta fixa/Flow Lock)
         llmMetrics: undefined
       };
     }
@@ -2618,7 +2670,7 @@ export class WebhookFlowOrchestratorService {
       }
 
       // Persistir E-MAIL agora
-      const normalizedPhoneForEmail = userPhone.replace(/[\s\-\(\)]/g, '');
+      const normalizedPhoneForEmail = normalizePhone(userPhone);
       await upsertUserProfile({
         tenantId: tenantId,
         userPhone: normalizedPhoneForEmail,
@@ -2663,7 +2715,7 @@ export class WebhookFlowOrchestratorService {
         );
 
         // Buscar dados do usuário para personalização
-        const normalizedPhone = userPhone.replace(/[\s\-\(\)]/g, '');
+        const normalizedPhone = normalizePhone(userPhone);
         let userName = '';
         let userGender: string | undefined = undefined;
         
@@ -2801,7 +2853,7 @@ export class WebhookFlowOrchestratorService {
       }
 
       // Skip birth_date - tabela users não possui esta coluna
-      const normalizedPhoneForBirthday = userPhone.replace(/[\s\-\(\)]/g, '');
+      const normalizedPhoneForBirthday = normalizePhone(userPhone);
       
       // Apenas garantir que o usuário existe via user-profile.service
       await upsertUserProfile({
@@ -2868,7 +2920,7 @@ export class WebhookFlowOrchestratorService {
       }
 
       // Skip address - tabela users não possui esta coluna
-      const normalizedPhoneForAddress = userPhone.replace(/[\s\-\(\)]/g, '');
+      const normalizedPhoneForAddress = normalizePhone(userPhone);
       const addressData = { full_address: address, created_at: new Date().toISOString() };
       
       // Apenas garantir que o usuário existe via user-profile.service
@@ -2885,7 +2937,7 @@ export class WebhookFlowOrchestratorService {
       );
 
       // Buscar dados do usuário para personalização
-      const normalizedPhone = userPhone.replace(/[\s\-\(\)]/g, '');
+      const normalizedPhone = normalizePhone(userPhone);
       let userName = '';
       let userGender: string | undefined = undefined;
       
@@ -3746,7 +3798,7 @@ Regras:
   }> {
     try {
       // Normalizar telefone
-      const normalizedPhone = userPhone.replace(/[\s\-\(\)]/g, '');
+      const normalizedPhone = normalizePhone(userPhone);
       console.log(`🔍 [determineUserStatus] Input: ${userPhone} -> Normalized: ${normalizedPhone}`);
       
       // 1. Buscar usuário globalmente usando lógica de múltiplos candidatos (igual getPreviousEnhancedContext)
