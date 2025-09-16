@@ -7,7 +7,7 @@ import { TelemetryService } from '../telemetry.service';
 import { ConversationHistoryPersistence } from '../conversation-history-persistence.service';
 import { ConversationRepository } from '../../repositories/conversation.repository';
 import { recordLLMMetrics } from '../telemetry/llm-telemetry.service';
-import { TelemetryData } from './types/orchestrator.types';
+import { TelemetryData } from '../../types';
 import { EnhancedConversationContext } from '../../types/flow-lock.types';
 import * as crypto from 'crypto';
 

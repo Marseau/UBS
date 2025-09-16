@@ -644,6 +644,10 @@
                 <i class="fas fa-users"></i>
                 <span>Clientes</span>
             </a>
+            <a class="nav-link" href="professionals-standardized.html">
+                <i class="fas fa-user-tie"></i>
+                <span>Profissionais</span>
+            </a>
             <a class="nav-link" href="services-standardized.html">
                 <i class="fas fa-concierge-bell"></i>
                 <span>Serviços</span>
@@ -685,17 +689,17 @@
                 </div>
                 <div class="dropdown">
                     <button class="btn btn-link dropdown-toggle d-flex align-items-center compact-button p-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <div class="user-avatar me-2" id="userAvatar">B</div>
+                        <div class="user-avatar me-2" id="userAvatar"></div>
                         <div class="d-none d-md-block text-start">
                             <div class="fw-medium compact-text" id="userName">Carregando...</div>
                             <small class="text-muted compact-small" id="userRole">Administrador</small>
                         </div>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>Perfil</a></li>
-                        <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Configurações</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="goToProfile()"><i class="fas fa-user me-2"></i>Perfil</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="goToSettings()"><i class="fas fa-cog me-2"></i>Configurações</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="#"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
                     </ul>
                 </div>
             </div>
@@ -1774,7 +1778,7 @@
     <!-- JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/utils/secure-auth.js"></script>
-    <script src="js/utils/tenant-avatar-loader.js"></script>
+    <script src="js/utils/tenant-avatar-loader.js?v=20250916-1530"></script>
     <script src="js/settings.js"></script>
     
 
@@ -2003,6 +2007,25 @@
             // Carregar dados iniciais
             loadCancellationPolicy();
         });
+
+        // Funções do dropdown do avatar
+        function logout() {
+            if (confirm('Tem certeza que deseja sair?')) {
+                localStorage.removeItem('ubs_token');
+                localStorage.removeItem('adminToken');
+                window.location.href = 'login-standardized.html';
+            }
+        }
+
+        function goToProfile() {
+            // Navegar para página de perfil ou configurações do usuário
+            window.location.href = 'settings-standardized.html';
+        }
+
+        function goToSettings() {
+            // Já estamos na página de configurações, apenas rolar para o topo
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     </script>
 </body>
 </html>

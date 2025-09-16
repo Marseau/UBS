@@ -11,22 +11,6 @@ class AdminAuthMiddleware {
     constructor() {
         this.bypassLogged = false; // Track if bypass message was already logged
         this.verifyToken = async (req, res, next) => {
-            // 🚨 DEVELOPMENT BYPASS - P1-002 Enhancement
-            if (process.env.NODE_ENV === 'development' && process.env.BYPASS_SUPER_ADMIN_AUTH === 'true') {
-                // Log only once on startup, not per request
-                if (!this.bypassLogged) {
-                    console.log('🚨 DEVELOPMENT BYPASS ATIVO - JWT verification disabled');
-                    this.bypassLogged = true;
-                }
-                req.admin = { 
-                    id: 'dev-admin', 
-                    email: 'dev@admin.com', 
-                    role: 'super_admin', 
-                    tenantId: null 
-                };
-                req.user = req.admin;
-                return next();
-            }
 
             // Log para depuração
             console.log('Authorization header:', req.headers.authorization);
@@ -51,7 +35,10 @@ class AdminAuthMiddleware {
 
                 // Injeta o payload no req.user E req.admin para compatibilidade
                 req.user = decoded;
-                req.admin = decoded;
+                req.admin = {
+                    ...decoded,
+                    tenantId: decoded.tenant_id // Garantir compatibilidade
+                };
 
                 // Permissão total para super_admin
                 if (req.user.role === 'super_admin') {

@@ -11,7 +11,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { logger } from '../../utils/logger';
+import { conversationLogger } from '../../utils/logger';
 
 export interface ConversationMessage {
   sessionId: string;
@@ -58,6 +58,7 @@ export interface ConversationHistoryRecord {
 
 export class ConversationHistoryPersistence {
   private supabase: any;
+  private logger = conversationLogger('conversation-history-persistence');
 
   constructor() {
     this.supabase = createClient(
@@ -66,11 +67,19 @@ export class ConversationHistoryPersistence {
     );
     
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      logger.error('❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+      this.logger.conversationError(new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'), {
+        service: 'conversation-history-persistence',
+        method: 'constructor',
+        operationType: 'initialization_error'
+      });
       throw new Error('Supabase configuration required for ConversationHistoryPersistence');
     }
-    
-    logger.info('✅ ConversationHistoryPersistence initialized with Supabase connection');
+
+    this.logger.conversation('✅ ConversationHistoryPersistence initialized with Supabase connection', {
+      service: 'conversation-history-persistence',
+      method: 'constructor',
+      operationType: 'initialization_success'
+    });
   }
 
   /**
@@ -84,9 +93,11 @@ export class ConversationHistoryPersistence {
     const timestamp = new Date().toISOString();
     
     try {
-      logger.info('💾 Persisting conversation pair', {
+      this.logger.conversation('💾 Persisting conversation pair', {
+        service: 'conversation-history-persistence',
+        method: 'persistConversationPair',
+        operationType: 'persist_pair',
         sessionId: userMessage.sessionId.substring(0, 8) + '...',
-        userPhone: userMessage.userPhone.substring(0, 8) + '...',
         tenantId: userMessage.tenantId.substring(0, 8) + '...'
       });
 
@@ -128,8 +139,10 @@ export class ConversationHistoryPersistence {
         .select();
 
       if (error) {
-        logger.error('❌ Failed to persist conversation pair', {
-          error: error.message,
+        this.logger.conversationError(new Error(error.message), {
+          service: 'conversation-history-persistence',
+          method: 'persistConversationPair',
+          operationType: 'persist_pair_error',
           sessionId: userMessage.sessionId.substring(0, 8) + '...'
         });
 
@@ -142,10 +155,12 @@ export class ConversationHistoryPersistence {
         };
       }
 
-      logger.info('✅ Conversation pair persisted successfully', {
+      this.logger.conversation('✅ Conversation pair persisted successfully', {
+        service: 'conversation-history-persistence',
+        method: 'persistConversationPair',
+        operationType: 'persist_pair_success',
         sessionId: userMessage.sessionId.substring(0, 8) + '...',
-        insertedRecords: data?.length || 2,
-        timestamp
+        insertedRecords: data?.length || 2
       });
 
       return {
@@ -157,8 +172,10 @@ export class ConversationHistoryPersistence {
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger.error('💥 Conversation pair persistence failed', {
-        error: errorMessage,
+      this.logger.conversationError(error as Error, {
+        service: 'conversation-history-persistence',
+        method: 'persistConversationPair',
+        operationType: 'persist_pair_exception',
         sessionId: userMessage.sessionId.substring(0, 8) + '...'
       });
 
@@ -180,9 +197,11 @@ export class ConversationHistoryPersistence {
     const timestamp = new Date().toISOString();
     
     try {
-      logger.info('💾 Persisting single message', {
+      this.logger.conversation('💾 Persisting single message', {
+        service: 'conversation-history-persistence',
+        method: 'persistSingleMessage',
+        operationType: 'persist_single',
         sessionId: message.sessionId.substring(0, 8) + '...',
-        userPhone: message.userPhone.substring(0, 8) + '...',
         isFromUser: message.isFromUser,
         contentLength: message.content.length
       });
@@ -208,8 +227,10 @@ export class ConversationHistoryPersistence {
         .select();
 
       if (error) {
-        logger.error('❌ Failed to persist single message', {
-          error: error.message,
+        this.logger.conversationError(new Error(error.message), {
+          service: 'conversation-history-persistence',
+          method: 'persistSingleMessage',
+          operationType: 'persist_single_error',
           sessionId: message.sessionId.substring(0, 8) + '...'
         });
 
@@ -222,10 +243,12 @@ export class ConversationHistoryPersistence {
         };
       }
 
-      logger.info('✅ Single message persisted successfully', {
+      this.logger.conversation('✅ Single message persisted successfully', {
+        service: 'conversation-history-persistence',
+        method: 'persistSingleMessage',
+        operationType: 'persist_single_success',
         sessionId: message.sessionId.substring(0, 8) + '...',
-        insertedRecords: data?.length || 1,
-        timestamp
+        insertedRecords: data?.length || 1
       });
 
       return {
@@ -237,8 +260,10 @@ export class ConversationHistoryPersistence {
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger.error('💥 Single message persistence failed', {
-        error: errorMessage,
+      this.logger.conversationError(error as Error, {
+        service: 'conversation-history-persistence',
+        method: 'persistSingleMessage',
+        operationType: 'persist_single_exception',
         sessionId: message.sessionId.substring(0, 8) + '...'
       });
 
@@ -258,7 +283,10 @@ export class ConversationHistoryPersistence {
    */
   async getConversationHistory(sessionId: string, limit: number = 20): Promise<ConversationMessage[]> {
     try {
-      logger.info('📋 Fetching conversation history', {
+      this.logger.conversation('📋 Fetching conversation history', {
+        service: 'conversation-history-persistence',
+        method: 'getConversationHistory',
+        operationType: 'fetch_history',
         sessionId: sessionId.substring(0, 8) + '...',
         limit
       });
@@ -271,8 +299,10 @@ export class ConversationHistoryPersistence {
         .limit(limit);
 
       if (error) {
-        logger.error('❌ Failed to fetch conversation history', {
-          error: error.message,
+        this.logger.conversationError(new Error(error.message), {
+          service: 'conversation-history-persistence',
+          method: 'getConversationHistory',
+          operationType: 'fetch_history_error',
           sessionId: sessionId.substring(0, 8) + '...'
         });
         return [];
@@ -293,7 +323,10 @@ export class ConversationHistoryPersistence {
         timestamp: record.created_at
       }));
 
-      logger.info('✅ Conversation history fetched successfully', {
+      this.logger.conversation('✅ Conversation history fetched successfully', {
+        service: 'conversation-history-persistence',
+        method: 'getConversationHistory',
+        operationType: 'fetch_history_success',
         sessionId: sessionId.substring(0, 8) + '...',
         recordCount: history.length
       });
@@ -301,8 +334,10 @@ export class ConversationHistoryPersistence {
       return history;
 
     } catch (error) {
-      logger.error('💥 Conversation history fetch failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
+      this.logger.conversationError(error as Error, {
+        service: 'conversation-history-persistence',
+        method: 'getConversationHistory',
+        operationType: 'fetch_history_exception',
         sessionId: sessionId.substring(0, 8) + '...'
       });
       return [];
@@ -315,9 +350,10 @@ export class ConversationHistoryPersistence {
    */
   async getOrCreateSessionId(userPhone: string, tenantId: string): Promise<string> {
     try {
-      logger.info('🔄 Getting or creating session ID', {
-        userPhone: userPhone.substring(0, 8) + '...',
-        tenantId: tenantId.substring(0, 8) + '...'
+      this.logger.conversation('🔄 Getting or creating session ID', {
+        service: 'conversation-history-persistence',
+        method: 'getOrCreateSessionId',
+        operationType: 'session_management'
       });
 
       // Buscar session_id ativa nas últimas 2 horas
@@ -333,36 +369,43 @@ export class ConversationHistoryPersistence {
         .limit(1);
 
       if (error) {
-        logger.warn('⚠️ Failed to fetch recent session, creating new one', {
-          error: error.message,
-          userPhone: userPhone.substring(0, 8) + '...'
+        this.logger.warn('⚠️ Failed to fetch recent session, creating new one', {
+          service: 'conversation-history-persistence',
+          method: 'getOrCreateSessionId',
+          operationType: 'session_fetch_warning',
+          error: error.message
         });
       }
 
       // Se encontrou session recente, reutilizar
       if (data && data.length > 0) {
         const existingSessionId = data[0].session_id_uuid;
-        logger.info('♻️ Reusing existing session ID', {
-          sessionId: existingSessionId.substring(0, 8) + '...',
-          userPhone: userPhone.substring(0, 8) + '...'
+        this.logger.conversation('♻️ Reusing existing session ID', {
+          service: 'conversation-history-persistence',
+          method: 'getOrCreateSessionId',
+          operationType: 'session_reuse',
+          sessionId: existingSessionId.substring(0, 8) + '...'
         });
         return existingSessionId;
       }
 
       // Criar novo session_id
       const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      logger.info('✨ Created new session ID', {
-        sessionId: newSessionId.substring(0, 8) + '...',
-        userPhone: userPhone.substring(0, 8) + '...'
+
+      this.logger.conversation('✨ Created new session ID', {
+        service: 'conversation-history-persistence',
+        method: 'getOrCreateSessionId',
+        operationType: 'session_create',
+        sessionId: newSessionId.substring(0, 8) + '...'
       });
 
       return newSessionId;
 
     } catch (error) {
-      logger.error('💥 Session ID generation failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        userPhone: userPhone.substring(0, 8) + '...'
+      this.logger.conversationError(error as Error, {
+        service: 'conversation-history-persistence',
+        method: 'getOrCreateSessionId',
+        operationType: 'session_generation_error'
       });
 
       // Fallback: Sempre gerar novo ID em caso de erro
@@ -385,7 +428,11 @@ export class ConversationHistoryPersistence {
         .gte('created_at', today + 'T00:00:00');
 
       if (error) {
-        logger.error('❌ Failed to fetch persistence stats', { error: error.message });
+        this.logger.conversationError(new Error(error.message), {
+          service: 'conversation-history-persistence',
+          method: 'getPersistenceStats',
+          operationType: 'stats_fetch_error'
+        });
         return null;
       }
 
@@ -404,8 +451,10 @@ export class ConversationHistoryPersistence {
       };
 
     } catch (error) {
-      logger.error('💥 Persistence stats failed', {
-        error: error instanceof Error ? error.message : 'Unknown error'
+      this.logger.conversationError(error as Error, {
+        service: 'conversation-history-persistence',
+        method: 'getPersistenceStats',
+        operationType: 'stats_exception'
       });
       return null;
     }

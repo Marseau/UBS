@@ -54,7 +54,7 @@ async function createCleanBuild() {
         console.log('\n📋 2. Verificando arquivos core para produção');
         
         const coreFiles = [
-            'src/index.ts',
+            'src/.',
             'src/config/database.ts',
             'src/services/tenant-metrics-cron-optimized.service.ts',
             'src/services/platform-aggregation.service.ts',

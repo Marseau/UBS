@@ -13,6 +13,7 @@ import { IntentDetectionOrchestrator } from './intent-detection-orchestrator';
 import { DataCollectionOrchestrator } from './data-collection-orchestrator';
 import { ResponseGenerationOrchestrator } from './response-generation-orchestrator';
 import { TelemetryOrchestrator } from './telemetry-orchestrator';
+import { AppointmentFlowService } from './appointment-flow.service';
 
 import {
   OrchestratorInput,
@@ -20,19 +21,21 @@ import {
   UserContext,
   TenantContext,
   DataCollectionState
-} from './types/orchestrator.types';
+} from '../../types';
 
 export class OrchestratorCoreService {
   private intentDetector: IntentDetectionOrchestrator;
   private dataCollector: DataCollectionOrchestrator;
   private responseGenerator: ResponseGenerationOrchestrator;
   private telemetryHandler: TelemetryOrchestrator;
+  private appointmentFlow: AppointmentFlowService;
 
   constructor() {
     this.intentDetector = new IntentDetectionOrchestrator();
     this.dataCollector = new DataCollectionOrchestrator();
     this.responseGenerator = new ResponseGenerationOrchestrator();
     this.telemetryHandler = new TelemetryOrchestrator();
+    this.appointmentFlow = new AppointmentFlowService();
   }
 
   /**
@@ -89,7 +92,38 @@ export class OrchestratorCoreService {
         );
       }
 
-      // 5. Processar intent para usuário já cadastrado
+      // 5. Verificar primeiro se é um comando específico de agendamento (prioridade)
+      const appointmentCommand = this.appointmentFlow.detectAppointmentCommand(messageText);
+      console.log('🔍 [ORCHESTRATOR] Appointment command detected:', appointmentCommand, 'for message:', messageText);
+
+      if (appointmentCommand) {
+        console.log('✅ [ORCHESTRATOR] Processing appointment command:', appointmentCommand);
+        const appointmentResult = await this.handleAppointmentFlow(
+          appointmentCommand,
+          messageText,
+          userContext,
+          tenantContext,
+          sessionId
+        );
+
+        console.log('📋 [ORCHESTRATOR] Appointment result:', appointmentResult);
+
+        if (appointmentResult) {
+          console.log('🎯 [ORCHESTRATOR] Returning appointment response with intent:', appointmentCommand);
+          return {
+            success: true,
+            aiResponse: appointmentResult.response,
+            intent: appointmentCommand,
+            conversationOutcome: this.determineConversationOutcome(
+              appointmentCommand,
+              messageText,
+              appointmentResult.response
+            )
+          };
+        }
+      }
+
+      // 5.1. Processar intent geral para usuário já cadastrado (fallback)
       const intentResult = await this.intentDetector.detectIntent(messageText, conversationContext);
 
       // 6. Gerar resposta baseada no intent
@@ -240,11 +274,14 @@ export class OrchestratorCoreService {
       'onboarding_in_progress';
 
     // Registrar telemetria do onboarding
+    const processingTime = Date.now() - new Date(conversationContext.session_started_at).getTime();
     const telemetryData = this.telemetryHandler.createTelemetryData(
       'onboarding',
-      'dictionary', // Onboarding é determinístico
-      1.0,
-      Date.now() - new Date(conversationContext.session_started_at).getTime()
+      onboardingResult.aiMetrics ? 'llm' : 'dictionary', // Use LLM when AI was used, dictionary otherwise
+      1.0, // Confidence is always 1.0 for onboarding
+      onboardingResult.aiMetrics?.processing_time_ms || processingTime,
+      onboardingResult.aiMetrics?.model_used,
+      onboardingResult.aiMetrics?.tokens
     );
 
     await this.telemetryHandler.recordTelemetry(
@@ -326,6 +363,63 @@ export class OrchestratorCoreService {
       flow_lock: null,
       intent_history: []
     };
+  }
+
+  /**
+   * Handle appointment flow commands
+   */
+  private async handleAppointmentFlow(
+    command: string,
+    messageText: string,
+    userContext: UserContext,
+    tenantContext: TenantContext,
+    sessionId: string
+  ): Promise<{ response: string; metadata?: any } | null> {
+    try {
+      const ctx = {
+        message: messageText,
+        userPhone: userContext.phone,
+        sessionId: sessionId,
+        userId: userContext.id,
+        tenantId: tenantContext.id,
+        tenantConfig: tenantContext
+      };
+
+      switch (command) {
+        case 'my_appointments':
+          return await this.appointmentFlow.handleMyAppointments(ctx);
+
+        case 'cancel_appointment':
+          return await this.appointmentFlow.handleCancelAppointment(ctx);
+
+        case 'reschedule':
+          return await this.appointmentFlow.handleRescheduleAppointment(ctx);
+
+        case 'confirm':
+          // Check if this is a booking selection confirmation: "Quero o serviço X no horário Y"
+          const message = ctx.message.toLowerCase().trim();
+          const isBookingConfirmation = /servi[cç]o\s+\d+.*hor[áa]rio\s+\d+/.test(message);
+
+          if (isBookingConfirmation) {
+            return await this.appointmentFlow.handleBookingConfirmation(ctx);
+          } else {
+            return await this.appointmentFlow.handleConfirmAppointment(ctx);
+          }
+
+        case 'booking':
+          return await this.appointmentFlow.handleBookingIntent(ctx);
+
+        default:
+          console.log(`[APPOINTMENT-FLOW] Comando não implementado: ${command}`);
+          return null;
+      }
+    } catch (error) {
+      console.error('[APPOINTMENT-FLOW] Erro ao processar comando:', error);
+      return {
+        response: 'Erro ao processar comando de agendamento. Tente novamente.',
+        metadata: { error: true }
+      };
+    }
   }
 
   private isGreetingMessage(messageText: string): boolean {

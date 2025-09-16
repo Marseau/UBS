@@ -76,6 +76,9 @@ const getTenantId = (req) => {
 // User info endpoint for dashboard initialization
 router.get('/user-info', adminAuth.verifyToken, async (req, res) => {
     try {
+        console.log('🔍 [USER-INFO DEBUG] req.admin:', req.admin);
+        console.log('🔍 [USER-INFO DEBUG] req.user:', req.user);
+
         // Get tenant name if user is tenant_admin
         let displayName = req.admin?.email?.split('@')[0] || 'Admin User';
         
@@ -1670,349 +1673,7 @@ router.put('/users/:userId/unblock', adminAuth.requirePermission(admin_auth_1.AD
         return res.status(500).json({ error: 'Failed to unblock user' });
     }
 });
-router.get('/services', adminAuth.verifyToken, async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID é obrigatório.' });
-        }
-        
-        console.log(`🛠️ [SERVICES] Getting services for tenant: ${tenantId}`);
-        const services = await serviceService.getAll(tenantId);
-        res.json(services);
-    } catch (error) {
-        console.error('API Error:', error);
-        res.status(500).json({ error: 'Falha ao buscar serviços.' });
-    }
-});
-router.post('/services', adminAuth.verifyToken, async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID é obrigatório.' });
-        }
-        
-        console.log(`🛠️ [SERVICES] Creating service for tenant: ${tenantId}`);
-        const newService = await serviceService.createService(tenantId, req.body);
-        res.status(201).json(newService);
-    } catch (error) {
-        console.error('API Error em POST /services:', error);
-        res.status(500).json({ error: 'Falha ao criar serviço.' });
-    }
-});
-router.put('/services/:id', adminAuth.verifyToken, async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID é obrigatório.' });
-        }
-        
-        const { id } = req.params;
-        console.log(`🛠️ [SERVICES] Updating service ${id} for tenant: ${tenantId}`);
-        const updatedService = await serviceService.updateService(tenantId, id, req.body);
-        res.json(updatedService);
-    } catch (error) {
-        console.error('API Error:', error);
-        res.status(500).json({ error: 'Falha ao atualizar serviço.' });
-    }
-});
-router.delete('/services/:id', adminAuth.verifyToken, async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID é obrigatório.' });
-        }
-        
-        const { id } = req.params;
-        console.log(`🛠️ [SERVICES] Deleting service ${id} for tenant: ${tenantId}`);
-        await serviceService.deleteService(tenantId, id);
-        res.status(204).send();
-    } catch (error) {
-        console.error('API Error:', error);
-        res.status(500).json({ error: 'Falha ao excluir serviço.' });
-    }
-});
-router.get('/professionals', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const professionals = await professionalService.getAll(tenantId);
-        res.json(professionals);
-    }
-    catch (error) {
-        console.error('Error getting professionals:', error);
-        res.status(500).json({ error: 'Failed to get professionals' });
-    }
-});
-router.get('/professionals/:id', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const professional = await professionalService.getById(req.params.id, tenantId);
-        if (!professional) {
-            return res.status(404).json({ error: 'Professional not found' });
-        }
-        res.json(professional);
-    }
-    catch (error) {
-        console.error('Error getting professional:', error);
-        res.status(500).json({ error: 'Failed to get professional' });
-    }
-});
-router.post('/professionals', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const professionalData = { ...req.body, tenant_id: tenantId };
-        const newProfessional = await professionalService.create(professionalData);
-        res.status(201).json(newProfessional);
-    }
-    catch (error) {
-        console.error('Error creating professional:', error);
-        res.status(500).json({ error: 'Failed to create professional' });
-    }
-});
-router.put('/professionals/:id', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const updatedProfessional = await professionalService.update(req.params.id, req.body, tenantId);
-        if (!updatedProfessional) {
-            return res.status(404).json({ error: 'Professional not found' });
-        }
-        res.json(updatedProfessional);
-    }
-    catch (error) {
-        console.error('Error updating professional:', error);
-        res.status(500).json({ error: 'Failed to update professional' });
-    }
-});
-router.delete('/professionals/:id', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const success = await professionalService.delete(req.params.id, tenantId);
-        if (!success) {
-            return res.status(404).json({ error: 'Professional not found' });
-        }
-        res.status(204).send();
-    }
-    catch (error) {
-        console.error('Error deleting professional:', error);
-        res.status(500).json({ error: 'Failed to delete professional' });
-    }
-});
-router.post('/professional-services', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const associationData = { ...req.body, tenant_id: tenantId };
-        const newAssociation = await professionalService.addServiceToProfessional(associationData);
-        res.status(201).json(newAssociation);
-    }
-    catch (error) {
-        console.error('Error creating professional service association:', error);
-        res.status(500).json({ error: 'Failed to create association' });
-    }
-});
-router.delete('/professional-services/:id', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const success = await professionalService.removeServiceFromProfessional(req.params.id, tenantId);
-        if (!success) {
-            return res.status(404).json({ error: 'Association not found' });
-        }
-        res.status(204).send();
-    }
-    catch (error) {
-        console.error('Error deleting professional service association:', error);
-        res.status(500).json({ error: 'Failed to delete association' });
-    }
-});
-router.post('/availability-exceptions', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const exceptionData = { ...req.body, tenant_id: tenantId };
-        const newException = await professionalService.addAvailabilityException(exceptionData);
-        res.status(201).json(newException);
-    }
-    catch (error) {
-        console.error('Error creating availability exception:', error);
-        res.status(500).json({ error: 'Failed to create exception' });
-    }
-});
-router.delete('/availability-exceptions/:id', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const success = await professionalService.deleteAvailabilityException(req.params.id, tenantId);
-        if (!success) {
-            return res.status(404).json({ error: 'Exception not found' });
-        }
-        res.status(204).send();
-    }
-    catch (error) {
-        console.error('Error deleting availability exception:', error);
-        res.status(500).json({ error: 'Failed to delete exception' });
-    }
-});
 
-// Professional Schedules Routes
-router.get('/professionals/:id/schedules', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const schedules = await professionalService.getProfessionalSchedules(req.params.id, tenantId);
-        res.json(schedules);
-    }
-    catch (error) {
-        console.error('Error getting professional schedules:', error);
-        res.status(500).json({ error: 'Failed to get schedules' });
-    }
-});
-
-router.post('/professional-schedules', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const scheduleData = { ...req.body, tenant_id: tenantId };
-        const newSchedule = await professionalService.saveProfessionalSchedule(scheduleData);
-        res.status(201).json(newSchedule);
-    }
-    catch (error) {
-        console.error('Error creating professional schedule:', error);
-        res.status(500).json({ error: 'Failed to create schedule' });
-    }
-});
-
-router.delete('/professional-schedules/:id', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const success = await professionalService.deleteProfessionalSchedule(req.params.id, tenantId);
-        if (!success) {
-            return res.status(404).json({ error: 'Schedule not found' });
-        }
-        res.status(204).send();
-    }
-    catch (error) {
-        console.error('Error deleting professional schedule:', error);
-        res.status(500).json({ error: 'Failed to delete schedule' });
-    }
-});
-
-// Availability Checking Routes
-router.post('/professionals/:id/check-availability', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const { startTime, endTime } = req.body;
-        if (!startTime || !endTime) {
-            return res.status(400).json({ error: 'Start time and end time are required' });
-        }
-        
-        const isAvailable = await professionalService.checkProfessionalAvailability(
-            req.params.id, 
-            startTime, 
-            endTime
-        );
-        res.json({ available: isAvailable });
-    }
-    catch (error) {
-        console.error('Error checking professional availability:', error);
-        res.status(500).json({ error: 'Failed to check availability' });
-    }
-});
-
-router.get('/professionals/:id/available-slots', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const { date } = req.query;
-        if (!date) {
-            return res.status(400).json({ error: 'Date parameter is required' });
-        }
-        
-        const availableSlots = await professionalService.getAvailableSlots(req.params.id, date);
-        res.json(availableSlots);
-    }
-    catch (error) {
-        console.error('Error getting available slots:', error);
-        res.status(500).json({ error: 'Failed to get available slots' });
-    }
-});
-
-// Service-Professional Association Updates
-router.put('/professional-services/:id', async (req, res) => {
-    try {
-        const tenantId = getTenantId(req);
-        if (!tenantId) {
-            return res.status(400).json({ error: 'Tenant ID is required' });
-        }
-        
-        const updatedAssociation = await professionalService.updateServiceAssociation(
-            req.params.id, 
-            req.body, 
-            tenantId
-        );
-        if (!updatedAssociation) {
-            return res.status(404).json({ error: 'Association not found' });
-        }
-        res.json(updatedAssociation);
-    }
-    catch (error) {
-        console.error('Error updating professional service association:', error);
-        res.status(500).json({ error: 'Failed to update association' });
-    }
-});
 router.get('/system/health', adminAuth.requirePermission(admin_auth_1.ADMIN_PERMISSIONS.MANAGE_SYSTEM), async (req, res) => {
     try {
         const [calendarStatus, emailStatus] = await Promise.all([
@@ -4678,95 +4339,604 @@ try {
 
 exports.default = router;
 //# sourceMappingURL=admin.js.map
-// src/routes/admin.js - Adicionar no final do arquivo
-
-// =====================================================
-// TENANT BUSINESS ANALYTICS ROUTES
-// =====================================================
-
-// GET /api/admin/tenants - Listar todos os tenants
-router.get('/tenants', async (req, res) => {
+router.get('/professionals', adminAuth.verifyToken, async (req, res) => {
     try {
-        const supabase = getAdminClient();
-        
-        const { data: tenants, error } = await supabase
-            .from('tenants')
-            .select('id, business_name, name, created_at')
-            .order('business_name');
+        console.log('📋 [API] Loading professionals for tenant');
+        console.log('🔍 [DEBUG] req.user:', req.user);
+        console.log('🔍 [DEBUG] req.admin:', req.admin);
 
-        if (error) throw error;
+        const tenantId = req.user?.tenant_id;
+        console.log('🔍 [DEBUG] tenantId extracted:', tenantId);
 
-        res.json(tenants);
-    } catch (error) {
-        console.error('Erro ao buscar tenants:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
-    }
-});
+        if (!tenantId) {
+            console.log('❌ [DEBUG] No tenant_id found in req.user');
+            return res.status(400).json({
+                success: false,
+                error: 'Tenant ID required'
+            });
+        }
 
-// GET /api/admin/tenant/:tenantId/business-analytics
-router.get('/tenant/:tenantId/business-analytics', async (req, res) => {
-    try {
-        const { tenantId } = req.params;
-        const { period = 30 } = req.query;
-        
-        const supabase = getAdminClient();
-        
-        // Buscar métricas da tabela
-        const { data: metrics, error } = await supabase
-            .from('tenant_business_analytics_metrics')
-            .select('*')
+        const { data: professionals, error } = await database_1.supabaseAdmin
+            .from('professionals')
+            .select(`
+                id,
+                name,
+                email,
+                phone,
+                specialties,
+                bio,
+                avatar_url,
+                is_active,
+                working_hours,
+                created_at,
+                updated_at
+            `)
             .eq('tenant_id', tenantId)
-            .eq('calculation_period_days', parseInt(period))
-            .eq('metric_date', new Date().toISOString().split('T')[0])
-            .single();
+            .order('name');
 
         if (error) {
-            // Se não encontrar dados, calcular em tempo real
-            const { data: realTimeMetrics } = await supabase.rpc(
-                'get_tenant_business_analytics',
-                [tenantId, parseInt(period)]
-            );
-            
-            if (realTimeMetrics && realTimeMetrics.length > 0) {
-                return res.json(realTimeMetrics[0]);
-            }
+            console.error('❌ Error loading professionals:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to load professionals'
+            });
         }
 
-        if (metrics) {
-            return res.json(metrics);
-        }
+        // Transform data for frontend
+        const professionalsData = professionals.map(prof => ({
+            id: prof.id,
+            name: prof.name,
+            email: prof.email,
+            phone: prof.phone,
+            specialties: prof.specialties || [],
+            availability_schedule: prof.availability_schedule || {},
+            google_calendar_status: prof.google_calendar_credentials ? 'connected' : 'not_connected',
+            google_calendar_id: prof.google_calendar_id,
+            created_at: prof.created_at,
+            updated_at: prof.updated_at
+        }));
 
-        res.status(404).json({ error: 'Métricas não encontradas' });
+        console.log(`✅ [API] Loaded ${professionalsData.length} professionals`);
+
+        res.json({
+            success: true,
+            data: professionalsData,
+            total: professionalsData.length
+        });
+
     } catch (error) {
-        console.error('Erro ao buscar métricas:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
-    }
-});
-
-// POST /api/admin/refresh-tenant-analytics
-router.post('/refresh-tenant-analytics', async (req, res) => {
-    try {
-        const { tenant_id, period_days = 30 } = req.body;
-        
-        const supabase = getAdminClient();
-        
-        // Executar função de refresh
-        const { data, error } = await supabase.rpc(
-            'refresh_tenant_analytics',
-            [tenant_id, period_days]
-        );
-
-        if (error) {
-            throw error;
-        }
-
-        res.json(data);
-    } catch (error) {
-        console.error('Erro ao atualizar métricas:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Erro ao atualizar métricas',
-            error: error.message 
+        console.error('❌ Error in professionals endpoint:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
         });
     }
 });
+
+// Create new professional
+router.post('/professionals', adminAuth.verifyToken, async (req, res) => {
+    try {
+        console.log('➕ [API] Creating new professional');
+
+        const tenantId = req.user?.tenant_id;
+        if (!tenantId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Tenant ID required'
+            });
+        }
+
+        const { name, email, phone, specialties, availability_schedule } = req.body;
+
+        if (!name || !email) {
+            return res.status(400).json({
+                success: false,
+                error: 'Name and email are required'
+            });
+        }
+
+        const { data: professional, error } = await database_1.supabaseAdmin
+            .from('professionals')
+            .insert({
+                tenant_id: tenantId,
+                name,
+                email,
+                phone,
+                specialties: specialties || [],
+                availability_schedule: availability_schedule || {}
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('❌ Error creating professional:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to create professional'
+            });
+        }
+
+        console.log(`✅ [API] Professional created: ${professional.name}`);
+
+        res.status(201).json({
+            success: true,
+            data: professional,
+            message: 'Professional created successfully'
+        });
+
+    } catch (error) {
+        console.error('❌ Error in create professional endpoint:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Update professional
+router.put('/professionals/:id', adminAuth.verifyToken, async (req, res) => {
+    try {
+        console.log('📝 [API] Updating professional');
+
+        const tenantId = req.user?.tenant_id;
+        const professionalId = req.params.id;
+
+        if (!tenantId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Tenant ID required'
+            });
+        }
+
+        const { name, email, phone, specialties, availability_schedule } = req.body;
+
+        const { data: professional, error } = await database_1.supabaseAdmin
+            .from('professionals')
+            .update({
+                name,
+                email,
+                phone,
+                specialties: specialties || [],
+                availability_schedule: availability_schedule || {},
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', professionalId)
+            .eq('tenant_id', tenantId)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('❌ Error updating professional:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to update professional'
+            });
+        }
+
+        if (!professional) {
+            return res.status(404).json({
+                success: false,
+                error: 'Professional not found'
+            });
+        }
+
+        console.log(`✅ [API] Professional updated: ${professional.name}`);
+
+        res.json({
+            success: true,
+            data: professional,
+            message: 'Professional updated successfully'
+        });
+
+    } catch (error) {
+        console.error('❌ Error in update professional endpoint:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Delete professional
+router.delete('/professionals/:id', adminAuth.verifyToken, async (req, res) => {
+    try {
+        console.log('🗑️ [API] Deleting professional');
+
+        const tenantId = req.user?.tenant_id;
+        const professionalId = req.params.id;
+
+        if (!tenantId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Tenant ID required'
+            });
+        }
+
+        // Check if professional has appointments
+        const { data: appointments } = await database_1.supabaseAdmin
+            .from('appointments')
+            .select('id')
+            .eq('professional_id', professionalId)
+            .eq('tenant_id', tenantId)
+            .limit(1);
+
+        if (appointments && appointments.length > 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Cannot delete professional with existing appointments'
+            });
+        }
+
+        const { error } = await database_1.supabaseAdmin
+            .from('professionals')
+            .delete()
+            .eq('id', professionalId)
+            .eq('tenant_id', tenantId);
+
+        if (error) {
+            console.error('❌ Error deleting professional:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to delete professional'
+            });
+        }
+
+        console.log(`✅ [API] Professional deleted: ${professionalId}`);
+
+        res.json({
+            success: true,
+            message: 'Professional deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('❌ Error in delete professional endpoint:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Get Google Calendar connection status for professional
+router.get('/professionals/:id/calendar-status', adminAuth.verifyToken, async (req, res) => {
+    try {
+        console.log('📅 [API] Checking Google Calendar status');
+
+        const tenantId = req.user?.tenant_id;
+        const professionalId = req.params.id;
+
+        if (!tenantId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Tenant ID required'
+            });
+        }
+
+        const { data: professional, error } = await database_1.supabaseAdmin
+            .from('professionals')
+            .select('google_calendar_credentials, google_calendar_id')
+            .eq('id', professionalId)
+            .eq('tenant_id', tenantId)
+            .single();
+
+        if (error || !professional) {
+            return res.status(404).json({
+                success: false,
+                error: 'Professional not found'
+            });
+        }
+
+        const isConnected = !!professional.google_calendar_credentials;
+
+        res.json({
+            success: true,
+            data: {
+                isConnected,
+                calendarId: professional.google_calendar_id,
+                lastSync: isConnected ? new Date().toISOString() : null
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error checking calendar status:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Get tenant information
+router.get('/tenant', adminAuth.verifyToken, async (req, res) => {
+    try {
+        console.log('📋 [API] Loading tenant information');
+
+        const tenantId = req.user?.tenant_id;
+        if (!tenantId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Tenant ID required'
+            });
+        }
+
+        const { data: tenant, error } = await database_1.supabaseAdmin
+            .from('tenants')
+            .select(`
+                id,
+                name,
+                slug,
+                business_name,
+                business_description,
+                domain,
+                email,
+                phone,
+                whatsapp_phone,
+                business_address,
+                status,
+                subscription_plan,
+                ai_settings,
+                domain_config,
+                business_rules,
+                created_at,
+                updated_at
+            `)
+            .eq('id', tenantId)
+            .single();
+
+        if (error) {
+            console.error('❌ Error fetching tenant:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to fetch tenant information'
+            });
+        }
+
+        if (!tenant) {
+            return res.status(404).json({
+                success: false,
+                error: 'Tenant not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            data: tenant
+        });
+
+    } catch (error) {
+        console.error('❌ Error loading tenant:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Get all services for a tenant
+router.get('/services', adminAuth.verifyToken, async (req, res) => {
+    try {
+        console.log('📋 [API] Loading services for tenant');
+        console.log('🔍 [DEBUG] req.user:', JSON.stringify(req.user, null, 2));
+
+        const tenantId = req.user?.tenant_id;
+        console.log('🔍 [DEBUG] tenantId extracted:', tenantId);
+
+        if (!tenantId) {
+            console.log('❌ [ERROR] No tenant ID found');
+            return res.status(400).json({
+                success: false,
+                error: 'Tenant ID required'
+            });
+        }
+
+        console.log('🔍 [DEBUG] Executing Supabase query for tenant:', tenantId);
+        const { data: services, error } = await database_1.supabaseAdmin
+            .from('services')
+            .select(`
+                id,
+                name,
+                description,
+                is_active,
+                created_at,
+                updated_at
+            `)
+            .eq('tenant_id', tenantId)
+            .order('name');
+
+        console.log('🔍 [DEBUG] Supabase response - error:', error);
+        console.log('🔍 [DEBUG] Supabase response - data length:', services?.length || 0);
+
+        if (error) {
+            console.error('❌ Error fetching services:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to fetch services'
+            });
+        }
+
+        res.json({
+            success: true,
+            data: services || []
+        });
+
+    } catch (error) {
+        console.error('❌ Error loading services:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Create new service
+router.post('/services', adminAuth.verifyToken, async (req, res) => {
+    try {
+        console.log('📝 [API] Creating new service');
+
+        const tenantId = req.user?.tenant_id;
+        if (!tenantId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Tenant ID required'
+            });
+        }
+
+        const { name, description, duration, price, category, professional_id, is_active = true } = req.body;
+
+        if (!name || !duration || !price) {
+            return res.status(400).json({
+                success: false,
+                error: 'Name, duration, and price are required'
+            });
+        }
+
+        const { data: service, error } = await database_1.supabaseAdmin
+            .from('services')
+            .insert([{
+                tenant_id: tenantId,
+                name,
+                description,
+                duration,
+                price,
+                category,
+                professional_id,
+                is_active
+            }])
+            .select()
+            .single();
+
+        if (error) {
+            console.error('❌ Error creating service:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to create service'
+            });
+        }
+
+        console.log('✅ Service created successfully:', service.id);
+
+        res.status(201).json({
+            success: true,
+            data: service
+        });
+
+    } catch (error) {
+        console.error('❌ Error creating service:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Update service
+router.put('/services/:id', adminAuth.verifyToken, async (req, res) => {
+    try {
+        console.log('✏️ [API] Updating service:', req.params.id);
+
+        const tenantId = req.user?.tenant_id;
+        if (!tenantId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Tenant ID required'
+            });
+        }
+
+        const serviceId = req.params.id;
+        const { name, description, duration, price, category, professional_id, is_active } = req.body;
+
+        const updateData = {};
+        if (name !== undefined) updateData.name = name;
+        if (description !== undefined) updateData.description = description;
+        if (duration !== undefined) updateData.duration = duration;
+        if (price !== undefined) updateData.price = price;
+        if (category !== undefined) updateData.category = category;
+        if (professional_id !== undefined) updateData.professional_id = professional_id;
+        if (is_active !== undefined) updateData.is_active = is_active;
+        updateData.updated_at = new Date().toISOString();
+
+        const { data: service, error } = await database_1.supabaseAdmin
+            .from('services')
+            .update(updateData)
+            .eq('id', serviceId)
+            .eq('tenant_id', tenantId)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('❌ Error updating service:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to update service'
+            });
+        }
+
+        if (!service) {
+            return res.status(404).json({
+                success: false,
+                error: 'Service not found'
+            });
+        }
+
+        console.log('✅ Service updated successfully:', service.id);
+
+        res.json({
+            success: true,
+            data: service
+        });
+
+    } catch (error) {
+        console.error('❌ Error updating service:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
+// Delete service
+router.delete('/services/:id', adminAuth.verifyToken, async (req, res) => {
+    try {
+        console.log('🗑️ [API] Deleting service:', req.params.id);
+
+        const tenantId = req.user?.tenant_id;
+        if (!tenantId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Tenant ID required'
+            });
+        }
+
+        const serviceId = req.params.id;
+
+        const { error } = await database_1.supabaseAdmin
+            .from('services')
+            .delete()
+            .eq('id', serviceId)
+            .eq('tenant_id', tenantId);
+
+        if (error) {
+            console.error('❌ Error deleting service:', error);
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to delete service'
+            });
+        }
+
+        console.log('✅ Service deleted successfully:', serviceId);
+
+        res.json({
+            success: true,
+            message: 'Service deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('❌ Error deleting service:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
+module.exports = router;

@@ -563,7 +563,8 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/utils/secure-auth.js"></script>
-    
+    <script src="js/utils/force-avatar-fix.js"></script>
+
     <script>
         // Funções auxiliares do template
         function getAuthToken() {
@@ -643,34 +644,13 @@
                                 const tenant = userInfo.data;
                                 
                                 if (tenant) {
-                                    // Atualizar avatar com dados reais do tenant
-                                    const avatarElement = document.getElementById('userAvatar');
-                                    const nameElement = document.getElementById('userName');
-                                    const roleElement = document.getElementById('userRole');
-                                    
-                                    const businessName = tenant.business_name || tenant.name;
-                                    
-                                    if (avatarElement && businessName) {
-                                        avatarElement.textContent = businessName.substring(0, 2).toUpperCase();
+                                    // Avatar será carregado pelo force-avatar-fix.js
+                                    console.log('✅ Dados do tenant carregados, chamando force-avatar-fix');
+
+                                    // Força atualização do avatar
+                                    if (window.forceUpdateTenantAvatar) {
+                                        window.forceUpdateTenantAvatar();
                                     }
-                                    
-                                    if (nameElement && businessName) {
-                                        nameElement.textContent = businessName;
-                                    }
-                                    
-                                    if (roleElement && tenant.domain) {
-                                        const domainLabels = {
-                                            'beauty': 'Salão de Beleza',
-                                            'healthcare': 'Clínica de Saúde',
-                                            'legal': 'Escritório Jurídico',
-                                            'education': 'Educação',
-                                            'sports': 'Academia/Esportes',
-                                            'consulting': 'Consultoria'
-                                        };
-                                        roleElement.textContent = domainLabels[tenant.domain] || 'Administrador';
-                                    }
-                                    
-                                    console.log('✅ Avatar atualizado com dados reais da API:', tenant.business_name);
                                     return;
                                 }
                             } else {
@@ -722,8 +702,8 @@
                 console.log('✅ Dados reais carregados com sucesso');
             } catch (error) {
                 console.error('❌ Erro ao carregar dados reais:', error);
-                // Fallback para dados mock apenas em caso de erro
-                initializeMockCharts();
+                // Mostrar estado sem dados
+                showNoDataState();
             }
         }
         
@@ -785,7 +765,7 @@
                 
             } catch (error) {
                 console.error('❌ Erro ao carregar gráficos:', error);
-                initializeMockCharts();
+                showNoDataState();
             }
         }
         
@@ -944,99 +924,49 @@
             }
         }
         
-        // Fallback para gráficos mock apenas em caso de erro
-        function initializeMockCharts() {
-            console.warn('⚠️ Usando dados mock como fallback');
-            
-            // Gráfico 1: Receita por Período (mock)
-            const revenueCtx = document.getElementById('revenueChart').getContext('2d');
-            new Chart(revenueCtx, {
-                type: 'line',
-                data: {
-                    labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul'],
-                    datasets: [{
-                        label: 'Receita (R$)',
-                        data: [28000, 32000, 35000, 38000, 42000, 39000, 45720],
-                        borderColor: '#198754',
-                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
+        // Estado sem dados para quando APIs falham
+        function showNoDataState() {
+            console.warn('⚠️ Mostrando estado sem dados');
+
+            // Substituir conteúdo dos gráficos por mensagem de "sem dados"
+            const chartContainers = [
+                'revenueChart',
+                'appointmentStatusChart',
+                'servicesChart',
+                'conversationsChart'
+            ];
+
+            chartContainers.forEach(chartId => {
+                const chartContainer = document.getElementById(chartId);
+                if (chartContainer) {
+                    const chartWidget = chartContainer.closest('.chart-widget');
+                    if (chartWidget) {
+                        chartWidget.innerHTML = `
+                            <div class="chart-header">
+                                <h5 class="chart-title">Dados Indisponíveis</h5>
+                            </div>
+                            <div class="chart-body d-flex align-items-center justify-content-center">
+                                <div class="text-center text-muted">
+                                    <i class="fas fa-chart-line fa-3x mb-3 opacity-50"></i>
+                                    <h6>Sem dados</h6>
+                                    <p class="small mb-0">Não foi possível carregar os dados no momento</p>
+                                </div>
+                            </div>
+                        `;
                     }
                 }
             });
-            
-            // Gráfico 2: Status dos Agendamentos (mock)
-            const statusCtx = document.getElementById('appointmentStatusChart').getContext('2d');
-            new Chart(statusCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Confirmados', 'Pendentes', 'Concluídos', 'Cancelados'],
-                    datasets: [{
-                        data: [45, 12, 38, 5],
-                        backgroundColor: ['#198754', '#ffc107', '#0d6efd', '#dc3545']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false
-                }
-            });
-            
-            // Gráfico 3: Serviços Mais Vendidos
-            const servicesCtx = document.getElementById('servicesChart').getContext('2d');
-            new Chart(servicesCtx, {
-                type: 'bar',
-                data: {
-                    labels: ['Corte Feminino', 'Manicure', 'Tratamentos', 'Corte Masculino', 'Escova'],
-                    datasets: [{
-                        label: 'Vendas',
-                        data: [30, 25, 20, 15, 10],
-                        backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6c757d']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    }
-                }
-            });
-            
-            // Gráfico 4: Conversas vs Agendamentos
-            const conversationsCtx = document.getElementById('conversationsChart').getContext('2d');
-            new Chart(conversationsCtx, {
-                type: 'line',
-                data: {
-                    labels: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
-                    datasets: [{
-                        label: 'Conversas',
-                        data: [25, 30, 22, 35, 40, 28, 20],
-                        borderColor: '#17a2b8',
-                        backgroundColor: 'rgba(23, 162, 184, 0.1)',
-                        tension: 0.4
-                    }, {
-                        label: 'Agendamentos',
-                        data: [15, 18, 12, 22, 25, 16, 10],
-                        borderColor: '#28a745',
-                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false
+
+            // Atualizar KPIs para mostrar "sem dados"
+            const kpiElements = [
+                'totalRevenue', 'todayAppointments', 'activeCustomers', 'occupancyRate',
+                'whatsappConversations', 'conversionRate', 'customerSatisfaction', 'averageTicket'
+            ];
+
+            kpiElements.forEach(kpiId => {
+                const element = document.getElementById(kpiId);
+                if (element) {
+                    element.textContent = '--';
                 }
             });
         }
@@ -1051,25 +981,24 @@
             const currentPage = window.location.pathname.split('/').pop();
             setActiveMenu(currentPage);
             
-            // Carregar dados reais primeiro, fallback para mock em caso de erro
+            // Carregar dados reais primeiro, mostrar "sem dados" em caso de erro
             loadRealData(30);
             updateLastUpdateTime();
             
-            // Inicializa contexto na página
-            if (window.contextManager) {
-                // Força contexto de tenant admin
-                window.contextManager.currentContext = window.contextManager.userContexts.TENANT_ADMIN;
-                window.contextManager.refreshContext();
-            }
-            
-            // Força carregar dados do tenant após outros scripts (delay para garantir)
+            // Contexto desabilitado - usando force-avatar-fix.js
+            console.log('🚫 ContextManager desabilitado para evitar conflitos');
+
+            // Força carregar dados do tenant e avatar após outros scripts
             setTimeout(() => {
                 loadTenantData();
-            }, 500);
-            
-            // Força novamente após mais tempo para sobrescrever qualquer outro script
-            setTimeout(() => {
-                loadTenantData();
+
+                // Força execução do avatar fix após todos os scripts
+                setTimeout(() => {
+                    if (window.forceUpdateTenantAvatar) {
+                        console.log('🔄 Forçando execução do force-avatar-fix');
+                        window.forceUpdateTenantAvatar();
+                    }
+                }, 500);
             }, 1000);
         });
     </script>

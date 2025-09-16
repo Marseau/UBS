@@ -6,9 +6,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Simple utilities
-function normalizeE164(phone: string): string {
-  return phone.replace(/[\s\-\(\)]/g, '');
+// 🔧 Padronização global de telefone: remove tudo que não é dígito
+export function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, '');
 }
 
 export interface UserProfileData {
@@ -18,27 +18,29 @@ export interface UserProfileData {
   email?: string;
   gender?: string;
   birth_date?: string;
+  address?: any;
 }
 
 export interface ConversationState {
   tenantId: string;
   userId: string;
-  current_state: 'idle' | 'onboarding_need_name' | 'onboarding_need_email' | string;
+  current_state: 'idle' | 'need_name' | 'need_email' | 'need_gender_confirmation' | 'ask_optional_data_consent' | 'need_birth_date' | 'need_address' | 'collection_complete' | string;
   context?: any;
 }
 
 /**
  * Insere ou atualiza perfil do usuário no banco
  */
-export async function upsertUserProfile({ 
-  tenantId, 
-  userPhone, 
-  name, 
-  email, 
+export async function upsertUserProfile({
+  tenantId,
+  userPhone,
+  name,
+  email,
   gender,
-  birth_date 
+  birth_date,
+  address
 }: UserProfileData): Promise<string> {
-  const phone = normalizeE164(userPhone);
+  const phone = normalizePhone(userPhone);
   
   console.log(`🔧 [UPSERT] Persistindo usuário ${phone} no Supabase`);
   console.log(`🔧 [UPSERT PARAMS] name: "${name}", email: "${email}", gender: "${gender}", birth_date: "${birth_date}"`);
@@ -49,6 +51,7 @@ export async function upsertUserProfile({
   if (email) userPayload.email = email;
   if (gender) userPayload.gender = gender;
   if (birth_date) userPayload.birth_date = birth_date;
+  if (address) userPayload.address = address;
   
   // Upsert user in Supabase
   const { data: user, error: userError } = await supabase
@@ -96,7 +99,7 @@ export async function getConversationState({
   tenantId, 
   userId 
 }: { tenantId: string; userId: string }): Promise<ConversationState> {
-  const phone = normalizeE164(userId);
+  const phone = normalizePhone(userId);
   
   console.log(`🔍 [STATE] Buscando estado para ${phone} no Supabase`);
   
@@ -112,7 +115,7 @@ export async function getConversationState({
     return {
       tenantId,
       userId,
-      current_state: 'onboarding_need_name',
+      current_state: 'need_name',
       context: {}
     };
   }
@@ -146,7 +149,7 @@ export async function getConversationState({
   return {
     tenantId,
     userId,
-    current_state: 'onboarding_need_name',
+    current_state: 'need_name',
     context: {}
   };
 }
@@ -165,7 +168,7 @@ export async function setConversationState({
   state: string;
   context?: any;
 }): Promise<void> {
-  const phone = normalizeE164(userId);
+  const phone = normalizePhone(userId);
   
   console.log(`🔄 [STATE] Persistindo estado ${state} para ${phone} no Supabase`);
   

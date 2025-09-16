@@ -10,12 +10,13 @@
  */
 
 import cron from 'node-cron';
-import { logger } from '../utils/logger';
+import { conversationLogger } from '../utils/logger';
 import { WebhookFlowOrchestratorService } from '../services/webhook-flow-orchestrator.service';
 
 export class ConversationOutcomeProcessor {
   private orchestrator: WebhookFlowOrchestratorService;
   private isProcessing: boolean = false;
+  private logger = conversationLogger('conversation-outcome-processor');
 
   constructor() {
     this.orchestrator = new WebhookFlowOrchestratorService();
@@ -29,31 +30,50 @@ export class ConversationOutcomeProcessor {
     // Executar a cada 10 minutos: */10 * * * *
     cron.schedule('*/10 * * * *', async () => {
       if (this.isProcessing) {
-        logger.info('⚠️ Conversation outcome processing already in progress, skipping...');
+        this.logger.warn('⚠️ Conversation outcome processing already in progress, skipping...', {
+          service: 'conversation-outcome-processor',
+          method: 'start',
+          operationType: 'cron_skip'
+        });
         return;
       }
 
       this.isProcessing = true;
       
       try {
-        logger.info('🔄 Starting conversation outcome processing...');
+        this.logger.conversation('🔄 Starting conversation outcome processing...', {
+          service: 'conversation-outcome-processor',
+          method: 'start',
+          operationType: 'cron_start'
+        });
         const startTime = Date.now();
         
         await this.orchestrator.processFinishedConversations();
         
         const duration = Date.now() - startTime;
-        logger.info(`✅ Conversation outcome processing completed in ${duration}ms`);
+        this.logger.conversation(`✅ Conversation outcome processing completed in ${duration}ms`, {
+          service: 'conversation-outcome-processor',
+          method: 'start',
+          operationType: 'cron_complete',
+          duration
+        });
         
       } catch (error) {
-        logger.error('❌ Failed to process conversation outcomes', {
-          error: error instanceof Error ? error.message : 'Unknown error'
+        this.logger.conversationError(error as Error, {
+          service: 'conversation-outcome-processor',
+          method: 'start',
+          operationType: 'cron_error'
         });
       } finally {
         this.isProcessing = false;
       }
     });
 
-    logger.info('🚀 Conversation outcome processor cronjob started (every 15 minutes)');
+    this.logger.conversation('🚀 Conversation outcome processor cronjob started (every 15 minutes)', {
+      service: 'conversation-outcome-processor',
+      method: 'start',
+      operationType: 'cron_scheduled'
+    });
   }
 
   /**
@@ -61,7 +81,11 @@ export class ConversationOutcomeProcessor {
    */
   stop(): void {
     cron.getTasks().forEach(task => (task as any).destroy());
-    logger.info('🛑 Conversation outcome processor cronjob stopped');
+    this.logger.conversation('🛑 Conversation outcome processor cronjob stopped', {
+      service: 'conversation-outcome-processor',
+      method: 'stop',
+      operationType: 'cron_stopped'
+    });
   }
 
   /**
@@ -75,13 +99,22 @@ export class ConversationOutcomeProcessor {
     this.isProcessing = true;
     
     try {
-      logger.info('🔧 Manual conversation outcome processing triggered...');
+      this.logger.conversation('🔧 Manual conversation outcome processing triggered...', {
+        service: 'conversation-outcome-processor',
+        method: 'processNow',
+        operationType: 'manual_trigger'
+      });
       const startTime = Date.now();
       
       await this.orchestrator.processFinishedConversations();
       
       const duration = Date.now() - startTime;
-      logger.info(`✅ Manual processing completed in ${duration}ms`);
+      this.logger.conversation(`✅ Manual processing completed in ${duration}ms`, {
+        service: 'conversation-outcome-processor',
+        method: 'processNow',
+        operationType: 'manual_complete',
+        duration
+      });
       
     } finally {
       this.isProcessing = false;

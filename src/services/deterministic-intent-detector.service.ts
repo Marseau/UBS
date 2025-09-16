@@ -10,7 +10,7 @@ export type DecisionMethod = 'regex' | 'llm';
 
 export interface IntentDetectionResult {
   intent: IntentKey | null;           // null quando regex não bater
-  confidence: number;                 // 0.0 a 1.0
+  confidence_score: number;           // 0.0 a 1.0
   decision_method: DecisionMethod;    // 'regex' aqui
 }
 
@@ -18,7 +18,7 @@ export interface IntentDetectionResult {
 export const INTENT_KEYS = [
   'greeting',
   'services',
-  'pricing', 
+  'pricing',
   'availability',
   'my_appointments',
   'address',
@@ -31,19 +31,21 @@ export const INTENT_KEYS = [
   'policies',
   'wrong_number',
   'booking_abandoned',
-  'appointment_inquiry'
+  'appointment_inquiry',
+  'booking'
 ] as const;
 
 // Ordem de prioridade para resolver sobreposições (primeiro vence)
 const PRIORITY: IntentKey[] = [
   'greeting',
+  'booking', // High priority for booking actions
   'appointment_inquiry',
   'confirm',
   'cancel',
   'reschedule',
   'my_appointments',
   'availability',
-  'pricing', 
+  'pricing',
   'services',
   'business_hours',
   'address',
@@ -142,7 +144,8 @@ const W = {
   oi: ['oi','ola','opa','bom dia','boa tarde','boa noite','eae','fala'] as const,
   serv: ['servico','servicos','procedimento','procedimentos','catalogo','menu','lista de servicos'] as const,
   preco: ['preco','precos','valor','valores','quanto custa','quanto sai','quanto fica','tabela de preco'] as const,
-  disp: ['disponibilidade','agenda','agendar','marcar','quando posso','tem horario','tem vaga','datas','horario','horarios','agendamento'] as const,
+  disp: ['disponibilidade','quando posso','tem horario','tem vaga','datas','horario','horarios'] as const, // Removed 'agendar', 'marcar', 'agendamento'
+  book: ['agendar','marcar','quero marcar','quero agendar','gostaria de marcar','gostaria de agendar','agendamento','marcacao','reserva','reservar'] as const, // New booking patterns
   meusAg: ['meu agendamento','meus agendamentos','o que marquei','ver agendamento','ver agendamentos'] as const,
   cancel: ['cancelar','cancela','desmarcar','anular'] as const,
   remarcar: ['remarcar','remarca','trocar horario','mudar horario','trocar data','mudar data','adiar','reagendar','reagenda'] as const,
@@ -178,13 +181,21 @@ const RULES: Record<IntentKey, RegExp[]> = {
     /preco (do|da) (corte|unha|barba|massagem|limpeza|depilacao)/i,
   ],
 
+  booking: [
+    any(W.book),
+    /\b(quero.*marcar|quero.*agendar|gostaria.*marcar|gostaria.*agendar)\b/i,
+    /\b(marcar.*para|agendar.*para|marcar.*amanha|agendar.*amanha)\b/i,
+    /\b(marque.*para|agende.*para)\b/i,
+  ],
+
   availability: [
     any(W.disp),
-    /\b(hoje|amanha|depois de amanha|semana que vem|mes que vem)\b/i,
-    /\b(na|pela|de) (manha|tarde|noite)\b/i,
+    // Only match time requests without booking verbs
+    /^(?!.*(marque|agende|marcar|agendar))\b(hoje|amanha|depois de amanha|semana que vem|mes que vem)\b/i,
+    /\b(na|pela|de) (manha|tarde|noite)\b(?!.*(marque|agende|marcar|agendar))/i,
     /(quando voces? atendem|quando tem|qual (o )?melhor horario)/i,
-    /(\bagenda\b).*(amanh[ãa]|hoje|semana|mes)/i,
-    /tem (horario|vaga) (amanh[ãa]|hoje|na (manha|tarde|noite))/i,
+    /(\bagenda\b).*(amanh[ãa]|hoje|semana|mes)(?!.*(marque|agende|marcar|agendar))/i,
+    /tem (horario|vaga) (amanh[ãa]|hoje|na (manha|tarde|noite))(?!.*(marque|agende|marcar|agendar))/i,
   ],
 
   my_appointments: [
@@ -193,9 +204,9 @@ const RULES: Record<IntentKey, RegExp[]> = {
   ],
 
   address: [any(W.addr)],
-  
+
   payments: [any(W.pay)],
-  
+
   business_hours: [
     any(W.hours),
     /(que horas (abre|fecha)|horario de atendimento)/i,
@@ -218,14 +229,14 @@ const RULES: Record<IntentKey, RegExp[]> = {
   ],
 
   modify_appointment: [any(W.mod)],
-  
+
   policies: [any(W.pol)],
-  
+
   wrong_number: [any(W.wrong)],
-  
+
   booking_abandoned: [any(W.abad)],
-  
-  appointment_inquiry: [any(W.disp)] // Booking patterns
+
+  appointment_inquiry: [any(W.disp)] // General availability inquiry patterns
 };
 
 // ===== FUNÇÃO PRINCIPAL DE DETECÇÃO (NOVA API) =====
@@ -233,27 +244,28 @@ export function detectIntentByRegex(text: string): IntentDetectionResult {
   const t = (text || '').toLowerCase().trim();
 
   // atalhos numéricos do menu
-  if (/^\s*1\s*$/.test(t)) return { intent: 'availability', confidence: 0.95, decision_method: 'regex' };
-  if (/^\s*2\s*$/.test(t)) return { intent: 'my_appointments', confidence: 0.95, decision_method: 'regex' };
-  if (/^\s*3\s*$/.test(t)) return { intent: 'cancel', confidence: 0.95, decision_method: 'regex' };
-  if (/^\s*4\s*$/.test(t)) return { intent: 'reschedule', confidence: 0.95, decision_method: 'regex' };
-  if (/^\s*5\s*$/.test(t)) return { intent: null, confidence: 0.0, decision_method: 'regex' };
+  if (/^\s*1\s*$/.test(t)) return { intent: 'availability', confidence_score: 0.95, decision_method: 'regex' };
+  if (/^\s*2\s*$/.test(t)) return { intent: 'my_appointments', confidence_score: 0.95, decision_method: 'regex' };
+  if (/^\s*3\s*$/.test(t)) return { intent: 'cancel', confidence_score: 0.95, decision_method: 'regex' };
+  if (/^\s*4\s*$/.test(t)) return { intent: 'reschedule', confidence_score: 0.95, decision_method: 'regex' };
+  if (/^\s*5\s*$/.test(t)) return { intent: null, confidence_score: 0.0, decision_method: 'regex' };
 
   // greeting: incluir agradecimentos/elogios
   if (/(oi|ol[áa]|bom dia|boa tarde|boa noite)\b/i.test(t) || any(W.thanks).test(t) || /[👍✅]/.test(t)) {
-    return { intent: 'greeting', confidence: 0.9, decision_method: 'regex' };
+    return { intent: 'greeting', confidence_score: 0.9, decision_method: 'regex' };
   }
 
   // services: requisitos e procedimentos frequentes
   if (/\bservi[cç]os?\b/i.test(t) || any(W.requirements).test(t) || any(W.procedures).test(t)) {
-    return { intent: 'services', confidence: t.endsWith('?') ? 0.9 : 0.85, decision_method: 'regex' };
+    return { intent: 'services', confidence_score: t.endsWith('?') ? 0.9 : 0.85, decision_method: 'regex' };
   }
 
   const map: Record<IntentKey, RegExp> = {
     ['greeting']: /(oi|ol[áa]|bom dia|boa tarde|boa noite)\b/i,
     ['services']: /\b(servi[cç]os?)\b/i,
     ['pricing']: /\b(pre[çc]o|valor|quanto\s+(custa|sai|fica))\b/i,
-    ['availability']: /\b(disponibilidade|quando posso|hor[áa]rio|datas|agenda|tem.*vaga|amanh[ãa]|hoje|depois de amanh[ãa]|semana que vem)\b/i,
+    ['booking']: /\b(quero\s*(marcar|agendar)|marque?\s*para|agende?\s*para|gostaria\s*de\s*(marcar|agendar))\b/i,
+    ['availability']: /\b(disponibilidade|quando posso|hor[áa]rio|datas|tem.*vaga|amanh[ãa]|hoje|depois de amanh[ãa]|semana que vem)\b/i,
     ['my_appointments']: /\b(meus? agendamentos|tenho.*agendamento|o que marquei|ver agendamentos)\b/i,
     ['address']: /\b(endere[cç]o|onde fica|localiza[çc][ãa]o|como chegar|maps|google\s*maps|local)\b/i,
     ['payments']: /\b(pagamento|formas de pagamento|pix|cartao|credito|debito|dinheiro)\b/i,
@@ -265,17 +277,17 @@ export function detectIntentByRegex(text: string): IntentDetectionResult {
     ['policies']: /\b(politicas?|politica|cancelamento|reembolso|no[-\s]?show|termos?|condicoes?)\b/i,
     ['wrong_number']: /\b(numero errado|mensagem errada|nao sou cliente|engano)\b/i,
     ['booking_abandoned']: /\b(desisti|deixa pra la|nao quero mais)\b/i,
-    ['appointment_inquiry']: /\b(agendar|marcar|reserva|quero.*agendamento)\b/i
+    ['appointment_inquiry']: /\b(agenda|tem\s*horario)\b/i
   };
 
   for (const [intent, re] of Object.entries(map)) {
     if (re.test(t)) {
       // pontuação simples: frases curtas e diretas recebem >0.9
       const confidence = t.length < 40 ? 0.92 : 0.85;
-      return { intent: intent as IntentKey, confidence, decision_method: 'regex' };
+      return { intent: intent as IntentKey, confidence_score: confidence, decision_method: 'regex' };
     }
   }
-  return { intent: null, confidence: 0.0, decision_method: 'regex' };
+  return { intent: null, confidence_score: 0.0, decision_method: 'regex' };
 }
 
 /** Retorna TODAS as intents que casam, ordenadas por prioridade (mais importante primeiro) */

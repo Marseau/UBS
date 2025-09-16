@@ -1,11 +1,12 @@
 import cron from "node-cron";
-import { logger } from "../utils/logger";
+import { conversationLogger } from "../utils/logger";
 import { MetricsPopulationService } from "./metrics-population.service";
 import { MetricsPeriod } from "./metrics-analysis.service";
 
 export class NewMetricsCronService {
   private populationService: MetricsPopulationService;
   private isRunning: boolean = false;
+  private logger = conversationLogger('new-metrics-cron');
 
   constructor() {
     this.populationService = new MetricsPopulationService();
@@ -20,15 +21,22 @@ export class NewMetricsCronService {
       "0 3 * * *",
       async () => {
         if (this.isRunning) {
-          logger.warn(
-            "Cron job de métricas já está executando, pulando esta execução",
-          );
+          this.logger.warn(
+            "Cron job de métricas já está executando, pulando esta execução", {
+            service: 'new-metrics-cron',
+            method: 'start',
+            operationType: 'cron_execution'
+          });
           return;
         }
 
         try {
           this.isRunning = true;
-          logger.info("Iniciando cron job de métricas diário às 03:00h");
+          this.logger.conversation("Iniciando cron job de métricas diário às 03:00h", {
+            service: 'new-metrics-cron',
+            method: 'start',
+            operationType: 'cron_start'
+          });
 
           const startTime = Date.now();
 
@@ -38,9 +46,18 @@ export class NewMetricsCronService {
           );
 
           const duration = Date.now() - startTime;
-          logger.info(`Cron job de métricas concluído em ${duration}ms`);
+          this.logger.conversation(`Cron job de métricas concluído em ${duration}ms`, {
+            service: 'new-metrics-cron',
+            method: 'start',
+            operationType: 'cron_complete',
+            duration
+          });
         } catch (error) {
-          logger.error("Erro no cron job de métricas:", error);
+          this.logger.conversationError(error as Error, {
+            service: 'new-metrics-cron',
+            method: 'start',
+            operationType: 'cron_error'
+          });
 
           // Tentar notificar sobre o erro (implementar notificação se necessário)
           await this.notifyError(error);
@@ -53,9 +70,12 @@ export class NewMetricsCronService {
       },
     );
 
-    logger.info(
-      "Cron job de métricas agendado para 03:00h diário (horário de Brasília)",
-    );
+    this.logger.conversation(
+      "Cron job de métricas agendado para 03:00h diário (horário de Brasília)", {
+      service: 'new-metrics-cron',
+      method: 'start',
+      operationType: 'cron_scheduled'
+    });
   }
 
   /**
@@ -65,7 +85,11 @@ export class NewMetricsCronService {
     cron.getTasks().forEach((task) => {
       task.stop();
     });
-    logger.info("Cron jobs de métricas parados");
+    this.logger.conversation("Cron jobs de métricas parados", {
+      service: 'new-metrics-cron',
+      method: 'stop',
+      operationType: 'cron_stopped'
+    });
   }
 
   /**
@@ -78,7 +102,11 @@ export class NewMetricsCronService {
 
     try {
       this.isRunning = true;
-      logger.info("Executando cron job de métricas manualmente");
+      this.logger.conversation("Executando cron job de métricas manualmente", {
+        service: 'new-metrics-cron',
+        method: 'runManually',
+        operationType: 'manual_execution'
+      });
 
       const startTime = Date.now();
 
@@ -87,9 +115,18 @@ export class NewMetricsCronService {
       );
 
       const duration = Date.now() - startTime;
-      logger.info(`Execução manual concluída em ${duration}ms`);
+      this.logger.conversation(`Execução manual concluída em ${duration}ms`, {
+        service: 'new-metrics-cron',
+        method: 'runManually',
+        operationType: 'manual_complete',
+        duration
+      });
     } catch (error) {
-      logger.error("Erro na execução manual:", error);
+      this.logger.conversationError(error as Error, {
+        service: 'new-metrics-cron',
+        method: 'runManually',
+        operationType: 'manual_error'
+      });
       throw error;
     } finally {
       this.isRunning = false;
@@ -128,10 +165,10 @@ export class NewMetricsCronService {
    */
   private async notifyError(error: any): Promise<void> {
     // TODO: Implementar notificação por email, Slack, webhook, etc.
-    logger.error("Notificação de erro crítico no cron job de métricas:", {
-      error: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString(),
+    this.logger.conversationError(error, {
+      service: 'new-metrics-cron',
+      method: 'notifyError',
+      operationType: 'critical_error_notification'
     });
 
     // Exemplo de implementação futura:
@@ -159,7 +196,13 @@ export class NewMetricsCronService {
         .limit(1);
 
       if (error) {
-        errors.push(`Erro ao verificar platform_metrics: ${error.message}`);
+        const errorMsg = `Erro ao verificar platform_metrics: ${error.message}`;
+        errors.push(errorMsg);
+        this.logger.conversationError(new Error(errorMsg), {
+          service: 'new-metrics-cron',
+          method: 'healthCheck',
+          operationType: 'health_check_error'
+        });
       }
 
       let lastExecution: string | null = null;

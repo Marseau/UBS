@@ -731,13 +731,13 @@ router.post("/chat", async (req, res) => {
       
       // Chamar direto o orchestrator (mesmo fluxo do webhook)
       // 🎯 CORREÇÃO CRÍTICA: session_id deve ser consistente para preservar flow_lock entre mensagens
-      const result = await orchestrator.orchestrateWebhookFlow(
-        text,
-        userPhone,
-        tenantId,
-        { domain: 'demo', services: [], policies: {} },
-        { session_id: `demo_${userPhone}_${tenantId}`, demoMode: { source: 'demo_ui', tenantId } }
-      );
+      const result = await orchestrator.orchestrateWebhookFlow({
+        messageText: text,
+        userPhone: userPhone,
+        tenantId: tenantId,
+        tenantConfig: { domain: 'demo', services: [], policies: {} },
+        existingContext: { session_id: `demo_${userPhone}_${tenantId}`, demoMode: { source: 'demo_ui', tenantId } }
+      });
       
       // Retornar resposta no formato esperado pela demo UI
       const finalResponse = {
@@ -746,12 +746,18 @@ router.post("/chat", async (req, res) => {
         telemetry: {
           ...result.telemetryData,
           intent: result.telemetryData?.intent || 'unknown',
-          confidence: result.telemetryData?.confidence || 0,
+          confidence: result.telemetryData?.confidence_score || 0,
           decision_method: result.telemetryData?.decision_method || 'direct_orchestrator',
           flow_lock_active: !!result.updatedContext?.flow_lock,
           processing_time_ms: result.telemetryData?.processing_time_ms || 0,
-          tokens_used: result.llmMetrics?.total_tokens || 0,
-          api_cost_usd: result.llmMetrics?.api_cost_usd || 0
+          // ✅ SEPARAÇÃO: Métricas de geração (llmMetrics) + classificação (intentMetrics)
+          generation_tokens: result.intentMetrics?.total_tokens || 0,
+          generation_api_cost_usd: result.intentMetrics?.api_cost_usd || 0,
+          classification_tokens: result.intentMetrics?.total_tokens || 0,
+          classification_api_cost_usd: result.intentMetrics?.api_cost_usd || 0,
+          // ✅ TOTAL: Métricas unificadas em intentMetrics
+          tokens_used: result.intentMetrics?.total_tokens || 0,
+          api_cost_usd: result.intentMetrics?.api_cost_usd || 0
         }
       };
       

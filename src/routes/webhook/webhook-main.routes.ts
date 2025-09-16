@@ -7,7 +7,7 @@
 import express from 'express';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
-import { WebhookFlowOrchestratorService } from '../../services/webhook-flow-orchestrator.service.refactored';
+import { WebhookFlowOrchestratorService } from '../../services/webhook-flow-orchestrator-refactored.service';
 import { demoTokenValidator } from '../../utils/demo-token-validator';
 import { VALID_CONVERSATION_OUTCOMES } from '../../types/billing-cron.types';
 
@@ -219,14 +219,14 @@ router.post(
 
       // Resposta de sucesso
       logger.info('Message processed successfully', {
-        intent: result.intent,
+        intent: result.telemetryData.intent,
         outcome: result.conversationOutcome
       });
 
       return res.status(200).json({
         status: 'success',
         response: result.aiResponse,
-        intent: result.intent,
+        intent: result.telemetryData.intent,
         outcome: result.conversationOutcome
       });
 

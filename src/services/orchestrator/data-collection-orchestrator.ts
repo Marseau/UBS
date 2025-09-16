@@ -5,7 +5,11 @@
 
 import { upsertUserProfile, normalizePhone } from '../user-profile.service';
 import { supabaseAdmin } from '../../config/database';
-import { DataCollectionState, OnboardingStep, UserContext } from './types/orchestrator.types';
+import { DataCollectionState, OnboardingStep, UserContext } from '../../types';
+import {
+  contextAwareService,
+  ConversationContext
+} from '../conversation-intelligence/context-aware.service';
 
 export class DataCollectionOrchestrator {
   private onboardingSteps: Map<DataCollectionState, OnboardingStep> = new Map();
@@ -79,7 +83,187 @@ export class DataCollectionOrchestrator {
     nextState: DataCollectionState | null;
     response: string;
     completedOnboarding?: boolean;
+    aiMetrics?: {
+      model_used: string;
+      tokens: number;
+      api_cost_usd: number;
+      processing_time_ms: number;
+    };
   }> {
+    // Get tenant information for personalized responses
+    const { data: tenant } = await supabaseAdmin
+      .from('tenants')
+      .select('business_name, name, domain')
+      .eq('id', tenantId)
+      .single();
+
+    const tenantName = tenant?.business_name || tenant?.name || 'nosso negócio';
+    const businessType = tenant?.domain === 'healthcare' ? 'clínica' :
+                        tenant?.domain === 'beauty' ? 'salão de beleza' :
+                        tenant?.domain === 'legal' ? 'escritório' :
+                        tenant?.domain === 'education' ? 'escola' :
+                        'negócio';
+
+    // First, check if this message needs context-aware intelligent processing
+    const conversationContext: ConversationContext = {
+      hasName: !!userContext.name,
+      hasEmail: !!userContext.email,
+      hasGender: !!userContext.gender,
+      userName: userContext.name,
+      userEmail: userContext.email,
+      userGender: userContext.gender,
+      currentStage: 'onboarding',
+      previousMessages: [], // TODO: Get from conversation history
+      tenantName: tenantName,
+      businessType: businessType
+    };
+
+    console.log('🚨 [DATA-COLLECTION] About to call Context-Aware service!', { input });
+
+    // Process message with Context-Aware intelligence
+    const contextualResponse = await contextAwareService.processContextualMessage(
+      input,
+      conversationContext
+    );
+
+    console.log('🚨 [DATA-COLLECTION] Context-Aware response received:', contextualResponse);
+
+    // If context-aware service provides a complete response OR has processed data intelligently
+    if (!contextualResponse.shouldContinueFlow || contextualResponse.contextUpdate) {
+      // Process context updates (e.g., extracted name from combined message)
+      if (contextualResponse.contextUpdate) {
+        console.log('🔄 [DATA-COLLECTION] Processing context update:', contextualResponse.contextUpdate);
+
+        if (contextualResponse.contextUpdate.userName && contextualResponse.contextUpdate.hasName) {
+          // Update user context with extracted name (and potentially inferred gender)
+          const updatedUser = await upsertUserProfile({
+            tenantId: tenantId,
+            userPhone: userContext.phone,
+            name: contextualResponse.contextUpdate.userName,
+            email: userContext.email || undefined,
+            gender: contextualResponse.contextUpdate.userGender || userContext.gender || undefined
+          });
+
+          console.log('✅ [DATA-COLLECTION] User updated with extracted name:', updatedUser);
+
+          // Check if gender was also inferred (high confidence)
+          if (contextualResponse.contextUpdate.hasGender && contextualResponse.contextUpdate.userGender) {
+            console.log('🧠 [DATA-COLLECTION] Gender also inferred:', contextualResponse.contextUpdate.userGender);
+            // Name + Gender collected, check if email is missing
+            if (!userContext.email) {
+              // Still need email, go directly to email collection (skip gender confirmation)
+              const nextState = DataCollectionState.NEED_EMAIL;
+              return {
+                success: true,
+                nextState: nextState,
+                response: contextualResponse.message,
+                completedOnboarding: false,
+                aiMetrics: contextualResponse.aiMetrics
+              };
+            } else {
+              // We have name + gender + email = onboarding complete!
+              return {
+                success: true,
+                nextState: null, // Onboarding completed
+                response: contextualResponse.message,
+                completedOnboarding: true,
+                aiMetrics: contextualResponse.aiMetrics
+              };
+            }
+          } else {
+            // Only name collected, move to email collection
+            const nextState = DataCollectionState.NEED_EMAIL;
+
+            return {
+              success: true,
+              nextState: nextState,
+              response: contextualResponse.message,
+              completedOnboarding: false,
+              aiMetrics: contextualResponse.aiMetrics
+            };
+          }
+        }
+
+        if (contextualResponse.contextUpdate.userEmail && contextualResponse.contextUpdate.hasEmail) {
+          // Update user context with email (and potentially inferred gender)
+          const updatedUser = await upsertUserProfile({
+            tenantId: tenantId,
+            userPhone: userContext.phone,
+            name: userContext.name,
+            email: contextualResponse.contextUpdate.userEmail,
+            gender: contextualResponse.contextUpdate.userGender || userContext.gender || undefined
+          });
+
+          console.log('✅ [DATA-COLLECTION] User updated with email:', updatedUser);
+
+          // Check if gender was also inferred when email was collected
+          if (contextualResponse.contextUpdate.hasGender && contextualResponse.contextUpdate.userGender) {
+            console.log('🧠 [DATA-COLLECTION] Email + Gender both collected/inferred - onboarding complete!');
+            return {
+              success: true,
+              nextState: null, // Onboarding completed
+              response: contextualResponse.message,
+              completedOnboarding: true,
+              aiMetrics: contextualResponse.aiMetrics
+            };
+          } else {
+            // Only email collected, check if user already has gender
+            if (userContext.gender) {
+              // We already have gender from previous interactions - onboarding complete!
+              console.log('✅ [DATA-COLLECTION] Email collected, gender already exists - onboarding complete!');
+              return {
+                success: true,
+                nextState: null, // Onboarding completed
+                response: contextualResponse.message,
+                completedOnboarding: true,
+                aiMetrics: contextualResponse.aiMetrics
+              };
+            } else {
+              // Still need gender, move to gender collection
+              const nextState = DataCollectionState.NEED_GENDER_CONFIRMATION;
+              return {
+                success: true,
+                nextState: nextState,
+                response: contextualResponse.message,
+                completedOnboarding: false,
+                aiMetrics: contextualResponse.aiMetrics
+              };
+            }
+          }
+        }
+
+        if (contextualResponse.contextUpdate.userGender && contextualResponse.contextUpdate.hasGender) {
+          // Update user context with gender and complete onboarding
+          const updatedUser = await upsertUserProfile({
+            tenantId: tenantId,
+            userPhone: userContext.phone,
+            name: userContext.name,
+            email: userContext.email,
+            gender: contextualResponse.contextUpdate.userGender
+          });
+
+          console.log('✅ [DATA-COLLECTION] User updated with gender:', updatedUser);
+
+          return {
+            success: true,
+            nextState: null, // Onboarding completed
+            response: contextualResponse.message,
+            completedOnboarding: true,
+            aiMetrics: contextualResponse.aiMetrics
+          };
+        }
+      }
+
+      return {
+        success: true,
+        nextState: currentState, // Keep current state
+        response: contextualResponse.message,
+        completedOnboarding: false,
+        aiMetrics: contextualResponse.aiMetrics
+      };
+    }
+
+    // Continue with normal onboarding flow processing
     const step = this.onboardingSteps.get(currentState);
     if (!step) {
       return {
@@ -111,7 +295,7 @@ export class DataCollectionOrchestrator {
 
       case DataCollectionState.NEED_EMAIL:
         updateData.email = input.trim().toLowerCase();
-        response = "Email registrado com sucesso!";
+        response = `Email registrado com sucesso! ✅ ${userContext.name}, como posso te ajudar hoje?`;
         break;
 
       case DataCollectionState.NEED_GENDER_CONFIRMATION:
@@ -289,9 +473,10 @@ export class DataCollectionOrchestrator {
 
   private normalizeGender(input: string): string {
     const normalized = input.trim().toLowerCase();
-    if (['m', 'masculino'].includes(normalized)) return 'masculino';
-    if (['f', 'feminino'].includes(normalized)) return 'feminino';
-    return 'outro';
+    // Database expects English values: 'male', 'female', 'other'
+    if (['m', 'masculino'].includes(normalized)) return 'male';
+    if (['f', 'feminino'].includes(normalized)) return 'female';
+    return 'other';
   }
 
   private getValidationErrorMessage(state: DataCollectionState): string {

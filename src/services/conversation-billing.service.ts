@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/config/database";
-import { logger } from "@/utils/logger";
+import { conversationLogger } from "@/utils/logger";
 import { stripeService } from "./stripe.service";
 
 export interface ConversationUsage {
@@ -24,6 +24,7 @@ export interface BillingResult {
 }
 
 export class ConversationBillingService {
+  private logger = conversationLogger('conversation-billing');
   /**
    * Conta conversas únicas do mês atual para um tenant
    * CORRIGIDO: Agora conta session_ids únicos, não mensagens individuais
@@ -55,7 +56,12 @@ export class ConversationBillingService {
         .not("conversation_context->session_id", "is", null);
 
       if (error) {
-        logger.error("Error counting conversations", { error, tenantId });
+        this.logger.conversationError(new Error(error.message), {
+          service: 'conversation-billing',
+          method: 'countMonthlyConversations',
+          tenantId,
+          operationType: 'count_conversations'
+        });
         throw error;
       }
 
@@ -71,20 +77,23 @@ export class ConversationBillingService {
 
       const conversationCount = uniqueSessionIds.size;
 
-      logger.info("Monthly conversations counted (UNIQUE sessions)", {
+      this.logger.conversation("Monthly conversations counted (UNIQUE sessions)", {
+        service: 'conversation-billing',
+        method: 'countMonthlyConversations',
         tenantId,
-        periodStart: periodStart.toISOString(),
-        periodEnd: periodEnd.toISOString(),
         conversationCount,
         totalMessages: data?.length || 0,
-        method: "unique_session_ids",
+        operationType: 'count_conversations',
+        timestamp: new Date().toISOString()
       });
 
       return conversationCount;
     } catch (error) {
-      logger.error("Failed to count monthly conversations", {
-        error,
+      this.logger.conversationError(error as Error, {
+        service: 'conversation-billing',
+        method: 'countMonthlyConversations',
         tenantId,
+        operationType: 'count_conversations'
       });
       throw error;
     }
@@ -151,7 +160,14 @@ export class ConversationBillingService {
         currentPlan,
       };
 
-      logger.info("Monthly bill calculated", { usage });
+      this.logger.conversation("Monthly bill calculated", {
+        service: 'conversation-billing',
+        method: 'calculateMonthlyBill',
+        tenantId: usage.tenantId,
+        operationType: 'calculate_bill',
+        conversationsUsed: usage.conversationsUsed,
+        totalAmount: usage.totalAmount
+      });
 
       return {
         success: true,
@@ -160,7 +176,12 @@ export class ConversationBillingService {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
-      logger.error("Failed to calculate monthly bill", { error, tenantId });
+      this.logger.conversationError(error as Error, {
+        service: 'conversation-billing',
+        method: 'calculateMonthlyBill',
+        tenantId,
+        operationType: 'calculate_bill'
+      });
       return {
         success: false,
         usage: null as any,
@@ -214,9 +235,11 @@ export class ConversationBillingService {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
-      logger.error("Failed to process conversation overage", {
-        error,
+      this.logger.conversationError(error as Error, {
+        service: 'conversation-billing',
+        method: 'processConversationOverage',
         tenantId,
+        operationType: 'process_overage'
       });
       return {
         success: false,
@@ -235,7 +258,12 @@ export class ConversationBillingService {
   ): Promise<void> {
     try {
       // TODO: Implementar quando subscription_id estiver disponível na tabela tenants
-      logger.info("Mock upgrade plan", { tenantId, newPlan });
+      this.logger.conversation("Mock upgrade plan", {
+        service: 'conversation-billing',
+        method: 'upgradeToNextPlan',
+        tenantId,
+        operationType: 'upgrade_plan'
+      });
 
       // Atualizar tenant no database
       await supabaseAdmin
@@ -246,9 +274,19 @@ export class ConversationBillingService {
         })
         .eq("id", tenantId);
 
-      logger.info("Plan upgraded successfully", { tenantId, newPlan });
+      this.logger.conversation("Plan upgraded successfully", {
+        service: 'conversation-billing',
+        method: 'upgradeToNextPlan',
+        tenantId,
+        operationType: 'upgrade_plan'
+      });
     } catch (error) {
-      logger.error("Failed to upgrade plan", { error, tenantId, newPlan });
+      this.logger.conversationError(error as Error, {
+        service: 'conversation-billing',
+        method: 'upgradeToNextPlan',
+        tenantId,
+        operationType: 'upgrade_plan'
+      });
       throw error;
     }
   }
@@ -262,20 +300,25 @@ export class ConversationBillingService {
   ): Promise<void> {
     try {
       // TODO: Implementar quando stripe_subscription_item_id estiver disponível
-      logger.info("Mock Stripe usage report", {
+      this.logger.conversation("Mock Stripe usage report", {
+        service: 'conversation-billing',
+        method: 'reportUsageToStripe',
         tenantId,
-        overageConversations,
+        operationType: 'report_usage'
       });
 
-      logger.info("Usage reported to Stripe", {
+      this.logger.conversation("Usage reported to Stripe", {
+        service: 'conversation-billing',
+        method: 'reportUsageToStripe',
         tenantId,
-        overageConversations,
+        operationType: 'report_usage'
       });
     } catch (error) {
-      logger.error("Failed to report usage to Stripe", {
-        error,
+      this.logger.conversationError(error as Error, {
+        service: 'conversation-billing',
+        method: 'reportUsageToStripe',
         tenantId,
-        overageConversations,
+        operationType: 'report_usage'
       });
       throw error;
     }
@@ -335,7 +378,12 @@ export class ConversationBillingService {
         generatedAt: new Date().toISOString(),
       };
     } catch (error) {
-      logger.error("Failed to generate usage report", { error, tenantId });
+      this.logger.conversationError(error as Error, {
+        service: 'conversation-billing',
+        method: 'generateUsageReport',
+        tenantId,
+        operationType: 'generate_report'
+      });
       throw error;
     }
   }
@@ -346,17 +394,25 @@ export class ConversationBillingService {
   async saveBillingRecord(usage: ConversationUsage): Promise<void> {
     try {
       // TODO: Criar tabela conversation_billing ou usar tenant_metrics
-      logger.info("Mock billing record save", {
+      this.logger.conversation("Mock billing record save", {
+        service: 'conversation-billing',
+        method: 'saveBillingRecord',
         tenantId: usage.tenantId,
-        amount: usage.totalAmount,
-        conversations: usage.conversationsUsed,
+        operationType: 'save_billing_record'
       });
 
-      logger.info("Billing record saved", { tenantId: usage.tenantId });
-    } catch (error) {
-      logger.error("Failed to save billing record", {
-        error,
+      this.logger.conversation("Billing record saved", {
+        service: 'conversation-billing',
+        method: 'saveBillingRecord',
         tenantId: usage.tenantId,
+        operationType: 'save_billing_record'
+      });
+    } catch (error) {
+      this.logger.conversationError(error as Error, {
+        service: 'conversation-billing',
+        method: 'saveBillingRecord',
+        tenantId: usage.tenantId,
+        operationType: 'save_billing_record'
       });
       throw error;
     }

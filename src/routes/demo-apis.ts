@@ -252,6 +252,26 @@ router.post('/create', async (req: Request, res: Response) => {
 
       // 3. Criar profissionais apenas se novo tenant E tiver dados do formulário
       if (!isReused && !existingProfs.data?.length && professionals.length > 0) {
+        // 🔐 GOOGLE CALENDAR: Buscar credenciais reais existentes para copiar
+        const { data: realCredentials, error: credError } = await supabase
+          .from('professionals')
+          .select('google_calendar_credentials')
+          .eq('id', 'd705cdd3-0c15-43ce-9ace-dd68b66126ba') // ID específico com credenciais reais
+          .limit(1);
+
+        if (credError) {
+          console.warn('🔍 [DEMO-CALENDAR] Erro ao buscar credenciais:', credError);
+        }
+
+        const validGoogleCredentials = realCredentials?.[0]?.google_calendar_credentials;
+
+        console.log('🔐 [DEMO-CALENDAR] Resultado da busca:', {
+          found: !!realCredentials?.[0],
+          hasCredentials: !!validGoogleCredentials,
+          provider: validGoogleCredentials?.provider,
+          tokenPrefix: validGoogleCredentials?.access_token?.substring(0, 20)
+        });
+
         const professionalsToInsert = professionals.map((pro: any) => ({
           id: crypto.randomUUID(),
           tenant_id: tenantId,
@@ -259,7 +279,9 @@ router.post('/create', async (req: Request, res: Response) => {
           email: `${pro.full_name.toLowerCase().replace(/\s+/g, '.')}@demo.local`,
           phone: phone || null,
           specialties: [pro.role || 'professional'],
-          google_calendar_id: 'primary', // força no backend sempre
+          google_calendar_id: 'primary',
+          // ✅ COPIAR CREDENCIAIS REAIS: Para stress testing da AI com agendamentos reais
+          google_calendar_credentials: validGoogleCredentials || null,
           is_active: true
         }));
         
@@ -270,7 +292,26 @@ router.post('/create', async (req: Request, res: Response) => {
           
         if (profError) throw profError;
         createdProfessionals = newProfs || [];
-        
+
+        // 🔧 FORÇA CREDENCIAIS REAIS: Update pós-inserção para sobrescrever qualquer fallback
+        if (validGoogleCredentials && createdProfessionals.length > 0) {
+          console.log('🔧 [DEMO-CALENDAR] Forçando credenciais reais pós-inserção...');
+
+          const professionalIds = createdProfessionals.map(p => p.id);
+          const { error: updateError } = await supabase
+            .from('professionals')
+            .update({
+              google_calendar_credentials: validGoogleCredentials
+            })
+            .in('id', professionalIds);
+
+          if (updateError) {
+            console.warn('⚠️ [DEMO-CALENDAR] Erro ao forçar credenciais reais:', updateError);
+          } else {
+            console.log('✅ [DEMO-CALENDAR] Credenciais reais forçadas com sucesso!');
+          }
+        }
+
         // Vincular profissionais aos serviços criados via professional_services
         if (createdServices.length > 0 && createdProfessionals.length > 0) {
           console.log(`🔗 Criando ${createdProfessionals.length}×${createdServices.length} = ${createdProfessionals.length * createdServices.length} vínculos profissionais-serviços`);
@@ -457,7 +498,7 @@ router.get('/evidence/:tenantId', async (req: Request, res: Response) => {
     // 3. PROFESSIONALS TABLE
     const { data: professionals, error: profError } = await supabase
       .from('professionals')
-      .select('id, tenant_id, name, google_calendar_id')
+      .select('id, tenant_id, name, google_calendar_id, google_calendar_credentials')
       .eq('tenant_id', tenantId);
 
     evidence.tables.professionals = {

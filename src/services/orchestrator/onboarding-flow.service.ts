@@ -8,12 +8,17 @@ import {
     OnboardingFlowResult,
     UserDataExtractionResult,
     OrchestratorContext
-} from './orchestrator.types';
+} from '../../types';
 import {
     extractUserData,
     determineNextCollectionState,
     firstName
 } from './user-data-extraction.utils';
+import {
+    contextAwareService,
+    ConversationContext,
+    ContextualResponse
+} from '../conversation-intelligence/context-aware.service';
 
 export class OnboardingFlowService {
 
@@ -29,6 +34,44 @@ export class OnboardingFlowService {
             gender?: string;
         }
     ): Promise<OnboardingFlowResult> {
+
+        // Build conversation context for intelligent responses
+        const conversationContext: ConversationContext = {
+            hasName: !!userData.name,
+            hasEmail: !!userData.email,
+            userName: userData.name,
+            userEmail: userData.email,
+            currentStage: 'onboarding',
+            previousMessages: [], // TODO: Get from conversation history
+            tenantName: ctx.tenantConfig?.business_name || ctx.tenantConfig?.name || 'nosso negócio',
+            businessType: ctx.tenantConfig?.business_type || ctx.tenantConfig?.domain || 'serviço'
+        };
+
+        // Check if this message needs contextual intelligence first
+        const contextualResponse = await contextAwareService.processContextualMessage(
+            ctx.message,
+            conversationContext
+        );
+
+        // If context-aware service handles this completely, use its response
+        if (!contextualResponse.shouldContinueFlow) {
+            return {
+                success: true,
+                shouldContinue: false,
+                response: contextualResponse.message,
+                isComplete: contextualResponse.nextStage === 'service_selection',
+                nextState: contextualResponse.nextStage === 'service_selection'
+                    ? DataCollectionState.COMPLETED
+                    : DataCollectionState.AWAITING_NAME,
+                extractedData: contextualResponse.contextUpdate ? {
+                    name: contextualResponse.contextUpdate.userName || userData.name,
+                    email: contextualResponse.contextUpdate.userEmail || userData.email,
+                    gender: userData.gender,
+                    extractedSuccessfully: true
+                } : undefined,
+                aiMetrics: contextualResponse.aiMetrics
+            };
+        }
 
         // Extract any data from the current message
         const extractedData = extractUserData(ctx.message);
@@ -49,9 +92,10 @@ export class OnboardingFlowService {
         if (hasName && hasEmail && hasGender) {
             const name = firstName(updatedData.name);
             return {
+                success: true,
                 shouldContinue: false,
                 response: `Perfeito, ${name}! Seus dados foram salvos. Como posso te ajudar hoje?`,
-                isCompleted: true,
+                isComplete: true,
                 nextState: DataCollectionState.COMPLETED,
                 extractedData: {
                     name: updatedData.name,
@@ -72,59 +116,56 @@ export class OnboardingFlowService {
 
         let response: string;
 
-        switch (nextState) {
-            case DataCollectionState.AWAITING_NAME:
-                if (extractedData.name) {
-                    // Name was just extracted, move to email
-                    response = `Prazer em te conhecer, ${firstName(extractedData.name)}! Agora preciso do seu e-mail para finalizar o cadastro.`;
-                } else {
-                    // Still need name
-                    response = `Olá! Para começar, preciso do seu nome completo. Pode me dizer qual é o seu nome?`;
-                }
-                break;
+        // Update conversation context with new data
+        const updatedConversationContext: ConversationContext = {
+            ...conversationContext,
+            hasName: hasName,
+            hasEmail: hasEmail,
+            userName: updatedData.name,
+            userEmail: updatedData.email
+        };
 
-            case DataCollectionState.AWAITING_EMAIL:
-                if (extractedData.email) {
-                    // Email was just extracted, move to gender
-                    const name = firstName(updatedData.name);
-                    response = `Ótimo, ${name}! E-mail ${extractedData.email} salvo. Por último, você é homem ou mulher? (Para personalizar melhor o atendimento)`;
-                } else {
-                    // Still need email
-                    const name = firstName(updatedData.name);
-                    response = `Obrigado, ${name}! Agora preciso do seu e-mail para finalizar o cadastro.`;
-                }
-                break;
+        // Use contextual response when transitioning between states
+        let capturedAiMetrics: any = undefined;
 
-            case DataCollectionState.AWAITING_GENDER:
-                if (extractedData.gender) {
-                    // Gender was inferred or extracted, complete onboarding
-                    const name = firstName(updatedData.name);
-                    response = `Perfeito, ${name}! Seus dados foram salvos. Como posso te ajudar hoje?`;
-                } else {
-                    // Still need gender
-                    const name = firstName(updatedData.name);
-                    response = `Quase pronto, ${name}! Por último, você é homem ou mulher? (Para personalizar melhor o atendimento)`;
-                }
-                break;
+        if (extractedData.name || extractedData.email || extractedData.gender) {
+            // Data was extracted, get intelligent transition response
+            const transitionResponse = await contextAwareService.processContextualMessage(
+                ctx.message,
+                updatedConversationContext
+            );
 
-            default:
-                response = `Vamos começar o seu cadastro. Qual é o seu nome completo?`;
-                break;
+            // Capture AI metrics from transition response
+            if (transitionResponse.aiMetrics) {
+                capturedAiMetrics = transitionResponse.aiMetrics;
+            }
+
+            if (transitionResponse.shouldContinueFlow && transitionResponse.message) {
+                response = transitionResponse.message;
+            } else {
+                // Fallback to original logic
+                response = this.getDefaultStateResponse(nextState, extractedData, updatedData);
+            }
+        } else {
+            // No data extracted, use default prompting
+            response = this.getDefaultStateResponse(nextState, extractedData, updatedData);
         }
 
         const isCompleted = nextState === DataCollectionState.COMPLETED;
 
         return {
+            success: true,
             shouldContinue: !isCompleted,
             response,
             nextState,
-            isCompleted,
+            isComplete: isCompleted,
             extractedData: extractedData.extractedSuccessfully ? {
                 name: updatedData.name,
                 email: updatedData.email,
                 gender: updatedData.gender,
                 extractedSuccessfully: true
-            } : undefined
+            } : undefined,
+            aiMetrics: capturedAiMetrics
         };
     }
 
@@ -149,6 +190,51 @@ export class OnboardingFlowService {
             !!userData.email,
             !!userData.gender
         );
+    }
+
+    /**
+     * Get default response for onboarding state (fallback method)
+     */
+    private getDefaultStateResponse(
+        nextState: DataCollectionState,
+        extractedData: UserDataExtractionResult,
+        updatedData: { name?: string; email?: string; gender?: string }
+    ): string {
+        switch (nextState) {
+            case DataCollectionState.AWAITING_NAME:
+                if (extractedData.name) {
+                    // Name was just extracted, move to email
+                    return `Prazer em te conhecer, ${firstName(extractedData.name)}! Agora preciso do seu e-mail para finalizar o cadastro.`;
+                } else {
+                    // Still need name
+                    return `Olá! Para começar, preciso do seu nome completo. Pode me dizer qual é o seu nome?`;
+                }
+
+            case DataCollectionState.AWAITING_EMAIL:
+                if (extractedData.email) {
+                    // Email was just extracted, move to gender
+                    const name = firstName(updatedData.name);
+                    return `Ótimo, ${name}! E-mail ${extractedData.email} salvo. Por último, você é homem ou mulher? (Para personalizar melhor o atendimento)`;
+                } else {
+                    // Still need email
+                    const name = firstName(updatedData.name);
+                    return `Obrigado, ${name}! Agora preciso do seu e-mail para finalizar o cadastro.`;
+                }
+
+            case DataCollectionState.AWAITING_GENDER:
+                if (extractedData.gender) {
+                    // Gender was inferred or extracted, complete onboarding
+                    const name = firstName(updatedData.name);
+                    return `Perfeito, ${name}! Seus dados foram salvos. Como posso te ajudar hoje?`;
+                } else {
+                    // Still need gender
+                    const name = firstName(updatedData.name);
+                    return `Quase pronto, ${name}! Por último, você é homem ou mulher? (Para personalizar melhor o atendimento)`;
+                }
+
+            default:
+                return `Vamos começar o seu cadastro. Qual é o seu nome completo?`;
+        }
     }
 
     /**

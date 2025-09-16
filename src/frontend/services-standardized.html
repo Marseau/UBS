@@ -84,33 +84,33 @@
             <div class="row g-3 mb-4">
                 <div class="col-xl-3 col-md-6">
                     <div class="metric-card">
-                        <div class="metric-value">18</div>
+                        <div class="metric-value" id="totalServices">--</div>
                         <div class="metric-title">Total Serviços</div>
-                        <div class="metric-subtitle">Ativos</div>
+                        <div class="metric-subtitle">Sem dados</div>
                     </div>
                 </div>
                 
                 <div class="col-xl-3 col-md-6">
                     <div class="metric-card">
-                        <div class="metric-value">R$ 127</div>
+                        <div class="metric-value" id="avgPrice">--</div>
                         <div class="metric-title">Preço Médio</div>
-                        <div class="metric-subtitle">Por serviço</div>
+                        <div class="metric-subtitle">Sem dados</div>
                     </div>
                 </div>
                 
                 <div class="col-xl-3 col-md-6">
                     <div class="metric-card">
-                        <div class="metric-value">45min</div>
+                        <div class="metric-value" id="avgDuration">--</div>
                         <div class="metric-title">Duração Média</div>
-                        <div class="metric-subtitle">Tempo padrão</div>
+                        <div class="metric-subtitle">Sem dados</div>
                     </div>
                 </div>
                 
                 <div class="col-xl-3 col-md-6">
                     <div class="metric-card">
-                        <div class="metric-value">94%</div>
+                        <div class="metric-value" id="popularityRate">--</div>
                         <div class="metric-title">Popularidade</div>
-                        <div class="metric-subtitle">Taxa de uso</div>
+                        <div class="metric-subtitle">Sem dados</div>
                     </div>
                 </div>
             </div>
@@ -252,7 +252,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/utils/secure-auth.js"></script>
-    <script src="js/utils/tenant-avatar-loader.js"></script>
+    <script src="js/utils/tenant-avatar-loader.js?v=20250916-1530"></script>
     
     <script>
         // Variáveis globais para armazenar dados do serviço
@@ -409,19 +409,27 @@
         }
         
         function getAuthToken() {
-            if (window.secureAuth) {
-                return window.secureAuth.getAuthHeader();
+            // Usar a mesma lógica da página de login
+            const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+            if (!token) {
+                console.error('❌ Token não encontrado no localStorage');
+                return null;
             }
-            return 'Bearer ' + (localStorage.getItem('ubs_token') || localStorage.getItem('adminToken'));
+            return 'Bearer ' + token;
         }
 
         // Função para carregar lista de serviços via API
         async function loadServices() {
             try {
-                const token = localStorage.getItem('ubs_token');
+                const authToken = getAuthToken();
+                if (!authToken) {
+                    console.error('❌ Token não disponível para loadServices');
+                    return;
+                }
+
                 const response = await fetch('/api/admin/services', {
                     headers: {
-                        'Authorization': `Bearer ${token}`,
+                        'Authorization': authToken,
                         'Content-Type': 'application/json'
                     }
                 });
@@ -813,7 +821,19 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    const services = data.services || data || [];
+                    console.log('🔍 Dados recebidos da API:', data);
+
+                    // Garantir que services seja sempre um array
+                    let services = [];
+                    if (data.services && Array.isArray(data.services)) {
+                        services = data.services;
+                    } else if (Array.isArray(data)) {
+                        services = data;
+                    } else if (data && Array.isArray(data.data)) {
+                        services = data.data;
+                    }
+
+                    console.log('📋 Services processados:', services);
                     
                     if (services.length === 0) {
                         tableBody.innerHTML = `
@@ -890,8 +910,24 @@
             }
         }
 
+        // Função para verificar autenticação
+        function checkAuth() {
+            const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+            if (!token) {
+                console.log('❌ Usuário não autenticado, redirecionando...');
+                alert('Sessão expirada. Você será redirecionado para a página de login.');
+                window.location.href = 'login-standardized.html';
+                return false;
+            }
+            return true;
+        }
+
         // Inicializa contexto na página
         document.addEventListener('DOMContentLoaded', function() {
+            // Verificar autenticação primeiro
+            if (!checkAuth()) {
+                return;
+            }
             // Carrega sidebar dinâmica primeiro
             loadDynamicSidebar();
             

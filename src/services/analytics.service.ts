@@ -123,7 +123,13 @@ export class AnalyticsService {
           .from("appointments")
           .select("*")
           .eq("tenant_id", tenantId),
-        getAdminClient().from("users").select("id").eq("tenant_id", tenantId),
+        getAdminClient()
+          .from("users")
+          .select(`
+            id,
+            user_tenants!inner(tenant_id)
+          `)
+          .eq("user_tenants.tenant_id", tenantId),
         getAdminClient().from("services").select("*").eq("tenant_id", tenantId),
         getAdminClient()
           .from("conversation_history")

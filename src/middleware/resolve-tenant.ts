@@ -49,8 +49,25 @@ async function getTenantByDemoToken(token: string, demoTenantId?: string, routeT
         finalTenantId: tenantId
       });
       if (tenantId) {
-        console.log(`✅ [getTenantByDemoToken] Sucesso com tenant: ${tenantId}`);
-        return { id: tenantId };
+        // Validar se o tenant realmente existe no banco
+        try {
+          const { data: tenantExists } = await supabaseAdmin
+            .from('tenants')
+            .select('id')
+            .eq('id', tenantId)
+            .single();
+          
+          if (tenantExists) {
+            console.log(`✅ [getTenantByDemoToken] Sucesso com tenant: ${tenantId}`);
+            return { id: tenantId };
+          } else {
+            console.error(`❌ [getTenantByDemoToken] Tenant ${tenantId} não existe no banco!`);
+            return null;
+          }
+        } catch (error) {
+          console.error(`❌ [getTenantByDemoToken] Erro ao validar tenant ${tenantId}:`, error);
+          return null;
+        }
       }
       console.error('❌ [TENANT-RESOLUTION] Demo token HMAC válido mas sem tenant específico!', {
         payload,
@@ -67,8 +84,25 @@ async function getTenantByDemoToken(token: string, demoTenantId?: string, routeT
   if (token === process.env.DEMO_MODE_TOKEN || token === 'fixed-secret-for-load-test-2025') {
     const tenantId = demoTenantId || routeTenantId;
     if (tenantId) {
-      console.log(`✅ [getTenantByDemoToken] Sucesso com token simples: ${tenantId}`);
-      return { id: tenantId };
+      // Validar se o tenant realmente existe no banco
+      try {
+        const { data: tenantExists } = await supabaseAdmin
+          .from('tenants')
+          .select('id')
+          .eq('id', tenantId)
+          .single();
+        
+        if (tenantExists) {
+          console.log(`✅ [getTenantByDemoToken] Sucesso com token simples: ${tenantId}`);
+          return { id: tenantId };
+        } else {
+          console.error(`❌ [getTenantByDemoToken] Tenant ${tenantId} não existe no banco (token simples)!`);
+          return null;
+        }
+      } catch (error) {
+        console.error(`❌ [getTenantByDemoToken] Erro ao validar tenant ${tenantId} (token simples):`, error);
+        return null;
+      }
     }
     console.error('❌ [TENANT-RESOLUTION] Demo token simples sem tenant específico!');
     return null;

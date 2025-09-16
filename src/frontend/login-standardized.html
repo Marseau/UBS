@@ -583,11 +583,11 @@
         // Redirect user based on role
         function redirectUser(decodedToken) {
             if (decodedToken.role === 'super_admin') {
-                window.location.href = '/dashboard-standardized.html';
+                window.location.href = '/dashboard-standardized.html';  // Super Admin Dashboard
             } else if (decodedToken.role === 'tenant_admin') {
-                window.location.href = '/dashboard-standardized.html';
+                window.location.href = '/dashboard-tenant-admin.html';  // Tenant Admin Dashboard
             } else {
-                window.location.href = '/dashboard-standardized.html';
+                window.location.href = '/dashboard-standardized.html';  // Fallback
             }
         }
 

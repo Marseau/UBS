@@ -18,6 +18,7 @@ import { BusinessHoursService } from '../services/business-hours.service';
 import { ContextualUpsellService } from '../services/contextual-upsell.service';
 import { RetentionStrategyService, RetentionOffer } from '../services/retention-strategy.service';
 import { ContextualSuggestionsService, SuggestionContext } from '../services/contextual-suggestions.service';
+import { finalizeAndRespond } from '../core/finalize';
 import { AppointmentActionablesService } from '../services/appointment-actionables.service';
 import { MapsLocationService } from '../services/maps-location.service';
 import Redis from 'ioredis';
@@ -1906,13 +1907,14 @@ class ValidationService {
       }
     }
     
-    const result = await orchestrator.orchestrateWebhookFlow(
-      text,
-      userPhone,
-      actualTenantId,
-      { domain: 'whatsapp', services: [], policies: {} },
-      { session_id: sessionKey, demoMode: null }
-    );
+    const result = await orchestrator.orchestrateWebhookFlow({
+      messageText: text,
+      userPhone: userPhone,
+      tenantId: actualTenantId,
+      tenantConfig: { domain: 'whatsapp', services: [], policies: {} },
+      existingContext: { session_id: sessionKey, demoMode: (req as any)?.demoMode },
+      isDemo: !!(req as any)?.demoMode // Detecta se é demo baseado no token
+    });
     
     // 🚀 OTIMIZAÇÃO #1: RESPOSTA PRIMEIRO, BANCO DEPOIS
     const processingTime = Date.now() - startTime;
@@ -1957,35 +1959,42 @@ class ValidationService {
       });
     }
     
-    const __persist_intentTokens: number = __persist_intentLlm.total_tokens ?? 0;
-    const __persist_intentApiCost: number = __persist_intentLlm.api_cost_usd ?? 0;
-    const __persist_intentProcessingCost: number = __persist_intentLlm.processing_cost_usd ?? 0;
-    const __persist_intentModelUsed: string | null = __persist_intentLlm.model_used ?? null;
-    const __persist_aiConfidence: number = result?.telemetryData?.confidence ?? 0;
+    // ✅ NOVO: Usar intentMetrics separadas em vez de extrair do llmMetrics
+    const __persist_intentTokens: number = result.intentMetrics?.total_tokens ?? 0;
+    const __persist_intentApiCost: number = result.intentMetrics?.api_cost_usd ?? 0;
+    const __persist_intentProcessingCost: number = result.intentMetrics?.processing_cost_usd ?? 0;
+    const __persist_intentModelUsed: string | null = result.intentMetrics?.model_used ?? null;
+    // ✅ NORMALIZAÇÃO: Confiança com fallback para chaves antigas
+    const __persist_aiConfidence: number = 
+      result?.telemetryData?.confidence_score 
+      ?? 0;
+      
     // ✅ CORREÇÃO: Flow Lock não deve anular persistência de intent
     // Intent Detection e Flow Lock são sistemas separados com responsabilidades distintas
-    const __persist_intent: string | undefined = result?.telemetryData?.intent ?? undefined;
+    const __persist_intent: string | null = result?.telemetryData?.intent ?? null;
     
     // ✅ ADICIONAL: Persiste flow_state separadamente para analytics de fluxo
     const __persist_flow_state: string | undefined = result?.updatedContext?.flow_lock?.active_flow ?? undefined;
 
-    // SEPARAÇÃO: Métricas de Response Generation (para linha da IA) - IMPLEMENTADO
-    const __persist_responseTokens: number = result.llmMetrics?.total_tokens || 0;
-    const __persist_responseApiCost: number = result.llmMetrics?.api_cost_usd || 0;
-    const __persist_responseProcessingCost: number = result.llmMetrics?.processing_cost_usd || 0.00003;
-    const __persist_responseModelUsed: string | null = result.telemetryData?.model_used || config.openai.model;
+    // ---- SEPARAÇÃO: MÉTRICAS de Resposta (geração) ----
+    const __persist_responseTokens: number = result?.intentMetrics?.total_tokens ?? 0;
+    const __persist_responseApiCost: number = result?.intentMetrics?.api_cost_usd ?? 0;
+    let __effective_responseProcessingCost: number = 
+      (result?.intentMetrics?.api_cost_usd ?? 0) + (result?.intentMetrics?.processing_cost_usd ?? 0);
+    const __persist_responseModelUsed: string | null = result?.intentMetrics?.model_used ?? null;
     
     // DEBUG: Verificar se as métricas estão chegando
     console.log('🔍 [METRICS DEBUG] AI Response Metrics:', {
       responseTokens: __persist_responseTokens,
       responseApiCost: __persist_responseApiCost,
-      responseProcessingCost: __persist_responseProcessingCost,
+      responseProcessingCost: __effective_responseProcessingCost,
       responseModelUsed: __persist_responseModelUsed,
       llmMetrics: result.llmMetrics
     });
     
     // === Captura demo token payload para persistência assíncrona ===
     const __persist_demoPayload = (req as any)?.demoMode ?? undefined;
+    console.log('🔍 [DEMO DEBUG] __persist_demoPayload:', __persist_demoPayload);
 
     setImmediate(async () => {
       console.log('🔍 setImmediate executado para persistência');
@@ -2049,10 +2058,12 @@ class ValidationService {
         const sessionUuid = String(sessionDataForContext.conversationId);
 
         // 4) Bases (NÃO colocar content/is_from_user/message_type aqui)
+        const finalMessageSource = __persist_demoPayload ? 'whatsapp_demo' : 'whatsapp';
+        console.log('🔍 [DEMO DEBUG] Final message_source:', { __persist_demoPayload: !!__persist_demoPayload, finalMessageSource });
         const commonBase = {
           tenant_id: tenantId,
           user_id: userId,
-          message_source: __persist_demoPayload ? 'whatsapp_demo' : 'whatsapp',
+          message_source: finalMessageSource,
           created_at: new Date().toISOString(),
           conversation_outcome: null, // outcome final é resolvido por analisador/cron
           conversation_context: { 
@@ -2070,7 +2081,7 @@ class ValidationService {
         }
 
         // Ajuste de custo de processamento para Response Generation (linha IA)
-        let __effective_responseProcessingCost = __persist_responseProcessingCost;
+        // Usar o valor já calculado de __effective_responseProcessingCost definido anteriormente
         if (!__persist_responseTokens || __persist_responseTokens === 0) {
           // custo mínimo de infra + inserts no BD para resposta
           __effective_responseProcessingCost = 0.00003; // 0.00002 infra + 0.00001 DB
@@ -2220,19 +2231,21 @@ export default router;
       const state: string = st.current_state;
       if (state === 'awaiting_user') {
         try {
-          await supabaseAdmin.from('conversation_history').insert([{
-            tenant_id: tenantId,
-            user_id: userId,
-            content: 'Você ainda está aí? Se preferir, posso encerrar por aqui e retomamos quando quiser.',
-            is_from_user: false,
-            message_type: 'text',
-            intent_detected: 'general_inquiry',
-            conversation_outcome: null, // OUTCOMES DETERMINADOS PELO ConversationOutcomeAnalyzerService
-            message_source: 'whatsapp_demo',
-            model_used: 'system',
-            created_at: new Date().toISOString(),
-            conversation_context: { hint: 'inactivity_ping' }
-          }]);
+          await finalizeAndRespond({
+            tenantId: tenantId,
+            userId: userId,
+            sessionId: undefined,
+            requestText: '', // Sistema automático, não tem input do usuário
+            replyText: 'Você ainda está aí? Se preferir, posso encerrar por aqui e retomamos quando quiser.',
+            isFromUser: false,
+            intentDetected: 'general_inquiry',
+            confidence: 1.0,
+            modelUsed: 'system', // Mensagem automática do sistema
+            tokensUsed: null,
+            apiCostUsd: null,
+            outcome: null,
+            context: { hint: 'inactivity_ping' }
+          });
         } catch {}
         await (supabaseAdmin as any)
           .from('conversation_states')
@@ -2242,19 +2255,21 @@ export default router;
       }
       if (state === 'pinged_wait') {
         try {
-          await supabaseAdmin.from('conversation_history').insert([{
-            tenant_id: tenantId,
-            user_id: userId,
-            content: 'Conversa encerrada por inatividade. Podemos retomar quando quiser.',
-            is_from_user: false,
-            message_type: 'text',
-            intent_detected: 'general_inquiry',
-            conversation_outcome: null, // OUTCOMES DETERMINADOS PELO ConversationOutcomeAnalyzerService
-            message_source: 'whatsapp_demo',
-            model_used: 'system',
-            created_at: new Date().toISOString(),
-            conversation_context: { hint: 'inactivity_timeout' }
-          }]);
+          await finalizeAndRespond({
+            tenantId: tenantId,
+            userId: userId,
+            sessionId: undefined,
+            requestText: '',
+            replyText: 'Conversa encerrada por inatividade. Podemos retomar quando quiser.',
+            isFromUser: false,
+            intentDetected: 'general_inquiry',
+            confidence: 1.0,
+            modelUsed: 'system',
+            tokensUsed: null,
+            apiCostUsd: null,
+            outcome: null,
+            context: { hint: 'inactivity_timeout' }
+          });
         } catch {}
         await (supabaseAdmin as any)
           .from('conversation_states')

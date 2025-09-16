@@ -84,33 +84,33 @@
             <div class="row g-3 mb-4">
                 <div class="col-xl-3 col-md-6">
                     <div class="metric-card">
-                        <div class="metric-value">12</div>
+                        <div class="metric-value">--</div>
                         <div class="metric-title">Hoje</div>
-                        <div class="metric-subtitle">Agendamentos</div>
+                        <div class="metric-subtitle">Sem dados</div>
                     </div>
                 </div>
-                
+
                 <div class="col-xl-3 col-md-6">
                     <div class="metric-card">
-                        <div class="metric-value">89</div>
+                        <div class="metric-value">--</div>
                         <div class="metric-title">Confirmados</div>
-                        <div class="metric-subtitle">Esta semana</div>
+                        <div class="metric-subtitle">Sem dados</div>
                     </div>
                 </div>
-                
+
                 <div class="col-xl-3 col-md-6">
                     <div class="metric-card">
-                        <div class="metric-value">7</div>
+                        <div class="metric-value">--</div>
                         <div class="metric-title">Pendentes</div>
-                        <div class="metric-subtitle">Aguardando</div>
+                        <div class="metric-subtitle">Sem dados</div>
                     </div>
                 </div>
-                
+
                 <div class="col-xl-3 col-md-6">
                     <div class="metric-card">
-                        <div class="metric-value">94%</div>
+                        <div class="metric-value">--</div>
                         <div class="metric-title">Comparecimento</div>
-                        <div class="metric-subtitle">Taxa mensal</div>
+                        <div class="metric-subtitle">Sem dados</div>
                     </div>
                 </div>
             </div>
@@ -280,7 +280,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/utils/secure-auth.js"></script>
-    <script src="js/utils/tenant-avatar-loader.js"></script>
+    <script src="js/utils/tenant-avatar-loader.js?v=20250916-1530"></script>
     
     <script>
         // Variáveis globais para armazenar dados do agendamento
@@ -290,9 +290,15 @@
         // Função para carregar lista de clientes
         async function loadCustomers() {
             try {
+                const authToken = getAuthToken();
+                if (!authToken) {
+                    console.error('❌ Token não disponível para loadCustomers');
+                    return;
+                }
+
                 const response = await fetch('/api/admin/customers', {
                     headers: {
-                        'Authorization': getAuthToken()
+                        'Authorization': authToken
                     }
                 });
                 
@@ -301,8 +307,12 @@
                     console.log('📊 Dados do tenant recebidos:', data);
                     customersData = data.customers || [];
                     
-                    // Ordena por nome
-                    customersData.sort((a, b) => a.name.localeCompare(b.name));
+                    // Ordena por nome (com tratamento para nomes null)
+                    customersData.sort((a, b) => {
+                        const nameA = a.name || 'Sem nome';
+                        const nameB = b.name || 'Sem nome';
+                        return nameA.localeCompare(nameB);
+                    });
                     
                     // Popula o dropdown
                     populateCustomersDropdown();
@@ -313,7 +323,7 @@
                 }
             } catch (error) {
                 console.error('Erro ao carregar clientes:', error);
-                // Fallback com dados simulados
+                // Sem dados disponíveis
                 customersData = [];
                 populateCustomersDropdown();
             }
@@ -327,8 +337,9 @@
             customersData.forEach(customer => {
                 const option = document.createElement('option');
                 option.value = customer.id;
-                option.textContent = `${customer.name} - ${customer.phone}`;
-                option.dataset.name = customer.name;
+                const displayName = customer.name || 'Sem nome';
+                option.textContent = `${displayName} - ${customer.phone}`;
+                option.dataset.name = customer.name || '';
                 option.dataset.phone = customer.phone;
                 dropdown.appendChild(option);
             });
@@ -363,8 +374,9 @@
             
             // Seleciona o cliente no dropdown
             const clientDropdown = document.getElementById('editClient');
-            const clientOption = Array.from(clientDropdown.options).find(option => 
-                option.dataset.name === client && option.dataset.phone === phone
+            const clientOption = Array.from(clientDropdown.options).find(option =>
+                (option.dataset.name === client || (client === 'Sem nome' && !option.dataset.name)) &&
+                option.dataset.phone === phone
             );
             if (clientOption) {
                 clientDropdown.value = clientOption.value;
@@ -493,7 +505,7 @@
         }
         
         function parseDateTimeString(dateTimeStr) {
-            // Parse simples para o exemplo (melhorar para datas reais)
+            // Parse de datas para agendamentos
             if (dateTimeStr.includes('Hoje')) {
                 const today = new Date();
                 const time = dateTimeStr.split(', ')[1];
@@ -508,10 +520,13 @@
         }
         
         function getAuthToken() {
-            if (window.secureAuth) {
-                return window.secureAuth.getAuthHeader();
+            // Usar a mesma lógica da página de login
+            const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+            if (!token) {
+                console.error('❌ Token não encontrado no localStorage');
+                return null;
             }
-            return 'Bearer ' + (localStorage.getItem('ubs_token') || localStorage.getItem('adminToken'));
+            return 'Bearer ' + token;
         }
 
         // Função para carregar lista de agendamentos via API
@@ -610,9 +625,23 @@
             return statusTexts[status] || status;
         }
 
+        // Função para verificar autenticação
+        function checkAuth() {
+            const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+            if (!token) {
+                console.log('❌ Usuário não autenticado, redirecionando...');
+                alert('Sessão expirada. Você será redirecionado para a página de login.');
+                window.location.href = 'login-standardized.html';
+                return false;
+            }
+            return true;
+        }
+
         // Carrega agendamentos ao inicializar a página
         document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(loadAppointments, 100);
+            if (checkAuth()) {
+                setTimeout(loadAppointments, 100);
+            }
         });
         
         function showSuccessMessage(message) {
@@ -676,13 +705,13 @@
         
         function logout() {
             if (confirm('Tem certeza que deseja sair?')) {
-                if (window.secureAuth) {
-                    window.secureAuth.logout();
-                } else {
-                    localStorage.removeItem('ubs_token');
-                    localStorage.removeItem('adminToken');
-                }
-                window.location.href = 'login.html';
+                // Usar a mesma lógica da página de login
+                localStorage.removeItem('ubs_token');
+                localStorage.removeItem('adminToken');
+                localStorage.removeItem('ubs_user_data');
+                sessionStorage.removeItem('ubs_token');
+                sessionStorage.removeItem('adminToken');
+                window.location.href = 'login-standardized.html';
             }
         }
 
@@ -704,6 +733,11 @@
         async function fetchTenantData(tenantId) {
             try {
                 const authToken = getAuthToken();
+                if (!authToken) {
+                    console.error('❌ Token não disponível para fetchTenantData');
+                    return null;
+                }
+
                 const response = await fetch('/api/admin/tenant', {
                     headers: {
                         'Authorization': authToken,
@@ -712,7 +746,7 @@
                 });
                 
                 if (response.ok) {
-                    const tenant = await response.json();
+                    const data = await response.json();
                     // Verificar diferentes estruturas de resposta
                     if (data.business_name) {
                         return data.business_name;
@@ -729,7 +763,7 @@
                     else if (Array.isArray(data) && data.length > 0) {
                         return data[0].business_name || data[0].name || data[0].slug || 'Empresa';
                     }
-                    
+
                     console.warn('⚠️ Estrutura de dados inesperada:', data);
                     return 'Empresa';
                 } else {

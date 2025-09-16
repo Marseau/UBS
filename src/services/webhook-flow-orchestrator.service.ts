@@ -38,7 +38,7 @@ type OrchestratorInput = {
   userPhone: string;
   whatsappNumber?: string;
   tenantId?: string;            // quando disponível
-  messageSource: 'whatsapp' | 'whatsapp_demo' | 'web' | 'api';
+  messageSource: 'whatsapp' | 'demo';
 };
 
 // IntentDecision será redefinida abaixo para compatibilidade
@@ -593,12 +593,6 @@ export class WebhookFlowOrchestratorService {
     existingContext?: any;
     isDemo?: boolean;
   }) {
-    console.log('🚨 [ORCHESTRATOR-METHOD-START] Entrada do método:', {
-      messageText: input.messageText?.substring(0, 30),
-      tenantId: input.tenantId,
-      isDemo: input.isDemo
-    });
-
     const startTime = Date.now();
     
     // 1) Monta o contexto único do turn
@@ -620,45 +614,27 @@ export class WebhookFlowOrchestratorService {
     });
 
     // PERSISTIR MENSAGEM DO USUÁRIO PRIMEIRO (ANTES DE PROCESSAR IA)
-    console.log('🔥 [ORCHESTRATOR-DEBUG] INICIO da persistência user message');
+    const { persistConversationMessage } = await import('../services/persistence/conversation-history.persistence');
+    const { ConversationRow } = await import('../contracts/conversation');
+    
+    const userRow = ConversationRow.parse({
+      tenant_id: ctx.tenantId,
+      user_id: ctx.userId,
+      content: ctx.message,
+      is_from_user: true, // MENSAGEM DO USUÁRIO
+      message_type: "text",
+      intent_detected: null, // Será preenchido depois da detecção
+      confidence_score: null,
+      conversation_context: { session_id: ctx.sessionId },
+      model_used: null, // Mensagem do usuário não usa modelo
+      tokens_used: null,
+      api_cost_usd: null,
+      conversation_outcome: null,
+      message_source: ctx.isDemo ? 'whatsapp_demo' : 'whatsapp', // ESSENCIAL: Diferenciar origem
+    });
 
-    try {
-      const { persistConversationMessage } = await import('../services/persistence/conversation-history.persistence');
-      const { ConversationRow } = await import('../contracts/conversation');
-
-      console.log('🔥 [ORCHESTRATOR-DEBUG] Imports successful, creating user row');
-
-      const userRow = ConversationRow.parse({
-        tenant_id: ctx.tenantId,
-        user_id: ctx.userId,
-        content: ctx.message,
-        is_from_user: true, // MENSAGEM DO USUÁRIO
-        message_type: "text",
-        intent_detected: null, // Será preenchido depois da detecção
-        confidence_score: null,
-        conversation_context: { session_id: ctx.sessionId },
-        model_used: null, // Mensagem do usuário não usa modelo
-        tokens_used: null,
-        api_cost_usd: null,
-        processing_cost_usd: 0.00003, // ADICIONADO: Custo de infraestrutura (servidor + db)
-        conversation_outcome: null,
-        message_source: ctx.isDemo ? 'whatsapp_demo' : 'whatsapp', // ESSENCIAL: Diferenciar origem
-      });
-
-      // DEBUG: Log específico antes de chamar persistConversationMessage
-      console.log('🔍 [ORCHESTRATOR-DEBUG] Antes de persistir user row:', {
-        is_from_user: userRow.is_from_user,
-        processing_cost_usd: userRow.processing_cost_usd,
-        content_preview: userRow.content.substring(0, 30),
-        tenant_id: userRow.tenant_id
-      });
-
-      await persistConversationMessage(userRow);
-      console.log('✅ [ORCHESTRATOR] User message persisted with source:', ctx.isDemo ? 'whatsapp_demo' : 'whatsapp');
-    } catch (error) {
-      console.error('❌ [ORCHESTRATOR-DEBUG] ERRO na persistência user message:', error);
-      throw error;
-    }
+    await persistConversationMessage(userRow);
+    console.log('✅ [ORCHESTRATOR] User message persisted with source:', ctx.isDemo ? 'whatsapp_demo' : 'whatsapp');
 
     // Inicia tracking de latência para telemetria
     this.latency.turnStart(ctx.sessionId);
@@ -2919,6 +2895,7 @@ export class WebhookFlowOrchestratorService {
         };
       }
 
+      
       // Skip address - tabela users não possui esta coluna
       const normalizedPhoneForAddress = normalizePhone(userPhone);
       const addressData = { full_address: address, created_at: new Date().toISOString() };

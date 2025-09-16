@@ -253,19 +253,43 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/utils/secure-auth.js"></script>
-    <script src="js/utils/tenant-avatar-loader.js"></script>
+    <script src="js/utils/tenant-avatar-loader.js?v=20250916-1530"></script>
     
     <script>
         // Variáveis globais
         let currentConversationData = {};
         let conversationsData = [];
         let filteredConversations = [];
-        
+
+        // Função para verificar autenticação SEM limpar tokens
+        function checkAuth() {
+            const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+            if (!token) {
+                console.log('❌ Usuário não autenticado, redirecionando...');
+                alert('Sessão não encontrada. Você será redirecionado para a página de login.');
+                window.location.href = 'login-standardized.html';
+                return false;
+            }
+
+            console.log('✅ Token encontrado, continuando...');
+            return true;
+        }
+
         // Inicializa página
         document.addEventListener('DOMContentLoaded', function() {
+            // Verificar autenticação primeiro
+            if (!checkAuth()) {
+                return;
+            }
+
+            // APÓS verificação de auth, carregar elementos da UI
+            loadDynamicSidebar();
+            loadDynamicAvatar();
+
+            // Carregar dados da página
             loadConversationsData();
             loadWhatsAppNumbers();
-            
+
             if (window.contextManager) {
                 window.contextManager.refreshContext();
             }
@@ -275,20 +299,35 @@
         async function loadConversationsData() {
             try {
                 showLoadingState();
-                
+
+                const authToken = getAuthToken();
+                if (!authToken) {
+                    console.error('❌ Token não disponível para loadConversationsData');
+                    return;
+                }
+
                 // Busca conversas agrupadas por telefone
                 const response = await fetch('/api/admin/conversations/summary', {
-                    headers: { 'Authorization': getAuthToken() }
+                    headers: { 'Authorization': authToken }
                 });
                 
-                if (!response.ok) throw new Error('Erro ao carregar conversas');
-                
+                if (!response.ok) {
+                    console.error('❌ Erro ao carregar conversas:', response.status);
+                    showErrorMessage(`Erro ao carregar conversas: ${response.status}`);
+                    return;
+                }
+
                 const data = await response.json();
-                    console.log('📊 Dados do tenant recebidos:', data);
+                console.log('📊 Dados do tenant recebidos:', data);
                 conversationsData = data.conversations || [];
                 filteredConversations = [...conversationsData];
-                
-                updateConversationsTable();
+
+                // Verificar se há conversas
+                if (conversationsData.length === 0) {
+                    showNoConversationsState();
+                } else {
+                    updateConversationsTable();
+                }
                 updateConversationsKPIs(data.stats || {});
                 
             } catch (error) {
@@ -300,10 +339,21 @@
         // Carrega números WhatsApp do tenant
         async function loadWhatsAppNumbers() {
             try {
+                const authToken = getAuthToken();
+                if (!authToken) {
+                    console.error('❌ Token não disponível para loadWhatsAppNumbers');
+                    return;
+                }
+
                 const response = await fetch('/api/admin/tenant/whatsapp-numbers', {
-                    headers: { 'Authorization': getAuthToken() }
+                    headers: { 'Authorization': authToken }
                 });
-                
+
+                if (!response.ok) {
+                    console.error('❌ Erro ao carregar números WhatsApp:', response.status);
+                    return; // Falhar silenciosamente para não bloquear a página
+                }
+
                 const data = await response.json();
                     console.log('📊 Dados do tenant recebidos:', data);
                 const whatsappSelect = document.getElementById('filterWhatsapp');
@@ -405,11 +455,21 @@
         // Visualiza conversa completa
         async function viewConversation(phoneNumber) {
             try {
+                const authToken = getAuthToken();
+                if (!authToken) {
+                    console.error('❌ Token não disponível para viewConversation');
+                    return;
+                }
+
                 const response = await fetch(`/api/admin/conversations/details/${encodeURIComponent(phoneNumber)}`, {
-                    headers: { 'Authorization': getAuthToken() }
+                    headers: { 'Authorization': authToken }
                 });
-                
-                if (!response.ok) throw new Error('Erro ao carregar detalhes da conversa');
+
+                if (!response.ok) {
+                    console.error('❌ Erro ao carregar detalhes da conversa:', response.status);
+                    showErrorMessage(`Erro ao carregar conversa: ${response.status}`);
+                    return;
+                }
                 
                 const data = await response.json();
                     console.log('📊 Dados do tenant recebidos:', data);
@@ -544,7 +604,13 @@
         
         // Funções auxiliares
         function getAuthToken() {
-            return localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+            // Usar a mesma lógica da página de login
+            const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+            if (!token) {
+                console.error('❌ Token não encontrado no localStorage');
+                return null;
+            }
+            return 'Bearer ' + token;
         }
         
         function formatDateTime(dateStr) {
@@ -642,7 +708,26 @@
             
             setTimeout(() => alert.remove(), 5000);
         }
-        
+
+        // Exibir estado quando não há conversas
+        function showNoConversationsState() {
+            const tableBody = document.getElementById('conversationsTableBody');
+            if (tableBody) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="text-center py-5">
+                            <div class="d-flex flex-column align-items-center text-muted">
+                                <i class="fas fa-comments fa-3x mb-3 opacity-50"></i>
+                                <h5>Nenhuma conversa encontrada</h5>
+                                <p class="mb-0">Não há conversas WhatsApp registradas para o período selecionado.</p>
+                                <small class="mt-2">Verifique se há mensagens no WhatsApp Business ou ajuste o filtro de período.</small>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
         // Funções do menu de usuário
         function exportData() {
             window.open('/api/admin/conversations/export?format=csv', '_blank');
@@ -656,13 +741,9 @@
         
         function logout() {
             if (confirm('Tem certeza que deseja sair?')) {
-                if (window.secureAuth) {
-                    window.secureAuth.logout();
-                } else {
-                    localStorage.removeItem('ubs_token');
-                    localStorage.removeItem('adminToken');
-                }
-                window.location.href = 'login.html';
+                localStorage.removeItem('ubs_token');
+                localStorage.removeItem('adminToken');
+                window.location.href = 'login-standardized.html';
             }
         }
 
@@ -684,15 +765,20 @@
         async function fetchTenantData(tenantId) {
             try {
                 const authToken = getAuthToken();
+                if (!authToken) {
+                    console.error('❌ Token não disponível para fetchTenantData');
+                    return 'Tenant Desconhecido';
+                }
+
                 const response = await fetch('/api/admin/tenant', {
                     headers: {
                         'Authorization': authToken,
                         'Content-Type': 'application/json'
                     }
                 });
-                
+
                 if (response.ok) {
-                    const tenant = await response.json();
+                    const data = await response.json();
                     // Verificar diferentes estruturas de resposta
                     if (data.business_name) {
                         return data.business_name;
@@ -899,11 +985,9 @@
             }
         }
         
-        // Inicializar sidebar dinâmica quando página carrega
-        document.addEventListener('DOMContentLoaded', function() {
-            loadDynamicSidebar();
-            loadDynamicAvatar();
-        });
+        // REMOVIDO: Event listener duplicado que causava condição de corrida
+        // Agora loadDynamicSidebar() e loadDynamicAvatar() são chamados
+        // APÓS a verificação de autenticação no DOMContentLoaded principal
     </script>
 </body>
 </html>

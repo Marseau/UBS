@@ -148,7 +148,7 @@ export async function mergeEnhancedConversationContext(
   updates: Partial<EnhancedConversationContext>,
   intentData?: {
     intent: string;
-    confidence: number;
+    confidence_score: number;
     decision_method: 'command' | 'dictionary' | 'regex' | 'llm';
   }
 ): Promise<EnhancedConversationContext> {
@@ -175,6 +175,7 @@ export async function mergeEnhancedConversationContext(
       // Preservar campos críticos
       session_id: previousContext.session_id,
       session_started_at: previousContext.session_started_at,
+      tenant_id: tenantId, // Sempre garantir tenant_id correto no merge
       last_message_at: nowISO,
       duration_ms: durationMs,
       duration_minutes: durationMinutes,
@@ -186,7 +187,7 @@ export async function mergeEnhancedConversationContext(
         ...(previousContext.intent_history || []),
         ...(intentData ? [{
           intent: intentData.intent,
-          confidence: intentData.confidence,
+          confidence: intentData.confidence_score,
           timestamp: nowISO,
           decision_method: intentData.decision_method
         }] : [])
@@ -211,7 +212,7 @@ export async function mergeEnhancedConversationContext(
       flow_lock: updates.flow_lock || null,
       intent_history: intentData ? [{
         intent: intentData.intent,
-        confidence: intentData.confidence,
+        confidence: intentData.confidence_score,
         timestamp: nowISO,
         decision_method: intentData.decision_method
       }] : [],
@@ -234,53 +235,36 @@ export async function mergeEnhancedConversationContext(
  * CORRIGIDO: Busca pelo contexto mais recente da sessão ativa
  */
 async function getPreviousEnhancedContext(
-  userPhone: string, 
+  userPhone: string,
   tenantId: string
 ): Promise<EnhancedConversationContext | null> {
   try {
-    // CORREÇÃO: Usar lógica de busca de telefone mais específica para evitar falsos positivos
-    const raw = String(userPhone || '').trim();
-    const digits = raw.replace(/\D/g, '');
-    const candidatesSet = new Set<string>();
-    if (digits) {
-      // Priorizar match exato primeiro
-      candidatesSet.add(digits);
-      candidatesSet.add(`+${digits}`);
-      
-      // Apenas adicionar variações se o número for válido (11+ dígitos)
-      if (digits.length >= 11) {
-        if (digits.startsWith('55')) {
-          const local = digits.slice(2);
-          if (local && local.length >= 10) {
-            candidatesSet.add(local);
-            candidatesSet.add(`+${local}`);
-          }
-        } else if (digits.length >= 10) {
-          candidatesSet.add(`55${digits}`);
-          candidatesSet.add(`+55${digits}`);
-        }
-      }
-    }
-    const candidates = Array.from(candidatesSet);
-    const orClause = candidates.map(v => `phone.eq.${v}`).join(',');
+    // CORREÇÃO CRÍTICA: Usar mesma normalização do toCtxId() para garantir consistência
+    const normalizedPhone = String(userPhone || '').replace(/\D/g, ''); // Mesmo que toCtxId()
+    console.log(`🔍 [NORMALIZE] Phone input: '${userPhone}' → normalized: '${normalizedPhone}'`);
 
-    // Buscar pelo telefone do usuário usando a mesma lógica complexa
+    if (!normalizedPhone) {
+      console.log('🚫 [NORMALIZE] Telefone vazio após normalização');
+      return null;
+    }
+
+    // Buscar pelo telefone normalizado
     const { data: user, error: userError } = await supabaseAdmin
       .from('users')
       .select('id')
-      .or(orClause)
+      .eq('phone', normalizedPhone)
       .limit(1)
       .maybeSingle();
 
-    console.log(`🔍 [DEBUG] Busca de usuário - Phone: ${userPhone}, Candidates: ${candidates.join(',')}, User encontrado:`, user ? `ID: ${user.id}` : 'NULL', 'Error:', userError);
+    console.log(`🔍 [DEBUG] Busca de usuário - Normalized phone: ${normalizedPhone}, User encontrado:`, user ? `ID: ${user.id}` : 'NULL', 'Error:', userError);
 
     if (userError || !user) {
       return null;
     }
 
-    // SIMPLIFICADO: Buscar apenas conversas sem outcome (query otimizada)
-    console.log(`🔍 [SIMPLE] Buscando conversas ativas para user_id=${user.id}, tenant_id=${tenantId}`);
-    
+    // CORREÇÃO CRÍTICA: Buscar TODAS as conversas sem outcome para análise de session_id
+    console.log(`🔍 [CRITICAL] Buscando TODAS as conversas ativas para user_id=${user.id}, tenant_id=${tenantId}`);
+
     const { data: recentConversations, error } = await supabaseAdmin
       .from('conversation_history')
       .select('conversation_context, created_at, user_id, tenant_id')
@@ -288,7 +272,7 @@ async function getPreviousEnhancedContext(
       .eq('tenant_id', tenantId)
       .is('conversation_outcome', null)
       .order('created_at', { ascending: false })
-      .limit(1);
+      .limit(10); // AUMENTAR para capturar múltiplos registros da mesma session
 
     console.log(`🔍 [DEBUG] Query conversation_history - UserID: ${user.id}, TenantID: ${tenantId}, Encontrados: ${recentConversations?.length || 0}, Error:`, error);
     console.log(`🔍 [RECOVERY-DEBUG] Query details - SQL: conversation_history WHERE user_id='${user.id}' AND tenant_id='${tenantId}' AND conversation_outcome IS NULL`);
@@ -320,6 +304,7 @@ async function getPreviousEnhancedContext(
             // Se não temos essa sessão ou este registro é mais recente
             if (!sessionMap.has(sessionId) || currentTimestamp > sessionMap.get(sessionId)!.timestamp) {
               console.log(`✅ [VALID-OBJ] Contexto recuperado: Session ${sessionId.substring(0,8)}... | Flow: ${context.flow_lock?.active_flow || 'none'} | Step: ${context.flow_lock?.step || 'none'}`);
+              console.log(`🔍 [FLOW-DEBUG] Raw flow_lock object:`, JSON.stringify(context.flow_lock, null, 2));
               sessionMap.set(sessionId, {
                 context: context,
                 timestamp: currentTimestamp
@@ -371,25 +356,47 @@ async function getPreviousEnhancedContext(
       }
     }
 
-    // Pegar a sessão mais recente entre todas as sessões
+    // CORREÇÃO: Pegar a sessão mais recente COM flow_lock, senão a mais recente
     let mostRecentContext: any = null;
     let mostRecentTimestamp = '';
-    
+    let sessionWithFlowLock: any = null;
+    let sessionWithFlowLockTimestamp = '';
+
+    console.log(`🔍 [SESSION-DEBUG] Sessions encontradas: ${sessionMap.size}`);
+
     for (const [sessionId, sessionData] of sessionMap.entries()) {
+      console.log(`🔍 [SESSION-DEBUG] Session ${sessionId.substring(0,8)}... | Timestamp: ${sessionData.timestamp} | Flow: ${sessionData.context.flow_lock?.active_flow || 'none'}`);
+
+      // Verificar se esta sessão tem flow_lock
+      if (sessionData.context.flow_lock && sessionData.context.flow_lock.active_flow) {
+        if (sessionData.timestamp > sessionWithFlowLockTimestamp) {
+          sessionWithFlowLockTimestamp = sessionData.timestamp;
+          sessionWithFlowLock = sessionData.context;
+          console.log(`✅ [PRIORITY] Session com flow_lock encontrada: ${sessionId.substring(0,8)}... | Flow: ${sessionData.context.flow_lock.active_flow}`);
+        }
+      }
+
+      // Manter track da sessão mais recente geral
       if (sessionData.timestamp > mostRecentTimestamp) {
         mostRecentTimestamp = sessionData.timestamp;
         mostRecentContext = sessionData.context;
       }
     }
 
-    if (mostRecentContext) {
-      console.log(`📋 [CORRIGIDO] Recuperando contexto: Session ${mostRecentContext.session_id.substring(0,8)}... | Flow: ${mostRecentContext.flow_lock?.active_flow || 'none'} | Step: ${mostRecentContext.flow_lock?.step || 'none'} | Timestamp: ${mostRecentTimestamp}`);
-      
+    // PRIORIZAR: session com flow_lock se existir, senão a mais recente
+    const finalContext = sessionWithFlowLock || mostRecentContext;
+    const finalReason = sessionWithFlowLock ? 'flow_lock_priority' : 'most_recent';
+    console.log(`🎯 [SELECTION] Using context: ${finalReason} | Session: ${finalContext?.session_id?.substring(0,8)}... | Flow: ${finalContext?.flow_lock?.active_flow || 'none'}`)
+
+    if (finalContext) {
+      const finalTimestamp = sessionWithFlowLock ? sessionWithFlowLockTimestamp : mostRecentTimestamp;
+      console.log(`📋 [FINAL] Recuperando contexto: Session ${finalContext.session_id.substring(0,8)}... | Flow: ${finalContext.flow_lock?.active_flow || 'none'} | Step: ${finalContext.flow_lock?.step || 'none'} | Timestamp: ${finalTimestamp} | Reason: ${finalReason}`);
+
       // Converter para EnhancedConversationContext
       return {
-        ...mostRecentContext,
-        flow_lock: mostRecentContext.flow_lock || null,
-        intent_history: mostRecentContext.intent_history || []
+        ...finalContext,
+        flow_lock: finalContext.flow_lock || null,
+        intent_history: finalContext.intent_history || []
       } as EnhancedConversationContext;
     }
 

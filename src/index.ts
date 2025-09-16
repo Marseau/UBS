@@ -63,14 +63,13 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // 1) RAW só para webhooks (usar wildcard)
-app.use('/api/whatsapp-v3/webhook', express.raw({ type: '*/*' }));
 app.use('/api/whatsapp/webhook', express.raw({ type: '*/*' }));
 
 // 2) JSON global, exceto nos webhooks
 const jsonParser = express.json();
 const urlencodedParser = express.urlencoded({ extended: true });
 app.use((req, res, next) => {
-  if (req.path === '/api/whatsapp-v3/webhook' || req.path === '/api/whatsapp/webhook') {
+  if (req.path === '/api/whatsapp/webhook') {
     return next();
   }
   return jsonParser(req, res, next);
@@ -78,7 +77,7 @@ app.use((req, res, next) => {
 
 // 3) URLEncoded parser para forms, exceto nos webhooks
 app.use((req, res, next) => {
-  if (req.path === '/api/whatsapp-v3/webhook' || req.path === '/api/whatsapp/webhook') {
+  if (req.path === '/api/whatsapp/webhook') {
     return next();
   }
   return urlencodedParser(req, res, next);
@@ -86,11 +85,19 @@ app.use((req, res, next) => {
 
 // 4) Resolução determinística de tenant (aplicar aos webhooks)
 import { resolveTenant } from './middleware/resolve-tenant';
-app.use('/api/whatsapp-v3/webhook', resolveTenant);
 app.use('/api/whatsapp/webhook', resolveTenant);
 
-// Servir arquivos estáticos da pasta frontend
-app.use('/src/frontend', express.static(path.join(__dirname, 'frontend')));
+// Servir arquivos estáticos da pasta frontend com cache-busting headers
+app.use('/src/frontend', express.static(path.join(__dirname, 'frontend'), {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      console.log('🚫 [CACHE] No-cache headers set for:', path);
+    }
+  }
+}));
 
 // Autenticação para rotas da API de Admin
 const authMiddleware = new AdminAuthMiddleware();
@@ -110,30 +117,29 @@ app.get('/api/health', (_req, res) => {
 
 // API Routes
 try {
-  // Oficial: V3 no endpoint padrão
-  const whatsappWebhookV3 = require('./routes/whatsapp-webhook-v3.routes');
+  // Refactored: V3 modular no endpoint padrão
+  const whatsappWebhookV3 = require('./routes/whatsapp-webhook-v3-refactored.routes');
   app.use('/api/whatsapp', 'default' in whatsappWebhookV3 ? whatsappWebhookV3.default : whatsappWebhookV3);
-  console.log('✅ WhatsApp webhook V3 promoted to official /api/whatsapp');
+  console.log('✅ WhatsApp webhook V3 REFACTORED promoted to official /api/whatsapp');
 } catch (error) {
-  console.error('❌ Failed to load WhatsApp webhook V3 as official route:', error);
+  console.error('❌ Failed to load WhatsApp webhook V3 refactored route:', error);
 }
 
 // V2 removida para evitar confusão; manter apenas V3
 
-// Alias: manter V3 acessível também em /api/whatsapp-v3
-try {
-  const whatsappWebhookV3Alias = require('./routes/whatsapp-webhook-v3.routes');
-  app.use('/api/whatsapp-v3', 'default' in whatsappWebhookV3Alias ? whatsappWebhookV3Alias.default : whatsappWebhookV3Alias);
-  console.log('✅ WhatsApp webhook V3 alias mounted at /api/whatsapp-v3');
-} catch (error) {
-  console.error('❌ Failed to load WhatsApp webhook V3 routes:', error);
-}
+// REMOVIDO: Alias V3 estava causando execução dupla do mesmo handler
+// O arquivo whatsapp-webhook-v3.routes só deve ser registrado UMA vez
 
 try {
   // Load Google OAuth routes (no auth required for OAuth flow)
   const googleOAuthRoutes = require('./routes/google-oauth.routes');
   app.use('/api/google-oauth', 'default' in googleOAuthRoutes ? googleOAuthRoutes.default : googleOAuthRoutes);
   console.log('✅ Google OAuth routes loaded successfully - CALENDAR INTEGRATION READY');
+
+  // Load Google Calendar API routes (auth required for calendar operations)
+  const googleCalendarRoutes = require('./routes/google-calendar.routes');
+  app.use('/api/google/calendar', 'default' in googleCalendarRoutes ? googleCalendarRoutes.default : googleCalendarRoutes);
+  console.log('✅ Google Calendar API routes loaded successfully - CALENDAR OPERATIONS READY');
 } catch (error) {
   console.error("❌ Failed to load Google OAuth routes:", error);
 }
@@ -157,12 +163,32 @@ try {
 }
 
 try {
-  // Load admin routes 
+  // Load conversations routes for WhatsApp conversations management FIRST (before admin routes)
+  const conversationsRoutes = require('./routes/conversations');
+
+  // Conversations routes already have their own auth middleware
+  app.use('/api/admin/conversations', 'default' in conversationsRoutes ? conversationsRoutes.default : conversationsRoutes);
+  console.log('✅ Conversations routes loaded successfully - WHATSAPP CONVERSATIONS READY (priority routing)');
+} catch (error) {
+  console.error("❌ Failed to load conversations routes:", error);
+}
+
+try {
+  // Load admin routes
   const adminRoutes = require('./routes/admin');
   app.use('/api/admin', 'default' in adminRoutes ? adminRoutes.default : adminRoutes);
   console.log('✅ Admin routes loaded successfully - NAVEGAÇÃO CORRIGIDA - APPOINTMENTS AGORA INTERNO');
 } catch (error) {
   console.error("❌ Failed to load admin routes:", error);
+}
+
+try {
+  // Load Google Calendar re-authorization routes
+  const googleCalendarReauthRoutes = require('./routes/google-calendar-reauth.routes');
+  app.use('/api/admin', 'default' in googleCalendarReauthRoutes ? googleCalendarReauthRoutes.default : googleCalendarReauthRoutes);
+  console.log('✅ Google Calendar re-authorization routes loaded successfully');
+} catch (error) {
+  console.error("❌ Failed to load Google Calendar reauth routes:", error);
 }
 
 try {
@@ -491,20 +517,7 @@ try {
   console.error("❌ Failed to load optimized cron routes:", error);
 }
 
-try {
-  // Load conversations routes for WhatsApp conversations management
-  const conversationsRoutes = require('./routes/conversations');
-  
-  // Apply auth middleware to conversations routes  
-  app.use('/api/admin/conversations', (req, res, next) => {
-    return authMiddleware.verifyToken(req, res, next);
-  });
-  
-  app.use('/api/admin/conversations', 'default' in conversationsRoutes ? conversationsRoutes.default : conversationsRoutes);
-  console.log('✅ Conversations routes loaded successfully - WHATSAPP CONVERSATIONS READY');
-} catch (error) {
-  console.error("❌ Failed to load conversations routes:", error);
-}
+// Conversations routes moved earlier for priority routing (before admin routes)
 
 try {
   // Load tenant routes for tenant-specific data
@@ -598,6 +611,10 @@ app.get('/dashboard-tenant-analysis', (_req, res) => {
 
 app.get('/dashboard-tenant-admin', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'dashboard-tenant-admin.html'));
+});
+
+app.get('/settings', (_req, res) => {
+  res.sendFile(path.join(frontendPath, 'settings-standardized.html'));
 });
 
 // Test page for tenant redirect

@@ -3,7 +3,7 @@
  * Deterministic extraction of user information (name, email, gender, birth date)
  */
 
-import { UserDataExtractionResult, DataCollectionState } from './orchestrator.types';
+import { UserDataExtractionResult, DataCollectionState } from '../../types';
 
 // Helper function to get user by phone in a specific tenant
 import { supabaseAdmin } from '../../config/database';

@@ -1440,32 +1440,76 @@
           /* ===================== UTIL ===================== */
           cleanPhoneNumber(v) { return String(v || '').replace(/\D/g, ''); }
           
-          // ADICIONE: util para ler serviço/profissional do formulário
+          // ✅ CORRIGIDO: util para ler MÚLTIPLOS serviços do formulário
           getFormServices() {
-            // Só o primeiro é obrigatório; pode expandir depois
-            const name = (document.getElementById('service1Name')?.value || '').trim();
-            const priceStr = (document.getElementById('service1Price')?.value || '').trim(); // "45,00"
-            const duration = parseInt(document.getElementById('service1Duration')?.value || '60', 10);
+            const services = [];
 
-            if (!name) return [];
-            // normaliza para centavos
-            const cents = Math.round(Number((priceStr || '0').replace(/\./g,'').replace(',','.')) * 100);
-            return [{ name, price_cents: Number.isFinite(cents) ? cents : 0, duration_minutes: duration }];
+            // Service 1
+            const name1 = (document.getElementById('service1Name')?.value || '').trim();
+            const priceStr1 = (document.getElementById('service1Price')?.value || '').trim();
+            const duration1 = parseInt(document.getElementById('service1Duration')?.value || '60', 10);
+
+            if (name1) {
+              const cents1 = Math.round(Number((priceStr1 || '0').replace(/\./g,'').replace(',','.')) * 100);
+              services.push({
+                name: name1,
+                price_cents: Number.isFinite(cents1) ? cents1 : 0,
+                duration_minutes: duration1
+              });
+            }
+
+            // Service 2
+            const name2 = (document.getElementById('service2Name')?.value || '').trim();
+            const priceStr2 = (document.getElementById('service2Price')?.value || '').trim();
+            const duration2 = parseInt(document.getElementById('service2Duration')?.value || '45', 10);
+
+            if (name2) {
+              const cents2 = Math.round(Number((priceStr2 || '0').replace(/\./g,'').replace(',','.')) * 100);
+              services.push({
+                name: name2,
+                price_cents: Number.isFinite(cents2) ? cents2 : 0,
+                duration_minutes: duration2
+              });
+            }
+
+            return services;
           }
 
+          // ✅ CORRIGIDO: util para ler MÚLTIPLOS profissionais do formulário
           getFormProfessionals() {
-            const fullName = (document.getElementById('collaborator1Name')?.value || '').trim();
-            const role = (document.getElementById('collaborator1Role')?.value || 'professional').trim();
-            const schedule = (document.getElementById('collaborator1Schedule')?.value || 'full').trim();
+            const professionals = [];
 
-            if (!fullName) return [];
-            return [{
-              full_name: fullName,
-              role,
-              schedule,
-              // exigência: vincular automaticamente ao Google Calendar existente
-              google_calendar_id: 'primary'
-            }];
+            // Professional 1
+            const fullName1 = (document.getElementById('collaborator1Name')?.value || '').trim();
+            const role1 = (document.getElementById('collaborator1Role')?.value || 'professional').trim();
+            const schedule1 = (document.getElementById('collaborator1Schedule')?.value || 'full').trim();
+
+            if (fullName1) {
+              professionals.push({
+                full_name: fullName1,
+                role: role1,
+                schedule: schedule1,
+                // ✅ CORRIGIDO: garantir google_calendar_id sempre presente
+                google_calendar_id: 'primary'
+              });
+            }
+
+            // Professional 2
+            const fullName2 = (document.getElementById('collaborator2Name')?.value || '').trim();
+            const role2 = (document.getElementById('collaborator2Role')?.value || 'professional').trim();
+            const schedule2 = (document.getElementById('collaborator2Schedule')?.value || 'full').trim();
+
+            if (fullName2) {
+              professionals.push({
+                full_name: fullName2,
+                role: role2,
+                schedule: schedule2,
+                // ✅ CORRIGIDO: garantir google_calendar_id sempre presente
+                google_calendar_id: 'primary'
+              });
+            }
+
+            return professionals;
           }
           formatPhoneNumber(input) {
             let value = String(input.value || '').replace(/\D/g, '');
@@ -1574,10 +1618,12 @@
               });
             });
 
-            // 🔄 Listeners para validação em tempo real
+            // 🔄 Listeners para validação em tempo real - ✅ CORRIGIDO: incluir campos duplos
             [
               'service1Name','service1Price','service1Duration',
+              'service2Name','service2Price','service2Duration', // ✅ ADICIONADO: service2
               'collaborator1Name','collaborator1Role','collaborator1Schedule',
+              'collaborator2Name','collaborator2Role','collaborator2Schedule', // ✅ ADICIONADO: collaborator2
               'businessName','businessEmail'
             ].forEach(id => {
               const el = document.getElementById(id);
@@ -1882,14 +1928,22 @@
           }
         
           async sendMessage() {
+            // Prevenir dupla submissão
+            if (this.sendingMessage) return;
+            this.sendingMessage = true;
+            
             const input = document.getElementById('chatInput');
             const text = (input.value || '').trim();
-            if (!text) return;
+            if (!text) {
+              this.sendingMessage = false;
+              return;
+            }
             this.addMessage(text, 'user');
             input.value = '';
         
             if (!this.userPhone || !this.whatsappNumber || !this.demoToken) {
               this.addMessage('⚠️ A demo não foi inicializada corretamente.', 'ai');
+              this.sendingMessage = false;
               return;
             }
         
@@ -1911,6 +1965,8 @@
               else this.addMessage('⚠️ Erro ao processar resposta da IA', 'ai');
             } catch (e) {
               this.addMessage('⚠️ Falha de conexão com o servidor demo', 'ai');
+            } finally {
+              this.sendingMessage = false;
             }
           }
         }

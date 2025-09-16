@@ -276,10 +276,10 @@
                     <!-- User Menu -->
                     <div class="dropdown">
                         <button class="btn btn-link dropdown-toggle d-flex align-items-center compact-button" data-bs-toggle="dropdown">
-                            <div class="user-avatar me-2" id="userAvatar">U</div>
+                            <div class="user-avatar me-2" id="userAvatar"></div>
                             <div class="d-none d-md-block text-start">
-                                <div class="fw-medium compact-text" id="userName">UBS Platform</div>
-                                <small class="text-muted compact-small" id="userRole">Super Administrador</small>
+                                <div class="fw-medium compact-text" id="userName">Carregando...</div>
+                                <small class="text-muted compact-small" id="userRole">Administrador</small>
                             </div>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end compact-dropdown">
@@ -653,10 +653,13 @@
         
         // Template functions
         function getAuthToken() {
-            if (window.secureAuth) {
-                return window.secureAuth.getAuthHeader();
+            // Usar a mesma lógica da página de login
+            const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+            if (!token) {
+                console.error('❌ Token não encontrado no localStorage');
+                return null;
             }
-            return 'Bearer ' + (localStorage.getItem('ubs_token') || localStorage.getItem('adminToken'));
+            return 'Bearer ' + token;
         }
         
         function exportData() {
@@ -695,9 +698,14 @@
         // Function to get real timestamp from database
         async function updateLastUpdateTime(period = 30) {
             try {
-                const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+                const authToken = getAuthToken();
+                if (!authToken) {
+                    console.error('❌ Token não disponível para updateLastUpdateTime');
+                    return;
+                }
+
                 const response = await fetch(`/api/super-admin/last-update?period=${period}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': authToken }
                 });
                 
                 if (response.ok) {
@@ -795,9 +803,14 @@
         // Load KPIs from API
         async function loadKPIs(period) {
             try {
-                const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+                const authToken = getAuthToken();
+                if (!authToken) {
+                    console.error('❌ Token não disponível para loadKPIs');
+                    return;
+                }
+
                 const response = await fetch(`/api/super-admin/kpis?period=${period}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': authToken }
                 });
                 
                 if (response.ok) {
@@ -840,8 +853,12 @@
                 
                 // Load all chart data from real APIs
                 // Get auth token
-                const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
-                const authHeaders = { 'Authorization': `Bearer ${token}` };
+                const authToken = getAuthToken();
+                if (!authToken) {
+                    console.error('❌ Token não disponível para loadChartsData');
+                    return;
+                }
+                const authHeaders = { 'Authorization': authToken };
                 
                 const [
                     scatterRes,
@@ -951,10 +968,15 @@
         async function loadTenantsList() {
             try {
                 console.log('🏢 Loading tenants list for dropdown...');
-                
-                const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+
+                const authToken = getAuthToken();
+                if (!authToken) {
+                    console.error('❌ Token não disponível para loadTenantsList');
+                    return;
+                }
+
                 const response = await fetch('/api/super-admin/tenant-list', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': authToken }
                 });
                 
                 if (response.ok) {
@@ -1032,9 +1054,25 @@
             }
         }
         
+        // Função para verificar autenticação
+        function checkAuth() {
+            const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+            if (!token) {
+                console.log('❌ Usuário não autenticado, redirecionando...');
+                alert('Sessão expirada. Você será redirecionado para a página de login.');
+                window.location.href = 'login-standardized.html';
+                return false;
+            }
+            return true;
+        }
+
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Initializing Super Admin Dashboard...');
+
+            if (!checkAuth()) {
+                return;
+            }
             
             // Set active menu
             document.querySelectorAll('.nav-link').forEach(link => {

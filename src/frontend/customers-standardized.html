@@ -84,33 +84,33 @@
             <div class="row g-3 mb-4">
                 <div class="col-xl-3 col-md-6">
                     <div class="metric-card">
-                        <div class="metric-value">248</div>
+                        <div class="metric-value">--</div>
                         <div class="metric-title">Total Clientes</div>
-                        <div class="metric-subtitle">Base ativa</div>
+                        <div class="metric-subtitle">Sem dados</div>
                     </div>
                 </div>
-                
+
                 <div class="col-xl-3 col-md-6">
                     <div class="metric-card">
-                        <div class="metric-value">15</div>
+                        <div class="metric-value">--</div>
                         <div class="metric-title">Novos</div>
-                        <div class="metric-subtitle">Este mês</div>
+                        <div class="metric-subtitle">Sem dados</div>
                     </div>
                 </div>
-                
+
                 <div class="col-xl-3 col-md-6">
                     <div class="metric-card">
-                        <div class="metric-value">92%</div>
+                        <div class="metric-value">--</div>
                         <div class="metric-title">Satisfação</div>
-                        <div class="metric-subtitle">Média geral</div>
+                        <div class="metric-subtitle">Sem dados</div>
                     </div>
                 </div>
-                
+
                 <div class="col-xl-3 col-md-6">
                     <div class="metric-card">
-                        <div class="metric-value">R$ 187</div>
+                        <div class="metric-value">--</div>
                         <div class="metric-title">Ticket Médio</div>
-                        <div class="metric-subtitle">Por cliente</div>
+                        <div class="metric-subtitle">Sem dados</div>
                     </div>
                 </div>
             </div>
@@ -270,8 +270,8 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/utils/secure-auth.js"></script>
-    <script src="js/utils/tenant-avatar-loader.js"></script>
+    <!-- secure-auth.js removido para compatibilidade com login-standardized.html -->
+    <script src="js/utils/tenant-avatar-loader.js?v=20250916-1530"></script>
     
     <script>
         // Variáveis globais para armazenar dados do cliente
@@ -348,9 +348,16 @@
         
         // Função para salvar alterações
         async function saveCustomer() {
+            const authToken = getAuthToken();
+            if (!authToken) {
+                console.error('❌ Token não disponível para saveCustomer');
+                alert('Sessão expirada. Faça login novamente.');
+                return;
+            }
+
             const form = document.getElementById('editCustomerForm');
             const formData = new FormData(form);
-            
+
             const customerData = {
                 id: formData.get('customerId'),
                 name: formData.get('name'),
@@ -362,21 +369,21 @@
                 address: formData.get('address'),
                 notes: formData.get('notes')
             };
-            
+
             try {
                 // Determine se é criação ou edição
                 const isNew = customerData.id === 'new';
                 const url = isNew ? '/api/admin/customers' : `/api/admin/customers/${customerData.id}`;
                 const method = isNew ? 'POST' : 'PUT';
-                
+
                 console.log('Salvando cliente:', customerData);
-                
+
                 // Chamada para a API
                 const response = await fetch(url, {
                     method: method,
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': getAuthToken()
+                        'Authorization': authToken
                     },
                     body: JSON.stringify(customerData)
                 });
@@ -424,19 +431,27 @@
         }
         
         function getAuthToken() {
-            if (window.secureAuth) {
-                return window.secureAuth.getAuthHeader();
+            // Usar a mesma lógica da página de login
+            const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+            if (!token) {
+                console.error('❌ Token não encontrado no localStorage');
+                return null;
             }
-            return 'Bearer ' + (localStorage.getItem('ubs_token') || localStorage.getItem('adminToken'));
+            return 'Bearer ' + token;
         }
 
         // Função para carregar lista de clientes via API
         async function loadCustomers() {
             try {
-                const token = localStorage.getItem('ubs_token');
+                const authToken = getAuthToken();
+                if (!authToken) {
+                    console.error('❌ Token não disponível para loadCustomers');
+                    return;
+                }
+
                 const response = await fetch('/api/admin/customers', {
                     headers: {
-                        'Authorization': `Bearer ${token}`,
+                        'Authorization': authToken,
                         'Content-Type': 'application/json'
                     }
                 });
@@ -506,9 +521,23 @@
             }
         }
 
+        // Função para verificar autenticação
+        function checkAuth() {
+            const token = localStorage.getItem('ubs_token') || localStorage.getItem('adminToken');
+            if (!token) {
+                console.log('❌ Usuário não autenticado, redirecionando...');
+                alert('Sessão expirada. Você será redirecionado para a página de login.');
+                window.location.href = 'login-standardized.html';
+                return false;
+            }
+            return true;
+        }
+
         // Carrega clientes ao inicializar a página
         document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(loadCustomers, 100);
+            if (checkAuth()) {
+                setTimeout(loadCustomers, 100);
+            }
         });
         
         function showSuccessMessage(message) {
@@ -569,13 +598,13 @@
         
         function logout() {
             if (confirm('Tem certeza que deseja sair?')) {
-                if (window.secureAuth) {
-                    window.secureAuth.logout();
-                } else {
-                    localStorage.removeItem('ubs_token');
-                    localStorage.removeItem('adminToken');
-                }
-                window.location.href = 'login.html';
+                // Usar a mesma lógica da página de login
+                localStorage.removeItem('ubs_token');
+                localStorage.removeItem('adminToken');
+                localStorage.removeItem('ubs_user_data');
+                sessionStorage.removeItem('ubs_token');
+                sessionStorage.removeItem('adminToken');
+                window.location.href = 'login-standardized.html';
             }
         }
 
@@ -597,6 +626,11 @@
         async function fetchTenantData(tenantId) {
             try {
                 const authToken = getAuthToken();
+                if (!authToken) {
+                    console.error('❌ Token não disponível para fetchTenantData');
+                    return null;
+                }
+
                 const response = await fetch('/api/admin/tenant', {
                     headers: {
                         'Authorization': authToken,
@@ -605,7 +639,7 @@
                 });
                 
                 if (response.ok) {
-                    const tenant = await response.json();
+                    const data = await response.json();
                     // Verificar diferentes estruturas de resposta
                     if (data.business_name) {
                         return data.business_name;

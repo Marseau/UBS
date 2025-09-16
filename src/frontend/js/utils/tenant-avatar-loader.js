@@ -18,39 +18,50 @@ async function loadTenantAvatar() {
 
         if (response.ok) {
             const userInfo = await response.json();
-            const tenant = userInfo.data;
+            const user = userInfo.data;
 
-            if (tenant) {
-                // Atualizar avatar com dados reais do tenant
+            if (user) {
+                // Atualizar avatar com dados do usuário (super admin ou tenant admin)
                 const avatarElement = document.getElementById('userAvatar');
                 const nameElement = document.getElementById('userName');
                 const roleElement = document.getElementById('userRole');
 
-                const businessName = tenant.business_name || tenant.name;
+                const displayName = user.name || user.business_name;
+                const userRole = user.role;
 
-                if (avatarElement && businessName) {
-                    avatarElement.textContent = businessName.substring(0, 2).toUpperCase();
+                if (avatarElement && displayName) {
+                    avatarElement.textContent = displayName.substring(0, 2).toUpperCase();
                 }
 
-                if (nameElement && businessName) {
-                    nameElement.textContent = businessName;
+                if (nameElement && displayName) {
+                    nameElement.textContent = displayName;
                 }
 
-                if (roleElement && tenant.domain) {
-                    const domainLabels = {
-                        'beauty': 'Salão de Beleza',
-                        'healthcare': 'Clínica de Saúde',
-                        'legal': 'Escritório Jurídico',
-                        'education': 'Educação',
-                        'sports': 'Academia/Esportes',
-                        'consulting': 'Consultoria'
-                    };
-                    roleElement.textContent = domainLabels[tenant.domain] || 'Administrador';
+                if (roleElement) {
+                    if (userRole === 'super_admin') {
+                        roleElement.textContent = 'Super Administrador';
+                    } else if (userRole === 'tenant_admin') {
+                        if (user.domain) {
+                            const domainLabels = {
+                                'beauty': 'Salão de Beleza',
+                                'healthcare': 'Clínica de Saúde',
+                                'legal': 'Escritório Jurídico',
+                                'education': 'Educação',
+                                'sports': 'Academia/Esportes',
+                                'consulting': 'Consultoria'
+                            };
+                            roleElement.textContent = domainLabels[user.domain] || 'Administrador do Tenant';
+                        } else {
+                            roleElement.textContent = 'Administrador do Tenant';
+                        }
+                    } else {
+                        roleElement.textContent = 'Administrador';
+                    }
                 }
 
-                console.log('✅ Avatar carregado:', businessName);
+                console.log('✅ Avatar carregado:', displayName, 'Role:', userRole);
             } else {
-                console.warn('⚠️ Dados do tenant não encontrados na resposta');
+                console.warn('⚠️ Dados do usuário não encontrados na resposta');
             }
         } else {
             console.error('❌ Erro ao carregar dados do tenant:', response.status);

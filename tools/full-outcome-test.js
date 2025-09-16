@@ -31,26 +31,12 @@ function b64url(buf) {
 }
 
 /**
- * Função para gerar token demo (formato correto para DemoTokenValidator)
+ * Função para gerar token demo usando a classe DemoTokenValidator do sistema
  */
 function makeDemoToken(tenantId) {
-  const secret = CONFIG.DEMO_SECRET;
-  const payload = {
-    timestamp: Date.now(),
-    tenantId: tenantId,
-    source: 'test_suite',
-    expiresIn: 5 * 60 * 1000 // 5 minutes in milliseconds
-  };
-
-  const dataToSign = JSON.stringify(payload);
-  const signature = crypto
-    .createHmac('sha256', secret)
-    .update(dataToSign)
-    .digest('hex');
-
-  // Base64 encode: payload + signature
-  const token = Buffer.from(`${dataToSign}.${signature}`).toString('base64');
-  return token;
+  // Import e usar a classe real do sistema
+  const { demoTokenValidator } = require('../src/utils/demo-token-validator');
+  return demoTokenValidator.generateToken({ source: 'test_suite', tenantId });
 }
 
 
@@ -61,35 +47,40 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Mapeamento tenant ID -> telefone do negócio (para demo)
+const TENANT_PHONE_MAP = {
+  'f34d8c94-f6cf-4dd7-82de-a3123b380cd8': '5511999001001', // Healthcare 1
+  'fe2fa876-05da-49b5-b266-8141bcd090fa': '5511999001002', // Healthcare 2
+  '33b8c488-5aa9-4891-b335-701d10296681': '5511999002001', // Beauty 1
+  '5bd592ee-8247-4a62-862e-7491fa499103': '5511999002002', // Beauty 2
+  '85cee693-a2e2-444a-926a-19f69db13489': '5511999003001', // Education 1
+  'c3aa73f8-db80-40db-a9c4-73718a0fee34': '5511999003002', // Education 2
+  '7ae2807f-4a30-4b37-b11e-073b79a3b0c4': '5511999004001', // Sports 1
+  '4853f74d-9518-4476-bfa7-9cb4e43af04a': '5511999004002', // Sports 2
+  'ae509773-6b9d-45f9-925c-dfa3edd0326a': '5511999005001', // Legal 1
+  '765b26dc-f8e3-4eb2-b1c6-a896d99d1c2a': '5511999005002', // Legal 2
+  '151b2fb0-39e6-4a7f-bf87-3454a5327cb4': '5511999006001', // Consulting 1
+  '4a6dc7c4-abd6-4ca6-bb4c-f4d14a3579f5': '5511999006002', // Consulting 2
+};
+
 /**
- * Enviar mensagem para a rota REAL do WhatsApp, com bypass via x-demo-token
- * - Payload no formato oficial do WhatsApp Cloud
- * - Sem metadata extra (backend monta conversation_context)
+ * Enviar mensagem para a rota DEMO correta
+ * - Usa /api/demo/chat para bypass com token
+ * - Payload simplificado para demo
  */
 async function sendWhatsAppWebhook(tenantId, message, userPhone) {
-  const url = `${CONFIG.HOST}/api/whatsapp/webhook`;
+  const url = `${CONFIG.HOST}/api/demo/chat`;
 
-  const wamid = `wamid.${crypto.randomBytes(12).toString('hex')}`;
-  const ts = Math.floor(Date.now() / 1000).toString();
+  const whatsappNumber = TENANT_PHONE_MAP[tenantId];
+  if (!whatsappNumber) {
+    throw new Error(`Tenant phone not found for ID: ${tenantId}`);
+  }
 
+  // Payload simples para rota demo
   const payload = {
-    object: "whatsapp_business_account",
-    entry: [{
-      changes: [{
-        value: {
-          messaging_product: "whatsapp",
-          metadata: { phone_number_id: tenantId }, // usamos tenantId como phone_number_id
-          contacts: [{ wa_id: userPhone }],
-          messages: [{
-            id: wamid,
-            from: userPhone,
-            timestamp: ts,
-            type: "text",
-            text: { body: message }
-          }]
-        }
-      }]
-    }]
+    message: message,
+    userPhone: userPhone,
+    whatsappNumber: whatsappNumber
   };
 
   const headers = {

@@ -71,13 +71,13 @@ export class WebhookV3FlowIntegrationService {
 
     try {
       // 2. Executar Flow Lock System
-      const result = await this.orchestrator.orchestrateWebhookFlow(
-        text,
-        tenantData?.user?.id || 'unknown',
-        tenantData?.tenant?.id || 'unknown',
-        this.buildTenantConfig(tenantData),
-        this.buildExistingContext(session)
-      );
+      const result = await this.orchestrator.orchestrateWebhookFlow({
+        messageText: text,
+        userPhone: tenantData?.user?.id || 'unknown',
+        tenantId: tenantData?.tenant?.id || 'unknown',
+        tenantConfig: this.buildTenantConfig(tenantData),
+        existingContext: this.buildExistingContext(session)
+      });
 
       // 3. Persistir contexto atualizado de volta na sessão
       await this.syncContextBackToSession(session, result.updatedContext);

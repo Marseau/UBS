@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CalendarService = void 0;
 const googleapis_1 = require("googleapis");
+const { calendar } = require("googleapis").google;
 const database_1 = require("../config/database");
 const EncryptionService = require("../utils/encryption.service");
 const { ensureFreshGoogleToken } = require("../utils/google-token"); // ✅ NOVO
@@ -62,14 +63,28 @@ class CalendarService {
             let tenant, service, user;
             
             if (appointment.tenant) {
+                // Handle Supabase JOIN result structure
                 tenant = appointment.tenant;
+                console.log('🔍 [CALENDAR] Using tenant from JOIN:', tenant);
             } else {
+                console.log('🔍 [CALENDAR] Fetching tenant for appointment.tenant_id:', appointment.tenant_id);
                 const { data: tenantData, error: tenantError } = await database_1.supabase
                     .from('tenants')
                     .select('business_name, business_address, domain')
                     .eq('id', appointment.tenant_id)
                     .single();
-                if (tenantError) throw new Error(`Failed to fetch tenant: ${tenantError.message}`);
+
+                console.log('🔍 [CALENDAR] Tenant query result:', { tenantData, tenantError });
+
+                if (tenantError) {
+                    console.error('🔍 [CALENDAR] Tenant query error:', tenantError);
+                    throw new Error(`Failed to fetch tenant: ${tenantError.message}`);
+                }
+
+                if (!tenantData) {
+                    throw new Error(`Tenant not found for ID: ${appointment.tenant_id}`);
+                }
+
                 tenant = tenantData;
             }
             
@@ -81,8 +96,9 @@ class CalendarService {
                     .from('services')
                     .select('name, description')
                     .eq('id', serviceId)
-                    .single();
+                    .maybeSingle();
                 if (serviceError) throw new Error(`Failed to fetch service: ${serviceError.message}`);
+                if (!serviceData) throw new Error(`Service not found for ID: ${serviceId}`);
                 service = serviceData;
             }
             
@@ -96,8 +112,9 @@ class CalendarService {
                     .from('users')
                     .select('name, email, phone')
                     .eq('id', userId)
-                    .single();
+                    .maybeSingle();
                 if (userError) throw new Error(`Failed to fetch user: ${userError.message}`);
+                if (!userData) throw new Error(`User not found for ID: ${userId}`);
                 user = userData;
             }
             
@@ -138,7 +155,10 @@ class CalendarService {
                     }
                 }
             };
-            const response = await this.calendar.events.insert({
+            // Create calendar instance with the authenticated client
+            const calendarWithAuth = calendar({ version: 'v3', auth: authClient });
+
+            const response = await calendarWithAuth.events.insert({
                 calendarId: 'primary',
                 resource: event,
                 sendUpdates: 'all'
@@ -164,6 +184,16 @@ class CalendarService {
             if (errorMessage.includes('invalid_grant') || errorMessage.includes('unauthorized')) {
                 errorType = 'auth_expired';
                 errorMessage = 'Google Calendar authorization has expired. Please re-authorize.';
+
+                // Log específico para debugging
+                console.error(`🔐 [CALENDAR] Auth expired for professional ${appointment.professional_id}:`, {
+                    originalError: error.message,
+                    status: error.response?.status,
+                    data: error.response?.data
+                });
+
+                // Marcar credenciais como inválidas para evitar tentativas repetidas
+                await this.markCredentialsAsInvalid(appointment.professional_id);
             } else if (errorMessage.includes('not found') || errorMessage.includes('missing')) {
                 errorType = 'data_missing';
             } else if (errorMessage.includes('required')) {
@@ -180,6 +210,26 @@ class CalendarService {
             };
         }
     }
+
+    /**
+     * Marca credenciais como inválidas para evitar tentativas repetidas
+     */
+    async markCredentialsAsInvalid(professionalId) {
+        try {
+            await database_1.supabaseAdmin
+                .from('professionals')
+                .update({
+                    google_calendar_credentials: null,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', professionalId);
+
+            console.log(`⚠️ [CALENDAR] Credentials marked as invalid for professional ${professionalId}`);
+        } catch (error) {
+            console.error('Error marking credentials as invalid:', error);
+        }
+    }
+
     async updateCalendarEvent(appointment) {
         try {
             if (!appointment.external_event_id) {
@@ -261,10 +311,33 @@ class CalendarService {
             };
         }
     }
-    async checkCalendarConflicts(tenantId, startTime, endTime, excludeEventId) {
+    async checkCalendarConflicts(tenantId, startTime, endTime, excludeEventId, professionalId) {
         try {
+            // Se não foi fornecido professionalId, retornar sem conflitos
+            if (!professionalId) {
+                return {
+                    hasConflicts: false,
+                    conflicts: [],
+                    message: 'No professional ID provided'
+                };
+            }
+
+            // Obter cliente autenticado para o profissional
+            const authClient = await this.getAuthClientForProfessional(professionalId);
+            if (!authClient) {
+                console.log(`⚠️ [CALENDAR] No valid credentials for professional ${professionalId}`);
+                return {
+                    hasConflicts: false,
+                    conflicts: [],
+                    message: 'No valid credentials for professional'
+                };
+            }
+
+            // Criar instância do calendar com autenticação
+            const calendarWithAuth = calendar({ version: 'v3', auth: authClient });
             const calendarId = await this.getCalendarId(tenantId);
-            const response = await this.calendar.events.list({
+
+            const response = await calendarWithAuth.events.list({
                 calendarId,
                 timeMin: startTime,
                 timeMax: endTime,
@@ -579,8 +652,17 @@ class CalendarService {
                  console.warn(`Refresh token não recebido para o profissional ${professionalId}. Isso é esperado em re-autorizações.`);
             }
 
-            // ✅ ENCRYPT TOKENS BEFORE STORING
-            const encryptedCredentials = await this.encryptionService.encryptCredentials(tokens);
+            // ✅ ENCRYPT TOKENS BEFORE STORING - Estruturar credenciais corretamente
+            const credentials = {
+                access_token: tokens.access_token,
+                refresh_token: tokens.refresh_token,
+                scope: tokens.scope,
+                token_type: tokens.token_type || 'Bearer',
+                expiry_date: tokens.expiry_date,
+                provider: 'google'
+            };
+
+            const encryptedCredentials = await this.encryptionService.encryptCredentials(credentials);
 
             const { error } = await database_1.supabaseAdmin
                 .from('professionals')
@@ -608,6 +690,23 @@ class CalendarService {
      * @returns {Promise<import('google-auth-library').OAuth2Client | null>}
      */
     async getAuthClientForProfessional(professionalId) {
+        // ✅ GARANTIR TOKEN FRESH ANTES DE USAR
+        console.log(`🔐 [CALENDAR] Ensuring fresh token for professional: ${professionalId}`);
+        const tokenResult = await ensureFreshGoogleToken({ professionalId });
+
+        // Se falhou na validação/refresh, retornar null
+        if (tokenResult.error) {
+            console.error(`❌ [CALENDAR] Token validation failed for professional ${professionalId}:`, tokenResult.error);
+
+            // Se erro é invalid_grant ou needsReauth, marcar credenciais como inválidas
+            if (tokenResult.error === 'invalid_grant' || tokenResult.needsReauth) {
+                console.log(`🔄 [CALENDAR] Marking credentials as invalid for professional ${professionalId}`);
+                await this.markCredentialsAsInvalid(professionalId);
+            }
+
+            return null;
+        }
+
         const { data: professional, error } = await database_1.supabaseAdmin
             .from('professionals')
             .select('google_calendar_credentials')
@@ -622,12 +721,19 @@ class CalendarService {
         // ✅ DECRYPT CREDENTIALS BEFORE USING
         const decryptedCredentials = await this.encryptionService.decryptCredentials(professional.google_calendar_credentials);
 
+        console.log(`🔐 [CALENDAR] Credentials for professional ${professionalId}:`, {
+            hasAccessToken: !!decryptedCredentials.access_token,
+            hasRefreshToken: !!decryptedCredentials.refresh_token,
+            expiryDate: decryptedCredentials.expiry_date,
+            provider: decryptedCredentials.provider
+        });
+
         const authClient = new googleapis_1.google.auth.OAuth2(
             process.env.GOOGLE_CALENDAR_CLIENT_ID,
             process.env.GOOGLE_CALENDAR_CLIENT_SECRET,
             process.env.GOOGLE_CALENDAR_REDIRECT_URI
         );
-        
+
         authClient.setCredentials(decryptedCredentials);
         return authClient;
     }

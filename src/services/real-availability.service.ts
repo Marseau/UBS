@@ -5,6 +5,7 @@
  */
 
 import { supabaseAdmin } from '../config/database';
+import { CalendarService } from './calendar.service';
 
 export interface TimeSlot {
   datetime: string; // ISO string
@@ -36,6 +37,11 @@ export interface AppointmentConflict {
 }
 
 export class RealAvailabilityService {
+  private calendarService: CalendarService;
+
+  constructor() {
+    this.calendarService = new CalendarService();
+  }
 
   /**
    * MÉTODO PRINCIPAL - Obter slots reais disponíveis
@@ -86,11 +92,24 @@ export class RealAvailabilityService {
         };
       }
 
-      // 4. Buscar agendamentos existentes para verificar conflitos
+      // 4. Buscar profissionais com Google Calendar configurado para verificação adicional
+      const professionals = await this.getProfessionalsWithCalendar(tenantId);
+
+      // 5. Buscar agendamentos existentes para verificar conflitos
       const conflicts = await this.getAppointmentConflicts(tenantId, dateStr);
 
-      // 5. Filtrar slots disponíveis (sem conflitos)
-      const availableSlots = this.filterAvailableSlots(baseSlots, conflicts.data);
+      // 6. Verificar disponibilidade no Google Calendar se profissionais têm credenciais
+      let googleCalendarConflicts: any[] = [];
+      if (professionals.length > 0) {
+        googleCalendarConflicts = await this.getGoogleCalendarConflicts(
+          professionals,
+          dateStr
+        );
+      }
+
+      // 7. Filtrar slots disponíveis (sem conflitos)
+      const allConflicts = [...conflicts.data, ...googleCalendarConflicts];
+      const availableSlots = this.filterAvailableSlots(baseSlots, allConflicts);
 
       // 6. Formatar resposta
       const message = availableSlots.length > 0 
@@ -372,6 +391,78 @@ export class RealAvailabilityService {
     const dayName = this.formatDate(date);
     const period = window ? ` no período da ${window}` : '';
     return `Não atendemos ${dayName}${period}. Tente outro dia.`;
+  }
+
+  /**
+   * Buscar profissionais com Google Calendar configurado
+   */
+  private async getProfessionalsWithCalendar(tenantId: string): Promise<any[]> {
+    try {
+      const { data: professionals, error } = await supabaseAdmin
+        .from('professionals')
+        .select('id, name, google_calendar_id, google_calendar_credentials')
+        .eq('tenant_id', tenantId)
+        .not('google_calendar_credentials', 'is', null)
+        .not('google_calendar_id', 'is', null);
+
+      if (error) {
+        console.error('❌ [REAL-AVAILABILITY] Erro buscar profissionais:', error);
+        return [];
+      }
+
+      console.log(`📋 [REAL-AVAILABILITY] ${professionals?.length || 0} profissionais com Google Calendar encontrados`);
+      return professionals || [];
+
+    } catch (error) {
+      console.error('❌ [REAL-AVAILABILITY] Erro profissionais:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Verificar conflitos no Google Calendar real
+   */
+  private async getGoogleCalendarConflicts(professionals: any[], dateStr: string): Promise<any[]> {
+    try {
+      const conflicts: any[] = [];
+      const startTime = `${dateStr}T00:00:00.000Z`;
+      const endTime = `${dateStr}T23:59:59.999Z`;
+
+      for (const professional of professionals) {
+        try {
+          // Usar CalendarService para verificar conflitos do dia
+          const calendarResult = await this.calendarService.checkCalendarConflicts(
+            professional.tenant_id || 'unknown',
+            startTime,
+            endTime,
+            null, // excludeEventId
+            professional.id // professionalId - CRUCIAL para autenticação
+          );
+
+          if (calendarResult && calendarResult.hasConflicts && calendarResult.conflicts.length > 0) {
+            calendarResult.conflicts.forEach((conflict: any) => {
+              conflicts.push({
+                start_time: conflict.start || conflict.start_time,
+                end_time: conflict.end || conflict.end_time,
+                service: `Google Calendar - ${conflict.summary || 'Evento'}`,
+                status: 'confirmed'
+              });
+            });
+          }
+
+        } catch (profError) {
+          console.error(`❌ [REAL-AVAILABILITY] Erro Google Calendar para ${professional.name}:`, profError);
+          // Continuar com próximo profissional
+        }
+      }
+
+      console.log(`📅 [REAL-AVAILABILITY] ${conflicts.length} conflitos Google Calendar encontrados em ${dateStr}`);
+      return conflicts;
+
+    } catch (error) {
+      console.error('❌ [REAL-AVAILABILITY] Erro Google Calendar conflicts:', error);
+      return [];
+    }
   }
 
   /**

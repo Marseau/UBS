@@ -39,7 +39,7 @@ import {
     ALLOWED_INTENTS,
     WebhookMessage,
     WebhookResponse
-} from './webhook.types';
+} from '../../types';
 import {
     parseWebhookData,
     validateMessageData,

@@ -9,7 +9,7 @@ import { MapsLocationService } from '../maps-location.service';
 import { RealAvailabilityService } from '../real-availability.service';
 import { BusinessHoursService } from '../business-hours.service';
 import { ContextualPoliciesService } from '../contextual-policies.service';
-import { UserContext, TenantContext } from './types/orchestrator.types';
+import { UserContext, TenantContext } from '../../types';
 
 export interface ResponseContext {
   intent: string;
@@ -145,22 +145,32 @@ export class ResponseGenerationOrchestrator {
 
   private async handleAvailability(tenantId: string): Promise<string> {
     try {
+      // Use RealAvailabilityService properly - it expects undefined for next business day
       const result = await this.availabilityService.getRealAvailableSlots(
         tenantId,
-        new Date().toISOString().split('T')[0]
+        undefined, // Use default (next business day)
+        undefined  // No time window filter
       );
 
-      if (!result.success || !result.slots || result.slots.length === 0) {
-        return "No momento não há horários disponíveis para os próximos 7 dias.";
+      if (!result.success) {
+        return result.message || "Configuração de horários não encontrada. Entre em contato para agendar.";
       }
 
-      const availability = result.slots
-        .map(slot => `• ${slot}`)
-        .join('\n');
+      if (result.slots.length === 0) {
+        return result.message + '\n\nTente perguntar sobre outros períodos (manhã, tarde, noite) ou outros dias.';
+      }
 
-      return `Horários disponíveis:\n\n${availability}`;
+      // Format slots properly using the formatted field
+      let response = `${result.message}\n\n`;
+      result.slots.forEach((slot, index) => {
+        response += `${index + 1}. ${slot.formatted}\n`;
+      });
+      response += '\nPara agendar, me informe qual horário funciona melhor para você!';
+
+      return response;
     } catch (error) {
-      return "Infelizmente neste momento não possuo esta informação no sistema.";
+      console.error('❌ [RESPONSE-GEN] Error in handleAvailability:', error);
+      return "Erro ao consultar disponibilidade. Tente novamente em alguns instantes.";
     }
   }
 

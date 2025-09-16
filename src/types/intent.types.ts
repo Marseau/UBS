@@ -9,7 +9,7 @@ export type BusinessIntent =
   | 'greeting' | 'services' | 'pricing' | 'availability' | 'my_appointments'
   | 'address' | 'payments' | 'business_hours' | 'cancel' | 'reschedule'
   | 'confirm' | 'modify_appointment' | 'policies' | 'wrong_number'
-  | 'booking_abandoned' | 'appointment_inquiry';
+  | 'booking_abandoned' | 'appointment_inquiry' | 'booking';
 
 /**
  * SYSTEM FLOW STATES - Estados do Sistema de Conversação
@@ -62,9 +62,9 @@ export type UnifiedIntent = BusinessIntent | SystemFlowState;
 // Utility types
 export const VALID_INTENTS: BusinessIntent[] = [
   'greeting', 'services', 'pricing', 'availability', 'my_appointments',
-  'address', 'payments', 'business_hours', 'cancel', 'reschedule', 
+  'address', 'payments', 'business_hours', 'cancel', 'reschedule',
   'confirm', 'modify_appointment', 'policies', 'wrong_number',
-  'booking_abandoned', 'appointment_inquiry'
+  'booking_abandoned', 'appointment_inquiry', 'booking'
 ];
 export const VALID_FLOW_STATES = Object.values(SystemFlowState) as string[];
 export const ALL_VALID_TYPES = [...VALID_INTENTS, ...VALID_FLOW_STATES];
@@ -72,7 +72,7 @@ export const ALL_VALID_TYPES = [...VALID_INTENTS, ...VALID_FLOW_STATES];
 // Intent categories para intenções reais do usuário
 export const INTENT_CATEGORIES = {
   BOOKING_ACTIONS: [
-    'cancel', 'reschedule', 'confirm', 'availability', 'my_appointments',
+    'booking', 'cancel', 'reschedule', 'confirm', 'availability', 'my_appointments',
     'modify_appointment', 'appointment_inquiry'
   ] as BusinessIntent[],
   INFORMATIONAL: [
@@ -134,20 +134,21 @@ export function isValidType(value: string): value is UnifiedIntent {
 // Priority order para detecção determinística (APENAS intenções reais)
 export const INTENT_PRIORITY: BusinessIntent[] = [
   // Core business intents primeiro (independente da frequência)
-  'appointment_inquiry',           // CORE: Agendar
-  'reschedule',                    // CORE: Reagendar  
+  'booking',                       // CORE: Criar agendamento
+  'appointment_inquiry',           // CORE: Agendar (genérico)
+  'reschedule',                    // CORE: Reagendar
   'cancel',                        // CORE: Cancelar
   'confirm',                       // CORE: Confirmar
   'availability',                  // CORE: Ver disponibilidade
-  
+
   // Customer information intents
   'greeting',                      // Cumprimento inicial
   'services',                      // Serviços
   'pricing',                       // Preços
-  'address',                       // Endereço  
+  'address',                       // Endereço
   'business_hours',                // Horário funcionamento
   'my_appointments',               // Meus agendamentos
-  
+
   // System fallbacks
   'wrong_number'                   // fallback técnico
 ];

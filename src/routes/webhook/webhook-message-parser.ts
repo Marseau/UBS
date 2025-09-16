@@ -3,7 +3,7 @@
  */
 
 import { logger } from './webhook-validation.middleware';
-import { WebhookMessage } from './webhook.types';
+import { WebhookMessage } from '../../types';
 
 export interface ParsedWebhookData {
     messageText: string;

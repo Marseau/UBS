@@ -10,7 +10,7 @@
 import winston, { Logger, format } from 'winston';
 import path from 'path';
 
-export interface LogContext {
+export interface StructuredLogContext {
     tenantId?: string;
     userId?: string;
     requestId?: string;
@@ -159,7 +159,7 @@ export class StructuredLoggerService {
     /**
      * Log error with context
      */
-    error(message: string, context?: LogContext, error?: Error): void {
+    error(message: string, context?: StructuredLogContext, error?: Error): void {
         this.incrementLogCount('error');
         
         const logData: any = {
@@ -180,7 +180,7 @@ export class StructuredLoggerService {
     /**
      * Log warning with context
      */
-    warn(message: string, context?: LogContext): void {
+    warn(message: string, context?: StructuredLogContext): void {
         this.incrementLogCount('warn');
         
         this.logger.warn({
@@ -193,7 +193,7 @@ export class StructuredLoggerService {
     /**
      * Log info with context
      */
-    info(message: string, context?: LogContext): void {
+    info(message: string, context?: StructuredLogContext): void {
         this.incrementLogCount('info');
         
         this.logger.info({
@@ -206,7 +206,7 @@ export class StructuredLoggerService {
     /**
      * Log debug with context
      */
-    debug(message: string, context?: LogContext): void {
+    debug(message: string, context?: StructuredLogContext): void {
         if (this.logger.isDebugEnabled()) {
             this.incrementLogCount('debug');
             
@@ -221,7 +221,7 @@ export class StructuredLoggerService {
     /**
      * Log performance metrics
      */
-    performance(operationType: string, duration: number, context?: LogContext): void {
+    performance(operationType: string, duration: number, context?: StructuredLogContext): void {
         this.incrementLogCount('performance');
         
         this.logger.info({
@@ -237,7 +237,7 @@ export class StructuredLoggerService {
     /**
      * Log tenant-specific operations
      */
-    tenant(message: string, tenantId: string, context?: LogContext): void {
+    tenant(message: string, tenantId: string, context?: StructuredLogContext): void {
         this.info(message, {
             ...context,
             tenantId,
@@ -254,7 +254,7 @@ export class StructuredLoggerService {
         success: number;
         failures: number;
         duration: number;
-    }, context?: LogContext): void {
+    }, context?: StructuredLogContext): void {
         this.performance('batch-processing', batchInfo.duration, {
             message,
             batchSize: batchInfo.batchSize,
@@ -270,7 +270,7 @@ export class StructuredLoggerService {
     /**
      * Log database operations
      */
-    database(operation: string, duration: number, context?: LogContext): void {
+    database(operation: string, duration: number, context?: StructuredLogContext): void {
         this.performance('database-operation', duration, {
             message: `Database: ${operation}`,
             databaseOperation: operation,
@@ -282,7 +282,7 @@ export class StructuredLoggerService {
     /**
      * Log cache operations
      */
-    cache(operation: 'hit' | 'miss' | 'set' | 'clear', key: string, duration?: number, context?: LogContext): void {
+    cache(operation: 'hit' | 'miss' | 'set' | 'clear', key: string, duration?: number, context?: StructuredLogContext): void {
         this.debug(`Cache ${operation}: ${key}`, {
             cacheOperation: operation,
             cacheKey: key,
@@ -295,7 +295,7 @@ export class StructuredLoggerService {
     /**
      * Log with custom level and context
      */
-    log(level: string, message: string, context?: LogContext): void {
+    log(level: string, message: string, context?: StructuredLogContext): void {
         if (this.logger.isLevelEnabled(level)) {
             this.incrementLogCount(level);
             
@@ -310,7 +310,7 @@ export class StructuredLoggerService {
     /**
      * Create child logger with default context
      */
-    child(defaultContext: LogContext): StructuredLoggerService {
+    child(defaultContext: StructuredLogContext): StructuredLoggerService {
         const childLogger = Object.create(this);
         const originalLogger = this.logger;
         
@@ -321,7 +321,7 @@ export class StructuredLoggerService {
     /**
      * Start timed operation
      */
-    startTimer(operationType: string, context?: LogContext): () => void {
+    startTimer(operationType: string, context?: StructuredLogContext): () => void {
         const startTime = Date.now();
         
         this.debug(`Starting: ${operationType}`, {

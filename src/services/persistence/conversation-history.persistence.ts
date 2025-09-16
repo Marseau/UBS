@@ -10,6 +10,14 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 });
 
 export async function persistConversationMessage(row: ConversationRowT): Promise<string> {
+
+  // DEBUG: Log específico para processing_cost_usd
+  console.log('🔍 [PERSIST-DEBUG] processing_cost_usd antes de inserir:', {
+    is_from_user: row.is_from_user,
+    processing_cost_usd: row.processing_cost_usd,
+    content_preview: row.content.substring(0, 30)
+  });
+
   const { data, error } = await supabase
     .from('conversation_history')
     .insert({
