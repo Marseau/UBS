@@ -22,6 +22,54 @@ import { demoTokenValidator } from '../utils/demo-token-validator';
 
 const router = Router();
 
+// ===== Função para resolver tenant dinamicamente (NO MORE HARDCODED!) =====
+async function findTenantByBusinessPhone(phoneNumberId: string): Promise<any | null> {
+  try {
+    const digits = String(phoneNumberId || '').replace(/\D/g, '');
+    const plusDigits = `+${digits}`;
+
+    console.log(`🔍 [DYNAMIC TENANT] Buscando tenant por número: ${digits} / ${plusDigits}`);
+
+    // Busca por whatsapp_phone
+    const { data: tenant, error } = await supabase
+      .from('tenants').select('*')
+      .or(`whatsapp_phone.eq.${digits},whatsapp_phone.eq.${plusDigits}`)
+      .single();
+
+    if (!error && tenant) {
+      console.log(`✅ [DYNAMIC TENANT] Encontrado por whatsapp_phone: ${tenant.name} (${tenant.id})`);
+      return tenant;
+    }
+
+    // Fallback: busca por phone normal
+    const fb = await supabase
+      .from('tenants').select('*')
+      .or(`phone.eq.${digits},phone.eq.${plusDigits}`)
+      .single();
+
+    if (!fb.error && fb.data) {
+      console.log(`✅ [DYNAMIC TENANT] Encontrado por phone: ${fb.data.name} (${fb.data.id})`);
+      return fb.data;
+    }
+
+    // Fallback: busca por whatsapp_numbers array
+    const j = await supabase
+      .from('tenants').select('*')
+      .contains('whatsapp_numbers', [{ phone_number_id: digits }]);
+
+    if (!j.error && j.data?.[0]) {
+      console.log(`✅ [DYNAMIC TENANT] Encontrado por whatsapp_numbers: ${j.data[0].name} (${j.data[0].id})`);
+      return j.data[0];
+    }
+
+    console.log(`❌ [DYNAMIC TENANT] Nenhum tenant encontrado para: ${digits}`);
+    return null;
+  } catch (error) {
+    console.error('🚨 [DYNAMIC TENANT] Database tenant search error', { phoneNumberId, error });
+    return null;
+  }
+}
+
 // ========================= Helpers =========================
 const onlyDigits = (s: string) => String(s || '').replace(/\D/g, '');
 
@@ -203,6 +251,7 @@ router.post('/create', async (req: Request, res: Response) => {
           email: businessEmail,
           domain,
           phone, // campo canônico para lookup
+          whatsapp_phone: phone, // ✅ CORREÇÃO: persistir também em whatsapp_phone para N8N
           account_type: 'test',
           status: 'active'
         });
@@ -647,6 +696,124 @@ router.post('/chat', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('❌ [DEMO PROXY] Error:', err);
     return res.status(500).json({ success: false, error: 'internal_error', details: (err as Error).message });
+  }
+});
+
+// 🚀 [N8N PROXY] - Rota para testar protótipo N8N
+router.post('/chat-n8n', async (req: Request, res: Response) => {
+  try {
+    console.log('🚀 [DEMO N8N] PROXY PARA N8N WEBHOOK');
+
+    // Validação manual do token com fallback
+    const auth = req.headers.authorization || '';
+    const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    const xDemo = (req.headers['x-demo-token'] as string) || '';
+    const demoToken = bearer || xDemo;
+
+    if (!demoToken) {
+      return res.status(401).json({ success: false, error: 'missing_demo_token' });
+    }
+
+    // Usar validação HMAC apropriada para produção
+    let tokenPayload = demoTokenValidator.validateToken(demoToken);
+
+    // FALLBACK: Se não for HMAC válido, tentar tokens simples para compatibilidade
+    if (!tokenPayload && (demoToken === process.env.DEMO_MODE_TOKEN || demoToken === 'fixed-secret-for-load-test-2025')) {
+      console.log('🔄 [N8N-PROXY] Usando fallback de token simples:', demoToken);
+      tokenPayload = {
+        timestamp: Date.now(),
+        source: 'test_suite' as const,
+        expiresIn: 5 * 60 * 1000
+      };
+    }
+
+    if (!tokenPayload) {
+      return res.status(401).json({ success: false, error: 'invalid_demo_token' });
+    }
+
+    console.log('📋 [DemoTokenValidator] Token válido:', tokenPayload);
+
+    const { message, userPhone, whatsappNumber } = req.body;
+
+    console.log('🔍 [DEBUG] Request body recebido:', JSON.stringify(req.body, null, 2));
+
+    // 🎯 RESOLUÇÃO DINÂMICA DE TENANT (NO MORE HARDCODED!)
+    let dynamicWhatsappNumber = whatsappNumber;
+
+    if (!dynamicWhatsappNumber) {
+      // Se não fornecido, pega o primeiro tenant ativo disponível
+      console.log('⚠️ [DYNAMIC TENANT] whatsappNumber não fornecido, buscando primeiro tenant ativo...');
+      const { data: firstTenant, error } = await supabase
+        .from('tenants')
+        .select('whatsapp_phone, phone, name')
+        .eq('status', 'active')
+        .not('whatsapp_phone', 'is', null)
+        .limit(1)
+        .single();
+
+      if (!error && firstTenant) {
+        dynamicWhatsappNumber = firstTenant.whatsapp_phone || firstTenant.phone;
+        console.log(`✅ [DYNAMIC TENANT] Usando primeiro tenant ativo: ${firstTenant.name} - ${dynamicWhatsappNumber}`);
+      } else {
+        console.error('❌ [DYNAMIC TENANT] Nenhum tenant ativo encontrado!');
+        return res.status(400).json({
+          success: false,
+          error: 'no_active_tenant_found',
+          message: 'Nenhum tenant ativo encontrado. Forneça whatsappNumber no body.'
+        });
+      }
+    }
+
+    // Verificar se o tenant existe para o número fornecido
+    const tenant = await findTenantByBusinessPhone(dynamicWhatsappNumber);
+    if (!tenant) {
+      console.error(`❌ [DYNAMIC TENANT] Tenant não encontrado para: ${dynamicWhatsappNumber}`);
+      return res.status(400).json({
+        success: false,
+        error: 'tenant_not_found',
+        message: `Tenant não encontrado para o número: ${dynamicWhatsappNumber}`
+      });
+    }
+
+    console.log(`🎯 [DYNAMIC TENANT] Tenant resolvido: ${tenant.name} (${tenant.id}) - ${dynamicWhatsappNumber}`);
+
+    // Payload DINÂMICO para persistir no BD
+    const n8nPayload = {
+      contact_phone: userPhone,
+      whatsapp_business_phone: dynamicWhatsappNumber,
+      message_text: message,
+      timestamp: new Date().toISOString()
+    };
+
+    console.log('📤 [N8N PROXY] Enviando para N8N (LIMPO):', JSON.stringify(n8nPayload, null, 2));
+    console.log('🔍 [DEBUG] Objeto antes do axios:', Object.keys(n8nPayload));
+
+    // Fazer requisição para N8N webhook
+    const axios = await import('axios');
+    console.log('🔍 [DEBUG] Payload final sendo enviado via axios:', JSON.stringify(n8nPayload, null, 2));
+    const n8nResponse = await axios.default.post('https://n8n.stratfin.tec.br/webhook/whatsapp-webhook', n8nPayload, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 30000
+    });
+
+    console.log('✅ [N8N PROXY] Resposta do N8N:', n8nResponse.data);
+
+    return res.json({
+      success: true,
+      source: 'n8n_workflow',
+      n8n_response: n8nResponse.data,
+      message: 'Processado pelo N8N',
+      userPhone,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (err) {
+    console.error('❌ [N8N PROXY] Erro:', (err as any).message);
+    return res.status(500).json({
+      success: false,
+      error: 'n8n_proxy_error',
+      details: (err as Error).message
+    });
   }
 });
 
