@@ -494,8 +494,17 @@ const frontendPath: string = resolveFrontendPath(candidatePaths);
 console.log('🖥️ Frontend path using:', frontendPath);
 
 // Routes - Define these BEFORE static middleware to ensure they take precedence
-app.get('/', (_req, res) => {
-  res.sendFile(path.join(frontendPath, 'landing.html'));
+app.get('/', (req, res) => {
+  // 🎯 Roteamento por domínio:
+  // dev.ubs.app.br → landing.html (SaaS)
+  // ubs.app.br → landingTM.html (Taylor Made)
+  const hostname = req.hostname;
+  const landingPage = hostname === 'dev.ubs.app.br'
+    ? 'landing.html'  // SaaS landing
+    : 'landingTM.html';  // Taylor Made landing (default)
+
+  console.log(`🏠 [${hostname}] Serving ${landingPage}`);
+  res.sendFile(path.join(frontendPath, landingPage));
 });
 
 app.get('/admin', (_req, res) => {
@@ -512,6 +521,27 @@ app.get('/register', (_req, res) => {
 
 app.get('/demo', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'demo.html'));
+});
+
+// Blog / Editorial Hub routes
+app.get('/blog', (_req, res) => {
+  res.sendFile(path.join(frontendPath, 'editorial-hub-preview.html'));
+});
+
+app.get('/editorial-hub', (_req, res) => {
+  res.sendFile(path.join(frontendPath, 'editorial-hub-preview.html'));
+});
+
+app.get('/editorial-hub-preview', (_req, res) => {
+  res.sendFile(path.join(frontendPath, 'editorial-hub-preview.html'));
+});
+
+app.get('/blog-showcase', (_req, res) => {
+  res.sendFile(path.join(frontendPath, 'blog-showcase-mockup.html'));
+});
+
+app.get('/editorial-content', (_req, res) => {
+  res.sendFile(path.join(frontendPath, 'editorial-content-section.html'));
 });
 
 app.get('/forgot-password', (_req, res) => {

@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UBS Taylor Made | Automação de Leads via WhatsApp + IA</title>
+    <meta name="description" content="Plataforma modular sob medida: Captação de Leads + Agendamento + Follow-up. Teste 7 dias grátis. Implantação em 15 dias. Risco zero.">
+    <meta name="keywords" content="automação whatsapp brasil, captação leads ia, agendamento inteligente">
+
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #2D5A9B;
+            --primary-light: #4A7BC8;
+            --primary-dark: #1E3F6B;
+            --secondary-color: #F8F9FA;
+            --accent-color: #28A745;
+            --text-dark: #2C3E50;
+            --text-light: #6C757D;
+            --border-color: #E9ECEF;
+            --danger-light: #FFF5F5;
+            --success-light: #F0FFF4;
+            --shadow: 0 4px 20px rgba(45, 90, 155, 0.15);
+            --shadow-lg: 0 10px 40px rgba(45, 90, 155, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text-dark);
+            overflow-x: hidden;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            scroll-padding-top: 80px;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 0;
+            transition: all 0.3s ease;
+        }
+
+        .navbar.scrolled {
+            box-shadow: var(--shadow);
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary-color) !important;
+        }
+
+        .logo-image-large {
+            width: 160px;
+            height: 80px;
+            border-radius: 8px;
+            object-fit: contain;
+            background: transparent;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+        }
+
+        .nav-link {
+            font-weight: 500;
+            color: var(--text-dark) !important;
+            margin: 0 0.5rem;
+            transition: color 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--primary-color) !important;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-outline-primary {
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+        }
+
+        .btn-accent {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-accent:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 140px 0 60px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100%" height="100%" fill="url(%23grid)"/></svg>');
+            opacity: 0.3;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            line-height: 1.2;
+        }
+
+        .hero .lead {
+            font-size: 1.25rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        .badge-hero {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            display: inline-block;
+            margin-bottom: 1rem;
+        }
+
+        /* Modules Section */
+        .modules {
+            padding: 80px 0;
+            background: var(--secondary-color);
+        }
+
+        .module-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2.5rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            height: 100%;
+            position: relative;
+        }
+
+        .module-card:hover {
+            transform: translateY(-10px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .module-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            color: white;
+            font-size: 2rem;
+        }
+
+        .module-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: var(--accent-color);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .module-badge.core {
+            background: var(--primary-color);
+        }
+
+        /* Problem Solution Section */
+        .problem-solution {
+            padding: 80px 0;
+        }
+
+        .problem-box, .solution-box {
+            padding: 2rem;
+            border-radius: 16px;
+            height: 100%;
+        }
+
+        .problem-box {
+            background: var(--danger-light);
+            border-left: 4px solid #dc3545;
+        }
+
+        .solution-box {
+            background: var(--success-light);
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .problem-box h3, .solution-box h3 {
+            margin-bottom: 1.5rem;
+            font-weight: 700;
+        }
+
+        .problem-box ul, .solution-box ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .problem-box ul li, .solution-box ul li {
+            padding: 0.75rem 0;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .problem-box ul li:last-child, .solution-box ul li:last-child {
+            border-bottom: none;
+        }
+
+        /* Target Section */
+        .target {
+            padding: 80px 0;
+            background: var(--secondary-color);
+        }
+
+        .target-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2.5rem;
+            box-shadow: var(--shadow);
+            height: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .target-card.featured {
+            border: 3px solid var(--primary-color);
+        }
+
+        .target-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .target-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        /* How it Works Section */
+        .how-it-works {
+            padding: 80px 0;
+        }
+
+        .step-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            text-align: center;
+            height: 100%;
+            position: relative;
+        }
+
+        .step-number {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0 auto 1rem;
+        }
+
+        .step-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Guarantee Section */
+        .guarantee {
+            padding: 80px 0;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            color: white;
+            text-align: center;
+        }
+
+        .guarantee-box {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 20px;
+            padding: 3rem;
+            backdrop-filter: blur(10px);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .guarantee h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* FAQ Section */
+        .faq {
+            padding: 80px 0;
+            background: var(--secondary-color);
+        }
+
+        .accordion-button {
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        .accordion-button:not(.collapsed) {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        /* CTA Final */
+        .cta-final {
+            padding: 80px 0;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            color: white;
+            text-align: center;
+        }
+
+        .btn-white {
+            background: white;
+            color: var(--primary-color);
+            border: none;
+            padding: 1rem 2.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-white:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--text-dark);
+            color: white;
+            padding: 60px 0 30px;
+        }
+
+        .footer h5 {
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .footer ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .footer ul li {
+            margin-bottom: 0.5rem;
+        }
+
+        .footer ul li a {
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer ul li a:hover {
+            color: white;
+        }
+
+        .footer-bottom {
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin-top: 2rem;
+            padding-top: 2rem;
+            text-align: center;
+            color: rgba(255,255,255,0.6);
+        }
+
+        /* Modal Customization */
+        .modal-content {
+            border-radius: 16px;
+            border: none;
+        }
+
+        .modal-header {
+            border-bottom: 2px solid var(--border-color);
+            background: var(--secondary-color);
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .form-control, .form-select {
+            border-radius: 8px;
+            border: 2px solid var(--border-color);
+            padding: 0.75rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(45, 90, 155, 0.15);
+        }
+
+        .form-check-input:checked {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-on-scroll {
+            opacity: 0;
+            animation: fadeInUp 0.8s ease forwards;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero {
+                padding: 100px 0 40px;
+            }
+
+            .logo-image-large {
+                width: 120px;
+                height: 60px;
+            }
+
+            .modules, .problem-solution, .target, .how-it-works, .guarantee, .faq, .cta-final {
+                padding: 50px 0;
+            }
+
+            .guarantee h2 {
+                font-size: 2rem;
+            }
+
+            .navbar-collapse {
+                background-color: white;
+                border-radius: 10px;
+                margin-top: 10px;
+                padding: 20px;
+                box-shadow: 0 5px 30px rgba(0, 0, 0, 0.1);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .logo-image-large {
+                width: 80px;
+                height: 40px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="#home">
+                <picture>
+                    <source srcset="/assets/images/optimized/UBS_Nac_v2.webp" type="image/webp">
+                    <img src="/assets/images/optimized/UBS_Nac_v2.png" alt="UBS Taylor Made" class="logo-image-large">
+                </picture>
+                <span class="d-none d-md-inline">Taylor Made</span>
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#modules">Módulos</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#benefits">Benefícios</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#how-it-works">Como Funciona</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#faq">FAQ</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/editorial-hub-preview">Blog</a>
+                    </li>
+                </ul>
+
+                <!-- Botão removido - Solicitar Proposta disponível no hero e rodapé -->
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-6 hero-content">
+                    <div class="badge-hero">
+                        🇧🇷 Desenvolvido para o mercado brasileiro
+                    </div>
+                    <h1 class="animate-on-scroll">Transforme Cliques em Clientes com IA sob Medida</h1>
+                    <p class="lead animate-on-scroll">Plataforma modular que integra Captação de Leads + Agendamento Inteligente + Follow-up Automático via WhatsApp. Elimine a distância entre gerar leads e converter vendas.</p>
+
+                    <div class="d-flex flex-wrap gap-3 animate-on-scroll">
+                        <button class="btn btn-white btn-lg" data-bs-toggle="modal" data-bs-target="#proposalModal">
+                            <i class="fas fa-paper-plane me-2"></i>
+                            Solicitar Proposta Gratuita
+                        </button>
+                        <a href="#how-it-works" class="btn btn-outline-light btn-lg">
+                            <i class="fas fa-play-circle me-2"></i>
+                            Ver Como Funciona
+                        </a>
+                    </div>
+                </div>
+
+                <div class="col-lg-6 mt-5 mt-lg-0">
+                    <div class="text-center animate-on-scroll">
+                        <div style="background: rgba(255,255,255,0.1); padding: 3rem; border-radius: 20px; backdrop-filter: blur(10px);">
+                            <i class="fas fa-funnel-dollar" style="font-size: 8rem; opacity: 0.8;"></i>
+                            <h4 class="mt-3">WhatsApp + IA + Automação</h4>
+                            <p>Módulos sob medida para seu negócio</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Modules Section -->
+    <section id="modules" class="modules">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto text-center mb-5">
+                    <h2 class="display-5 fw-bold mb-3">Uma Plataforma, Três Soluções sob Medida</h2>
+                    <p class="lead text-muted">Escolha os módulos que seu negócio precisa. Todos integrados via WhatsApp + IA.</p>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-lg-4 col-md-6">
+                    <div class="module-card animate-on-scroll">
+                        <span class="module-badge">Novo</span>
+                        <div class="module-icon">
+                            <i class="fas fa-bullseye"></i>
+                        </div>
+                        <h4>Captação & Qualificação de Leads</h4>
+                        <ul class="list-unstyled mt-3">
+                            <li><i class="fas fa-check text-success me-2"></i>Capture leads do Instagram, Facebook e Google</li>
+                            <li><i class="fas fa-check text-success me-2"></i>IA qualifica automaticamente via WhatsApp</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Registra origem, interesse e prioridade</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="col-lg-4 col-md-6">
+                    <div class="module-card animate-on-scroll">
+                        <span class="module-badge core">Core</span>
+                        <div class="module-icon">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <h4>Agendamento Inteligente</h4>
+                        <ul class="list-unstyled mt-3">
+                            <li><i class="fas fa-check text-success me-2"></i>Transforme leads em agendamentos confirmados</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Integração Google Calendar em tempo real</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Confirmações e lembretes automáticos</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="col-lg-4 col-md-6">
+                    <div class="module-card animate-on-scroll">
+                        <span class="module-badge">Novo</span>
+                        <div class="module-icon">
+                            <i class="fas fa-sync-alt"></i>
+                        </div>
+                        <h4>Follow-up Automático</h4>
+                        <ul class="list-unstyled mt-3">
+                            <li><i class="fas fa-check text-success me-2"></i>Lembretes pré-consulta e reativação</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Campanhas de marketing via WhatsApp</li>
+                            <li><i class="fas fa-check text-success me-2"></i>ROI mensurável e transparente</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Problem Solution Section -->
+    <section id="benefits" class="modules">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-10 mx-auto text-center mb-5">
+                    <h2 class="display-5 fw-bold mb-3">O Atrito que Mata as Conversões</h2>
+                    <p class="lead text-muted">Antes e depois da automação com UBS Taylor Made</p>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <div class="module-card animate-on-scroll">
+                        <div class="module-icon" style="background: linear-gradient(135deg, #dc3545, #c82333);">
+                            <i class="fas fa-times-circle"></i>
+                        </div>
+                        <h4>ANTES: Caos Operacional</h4>
+                        <ul class="list-unstyled mt-3">
+                            <li><i class="fas fa-exclamation-triangle text-danger me-2"></i>Leads chegam por Instagram/Google mas ninguém responde rápido</li>
+                            <li><i class="fas fa-exclamation-triangle text-danger me-2"></i>WhatsApp desorganizado, mensagens perdidas</li>
+                            <li><i class="fas fa-exclamation-triangle text-danger me-2"></i>Agenda cheia de conflitos e esquecimentos</li>
+                            <li><i class="fas fa-exclamation-triangle text-danger me-2"></i>Cliente cancela e você só descobre na hora</li>
+                            <li><i class="fas fa-exclamation-triangle text-danger me-2"></i>Impossível medir ROI de campanhas</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="module-card animate-on-scroll">
+                        <div class="module-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <h4>DEPOIS: Automação Inteligente</h4>
+                        <ul class="list-unstyled mt-3">
+                            <li><i class="fas fa-bolt text-success me-2"></i>IA responde em segundos, 24/7</li>
+                            <li><i class="fas fa-bolt text-success me-2"></i>Qualificação e registro automático</li>
+                            <li><i class="fas fa-bolt text-success me-2"></i>Google Calendar sincronizado, zero conflitos</li>
+                            <li><i class="fas fa-bolt text-success me-2"></i>Confirmações automáticas, 80% menos faltas</li>
+                            <li><i class="fas fa-bolt text-success me-2"></i>Dashboard com métricas em tempo real</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Target Audience Section -->
+    <section class="how-it-works">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto text-center mb-5">
+                    <h2 class="display-5 fw-bold mb-3">Para Quem É?</h2>
+                    <p class="lead text-muted">Soluções sob medida para agências e negócios locais</p>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <div class="module-card animate-on-scroll">
+                        <div class="module-icon">
+                            <i class="fas fa-rocket"></i>
+                        </div>
+                        <h4>Agências Digitais</h4>
+                        <p class="text-muted mb-4">Parceiro ideal para fechar o gap entre tráfego e conversão</p>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-star text-warning me-2"></i>Elimine a principal causa de churn de clientes</li>
+                            <li><i class="fas fa-star text-warning me-2"></i>Ofereça solução completa: tráfego + conversão</li>
+                            <li><i class="fas fa-star text-warning me-2"></i>Modelo de parceria white label ou comissão</li>
+                            <li><i class="fas fa-star text-warning me-2"></i>Material de vendas pronto</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="module-card animate-on-scroll">
+                        <div class="module-icon">
+                            <i class="fas fa-store"></i>
+                        </div>
+                        <h4>Negócios Locais</h4>
+                        <p class="text-muted mb-4">Profissionais liberais, micro, pequenas e médias empresas</p>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check text-success me-2"></i>Nunca mais perca leads de redes sociais</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Atendimento automatizado sem contratar equipe</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Agenda organizada e cheia</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Clientes confirmados e presentes</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How it Works Section -->
+    <section id="how-it-works" class="how-it-works">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto text-center mb-5">
+                    <h2 class="display-5 fw-bold mb-3">Do Interesse à Implantação em 4 Passos</h2>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-lg-3 col-md-6">
+                    <div class="step-card animate-on-scroll">
+                        <div class="step-number">1</div>
+                        <div class="step-icon"><i class="fas fa-clipboard-list"></i></div>
+                        <h5>Você preenche o formulário</h5>
+                        <p class="text-muted">Conte sobre seu negócio e necessidades</p>
+                    </div>
+                </div>
+
+                <div class="col-lg-3 col-md-6">
+                    <div class="step-card animate-on-scroll">
+                        <div class="step-number">2</div>
+                        <div class="step-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+                        <h5>Recebe proposta em 24h</h5>
+                        <p class="text-muted">Preço de implantação + mensalidade baseada no seu volume</p>
+                    </div>
+                </div>
+
+                <div class="col-lg-3 col-md-6">
+                    <div class="step-card animate-on-scroll">
+                        <div class="step-number">3</div>
+                        <div class="step-icon"><i class="fas fa-flask"></i></div>
+                        <h5>Teste 7 dias grátis</h5>
+                        <p class="text-muted">Sistema 100% funcional com seus dados reais</p>
+                    </div>
+                </div>
+
+                <div class="col-lg-3 col-md-6">
+                    <div class="step-card animate-on-scroll">
+                        <div class="step-number">4</div>
+                        <div class="step-icon"><i class="fas fa-check-circle"></i></div>
+                        <h5>Aprovou? Paga e segue</h5>
+                        <p class="text-muted">Não aprovou? Custo ZERO. Implantação em até 15 dias</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-5">
+                <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#proposalModal">
+                    <i class="fas fa-rocket me-2"></i>
+                    Solicitar Minha Proposta Agora
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Guarantee Section -->
+    <section class="guarantee">
+        <div class="container">
+            <div class="guarantee-box">
+                <h2><i class="fas fa-shield-alt me-3"></i>Garantia de Risco Zero</h2>
+                <p class="lead mb-4">Você testa 7 dias GRÁTIS com o sistema completo funcionando.<br>
+                Aprovou? Paga a implantação e continua usando.<br>
+                Não aprovou? Custo ZERO. Sem multas, sem pegadinhas.</p>
+                <div class="mt-4 p-3" style="background: rgba(255,255,255,0.1); border-radius: 12px;">
+                    <p class="mb-0"><strong>⏱️ Implantação completa em até 15 dias após aprovação</strong></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section id="faq" class="faq">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto text-center mb-5">
+                    <h2 class="display-5 fw-bold mb-3">Perguntas Frequentes</h2>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="accordion" id="faqAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                    Preciso trocar meu número de WhatsApp?
+                                </button>
+                            </h2>
+                            <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    Não. Integramos com seu número atual via WhatsApp Business API oficial.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                    Quanto tempo para implementar?
+                                </button>
+                            </h2>
+                            <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    Até 15 dias após aprovação do teste de 7 dias. Durante o teste, você já usa o sistema completo.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                    Como funciona a precificação?
+                                </button>
+                            </h2>
+                            <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    Você recebe proposta personalizada com: (1) Taxa de implantação única (paga após teste) + (2) Mensalidade baseada no volume de conversas (modelo SaaS do UBS - R$58 a R$290/mês conforme tier).
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                                    E se eu não aprovar no teste de 7 dias?
+                                </button>
+                            </h2>
+                            <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    Custo zero. Sem multas, sem taxas, sem pegadinhas. É simples assim.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+                                    Funciona para qualquer segmento?
+                                </button>
+                            </h2>
+                            <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    Sim. Temos IA especializada para 6 segmentos (beleza, saúde, educação, jurídico, esportes, consultoria) + agente geral que se adapta ao seu negócio.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">
+                                    Posso escolher apenas alguns módulos?
+                                </button>
+                            </h2>
+                            <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    Sim! A proposta é sob medida. Você escolhe quais módulos ativar conforme sua necessidade.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Final -->
+    <section class="cta-final">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto text-center">
+                    <h2 class="display-5 fw-bold mb-4">Pronto para Eliminar o Atrito Entre Leads e Vendas?</h2>
+                    <p class="lead mb-4">Receba sua proposta personalizada em 24h. Teste 7 dias grátis. Risco zero.</p>
+                    <button class="btn btn-white btn-lg" data-bs-toggle="modal" data-bs-target="#proposalModal">
+                        <i class="fas fa-paper-plane me-2"></i>
+                        Solicitar Proposta Agora
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4">
+                    <div class="d-flex align-items-center mb-3">
+                        <picture>
+                            <source srcset="/assets/images/optimized/UBS_Nac_v2.webp" type="image/webp">
+                            <img src="/assets/images/optimized/UBS_Nac_v2.png" alt="UBS Taylor Made" style="width: 120px; height: 120px; object-fit: contain;">
+                        </picture>
+                    </div>
+                    <p class="text-muted">Transformando leads em clientes desde 2025</p>
+                </div>
+
+                <div class="col-lg-2 col-md-3">
+                    <h5>Produto</h5>
+                    <ul>
+                        <li><a href="#modules">Módulos</a></li>
+                        <li><a href="#benefits">Benefícios</a></li>
+                        <li><a href="#how-it-works">Como Funciona</a></li>
+                    </ul>
+                </div>
+
+                <div class="col-lg-2 col-md-3">
+                    <h5>Empresa</h5>
+                    <ul>
+                        <li><a href="#">Sobre</a></li>
+                        <li><a href="#">Blog</a></li>
+                        <li><a href="#">Contato</a></li>
+                    </ul>
+                </div>
+
+                <div class="col-lg-2 col-md-3">
+                    <h5>Suporte</h5>
+                    <ul>
+                        <li><a href="#faq">FAQ</a></li>
+                        <li><a href="#">Documentação</a></li>
+                        <li><a href="#">Status</a></li>
+                    </ul>
+                </div>
+
+                <div class="col-lg-2 col-md-3">
+                    <h5>Contato</h5>
+                    <p class="text-muted small">admin@stratfin.tec.br</p>
+                    <div class="d-flex gap-3">
+                        <a href="#" class="text-white"><i class="fab fa-instagram fa-lg"></i></a>
+                        <a href="#" class="text-white"><i class="fab fa-youtube fa-lg"></i></a>
+                        <a href="#" class="text-white"><i class="fab fa-linkedin fa-lg"></i></a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>&copy; 2025 UBS Taylor Made. Todos os direitos reservados.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Proposal Modal -->
+    <div class="modal fade" id="proposalModal" tabindex="-1" aria-labelledby="proposalModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="proposalModalLabel"><i class="fas fa-clipboard-check me-2"></i>Receba Sua Proposta Personalizada</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="proposalForm">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="name" class="form-label">Nome Completo *</label>
+                                <input type="text" class="form-control" id="name" name="name" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="email" class="form-label">Email Profissional *</label>
+                                <input type="email" class="form-control" id="email" name="email" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="whatsapp" class="form-label">WhatsApp *</label>
+                                <input type="tel" class="form-control" id="whatsapp" name="whatsapp" placeholder="(00) 00000-0000" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="userType" class="form-label">Você é: *</label>
+                                <select class="form-select" id="userType" name="user_type" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="agency">Agência Digital</option>
+                                    <option value="local_business">Negócio Local (salão, clínica, etc.)</option>
+                                    <option value="consultant">Consultor/Freelancer</option>
+                                    <option value="other">Outro</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="businessSegment" class="form-label">Segmento do Negócio: *</label>
+                                <select class="form-select" id="businessSegment" name="business_segment" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="beauty">Beleza (salão, estética)</option>
+                                    <option value="healthcare">Saúde (clínica, terapias)</option>
+                                    <option value="education">Educação (aulas, cursos)</option>
+                                    <option value="legal">Jurídico (advocacia)</option>
+                                    <option value="sports">Esportes (personal, academia)</option>
+                                    <option value="consulting">Consultoria/Coaching</option>
+                                    <option value="other">Outro</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="mainChallenge" class="form-label">Qual seu maior desafio? *</label>
+                                <select class="form-select" id="mainChallenge" name="main_challenge" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="lost_leads">Perco leads que chegam via WhatsApp</option>
+                                    <option value="disorganized">Agenda desorganizada, muitos conflitos</option>
+                                    <option value="no_shows">Muitas faltas e cancelamentos</option>
+                                    <option value="no_roi">Não consigo medir ROI de marketing</option>
+                                    <option value="automation">Preciso automatizar atendimento</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label for="leadVolume" class="form-label">Quantos leads/agendamentos por mês? *</label>
+                                <select class="form-select" id="leadVolume" name="lead_volume" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="less_50">Menos de 50</option>
+                                    <option value="50_200">50 a 200</option>
+                                    <option value="200_500">200 a 500</option>
+                                    <option value="more_500">Mais de 500</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label">Quais módulos te interessam? *</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="modules_interest" value="lead_capture" id="module1">
+                                    <label class="form-check-label" for="module1">
+                                        Captação & Qualificação de Leads
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="modules_interest" value="scheduling" id="module2">
+                                    <label class="form-check-label" for="module2">
+                                        Agendamento Inteligente
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="modules_interest" value="followup" id="module3">
+                                    <label class="form-check-label" for="module3">
+                                        Follow-up Automático
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="modules_interest" value="all" id="moduleAll">
+                                    <label class="form-check-label" for="moduleAll">
+                                        <strong>Todos os módulos</strong>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label for="source" class="form-label">Como conheceu o UBS?</label>
+                                <select class="form-select" id="source" name="source">
+                                    <option value="">Selecione...</option>
+                                    <option value="instagram">Instagram</option>
+                                    <option value="youtube">YouTube</option>
+                                    <option value="google">Google</option>
+                                    <option value="referral">Indicação</option>
+                                    <option value="other">Outro</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-accent w-100 btn-lg">
+                                <i class="fas fa-paper-plane me-2"></i>
+                                Solicitar Proposta Gratuita
+                            </button>
+                        </div>
+                    </form>
+
+                    <div id="successMessage" class="alert alert-success mt-4 d-none">
+                        <h5><i class="fas fa-check-circle me-2"></i>Proposta solicitada com sucesso!</h5>
+                        <p class="mb-0">Você receberá nossa proposta personalizada em até 24h via WhatsApp e email.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Navbar scroll effect
+        window.addEventListener('scroll', function() {
+            const navbar = document.querySelector('.navbar');
+            if (window.scrollY > 50) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+
+        // Animate on scroll
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.animate-on-scroll').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Smooth scrolling
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                const href = this.getAttribute('href');
+                if (href && href.startsWith('#') && href !== '#') {
+                    e.preventDefault();
+                    const target = document.querySelector(href);
+                    if (target) {
+                        const navbarCollapse = document.querySelector('.navbar-collapse');
+                        if (navbarCollapse && navbarCollapse.classList.contains('show')) {
+                            const bsCollapse = bootstrap.Collapse.getInstance(navbarCollapse);
+                            if (bsCollapse) bsCollapse.hide();
+                        }
+
+                        const offsetTop = target.offsetTop - 80;
+                        window.scrollTo({
+                            top: offsetTop,
+                            behavior: 'smooth'
+                        });
+                    }
+                }
+            });
+        });
+
+        // WhatsApp mask
+        document.getElementById('whatsapp').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length <= 11) {
+                value = value.replace(/^(\d{2})(\d)/g, '($1) $2');
+                value = value.replace(/(\d)(\d{4})$/, '$1-$2');
+            }
+            e.target.value = value;
+        });
+
+        // Form submission
+        document.getElementById('proposalForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            // Get form data
+            const formData = new FormData(e.target);
+            const data = {
+                name: formData.get('name'),
+                email: formData.get('email'),
+                whatsapp: formData.get('whatsapp'),
+                user_type: formData.get('user_type'),
+                business_segment: formData.get('business_segment'),
+                main_challenge: formData.get('main_challenge'),
+                lead_volume: formData.get('lead_volume'),
+                modules_interest: formData.getAll('modules_interest'),
+                source: formData.get('source') || null,
+                timestamp: new Date().toISOString()
+            };
+
+            // Validate at least one module selected
+            if (data.modules_interest.length === 0) {
+                alert('Por favor, selecione pelo menos um módulo de interesse.');
+                return;
+            }
+
+            try {
+                // Send to backend
+                const response = await fetch('/api/leads/taylor-made', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    // Show success message
+                    document.getElementById('proposalForm').classList.add('d-none');
+                    document.getElementById('successMessage').classList.remove('d-none');
+
+                    // Close modal after 3 seconds
+                    setTimeout(() => {
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('proposalModal'));
+                        modal.hide();
+
+                        // Reset form after modal closes
+                        setTimeout(() => {
+                            document.getElementById('proposalForm').reset();
+                            document.getElementById('proposalForm').classList.remove('d-none');
+                            document.getElementById('successMessage').classList.add('d-none');
+                        }, 500);
+                    }, 3000);
+                } else {
+                    alert('Erro ao enviar proposta. Tente novamente.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Erro ao enviar proposta. Tente novamente.');
+            }
+        });
+
+        // "All modules" checkbox logic
+        document.getElementById('moduleAll').addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('input[name="modules_interest"]:not(#moduleAll)');
+            checkboxes.forEach(cb => {
+                cb.checked = this.checked;
+            });
+        });
+    </script>
+</body>
+</html>
