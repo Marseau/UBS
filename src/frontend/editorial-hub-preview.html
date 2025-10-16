@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog Hub | Conteúdo Editorial Semanal</title>
+    <meta name="description" content="Arquivo completo do nosso conteúdo editorial: threads no X, reels no Instagram e shorts no YouTube sobre automação via WhatsApp + IA.">
+
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #2D5A9B;
+            --primary-light: #4A7BC8;
+            --primary-dark: #1E3F6B;
+            --secondary-color: #F8F9FA;
+            --accent-color: #28A745;
+            --text-dark: #2C3E50;
+            --text-light: #6C757D;
+            --border-color: #E9ECEF;
+            --shadow: 0 4px 20px rgba(45, 90, 155, 0.15);
+            --shadow-lg: 0 10px 40px rgba(45, 90, 155, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text-dark);
+            overflow-x: hidden;
+            background: var(--secondary-color);
+        }
+
+        html {
+            scroll-behavior: smooth;
+            scroll-padding-top: 80px;
+        }
+
+        /* Navbar - EXACT landingTM pattern */
+        .navbar {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 0;
+            transition: all 0.3s ease;
+        }
+
+        .navbar.scrolled {
+            box-shadow: var(--shadow);
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary-color) !important;
+        }
+
+        .logo-image-large {
+            width: 160px;
+            height: 80px;
+            border-radius: 8px;
+            object-fit: contain;
+            background: transparent;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+        }
+
+        .nav-link {
+            font-weight: 500;
+            color: var(--text-dark) !important;
+            margin: 0 0.5rem;
+            transition: color 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--primary-color) !important;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        /* Hero Section - EXACT landingTM pattern */
+        .hero {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 120px 0 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100%" height="100%" fill="url(%23grid)"/></svg>');
+            opacity: 0.3;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            line-height: 1.2;
+        }
+
+        .hero .lead {
+            font-size: 1.25rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        .badge-hero {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            display: inline-block;
+            margin-bottom: 1rem;
+        }
+
+        /* KPI Header Section */
+        .kpi-header {
+            background: white;
+            padding: 1.5rem 0;
+            border-bottom: 2px solid var(--border-color);
+            margin-bottom: 2rem;
+        }
+
+        .kpi-card {
+            text-align: center;
+            padding: 1.5rem;
+            border-right: 1px solid var(--border-color);
+        }
+
+        .kpi-card:last-child {
+            border-right: none;
+        }
+
+        .kpi-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--primary-color);
+            display: block;
+            line-height: 1;
+            margin-bottom: 0.5rem;
+        }
+
+        .kpi-label {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Week Navigation */
+        .week-navigation {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .week-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin: 0;
+        }
+
+        .week-nav-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-week-nav {
+            background: var(--secondary-color);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            color: var(--text-dark);
+        }
+
+        .btn-week-nav:hover {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .btn-week-nav:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Content Containers */
+        .content-section {
+            padding: 40px 0;
+        }
+
+        .content-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .container-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            color: white;
+            padding: 2rem;
+            border-bottom: 3px solid var(--primary-dark);
+        }
+
+        .container-header.x-platform {
+            background: #000000;
+            padding: 0.75rem 2rem;
+            border-bottom: none;
+        }
+
+        .container-header.instagram-platform {
+            background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+            border-bottom: 3px solid #bc1888;
+        }
+
+        .container-header.youtube-platform {
+            background: #FF0000;
+            border-bottom: 3px solid #CC0000;
+        }
+
+        .container-header h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0 0 0.5rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .container-header.x-platform h3 {
+            font-size: 1.25rem;
+            margin: 0;
+        }
+
+        /* Thread Title Card */
+        .thread-title-card {
+            background: white;
+            padding: 1rem 2rem;
+            border-bottom: 1px solid #E1E8ED;
+        }
+
+        .thread-title-card h4 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin: 0 0 0.25rem 0;
+        }
+
+        .thread-date {
+            font-size: 0.85rem;
+            color: var(--text-light);
+            font-weight: 500;
+        }
+
+        /* Thread separator */
+        .thread-separator {
+            height: 1px;
+            background: #E1E8ED;
+            margin: 0;
+        }
+
+        /* Twitter Horizontal Scroll */
+        .horizontal-scroll-wrapper {
+            padding: 1rem 2rem;
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+
+        /* X Platform Header (single) */
+        .x-platform-header {
+            background: #000000;
+            padding: 0.75rem 2rem;
+            margin-bottom: 0;
+        }
+
+        .x-platform-header h3 {
+            font-size: 1.25rem;
+            margin: 0;
+            color: white;
+        }
+
+        .thread-horizontal-container {
+            display: flex;
+            gap: 1rem;
+            min-width: min-content;
+        }
+
+        .tweet-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            min-width: 300px;
+            max-width: 300px;
+            border: 1px solid #E1E8ED;
+            transition: all 0.3s ease;
+        }
+
+        .tweet-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(29, 161, 242, 0.15);
+            border-color: #1DA1F2;
+        }
+
+        .tweet-time {
+            font-weight: 600;
+            color: #1DA1F2;
+            font-size: 0.8rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .tweet-time i {
+            font-size: 0.7rem;
+        }
+
+        .tweet-text {
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: var(--text-dark);
+        }
+
+        /* Media Grids */
+        .media-grid {
+            padding: 2rem;
+        }
+
+        .instagram-grid,
+        .youtube-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .media-card {
+            background: var(--secondary-color);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            border: 2px solid var(--border-color);
+        }
+
+        .media-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--primary-color);
+        }
+
+        .media-thumbnail {
+            width: 100%;
+            aspect-ratio: 9/16;
+            background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 3rem;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .media-thumbnail.youtube {
+            background: #FF0000;
+        }
+
+        .media-thumbnail::after {
+            content: '▶';
+            position: absolute;
+            font-size: 4rem;
+            opacity: 0.9;
+        }
+
+        .media-info {
+            padding: 1.5rem;
+        }
+
+        .media-info h5 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .media-info p {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin: 0;
+        }
+
+        /* Loading State */
+        .loading-spinner {
+            text-align: center;
+            padding: 3rem;
+        }
+
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            color: var(--primary-color);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-light);
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        /* Statistics Footer */
+        .stats-footer {
+            background: white;
+            padding: 2rem 0;
+            border-top: 2px solid var(--border-color);
+            margin-top: 2rem;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 3rem;
+            font-weight: 800;
+            color: var(--primary-color);
+            display: block;
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            color: var(--text-light);
+            margin-top: 0.5rem;
+        }
+
+        /* Footer - EXACT landingTM pattern */
+        .footer {
+            background: var(--text-dark);
+            color: white;
+            padding: 60px 0 30px;
+        }
+
+        .footer h5 {
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .footer ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .footer ul li {
+            margin-bottom: 0.5rem;
+        }
+
+        .footer ul li a {
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer ul li a:hover {
+            color: white;
+        }
+
+        .footer-bottom {
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin-top: 2rem;
+            padding-top: 2rem;
+            text-align: center;
+            color: rgba(255,255,255,0.6);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero {
+                padding: 100px 0 40px;
+            }
+
+            .logo-image-large {
+                width: 120px;
+                height: 60px;
+            }
+
+            .kpi-card {
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+                padding: 1rem;
+            }
+
+            .kpi-card:last-child {
+                border-bottom: none;
+            }
+
+            .week-navigation {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .navbar-collapse {
+                background-color: white;
+                border-radius: 10px;
+                margin-top: 10px;
+                padding: 20px;
+                box-shadow: 0 5px 30px rgba(0, 0, 0, 0.1);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .logo-image-large {
+                width: 80px;
+                height: 40px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <picture>
+                    <source srcset="/assets/images/optimized/UBS_Nac_v2.webp" type="image/webp">
+                    <img src="/assets/images/optimized/UBS_Nac_v2.png" alt="UBS" class="logo-image-large">
+                </picture>
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/editorial-hub-preview">Blog Hub</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section - EXACT landingTM pattern -->
+    <section id="home" class="hero">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-8 mx-auto text-center hero-content">
+                    <div class="badge-hero">
+                        Arquivo Editorial Completo
+                    </div>
+                    <h1>Conteúdo Semanal</h1>
+                    <p class="lead">Threads no X, Reels no Instagram e Shorts no YouTube.<br>Automação via WhatsApp + IA</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- KPI Header -->
+    <section class="kpi-header">
+        <div class="container">
+            <div class="row" id="kpiContainer">
+                <div class="col-lg-3 col-6">
+                    <div class="kpi-card">
+                        <span class="kpi-number" id="kpiWeek">--</span>
+                        <span class="kpi-label">Semana Atual</span>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-6">
+                    <div class="kpi-card">
+                        <span class="kpi-number" id="kpiTweets">0</span>
+                        <span class="kpi-label">Tweets</span>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-6">
+                    <div class="kpi-card">
+                        <span class="kpi-number" id="kpiReels">0</span>
+                        <span class="kpi-label">Reels</span>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-6">
+                    <div class="kpi-card">
+                        <span class="kpi-number" id="kpiShorts">0</span>
+                        <span class="kpi-label">YouTube Shorts</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Week Navigation -->
+    <div class="container">
+        <div class="week-navigation">
+            <button class="btn btn-week-nav" id="btnPrevWeek" disabled>
+                <i class="fas fa-chevron-left me-2"></i>Semana Anterior
+            </button>
+            <h2 class="week-title" id="currentWeekTitle">Carregando...</h2>
+            <button class="btn btn-week-nav" id="btnNextWeek" disabled>
+                Próxima Semana<i class="fas fa-chevron-right ms-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Content Section -->
+    <section class="content-section">
+        <div class="container">
+            <div id="loadingState" class="loading-spinner">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Carregando conteúdo...</span>
+                </div>
+                <p class="mt-3 text-muted">Carregando conteúdo editorial...</p>
+            </div>
+
+            <div id="emptyState" class="empty-state d-none">
+                <h3>Nenhum conteúdo disponível</h3>
+                <p>Ainda não há conteúdo publicado para esta semana.</p>
+            </div>
+
+            <div id="contentGrid" class="d-none">
+                <!-- Single X Header -->
+                <div class="content-container mb-0">
+                    <div class="x-platform-header">
+                        <h3><i class="fab fa-x-twitter"></i></h3>
+                    </div>
+
+                    <!-- Thread 1 -->
+                    <div class="thread-title-card">
+                        <h4 id="thread1Title">Thread #1</h4>
+                        <div class="thread-date" id="thread1Date">Carregando...</div>
+                    </div>
+                    <div class="horizontal-scroll-wrapper">
+                        <div id="thread1Content" class="thread-horizontal-container">
+                            <!-- Thread 1 tweets will be injected here -->
+                        </div>
+                    </div>
+                    <div class="thread-separator"></div>
+
+                    <!-- Thread 2 -->
+                    <div class="thread-title-card">
+                        <h4 id="thread2Title">Thread #2</h4>
+                        <div class="thread-date" id="thread2Date">Carregando...</div>
+                    </div>
+                    <div class="horizontal-scroll-wrapper">
+                        <div id="thread2Content" class="thread-horizontal-container">
+                            <!-- Thread 2 tweets will be injected here -->
+                        </div>
+                    </div>
+                    <div class="thread-separator"></div>
+
+                    <!-- Thread 3 -->
+                    <div class="thread-title-card">
+                        <h4 id="thread3Title">Thread #3</h4>
+                        <div class="thread-date" id="thread3Date">Carregando...</div>
+                    </div>
+                    <div class="horizontal-scroll-wrapper">
+                        <div id="thread3Content" class="thread-horizontal-container">
+                            <!-- Thread 3 tweets will be injected here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div style="height: 1rem;"></div>
+
+                <!-- Instagram Reels Container -->
+                <div class="content-container mb-2">
+                    <div class="container-header instagram-platform">
+                        <h3><i class="fab fa-instagram"></i> Instagram Reels</h3>
+                        <p class="text-muted mb-0">Clique para assistir</p>
+                    </div>
+                    <div class="media-grid">
+                        <div id="instagramContent" class="instagram-grid">
+                            <!-- Instagram reels will be injected here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- YouTube Shorts Container -->
+                <div class="content-container mb-2">
+                    <div class="container-header youtube-platform">
+                        <h3><i class="fab fa-youtube"></i> YouTube Shorts</h3>
+                        <p class="text-muted mb-0">Clique para assistir</p>
+                    </div>
+                    <div class="media-grid">
+                        <div id="youtubeContent" class="youtube-grid">
+                            <!-- YouTube shorts will be injected here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Statistics Footer -->
+    <section class="stats-footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-3 col-6">
+                    <div class="stat-item">
+                        <span class="stat-number" id="totalWeeks">--</span>
+                        <p class="stat-label">Semanas Publicadas</p>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-6">
+                    <div class="stat-item">
+                        <span class="stat-number" id="totalTweets">--</span>
+                        <p class="stat-label">Total de Tweets</p>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-6">
+                    <div class="stat-item">
+                        <span class="stat-number" id="totalReels">--</span>
+                        <p class="stat-label">Total de Reels</p>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-6">
+                    <div class="stat-item">
+                        <span class="stat-number" id="totalShorts">--</span>
+                        <p class="stat-label">Total de Shorts</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer - EXACT landingTM pattern -->
+    <footer class="footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4">
+                    <div class="d-flex align-items-center mb-3">
+                        <picture>
+                            <source srcset="/assets/images/optimized/UBS_Nac_v2.webp" type="image/webp">
+                            <img src="/assets/images/optimized/UBS_Nac_v2.png" alt="UBS Taylor Made" style="width: 120px; height: 120px; object-fit: contain;">
+                        </picture>
+                    </div>
+                    <p class="text-muted">Desenvolvimento sob medida de automação via WhatsApp + IA desde 2025</p>
+                </div>
+
+                <div class="col-lg-2 col-md-3">
+                    <h5>Produto</h5>
+                    <ul>
+                        <li><a href="/#modules">Módulos</a></li>
+                        <li><a href="/#benefits">Benefícios</a></li>
+                        <li><a href="/#how-it-works">Como Funciona</a></li>
+                    </ul>
+                </div>
+
+                <div class="col-lg-2 col-md-3">
+                    <h5>Conteúdo</h5>
+                    <ul>
+                        <li><a href="/editorial-hub-preview">Blog Hub</a></li>
+                        <li><a href="https://x.com/ubstaylormade" target="_blank">X (Twitter)</a></li>
+                        <li><a href="https://instagram.com/ubstaylormade" target="_blank">Instagram</a></li>
+                        <li><a href="https://youtube.com/@ubstaylormade" target="_blank">YouTube</a></li>
+                    </ul>
+                </div>
+
+                <div class="col-lg-2 col-md-3">
+                    <h5>Suporte</h5>
+                    <ul>
+                        <li><a href="/#faq">FAQ</a></li>
+                        <li><a href="#">Documentação</a></li>
+                        <li><a href="#">Status</a></li>
+                    </ul>
+                </div>
+
+                <div class="col-lg-2 col-md-3">
+                    <h5>Contato</h5>
+                    <p class="text-muted small">admin@stratfin.tec.br</p>
+                    <div class="d-flex gap-3">
+                        <a href="#" class="text-white"><i class="fab fa-x-twitter fa-lg"></i></a>
+                        <a href="#" class="text-white"><i class="fab fa-instagram fa-lg"></i></a>
+                        <a href="#" class="text-white"><i class="fab fa-youtube fa-lg"></i></a>
+                        <a href="#" class="text-white"><i class="fab fa-linkedin fa-lg"></i></a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>&copy; 2025 UBS Taylor Made. Todos os direitos reservados.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Twitter Widget -->
+    <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+    <!-- Instagram Embed -->
+    <script async src="//www.instagram.com/embed.js"></script>
+
+    <script>
+        // Global state
+        let currentContent = null;
+        let allWeeks = [];
+        let currentWeekIndex = 0;
+
+        // Navbar scroll effect
+        window.addEventListener('scroll', function() {
+            const navbar = document.querySelector('.navbar');
+            if (window.scrollY > 50) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+
+        // Load editorial content on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLatestContent();
+            loadStatistics();
+        });
+
+        // Load latest editorial content
+        async function loadLatestContent() {
+            try {
+                const response = await fetch('/api/editorial-content/latest');
+
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        showEmptyState();
+                        return;
+                    }
+                    throw new Error('Failed to fetch content');
+                }
+
+                const result = await response.json();
+                currentContent = result.data;
+
+                renderContent(currentContent);
+
+            } catch (error) {
+                console.error('Error loading content:', error);
+                showEmptyState();
+            }
+        }
+
+        // Load statistics
+        async function loadStatistics() {
+            try {
+                const response = await fetch('/api/editorial-content/stats');
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch stats');
+                }
+
+                const result = await response.json();
+                const stats = result.stats;
+
+                document.getElementById('totalWeeks').textContent = stats.total_weeks || 0;
+                document.getElementById('totalTweets').textContent = stats.total_tweets || 0;
+                document.getElementById('totalReels').textContent = stats.total_reels || 0;
+                document.getElementById('totalShorts').textContent = stats.total_shorts || 0;
+
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+            }
+        }
+
+        // Render content
+        function renderContent(content) {
+            // Hide loading, show content
+            document.getElementById('loadingState').classList.add('d-none');
+            document.getElementById('emptyState').classList.add('d-none');
+            document.getElementById('contentGrid').classList.remove('d-none');
+
+            // Update KPIs
+            document.getElementById('kpiWeek').textContent = `${content.week_number}/${content.year}`;
+            document.getElementById('kpiTweets').textContent = content.total_tweets || 0;
+            document.getElementById('kpiReels').textContent = content.total_reels || 0;
+            document.getElementById('kpiShorts').textContent = content.total_shorts || 0;
+
+            // Update week title
+            document.getElementById('currentWeekTitle').textContent = `Semana ${content.week_number} de ${content.year}`;
+
+            // Render Twitter threads
+            renderTwitterThreads(content.threads, content.publication_date);
+
+            // Render Instagram reels
+            renderInstagramReels(content.reels);
+
+            // Render YouTube short
+            renderYouTubeShort(content.youtube_short);
+        }
+
+        // Generate tweet times (distributed throughout the day)
+        function generateTweetTimes(count) {
+            const times = [];
+            const startHour = 8; // 08:00
+            const intervalHours = 2; // Tweet every 2 hours
+
+            for (let i = 0; i < count; i++) {
+                const hour = startHour + (i * intervalHours);
+                const timeStr = `${hour.toString().padStart(2, '0')}:00`;
+                times.push(timeStr);
+            }
+            return times;
+        }
+
+        // Format publication date from database (YYYY-MM-DD → DD/MM/YYYY)
+        function formatPublicationDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString + 'T00:00:00'); // Avoid timezone issues
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+
+        // Render individual thread line
+        function renderThreadLine(thread, containerIdPrefix, publicationDate) {
+            const titleElement = document.getElementById(`${containerIdPrefix}Title`);
+            const dateElement = document.getElementById(`${containerIdPrefix}Date`);
+            const container = document.getElementById(`${containerIdPrefix}Content`);
+
+            // Update header
+            titleElement.textContent = thread.title;
+            const formattedDate = formatPublicationDate(publicationDate);
+            dateElement.textContent = `Publicado em ${formattedDate} | ${thread.description}`;
+
+            // Clear container
+            container.innerHTML = '';
+
+            if (!thread.tweets || thread.tweets.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>Nenhum tweet disponível</p></div>';
+                return;
+            }
+
+            // Generate times for tweets
+            const tweetTimes = generateTweetTimes(thread.tweets.length);
+
+            thread.tweets.forEach((tweet, index) => {
+                const tweetCard = document.createElement('div');
+                tweetCard.className = 'tweet-card';
+
+                const tweetTime = document.createElement('div');
+                tweetTime.className = 'tweet-time';
+                tweetTime.innerHTML = `<i class="far fa-clock"></i> ${tweetTimes[index]}`;
+
+                const tweetText = document.createElement('div');
+                tweetText.className = 'tweet-text';
+                tweetText.textContent = tweet;
+
+                tweetCard.appendChild(tweetTime);
+                tweetCard.appendChild(tweetText);
+                container.appendChild(tweetCard);
+            });
+        }
+
+        // Render Twitter threads (3 separate lines)
+        function renderTwitterThreads(threads, publicationDate) {
+            if (!threads || threads.length === 0) {
+                return;
+            }
+
+            // Render each thread in its own line
+            if (threads[0]) renderThreadLine(threads[0], 'thread1', publicationDate);
+            if (threads[1]) renderThreadLine(threads[1], 'thread2', publicationDate);
+            if (threads[2]) renderThreadLine(threads[2], 'thread3', publicationDate);
+        }
+
+        // Render Instagram reels
+        function renderInstagramReels(reels) {
+            const container = document.getElementById('instagramContent');
+            container.innerHTML = '';
+
+            if (!reels || reels.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>Nenhum reel disponível</p></div>';
+                return;
+            }
+
+            reels.forEach(reel => {
+                const mediaCard = document.createElement('div');
+                mediaCard.className = 'media-card';
+
+                // Create thumbnail
+                const thumbnail = document.createElement('div');
+                thumbnail.className = 'media-thumbnail';
+
+                if (reel.url) {
+                    thumbnail.style.cursor = 'pointer';
+                    thumbnail.onclick = () => window.open(reel.url, '_blank');
+                } else {
+                    thumbnail.style.opacity = '0.5';
+                    thumbnail.style.cursor = 'not-allowed';
+                }
+
+                // Create info section
+                const info = document.createElement('div');
+                info.className = 'media-info';
+                info.innerHTML = `
+                    <h5>${reel.title}</h5>
+                    <p>${reel.description}</p>
+                `;
+
+                mediaCard.appendChild(thumbnail);
+                mediaCard.appendChild(info);
+                container.appendChild(mediaCard);
+            });
+        }
+
+        // Render YouTube short
+        function renderYouTubeShort(youtubeShort) {
+            const container = document.getElementById('youtubeContent');
+            container.innerHTML = '';
+
+            if (!youtubeShort) {
+                container.innerHTML = '<div class="empty-state"><p>Nenhum short disponível</p></div>';
+                return;
+            }
+
+            const mediaCard = document.createElement('div');
+            mediaCard.className = 'media-card';
+
+            // Create thumbnail
+            const thumbnail = document.createElement('div');
+            thumbnail.className = 'media-thumbnail youtube';
+
+            if (youtubeShort.url) {
+                thumbnail.style.cursor = 'pointer';
+                thumbnail.onclick = () => window.open(youtubeShort.url, '_blank');
+            } else {
+                thumbnail.style.opacity = '0.5';
+                thumbnail.style.cursor = 'not-allowed';
+            }
+
+            // Create info section
+            const info = document.createElement('div');
+            info.className = 'media-info';
+            info.innerHTML = `
+                <h5>${youtubeShort.title}</h5>
+                <p>${youtubeShort.description}</p>
+            `;
+
+            mediaCard.appendChild(thumbnail);
+            mediaCard.appendChild(info);
+            container.appendChild(mediaCard);
+        }
+
+        // Show empty state
+        function showEmptyState() {
+            document.getElementById('loadingState').classList.add('d-none');
+            document.getElementById('contentGrid').classList.add('d-none');
+            document.getElementById('emptyState').classList.remove('d-none');
+        }
+
+        // Week navigation (placeholder for now)
+        document.getElementById('btnPrevWeek').addEventListener('click', function() {
+            // TODO: Implement week navigation
+            console.log('Previous week');
+        });
+
+        document.getElementById('btnNextWeek').addEventListener('click', function() {
+            // TODO: Implement week navigation
+            console.log('Next week');
+        });
+    </script>
+</body>
+</html>
