@@ -16,15 +16,16 @@ export type FlowType =
   | 'general'
   | null;
 
-export type FlowStep = 
+export type FlowStep =
   | 'start'
-  | 'collect_service' 
+  | 'collect_service'
   | 'collect_datetime'
   | 'collect_id'
   | 'collect_email'
   | 'collect_gender'
   | 'collect_confirmation'
   | 'show_slots'
+  | 'select_time_slot'
   | 'confirm'
   | 'complete'
   | 'abandoned'
@@ -99,4 +100,22 @@ export interface FlowLockDecision {
   suggested_response: string;
   action: 'continue' | 'abort' | 'timeout' | 'complete';
   expires_at: string;
+}
+
+export interface AppointmentStateData {
+  appointment_id?: string;
+  status?: string;
+  service_name?: string;
+  professional_name?: string;
+  datetime?: string;
+  [key: string]: any;
+}
+
+export interface TemporalContextData {
+  session_id: string;
+  started_at: string;
+  last_interaction_at: string;
+  message_count: number;
+  duration_ms: number;
+  [key: string]: any;
 }
