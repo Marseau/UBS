@@ -66,7 +66,8 @@ app.use('/api/whatsapp-v3/webhook', express.raw({ type: '*/*' }));
 app.use('/api/whatsapp/webhook', express.raw({ type: '*/*' }));
 
 // 2) JSON global, exceto nos webhooks
-const jsonParser = express.json();
+// Aumentar limite para 100mb para suportar payloads de vídeo (N8N)
+const jsonParser = express.json({ limit: '100mb' });
 app.use((req, res, next) => {
   if (req.path === '/api/whatsapp-v3/webhook' || req.path === '/api/whatsapp/webhook') {
     return next();
@@ -282,13 +283,22 @@ try {
 }
 
 try {
-  // Load demo routes (NO AUTH REQUIRED)  
+  // Load demo routes (NO AUTH REQUIRED)
   const demoRoutesModule = require('./routes/demo-apis');
   const demoRoutes = demoRoutesModule.default || demoRoutesModule;
   app.use('/api/demo', demoRoutes);
   console.log('✅ Demo routes loaded successfully - DEMO INTERATIVA READY');
 } catch (error) {
   console.error("❌ Failed to load demo routes:", error);
+}
+
+try {
+  // Load Taylor Made leads routes (NO AUTH REQUIRED - public landing page)
+  const taylorMadeLeadsRoutes = require('./routes/taylor-made-leads.routes');
+  app.use('/api/leads', 'default' in taylorMadeLeadsRoutes ? taylorMadeLeadsRoutes.default : taylorMadeLeadsRoutes);
+  console.log('✅ Taylor Made leads routes loaded successfully - TAYLOR MADE LANDING READY');
+} catch (error) {
+  console.error("❌ Failed to load Taylor Made leads routes:", error);
 }
 
 try {
@@ -474,6 +484,95 @@ try {
   console.error("❌ Failed to load calendar webhook routes:", error);
 }
 
+// Editorial Content Routes - Blog content (threads, reels, shorts)
+try {
+  const editorialContentRoutes = require('./routes/editorial-content.routes');
+  app.use('/api/editorial-content', 'default' in editorialContentRoutes ? editorialContentRoutes.default : editorialContentRoutes);
+  console.log('✅ Editorial Content routes loaded successfully - BLOG CONTENT READY');
+} catch (error) {
+  console.error("❌ Failed to load editorial content routes:", error);
+}
+
+// Content Approval Routes - Approve editorial content (threads, reels, shorts)
+try {
+  const contentApprovalRoutes = require('./routes/content-approval.routes');
+  app.use('/api/content-approval', 'default' in contentApprovalRoutes ? contentApprovalRoutes.default : contentApprovalRoutes);
+  console.log('✅ Content Approval routes loaded successfully - EDITORIAL APPROVAL READY');
+} catch (error) {
+  console.error("❌ Failed to load content approval routes:", error);
+}
+
+// Multi-Page Reel Routes - Generate multi-page Instagram reels (DISABLED - use N8N)
+try {
+  const multiPageReelRoutes = require('./routes/multi-page-reel.routes');
+  app.use('/api/multi-page-reel', 'default' in multiPageReelRoutes ? multiPageReelRoutes.default : multiPageReelRoutes);
+  console.log('✅ Multi-Page Reel routes loaded (DISABLED - workaround via N8N)');
+} catch (error) {
+  console.error("❌ Failed to load multi-page reel routes:", error);
+}
+
+// Video Concatenation Routes - Concatenate reels into YouTube Shorts
+try {
+  const videoConcatenateRoutes = require('./routes/video-concatenate.routes');
+  app.use('/api/video-concatenate', 'default' in videoConcatenateRoutes ? videoConcatenateRoutes.default : videoConcatenateRoutes);
+  console.log('✅ Video Concatenation routes loaded successfully - YOUTUBE SHORT GENERATION READY');
+} catch (error) {
+  console.error("❌ Failed to load video concatenation routes:", error);
+}
+
+// Canva Hybrid Video Routes - Generate Instagram reels with Canva templates
+try {
+  const canvaHybridVideoRoutes = require('./routes/canva-hybrid-video.routes');
+  app.use('/api/canva-hybrid-video', 'default' in canvaHybridVideoRoutes ? canvaHybridVideoRoutes.default : canvaHybridVideoRoutes);
+  console.log('✅ Canva Hybrid Video routes loaded successfully - INSTAGRAM REEL GENERATION READY');
+} catch (error) {
+  console.error("❌ Failed to load canva hybrid video routes:", error);
+}
+
+// Instagram Scraper Routes - Execute Puppeteer scraping on Mac, save to Supabase
+try {
+  console.log('🔍 [DEBUG] Attempting to load instagram-scraper.routes...');
+  const instagramScraperRoutes = require('./routes/instagram-scraper.routes');
+  console.log('🔍 [DEBUG] Module loaded, keys:', Object.keys(instagramScraperRoutes));
+  const router = 'default' in instagramScraperRoutes ? instagramScraperRoutes.default : instagramScraperRoutes;
+  console.log('🔍 [DEBUG] Router type:', typeof router);
+  console.log('🔍 [DEBUG] Router stack length:', router.stack ? router.stack.length : 'N/A');
+  app.use('/api/instagram-scraper', router);
+  console.log('✅ Instagram Scraper routes loaded successfully - LEAD SCRAPING VIA MAC READY');
+} catch (error) {
+  console.error("❌ Failed to load Instagram scraper routes:", error);
+}
+
+// Instagram Webhook Routes - Capture interactions (comments, DMs, mentions) for auto-follow
+try {
+  const instagramWebhookRoutes = require('./routes/instagram-webhook.routes');
+  const router = 'default' in instagramWebhookRoutes ? instagramWebhookRoutes.default : instagramWebhookRoutes;
+  app.use('/api/instagram', router);
+  console.log('✅ Instagram Webhook routes loaded - AUTO-FOLLOW ON INTERACTIONS READY');
+} catch (error) {
+  console.error('❌ Failed to load Instagram Webhook routes:', error);
+}
+
+// Account Actions Routes - Record social media actions (multi-platform)
+try {
+  const accountActionsRoutes = require('./routes/account-actions.routes');
+  const router = 'default' in accountActionsRoutes ? accountActionsRoutes.default : accountActionsRoutes;
+  app.use('/api', router);
+  console.log('✅ Account Actions routes loaded - MULTI-PLATFORM SUPPORT');
+} catch (error) {
+  console.error("❌ Failed to load Account Actions routes:", error);
+}
+
+// Facebook Webhook Verification - GET endpoint for Facebook verification
+try {
+  const facebookWebhookVerification = require('./routes/facebook-webhook-verification.routes');
+  const router = 'default' in facebookWebhookVerification ? facebookWebhookVerification.default : facebookWebhookVerification;
+  app.use('/webhook', router);
+  console.log('✅ Facebook Webhook Verification routes loaded - /webhook/social-media-activity');
+} catch (error) {
+  console.error("❌ Failed to load Facebook Webhook Verification routes:", error);
+}
+
 // Define o caminho para a pasta frontend de forma explícita e segura
 const candidatePaths: string[] = [
   path.join(process.cwd(), 'src', 'frontend'),
@@ -544,8 +643,17 @@ app.get('/editorial-content', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'editorial-content-section.html'));
 });
 
+// Content Approval - Marketing approval page
+app.get('/content-approval', (_req, res) => {
+  res.sendFile(path.join(frontendPath, 'content-approval.html'));
+});
+
 app.get('/forgot-password', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'forgot-password.html'));
+});
+
+app.get('/privacy', (_req, res) => {
+  res.sendFile(path.join(frontendPath, 'privacy.html'));
 });
 
 app.get('/domain-details', (_req, res) => {
@@ -891,8 +999,13 @@ async function initializeServices() {
   }
 }
 
-app.listen(PORT, async () => {
+const server = app.listen(PORT, async () => {
   console.log(`🌐 Server running on http://localhost:${PORT}`);
+
+// Configurar timeout para 60 minutos (scraping do Instagram com lock pode demorar + N8N timeout é 50min)
+server.setTimeout(3600000); // 60 minutos
+server.keepAliveTimeout = 3610000; // 60min + 10s
+server.headersTimeout = 3615000; // 60min + 15s
   
   // ENV Sanity Check
   console.log('🔎 ENV SANITY', {
