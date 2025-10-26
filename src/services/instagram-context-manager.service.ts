@@ -1,5 +1,5 @@
 // @ts-nocheck - puppeteer contexts usam DOM APIs sem typings fortes
-import { Browser, BrowserContext, Page } from 'puppeteer';
+import { Browser, Page } from 'puppeteer';
 import { getBrowserInstance, ensureLoggedSession } from './instagram-session.service';
 import fs from 'fs';
 import path from 'path';
@@ -7,40 +7,46 @@ import path from 'path';
 const COOKIES_FILE = path.join(process.cwd(), 'instagram-cookies.json');
 
 /**
- * Sistema de gerenciamento de Browser Contexts para isolamento de requisições
+ * Sistema de gerenciamento de Páginas para requisições paralelas
  *
- * PROBLEMA RESOLVIDO:
- * - Múltiplas requisições simultâneas compartilhavam o mesmo browserInstance
- * - Páginas de uma request interferiam com outras (erros "detached frame")
+ * OTIMIZAÇÃO v2:
+ * - 1 janela do navegador apenas
+ * - Múltiplas abas (páginas) na mesma janela
+ * - Cookies compartilhados automaticamente
+ * - Menor overhead que BrowserContexts
+ * - Footprint visual reduzido
  *
- * SOLUÇÃO:
- * - Cada requisição recebe seu próprio BrowserContext isolado
- * - Contexts compartilham o browser mas são completamente isolados
- * - Cookies, storage, cache separados por context
- * - Cleanup automático ao finalizar requests
+ * ANTES (v1 - Contexts):
+ * - 1 browser → N contexts → N páginas
+ * - Isolamento máximo, overhead médio
+ *
+ * AGORA (v2 - Páginas simples):
+ * - 1 browser → N páginas diretas
+ * - Isolamento suficiente, overhead mínimo
  */
 
-interface ManagedContext {
-  context: BrowserContext;
+interface ManagedPage {
   page: Page;
   createdAt: number;
   requestId: string;
 }
 
-const activeContexts = new Map<string, ManagedContext>();
-let contextCounter = 0;
+const activePages = new Map<string, ManagedPage>();
+let pageCounter = 0;
 
 /**
  * Gera ID único para tracking de requisição
  */
 function generateRequestId(): string {
-  return `ctx_${++contextCounter}_${Date.now()}`;
+  return `page_${++pageCounter}_${Date.now()}`;
 }
 
 /**
- * Cria um Browser Context isolado com página autenticada
+ * Cria uma página simples com cookies autenticados
  *
- * @returns Objeto com context, page e cleanup function
+ * OTIMIZAÇÃO: Usa páginas diretas sem BrowserContexts para reduzir overhead
+ *
+ * @returns Objeto com page, requestId e cleanup function
  */
 export async function createIsolatedContext(): Promise<{
   page: Page;
@@ -57,11 +63,10 @@ export async function createIsolatedContext(): Promise<{
 
   const requestId = generateRequestId();
 
-  // Criar context isolado
-  const context = await browser.createBrowserContext();
-  const page = await context.newPage();
+  // Criar página simples (sem context isolado)
+  const page = await browser.newPage();
 
-  console.log(`🔒 Context isolado criado: ${requestId}`);
+  console.log(`📄 Página criada: ${requestId}`);
 
   // Carregar cookies do arquivo (sessionPage foi fechada após login)
   if (fs.existsSync(COOKIES_FILE)) {
@@ -70,35 +75,34 @@ export async function createIsolatedContext(): Promise<{
       const cookies = JSON.parse(cookiesData);
       if (Array.isArray(cookies) && cookies.length > 0) {
         await page.setCookie(...cookies);
-        console.log(`   🔑 ${cookies.length} cookies aplicados ao context ${requestId}`);
+        console.log(`   🔑 ${cookies.length} cookies aplicados à página ${requestId}`);
       }
     } catch (error: any) {
-      console.warn(`   ⚠️  Erro ao carregar cookies para context ${requestId}: ${error.message}`);
+      console.warn(`   ⚠️  Erro ao carregar cookies para página ${requestId}: ${error.message}`);
     }
   }
 
-  // Armazenar context gerenciado
-  const managedContext: ManagedContext = {
-    context,
+  // Armazenar página gerenciada
+  const managedPage: ManagedPage = {
     page,
     createdAt: Date.now(),
     requestId
   };
-  activeContexts.set(requestId, managedContext);
+  activePages.set(requestId, managedPage);
 
   // Função de cleanup para garantir limpeza
   const cleanup = async () => {
-    await cleanupContext(requestId);
+    await cleanupPage(requestId);
   };
 
   return { page, requestId, cleanup };
 }
 
 /**
- * Limpa um context específico (fecha página e context)
+ * Limpa uma página específica
  */
-async function cleanupContext(requestId: string): Promise<void> {
-  const managed = activeContexts.get(requestId);
+async function cleanupPage(requestId: string): Promise<void> {
+  const managed = activePages.get(requestId);
   if (!managed) {
     return;
   }
@@ -107,75 +111,70 @@ async function cleanupContext(requestId: string): Promise<void> {
     // Fechar página
     if (!managed.page.isClosed()) {
       await managed.page.close().catch((err) => {
-        console.warn(`   ⚠️  Erro ao fechar página do context ${requestId}: ${err.message}`);
+        console.warn(`   ⚠️  Erro ao fechar página ${requestId}: ${err.message}`);
       });
     }
 
-    // Fechar context
-    await managed.context.close().catch((err) => {
-      console.warn(`   ⚠️  Erro ao fechar context ${requestId}: ${err.message}`);
-    });
-
     const lifespan = Date.now() - managed.createdAt;
-    console.log(`🗑️  Context ${requestId} limpo (vida: ${(lifespan / 1000).toFixed(1)}s)`);
+    console.log(`🗑️  Página ${requestId} limpa (vida: ${(lifespan / 1000).toFixed(1)}s)`);
   } catch (error: any) {
-    console.warn(`⚠️  Erro geral ao limpar context ${requestId}: ${error.message}`);
+    console.warn(`⚠️  Erro geral ao limpar página ${requestId}: ${error.message}`);
   } finally {
-    activeContexts.delete(requestId);
+    activePages.delete(requestId);
   }
 }
 
 /**
- * Limpa todos os contexts ativos (útil para shutdown graceful)
+ * Limpa todas as páginas ativas (útil para shutdown graceful)
  */
 export async function cleanupAllContexts(): Promise<void> {
-  console.log(`🧹 Limpando ${activeContexts.size} contexts ativos...`);
+  console.log(`🧹 Limpando ${activePages.size} páginas ativas...`);
 
-  const cleanupPromises = Array.from(activeContexts.keys()).map(requestId =>
-    cleanupContext(requestId)
+  const cleanupPromises = Array.from(activePages.keys()).map(requestId =>
+    cleanupPage(requestId)
   );
 
   await Promise.allSettled(cleanupPromises);
-  activeContexts.clear();
+  activePages.clear();
 
-  console.log('✅ Todos os contexts limpos');
+  console.log('✅ Todas as páginas limpas');
 }
 
 /**
- * Retorna estatísticas dos contexts ativos
+ * Retorna estatísticas das páginas ativas
  */
 export function getContextStats(): {
   activeCount: number;
   contexts: Array<{ requestId: string; ageSeconds: number }>;
 } {
   const now = Date.now();
-  const contexts = Array.from(activeContexts.values()).map(ctx => ({
+  const contexts = Array.from(activePages.values()).map(ctx => ({
     requestId: ctx.requestId,
     ageSeconds: (now - ctx.createdAt) / 1000
   }));
 
   return {
-    activeCount: activeContexts.size,
+    activeCount: activePages.size,
     contexts
   };
 }
 
 /**
- * Limpa contexts antigos (older than maxAgeMs)
+ * Limpa páginas antigas (older than maxAgeMs)
  */
 export async function cleanupStaleContexts(maxAgeMs: number = 600000): Promise<number> {
   const now = Date.now();
   const staleIds: string[] = [];
 
-  for (const [requestId, managed] of activeContexts.entries()) {
+  for (const [requestId, managed] of activePages.entries()) {
     if (now - managed.createdAt > maxAgeMs) {
       staleIds.push(requestId);
     }
   }
 
   if (staleIds.length > 0) {
-    console.log(`🧹 Limpando ${staleIds.length} contexts obsoletos (>${maxAgeMs}ms)...`);
-    await Promise.allSettled(staleIds.map(id => cleanupContext(id)));
+    console.log(`🧹 Limpando ${staleIds.length} páginas obsoletas (>${maxAgeMs}ms)...`);
+    await Promise.allSettled(staleIds.map(id => cleanupPage(id)));
   }
 
   return staleIds.length;
