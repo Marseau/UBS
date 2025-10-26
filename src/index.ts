@@ -1026,3 +1026,35 @@ server.headersTimeout = 3615000; // 60min + 15s
   // Initialize services after server starts
   await initializeServices();
 });
+
+// ============================================================================
+// GRACEFUL SHUTDOWN - Instagram Context Manager Cleanup
+// ============================================================================
+import { cleanupAllContexts } from './services/instagram-context-manager.service';
+
+const gracefulShutdown = async (signal: string) => {
+  console.log(`\n🛑 ${signal} recebido - iniciando shutdown graceful...`);
+
+  try {
+    // Limpar todos os browser contexts ativos
+    await cleanupAllContexts();
+
+    // Fechar servidor HTTP
+    server.close(() => {
+      console.log('✅ Servidor HTTP encerrado');
+      process.exit(0);
+    });
+
+    // Força shutdown após 10 segundos se não terminar
+    setTimeout(() => {
+      console.error('⚠️ Shutdown forçado após timeout');
+      process.exit(1);
+    }, 10000);
+  } catch (error: any) {
+    console.error('❌ Erro durante shutdown:', error.message);
+    process.exit(1);
+  }
+};
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

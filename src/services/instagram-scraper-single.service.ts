@@ -10,6 +10,7 @@ import {
   parseInstagramCount,
   extractHashtagsFromPosts
 } from './instagram-profile.utils';
+import { createIsolatedContext } from './instagram-context-manager.service';
 
 // Controla instância única de browser e página de sessão
 let browserInstance: Browser | null = null;
@@ -363,7 +364,8 @@ export async function scrapeInstagramTag(
   searchTerm: string,
   maxProfiles: number = 10
 ): Promise<InstagramProfileData[]> {
-  const page = await createAuthenticatedPage();
+  const { page, requestId, cleanup } = await createIsolatedContext();
+  console.log(`🔒 Request ${requestId} iniciada para scrape-tag: "${searchTerm}"`);
   try {
     // Normalizar termo
     const normalizedTerm = searchTerm
@@ -1022,9 +1024,8 @@ export async function scrapeInstagramTag(
     console.error(`❌ Erro ao scrape tag "${searchTerm}":`, error.message);
     throw error;
   } finally {
-    if (!page.isClosed()) {
-      await page.close().catch(() => {});
-    }
+    console.log(`🔓 Request ${requestId} finalizada (scrape-tag: "${searchTerm}")`);
+    await cleanup();
   }
 }
 
@@ -1109,7 +1110,8 @@ export async function scrapeInstagramProfile(username: string): Promise<{
   website: string | null;
   business_category: string | null;
 }> {
-  const page = await createAuthenticatedPage();
+  const { page, requestId, cleanup } = await createIsolatedContext();
+  console.log(`🔒 Request ${requestId} iniciada para scrape-profile: "${username}"`);
   try {
     const url = `https://www.instagram.com/${username}/`;
 
@@ -1194,9 +1196,8 @@ export async function scrapeInstagramProfile(username: string): Promise<{
     console.error(`❌ Erro ao scrape perfil "@${username}":`, error.message);
     throw error;
   } finally {
-    if (!page.isClosed()) {
-      await page.close().catch(() => {});
-    }
+    console.log(`🔓 Request ${requestId} finalizada (scrape-profile: "${username}")`);
+    await cleanup();
   }
 }
 

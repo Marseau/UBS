@@ -2,7 +2,6 @@
 import { Page } from 'puppeteer';
 import { detectLanguage } from './language-country-detector.service';
 import {
-  createAuthenticatedPage,
   ensureLoggedSession,
   getLoggedUsername,
   closeBrowser as sessionCloseBrowser,
@@ -16,6 +15,7 @@ import {
   parseInstagramCount,
   extractHashtagsFromPosts
 } from './instagram-profile.utils';
+import { createIsolatedContext } from './instagram-context-manager.service';
 
 export { closeBrowser } from './instagram-session.service';
 
@@ -304,7 +304,8 @@ export async function scrapeInstagramUserSearch(
   maxProfiles: number = 5
 ): Promise<InstagramProfileData[]> {
   await ensureLoggedSession();
-  const page = await createAuthenticatedPage();
+  const { page, requestId, cleanup } = await createIsolatedContext();
+  console.log(`🔒 Request ${requestId} iniciada para scrape-users: "${searchTerm}"`);
   try {
     console.log(`🔍 Buscando usuários para termo: "${searchTerm}"`);
 
@@ -705,14 +706,12 @@ export async function scrapeInstagramUserSearch(
     console.error(`❌ Erro na busca de usuários "${searchTerm}":`, error.message);
     throw error;
   } finally {
+    console.log(`🔓 Request ${requestId} finalizada (scrape-users: "${searchTerm}")`);
+    await cleanup();
+
     if (SHOULD_AUTO_CLOSE) {
-      if (!page.isClosed()) {
-        await page.close().catch(() => {});
-      }
       await sessionCloseBrowser().catch(() => {});
       console.log('✅ Auto-close ativo: browser encerrado após scrape de usuários.');
-    } else {
-      console.log('ℹ️ Auto-close desativado: mantendo página aberta após scrape de usuários.');
     }
   }
 }
