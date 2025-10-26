@@ -2,6 +2,14 @@
 import puppeteer, { Browser, Page, ElementHandle } from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
+import { detectLanguage } from './language-country-detector.service';
+import {
+  calculateActivityScore,
+  extractHashtags,
+  extractEmailFromBio,
+  parseInstagramCount,
+  extractHashtagsFromPosts
+} from './instagram-profile.utils';
 
 // Controla instância única de browser e página de sessão
 let browserInstance: Browser | null = null;
@@ -338,6 +346,11 @@ export interface InstagramProfileData {
   phone: string | null;
   website: string | null;
   business_category: string | null;
+  activity_score?: number; // Score de atividade (0-100)
+  is_active?: boolean; // Se a conta está ativa
+  language?: string; // ISO 639-1 language code (pt, en, es, etc)
+  hashtags_bio?: string[] | null; // Hashtags extraídas da bio
+  hashtags_posts?: string[] | null; // Hashtags extraídas dos posts (4 posts)
 }
 
 /**
@@ -874,11 +887,86 @@ export async function scrapeInstagramTag(
             business_category: null // Não facilmente extraível
           };
 
+          // EXTRAIR EMAIL DA BIO se não tiver email público
+          if (!completeProfile.email && completeProfile.bio) {
+            const emailFromBio = extractEmailFromBio(completeProfile.bio);
+            if (emailFromBio) {
+              completeProfile.email = emailFromBio;
+            }
+          }
+
+          // EXTRAIR HASHTAGS DA BIO
+          if (completeProfile.bio) {
+            const bioHashtags = extractHashtags(completeProfile.bio, 10);
+            if (bioHashtags.length > 0) {
+              completeProfile.hashtags_bio = bioHashtags;
+              console.log(`   🏷️  Hashtags da bio (${bioHashtags.length}): ${bioHashtags.join(', ')}`);
+            }
+          }
+
+          // ========================================
+          // VALIDAÇÕES ANTES DE ADICIONAR AO RESULTADO
+          // ========================================
+
+          // VALIDAÇÃO 1: CALCULAR ACTIVITY SCORE
+          const activityScore = calculateActivityScore(completeProfile);
+          completeProfile.activity_score = activityScore.score;
+          completeProfile.is_active = activityScore.isActive;
+
+          console.log(`   📊 Activity Score: ${activityScore.score}/100 (${activityScore.isActive ? 'ATIVA ✅' : 'INATIVA ❌'})`);
+          console.log(`   📈 ${activityScore.postsPerMonth.toFixed(1)} posts/mês`);
+          if (activityScore.reasons.length > 0) {
+            console.log(`   💡 Razões: ${activityScore.reasons.join(', ')}`);
+          }
+
+          if (!activityScore.isActive) {
+            console.log(`   ❌ Perfil REJEITADO por baixo activity score - não será contabilizado`);
+            processedUsernames.add(username); // Marcar como processado para não tentar novamente
+            continue; // PULA para o próximo perfil
+          }
+
+          // VALIDAÇÃO 2: IDIOMA = PORTUGUÊS
+          console.log(`   🌍 Detectando idioma da bio...`);
+          const languageDetection = await detectLanguage(completeProfile.bio, completeProfile.username);
+          completeProfile.language = languageDetection.language;
+          console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
+
+          if (languageDetection.language !== 'pt') {
+            console.log(`   ❌ Perfil REJEITADO por idioma não-português (${languageDetection.language}) - não será contabilizado`);
+            processedUsernames.add(username); // Marcar como processado para não tentar novamente
+            continue; // PULA para o próximo perfil
+          }
+
+          // ========================================
+          // EXTRAÇÃO DE HASHTAGS DOS POSTS (4 posts)
+          // ========================================
+          console.log(`   🏷️  Extraindo hashtags dos posts...`);
+          try {
+            const profileUrl = `https://www.instagram.com/${username}/`;
+            await page.goto(profileUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            const postHashtags = await extractHashtagsFromPosts(page, 3);
+            if (postHashtags && postHashtags.length > 0) {
+              completeProfile.hashtags_posts = postHashtags;
+              console.log(`   ✅ ${postHashtags.length} hashtags extraídas dos posts`);
+            } else {
+              completeProfile.hashtags_posts = null;
+              console.log(`   ⚠️  Nenhuma hashtag encontrada nos posts`);
+            }
+          } catch (hashtagError: any) {
+            console.log(`   ⚠️  Erro ao extrair hashtags dos posts: ${hashtagError.message}`);
+            completeProfile.hashtags_posts = null;
+          }
+
+          // ========================================
+          // PERFIL APROVADO NAS VALIDAÇÕES - ADICIONAR AO RESULTADO
+          // ========================================
           foundProfiles.push(completeProfile);
           processedUsernames.add(username);
           consecutiveDuplicates = 0; // Resetar contador ao encontrar perfil novo
-          console.log(`   ✅ Perfil completo extraído: @${username} (${followers_count} seguidores, ${posts_count} posts)`);
-          console.log(`   📊 Total coletado: ${foundProfiles.length}/${maxProfiles}`);
+          console.log(`   ✅ Perfil APROVADO e adicionado: @${username} (${followers_count} seguidores, ${posts_count} posts)`);
+          console.log(`   📊 Total coletado (aprovados): ${foundProfiles.length}/${maxProfiles}`);
 
           // ANTI-DETECÇÃO: Delay antes de retornar ao feed (3-5s)
           console.log(`   🛡️  Aguardando antes de retornar ao feed...`);
@@ -998,70 +1086,6 @@ function decodeInstagramString(value: string | null): string | null {
       .replace(/\\n/g, ' ')
       .replace(/\\\\/g, '\\');
   }
-}
-
-function parseInstagramCount(value: string | null): number {
-  if (!value) {
-    return 0;
-  }
-  const normalized = value.toLowerCase().replace(/\u202f|\s/g, '');
-  const suffixMatch = normalized.match(/(mil|kk|k|m)$/);
-  let multiplier = 1;
-  let numberPortion = normalized;
-
-  if (suffixMatch) {
-    const suffix = suffixMatch[1];
-    numberPortion = normalized.slice(0, -suffix.length);
-    if (suffix === 'm') {
-      multiplier = 1_000_000;
-    } else {
-      multiplier = 1_000;
-    }
-  }
-
-  numberPortion = numberPortion.replace(/[^\d.,]/g, '');
-
-  if (!suffixMatch && /^\d{1,3}([.,]\d{3})+$/.test(numberPortion)) {
-    const digitsOnly = numberPortion.replace(/\D/g, '');
-    return parseInt(digitsOnly, 10) || 0;
-  }
-
-  let numeric = Number.parseFloat(numberPortion.replace(/,/g, '.'));
-
-  if (!Number.isFinite(numeric)) {
-    numeric = Number.parseInt(numberPortion.replace(/\D/g, ''), 10);
-  }
-
-  if (!Number.isFinite(numeric)) {
-    return 0;
-  }
-
-  return Math.round(numeric * multiplier);
-}
-
-/**
- * Extrai email do texto da bio do Instagram
- * Detecta emails comuns que profissionais deixam na bio
- *
- * @param bio - Texto da biografia do perfil
- * @returns Email encontrado ou null
- */
-function extractEmailFromBio(bio: string | null): string | null {
-  if (!bio) return null;
-
-  // Regex para padrões comuns de email
-  // Exemplos: email@exemplo.com, contato@empresa.com.br, nome.sobrenome@gmail.com
-  const emailPattern = /\b[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+\b/gi;
-  const match = bio.match(emailPattern);
-
-  if (match && match.length > 0) {
-    // Retornar o primeiro email encontrado
-    const email = match[0].toLowerCase();
-    console.log(`   📧 Email encontrado na bio: ${email}`);
-    return email;
-  }
-
-  return null;
 }
 
 /**

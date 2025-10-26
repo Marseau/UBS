@@ -4,6 +4,7 @@ import {
   scrapeInstagramProfile,
   closeBrowser
 } from '../services/instagram-scraper-single.service';
+import { scrapeInstagramUserSearch } from '../services/instagram-scraper-user-search.service';
 
 const router = Router();
 
@@ -48,6 +49,62 @@ router.post('/scrape-tag', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao scrape hashtag',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/scrape-users
+ * Busca usuários via campo de busca - retorna perfis validados (PT + activity >= 50)
+ *
+ * Body:
+ * {
+ *   "search_term": "gestor de trafego",
+ *   "max_profiles": 5,
+ *   "target_segment": "marketing",
+ *   "search_terms_id": "uuid",
+ *   "session_id": "uuid"
+ * }
+ */
+router.post('/scrape-users', async (req: Request, res: Response) => {
+  try {
+    const {
+      search_term,
+      max_profiles = 5,
+      target_segment,
+      search_terms_id,
+      session_id
+    } = req.body;
+
+    if (!search_term) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo "search_term" é obrigatório'
+      });
+    }
+
+    console.log(`🔎 Scraping users: "${search_term}" (max: ${max_profiles} perfis validados)`);
+
+    const profiles = await scrapeInstagramUserSearch(search_term, max_profiles);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        search_term,
+        profiles,
+        total_found: profiles.length,
+        target_segment,
+        search_terms_id,
+        session_id
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro ao scrape users:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar usuários',
       error: error.message
     });
   }
@@ -122,7 +179,8 @@ router.get('/status', (req: Request, res: Response) => {
     success: true,
     message: 'Instagram Scraper Service está ativo',
     endpoints: {
-      'POST /scrape-tag': 'Scrape hashtag específica - retorna usernames',
+      'POST /scrape-tag': 'Scrape hashtag específica - retorna perfis completos',
+      'POST /scrape-users': 'Busca usuários validados (PT + activity >= 50) - retorna perfis com hashtags',
       'POST /scrape-profile': 'Scrape perfil específico - retorna dados do perfil',
       'POST /close-browser': 'Fechar browser Puppeteer',
       'GET /debug-page': 'Debug: mostra elementos da página atual'
