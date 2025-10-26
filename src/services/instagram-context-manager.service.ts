@@ -1,6 +1,10 @@
 // @ts-nocheck - puppeteer contexts usam DOM APIs sem typings fortes
 import { Browser, BrowserContext, Page } from 'puppeteer';
-import { getBrowserInstance, ensureLoggedSession, getSessionPage } from './instagram-session.service';
+import { getBrowserInstance, ensureLoggedSession } from './instagram-session.service';
+import fs from 'fs';
+import path from 'path';
+
+const COOKIES_FILE = path.join(process.cwd(), 'instagram-cookies.json');
 
 /**
  * Sistema de gerenciamento de Browser Contexts para isolamento de requisições
@@ -59,17 +63,17 @@ export async function createIsolatedContext(): Promise<{
 
   console.log(`🔒 Context isolado criado: ${requestId}`);
 
-  // Copiar cookies da sessão principal para o novo context
-  const sessionPage = getSessionPage();
-  if (sessionPage && !sessionPage.isClosed()) {
+  // Carregar cookies do arquivo (sessionPage foi fechada após login)
+  if (fs.existsSync(COOKIES_FILE)) {
     try {
-      const cookies = await sessionPage.cookies();
-      if (cookies.length > 0) {
+      const cookiesData = fs.readFileSync(COOKIES_FILE, 'utf8');
+      const cookies = JSON.parse(cookiesData);
+      if (Array.isArray(cookies) && cookies.length > 0) {
         await page.setCookie(...cookies);
         console.log(`   🔑 ${cookies.length} cookies aplicados ao context ${requestId}`);
       }
     } catch (error: any) {
-      console.warn(`   ⚠️  Erro ao copiar cookies para context ${requestId}: ${error.message}`);
+      console.warn(`   ⚠️  Erro ao carregar cookies para context ${requestId}: ${error.message}`);
     }
   }
 
