@@ -71,3 +71,10 @@ check-*.sql
 !README.md
 !CLAUDE.md
 instagram-cookies.json
+
+# Arquivos grandes - não devem ser versionados
+*.svg
+*.backup
+*.backup.gz
+db_cluster*.backup*
+Modelo*.svg
