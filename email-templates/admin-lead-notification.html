@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Novo Lead Capturado</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+    }
+    .container {
+      max-width: 700px;
+      margin: 20px auto;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      background: #2c3e50;
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 700;
+    }
+    .header .timestamp {
+      margin: 10px 0 0 0;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    .alert {
+      background: #e74c3c;
+      color: white;
+      padding: 20px 30px;
+      margin: 0;
+      font-weight: 600;
+      font-size: 16px;
+      text-align: center;
+      border-bottom: 3px solid #c0392b;
+    }
+    .content {
+      padding: 30px;
+    }
+    .section {
+      margin: 30px 0;
+    }
+    .section h2 {
+      color: #2c3e50;
+      font-size: 20px;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #ecf0f1;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+      background: white;
+      border: 1px solid #ecf0f1;
+    }
+    th {
+      background: #34495e;
+      color: white;
+      padding: 15px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    td {
+      padding: 15px;
+      border-bottom: 1px solid #ecf0f1;
+      font-size: 15px;
+    }
+    tr:hover {
+      background: #f8f9fa;
+    }
+    .label {
+      font-weight: 700;
+      color: #34495e;
+      width: 40%;
+    }
+    .value {
+      color: #555;
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge-critical { background: #e74c3c; color: white; }
+    .badge-high { background: #e67e22; color: white; }
+    .badge-medium { background: #f39c12; color: white; }
+    .badge-low { background: #3498db; color: white; }
+    .badge-info { background: #9b59b6; color: white; }
+    .whatsapp-link {
+      display: inline-block;
+      background: #25D366;
+      color: white !important;
+      padding: 12px 25px;
+      text-decoration: none;
+      border-radius: 50px;
+      font-weight: 600;
+      margin: 10px 5px;
+      box-shadow: 0 3px 10px rgba(37, 211, 102, 0.3);
+      transition: transform 0.2s;
+    }
+    .whatsapp-link:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(37, 211, 102, 0.4);
+    }
+    .email-link {
+      display: inline-block;
+      background: #3498db;
+      color: white !important;
+      padding: 12px 25px;
+      text-decoration: none;
+      border-radius: 50px;
+      font-weight: 600;
+      margin: 10px 5px;
+      box-shadow: 0 3px 10px rgba(52, 152, 219, 0.3);
+      transition: transform 0.2s;
+    }
+    .email-link:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+    }
+    .actions {
+      background: linear-gradient(135deg, #ecf0f1 0%, #d5dbdb 100%);
+      padding: 25px;
+      border-radius: 8px;
+      margin: 25px 0;
+    }
+    .actions h3 {
+      margin-top: 0;
+      color: #2c3e50;
+      font-size: 18px;
+    }
+    .actions ol {
+      margin: 15px 0;
+      padding-left: 25px;
+    }
+    .actions li {
+      margin: 10px 0;
+      color: #555;
+      font-weight: 500;
+    }
+    .quick-links {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 2px solid #bdc3c7;
+    }
+    .quick-links h4 {
+      margin-top: 0;
+      color: #2c3e50;
+      font-size: 16px;
+    }
+    .quick-links ul {
+      list-style: none;
+      padding: 0;
+      margin: 10px 0;
+    }
+    .quick-links li {
+      margin: 8px 0;
+    }
+    .quick-links a {
+      color: #3498db;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .quick-links a:hover {
+      text-decoration: underline;
+    }
+    .footer {
+      background: #f8f9fa;
+      padding: 25px;
+      text-align: center;
+      border-top: 1px solid #ecf0f1;
+    }
+    .footer p {
+      margin: 5px 0;
+      color: #666;
+      font-size: 14px;
+    }
+    .id-code {
+      font-family: 'Courier New', monospace;
+      background: #ecf0f1;
+      padding: 3px 8px;
+      border-radius: 4px;
+      color: #2c3e50;
+      font-weight: 600;
+    }
+    .priority-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: pulse 2s infinite;
+    }
+    .priority-high { background: #e74c3c; }
+    .priority-medium { background: #f39c12; }
+    .priority-low { background: #3498db; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    @media only screen and (max-width: 700px) {
+      .container {
+        margin: 0;
+        border-radius: 0;
+      }
+      .content {
+        padding: 20px;
+      }
+      .label {
+        width: 100%;
+        display: block;
+        margin-bottom: 5px;
+      }
+      .value {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>🎯 NOVO LEAD CAPTURADO</h1>
+      <div class="timestamp">{{FORMATTED_DATE}}</div>
+    </div>
+
+    <!-- Alert de Ação -->
+    <div class="alert">
+      <span class="priority-indicator priority-high"></span>
+      ⏰ AÇÃO NECESSÁRIA: Iniciar produção da proposta personalizada
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+      <!-- Dados do Lead -->
+      <div class="section">
+        <h2>📋 Dados do Lead</h2>
+        <table>
+          <thead>
+            <tr>
+              <th colspan="2">Informações de Contato</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="label">ID do Lead</td>
+              <td class="value"><span class="id-code">{{LEAD_ID}}</span></td>
+            </tr>
+            <tr>
+              <td class="label">Nome Completo</td>
+              <td class="value"><strong>{{LEAD_NAME}}</strong></td>
+            </tr>
+            <tr>
+              <td class="label">Email</td>
+              <td class="value">
+                <a href="mailto:{{EMAIL}}" style="color: #3498db; text-decoration: none; font-weight: 600;">
+                  {{EMAIL}}
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td class="label">WhatsApp</td>
+              <td class="value">
+                <strong>+55 {{WHATSAPP}}</strong><br>
+                <a href="https://wa.me/55{{WHATSAPP}}" class="whatsapp-link" target="_blank">
+                  📱 Abrir no WhatsApp
+                </a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <table>
+          <thead>
+            <tr>
+              <th colspan="2">Perfil do Negócio</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="label">Tipo de Usuário</td>
+              <td class="value">
+                <span class="badge badge-info">{{USER_TYPE}}</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="label">Segmento de Negócio</td>
+              <td class="value">
+                <span class="badge badge-critical">{{BUSINESS_SEGMENT}}</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="label">Desafio Principal</td>
+              <td class="value">
+                <span class="badge badge-high">{{MAIN_CHALLENGE}}</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="label">Volume de Leads</td>
+              <td class="value">
+                <span class="badge badge-medium">{{LEAD_VOLUME}}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <table>
+          <thead>
+            <tr>
+              <th colspan="2">Interesse e Origem</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="label">Módulos de Interesse</td>
+              <td class="value"><strong>{{MODULES_INTEREST}}</strong></td>
+            </tr>
+            <tr>
+              <td class="label">Origem</td>
+              <td class="value">
+                <span class="badge badge-low">{{SOURCE}}</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="label">Data de Cadastro</td>
+              <td class="value">{{FORMATTED_DATE}}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Ações Rápidas -->
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="https://wa.me/55{{WHATSAPP}}" class="whatsapp-link" target="_blank">
+          📱 Entrar em contato via WhatsApp
+        </a>
+        <a href="mailto:{{EMAIL}}" class="email-link">
+          📧 Responder por email
+        </a>
+      </div>
+
+      <!-- Próximas Ações -->
+      <div class="actions">
+        <h3>✅ Próximas Ações</h3>
+        <ol>
+          <li><strong>✉️ Email de boas-vindas enviado automaticamente ao lead</strong></li>
+          <li>📊 Analisar necessidades específicas do lead e volume de operação</li>
+          <li>💰 Calcular pricing baseado no volume e módulos de interesse</li>
+          <li>📝 Preparar proposta personalizada com ROI estimado</li>
+          <li>📱 Aguardar autorização do lead para contato via WhatsApp</li>
+          <li>🎯 Enviar proposta completa em até <strong>24 horas</strong></li>
+          <li>📞 Agendar call de apresentação da plataforma</li>
+          <li>🎬 Preparar demo personalizado com casos de uso do segmento</li>
+        </ol>
+
+        <div class="quick-links">
+          <h4>🔗 Acesso Rápido:</h4>
+          <ul>
+            <li>📊 <a href="https://n8n.ubs-app.br" target="_blank">Dashboard N8N</a></li>
+            <li>💾 <a href="https://supabase.com/dashboard/project/qsdfyffuonywmtnlycri/editor" target="_blank">Banco de Dados (Supabase)</a></li>
+            <li>📋 <a href="https://ubs-app.br/admin/taylor-made-leads" target="_blank">Painel de Leads (Em desenvolvimento)</a></li>
+            <li>🌐 <a href="https://ubs-app.br" target="_blank">Website UBS</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Informações Adicionais -->
+      <div class="section">
+        <h2>ℹ️ Informações Adicionais</h2>
+        <table>
+          <tbody>
+            <tr>
+              <td class="label">Status Atual</td>
+              <td class="value">
+                <span class="badge badge-high">Proposta em Produção</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="label">Email Boas-Vindas</td>
+              <td class="value">
+                <span class="badge badge-info">✅ Enviado</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="label">Email Admin</td>
+              <td class="value">
+                <span class="badge badge-info">✅ Enviado</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="label">Autorização WhatsApp</td>
+              <td class="value">
+                <span class="badge badge-medium">⏳ Aguardando Resposta</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Observações -->
+      <div class="section">
+        <h2>📝 Observações</h2>
+        <p style="background: #fff3cd; padding: 15px; border-left: 4px solid #f39c12; border-radius: 4px; color: #856404;">
+          <strong>⚠️ Importante:</strong> O lead receberá a proposta automaticamente após você marcar como concluída no sistema. Certifique-se de revisar todos os detalhes antes de enviar.
+        </p>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <p><strong>Universal Booking System - Admin Dashboard</strong></p>
+      <p>Sistema de Automação de Leads Taylor Made</p>
+      <p style="margin-top: 15px; font-size: 12px; color: #999;">
+        Este é um email automático gerado pelo sistema N8N.<br>
+        Workflow: LeadCapturado (ID: wyF5ovm9jenHJ6yo)
+      </p>
+    </div>
+  </div>
+</body>
+</html>

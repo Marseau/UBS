@@ -1,0 +1,137 @@
+import { Router, Request, Response } from 'express';
+import OpenAI from 'openai';
+import { createClient } from '@supabase/supabase-js';
+
+const router = Router();
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+/**
+ * POST /api/content-preview/instagram/:id
+ * Generate Instagram image preview with DALL-E
+ */
+router.post('/instagram/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Get content from database
+    const { data: content, error } = await supabase
+      .from('editorial_content')
+      .select('instagram_post, instagram_image_url')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+
+    // If image already exists, return it
+    if (content.instagram_image_url) {
+      res.json({
+        success: true,
+        image_url: content.instagram_image_url,
+        cached: true
+      });
+      return;
+    }
+
+    // Generate image with DALL-E
+    const prompt = `Crie uma imagem minimalista e profissional para Instagram (1080x1080px) com:
+- Fundo gradiente azul (#2D5A9B para #4A7BC8)
+- Texto centralizado em branco, fonte sans-serif bold: "${content.instagram_post.substring(0, 100)}..."
+- Logo 'UBS' discreto no canto inferior direito
+- Estilo corporativo, limpo, sem elementos distrativos
+- Design moderno e profissional`;
+
+    console.log('🎨 Generating Instagram image with DALL-E...');
+
+    const response = await openai.images.generate({
+      model: 'dall-e-3',
+      prompt,
+      size: '1024x1024',
+      quality: 'standard',
+      n: 1
+    });
+
+    const imageUrl = response.data?.[0]?.url;
+
+    if (!imageUrl) {
+      throw new Error('DALL-E did not return an image URL');
+    }
+
+    // Save to database
+    await supabase
+      .from('editorial_content')
+      .update({ instagram_image_url: imageUrl })
+      .eq('id', id);
+
+    console.log('✅ Instagram preview generated:', imageUrl);
+
+    res.json({
+      success: true,
+      image_url: imageUrl,
+      cached: false
+    });
+
+  } catch (error: any) {
+    console.error('Error generating Instagram preview:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content-preview/youtube/:id
+ * Generate YouTube video preview placeholder
+ */
+router.post('/youtube/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Get content from database
+    const { data: content, error } = await supabase
+      .from('editorial_content')
+      .select('youtube_segment, youtube_video_url, main_theme')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+
+    // If video already exists, return it
+    if (content.youtube_video_url) {
+      res.json({
+        success: true,
+        video_url: content.youtube_video_url,
+        cached: true
+      });
+      return;
+    }
+
+    // For now, return a placeholder with script preview
+    // Full video generation happens in the Publisher workflow
+    res.json({
+      success: true,
+      video_url: null,
+      script: content.youtube_segment,
+      title: `${content.main_theme} | UBS Taylor Made`,
+      placeholder: true,
+      message: 'Video will be generated when approved and published'
+    });
+
+  } catch (error: any) {
+    console.error('Error generating YouTube preview:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+export default router;

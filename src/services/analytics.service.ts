@@ -984,7 +984,7 @@ export class AnalyticsService {
       // Count service usage
       const serviceUsage = new Map();
       appointmentServices?.forEach((apt) => {
-        const service = apt.services;
+        const service = Array.isArray(apt.services) ? apt.services[0] : apt.services;
         if (service) {
           const current = serviceUsage.get(service.id) || {
             ...service,
@@ -1129,7 +1129,7 @@ export class AnalyticsService {
       // Count services usage
       const serviceUsage = new Map();
       appointmentServices?.forEach((apt) => {
-        const service = apt.services;
+        const service = Array.isArray(apt.services) ? apt.services[0] : apt.services;
         if (service) {
           const current = serviceUsage.get(service.name) || 0;
           serviceUsage.set(service.name, current + 1);

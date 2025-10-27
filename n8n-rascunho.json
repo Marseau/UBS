@@ -1,0 +1,95 @@
+{
+  "name": "rascunho",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "create",
+        "tableId": "editorial_content",
+        "options": {},
+        "dataMode": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "week_number",
+              "fieldValue": "={{ $json.week_number }}"
+            },
+            {
+              "fieldId": "year",
+              "fieldValue": "={{ $json.year }}"
+            },
+            {
+              "fieldId": "main_theme",
+              "fieldValue": "={{ $json.main_theme }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "pending"
+            },
+            {
+              "fieldId": "thread_1_title",
+              "fieldValue": "={{ $json.thread_1_title }}"
+            },
+            {
+              "fieldId": "thread_1_sub_theme",
+              "fieldValue": "={{ $json.thread_1_sub_theme }}"
+            },
+            {
+              "fieldId": "thread_1_tweets",
+              "fieldValue": "={{ $json.thread_1_tweets }}"
+            },
+            {
+              "fieldId": "thread_2_title",
+              "fieldValue": "={{ $json.thread_2_title }}"
+            },
+            {
+              "fieldId": "thread_2_sub_theme",
+              "fieldValue": "={{ $json.thread_2_sub_theme }}"
+            },
+            {
+              "fieldId": "thread_2_tweets",
+              "fieldValue": "={{ $json.thread_2_tweets }}"
+            },
+            {
+              "fieldId": "thread_3_title",
+              "fieldValue": "={{ $json.thread_3_title }}"
+            },
+            {
+              "fieldId": "thread_3_sub_theme",
+              "fieldValue": "={{ $json.thread_3_sub_theme }}"
+            },
+            {
+              "fieldId": "thread_3_tweets",
+              "fieldValue": "={{ $json.thread_3_tweets }}"
+            }
+          ]
+        }
+      },
+      "id": "5ef69af4-d1f7-4805-8507-4d2157b6bc4a",
+      "name": "Insert Editorial Content",
+      "type": "n8n-nodes-base.supabase",
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "supabaseApi": {
+          "id": "QTLIbdCBpZio7YIz",
+          "name": "Supabase account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "619551f2-b09d-4a4e-a25c-4be415a28b10",
+  "meta": {
+    "instanceId": "114d5fb1f59bb271bb8c6e179b697a65ce7a93604ea96d0f89edaf65e4ce5ce3"
+  },
+  "id": "SswvkJMpyu4pd6dA",
+  "tags": []
+}

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizar Carrossel Placid</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .info-box {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .info-box h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .carousel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .slide-card {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .slide-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+
+        .slide-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .slide-image {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .slide-footer {
+            padding: 15px 20px;
+            background: #f8f9fa;
+        }
+
+        .download-btn {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background 0.3s ease;
+            margin-right: 10px;
+        }
+
+        .download-btn:hover {
+            background: #764ba2;
+        }
+
+        .copy-btn {
+            display: inline-block;
+            background: #48bb78;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background 0.3s ease;
+            cursor: pointer;
+            border: none;
+        }
+
+        .copy-btn:hover {
+            background: #38a169;
+        }
+
+        .copy-btn.copied {
+            background: #2d3748;
+        }
+
+        .actions {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        .big-button {
+            display: inline-block;
+            background: white;
+            color: #667eea;
+            padding: 15px 40px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1.2rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            margin: 0 10px;
+        }
+
+        .big-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.5rem;
+            padding: 50px;
+        }
+
+        @media (max-width: 768px) {
+            .carousel-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Carrossel Placid Gerado</h1>
+
+        <div class="info-box">
+            <h2>📊 Informações do Carrossel</h2>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalSlides">-</div>
+                    <div class="stat-label">Total de Slides</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="cost">-</div>
+                    <div class="stat-label">Custo (USD)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="contentId">-</div>
+                    <div class="stat-label">Content ID</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="carouselContainer">
+            <div class="loading">⏳ Carregando carrossel...</div>
+        </div>
+
+        <div class="actions">
+            <a href="#" class="big-button" id="generateNew">🔄 Gerar Novo Carrossel</a>
+            <a href="/" class="big-button">🏠 Voltar ao Dashboard</a>
+        </div>
+    </div>
+
+    <script>
+        // URLs do carrossel gerado anteriormente
+        const existingCarousel = {
+            success: true,
+            content_id: "test-content-001",
+            carousel_urls: [
+                "https://s3-placid.s3.eu-central-1.amazonaws.com/production/rest-images/gzrl0haj9qdu1/rest-c7fe86ad0cedadeb0259ffdcb05bab7a-a6shtr8z.jpg",
+                "https://s3-placid.s3.eu-central-1.amazonaws.com/production/rest-images/gzrl0haj9qdu1/rest-2c2aec2783d7bb5b8e87d1c7242945b6-ev4coyyl.jpg",
+                "https://s3-placid.s3.eu-central-1.amazonaws.com/production/rest-images/gzrl0haj9qdu1/rest-981b63ac81d987f2308682e3dc9d1426-hyty20sm.jpg",
+                "https://s3-placid.s3.eu-central-1.amazonaws.com/production/rest-images/gzrl0haj9qdu1/rest-7ec226b3c817885ee683e844c76c6e10-wlwkbjse.jpg",
+                "https://s3-placid.s3.eu-central-1.amazonaws.com/production/rest-images/gzrl0haj9qdu1/rest-7af3ded41fafa358bfa39f5da45c7cac-9ukw422l.jpg",
+                "https://s3-placid.s3.eu-central-1.amazonaws.com/production/rest-images/gzrl0haj9qdu1/rest-03357df0f50d4163e0a0bff53b405f4f-jpo2uclu.jpg",
+                "https://s3-placid.s3.eu-central-1.amazonaws.com/production/rest-images/gzrl0haj9qdu1/rest-58256571e589344c63b52f611e42d1e6-uvhdhxjb.jpg"
+            ],
+            total_slides: 7,
+            cost: 0.532,
+            message: "Carrossel gerado com sucesso!"
+        };
+
+        async function loadCarousel() {
+            // Mostrar o carrossel já gerado
+            displayCarousel(existingCarousel);
+        }
+
+        async function generateNewCarousel() {
+            try {
+                document.getElementById('carouselContainer').innerHTML =
+                    '<div class="loading">⏳ Gerando novo carrossel...</div>';
+
+                const response = await fetch('/api/placid-test/generate', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displayCarousel(data);
+                } else {
+                    document.getElementById('carouselContainer').innerHTML =
+                        `<div class="info-box" style="background: #fed7d7; color: #c53030;">
+                            <h2>❌ Erro ao gerar carrossel</h2>
+                            <p>${data.message || 'Erro desconhecido'}</p>
+                        </div>`;
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                document.getElementById('carouselContainer').innerHTML =
+                    `<div class="info-box" style="background: #fed7d7; color: #c53030;">
+                        <h2>❌ Erro de Conexão</h2>
+                        <p>Não foi possível conectar ao servidor: ${error.message}</p>
+                    </div>`;
+            }
+        }
+
+        function displayCarousel(data) {
+            // Update stats
+            document.getElementById('totalSlides').textContent = data.total_slides;
+            document.getElementById('cost').textContent = `$${data.cost.toFixed(3)}`;
+            document.getElementById('contentId').textContent = data.content_id;
+
+            // Create carousel grid
+            const container = document.getElementById('carouselContainer');
+            const grid = document.createElement('div');
+            grid.className = 'carousel-grid';
+
+            data.carousel_urls.forEach((url, index) => {
+                const slideCard = document.createElement('div');
+                slideCard.className = 'slide-card';
+
+                slideCard.innerHTML = `
+                    <div class="slide-header">
+                        Slide ${index + 1} de ${data.total_slides}
+                    </div>
+                    <img src="${url}" alt="Slide ${index + 1}" class="slide-image" loading="lazy">
+                    <div class="slide-footer">
+                        <a href="${url}" target="_blank" download="slide-${index + 1}.jpg" class="download-btn">
+                            📥 Download
+                        </a>
+                        <button class="copy-btn" onclick="copyUrl('${url}', this)">
+                            📋 Copiar URL
+                        </button>
+                    </div>
+                `;
+
+                grid.appendChild(slideCard);
+            });
+
+            container.innerHTML = '';
+            container.appendChild(grid);
+        }
+
+        function copyUrl(url, button) {
+            navigator.clipboard.writeText(url).then(() => {
+                const originalText = button.textContent;
+                button.textContent = '✅ Copiado!';
+                button.classList.add('copied');
+
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        // Generate new carousel on button click
+        document.getElementById('generateNew').addEventListener('click', (e) => {
+            e.preventDefault();
+            generateNewCarousel();
+        });
+
+        // Load existing carousel on page load (não gera um novo!)
+        loadCarousel();
+    </script>
+</body>
+</html>

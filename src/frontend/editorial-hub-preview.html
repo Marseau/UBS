@@ -107,6 +107,7 @@
             background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
             color: white;
             padding: 120px 0 40px;
+            margin-top: 3rem;
             position: relative;
             overflow: hidden;
         }
@@ -942,6 +943,11 @@
 
             // Render YouTube short
             renderYouTubeShort(content.youtube_short);
+
+            // Load all weeks for navigation (only on first render)
+            if (allWeeks.length === 0) {
+                loadAllWeeks();
+            }
         }
 
         // Generate tweet times (distributed throughout the day)
@@ -1105,15 +1111,70 @@
             document.getElementById('emptyState').classList.remove('d-none');
         }
 
-        // Week navigation (placeholder for now)
+        // Load all available weeks for navigation
+        async function loadAllWeeks() {
+            try {
+                const response = await fetch('/api/editorial-content/all');
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch all weeks');
+                }
+
+                const result = await response.json();
+                allWeeks = result.data || [];
+
+                // Sort by year and week_number (most recent first)
+                allWeeks.sort((a, b) => {
+                    if (a.year !== b.year) return b.year - a.year;
+                    return b.week_number - a.week_number;
+                });
+
+                // Find current week index
+                if (currentContent) {
+                    currentWeekIndex = allWeeks.findIndex(
+                        w => w.week_number === currentContent.week_number && w.year === currentContent.year
+                    );
+                    if (currentWeekIndex === -1) currentWeekIndex = 0;
+                }
+
+                updateNavigationButtons();
+            } catch (error) {
+                console.error('Error loading weeks:', error);
+            }
+        }
+
+        // Update navigation buttons state
+        function updateNavigationButtons() {
+            const btnPrev = document.getElementById('btnPrevWeek');
+            const btnNext = document.getElementById('btnNextWeek');
+
+            // Disable "Semana Anterior" if at oldest week (highest index)
+            btnPrev.disabled = (currentWeekIndex >= allWeeks.length - 1);
+
+            // Disable "Próxima Semana" if at most recent week (index 0)
+            btnNext.disabled = (currentWeekIndex === 0);
+        }
+
+        // Navigate to specific week
+        function navigateToWeek(index) {
+            if (index < 0 || index >= allWeeks.length) return;
+
+            currentWeekIndex = index;
+            currentContent = allWeeks[index];
+
+            renderContent(currentContent);
+            updateNavigationButtons();
+        }
+
+        // Week navigation buttons
         document.getElementById('btnPrevWeek').addEventListener('click', function() {
-            // TODO: Implement week navigation
-            console.log('Previous week');
+            // "Semana Anterior" = older week (higher index)
+            navigateToWeek(currentWeekIndex + 1);
         });
 
         document.getElementById('btnNextWeek').addEventListener('click', function() {
-            // TODO: Implement week navigation
-            console.log('Next week');
+            // "Próxima Semana" = more recent week (lower index)
+            navigateToWeek(currentWeekIndex - 1);
         });
     </script>
 </body>

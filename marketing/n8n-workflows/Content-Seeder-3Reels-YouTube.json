@@ -1,0 +1,323 @@
+{
+  "name": "Content Seeder - 3 Reels + YouTube Short",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "execute-workflow-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $workflow.id_twitter_threads_generator }}",
+        "fieldsToSend": "allFields"
+      },
+      "id": "call-twitter-threads",
+      "name": "Call Twitter Threads Generator",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "notes": "Gera 21 tweets (3 threads de 7) baseado no tema"
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $workflow.id_reels_generator }}",
+        "fieldsToSend": "allFields"
+      },
+      "id": "call-reels-generator",
+      "name": "Call Instagram Reels Generator",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [680, 300],
+      "notes": "Gera 3 Reels (Carla + Bruno) baseado nas threads"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai os 3 Reels do resultado da IA\nconst reelsData = $input.item.json.reels;\nconst tema_semana = $input.item.json.tema_semana;\nconst semana = $input.item.json.semana;\nconst audio_trending = $input.item.json.audio_trending || 'Corporate Inspiring';\n\n// Cria 3 itens, um para cada Reel\nconst output = [];\n\nfor (let i = 1; i <= 3; i++) {\n  const reelKey = `reel_${i}`;\n  const reel = reelsData[reelKey];\n  \n  if (!reel) {\n    throw new Error(`Reel ${i} não encontrado no resultado da IA`);\n  }\n  \n  output.push({\n    json: {\n      reel_number: i,\n      sub_theme: reel.sub_theme,\n      carla_script: reel.carla_script,\n      bruno_script: reel.bruno_script,\n      instagram_caption: reel.instagram_caption,\n      instagram_hashtags: reel.instagram_hashtags,\n      tema_semana: tema_semana,\n      semana: semana,\n      audio_trending: audio_trending,\n      content_type: 'instagram_reel',\n      week_of_year: semana,\n      main_topic: tema_semana\n    }\n  });\n}\n\nreturn output;"
+      },
+      "id": "split-into-3-reels",
+      "name": "Split into 3 Reels",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300],
+      "notes": "Transforma resultado da IA em 3 itens separados"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "table": "editorial_content",
+        "columns": "content_type, week_of_year, main_topic, sub_theme, carla_script, bruno_script, instagram_caption, instagram_hashtags, audio_trending, created_at",
+        "values": "={{ $json.content_type }}, ={{ $json.week_of_year }}, ={{ $json.main_topic }}, ={{ $json.sub_theme }}, ={{ $json.carla_script }}, ={{ $json.bruno_script }}, ={{ $json.instagram_caption }}, ={{ JSON.stringify($json.instagram_hashtags) }}, ={{ $json.audio_trending }}, ={{ new Date().toISOString() }}"
+      },
+      "id": "insert-to-supabase",
+      "name": "Insert to Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1120, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase API"
+        }
+      },
+      "notes": "Insere cada Reel no banco (3 registros)"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Para cada Reel, busca o template Canva por categoria\nconst content = $input.item.json;\nconst contentId = content.id;\n\n// Extrai categoria do tema (pode ser implementado com lógica mais complexa)\nconst tema = content.main_topic.toLowerCase();\nlet category = 'business'; // default\n\nif (tema.includes('lead') || tema.includes('conversão')) {\n  category = 'marketing';\n} else if (tema.includes('agenda') || tema.includes('tempo')) {\n  category = 'analytics';\n} else if (tema.includes('tecnologia') || tema.includes('ia') || tema.includes('automação')) {\n  category = 'tech';\n}\n\nreturn {\n  json: {\n    content_id: contentId,\n    category: category,\n    carla_script: content.carla_script,\n    bruno_script: content.bruno_script,\n    reel_number: content.reel_number || 1,\n    audio_trending: content.audio_trending\n  }\n};"
+      },
+      "id": "prepare-canva-params",
+      "name": "Prepare Canva Params",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300],
+      "notes": "Prepara parâmetros para buscar template Canva"
+    },
+    {
+      "parameters": {
+        "workflowId": "XW5G28IkaZQzfWk2",
+        "fieldsToSend": "allFields"
+      },
+      "id": "get-canva-templates",
+      "name": "Get Canva Template PNGs",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1560, 300],
+      "notes": "Sub-workflow: Busca e exporta 2 PNGs do Canva (Main + CTA)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://ubs.app.br/api/canva-hybrid-video/generate/{{ $json.content_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "jsonParameters": true,
+        "options": {
+          "timeout": 300000
+        },
+        "bodyParametersJson": "={\n  \"main_png_binary\": {{ JSON.stringify($json.main_png_binary) }},\n  \"main_design_id\": \"{{ $json.main_design_id }}\",\n  \"main_design_name\": \"{{ $json.main_design_name }}\",\n  \"cta_png_binary\": {{ JSON.stringify($json.cta_png_binary) }},\n  \"cta_design_id\": \"{{ $json.cta_design_id }}\",\n  \"cta_design_name\": \"CTA Final Template\",\n  \"voice_id_carla\": \"XrExE9yKIg1WjnnlVkGX\",\n  \"voice_id_bruno\": \"yQtGAPI0R2jQuAXxLWk1\",\n  \"music_category\": \"{{ $('Prepare Canva Params').item.json.audio_trending }}\"\n}"
+      },
+      "id": "generate-reel-video",
+      "name": "Generate Reel Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1780, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2",
+          "name": "UBS API Auth"
+        }
+      },
+      "notes": "Gera vídeo para cada Reel (3 chamadas separadas)"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Aguarda todos os 3 vídeos serem gerados\n// Coleta as URLs dos vídeos para concatenação\n\nconst videoUrls = [];\nconst contentIds = [];\n\nfor (let i = 0; i < $input.all().length; i++) {\n  const item = $input.all()[i].json;\n  \n  if (item.success && item.video_url) {\n    videoUrls.push({\n      reel_number: $('Prepare Canva Params').all()[i].json.reel_number,\n      video_url: item.video_url,\n      content_id: item.content_id\n    });\n    contentIds.push(item.content_id);\n  }\n}\n\n// Ordena por reel_number para garantir ordem correta\nvideoUrls.sort((a, b) => a.reel_number - b.reel_number);\n\nif (videoUrls.length !== 3) {\n  throw new Error(`Esperado 3 vídeos, recebido ${videoUrls.length}`);\n}\n\nreturn {\n  json: {\n    video_urls: videoUrls.map(v => v.video_url),\n    reel_content_ids: contentIds,\n    tema_semana: $('Split into 3 Reels').first().json.tema_semana,\n    semana: $('Split into 3 Reels').first().json.semana,\n    ready_for_concatenation: true\n  }\n};"
+      },
+      "id": "collect-video-urls",
+      "name": "Collect Video URLs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 300],
+      "notes": "Coleta URLs dos 3 vídeos para concatenação"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ubs.app.br/api/video-concatenate/youtube-short",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "jsonParameters": true,
+        "options": {
+          "timeout": 600000
+        },
+        "bodyParametersJson": "={\n  \"video_urls\": {{ JSON.stringify($json.video_urls) }},\n  \"output_name\": \"YouTube_Short_{{ $json.semana }}_{{ $json.tema_semana.replace(/[^a-zA-Z0-9]/g, '_') }}\",\n  \"youtube_caption\": \"{{ $json.tema_semana }} - Teste 7 dias grátis → link na descrição\",\n  \"remove_cta_from_videos\": [0, 1],\n  \"keep_cta_in_video\": 2\n}"
+      },
+      "id": "concatenate-youtube-short",
+      "name": "Concatenate YouTube Short",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2220, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2",
+          "name": "UBS API Auth"
+        }
+      },
+      "notes": "Concatena 3 Reels em 1 YouTube Short (~3min) com apenas 1 CTA final"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "table": "editorial_content",
+        "columns": "content_type, week_of_year, main_topic, youtube_short_url, youtube_caption, youtube_short_duration_seconds, video_generation_cost_usd, created_at, related_reel_ids",
+        "values": "=youtube_short, ={{ $('Collect Video URLs').item.json.semana }}, ={{ $('Collect Video URLs').item.json.tema_semana }}, ={{ $json.youtube_short_url }}, ={{ $json.youtube_caption }}, ={{ $json.duration_seconds }}, ={{ $json.cost_usd }}, ={{ new Date().toISOString() }}, ={{ JSON.stringify($('Collect Video URLs').item.json.reel_content_ids) }}"
+      },
+      "id": "insert-youtube-record",
+      "name": "Insert YouTube Record",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2440, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase API"
+        }
+      },
+      "notes": "Salva YouTube Short no banco (1 registro)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retorna resultado final com todas as URLs\nconst reelUrls = [];\n\nfor (let i = 0; i < 3; i++) {\n  const insertResult = $('Insert to Supabase').all()[i].json;\n  const videoResult = $('Generate Reel Video').all()[i].json;\n  \n  reelUrls.push({\n    reel_number: i + 1,\n    content_id: insertResult.id,\n    video_url: videoResult.video_url,\n    instagram_caption: $('Split into 3 Reels').all()[i].json.instagram_caption\n  });\n}\n\nconst youtubeResult = $('Concatenate YouTube Short').item.json;\nconst youtubeRecord = $('Insert YouTube Record').item.json;\n\nreturn {\n  json: {\n    success: true,\n    tema_semana: $('Collect Video URLs').item.json.tema_semana,\n    semana: $('Collect Video URLs').item.json.semana,\n    reels_generated: reelUrls,\n    youtube_short: {\n      content_id: youtubeRecord.id,\n      video_url: youtubeResult.youtube_short_url,\n      caption: youtubeResult.youtube_caption,\n      duration_seconds: youtubeResult.duration_seconds\n    },\n    message: '✅ Content Seeder completo: 3 Reels + 1 YouTube Short gerados com sucesso'\n  }\n};"
+      },
+      "id": "final-output",
+      "name": "Final Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2660, 300],
+      "notes": "Retorna resultado consolidado do workflow"
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Call Twitter Threads Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Twitter Threads Generator": {
+      "main": [
+        [
+          {
+            "node": "Call Instagram Reels Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Instagram Reels Generator": {
+      "main": [
+        [
+          {
+            "node": "Split into 3 Reels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split into 3 Reels": {
+      "main": [
+        [
+          {
+            "node": "Insert to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Prepare Canva Params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Canva Params": {
+      "main": [
+        [
+          {
+            "node": "Get Canva Template PNGs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Canva Template PNGs": {
+      "main": [
+        [
+          {
+            "node": "Generate Reel Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Reel Video": {
+      "main": [
+        [
+          {
+            "node": "Collect Video URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Video URLs": {
+      "main": [
+        [
+          {
+            "node": "Concatenate YouTube Short",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Concatenate YouTube Short": {
+      "main": [
+        [
+          {
+            "node": "Insert YouTube Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert YouTube Record": {
+      "main": [
+        [
+          {
+            "node": "Final Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2025-01-09T00:00:00.000Z",
+      "updatedAt": "2025-01-09T00:00:00.000Z",
+      "id": "content-seeder",
+      "name": "Content Seeder"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2025-10-09T00:00:00.000Z",
+  "versionId": "1"
+}

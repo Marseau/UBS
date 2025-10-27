@@ -1,5 +1,5 @@
 name = "landing-worker"
-main = "worker.js"
+main = "worker-proxy.js"
 compatibility_date = "2025-07-08"
 
 account_id = "89d9edcda3b919dd7ef078280c76d2e3"

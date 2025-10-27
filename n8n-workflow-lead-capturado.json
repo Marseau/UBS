@@ -1,0 +1,322 @@
+{
+  "name": "LeadCapturado",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-capturado",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Novo Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "lead-capturado"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "lead_id",
+              "value": "={{ $json.body.lead_id }}"
+            },
+            {
+              "name": "name",
+              "value": "={{ $json.body.name }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.body.email }}"
+            },
+            {
+              "name": "whatsapp",
+              "value": "={{ $json.body.whatsapp }}"
+            },
+            {
+              "name": "user_type",
+              "value": "={{ $json.body.user_type }}"
+            },
+            {
+              "name": "business_segment",
+              "value": "={{ $json.body.business_segment }}"
+            },
+            {
+              "name": "main_challenge",
+              "value": "={{ $json.body.main_challenge }}"
+            },
+            {
+              "name": "lead_volume",
+              "value": "={{ $json.body.lead_volume }}"
+            },
+            {
+              "name": "modules_interest",
+              "value": "={{ $json.body.modules_interest.join(', ') }}"
+            },
+            {
+              "name": "source",
+              "value": "={{ $json.body.source || 'Website' }}"
+            },
+            {
+              "name": "captured_at",
+              "value": "={{ $json.body.captured_at }}"
+            },
+            {
+              "name": "formatted_date",
+              "value": "={{ new Date($json.body.captured_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare-data",
+      "name": "Preparar Dados",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "{{ $env.ZOHO_SMTP_USER }}",
+        "toEmail": "={{ $node['Preparar Dados'].json.email }}",
+        "subject": "🎉 Obrigado pelo seu interesse na UBS!",
+        "emailType": "html",
+        "message": "=<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }\n    .container { max-width: 600px; margin: 0 auto; padding: 20px; }\n    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }\n    .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }\n    .highlight { background: #fff; padding: 20px; border-left: 4px solid #667eea; margin: 20px 0; }\n    .button { display: inline-block; padding: 15px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }\n    .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }\n    .checkbox { display: flex; align-items: center; margin: 15px 0; }\n    .checkbox input { margin-right: 10px; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>🎯 Recebemos sua solicitação!</h1>\n    </div>\n    <div class=\"content\">\n      <p>Olá <strong>{{ $node['Preparar Dados'].json.name }}</strong>,</p>\n      \n      <p>Muito obrigado por seu interesse na <strong>Universal Booking System (UBS)</strong>!</p>\n      \n      <div class=\"highlight\">\n        <h3>📋 O que acontece agora?</h3>\n        <ul>\n          <li>✅ Nossa equipe já está analisando suas necessidades</li>\n          <li>📊 Estamos preparando uma proposta personalizada para você</li>\n          <li>🎯 Em até 24 horas você receberá nossa proposta completa</li>\n          <li>💬 Poderemos tirar dúvidas via WhatsApp se autorizado</li>\n        </ul>\n      </div>\n\n      <div class=\"highlight\">\n        <h3>📱 Autorização de Contato via WhatsApp</h3>\n        <p>Para agilizar o atendimento e tirar dúvidas rapidamente, gostaríamos de entrar em contato via WhatsApp.</p>\n        <p><strong>Você autoriza o contato via WhatsApp no número {{ $node['Preparar Dados'].json.whatsapp }}?</strong></p>\n        <p style=\"font-size: 12px; color: #666;\">Responda este email com \"SIM\" para autorizar ou \"NÃO\" se preferir apenas email.</p>\n      </div>\n\n      <p><strong>Módulos de interesse:</strong> {{ $node['Preparar Dados'].json.modules_interest }}</p>\n      <p><strong>Segmento:</strong> {{ $node['Preparar Dados'].json.business_segment }}</p>\n\n      <p>Se tiver alguma dúvida imediata, pode responder este email que nossa equipe responderá em breve!</p>\n\n      <p>Atenciosamente,<br>\n      <strong>Equipe UBS</strong><br>\n      Universal Booking System</p>\n    </div>\n    <div class=\"footer\">\n      <p>📧 admin@stratfin.tec.br | 🌐 ubs-app.br</p>\n      <p>Este é um email automático. Por favor, não responda.</p>\n    </div>\n  </div>\n</body>\n</html>",
+        "options": {
+          "allowUnauthorizedCerts": false
+        },
+        "additionalFields": {}
+      },
+      "id": "send-welcome-email",
+      "name": "Email Boas-Vindas ao Lead",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [650, 200],
+      "credentials": {
+        "smtp": {
+          "id": "zoho-smtp",
+          "name": "Zoho SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "{{ $env.ZOHO_SMTP_USER }}",
+        "toEmail": "admin@stratfin.tec.br",
+        "subject": "=🎯 NOVO LEAD TAYLOR MADE: {{ $node['Preparar Dados'].json.name }} - {{ $node['Preparar Dados'].json.business_segment }}",
+        "emailType": "html",
+        "message": "=<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }\n    .container { max-width: 700px; margin: 0 auto; padding: 20px; }\n    .header { background: #2c3e50; color: white; padding: 20px; text-align: center; }\n    .alert { background: #e74c3c; color: white; padding: 15px; margin: 20px 0; border-radius: 5px; font-weight: bold; }\n    table { width: 100%; border-collapse: collapse; margin: 20px 0; }\n    th { background: #34495e; color: white; padding: 12px; text-align: left; }\n    td { padding: 12px; border-bottom: 1px solid #ddd; }\n    tr:hover { background: #f5f5f5; }\n    .badge { display: inline-block; padding: 5px 10px; border-radius: 3px; font-size: 12px; font-weight: bold; }\n    .badge-high { background: #e74c3c; color: white; }\n    .badge-medium { background: #f39c12; color: white; }\n    .badge-low { background: #3498db; color: white; }\n    .whatsapp-link { background: #25D366; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; }\n    .footer { margin-top: 30px; padding: 20px; background: #ecf0f1; border-radius: 5px; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>🎯 NOVO LEAD CAPTURADO</h1>\n      <p>{{ $node['Preparar Dados'].json.formatted_date }}</p>\n    </div>\n\n    <div class=\"alert\">\n      ⏰ AÇÃO NECESSÁRIA: Iniciar produção da proposta personalizada\n    </div>\n\n    <h2>📋 Dados do Lead</h2>\n    <table>\n      <tr>\n        <th>Campo</th>\n        <th>Valor</th>\n      </tr>\n      <tr>\n        <td><strong>ID do Lead</strong></td>\n        <td><code>{{ $node['Preparar Dados'].json.lead_id }}</code></td>\n      </tr>\n      <tr>\n        <td><strong>Nome Completo</strong></td>\n        <td>{{ $node['Preparar Dados'].json.name }}</td>\n      </tr>\n      <tr>\n        <td><strong>Email</strong></td>\n        <td><a href=\"mailto:{{ $node['Preparar Dados'].json.email }}\">{{ $node['Preparar Dados'].json.email }}</a></td>\n      </tr>\n      <tr>\n        <td><strong>WhatsApp</strong></td>\n        <td>\n          <a href=\"https://wa.me/55{{ $node['Preparar Dados'].json.whatsapp }}\" class=\"whatsapp-link\" target=\"_blank\">\n            📱 +55 {{ $node['Preparar Dados'].json.whatsapp }}\n          </a>\n        </td>\n      </tr>\n      <tr>\n        <td><strong>Tipo de Usuário</strong></td>\n        <td>{{ $node['Preparar Dados'].json.user_type }}</td>\n      </tr>\n      <tr>\n        <td><strong>Segmento de Negócio</strong></td>\n        <td><span class=\"badge badge-high\">{{ $node['Preparar Dados'].json.business_segment }}</span></td>\n      </tr>\n      <tr>\n        <td><strong>Desafio Principal</strong></td>\n        <td>{{ $node['Preparar Dados'].json.main_challenge }}</td>\n      </tr>\n      <tr>\n        <td><strong>Volume de Leads</strong></td>\n        <td><span class=\"badge badge-medium\">{{ $node['Preparar Dados'].json.lead_volume }}</span></td>\n      </tr>\n      <tr>\n        <td><strong>Módulos de Interesse</strong></td>\n        <td>{{ $node['Preparar Dados'].json.modules_interest }}</td>\n      </tr>\n      <tr>\n        <td><strong>Origem</strong></td>\n        <td>{{ $node['Preparar Dados'].json.source }}</td>\n      </tr>\n      <tr>\n        <td><strong>Data de Cadastro</strong></td>\n        <td>{{ $node['Preparar Dados'].json.formatted_date }}</td>\n      </tr>\n    </table>\n\n    <div class=\"footer\">\n      <h3>✅ Próximas Ações</h3>\n      <ol>\n        <li>✉️ Email de boas-vindas enviado automaticamente ao lead</li>\n        <li>📊 Analisar necessidades e preparar proposta personalizada</li>\n        <li>📱 Aguardar autorização do lead para contato via WhatsApp</li>\n        <li>🎯 Enviar proposta em até 24 horas</li>\n        <li>📞 Agendar call de apresentação</li>\n      </ol>\n\n      <p><strong>🔗 Acesso Rápido:</strong></p>\n      <ul>\n        <li><a href=\"https://n8n.ubs-app.br\">Dashboard N8N</a></li>\n        <li><a href=\"https://ubs-app.br/admin/taylor-made-leads\">Painel de Leads (Em desenvolvimento)</a></li>\n      </ul>\n    </div>\n  </div>\n</body>\n</html>",
+        "options": {
+          "allowUnauthorizedCerts": false
+        }
+      },
+      "id": "send-admin-email",
+      "name": "Email para Admin",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [650, 400],
+      "credentials": {
+        "smtp": {
+          "id": "zoho-smtp",
+          "name": "Zoho SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE taylor_made_leads\nSET \n  welcome_email_sent = TRUE,\n  welcome_email_sent_at = NOW(),\n  admin_email_sent = TRUE,\n  admin_email_sent_at = NOW(),\n  proposal_in_progress = TRUE,\n  proposal_started_at = NOW()\nWHERE id = '{{ $node['Preparar Dados'].json.lead_id }}'\nRETURNING *;",
+        "options": {}
+      },
+      "id": "update-lead-status",
+      "name": "Atualizar Status no Banco",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-postgres",
+          "name": "Supabase PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $node['Atualizar Status no Banco'].json[0] }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "check-success",
+      "name": "Verificar Sucesso",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "success"
+            },
+            {
+              "name": "message",
+              "value": "=Lead {{ $node['Preparar Dados'].json.name }} processado com sucesso. Emails enviados e proposta em andamento."
+            },
+            {
+              "name": "lead_id",
+              "value": "={{ $node['Preparar Dados'].json.lead_id }}"
+            },
+            {
+              "name": "welcome_email_sent",
+              "value": "true"
+            },
+            {
+              "name": "admin_email_sent",
+              "value": "true"
+            },
+            {
+              "name": "proposal_in_progress",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "success-response",
+      "name": "✅ Sucesso",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "error"
+            },
+            {
+              "name": "message",
+              "value": "=Erro ao processar lead {{ $node['Preparar Dados'].json.name }}"
+            },
+            {
+              "name": "lead_id",
+              "value": "={{ $node['Preparar Dados'].json.lead_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "error-response",
+      "name": "❌ Erro",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    }
+  ],
+  "connections": {
+    "Webhook - Novo Lead": {
+      "main": [
+        [
+          {
+            "node": "Preparar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Dados": {
+      "main": [
+        [
+          {
+            "node": "Email Boas-Vindas ao Lead",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email para Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Boas-Vindas ao Lead": {
+      "main": [
+        [
+          {
+            "node": "Atualizar Status no Banco",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email para Admin": {
+      "main": [
+        [
+          {
+            "node": "Atualizar Status no Banco",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualizar Status no Banco": {
+      "main": [
+        [
+          {
+            "node": "Verificar Sucesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar Sucesso": {
+      "main": [
+        [
+          {
+            "node": "✅ Sucesso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "❌ Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2025-10-18T14:30:00.000Z",
+      "updatedAt": "2025-10-18T14:30:00.000Z",
+      "id": "1",
+      "name": "Taylor Made"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-18T14:30:00.000Z",
+  "versionId": "1"
+}

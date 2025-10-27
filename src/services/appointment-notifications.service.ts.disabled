@@ -1,0 +1,412 @@
+/**
+ * Appointment Notifications Service
+ * 
+ * Serviço unificado para coordenar notificações de agendamento
+ * Integra Email + SMS com estratégias inteligentes de envio
+ */
+
+import EmailService from './email.service';
+import SMSService from './sms.service';
+import { supabase } from '../config/database';
+
+export type NotificationType = 'confirmation' | 'reminder_day_before' | 'reminder_hour_before' | 'cancellation' | 'reschedule' | 'no_show' | 'feedback';
+
+export interface NotificationConfig {
+  email: boolean;
+  sms: boolean;
+  priority: 'email' | 'sms' | 'both';
+}
+
+export interface NotificationResult {
+  success: boolean;
+  email?: { success: boolean; messageId?: string; message: string };
+  sms?: { success: boolean; messageId?: string; message: string };
+  message: string;
+}
+
+/**
+ * Configurações padrão por tipo de notificação
+ */
+const DEFAULT_CONFIGS: Record<NotificationType, NotificationConfig> = {
+  confirmation: { email: true, sms: true, priority: 'both' },
+  reminder_day_before: { email: true, sms: true, priority: 'both' },
+  reminder_hour_before: { email: false, sms: true, priority: 'sms' }, // SMS prioritário para lembrete urgente
+  cancellation: { email: true, sms: true, priority: 'both' },
+  reschedule: { email: true, sms: true, priority: 'both' },
+  no_show: { email: true, sms: false, priority: 'email' }, // No-show não é urgente
+  feedback: { email: true, sms: false, priority: 'email' }  // Feedback via email é melhor
+};
+
+export class AppointmentNotificationsService {
+  private emailService: EmailService;
+  private smsService: SMSService;
+
+  constructor() {
+    this.emailService = new EmailService();
+    this.smsService = new SMSService();
+  }
+
+  /**
+   * Enviar notificação de confirmação de agendamento
+   */
+  async sendConfirmation(appointmentId: string, config?: Partial<NotificationConfig>): Promise<NotificationResult> {
+    return this.sendNotification('confirmation', appointmentId, config);
+  }
+
+  /**
+   * Enviar lembrete 24h antes
+   */
+  async sendDayBeforeReminder(appointmentId: string, config?: Partial<NotificationConfig>): Promise<NotificationResult> {
+    return this.sendNotification('reminder_day_before', appointmentId, config);
+  }
+
+  /**
+   * Enviar lembrete 1h antes
+   */
+  async sendHourBeforeReminder(appointmentId: string, config?: Partial<NotificationConfig>): Promise<NotificationResult> {
+    return this.sendNotification('reminder_hour_before', appointmentId, config);
+  }
+
+  /**
+   * Enviar notificação de cancelamento
+   */
+  async sendCancellation(appointmentId: string, reason?: string, config?: Partial<NotificationConfig>): Promise<NotificationResult> {
+    return this.sendNotification('cancellation', appointmentId, config, { reason });
+  }
+
+  /**
+   * Enviar notificação de remarcação
+   */
+  async sendReschedule(appointmentId: string, config?: Partial<NotificationConfig>): Promise<NotificationResult> {
+    return this.sendNotification('reschedule', appointmentId, config);
+  }
+
+  /**
+   * Enviar notificação de no-show
+   */
+  async sendNoShow(appointmentId: string, config?: Partial<NotificationConfig>): Promise<NotificationResult> {
+    return this.sendNotification('no_show', appointmentId, config);
+  }
+
+  /**
+   * Enviar solicitação de feedback
+   */
+  async sendFeedbackRequest(appointmentId: string, config?: Partial<NotificationConfig>): Promise<NotificationResult> {
+    return this.sendNotification('feedback', appointmentId, config);
+  }
+
+  /**
+   * Método principal de envio de notificação
+   */
+  private async sendNotification(
+    type: NotificationType, 
+    appointmentId: string, 
+    configOverride?: Partial<NotificationConfig>,
+    extraData?: { reason?: string }
+  ): Promise<NotificationResult> {
+    
+    // Merge configuration
+    const config: NotificationConfig = {
+      ...DEFAULT_CONFIGS[type],
+      ...configOverride
+    };
+
+    const result: NotificationResult = {
+      success: false,
+      message: ''
+    };
+
+    // Verificar se appointment existe e se usuário tem email/phone válidos
+    const appointmentData = await this.getAppointmentData(appointmentId);
+    if (!appointmentData) {
+      result.message = 'Appointment not found';
+      return result;
+    }
+
+    const { user } = appointmentData;
+    const hasEmail = !!user.email && user.email.includes('@');
+    const hasPhone = !!user.phone;
+
+    console.log(`📧 Sending ${type} notification for appointment ${appointmentId}`);
+    console.log(`📱 User contact: email=${hasEmail ? 'yes' : 'no'}, phone=${hasPhone ? 'yes' : 'no'}`);
+
+    let emailSuccess = false;
+    let smsSuccess = false;
+
+    // Enviar Email se configurado e usuário tem email
+    if (config.email && hasEmail && this.emailService.isReady()) {
+      try {
+        let emailResult;
+        
+        switch (type) {
+          case 'confirmation':
+            emailResult = await this.emailService.sendAppointmentConfirmation(appointmentId);
+            break;
+          case 'reminder_day_before':
+            emailResult = await this.emailService.sendAppointmentReminder(appointmentId, 'day_before');
+            break;
+          case 'reminder_hour_before':
+            emailResult = await this.emailService.sendAppointmentReminder(appointmentId, 'hour_before');
+            break;
+          case 'cancellation':
+            emailResult = await this.emailService.sendAppointmentCancellation(appointmentId, extraData?.reason);
+            break;
+          default:
+            emailResult = { success: false, message: `Email template not implemented for ${type}` };
+        }
+
+        result.email = emailResult;
+        emailSuccess = emailResult.success;
+        
+        if (emailSuccess) {
+          console.log(`✅ Email ${type} sent successfully`);
+        } else {
+          console.log(`❌ Email ${type} failed: ${emailResult.message}`);
+        }
+      } catch (error) {
+        result.email = { 
+          success: false, 
+          message: `Email error: ${error instanceof Error ? error.message : 'Unknown error'}` 
+        };
+        console.error(`❌ Email ${type} error:`, error);
+      }
+    } else {
+      console.log(`⏭️ Email ${type} skipped: config=${config.email}, hasEmail=${hasEmail}, ready=${this.emailService.isReady()}`);
+    }
+
+    // Enviar SMS se configurado e usuário tem telefone
+    if (config.sms && hasPhone && this.smsService.isReady()) {
+      try {
+        let smsResult;
+        
+        switch (type) {
+          case 'confirmation':
+            smsResult = await this.smsService.sendAppointmentConfirmation(appointmentId);
+            break;
+          case 'reminder_day_before':
+            smsResult = await this.smsService.sendAppointmentReminder(appointmentId, 'day_before');
+            break;
+          case 'reminder_hour_before':
+            smsResult = await this.smsService.sendAppointmentReminder(appointmentId, 'hour_before');
+            break;
+          case 'cancellation':
+            smsResult = await this.smsService.sendAppointmentCancellation(appointmentId, extraData?.reason);
+            break;
+          case 'reschedule':
+            smsResult = await this.smsService.sendAppointmentReschedule(appointmentId);
+            break;
+          default:
+            smsResult = { success: false, message: `SMS template not implemented for ${type}` };
+        }
+
+        result.sms = smsResult;
+        smsSuccess = smsResult.success;
+        
+        if (smsSuccess) {
+          console.log(`✅ SMS ${type} sent successfully`);
+        } else {
+          console.log(`❌ SMS ${type} failed: ${smsResult.message}`);
+        }
+      } catch (error) {
+        result.sms = { 
+          success: false, 
+          message: `SMS error: ${error instanceof Error ? error.message : 'Unknown error'}` 
+        };
+        console.error(`❌ SMS ${type} error:`, error);
+      }
+    } else {
+      console.log(`⏭️ SMS ${type} skipped: config=${config.sms}, hasPhone=${hasPhone}, ready=${this.smsService.isReady()}`);
+    }
+
+    // Determinar sucesso geral baseado na prioridade
+    if (config.priority === 'both') {
+      result.success = (config.email ? emailSuccess : true) && (config.sms ? smsSuccess : true);
+      result.message = `Notification ${type}: Email=${emailSuccess ? 'sent' : 'failed'}, SMS=${smsSuccess ? 'sent' : 'failed'}`;
+    } else if (config.priority === 'email') {
+      result.success = emailSuccess;
+      result.message = `Email ${type}: ${emailSuccess ? 'sent successfully' : 'failed'}`;
+    } else if (config.priority === 'sms') {
+      result.success = smsSuccess;
+      result.message = `SMS ${type}: ${smsSuccess ? 'sent successfully' : 'failed'}`;
+    }
+
+    // Log resultado final
+    console.log(`📊 Notification ${type} result:`, {
+      appointmentId,
+      success: result.success,
+      emailSent: emailSuccess,
+      smsSent: smsSuccess,
+      priority: config.priority
+    });
+
+    return result;
+  }
+
+  /**
+   * Buscar dados do agendamento
+   */
+  private async getAppointmentData(appointmentId: string) {
+    const { data: appointment } = await supabase
+      .from('appointments')
+      .select(`
+        *,
+        tenants (*),
+        users (*),
+        services (*)
+      `)
+      .eq('id', appointmentId)
+      .single();
+
+    if (!appointment) return null;
+
+    return {
+      appointment,
+      tenant: appointment.tenants,
+      user: appointment.users,
+      service: appointment.services
+    };
+  }
+
+  /**
+   * Processar lembretes automáticos
+   * Executado via cron job
+   */
+  async processScheduledReminders(): Promise<void> {
+    console.log('🔔 Processing scheduled reminders...');
+
+    try {
+      // Lembretes de 24h antes
+      await this.processDayBeforeReminders();
+      
+      // Lembretes de 1h antes  
+      await this.processHourBeforeReminders();
+
+      console.log('✅ Scheduled reminders processed successfully');
+    } catch (error) {
+      console.error('❌ Error processing scheduled reminders:', error);
+    }
+  }
+
+  /**
+   * Processar lembretes de 24h antes
+   */
+  private async processDayBeforeReminders(): Promise<void> {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowDateStr = tomorrow.toISOString().split('T')[0];
+
+    const { data: appointments, error } = await supabase
+      .from('appointments')
+      .select('id')
+      .eq('status', 'confirmed')
+      .gte('start_time', `${tomorrowDateStr}T00:00:00`)
+      .lt('start_time', `${tomorrowDateStr}T23:59:59`)
+      .is('day_before_reminder_sent', null);
+
+    if (error) {
+      console.error('Error fetching day-before appointments:', error);
+      return;
+    }
+
+    if (!appointments || appointments.length === 0) {
+      console.log('No day-before reminders to send');
+      return;
+    }
+
+    console.log(`📅 Sending ${appointments.length} day-before reminders`);
+
+    for (const appointment of appointments) {
+      try {
+        await this.sendDayBeforeReminder(appointment.id);
+        
+        // Marcar como enviado (campo removido temporariamente até migration)
+        // await supabase
+        //   .from('appointments')
+        //   .update({ day_before_reminder_sent: new Date().toISOString() })
+        //   .eq('id', appointment.id);
+          
+      } catch (error) {
+        console.error(`Error sending day-before reminder for appointment ${appointment.id}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Processar lembretes de 1h antes
+   */
+  private async processHourBeforeReminders(): Promise<void> {
+    const oneHourFromNow = new Date();
+    oneHourFromNow.setHours(oneHourFromNow.getHours() + 1);
+    
+    const startTime = oneHourFromNow.toISOString();
+    oneHourFromNow.setMinutes(oneHourFromNow.getMinutes() + 30); // Janela de 30 minutos
+    const endTime = oneHourFromNow.toISOString();
+
+    const { data: appointments, error } = await supabase
+      .from('appointments')
+      .select('id')
+      .eq('status', 'confirmed')
+      .gte('start_time', startTime)
+      .lt('start_time', endTime)
+      .is('hour_before_reminder_sent', null);
+
+    if (error) {
+      console.error('Error fetching hour-before appointments:', error);
+      return;
+    }
+
+    if (!appointments || appointments.length === 0) {
+      console.log('No hour-before reminders to send');
+      return;
+    }
+
+    console.log(`⏰ Sending ${appointments.length} hour-before reminders`);
+
+    for (const appointment of appointments) {
+      try {
+        await this.sendHourBeforeReminder(appointment.id);
+        
+        // Marcar como enviado (campo removido temporariamente até migration)
+        // await supabase
+        //   .from('appointments')
+        //   .update({ hour_before_reminder_sent: new Date().toISOString() })
+        //   .eq('id', appointment.id);
+          
+      } catch (error) {
+        console.error(`Error sending hour-before reminder for appointment ${appointment.id}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Status do serviço
+   */
+  getServiceStatus() {
+    return {
+      email: {
+        configured: this.emailService.isReady(),
+        provider: 'Zoho SMTP'
+      },
+      sms: {
+        configured: this.smsService.isReady(),
+        provider: 'Twilio'
+      }
+    };
+  }
+
+  /**
+   * Testar configuração de ambos os serviços
+   */
+  async testConfiguration() {
+    const emailTest = await this.emailService.testConfiguration();
+    const smsTest = await this.smsService.testConfiguration();
+
+    return {
+      email: emailTest,
+      sms: smsTest,
+      overall: emailTest.success && smsTest.success
+    };
+  }
+}
+
+export default AppointmentNotificationsService;

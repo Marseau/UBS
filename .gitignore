@@ -70,3 +70,4 @@ check-*.sql
 *.md
 !README.md
 !CLAUDE.md
+instagram-cookies.json

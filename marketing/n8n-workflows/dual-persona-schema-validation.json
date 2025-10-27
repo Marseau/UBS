@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ubs.app.br/schemas/dual-persona-content.json",
+  "title": "Dual Persona Weekly Content Schema",
+  "description": "Schema de validação para conteúdo semanal dual persona (Carla + Bruno) com validação crítica de governança",
+  "type": "object",
+  "properties": {
+    "day_1": { "$ref": "#/$defs/dayNoYT" },
+    "day_2": { "$ref": "#/$defs/dayNoYT" },
+    "day_3": { "$ref": "#/$defs/dayNoYT" },
+    "day_4": { "$ref": "#/$defs/dayThread" },
+    "day_5": { "$ref": "#/$defs/dayNoYT" },
+    "day_6": { "$ref": "#/$defs/dayNoYT" },
+    "day_7": { "$ref": "#/$defs/dayWithYT" }
+  },
+  "required": ["day_1", "day_2", "day_3", "day_4", "day_5", "day_6", "day_7"],
+  "$defs": {
+    "baseDay": {
+      "type": "object",
+      "properties": {
+        "sub_theme": {
+          "type": "string",
+          "minLength": 10,
+          "description": "Subtema específico do dia baseado no tema principal da semana"
+        },
+        "twitter_insertion_1": {
+          "type": "string",
+          "maxLength": 280,
+          "description": "Tweet 1 - Geralmente Carla apresentando problema"
+        },
+        "twitter_insertion_2": {
+          "type": "string",
+          "maxLength": 280,
+          "description": "Tweet 2 - Geralmente Bruno respondendo com solução"
+        },
+        "twitter_insertion_3": {
+          "type": "string",
+          "maxLength": 280,
+          "description": "Tweet 3 - Geralmente Bruno com CTA"
+        },
+        "carla_script": {
+          "type": "string",
+          "minLength": 300,
+          "maxLength": 550,
+          "description": "Script Carla: 55-75 palavras = aprox 300-550 caracteres (incluindo espaços). Validação real por contagem de palavras e tempo de fala (20-25s)."
+        },
+        "bruno_script": {
+          "type": "string",
+          "minLength": 650,
+          "maxLength": 900,
+          "description": "Script Bruno: 95-120 palavras = aprox 650-900 caracteres (incluindo espaços). Validação real por contagem de palavras e tempo de fala (35-40s)."
+        },
+        "instagram_caption": {
+          "type": "string",
+          "maxLength": 150,
+          "description": "Legenda do Instagram com CTA rotativo. Deve variar a cada dia."
+        },
+        "instagram_hashtags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[^#\\s][\\w\\p{L}0-9_]{1,50}$",
+            "description": "Hashtag sem o caractere #, apenas alfanuméricos e underscores"
+          },
+          "minItems": 7,
+          "maxItems": 10,
+          "description": "7-10 hashtags rotacionadas por dia do pool semanal"
+        }
+      },
+      "required": [
+        "sub_theme",
+        "twitter_insertion_1",
+        "twitter_insertion_2",
+        "twitter_insertion_3",
+        "carla_script",
+        "bruno_script",
+        "instagram_caption",
+        "instagram_hashtags"
+      ]
+    },
+    "dayNoYT": {
+      "allOf": [
+        { "$ref": "#/$defs/baseDay" },
+        {
+          "properties": {
+            "youtube_segment": {
+              "type": "string",
+              "maxLength": 0,
+              "description": "CRÍTICO: Deve estar VAZIO em dias 1-6. Esta é uma regra de governança fundamental."
+            }
+          },
+          "required": ["youtube_segment"]
+        }
+      ],
+      "description": "Dia padrão sem conteúdo YouTube (dias 1, 2, 3, 5, 6)"
+    },
+    "dayThread": {
+      "allOf": [
+        { "$ref": "#/$defs/baseDay" },
+        {
+          "properties": {
+            "twitter_insertion_4": {
+              "type": "string",
+              "maxLength": 280,
+              "description": "Tweet 4 da thread educacional (Dia 4)"
+            },
+            "twitter_insertion_5": {
+              "type": "string",
+              "maxLength": 280,
+              "description": "Tweet 5 da thread educacional (Dia 4)"
+            },
+            "twitter_insertion_6": {
+              "type": "string",
+              "maxLength": 280,
+              "description": "Tweet 6 da thread educacional (Dia 4)"
+            },
+            "twitter_insertion_7": {
+              "type": "string",
+              "maxLength": 280,
+              "description": "Tweet 7 da thread educacional (Dia 4)"
+            },
+            "twitter_insertion_8": {
+              "type": "string",
+              "maxLength": 280,
+              "description": "Tweet 8 da thread educacional (Dia 4) - geralmente CTA"
+            },
+            "youtube_segment": {
+              "type": "string",
+              "maxLength": 0,
+              "description": "CRÍTICO: Deve estar VAZIO no dia 4 também"
+            }
+          },
+          "required": [
+            "twitter_insertion_4",
+            "twitter_insertion_5",
+            "twitter_insertion_6",
+            "twitter_insertion_7",
+            "twitter_insertion_8",
+            "youtube_segment"
+          ]
+        }
+      ],
+      "description": "Dia 4 especial com thread educacional de 8 tweets conectados"
+    },
+    "dayWithYT": {
+      "allOf": [
+        { "$ref": "#/$defs/baseDay" },
+        {
+          "properties": {
+            "youtube_segment": {
+              "type": "string",
+              "minLength": 1000,
+              "description": "Roteiro completo do vídeo YouTube (5-6 minutos). Deve incluir: Intro (30s) + Resumo Dias 1-6 (3-4min) + Recapitulação (1min) + Encerramento (30s)"
+            }
+          },
+          "required": ["youtube_segment"]
+        }
+      ],
+      "description": "Dia 7 especial com vídeo YouTube completo"
+    }
+  }
+}

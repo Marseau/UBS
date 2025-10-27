@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog/Showcase Mockup - UBS Taylor Made</title>
+
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #2D5A9B;
+            --primary-light: #4A7BC8;
+            --primary-dark: #1E3F6B;
+            --secondary-color: #F8F9FA;
+            --accent-color: #28A745;
+            --text-dark: #2C3E50;
+            --text-light: #6C757D;
+            --border-color: #E9ECEF;
+            --shadow: 0 4px 20px rgba(45, 90, 155, 0.15);
+            --shadow-lg: 0 10px 40px rgba(45, 90, 155, 0.2);
+            --twitter-blue: #1DA1F2;
+            --instagram-gradient: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+            --youtube-red: #FF0000;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text-dark);
+            background: #f5f5f5;
+            padding: 40px 0;
+        }
+
+        /* Showcase Section */
+        .showcase {
+            padding: 80px 0;
+            background: white;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .section-header h2 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--text-dark);
+            margin-bottom: 1rem;
+        }
+
+        .section-header p {
+            font-size: 1.2rem;
+            color: var(--text-light);
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        /* Stats Bar */
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-bottom: 3rem;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--primary-color);
+            display: block;
+        }
+
+        .stat-label {
+            color: var(--text-light);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-icon {
+            font-size: 1.5rem;
+            margin-right: 0.5rem;
+        }
+
+        .stat-icon.twitter { color: var(--twitter-blue); }
+        .stat-icon.instagram {
+            background: var(--instagram-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .stat-icon.youtube { color: var(--youtube-red); }
+
+        /* Filter Tabs */
+        .filter-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 3rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background: white;
+            border: 2px solid var(--border-color);
+            padding: 0.75rem 2rem;
+            border-radius: 50px;
+            font-weight: 600;
+            color: var(--text-dark);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .filter-btn:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .filter-btn.active {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+
+        /* Content Grid */
+        .content-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        /* Twitter Thread Card */
+        .content-card {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .content-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--primary-color);
+        }
+
+        .content-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+
+        .content-card.twitter::before { background: var(--twitter-blue); }
+        .content-card.instagram::before { background: var(--instagram-gradient); }
+        .content-card.youtube::before { background: var(--youtube-red); }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .platform-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 0.4rem 1rem;
+            border-radius: 50px;
+            color: white;
+        }
+
+        .platform-badge.twitter { background: var(--twitter-blue); }
+        .platform-badge.instagram { background: linear-gradient(45deg, #f09433, #e6683c, #dc2743); }
+        .platform-badge.youtube { background: var(--youtube-red); }
+
+        .publish-date {
+            font-size: 0.75rem;
+            color: var(--text-light);
+        }
+
+        .card-content {
+            margin-bottom: 1rem;
+        }
+
+        .thread-preview {
+            background: var(--secondary-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            border-left: 3px solid var(--twitter-blue);
+        }
+
+        .tweet-text {
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: var(--text-dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .tweet-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.8rem;
+            color: var(--text-light);
+        }
+
+        .thread-count {
+            background: white;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            text-align: center;
+        }
+
+        /* Video Card */
+        .video-thumbnail {
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .video-thumbnail::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100%" height="100%" fill="url(%23grid)"/></svg>');
+        }
+
+        .play-icon {
+            width: 60px;
+            height: 60px;
+            background: rgba(255,255,255,0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            position: relative;
+            z-index: 2;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .video-thumbnail:hover .play-icon {
+            transform: scale(1.1);
+            background: white;
+        }
+
+        .video-title {
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+
+        .video-stats {
+            display: flex;
+            gap: 1.5rem;
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+
+        /* Card Footer */
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .engagement-stats {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .view-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .view-btn:hover {
+            background: var(--primary-dark);
+            transform: translateX(3px);
+        }
+
+        /* Load More */
+        .load-more {
+            text-align: center;
+            margin-top: 3rem;
+        }
+
+        .load-more-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 1rem 3rem;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .load-more-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        /* CTA Section */
+        .showcase-cta {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            border-radius: 20px;
+            padding: 3rem;
+            text-align: center;
+            color: white;
+            margin-top: 4rem;
+        }
+
+        .showcase-cta h3 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .showcase-cta p {
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        .cta-btn {
+            background: white;
+            color: var(--primary-color);
+            border: none;
+            padding: 1rem 2.5rem;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .cta-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .section-header h2 {
+                font-size: 2rem;
+            }
+
+            .content-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .stats-bar {
+                gap: 1.5rem;
+            }
+
+            .stat-number {
+                font-size: 2rem;
+            }
+
+            .filter-tabs {
+                gap: 0.5rem;
+            }
+
+            .filter-btn {
+                padding: 0.6rem 1.5rem;
+                font-size: 0.9rem;
+            }
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            color: var(--text-light);
+            margin-bottom: 1rem;
+        }
+
+        .empty-state h4 {
+            color: var(--text-dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-state p {
+            color: var(--text-light);
+        }
+    </style>
+</head>
+<body>
+    <!-- Showcase Section -->
+    <section class="showcase">
+        <div class="container">
+            <!-- Section Header -->
+            <div class="section-header">
+                <h2>📱 Nosso Conteúdo em Ação</h2>
+                <p>Veja exemplos reais do conteúdo que produzimos toda semana para engajar sua audiência e converter leads</p>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <span class="stat-icon twitter"><i class="fab fa-twitter"></i></span>
+                    <span class="stat-number">84</span>
+                    <span class="stat-label">Tweets/Mês</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon instagram"><i class="fab fa-instagram"></i></span>
+                    <span class="stat-number">12</span>
+                    <span class="stat-label">Reels/Mês</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon youtube"><i class="fab fa-youtube"></i></span>
+                    <span class="stat-number">4</span>
+                    <span class="stat-label">Shorts/Mês</span>
+                </div>
+            </div>
+
+            <!-- Filter Tabs -->
+            <div class="filter-tabs">
+                <button class="filter-btn active" data-filter="all">
+                    <i class="fas fa-th"></i>
+                    Todos
+                </button>
+                <button class="filter-btn" data-filter="twitter">
+                    <i class="fab fa-twitter"></i>
+                    Twitter/X
+                </button>
+                <button class="filter-btn" data-filter="instagram">
+                    <i class="fab fa-instagram"></i>
+                    Instagram
+                </button>
+                <button class="filter-btn" data-filter="youtube">
+                    <i class="fab fa-youtube"></i>
+                    YouTube
+                </button>
+            </div>
+
+            <!-- Content Grid -->
+            <div class="content-grid" id="contentGrid">
+                <!-- Twitter Thread Card Example -->
+                <div class="content-card twitter" data-type="twitter">
+                    <div class="card-header">
+                        <span class="platform-badge twitter">
+                            <i class="fab fa-twitter"></i>
+                            Thread
+                        </span>
+                        <span class="publish-date">Há 2 dias</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="thread-preview">
+                            <div class="tweet-text">
+                                🚀 Como transformar leads frios em clientes pagantes usando WhatsApp + IA
+
+                                Um thread prático com 7 estratégias que usamos diariamente ⬇️
+                            </div>
+                            <div class="tweet-meta">
+                                <span><i class="fas fa-heart"></i> 234</span>
+                                <span><i class="fas fa-retweet"></i> 89</span>
+                                <span><i class="fas fa-comment"></i> 45</span>
+                            </div>
+                        </div>
+                        <div class="thread-count">
+                            <i class="fas fa-layer-group me-2"></i>
+                            7 tweets neste thread
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="engagement-stats">
+                            <span class="stat">
+                                <i class="fas fa-eye"></i>
+                                12.5K visualizações
+                            </span>
+                        </div>
+                        <button class="view-btn">
+                            Ver Thread <i class="fas fa-arrow-right ms-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Instagram Reel Card Example -->
+                <div class="content-card instagram" data-type="instagram">
+                    <div class="card-header">
+                        <span class="platform-badge instagram">
+                            <i class="fab fa-instagram"></i>
+                            Reel
+                        </span>
+                        <span class="publish-date">Há 3 dias</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="video-thumbnail">
+                            <div class="play-icon">
+                                <i class="fas fa-play"></i>
+                            </div>
+                        </div>
+                        <h4 class="video-title">5 sinais que você está perdendo clientes no WhatsApp</h4>
+                        <div class="video-stats">
+                            <span><i class="far fa-clock"></i> 45s</span>
+                            <span><i class="fas fa-play"></i> 8.2K views</span>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="engagement-stats">
+                            <span class="stat"><i class="fas fa-heart"></i> 567</span>
+                            <span class="stat"><i class="fas fa-comment"></i> 89</span>
+                        </div>
+                        <button class="view-btn">
+                            Assistir <i class="fas fa-arrow-right ms-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- YouTube Short Card Example -->
+                <div class="content-card youtube" data-type="youtube">
+                    <div class="card-header">
+                        <span class="platform-badge youtube">
+                            <i class="fab fa-youtube"></i>
+                            Short
+                        </span>
+                        <span class="publish-date">Há 5 dias</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="video-thumbnail" style="background: linear-gradient(135deg, #FF0000 0%, #CC0000 100%);">
+                            <div class="play-icon">
+                                <i class="fas fa-play"></i>
+                            </div>
+                        </div>
+                        <h4 class="video-title">Como a IA responde leads em segundos (demonstração real)</h4>
+                        <div class="video-stats">
+                            <span><i class="far fa-clock"></i> 60s</span>
+                            <span><i class="fas fa-play"></i> 15.3K views</span>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="engagement-stats">
+                            <span class="stat"><i class="fas fa-thumbs-up"></i> 1.2K</span>
+                            <span class="stat"><i class="fas fa-comment"></i> 156</span>
+                        </div>
+                        <button class="view-btn">
+                            Assistir <i class="fas fa-arrow-right ms-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- More Twitter Threads -->
+                <div class="content-card twitter" data-type="twitter">
+                    <div class="card-header">
+                        <span class="platform-badge twitter">
+                            <i class="fab fa-twitter"></i>
+                            Thread
+                        </span>
+                        <span class="publish-date">Há 1 semana</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="thread-preview">
+                            <div class="tweet-text">
+                                💡 Você sabia que 70% dos leads de Instagram são perdidos nas primeiras 24h?
+
+                                Veja como resolver isso com automação inteligente 👇
+                            </div>
+                            <div class="tweet-meta">
+                                <span><i class="fas fa-heart"></i> 189</span>
+                                <span><i class="fas fa-retweet"></i> 67</span>
+                                <span><i class="fas fa-comment"></i> 34</span>
+                            </div>
+                        </div>
+                        <div class="thread-count">
+                            <i class="fas fa-layer-group me-2"></i>
+                            7 tweets neste thread
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="engagement-stats">
+                            <span class="stat">
+                                <i class="fas fa-eye"></i>
+                                9.8K visualizações
+                            </span>
+                        </div>
+                        <button class="view-btn">
+                            Ver Thread <i class="fas fa-arrow-right ms-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- More Instagram Reels -->
+                <div class="content-card instagram" data-type="instagram">
+                    <div class="card-header">
+                        <span class="platform-badge instagram">
+                            <i class="fab fa-instagram"></i>
+                            Reel
+                        </span>
+                        <span class="publish-date">Há 1 semana</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="video-thumbnail" style="background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 100%);">
+                            <div class="play-icon">
+                                <i class="fas fa-play"></i>
+                            </div>
+                        </div>
+                        <h4 class="video-title">Agenda cheia vs Agenda vazia: a diferença está na automação</h4>
+                        <div class="video-stats">
+                            <span><i class="far fa-clock"></i> 38s</span>
+                            <span><i class="fas fa-play"></i> 6.7K views</span>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="engagement-stats">
+                            <span class="stat"><i class="fas fa-heart"></i> 423</span>
+                            <span class="stat"><i class="fas fa-comment"></i> 67</span>
+                        </div>
+                        <button class="view-btn">
+                            Assistir <i class="fas fa-arrow-right ms-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Another YouTube Short -->
+                <div class="content-card youtube" data-type="youtube">
+                    <div class="card-header">
+                        <span class="platform-badge youtube">
+                            <i class="fab fa-youtube"></i>
+                            Short
+                        </span>
+                        <span class="publish-date">Há 2 semanas</span>
+                    </div>
+                    <div class="card-content">
+                        <div class="video-thumbnail" style="background: linear-gradient(135deg, #FF0000 0%, #880000 100%);">
+                            <div class="play-icon">
+                                <i class="fas fa-play"></i>
+                            </div>
+                        </div>
+                        <h4 class="video-title">Antes e depois: como reduzir 80% das faltas em consultas</h4>
+                        <div class="video-stats">
+                            <span><i class="far fa-clock"></i> 55s</span>
+                            <span><i class="fas fa-play"></i> 11.5K views</span>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="engagement-stats">
+                            <span class="stat"><i class="fas fa-thumbs-up"></i> 891</span>
+                            <span class="stat"><i class="fas fa-comment"></i> 123</span>
+                        </div>
+                        <button class="view-btn">
+                            Assistir <i class="fas fa-arrow-right ms-2"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Load More -->
+            <div class="load-more">
+                <button class="load-more-btn">
+                    <i class="fas fa-plus-circle me-2"></i>
+                    Carregar Mais Conteúdo
+                </button>
+            </div>
+
+            <!-- CTA Section -->
+            <div class="showcase-cta">
+                <h3>🎯 Quer Este Conteúdo Trabalhando Para Você?</h3>
+                <p>Produzimos 100 peças de conteúdo/mês para manter sua audiência engajada e converter leads em clientes</p>
+                <button class="cta-btn" onclick="alert('Integrar com modal de proposta da landingTM')">
+                    <i class="fas fa-paper-plane me-2"></i>
+                    Solicitar Proposta Gratuita
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Filter functionality
+        const filterBtns = document.querySelectorAll('.filter-btn');
+        const contentCards = document.querySelectorAll('.content-card');
+
+        filterBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Remove active class from all buttons
+                filterBtns.forEach(b => b.classList.remove('active'));
+                // Add active to clicked button
+                btn.classList.add('active');
+
+                const filter = btn.dataset.filter;
+
+                // Filter cards
+                contentCards.forEach(card => {
+                    if (filter === 'all') {
+                        card.style.display = 'block';
+                        setTimeout(() => {
+                            card.style.opacity = '1';
+                            card.style.transform = 'scale(1)';
+                        }, 10);
+                    } else if (card.dataset.type === filter) {
+                        card.style.display = 'block';
+                        setTimeout(() => {
+                            card.style.opacity = '1';
+                            card.style.transform = 'scale(1)';
+                        }, 10);
+                    } else {
+                        card.style.opacity = '0';
+                        card.style.transform = 'scale(0.95)';
+                        setTimeout(() => {
+                            card.style.display = 'none';
+                        }, 300);
+                    }
+                });
+            });
+        });
+
+        // Load more functionality (mock)
+        document.querySelector('.load-more-btn').addEventListener('click', function() {
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Carregando...';
+            setTimeout(() => {
+                this.innerHTML = '<i class="fas fa-check me-2"></i>Todos os conteúdos carregados';
+                this.disabled = true;
+                this.style.opacity = '0.5';
+            }, 1500);
+        });
+
+        // View button clicks
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const card = this.closest('.content-card');
+                const type = card.dataset.type;
+                alert(`Abrindo ${type} em modal ou nova aba\n\nNo sistema real, isso abrirá:\n- Thread completo (Twitter)\n- Player de vídeo (Instagram/YouTube)\n- Estatísticas detalhadas`);
+            });
+        });
+
+        // Add animation on scroll
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.content-card').forEach(card => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'all 0.6s ease';
+            observer.observe(card);
+        });
+    </script>
+</body>
+</html>

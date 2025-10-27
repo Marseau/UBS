@@ -1,0 +1,52 @@
+{
+  "parameters": {
+    "operation": "create",
+    "tableId": "editorial_content",
+    "options": {},
+    "columns": {
+      "value": {
+        "week_number": "={{ $json.week_number }}",
+        "year": "={{ $json.year }}",
+        "main_theme": "={{ $json.main_theme }}",
+        "status": "={{ $json.status || 'pending' }}",
+        "thread_1_title": "={{ $json.thread_1_title }}",
+        "thread_1_sub_theme": "={{ $json.thread_1_sub_theme }}",
+        "thread_1_tweets": "={{ $json.thread_1_tweets }}",
+        "thread_1_approved": "={{ $json.thread_1_approved || false }}",
+        "thread_1_published": "={{ $json.thread_1_published || false }}",
+        "thread_2_title": "={{ $json.thread_2_title }}",
+        "thread_2_sub_theme": "={{ $json.thread_2_sub_theme }}",
+        "thread_2_tweets": "={{ $json.thread_2_tweets }}",
+        "thread_2_approved": "={{ $json.thread_2_approved || false }}",
+        "thread_2_published": "={{ $json.thread_2_published || false }}",
+        "thread_3_title": "={{ $json.thread_3_title }}",
+        "thread_3_sub_theme": "={{ $json.thread_3_sub_theme }}",
+        "thread_3_tweets": "={{ $json.thread_3_tweets }}",
+        "thread_3_approved": "={{ $json.thread_3_approved || false }}",
+        "thread_3_published": "={{ $json.thread_3_published || false }}",
+        "reel_1_approved": "={{ $json.reel_1_approved || false }}",
+        "reel_1_published": "={{ $json.reel_1_published || false }}",
+        "reel_2_approved": "={{ $json.reel_2_approved || false }}",
+        "reel_2_published": "={{ $json.reel_2_published || false }}",
+        "reel_3_approved": "={{ $json.reel_3_approved || false }}",
+        "reel_3_published": "={{ $json.reel_3_published || false }}",
+        "youtube_short_approved": "={{ $json.youtube_short_approved || false }}",
+        "youtube_short_published": "={{ $json.youtube_short_published || false }}",
+        "llm_cost_usd": "={{ $json.llm_cost_usd || 0 }}",
+        "video_cost_usd": "={{ $json.video_cost_usd || 0 }}",
+        "api_cost_usd": "={{ $json.api_cost_usd || 0 }}"
+      }
+    }
+  },
+  "id": "c0g1GBisAVsQ4y2I",
+  "name": "Insert Editorial Content",
+  "type": "n8n-nodes-base.supabase",
+  "typeVersion": 1,
+  "position": [2592, -576],
+  "credentials": {
+    "supabaseApi": {
+      "id": "QTLIbdCBpZio7YIz",
+      "name": "Supabase account"
+    }
+  }
+}

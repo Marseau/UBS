@@ -1,0 +1,84 @@
+{
+  "description": "Mapeamento COMPLETO de campos para INSERT no Supabase (editorial_content)",
+  "node_name": "Insert to Supabase (Node 12)",
+  "table": "editorial_content",
+  "operation": "insert",
+  "fields": [
+    {"fieldId": "week_number", "fieldValue": "={{ $json.week_number }}"},
+    {"fieldId": "year", "fieldValue": "={{ $json.year }}"},
+    {"fieldId": "main_theme", "fieldValue": "={{ $json.main_theme }}"},
+    {"fieldId": "audio_trending", "fieldValue": "={{ $json.audio_trending }}"},
+    {"fieldId": "status", "fieldValue": "={{ $json.status }}"},
+
+    {"fieldId": "thread_1_title", "fieldValue": "={{ $json.thread_1_title }}"},
+    {"fieldId": "thread_1_sub_theme", "fieldValue": "={{ $json.thread_1_sub_theme }}"},
+    {"fieldId": "thread_1_tweets", "fieldValue": "={{ $json.thread_1_tweets }}"},
+    {"fieldId": "thread_1_publication_schedule", "fieldValue": "={{ $json.thread_1_publication_schedule }}"},
+    {"fieldId": "thread_1_publication_status", "fieldValue": "={{ $json.thread_1_publication_status }}"},
+
+    {"fieldId": "thread_2_title", "fieldValue": "={{ $json.thread_2_title }}"},
+    {"fieldId": "thread_2_sub_theme", "fieldValue": "={{ $json.thread_2_sub_theme }}"},
+    {"fieldId": "thread_2_tweets", "fieldValue": "={{ $json.thread_2_tweets }}"},
+    {"fieldId": "thread_2_publication_schedule", "fieldValue": "={{ $json.thread_2_publication_schedule }}"},
+    {"fieldId": "thread_2_publication_status", "fieldValue": "={{ $json.thread_2_publication_status }}"},
+
+    {"fieldId": "thread_3_title", "fieldValue": "={{ $json.thread_3_title }}"},
+    {"fieldId": "thread_3_sub_theme", "fieldValue": "={{ $json.thread_3_sub_theme }}"},
+    {"fieldId": "thread_3_tweets", "fieldValue": "={{ $json.thread_3_tweets }}"},
+    {"fieldId": "thread_3_publication_schedule", "fieldValue": "={{ $json.thread_3_publication_schedule }}"},
+    {"fieldId": "thread_3_publication_status", "fieldValue": "={{ $json.thread_3_publication_status }}"},
+
+    {"fieldId": "twitter_publication_status", "fieldValue": "={{ $json.twitter_publication_status }}"},
+
+    {"fieldId": "reel_1_sub_theme", "fieldValue": "={{ $json.reel_1_sub_theme }}"},
+    {"fieldId": "reel_1_carla_script", "fieldValue": "={{ $json.reel_1_carla_script }}"},
+    {"fieldId": "reel_1_bruno_script", "fieldValue": "={{ $json.reel_1_bruno_script }}"},
+    {"fieldId": "reel_1_instagram_caption", "fieldValue": "={{ $json.reel_1_instagram_caption }}"},
+    {"fieldId": "reel_1_instagram_hashtags", "fieldValue": "={{ $json.reel_1_instagram_hashtags }}"},
+    {"fieldId": "reel_1_video_url", "fieldValue": "={{ $json.reel_1_video_url }}"},
+    {"fieldId": "reel_1_scheduled_at", "fieldValue": "={{ $json.reel_1_scheduled_at }}"},
+    {"fieldId": "reel_1_published_at", "fieldValue": "={{ $json.reel_1_published_at }}"},
+
+    {"fieldId": "reel_2_sub_theme", "fieldValue": "={{ $json.reel_2_sub_theme }}"},
+    {"fieldId": "reel_2_carla_script", "fieldValue": "={{ $json.reel_2_carla_script }}"},
+    {"fieldId": "reel_2_bruno_script", "fieldValue": "={{ $json.reel_2_bruno_script }}"},
+    {"fieldId": "reel_2_instagram_caption", "fieldValue": "={{ $json.reel_2_instagram_caption }}"},
+    {"fieldId": "reel_2_instagram_hashtags", "fieldValue": "={{ $json.reel_2_instagram_hashtags }}"},
+    {"fieldId": "reel_2_video_url", "fieldValue": "={{ $json.reel_2_video_url }}"},
+    {"fieldId": "reel_2_scheduled_at", "fieldValue": "={{ $json.reel_2_scheduled_at }}"},
+    {"fieldId": "reel_2_published_at", "fieldValue": "={{ $json.reel_2_published_at }}"},
+
+    {"fieldId": "reel_3_sub_theme", "fieldValue": "={{ $json.reel_3_sub_theme }}"},
+    {"fieldId": "reel_3_carla_script", "fieldValue": "={{ $json.reel_3_carla_script }}"},
+    {"fieldId": "reel_3_bruno_script", "fieldValue": "={{ $json.reel_3_bruno_script }}"},
+    {"fieldId": "reel_3_instagram_caption", "fieldValue": "={{ $json.reel_3_instagram_caption }}"},
+    {"fieldId": "reel_3_instagram_hashtags", "fieldValue": "={{ $json.reel_3_instagram_hashtags }}"},
+    {"fieldId": "reel_3_video_url", "fieldValue": "={{ $json.reel_3_video_url }}"},
+    {"fieldId": "reel_3_scheduled_at", "fieldValue": "={{ $json.reel_3_scheduled_at }}"},
+    {"fieldId": "reel_3_published_at", "fieldValue": "={{ $json.reel_3_published_at }}"},
+
+    {"fieldId": "instagram_publication_status", "fieldValue": "={{ $json.instagram_publication_status }}"},
+    {"fieldId": "youtube_publication_status", "fieldValue": "={{ $json.youtube_publication_status }}"},
+    {"fieldId": "youtube_scheduled_at", "fieldValue": "={{ $json.youtube_scheduled_at }}"},
+    {"fieldId": "youtube_published_at", "fieldValue": "={{ $json.youtube_published_at }}"},
+
+    {"fieldId": "llm_model", "fieldValue": "={{ $json.llm_model }}"},
+    {"fieldId": "llm_prompt_tokens", "fieldValue": "={{ $json.llm_prompt_tokens }}"},
+    {"fieldId": "llm_completion_tokens", "fieldValue": "={{ $json.llm_completion_tokens }}"},
+    {"fieldId": "llm_total_tokens", "fieldValue": "={{ $json.llm_total_tokens }}"},
+    {"fieldId": "llm_cost_usd", "fieldValue": "={{ $json.llm_cost_usd }}"},
+    {"fieldId": "llm_generation_time_ms", "fieldValue": "={{ $json.llm_generation_time_ms }}"},
+    {"fieldId": "llm_temperature", "fieldValue": "={{ $json.llm_temperature }}"},
+    {"fieldId": "api_cost_usd", "fieldValue": "={{ $json.api_cost_usd }}"},
+
+    {"fieldId": "twitter_metrics", "fieldValue": "={{ $json.twitter_metrics }}"},
+    {"fieldId": "instagram_metrics", "fieldValue": "={{ $json.instagram_metrics }}"},
+    {"fieldId": "youtube_metrics", "fieldValue": "={{ $json.youtube_metrics }}"},
+
+    {"fieldId": "content_type", "fieldValue": "={{ $json.content_type }}"},
+    {"fieldId": "persona_format", "fieldValue": "={{ $json.persona_format }}"},
+    {"fieldId": "created_at", "fieldValue": "={{ $json.created_at }}"},
+    {"fieldId": "updated_at", "fieldValue": "={{ $json.updated_at }}"}
+  ],
+  "total_fields": 68
+}

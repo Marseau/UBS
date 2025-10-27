@@ -1,0 +1,186 @@
+{
+  "name": "Instagram Lead Scraper - Hybrid (Manual Login)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT lst.*, lsr.segment_name\nFROM lead_search_terms lst\nJOIN lead_segment_rotation lsr ON lst.target_segment = lsr.segment_key\nWHERE lst.times_used = 0\n  OR lst.last_used_at < NOW() - INTERVAL '7 days'\nORDER BY lst.generated_at DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "id": "get-latest-terms",
+      "name": "Get Latest Unused Terms",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [460, 300],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-postgres",
+          "name": "Supabase PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nif (!data.id) {\n  throw new Error('Nenhum termo disponível para scraping');\n}\n\nconst terms = JSON.parse(data.search_terms);\n\n// Limitar a 20 termos por sessão para evitar detecção\nconst termsToUse = terms.slice(0, 20);\n\nreturn {\n  json: {\n    search_term_id: data.id,\n    segment: data.target_segment,\n    segment_name: data.segment_name,\n    terms: termsToUse,\n    total_terms: termsToUse.length,\n    content_id: data.content_id,\n    reel_number: data.reel_number\n  }\n};"
+      },
+      "id": "prepare-scraping-data",
+      "name": "Prepare Scraping Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO instagram_scraping_sessions (search_term_id, segment, status)\nVALUES ('{{ $json.search_term_id }}', '{{ $json.segment }}', 'running')\nRETURNING *;",
+        "options": {}
+      },
+      "id": "create-session",
+      "name": "Create Scraping Session",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [900, 300],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-postgres",
+          "name": "Supabase PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "session-id",
+              "name": "session_id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "segment",
+              "name": "segment",
+              "value": "={{ $('Prepare Scraping Data').first().json.segment }}",
+              "type": "string"
+            },
+            {
+              "id": "terms",
+              "name": "terms",
+              "value": "={{ $('Prepare Scraping Data').first().json.terms }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "combine-data",
+      "name": "Combine Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "notice": "⚠️ INSTRUÇÕES IMPORTANTES:\\n\\n1. Um navegador será aberto\\n2. VOCÊ precisa fazer login no Instagram manualmente\\n3. Resolva qualquer CAPTCHA se aparecer\\n4. Depois do login, CLIQUE EM RESUME neste workflow\\n\\n📊 Sessão atual:\\n- Segmento: {{ $json.segment }}\\n- Termos a processar: {{ $json.terms.length }}\\n\\n🔐 Use suas credenciais reais do Instagram"
+      },
+      "id": "manual-login-instructions",
+      "name": "⚠️ Manual Login Instructions",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1340, 140]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ESTE CÓDIGO PRECISA SER AJUSTADO NO N8N\\n// Puppeteer MCP tem limitações, você precisará usar HTTP Request direto\\n\\n// Pseudocódigo do que fazer:\\nconst terms = $input.first().json.terms;\\nconst sessionId = $input.first().json.session_id;\\nconst results = [];\\n\\n// 1. Abrir Instagram (já deve estar logado)\\n// 2. Para cada termo:\\nfor (const term of terms) {\\n  // Navegar para busca\\n  // URL: https://www.instagram.com/explore/tags/{term}/\\n  \\n  // Esperar 5-10 segundos (aleatorio)\\n  await new Promise(resolve => setTimeout(resolve, 5000 + Math.random() * 5000));\\n  \\n  // Extrair perfis da página\\n  // Usar seletores CSS para pegar:\\n  // - Username\\n  // - Full name\\n  // - Followers count\\n  // - Bio\\n  \\n  // Filtrar apenas business accounts com > 500 followers\\n  \\n  // Adicionar ao results\\n}\\n\\n// 3. Retornar results\\nreturn results.map(lead => ({ json: lead }));"
+      },
+      "id": "scrape-instagram-CODE-NEEDS-ADJUSTMENT",
+      "name": "⚠️ Scrape Instagram [CODE NEEDS ADJUSTMENT]",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $input.first().json;\nconst sessionData = $('Combine Data').first().json;\n\nconst hasContact = !!(lead.email || lead.phone || lead.website);\n\nconst leadScore = await $executeSql(\n  'SELECT calculate_lead_score($1, $2, $3, $4) as score',\n  [lead.followers_count, lead.posts_count, lead.is_business_account, hasContact]\n);\n\nreturn {\n  json: {\n    ...lead,\n    segment: sessionData.segment,\n    search_term_id: sessionData.session_id,\n    lead_score: leadScore[0].score,\n    is_qualified: leadScore[0].score >= 3.0\n  }\n};"
+      },
+      "id": "calculate-lead-score",
+      "name": "Calculate Lead Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO instagram_leads (\n  username, full_name, bio, profile_pic_url,\n  is_business_account, is_verified,\n  followers_count, following_count, posts_count,\n  email, phone, website,\n  business_category, segment,\n  search_term_id, search_term_used,\n  lead_score, is_qualified\n) VALUES (\n  '{{ $json.username }}',\n  '{{ $json.full_name }}',\n  '{{ $json.bio }}',\n  '{{ $json.profile_pic_url }}',\n  {{ $json.is_business_account }},\n  {{ $json.is_verified }},\n  {{ $json.followers_count }},\n  {{ $json.following_count }},\n  {{ $json.posts_count }},\n  '{{ $json.email }}',\n  '{{ $json.phone }}',\n  '{{ $json.website }}',\n  '{{ $json.business_category }}',\n  '{{ $json.segment }}',\n  '{{ $json.search_term_id }}',\n  '{{ $json.search_term_used }}',\n  {{ $json.lead_score }},\n  {{ $json.is_qualified }}\n)\nON CONFLICT (username) DO UPDATE SET\n  followers_count = EXCLUDED.followers_count,\n  following_count = EXCLUDED.following_count,\n  posts_count = EXCLUDED.posts_count,\n  updated_at = NOW()\nRETURNING *;",
+        "options": {}
+      },
+      "id": "save-lead",
+      "name": "Save Lead to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2000, 300],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-postgres",
+          "name": "Supabase PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE instagram_scraping_sessions\nSET\n  status = 'completed',\n  completed_at = NOW(),\n  duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER,\n  terms_processed = {{ $('Combine Data').first().json.terms.length }},\n  leads_found = {{ $itemIndex + 1 }}\nWHERE id = '{{ $('Combine Data').first().json.session_id }}';\n\nUPDATE lead_search_terms\nSET\n  times_used = times_used + 1,\n  last_used_at = NOW(),\n  scraping_session_id = '{{ $('Combine Data').first().json.session_id }}'\nWHERE id = '{{ $('Prepare Scraping Data').first().json.search_term_id }}';",
+        "options": {}
+      },
+      "id": "update-session-complete",
+      "name": "Update Session Complete",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2220, 300],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-postgres",
+          "name": "Supabase PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{"node": "Get Latest Unused Terms", "type": "main", "index": 0}]]
+    },
+    "Get Latest Unused Terms": {
+      "main": [[{"node": "Prepare Scraping Data", "type": "main", "index": 0}]]
+    },
+    "Prepare Scraping Data": {
+      "main": [[{"node": "Create Scraping Session", "type": "main", "index": 0}]]
+    },
+    "Create Scraping Session": {
+      "main": [[{"node": "Combine Data", "type": "main", "index": 0}]]
+    },
+    "Combine Data": {
+      "main": [[{"node": "⚠️ Scrape Instagram [CODE NEEDS ADJUSTMENT]", "type": "main", "index": 0}]]
+    },
+    "⚠️ Scrape Instagram [CODE NEEDS ADJUSTMENT]": {
+      "main": [[{"node": "Calculate Lead Score", "type": "main", "index": 0}]]
+    },
+    "Calculate Lead Score": {
+      "main": [[{"node": "Save Lead to Database", "type": "main", "index": 0}]]
+    },
+    "Save Lead to Database": {
+      "main": [[{"node": "Update Session Complete", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

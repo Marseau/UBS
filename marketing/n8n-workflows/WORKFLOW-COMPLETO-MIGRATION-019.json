@@ -1,0 +1,46 @@
+{
+  "name": "Content Seeder - Editorial Complete (Migration 019)",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "id": "manual-trigger",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "values": {
+          "number": [{"name": "week_number", "value": 41}],
+          "string": [{"name": "main_theme", "value": "Por que empresas perdem clientes por falhas em agendamento e follow-up"}]
+        }
+      },
+      "id": "edit-fields",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "position": [460, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://qsdfyffuonywmtnlycri.supabase.co/rest/v1/rpc/get_random_trending_audio",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "options": {"response": {"response": {"responseFormat": "json"}}}
+      },
+      "id": "get-audio",
+      "name": "Get Random Trending Audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [680, 300],
+      "typeVersion": 3,
+      "credentials": {"supabaseApi": {"id": "QTLIbdCBpZio7YIz", "name": "Supabase account"}}
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {"main": [[{"node": "Edit Fields", "type": "main", "index": 0}]]},
+    "Edit Fields": {"main": [[{"node": "Get Random Trending Audio", "type": "main", "index": 0}]]}
+  }
+}

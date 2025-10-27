@@ -16,6 +16,7 @@ import {
   extractHashtagsFromPosts
 } from './instagram-profile.utils';
 import { createIsolatedContext } from './instagram-context-manager.service';
+import { scraperLock } from './instagram-scraper-lock.service';
 
 export { closeBrowser } from './instagram-session.service';
 
@@ -303,6 +304,9 @@ export async function scrapeInstagramUserSearch(
   searchTerm: string,
   maxProfiles: number = 5
 ): Promise<InstagramProfileData[]> {
+  // CRITICAL: Adquirir lock ANTES de criar página para evitar concorrência
+  await scraperLock.acquire(`scrape-users: ${searchTerm}`);
+
   await ensureLoggedSession();
   const { page, requestId, cleanup } = await createIsolatedContext();
   console.log(`🔒 Request ${requestId} iniciada para scrape-users: "${searchTerm}"`);
@@ -708,6 +712,7 @@ export async function scrapeInstagramUserSearch(
   } finally {
     console.log(`🔓 Request ${requestId} finalizada (scrape-users: "${searchTerm}")`);
     await cleanup();
+    scraperLock.release(); // CRITICAL: Liberar lock para permitir próxima operação
 
     if (SHOULD_AUTO_CLOSE) {
       await sessionCloseBrowser().catch(() => {});

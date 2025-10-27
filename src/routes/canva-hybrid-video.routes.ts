@@ -1,7 +1,7 @@
 import * as express from 'express';
 import { Request, Response } from 'express';
 import { CanvaSvgVideoGeneratorService } from '../services/canva-svg-video-generator.service';
-// import { MultiPageReelGeneratorService } from '../services/multi-page-reel-generator.service'; // TODO: File missing
+import { MultiPageReelGeneratorService } from '../services/multi-page-reel-generator.service';
 import { createClient } from '@supabase/supabase-js';
 
 const router = express.Router();
@@ -160,15 +160,7 @@ router.post('/generate/:content_id/:reel_number', async (req: Request, res: Resp
 
     console.log(`🎬 Gerando vídeo multi-página (${tweets.length} tweets + CTA)...`);
 
-    // TODO: MultiPageReelGeneratorService missing - temporary error response
-    return res.status(501).json({
-      success: false,
-      error: 'Multi-page reel generation temporarily disabled - service file missing',
-      content_id,
-      reel_number: reelNum
-    });
-
-    /* const videoGenerator = new MultiPageReelGeneratorService();
+    const videoGenerator = new MultiPageReelGeneratorService();
 
     const result = await videoGenerator.generateMultiPageVideo(
       tweets, // Array de 7 tweets
@@ -233,7 +225,7 @@ router.post('/generate/:content_id/:reel_number', async (req: Request, res: Resp
       thread_title: threadTitle,
       tweets_count: tweets.length,
       message: `Vídeo Reel ${reelNum} multi-página gerado com sucesso (${tweets.length} tweets + CTA)`
-    }); */
+    });
 
   } catch (error: any) {
     console.error('❌ Erro ao gerar vídeo híbrido:', error);

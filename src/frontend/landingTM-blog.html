@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UBS Taylor Made | Blog de Campanhas Multicanal</title>
+    <meta name="description" content="Resumo editorial das campanhas Taylor Made: Tweets, Reels e Short alinhados à LandingTM para nutrir leads e reforçar posicionamento.">
+    <meta name="keywords" content="taylor made blog, ubs marketing, whatsapp salon conteudo">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #2D5A9B;
+            --primary-light: #4A7BC8;
+            --primary-dark: #1E3F6B;
+            --secondary-color: #F8F9FA;
+            --accent-color: #28A745;
+            --text-dark: #2C3E50;
+            --text-light: #6C757D;
+            --border-color: #E9ECEF;
+            --card-bg: #FFFFFF;
+            --shadow: 0 8px 30px rgba(45, 90, 155, 0.12);
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: var(--text-dark);
+            background: #FCFCFD;
+            line-height: 1.6;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .navbar {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.3rem;
+            color: var(--primary-color);
+        }
+
+        .nav-link {
+            font-weight: 500;
+            color: var(--text-dark) !important;
+        }
+
+        .nav-link:hover {
+            color: var(--primary-color) !important;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            padding: 0.6rem 1.5rem;
+        }
+
+        .btn-outline-primary {
+            border-radius: 8px;
+            font-weight: 600;
+            padding: 0.6rem 1.5rem;
+        }
+
+        .navbar-toggler {
+            border: none;
+        }
+
+        .navbar-toggler:focus {
+            box-shadow: none;
+        }
+
+        .navbar-toggler-icon {
+            filter: invert(28%) sepia(43%) saturate(812%) hue-rotate(184deg) brightness(90%) contrast(92%);
+        }
+
+        header.hero {
+            position: relative;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            color: #FFF;
+            padding: 140px 0 100px;
+            overflow: hidden;
+        }
+
+        header.hero::after {
+            content: '';
+            position: absolute;
+            top: -120px;
+            right: -160px;
+            width: 420px;
+            height: 420px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            filter: blur(30px);
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 3;
+        }
+
+        .hero-content h1 {
+            font-weight: 800;
+            font-size: clamp(2.2rem, 4vw, 3.2rem);
+            margin-bottom: 1rem;
+        }
+
+        .hero-content p {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.85);
+            max-width: 680px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 1.5rem;
+            backdrop-filter: blur(6px);
+        }
+
+        main {
+            margin-top: -60px;
+        }
+
+        section {
+            padding: 80px 0;
+        }
+
+        .section-header {
+            max-width: 720px;
+            margin-bottom: 3rem;
+        }
+
+        .section-header h2 {
+            font-size: clamp(1.8rem, 3vw, 2.6rem);
+            font-weight: 700;
+        }
+
+        .section-header p {
+            color: var(--text-light);
+        }
+
+        .card-gradient {
+            background: linear-gradient(180deg, #FFFFFF 0%, #F7F9FC 100%);
+            border-radius: 18px;
+            padding: 2rem;
+            border: 1px solid rgba(45, 90, 155, 0.08);
+            box-shadow: var(--shadow);
+        }
+
+        .card-gradient h3 {
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+
+        .content-summary {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .content-summary .metric {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.4rem 1.6rem;
+            border-radius: 14px;
+            border: 1px solid var(--border-color);
+            background: #FFF;
+        }
+
+        .content-summary .metric-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: grid;
+            place-items: center;
+            background: rgba(45, 90, 155, 0.1);
+            color: var(--primary-color);
+            font-size: 1.2rem;
+        }
+
+        .editorial-section {
+            background: #FFFFFF;
+            border: 1px solid rgba(45, 90, 155, 0.08);
+            border-radius: 18px;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        .editorial-section h3 {
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+
+        .editorial-grid {
+            display: grid;
+            gap: 1.5rem;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        }
+
+        .editorial-card {
+            padding: 1.4rem;
+            border-radius: 14px;
+            background: var(--card-bg);
+            border: 1px solid rgba(45, 90, 155, 0.08);
+        }
+
+        .editorial-card h4 {
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+
+        .editorial-card p {
+            color: var(--text-light);
+            font-size: 0.95rem;
+        }
+
+        .tweets-grid {
+            display: grid;
+            gap: 1.2rem;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        }
+
+        .tweet-card {
+            border-radius: 16px;
+            padding: 1.5rem;
+            background: #FFFFFF;
+            border: 1px solid rgba(45, 90, 155, 0.08);
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .tweet-card header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tweet-card h5 {
+            font-weight: 600;
+        }
+
+        .tweet-card p {
+            color: var(--text-light);
+            font-size: 0.95rem;
+        }
+
+        .tweet-embed {
+            border-top: 1px dashed rgba(45, 90, 155, 0.15);
+            padding-top: 0.9rem;
+            min-height: 120px;
+            display: grid;
+            place-items: center;
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        .media-showcase {
+            display: grid;
+            gap: 1.5rem;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        }
+
+        .media-card {
+            background: #FFFFFF;
+            border-radius: 18px;
+            border: 1px solid rgba(45, 90, 155, 0.08);
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .media-embed {
+            position: relative;
+            width: 100%;
+            padding-top: 177%;
+            border-radius: 12px;
+            background: rgba(45, 90, 155, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-light);
+            text-align: center;
+            font-size: 0.95rem;
+        }
+
+        .media-embed[data-ratio="16:9"] {
+            padding-top: 56.25%;
+        }
+
+        .media-embed iframe,
+        .media-embed video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 12px;
+        }
+
+        .cta-section {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            color: #FFF;
+            border-radius: 24px;
+            padding: 3.5rem;
+            text-align: center;
+            box-shadow: var(--shadow);
+        }
+
+        .cta-section h2 {
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .cta-section p {
+            color: rgba(255, 255, 255, 0.75);
+            max-width: 520px;
+            margin: 0 auto 2rem;
+        }
+
+        footer {
+            background: #0F1F36;
+            color: rgba(255, 255, 255, 0.75);
+            padding: 40px 0;
+        }
+
+        footer a {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        @media (max-width: 768px) {
+            header.hero {
+                padding: 120px 0 80px;
+            }
+
+            main {
+                margin-top: -40px;
+            }
+
+            section {
+                padding: 60px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="landingTM.html">
+                UBS Taylor Made
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Alternar navegação">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+                <ul class="navbar-nav align-items-lg-center">
+                    <li class="nav-item"><a class="nav-link" href="#visao-geral">Visão geral</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#editorial">Linha editorial</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#tweets">Tweets</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#reels">Reels</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#short">YouTube Short</a></li>
+                    <li class="nav-item ms-lg-3">
+                        <a class="btn btn-primary" href="landingTM.html">Voltar para Landing</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <span class="badge bg-light text-dark mb-3 px-3 py-2 rounded-pill">
+                    Conteúdo Taylor Made · 21 Tweets · 3 Reels · 1 Short
+                </span>
+                <h1>Blog Hub: Narrativa Completa das Campanhas Taylor Made</h1>
+                <p>
+                    Estrutura editorial para reunir todos os formatos produzidos e transformar publicações rápidas
+                    em conteúdo evergreen. Ideal para SEO, nutrição e reforço de proposta de valor.
+                </p>
+                <div class="row mt-5 g-3">
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <h6 class="text-uppercase text-white-50 mb-2">Distribuição</h6>
+                            <strong class="fs-4">3 canais sincronizados</strong>
+                            <p class="mb-0 text-white-75">
+                                Tweets, vídeos curtos e landing se alimentam mutuamente para gerar adoção orgânica.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <h6 class="text-uppercase text-white-50 mb-2">Sequência</h6>
+                            <strong class="fs-4">12 dias de pauta viva</strong>
+                            <p class="mb-0 text-white-75">
+                                Cadência planejada para grupos de publicação e reciclagem em newsletters.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <h6 class="text-uppercase text-white-50 mb-2">Conversão</h6>
+                            <strong class="fs-4">CTA centralizado</strong>
+                            <p class="mb-0 text-white-75">
+                                Todos os formatos apontam para a LandingTM e captura de lead em 1 clique.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <section id="visao-geral">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Visão geral do Hub</h2>
+                    <p>
+                        A página consolida os ativos da campanha Taylor Made, contextualiza a narrativa e permite
+                        embedded nativo de todos os formatos. Personalize textos, títulos e CTAs para cada ciclo.
+                    </p>
+                </div>
+                <div class="row g-4">
+                    <div class="col-lg-5">
+                        <div class="card-gradient h-100">
+                            <h3>Objetivo</h3>
+                            <p>
+                                Transformar peças rápidas em um conteúdo pilar que sustenta busca orgânica, nutrição
+                                de base e demonstração de autoridade. O blog funciona como ponte entre social e LandingTM.
+                            </p>
+                            <ul class="list-unstyled mt-4 mb-0">
+                                <li class="mb-2"><i class="fa-solid fa-arrow-up-right-from-square text-primary me-2"></i>Links cruzados para LandingTM e fluxos WhatsApp</li>
+                                <li class="mb-2"><i class="fa-solid fa-magnifying-glass-chart text-primary me-2"></i>SEO com palavras-chave de automação e nicho</li>
+                                <li><i class="fa-solid fa-envelope-open-text text-primary me-2"></i>Suporte para newsletters e sequências de e-mail</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="content-summary">
+                            <div class="metric">
+                                <span class="metric-icon"><i class="fa-brands fa-x-twitter"></i></span>
+                                <div>
+                                    <strong>21 Tweets</strong>
+                                    <p class="mb-0">Sequência estruturada para narrativas diárias ou clusters temáticos. Substitua os placeholders com IDs reais do X.</p>
+                                </div>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-icon"><i class="fa-brands fa-instagram"></i></span>
+                                <div>
+                                    <strong>3 Reels</strong>
+                                    <p class="mb-0">Vídeos curtos ancorados em provas sociais e demonstrações rápidas.</p>
+                                </div>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-icon"><i class="fa-brands fa-youtube"></i></span>
+                                <div>
+                                    <strong>1 YouTube Short</strong>
+                                    <p class="mb-0">Conteúdo único para reforçar CTA principal e elevar tempo de permanência.</p>
+                                </div>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-icon"><i class="fa-solid fa-link"></i></span>
+                                <div>
+                                    <strong>Integração LandingTM</strong>
+                                    <p class="mb-0">CTA persistente com botões e cards que replicam a proposta central.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="editorial" class="bg-white">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Linha editorial e narrativa</h2>
+                    <p>
+                        Use estes blocos para contextualizar o porquê de cada formato existir. Adapte títulos e descrições conforme
+                        feedback de campanha. Espaço pronto para insights, highlights e lições aprendidas.
+                    </p>
+                </div>
+                <div class="editorial-section">
+                    <div class="editorial-grid">
+                        <article class="editorial-card">
+                            <h4>Gatilho Inicial</h4>
+                            <p>Apresente o problema raiz que a LandingTM resolve. Conecte com dados dos tweets 1-7.</p>
+                        </article>
+                        <article class="editorial-card">
+                            <h4>Prova em Tempo Real</h4>
+                            <p>Use os 3 Reels como reforço visual de uso. Inserir copy curta + chamada para o fluxo WhatsApp.</p>
+                        </article>
+                        <article class="editorial-card">
+                            <h4>Profundidade Técnica</h4>
+                            <p>Compile insights dos tweets 8-14, trazendo bastidores e diferenciais do produto.</p>
+                        </article>
+                        <article class="editorial-card">
+                            <h4>Histórias de Clientes</h4>
+                            <p>Reserve espaço para depoimentos ou estudos de caso dos tweets 15-21.</p>
+                        </article>
+                        <article class="editorial-card">
+                            <h4>CTA Centralizado</h4>
+                            <p>Reforce a oferta principal com botão destacado e link direto para a LandingTM.</p>
+                        </article>
+                        <article class="editorial-card">
+                            <h4>Próximos Passos</h4>
+                            <p>Sugira leitura de materiais futuros, newsletter ou automações extras.</p>
+                        </article>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="tweets">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Tweets incorporados</h2>
+                    <p>
+                        Substitua os placeholders pelos IDs dos tweets publicados. Após inserir os IDs, o script do X carregará os embeds automaticamente.
+                    </p>
+                </div>
+                <div class="tweets-grid">
+                    <!-- Tweet cards 1-21 -->
+                    <!-- Cada card mantém estrutura consistente para highlights e embed -->
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #1</h5>
+                            <span class="badge bg-light text-dark">Top Funnel</span>
+                        </header>
+                        <p>Gancho inicial + problema do mercado para abrir a narrativa.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_1">Embed do Tweet 1</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #2</h5>
+                            <span class="badge bg-light text-dark">Top Funnel</span>
+                        </header>
+                        <p>Expanda o problema e traga número relevante que gere curiosidade.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_2">Embed do Tweet 2</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #3</h5>
+                            <span class="badge bg-light text-dark">Top Funnel</span>
+                        </header>
+                        <p>Introduza o conceito Taylor Made e destaque promessa de valor.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_3">Embed do Tweet 3</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #4</h5>
+                            <span class="badge bg-light text-dark">Top Funnel</span>
+                        </header>
+                        <p>Mostre dados de captação e volume de leads gerados com o sistema.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_4">Embed do Tweet 4</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #5</h5>
+                            <span class="badge bg-light text-dark">Top Funnel</span>
+                        </header>
+                        <p>Destaque screenshot ou gráfico miniatura sobre resultados iniciais.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_5">Embed do Tweet 5</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #6</h5>
+                            <span class="badge bg-light text-dark">Top Funnel</span>
+                        </header>
+                        <p>Call to action suave para visitar a LandingTM antes da transição.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_6">Embed do Tweet 6</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #7</h5>
+                            <span class="badge bg-primary text-white">Meio do Funil</span>
+                        </header>
+                        <p>Apresente o roadmap de integração e pilares do produto.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_7">Embed do Tweet 7</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #8</h5>
+                            <span class="badge bg-primary text-white">Meio do Funil</span>
+                        </header>
+                        <p>Detalhe uma funcionalidade crítica com bullet points.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_8">Embed do Tweet 8</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #9</h5>
+                            <span class="badge bg-primary text-white">Meio do Funil</span>
+                        </header>
+                        <p>Compartilhe insight técnico sobre IA ou automações n8n.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_9">Embed do Tweet 9</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #10</h5>
+                            <span class="badge bg-primary text-white">Meio do Funil</span>
+                        </header>
+                        <p>Explique como o sistema integra múltiplos canais e métricas.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_10">Embed do Tweet 10</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #11</h5>
+                            <span class="badge bg-primary text-white">Meio do Funil</span>
+                        </header>
+                        <p>Inclua depoimento rápido ou quote de cliente.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_11">Embed do Tweet 11</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #12</h5>
+                            <span class="badge bg-primary text-white">Meio do Funil</span>
+                        </header>
+                        <p>Use comparativo antes/depois para reforçar benefício.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_12">Embed do Tweet 12</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #13</h5>
+                            <span class="badge bg-primary text-white">Meio do Funil</span>
+                        </header>
+                        <p>Mostre estatística de atendimento ou redução de no-show.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_13">Embed do Tweet 13</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #14</h5>
+                            <span class="badge bg-primary text-white">Meio do Funil</span>
+                        </header>
+                        <p>Reforce a diferença Taylor Made vs. soluções generalistas.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_14">Embed do Tweet 14</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #15</h5>
+                            <span class="badge bg-success text-white">Fundo do Funil</span>
+                        </header>
+                        <p>Apresente case resumido de cliente: desafio, solução, resultado.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_15">Embed do Tweet 15</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #16</h5>
+                            <span class="badge bg-success text-white">Fundo do Funil</span>
+                        </header>
+                        <p>Detalhe investimento e tempo de retorno para gerar decisão.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_16">Embed do Tweet 16</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #17</h5>
+                            <span class="badge bg-success text-white">Fundo do Funil</span>
+                        </header>
+                        <p>Chamada direta para ação com incentivo (teste grátis, auditoria).</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_17">Embed do Tweet 17</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #18</h5>
+                            <span class="badge bg-success text-white">Fundo do Funil</span>
+                        </header>
+                        <p>Inclua vídeo curto ou GIF demonstrando fluxo funcionando.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_18">Embed do Tweet 18</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #19</h5>
+                            <span class="badge bg-success text-white">Fundo do Funil</span>
+                        </header>
+                        <p>Quebre objeções comuns (implantação, complexidade, custo).</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_19">Embed do Tweet 19</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #20</h5>
+                            <span class="badge bg-success text-white">Fundo do Funil</span>
+                        </header>
+                        <p>Mostre plano Taylor Made em roadmap visual ou bullets finais.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_20">Embed do Tweet 20</div>
+                    </article>
+                    <article class="tweet-card">
+                        <header>
+                            <h5>Tweet #21</h5>
+                            <span class="badge bg-success text-white">Fundo do Funil</span>
+                        </header>
+                        <p>Feche com CTA forte e links diretos para agendamento ou demo.</p>
+                        <div class="tweet-embed" data-tweet-id="TWEET_ID_21">Embed do Tweet 21</div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section id="reels" class="bg-white">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Reels destacados</h2>
+                    <p>
+                        Organize os 3 Reels principais com título, resumo e embed. Ajuste texto para reforçar CTA e ponto de prova.
+                    </p>
+                </div>
+                <div class="media-showcase">
+                    <article class="media-card">
+                        <header>
+                            <h5>Reel #1 · Demonstração express</h5>
+                            <p class="text-muted mb-0">Contextualize o foco do vídeo e como ele conversa com os tweets iniciais.</p>
+                        </header>
+                        <div class="media-embed" data-platform="instagram" data-reel-url="https://www.instagram.com/reel/REEL_ID_1/">
+                            Embed do Reel 1
+                        </div>
+                        <footer>
+                            <a class="btn btn-outline-primary w-100" href="landingTM.html" target="_blank">Ver oferta completa</a>
+                        </footer>
+                    </article>
+                    <article class="media-card">
+                        <header>
+                            <h5>Reel #2 · Bastidores do fluxo</h5>
+                            <p class="text-muted mb-0">Descreva o bastidor técnico e convide para baixar checklist.</p>
+                        </header>
+                        <div class="media-embed" data-platform="instagram" data-reel-url="https://www.instagram.com/reel/REEL_ID_2/">
+                            Embed do Reel 2
+                        </div>
+                        <footer>
+                            <a class="btn btn-outline-primary w-100" href="landingTM.html" target="_blank">Testar 7 dias grátis</a>
+                        </footer>
+                    </article>
+                    <article class="media-card">
+                        <header>
+                            <h5>Reel #3 · Prova social</h5>
+                            <p class="text-muted mb-0">Aponte o trecho do vídeo com depoimento ou estatística.</p>
+                        </header>
+                        <div class="media-embed" data-platform="instagram" data-reel-url="https://www.instagram.com/reel/REEL_ID_3/">
+                            Embed do Reel 3
+                        </div>
+                        <footer>
+                            <a class="btn btn-outline-primary w-100" href="landingTM.html" target="_blank">Entrar no WhatsApp</a>
+                        </footer>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section id="short">
+            <div class="container">
+                <div class="section-header">
+                    <h2>YouTube Short âncora</h2>
+                    <p>
+                        Destaque o Short que sintetiza a oferta. Ajuste os textos para promover tráfego direto para a LandingTM ou automação WhatsApp.
+                    </p>
+                </div>
+                <div class="media-card">
+                    <header>
+                        <h5>Short Oficial · CTA direto</h5>
+                        <p class="text-muted mb-0">Apresente o gancho do vídeo e sugerir próximos passos para o visitante.</p>
+                    </header>
+                    <div class="media-embed" data-ratio="16:9" data-platform="youtube" data-video-url="https://www.youtube.com/shorts/SHORT_ID_1">
+                        Embed do YouTube Short
+                    </div>
+                    <footer class="d-flex flex-column flex-md-row gap-3">
+                        <a class="btn btn-primary flex-fill" href="landingTM.html" target="_blank">Conferir Landing Taylor Made</a>
+                        <a class="btn btn-outline-primary flex-fill" href="https://wa.me/SEU_NUMERO_WHATSAPP" target="_blank">
+                            Falar com especialista
+                        </a>
+                    </footer>
+                </div>
+            </div>
+        </section>
+
+        <section id="newsletter" class="bg-white">
+            <div class="container">
+                <div class="cta-section">
+                    <h2>Capture leads direto do blog</h2>
+                    <p>Adicione aqui o formulário de newsletter ou conexão com o fluxo WhatsApp. Espaço pronto para integrações futuras (HubSpot, RD, Supabase).</p>
+                    <div class="row g-3 justify-content-center">
+                        <div class="col-md-8">
+                            <form class="row g-2">
+                                <div class="col-md-8">
+                                    <input type="email" class="form-control form-control-lg" placeholder="Digite seu melhor e-mail">
+                                </div>
+                                <div class="col-md-4 d-grid">
+                                    <button class="btn btn-dark btn-lg" type="submit">Quero receber a série</button>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="col-12">
+                            <small class="d-block text-white-50">Integre este formulário à mesma automação usada na LandingTM para manter o lead tracking unificado.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                <div>
+                    <strong>UBS Taylor Made</strong><br>
+                    <small>Hub oficial de campanhas multicanal · WhatsApp + IA</small>
+                </div>
+                <div class="d-flex gap-3">
+                    <a href="landingTM.html">LandingTM</a>
+                    <a href="https://wa.me/SEU_NUMERO_WHATSAPP" target="_blank" rel="noopener">Contato WhatsApp</a>
+                    <a href="#">Política de Privacidade</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Utilitário para aplicar embeds quando IDs/URLs forem configurados.
+
+            const twitterEmbeds = document.querySelectorAll('.tweet-embed[data-tweet-id]');
+            twitterEmbeds.forEach(placeholder => {
+                const tweetId = placeholder.dataset.tweetId;
+                if (!tweetId || tweetId.includes('TWEET_ID')) {
+                    return;
+                }
+                placeholder.textContent = '';
+                window.twttr?.widgets?.createTweet(tweetId, placeholder, {
+                    align: 'center',
+                    theme: 'light'
+                });
+            });
+
+            const mediaEmbeds = document.querySelectorAll('.media-embed');
+            mediaEmbeds.forEach(container => {
+                const platform = container.dataset.platform;
+                const url = container.dataset.reelUrl || container.dataset.videoUrl;
+
+                if (!url || url.includes('_ID_')) {
+                    return;
+                }
+
+                if (platform === 'instagram') {
+                    const segments = url.split('/').filter(Boolean);
+                    const reelSlug = segments.pop()?.split('?')[0];
+
+                    if (reelSlug) {
+                        container.innerHTML = `
+                            <iframe src="https://www.instagram.com/reel/${reelSlug}/embed"
+                                    allowfullscreen
+                                    loading="lazy"></iframe>`;
+                    }
+                }
+
+                if (platform === 'youtube') {
+                    let videoId = '';
+
+                    try {
+                        const parsed = new URL(url);
+                        if (parsed.pathname.includes('/shorts/')) {
+                            videoId = parsed.pathname.split('/shorts/')[1]?.split('/')[0] ?? '';
+                        } else if (parsed.searchParams.has('v')) {
+                            videoId = parsed.searchParams.get('v') ?? '';
+                        } else {
+                            videoId = parsed.pathname.replace(/^\//, '');
+                        }
+                    } catch (err) {
+                        videoId = url;
+                    }
+
+                    if (videoId) {
+                        container.innerHTML = `
+                            <iframe src="https://www.youtube.com/embed/${videoId}"
+                                    allowfullscreen
+                                    loading="lazy"></iframe>`;
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

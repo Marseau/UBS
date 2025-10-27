@@ -1,0 +1,54 @@
+{
+  "name": "Content Seeder - 3 Reels + YouTube Short (Updated v2)",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [368, -576],
+      "id": "a3a2ca5f-ca87-41c4-8b32-536913ca3708",
+      "name": "When clicking 'Execute workflow'"
+    },
+    {
+      "parameters": {
+        "values": {
+          "number": [{"name": "week_number", "value": 41}],
+          "string": [{"name": "main_theme", "value": "Por que empresas estão perdendo clientes por falhas em agendamento e follow-up"}]
+        },
+        "options": {}
+      },
+      "id": "69e6bf6b-7da5-4a90-be5b-689ab6721760",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "position": [576, -576],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://qsdfyffuonywmtnlycri.supabase.co/rest/v1/rpc/get_random_trending_audio",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "bodyParameters": {"parameters": []},
+        "options": {"response": {"response": {"responseFormat": "json"}}}
+      },
+      "id": "4b2e3c38-7108-4503-a124-1b86e84b3fd1",
+      "name": "Get Random Trending Audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [800, -576],
+      "typeVersion": 3,
+      "credentials": {"supabaseApi": {"id": "QTLIbdCBpZio7YIz", "name": "Supabase account"}}
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [[{"node": "Edit Fields", "type": "main", "index": 0}]]
+    },
+    "Edit Fields": {
+      "main": [[{"node": "Get Random Trending Audio", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {"executionOrder": "v1"},
+  "active": false
+}

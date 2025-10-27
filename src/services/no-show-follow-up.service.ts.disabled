@@ -1,0 +1,277 @@
+/**
+ * ✅ CORREÇÃO 4: No-Show Follow-up Service
+ * Sistema automático de follow-up para no-shows
+ */
+
+import { supabaseAdmin } from '../config/database';
+import cron from 'node-cron';
+import { NoShowManagerService } from './no-show-manager.service';
+
+export interface NoShowFollowUpResult {
+  processed: number;
+  followups_sent: number;
+  errors: number;
+}
+
+export class NoShowFollowUpService {
+  private noShowManager: NoShowManagerService;
+  private isProcessing: boolean = false;
+  private readonly FOLLOWUP_DELAY_HOURS = 2; // Follow-up 2 horas após no-show
+  private readonly MAX_FOLLOWUP_ATTEMPTS = 2; // Máximo 2 tentativas
+
+  constructor() {
+    this.noShowManager = new NoShowManagerService();
+  }
+
+  /**
+   * ✅ Iniciar sistema de follow-up automático
+   */
+  start(): void {
+    // Executar a cada hora para verificar no-shows pendentes de follow-up
+    cron.schedule('0 * * * *', async () => {
+      if (this.isProcessing) {
+        console.log('⚠️ [NO-SHOW-FOLLOWUP] Processamento anterior ainda em andamento');
+        return;
+      }
+
+      this.isProcessing = true;
+
+      try {
+        console.log('🔄 [NO-SHOW-FOLLOWUP] Iniciando varredura de no-shows...');
+        const result = await this.processNoShowFollowUps();
+
+        console.log(`✅ [NO-SHOW-FOLLOWUP] Processamento concluído:`, {
+          processados: result.processed,
+          followups_enviados: result.followups_sent,
+          erros: result.errors
+        });
+
+      } catch (error) {
+        console.error('❌ [NO-SHOW-FOLLOWUP] Erro crítico:', error);
+      } finally {
+        this.isProcessing = false;
+      }
+    });
+
+    console.log('✅ [NO-SHOW-FOLLOWUP] Sistema iniciado - verificação a cada hora');
+  }
+
+  /**
+   * ✅ Processar no-shows que precisam de follow-up
+   */
+  async processNoShowFollowUps(): Promise<NoShowFollowUpResult> {
+    const stats = {
+      processed: 0,
+      followups_sent: 0,
+      errors: 0
+    };
+
+    try {
+      // Buscar appointments com status 'no_show' que ainda não receberam follow-up
+      // ou que são elegíveis para segundo follow-up
+      const cutoffTime = new Date();
+      cutoffTime.setHours(cutoffTime.getHours() - this.FOLLOWUP_DELAY_HOURS);
+
+      const { data: noShows, error } = await supabaseAdmin
+        .from('appointments')
+        .select(`
+          *,
+          users!inner(name, phone),
+          tenants!inner(business_name, whatsapp_phone)
+        `)
+        .eq('status', 'no_show')
+        .lt('start_time', cutoffTime.toISOString())
+        .is('followup_attempts', null)
+        .or('followup_attempts.lt.2')
+        .limit(50);
+
+      if (error || !noShows) {
+        console.warn('⚠️ [NO-SHOW-FOLLOWUP] Erro ao buscar no-shows:', error);
+        return stats;
+      }
+
+      console.log(`📋 [NO-SHOW-FOLLOWUP] Encontrados ${noShows.length} no-shows para follow-up`);
+
+      for (const appointment of noShows) {
+        try {
+          stats.processed++;
+
+          const followupAttempts = (appointment as any).followup_attempts || 0;
+
+          // Verificar se pode enviar follow-up
+          if (followupAttempts >= this.MAX_FOLLOWUP_ATTEMPTS) {
+            continue;
+          }
+
+          // Determinar tipo de follow-up baseado no número de tentativas
+          const followupType = followupAttempts === 0 ? 'first_followup' : 'second_followup';
+
+          await this.sendNoShowFollowUp(appointment, followupType);
+
+          // Atualizar contador de tentativas
+          await supabaseAdmin
+            .from('appointments')
+            .update({
+              followup_attempts: followupAttempts + 1,
+              last_followup_at: new Date().toISOString()
+            } as any)
+            .eq('id', appointment.id);
+
+          stats.followups_sent++;
+
+          console.log(`📧 [NO-SHOW-FOLLOWUP] Follow-up enviado para appointment ${appointment.id}`);
+
+        } catch (error) {
+          stats.errors++;
+          console.error(`❌ [NO-SHOW-FOLLOWUP] Erro ao processar appointment ${appointment.id}:`, error);
+        }
+      }
+
+      return stats;
+
+    } catch (error) {
+      console.error('❌ [NO-SHOW-FOLLOWUP] Erro crítico no processamento:', error);
+      stats.errors++;
+      return stats;
+    }
+  }
+
+  /**
+   * ✅ Enviar follow-up específico para no-show
+   */
+  private async sendNoShowFollowUp(appointment: any, followupType: 'first_followup' | 'second_followup'): Promise<void> {
+    try {
+      const user = appointment.users;
+      const tenant = appointment.tenants;
+
+      let followupMessage = '';
+
+      if (followupType === 'first_followup') {
+        followupMessage = `Olá ${user.name}! 👋
+
+Notamos que você não compareceu ao seu agendamento hoje. Esperamos que esteja tudo bem!
+
+Gostaríamos de reagendar seu atendimento. Que tal escolhermos um novo horário que seja mais conveniente para você?
+
+Aguardamos seu retorno! 😊
+
+Atenciosamente,
+${tenant.business_name}`;
+      } else {
+        followupMessage = `Olá ${user.name}!
+
+Este é nosso segundo contato sobre o reagendamento do seu atendimento.
+
+Entendemos que imprevistos acontecem e estamos aqui para ajudar você a encontrar um horário que funcione melhor.
+
+Se não tiver mais interesse nos nossos serviços, nos informe para que possamos atualizar nossos registros.
+
+Obrigado pela compreensão! 🙏
+
+${tenant.business_name}`;
+      }
+
+      // Log do follow-up (integração com WhatsApp seria aqui)
+      console.log(`📧 [NO-SHOW-FOLLOWUP] Enviando ${followupType} para ${user.phone}: "${followupMessage.substring(0, 100)}..."`);
+
+      // Registrar follow-up no histórico de conversas
+      await supabaseAdmin
+        .from('conversation_history')
+        .insert({
+          tenant_id: appointment.tenant_id,
+          user_id: user.phone, // Use phone as user_id
+          content: followupMessage,
+          message_type: 'outbound',
+          conversation_outcome: `no_show_${followupType}`,
+          is_from_user: false,
+          session_id_uuid: `noshow_${appointment.id}_${Date.now()}`,
+          conversation_context: {
+            appointment_id: appointment.id,
+            followup_type: followupType,
+            followup_reason: 'no_show_automatic_followup'
+          },
+          created_at: new Date().toISOString()
+        });
+
+      console.log(`✅ [NO-SHOW-FOLLOWUP] Follow-up registrado para appointment ${appointment.id}`);
+
+    } catch (error) {
+      console.error(`❌ [NO-SHOW-FOLLOWUP] Erro ao enviar follow-up:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * ✅ Executar processamento manual (para testes)
+   */
+  async executeManually(): Promise<NoShowFollowUpResult> {
+    console.log('🔧 [NO-SHOW-FOLLOWUP] Execução manual iniciada...');
+    return await this.processNoShowFollowUps();
+  }
+
+  /**
+   * ✅ Obter estatísticas do sistema
+   */
+  async getStatistics(): Promise<{
+    pending_followups: number;
+    followups_sent_today: number;
+    no_shows_today: number;
+  }> {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+
+      // No-shows pendentes de follow-up
+      const { data: pendingFollowups } = await supabaseAdmin
+        .from('appointments')
+        .select('id', { count: 'exact' })
+        .eq('status', 'no_show')
+        .is('followup_attempts', null)
+        .or('followup_attempts.lt.2');
+
+      // Follow-ups enviados hoje
+      const { data: followupsSentToday } = await supabaseAdmin
+        .from('conversation_history')
+        .select('id', { count: 'exact' })
+        .like('conversation_outcome', 'no_show_%followup')
+        .gte('created_at', `${today}T00:00:00`)
+        .lt('created_at', `${today}T23:59:59`);
+
+      // No-shows de hoje
+      const { data: noShowsToday } = await supabaseAdmin
+        .from('appointments')
+        .select('id', { count: 'exact' })
+        .eq('status', 'no_show')
+        .gte('start_time', `${today}T00:00:00`)
+        .lt('start_time', `${today}T23:59:59`);
+
+      return {
+        pending_followups: (pendingFollowups as any)?.length || 0,
+        followups_sent_today: (followupsSentToday as any)?.length || 0,
+        no_shows_today: (noShowsToday as any)?.length || 0
+      };
+
+    } catch (error) {
+      console.error('❌ [NO-SHOW-FOLLOWUP] Erro ao buscar estatísticas:', error);
+      return {
+        pending_followups: 0,
+        followups_sent_today: 0,
+        no_shows_today: 0
+      };
+    }
+  }
+}
+
+// Singleton instance
+let noShowFollowUpInstance: NoShowFollowUpService | null = null;
+
+export function getNoShowFollowUpService(): NoShowFollowUpService {
+  if (!noShowFollowUpInstance) {
+    noShowFollowUpInstance = new NoShowFollowUpService();
+  }
+  return noShowFollowUpInstance;
+}
+
+export function startNoShowFollowUp(): void {
+  const service = getNoShowFollowUpService();
+  service.start();
+}

@@ -863,9 +863,259 @@ export type Database = {
           }
         ]
       }
+      account_actions: {
+        Row: {
+          id: string
+          source_platform: string | null
+          lead_id: string | null
+          username: string
+          action_type: string
+          post_id: string | null
+          media_id: string | null
+          comment_text: string | null
+          dm_text: string | null
+          executed_at: string | null
+          execution_method: string | null
+          success: boolean | null
+          error_message: string | null
+          retry_count: number | null
+          daily_action_count: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          source_platform?: string | null
+          lead_id?: string | null
+          username: string
+          action_type: string
+          post_id?: string | null
+          media_id?: string | null
+          comment_text?: string | null
+          dm_text?: string | null
+          executed_at?: string | null
+          execution_method?: string | null
+          success?: boolean | null
+          error_message?: string | null
+          retry_count?: number | null
+          daily_action_count?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          source_platform?: string | null
+          lead_id?: string | null
+          username?: string
+          action_type?: string
+          post_id?: string | null
+          media_id?: string | null
+          comment_text?: string | null
+          dm_text?: string | null
+          executed_at?: string | null
+          execution_method?: string | null
+          success?: boolean | null
+          error_message?: string | null
+          retry_count?: number | null
+          daily_action_count?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_actions_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "instagram_leads"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      instagram_leads: {
+        Row: {
+          id: string
+          username: string
+          full_name: string | null
+          bio: string | null
+          followers_count: number | null
+          following_count: number | null
+          posts_count: number | null
+          profile_pic_url: string | null
+          is_business_account: boolean | null
+          is_verified: boolean | null
+          email: string | null
+          phone: string | null
+          website: string | null
+          business_category: string | null
+          search_term_id: string | null
+          lead_score: number | null
+          enrichment_status: string | null
+          language: string | null
+          country: string | null
+          follow_status: string | null
+          followed_at: string | null
+          unfollowed_at: string | null
+          follow_attempts: number | null
+          last_follow_attempt_at: string | null
+          last_interaction_type: string | null
+          last_interaction_at: string | null
+          interaction_count: number | null
+          has_commented: boolean | null
+          has_dm: boolean | null
+          engagement_score: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          username: string
+          full_name?: string | null
+          bio?: string | null
+          followers_count?: number | null
+          following_count?: number | null
+          posts_count?: number | null
+          profile_pic_url?: string | null
+          is_business_account?: boolean | null
+          is_verified?: boolean | null
+          email?: string | null
+          phone?: string | null
+          website?: string | null
+          business_category?: string | null
+          search_term_id?: string | null
+          lead_score?: number | null
+          enrichment_status?: string | null
+          language?: string | null
+          country?: string | null
+          follow_status?: string | null
+          followed_at?: string | null
+          unfollowed_at?: string | null
+          follow_attempts?: number | null
+          last_follow_attempt_at?: string | null
+          last_interaction_type?: string | null
+          last_interaction_at?: string | null
+          interaction_count?: number | null
+          has_commented?: boolean | null
+          has_dm?: boolean | null
+          engagement_score?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          username?: string
+          full_name?: string | null
+          bio?: string | null
+          followers_count?: number | null
+          following_count?: number | null
+          posts_count?: number | null
+          profile_pic_url?: string | null
+          is_business_account?: boolean | null
+          is_verified?: boolean | null
+          email?: string | null
+          phone?: string | null
+          website?: string | null
+          business_category?: string | null
+          search_term_id?: string | null
+          lead_score?: number | null
+          enrichment_status?: string | null
+          language?: string | null
+          country?: string | null
+          follow_status?: string | null
+          followed_at?: string | null
+          unfollowed_at?: string | null
+          follow_attempts?: number | null
+          last_follow_attempt_at?: string | null
+          last_interaction_type?: string | null
+          last_interaction_at?: string | null
+          interaction_count?: number | null
+          has_commented?: boolean | null
+          has_dm?: boolean | null
+          engagement_score?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      instagram_interactions: {
+        Row: {
+          id: string
+          lead_id: string | null
+          instagram_user_id: string | null
+          username: string
+          interaction_type: string
+          post_id: string | null
+          media_id: string | null
+          comment_text: string | null
+          message_text: string | null
+          interaction_timestamp: string
+          detected_at: string | null
+          auto_followed: boolean | null
+          followed_at: string | null
+          auto_replied: boolean | null
+          replied_at: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          lead_id?: string | null
+          instagram_user_id?: string | null
+          username: string
+          interaction_type: string
+          post_id?: string | null
+          media_id?: string | null
+          comment_text?: string | null
+          message_text?: string | null
+          interaction_timestamp: string
+          detected_at?: string | null
+          auto_followed?: boolean | null
+          followed_at?: string | null
+          auto_replied?: boolean | null
+          replied_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          lead_id?: string | null
+          instagram_user_id?: string | null
+          username?: string
+          interaction_type?: string
+          post_id?: string | null
+          media_id?: string | null
+          comment_text?: string | null
+          message_text?: string | null
+          interaction_timestamp?: string
+          detected_at?: string | null
+          auto_followed?: boolean | null
+          followed_at?: string | null
+          auto_replied?: boolean | null
+          replied_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      account_actions_daily_stats: {
+        Row: {
+          action_date: string | null
+          action_type: string | null
+          execution_method: string | null
+          total_actions: number | null
+          successful_actions: number | null
+          failed_actions: number | null
+          avg_retries: number | null
+        }
+      }
+      account_actions_today_count: {
+        Row: {
+          action_type: string | null
+          count_today: number | null
+          last_action_at: string | null
+        }
+      }
     }
     Functions: {
       citext: {

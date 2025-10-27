@@ -69,7 +69,7 @@ router.get("/summary", adminAuth.verifyToken, async (req, res) => {
     };
 
     conversationData?.forEach((msg) => {
-      const phone = msg.users?.phone;
+      const phone = Array.isArray(msg.users) ? (msg.users[0] as any)?.phone : (msg.users as any)?.phone;
       const userId = msg.user_id;
       const key = `${userId}_${phone}`;
 
@@ -77,10 +77,10 @@ router.get("/summary", adminAuth.verifyToken, async (req, res) => {
         conversationGroups[key] = {
           user_id: userId,
           phone_number: phone,
-          user_name: msg.users?.name || "Usuário não identificado",
+          user_name: Array.isArray(msg.users) ? (msg.users[0] as any)?.name : (msg.users as any)?.name || "Usuário não identificado",
           tenant_id: msg.tenant_id,
-          tenant_name: msg.tenants?.name,
-          tenant_whatsapp: msg.tenants?.whatsapp_phone,
+          tenant_name: Array.isArray(msg.tenants) ? (msg.tenants[0] as any)?.name : (msg.tenants as any)?.name,
+          tenant_whatsapp: Array.isArray(msg.tenants) ? (msg.tenants[0] as any)?.whatsapp_phone : (msg.tenants as any)?.whatsapp_phone,
           total_messages: 0,
           user_messages: 0,
           system_messages: 0,
@@ -428,8 +428,8 @@ router.get("/export", adminAuth.verifyToken, async (req, res) => {
           const date = conv.created_at
             ? new Date(conv.created_at).toLocaleString("pt-BR")
             : "";
-          const phone = conv.users?.phone || "";
-          const userName = conv.users?.name || "";
+          const phone = Array.isArray(conv.users) ? (conv.users[0] as any)?.phone : (conv.users as any)?.phone || "";
+          const userName = Array.isArray(conv.users) ? (conv.users[0] as any)?.name : (conv.users as any)?.name || "";
           const content = `"${conv.content.replace(/"/g, '""')}"`;
           const origin = conv.is_from_user ? "Usuario" : "Sistema";
           const type = conv.message_type || "text";

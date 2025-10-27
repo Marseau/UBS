@@ -1,0 +1,171 @@
+{
+  "timestamp": "2025-09-29T01:17:30.255Z",
+  "summary": {
+    "successes": 30,
+    "warnings": 1,
+    "errors": 0,
+    "successRate": "96.8"
+  },
+  "details": {
+    "successes": [
+      {
+        "message": "UnifiedConversationContext interface definida",
+        "file": "src/types/flow-lock.types.ts",
+        "timestamp": "2025-09-29T01:17:30.250Z"
+      },
+      {
+        "message": "Alias de compatibilidade EnhancedConversationContext criado",
+        "file": "src/types/flow-lock.types.ts",
+        "timestamp": "2025-09-29T01:17:30.250Z"
+      },
+      {
+        "message": "Campo crítico 'temporal_context' presente na interface",
+        "file": "src/types/flow-lock.types.ts",
+        "timestamp": "2025-09-29T01:17:30.250Z"
+      },
+      {
+        "message": "Campo crítico 'timeout_stage' presente na interface",
+        "file": "src/types/flow-lock.types.ts",
+        "timestamp": "2025-09-29T01:17:30.251Z"
+      },
+      {
+        "message": "Campo crítico 'session_timeout_warnings' presente na interface",
+        "file": "src/types/flow-lock.types.ts",
+        "timestamp": "2025-09-29T01:17:30.251Z"
+      },
+      {
+        "message": "Campo crítico 'flow_lock_history' presente na interface",
+        "file": "src/types/flow-lock.types.ts",
+        "timestamp": "2025-09-29T01:17:30.251Z"
+      },
+      {
+        "message": "Campo crítico 'flow_metrics' presente na interface",
+        "file": "src/types/flow-lock.types.ts",
+        "timestamp": "2025-09-29T01:17:30.251Z"
+      },
+      {
+        "message": "Campo crítico 'recovery_attempts' presente na interface",
+        "file": "src/types/flow-lock.types.ts",
+        "timestamp": "2025-09-29T01:17:30.251Z"
+      },
+      {
+        "message": "Campo crítico 'data_collection_state' presente na interface",
+        "file": "src/types/flow-lock.types.ts",
+        "timestamp": "2025-09-29T01:17:30.251Z"
+      },
+      {
+        "message": "Campo crítico 'unified_context_ref' presente na interface",
+        "file": "src/types/flow-lock.types.ts",
+        "timestamp": "2025-09-29T01:17:30.251Z"
+      },
+      {
+        "message": "Função mergeUnifiedContext presente",
+        "file": "src/utils/conversation-context-helper.ts",
+        "timestamp": "2025-09-29T01:17:30.251Z"
+      },
+      {
+        "message": "Lógica de resolução de session_id implementada",
+        "file": "src/utils/conversation-context-helper.ts",
+        "timestamp": "2025-09-29T01:17:30.251Z"
+      },
+      {
+        "message": "Criação real de usuário implementada",
+        "file": "src/utils/conversation-context-helper.ts",
+        "timestamp": "2025-09-29T01:17:30.251Z"
+      },
+      {
+        "message": "Operações diretas na tabela unified_conversation_contexts",
+        "file": "src/utils/conversation-context-helper.ts",
+        "timestamp": "2025-09-29T01:17:30.251Z"
+      },
+      {
+        "message": "Funções depreciadas com wrapper de compatibilidade",
+        "file": "src/utils/conversation-context-helper.ts",
+        "timestamp": "2025-09-29T01:17:30.251Z"
+      },
+      {
+        "message": "Arquivo marcado como depreciado adequadamente",
+        "file": "src/utils/unified-context-helper.ts",
+        "timestamp": "2025-09-29T01:17:30.252Z"
+      },
+      {
+        "message": "Arquivo marcado como depreciado adequadamente",
+        "file": "src/services/unified-context-manager.service.ts",
+        "timestamp": "2025-09-29T01:17:30.252Z"
+      },
+      {
+        "message": "Import do mergeUnifiedContext correto no orchestrator",
+        "file": "src/services/orchestrator/orchestrator-core.service.ts",
+        "timestamp": "2025-09-29T01:17:30.253Z"
+      },
+      {
+        "message": "unifiedContextManager removido do orchestrator",
+        "file": "src/services/orchestrator/orchestrator-core.service.ts",
+        "timestamp": "2025-09-29T01:17:30.253Z"
+      },
+      {
+        "message": "ConversationHistoryPersistence usa mergeUnifiedContext",
+        "file": "src/services/conversation-history-persistence.service.ts",
+        "timestamp": "2025-09-29T01:17:30.253Z"
+      },
+      {
+        "message": "Resolução de userId implementada",
+        "file": "src/services/conversation-history-persistence.service.ts",
+        "timestamp": "2025-09-29T01:17:30.253Z"
+      },
+      {
+        "message": "Construção de contexto mínimo implementada",
+        "file": "src/services/conversation-history-persistence.service.ts",
+        "timestamp": "2025-09-29T01:17:30.253Z"
+      },
+      {
+        "message": "Arquivo migrado para mergeUnifiedContext",
+        "file": "src/services/orchestrator/telemetry-orchestrator.ts",
+        "timestamp": "2025-09-29T01:17:30.253Z"
+      },
+      {
+        "message": "Dependência essencial '@supabase/supabase-js' presente",
+        "file": "package.json",
+        "timestamp": "2025-09-29T01:17:30.254Z"
+      },
+      {
+        "message": "Dependência essencial 'uuid' presente",
+        "file": "package.json",
+        "timestamp": "2025-09-29T01:17:30.254Z"
+      },
+      {
+        "message": "Script de build presente",
+        "file": "package.json",
+        "timestamp": "2025-09-29T01:17:30.254Z"
+      },
+      {
+        "message": "TypeScript strict mode habilitado",
+        "file": "tsconfig.json",
+        "timestamp": "2025-09-29T01:17:30.254Z"
+      },
+      {
+        "message": "Path aliases configurados",
+        "file": "tsconfig.json",
+        "timestamp": "2025-09-29T01:17:30.254Z"
+      },
+      {
+        "message": "Lógica de busca de session_id existente implementada",
+        "file": "src/utils/conversation-context-helper.ts",
+        "timestamp": "2025-09-29T01:17:30.255Z"
+      },
+      {
+        "message": "session_id reutiliza existente antes de gerar novo",
+        "file": "src/utils/conversation-context-helper.ts",
+        "timestamp": "2025-09-29T01:17:30.255Z"
+      }
+    ],
+    "warnings": [
+      {
+        "message": "Anti-padrão detectado: Código temporário ou comentários de TODO",
+        "file": "src/services/orchestrator/orchestrator-core.service.ts",
+        "timestamp": "2025-09-29T01:17:30.255Z"
+      }
+    ],
+    "errors": []
+  }
+}

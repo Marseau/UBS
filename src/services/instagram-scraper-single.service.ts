@@ -11,6 +11,7 @@ import {
   extractHashtagsFromPosts
 } from './instagram-profile.utils';
 import { createIsolatedContext } from './instagram-context-manager.service';
+import { scraperLock } from './instagram-scraper-lock.service';
 
 // Controla instância única de browser e página de sessão
 let browserInstance: Browser | null = null;
@@ -364,6 +365,9 @@ export async function scrapeInstagramTag(
   searchTerm: string,
   maxProfiles: number = 10
 ): Promise<InstagramProfileData[]> {
+  // CRITICAL: Adquirir lock ANTES de criar página para evitar concorrência
+  await scraperLock.acquire(`scrape-tag: ${searchTerm}`);
+
   const { page, requestId, cleanup } = await createIsolatedContext();
   console.log(`🔒 Request ${requestId} iniciada para scrape-tag: "${searchTerm}"`);
   try {
@@ -1026,6 +1030,7 @@ export async function scrapeInstagramTag(
   } finally {
     console.log(`🔓 Request ${requestId} finalizada (scrape-tag: "${searchTerm}")`);
     await cleanup();
+    scraperLock.release(); // CRITICAL: Liberar lock para permitir próxima operação
   }
 }
 
@@ -1110,6 +1115,9 @@ export async function scrapeInstagramProfile(username: string): Promise<{
   website: string | null;
   business_category: string | null;
 }> {
+  // CRITICAL: Adquirir lock ANTES de criar página para evitar concorrência
+  await scraperLock.acquire(`scrape-profile: ${username}`);
+
   const { page, requestId, cleanup } = await createIsolatedContext();
   console.log(`🔒 Request ${requestId} iniciada para scrape-profile: "${username}"`);
   try {
@@ -1198,6 +1206,7 @@ export async function scrapeInstagramProfile(username: string): Promise<{
   } finally {
     console.log(`🔓 Request ${requestId} finalizada (scrape-profile: "${username}")`);
     await cleanup();
+    scraperLock.release(); // CRITICAL: Liberar lock para permitir próxima operação
   }
 }
 

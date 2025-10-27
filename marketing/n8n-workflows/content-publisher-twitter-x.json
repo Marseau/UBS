@@ -1,0 +1,413 @@
+{
+  "name": "Content Publisher - Twitter/X",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10,13,17 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst startOfYear = new Date(now.getFullYear(), 0, 1);\nconst daysSinceStart = Math.floor((now - startOfYear) / (1000 * 60 * 60 * 24));\nconst weekNumber = Math.ceil((daysSinceStart + startOfYear.getDay() + 1) / 7);\nconst year = now.getFullYear();\nconst currentHour = now.getHours();\n\nreturn {\n  json: {\n    week_number: weekNumber,\n    year: year,\n    current_hour: currentHour\n  }\n};"
+      },
+      "id": "get-current-week",
+      "name": "Get Current Week",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "editorial_content",
+        "filterType": "manual",
+        "filterString": "={{ \"published_x=eq.false&week_number=eq.\" + $json.week_number + \"&year=eq.\" + $json.year }}",
+        "options": {
+          "sort": [
+            {
+              "field": "day_of_week",
+              "direction": "asc"
+            }
+          ],
+          "limit": 1
+        }
+      },
+      "id": "get-next-post",
+      "name": "Get Next Post",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-content",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-if-found",
+      "name": "Check If Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "conditions": {
+                "number": [
+                  {
+                    "value1": "={{ $('Get Current Week').item.json.current_hour }}",
+                    "operation": "equal",
+                    "value2": 10
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "10h - Tweet 1"
+            },
+            {
+              "conditions": {
+                "number": [
+                  {
+                    "value1": "={{ $('Get Current Week').item.json.current_hour }}",
+                    "operation": "equal",
+                    "value2": 13
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "13h - Tweet 2"
+            },
+            {
+              "conditions": {
+                "number": [
+                  {
+                    "value1": "={{ $('Get Current Week').item.json.current_hour }}",
+                    "operation": "equal",
+                    "value2": 17
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "17h - Tweet 3"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch-by-hour",
+      "name": "Switch by Hour",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "tweet",
+              "name": "tweet",
+              "value": "={{ $('Get Next Post').item.json.twitter_insertion_1 }}",
+              "type": "string"
+            },
+            {
+              "id": "mark_published",
+              "name": "mark_published",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "post_id",
+              "name": "post_id",
+              "value": "={{ $('Get Next Post').item.json.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare-tweet-1",
+      "name": "Prepare Tweet 1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1250, 100]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "tweet",
+              "name": "tweet",
+              "value": "={{ $('Get Next Post').item.json.twitter_insertion_2 }}",
+              "type": "string"
+            },
+            {
+              "id": "mark_published",
+              "name": "mark_published",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "post_id",
+              "name": "post_id",
+              "value": "={{ $('Get Next Post').item.json.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare-tweet-2",
+      "name": "Prepare Tweet 2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "tweet",
+              "name": "tweet",
+              "value": "={{ $('Get Next Post').item.json.twitter_insertion_3 }}",
+              "type": "string"
+            },
+            {
+              "id": "mark_published",
+              "name": "mark_published",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "post_id",
+              "name": "post_id",
+              "value": "={{ $('Get Next Post').item.json.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare-tweet-3",
+      "name": "Prepare Tweet 3",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twitter.com/2/tweets",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "twitterOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"text\": $json.tweet + \"\\n\\nProposta grátis: https://ubs.app.br\" } }}",
+        "options": {}
+      },
+      "id": "post-to-x",
+      "name": "Post to X",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1450, 300],
+      "credentials": {
+        "twitterOAuth2Api": {
+          "id": "twitter-oauth2",
+          "name": "Twitter OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "editorial_content",
+        "filterType": "manual",
+        "filterString": "={{ \"id=eq.\" + $json.post_id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "published_x",
+              "fieldValue": "={{ $json.mark_published }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "update-published-status",
+      "name": "Update Published Status",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1650, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Current Week",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Current Week": {
+      "main": [
+        [
+          {
+            "node": "Get Next Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Next Post": {
+      "main": [
+        [
+          {
+            "node": "Check If Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Found": {
+      "main": [
+        [
+          {
+            "node": "Switch by Hour",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch by Hour": {
+      "main": [
+        [
+          {
+            "node": "Prepare Tweet 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Tweet 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Tweet 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Tweet 1": {
+      "main": [
+        [
+          {
+            "node": "Post to X",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Tweet 2": {
+      "main": [
+        [
+          {
+            "node": "Post to X",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Tweet 3": {
+      "main": [
+        [
+          {
+            "node": "Post to X",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to X": {
+      "main": [
+        [
+          {
+            "node": "Update Published Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-04T00:00:00.000Z",
+  "versionId": "1"
+}
