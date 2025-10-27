@@ -290,8 +290,10 @@ function setupProcessHandlers(): void {
   console.log('✅ Process handlers registrados para cleanup automático');
 }
 
-// Registrar handlers na inicialização do módulo
-setupProcessHandlers();
+// REMOVIDO: setupProcessHandlers() executado na inicialização do módulo
+// MOTIVO: Causava interferência com o ciclo de vida do scraping
+// Process handlers devem estar apenas no src/index.ts (arquivo principal)
+// setupProcessHandlers();
 
 /**
  * Busca usuários do Instagram via campo de busca
