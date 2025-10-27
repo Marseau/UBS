@@ -1,13 +1,7 @@
 // @ts-nocheck - Código usa window/document dentro de page.evaluate() (contexto browser)
 import { Page } from 'puppeteer';
 import { detectLanguage } from './language-country-detector.service';
-import {
-  ensureLoggedSession,
-  getLoggedUsername,
-  closeBrowser as sessionCloseBrowser,
-  getSessionPage as getManagerSessionPage,
-  getBrowserInstance
-} from './instagram-session.service';
+import { getLoggedUsername } from './instagram-session.service';
 import {
   calculateActivityScore,
   extractEmailFromBio,
@@ -16,11 +10,8 @@ import {
   extractHashtagsFromPosts
 } from './instagram-profile.utils';
 import { createIsolatedContext } from './instagram-context-manager.service';
-import { scraperLock } from './instagram-scraper-lock.service';
 
 export { closeBrowser } from './instagram-session.service';
-
-const SHOULD_AUTO_CLOSE = process.env.INSTAGRAM_AUTO_CLOSE === 'true';
 
 /**
  * Interface para dados completos do perfil Instagram
@@ -170,132 +161,6 @@ async function extractUsernamesFromSearchDialog(page: Page, maxResults: number):
 }
 
 /**
- * Faz logout do Instagram (navegando para URL de logout)
- */
-async function instagramLogout(): Promise<void> {
-  const sessionPage = getManagerSessionPage();
-  if (!sessionPage || sessionPage.isClosed()) {
-    console.log('   ⚠️  Sessão já fechada, pulando logout');
-    return;
-  }
-
-  try {
-    console.log('🚪 Fazendo logout do Instagram...');
-    await sessionPage.goto('https://www.instagram.com/accounts/logout/', {
-      waitUntil: 'networkidle2',
-      timeout: 10000
-    }).catch(() => {
-      console.log('   ⚠️  Timeout ao navegar para logout, continuando...');
-    });
-
-    // Aguardar logout processar
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    console.log('✅ Logout concluído');
-  } catch (error: any) {
-    console.log(`   ⚠️  Erro ao fazer logout: ${error.message}`);
-  }
-}
-
-/**
- * Cleanup completo: logout + fechar browser + limpar cookies
- */
-async function gracefulShutdown(deleteCookies: boolean = false): Promise<void> {
-  console.log('\n🛑 ======================================');
-  console.log('🛑 INICIANDO SHUTDOWN DO SCRAPER');
-  console.log('🛑 ======================================\n');
-
-  let cleanupSuccess = true;
-
-  try {
-    // 1. Fazer logout do Instagram
-    const sessionPage = getManagerSessionPage();
-    if (sessionPage && !sessionPage.isClosed()) {
-      await instagramLogout().catch((err) => {
-        console.error('❌ Erro ao fazer logout:', err.message);
-        cleanupSuccess = false;
-      });
-    }
-
-    // 2. Fechar browser e limpar recursos
-    await sessionCloseBrowser({ clearCookies: deleteCookies });
-
-  } catch (error: any) {
-    console.error('❌ Erro durante graceful shutdown:', error.message);
-    cleanupSuccess = false;
-  }
-
-  console.log('\n🛑 ======================================');
-  if (cleanupSuccess) {
-    console.log('✅ SHUTDOWN CONCLUÍDO COM SUCESSO');
-  } else {
-    console.log('⚠️  SHUTDOWN CONCLUÍDO COM ERROS');
-  }
-  console.log('🛑 ======================================\n');
-}
-
-/**
- * Registrar handlers de sinal de processo para cleanup automático
- */
-function setupProcessHandlers(): void {
-  let isShuttingDown = false;
-
-  const handleShutdown = async (signal: string) => {
-    if (isShuttingDown) {
-      console.log(`⚠️  Shutdown já em andamento, ignorando ${signal}`);
-      return;
-    }
-
-    isShuttingDown = true;
-    console.log(`\n⚡ Sinal recebido: ${signal}`);
-
-    try {
-      // Timeout de 10s para cleanup (evitar travar o processo)
-      await Promise.race([
-        gracefulShutdown(false), // Não deletar cookies em shutdown normal
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout de cleanup')), 10000)
-        )
-      ]);
-    } catch (error: any) {
-      console.error('❌ Erro no shutdown handler:', error.message);
-    } finally {
-      process.exit(0);
-    }
-  };
-
-  // Sinais de terminação
-  process.on('SIGTERM', () => handleShutdown('SIGTERM')); // pm2 stop
-  process.on('SIGINT', () => handleShutdown('SIGINT'));   // Ctrl+C
-  process.on('SIGUSR2', () => handleShutdown('SIGUSR2')); // pm2 reload
-
-  // Erros não capturados
-  process.on('uncaughtException', async (error) => {
-    console.error('\n❌ UNCAUGHT EXCEPTION:', error);
-    await handleShutdown('uncaughtException');
-  });
-
-  process.on('unhandledRejection', async (reason) => {
-    console.error('\n❌ UNHANDLED REJECTION:', reason);
-    await handleShutdown('unhandledRejection');
-  });
-
-  // Antes de sair normalmente
-  process.on('beforeExit', async (code) => {
-    if (!isShuttingDown && getBrowserInstance()) {
-      console.log(`\n⚠️  Processo encerrando (code ${code}) com browser ativo`);
-      await handleShutdown('beforeExit');
-    }
-  });
-
-  console.log('✅ Process handlers registrados para cleanup automático');
-}
-
-// REMOVIDO: setupProcessHandlers() executado na inicialização do módulo
-// MOTIVO: Causava interferência com o ciclo de vida do scraping
-// Process handlers devem estar apenas no src/index.ts (arquivo principal)
-// setupProcessHandlers();
-
-/**
  * Busca usuários do Instagram via campo de busca
  * Retorna apenas usuários com activity_score >= 50
  *
@@ -306,10 +171,6 @@ export async function scrapeInstagramUserSearch(
   searchTerm: string,
   maxProfiles: number = 5
 ): Promise<InstagramProfileData[]> {
-  // CRITICAL: Adquirir lock ANTES de criar página para evitar concorrência
-  await scraperLock.acquire(`scrape-users: ${searchTerm}`);
-
-  await ensureLoggedSession();
   const { page, requestId, cleanup } = await createIsolatedContext();
   console.log(`🔒 Request ${requestId} iniciada para scrape-users: "${searchTerm}"`);
   try {
@@ -706,6 +567,7 @@ export async function scrapeInstagramUserSearch(
       console.log(`👥 Perfis validados (apenas PT): ${usernames}`);
     }
 
+    console.log(`✅ SCRAPE-USERS CONCLUÍDO: ${validatedProfiles.length} perfis validados para "${searchTerm}"`);
     return validatedProfiles;
 
   } catch (error: any) {
@@ -714,11 +576,6 @@ export async function scrapeInstagramUserSearch(
   } finally {
     console.log(`🔓 Request ${requestId} finalizada (scrape-users: "${searchTerm}")`);
     await cleanup();
-    scraperLock.release(); // CRITICAL: Liberar lock para permitir próxima operação
-
-    if (SHOULD_AUTO_CLOSE) {
-      await sessionCloseBrowser().catch(() => {});
-      console.log('✅ Auto-close ativo: browser encerrado após scrape de usuários.');
-    }
+    console.log(`🏁 SCRAPE-USERS ENCERRADO COMPLETAMENTE: "${searchTerm}" - Request ${requestId}`);
   }
 }

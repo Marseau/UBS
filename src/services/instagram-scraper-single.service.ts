@@ -11,7 +11,6 @@ import {
   extractHashtagsFromPosts
 } from './instagram-profile.utils';
 import { createIsolatedContext } from './instagram-context-manager.service';
-import { scraperLock } from './instagram-scraper-lock.service';
 
 // Controla instância única de browser e página de sessão
 let browserInstance: Browser | null = null;
@@ -365,9 +364,6 @@ export async function scrapeInstagramTag(
   searchTerm: string,
   maxProfiles: number = 10
 ): Promise<InstagramProfileData[]> {
-  // CRITICAL: Adquirir lock ANTES de criar página para evitar concorrência
-  await scraperLock.acquire(`scrape-tag: ${searchTerm}`);
-
   const { page, requestId, cleanup } = await createIsolatedContext();
   console.log(`🔒 Request ${requestId} iniciada para scrape-tag: "${searchTerm}"`);
   try {
@@ -1022,6 +1018,7 @@ export async function scrapeInstagramTag(
       console.log(`📊 Dados completos coletados: username, bio, ${foundProfiles[0].followers_count} seguidores, etc.`);
     }
 
+    console.log(`✅ SCRAPE-TAG CONCLUÍDO: ${foundProfiles.length} perfis coletados para "${searchTerm}"`);
     return foundProfiles;
 
   } catch (error: any) {
@@ -1030,7 +1027,7 @@ export async function scrapeInstagramTag(
   } finally {
     console.log(`🔓 Request ${requestId} finalizada (scrape-tag: "${searchTerm}")`);
     await cleanup();
-    scraperLock.release(); // CRITICAL: Liberar lock para permitir próxima operação
+    console.log(`🏁 SCRAPE-TAG ENCERRADO COMPLETAMENTE: "${searchTerm}" - Request ${requestId}`);
   }
 }
 
@@ -1115,9 +1112,6 @@ export async function scrapeInstagramProfile(username: string): Promise<{
   website: string | null;
   business_category: string | null;
 }> {
-  // CRITICAL: Adquirir lock ANTES de criar página para evitar concorrência
-  await scraperLock.acquire(`scrape-profile: ${username}`);
-
   const { page, requestId, cleanup } = await createIsolatedContext();
   console.log(`🔒 Request ${requestId} iniciada para scrape-profile: "${username}"`);
   try {
@@ -1200,13 +1194,16 @@ export async function scrapeInstagramProfile(username: string): Promise<{
       business_category: profileData.business_category
     };
 
+    console.log(`✅ SCRAPE-PROFILE CONCLUÍDO: dados coletados para "@${username}"`);
+    return profileResult;
+
   } catch (error: any) {
     console.error(`❌ Erro ao scrape perfil "@${username}":`, error.message);
     throw error;
   } finally {
     console.log(`🔓 Request ${requestId} finalizada (scrape-profile: "${username}")`);
     await cleanup();
-    scraperLock.release(); // CRITICAL: Liberar lock para permitir próxima operação
+    console.log(`🏁 SCRAPE-PROFILE ENCERRADO COMPLETAMENTE: "@${username}" - Request ${requestId}`);
   }
 }
 

@@ -49,7 +49,12 @@ router.post('/scrape-tag', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao scrape hashtag',
-      error: error.message
+      error: error.message,
+      data: {
+        search_term: req.body.search_term || '',
+        profiles: [],
+        total_found: 0
+      }
     });
   }
 });
@@ -105,7 +110,15 @@ router.post('/scrape-users', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao buscar usuários',
-      error: error.message
+      error: error.message,
+      data: {
+        search_term: req.body.search_term || '',
+        profiles: [],
+        total_found: 0,
+        target_segment: req.body.target_segment || null,
+        search_terms_id: req.body.search_terms_id || null,
+        session_id: req.body.session_id || null
+      }
     });
   }
 });
