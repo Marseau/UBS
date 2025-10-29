@@ -7,6 +7,8 @@ import { config } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 import OpenAI from 'openai';
+import { writeFileSync } from 'fs';
+import { join } from 'path';
 
 // Carregar variáveis de ambiente
 config();
@@ -20,6 +22,31 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!
 });
 
+// Custos do GPT-4o-mini (Dezembro 2024)
+const GPT4O_MINI_INPUT_COST = 0.150 / 1_000_000;   // $0.150 por 1M tokens
+const GPT4O_MINI_OUTPUT_COST = 0.600 / 1_000_000;  // $0.600 por 1M tokens
+
+// Rastreamento de custos
+interface CostMetrics {
+  total_calls: number;
+  name_extraction_calls: number;
+  contact_extraction_calls: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  total_tokens: number;
+  total_cost_usd: number;
+}
+
+const costMetrics: CostMetrics = {
+  total_calls: 0,
+  name_extraction_calls: 0,
+  contact_extraction_calls: 0,
+  total_prompt_tokens: 0,
+  total_completion_tokens: 0,
+  total_tokens: 0,
+  total_cost_usd: 0
+};
+
 interface InstagramLead {
   id: number;
   username: string;
@@ -28,6 +55,9 @@ interface InstagramLead {
   email: string | null;
   phone: string | null;
   website: string | null;
+  hashtags_bio: string[] | null;
+  hashtags_posts: string[] | null;
+  segment: string | null;
 }
 
 interface EnrichmentResult {
@@ -42,8 +72,16 @@ interface EnrichmentResult {
     full_name: string | null;
     email: string | null;
     phone: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    city: string | null;
+    state: string | null;
+    neighborhood: string | null;
+    address: string | null;
+    zip_code: string | null;
   };
   sources: string[];
+  consent_indicators: string[]; // Indicadores de consentimento para marketing
 }
 
 /**
@@ -157,6 +195,23 @@ function isValidPhone(phone: string): boolean {
     return false;
   }
 
+  // REJEITAR: IDs do Facebook/Instagram/Threads (começam com 756665, 169109, etc.)
+  const fbInstagramPatterns = [
+    /^756665/,  // Facebook/Instagram tracking IDs
+    /^169109/,  // Facebook/Instagram session IDs
+    /^532874/,  // Outros IDs falsos observados
+    /^681454/,
+    /^100201/,
+    /^6446901002$/, // Threads.com ID fake (CRÍTICO: aparece em TODOS os perfis threads.com)
+    /^64469/       // Outros IDs do Threads.com
+  ];
+
+  for (const pattern of fbInstagramPatterns) {
+    if (pattern.test(phone)) {
+      return false;
+    }
+  }
+
   // Número local sem DDD: 8-9 dígitos
   // Ex: 99999999 ou 999999999
   if (length >= 8 && length <= 9) {
@@ -167,31 +222,105 @@ function isValidPhone(phone: string): boolean {
   // Ex: 1199999999 ou 11999999999
   if (length >= 10 && length <= 11) {
     const ddd = parseInt(phone.substring(0, 2));
-    if (ddd >= 11 && ddd <= 99) {
+    // Lista COMPLETA de DDDs brasileiros válidos
+    const validDDDs = [
+      11, 12, 13, 14, 15, 16, 17, 18, 19, // São Paulo
+      21, 22, 24, // Rio de Janeiro
+      27, 28, // Espírito Santo
+      31, 32, 33, 34, 35, 37, 38, // Minas Gerais
+      41, 42, 43, 44, 45, 46, // Paraná
+      47, 48, 49, // Santa Catarina
+      51, 53, 54, 55, // Rio Grande do Sul
+      61, // Distrito Federal
+      62, 64, // Goiás
+      63, // Tocantins
+      65, 66, // Mato Grosso
+      67, // Mato Grosso do Sul
+      68, 69, // Acre/Rondônia
+      71, 73, 74, 75, 77, // Bahia
+      79, // Sergipe
+      81, 87, // Pernambuco
+      82, // Alagoas
+      83, // Paraíba
+      84, // Rio Grande do Norte
+      85, 88, // Ceará
+      86, 89, // Piauí
+      91, 93, 94, // Pará
+      92, 97, // Amazonas
+      95, // Roraima
+      96, // Amapá
+      98, 99  // Maranhão
+    ];
+
+    if (validDDDs.includes(ddd)) {
       return true;
     }
   }
 
   // Telefone internacional com código do país: 12-15 dígitos (padrão ITU-T E.164)
   // Ex: 5511999999999 (Brasil - 13 dígitos)
-  // Ex: 14155551234 (EUA - 11 dígitos)
-  // Ex: 447700900123 (UK - 12 dígitos)
-  // Ex: 61412345678 (Austrália - 11 dígitos)
   if (length >= 12 && length <= 15) {
     // Brasil (código 55): 13 dígitos é padrão
     if (phone.startsWith('55') && length === 13) {
+      const ddd = parseInt(phone.substring(2, 4));
+      // Lista COMPLETA de DDDs brasileiros válidos
+      const validDDDs = [
+        11, 12, 13, 14, 15, 16, 17, 18, 19, // São Paulo
+        21, 22, 24, // Rio de Janeiro
+        27, 28, // Espírito Santo
+        31, 32, 33, 34, 35, 37, 38, // Minas Gerais
+        41, 42, 43, 44, 45, 46, // Paraná
+        47, 48, 49, // Santa Catarina
+        51, 53, 54, 55, // Rio Grande do Sul
+        61, // Distrito Federal
+        62, 64, // Goiás
+        63, // Tocantins
+        65, 66, // Mato Grosso
+        67, // Mato Grosso do Sul
+        68, 69, // Acre/Rondônia
+        71, 73, 74, 75, 77, // Bahia
+        79, // Sergipe
+        81, 87, // Pernambuco
+        82, // Alagoas
+        83, // Paraíba
+        84, // Rio Grande do Norte
+        85, 88, // Ceará
+        86, 89, // Piauí
+        91, 93, 94, // Pará
+        92, 97, // Amazonas
+        95, // Roraima
+        96, // Amapá
+        98, 99  // Maranhão
+      ];
+
+      if (validDDDs.includes(ddd)) {
+        return true;
+      }
+    }
+
+    // EUA/Canadá (código 1): 11 dígitos
+    if (phone.startsWith('1') && length === 11) {
       return true;
     }
 
-    // Outros países (códigos 1-99): 12-15 dígitos
-    const countryCode = parseInt(phone.substring(0, 2));
-    if (countryCode >= 1 && countryCode <= 99) {
-      return true;
-    }
+    // Outros países com código de 2 dígitos: validar códigos conhecidos
+    const validCountryCodes = [
+      44,  // UK
+      49,  // Germany
+      33,  // France
+      39,  // Italy
+      34,  // Spain
+      351, // Portugal
+      52,  // Mexico
+      54,  // Argentina
+      56,  // Chile
+      57,  // Colombia
+    ];
 
-    // Países com códigos de 3 dígitos (ex: 351 Portugal, 886 Taiwan)
+    const countryCode2 = parseInt(phone.substring(0, 2));
     const countryCode3 = parseInt(phone.substring(0, 3));
-    if (countryCode3 >= 100 && countryCode3 <= 999 && length >= 12) {
+
+    if (validCountryCodes.includes(countryCode2) || validCountryCodes.includes(countryCode3)) {
       return true;
     }
   }
@@ -205,15 +334,34 @@ function isValidPhone(phone: string): boolean {
 function extractPhoneFromBio(bio: string): string | null {
   if (!bio) return null;
 
-  // Padrões de telefone (Brasil e internacional)
+  // Padrões de telefone (Brasil e internacional) - MELHORADOS
   const patterns = [
-    /\+?\d{2}\s?\(?\d{2}\)?\s?\d{4,5}[-\s]?\d{4}/,  // Brasil: +55 (11) 99999-9999
-    /\(?\d{2,3}\)?\s?\d{4,5}[-\s]?\d{4}/,           // Local: (11) 99999-9999
-    /\+\d{1,3}\s?\d{8,14}/,                          // Internacional
-    /whatsapp:?\s*\+?\d[\d\s()-]{8,}/i,             // WhatsApp na bio
-    /📱\s*\+?\d[\d\s()-]{8,}/,                       // Emoji telefone
-    /tel:?\s*\+?\d[\d\s()-]{8,}/i,                  // tel: na bio
-    /contato:?\s*\+?\d[\d\s()-]{8,}/i               // Contato: na bio
+    // Brasil com código país
+    /\+?\s*55\s*\(?\d{2}\)?\s*\d{4,5}[-\s]?\d{4}/,  // +55 (11) 99999-9999
+    /\+?\s*55\s*\d{2}\s*\d{4,5}[-\s]?\d{4}/,        // +55 11 99999-9999 (sem parênteses)
+
+    // Brasil local (com DDD)
+    /\(?\d{2}\)?\s*\d{4,5}[-\s]?\d{4}/,             // (11) 99999-9999 ou 11 99999-9999
+    /\d{2}\s+\d{4,5}[-\s]?\d{4}/,                   // 11 99999-9999 (com espaço)
+    /\d{10,11}(?!\d)/,                               // 11999999999 (sem separadores)
+
+    // Padrões com texto antes
+    /whatsapp:?\s*\+?\d[\d\s()-]{8,}/i,             // WhatsApp: +55...
+    /zap:?\s*\+?\d[\d\s()-]{8,}/i,                  // Zap: +55...
+    /tel(?:efone)?:?\s*\+?\d[\d\s()-]{8,}/i,        // Tel: ou Telefone:
+    /contato:?\s*\+?\d[\d\s()-]{8,}/i,              // Contato:
+    /fone:?\s*\+?\d[\d\s()-]{8,}/i,                 // Fone:
+    /ligu?e?:?\s*\+?\d[\d\s()-]{8,}/i,              // Ligue: ou Liga:
+    /agende:?\s*\+?\d[\d\s()-]{8,}/i,               // Agende:
+
+    // Emojis
+    /📱\s*\+?\d[\d\s()-]{8,}/,                       // 📱
+    /☎️\s*\+?\d[\d\s()-]{8,}/,                       // ☎️
+    /📞\s*\+?\d[\d\s()-]{8,}/,                       // 📞
+    /📲\s*\+?\d[\d\s()-]{8,}/,                       // 📲
+
+    // Internacional
+    /\+\d{1,3}\s?\d{8,14}/                           // +1 555 123 4567
   ];
 
   for (const pattern of patterns) {
@@ -246,8 +394,18 @@ async function extractFromWebsite(websiteUrl: string): Promise<{ email: string |
       }
     }
 
-    // Skip URLs de redes sociais
-    const skipDomains = ['instagram.com', 'facebook.com', 'twitter.com', 'tiktok.com', 'linkedin.com', 'youtube.com', 'linktr.ee', 'beacons.ai'];
+    // Skip URLs de redes sociais (threads.com SEMPRE tem telefone fake 6446901002)
+    const skipDomains = [
+      'instagram.com',
+      'facebook.com',
+      'twitter.com',
+      'tiktok.com',
+      'linkedin.com',
+      'youtube.com',
+      'linktr.ee',
+      'beacons.ai',
+      'threads.com'  // CRÍTICO: Sempre retorna ID fake 6446901002
+    ];
     if (skipDomains.some(domain => cleanUrl.includes(domain))) {
       return { email: null, phone: null };
     }
@@ -307,9 +465,9 @@ async function extractFromWebsite(websiteUrl: string): Promise<{ email: string |
 }
 
 /**
- * Usa GPT-4o Mini para extrair email e telefone da bio
+ * Usa GPT-4o Mini para extrair NOME COMPLETO, email e telefone da bio
  */
-async function extractContactsWithAI(bio: string): Promise<{ email: string | null; phone: string | null }> {
+async function extractContactsWithAI(bio: string): Promise<{ full_name: string | null; email: string | null; phone: string | null }> {
   try {
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -319,20 +477,36 @@ async function extractContactsWithAI(bio: string): Promise<{ email: string | nul
           content: `Você é um especialista em extrair informações de contato de biografias do Instagram.
 
 TAREFA:
-Extraia EMAIL e TELEFONE da bio, se existirem.
+Extraia NOME COMPLETO, EMAIL e TELEFONE da bio, se existirem.
 
-REGRAS:
-1. Identifique emails mesmo escritos de forma criativa (ex: "gmail ponto com", "arroba", etc.)
-2. Identifique telefones em qualquer formato (com/sem DDD, com/sem código do país)
-3. Ignore emails genéricos (noreply@, no-reply@)
-4. Retorne em formato JSON: {"email": "...", "phone": "..."}
-5. Se não encontrar, use null
+REGRAS IMPORTANTES:
+1. NOME COMPLETO (CRÍTICO):
+   - Procure por nome próprio de pessoa/profissional na primeira linha da bio
+   - Ignore nomes de clínicas/empresas SE houver nome de pessoa
+   - Exemplos: "Dra. Maria Silva", "João Santos - Nutricionista", "Ana Costa"
+   - Se só tem nome de clínica/empresa, retorne null
 
-EXEMPLOS DE BIO:
-- "📧 contato arroba gmail.com | 📱11 99999-9999" → {"email": "contato@gmail.com", "phone": "11999999999"}
-- "WhatsApp: (11) 98765-4321" → {"email": null, "phone": "11987654321"}
-- "Email para parcerias: maria ponto silva @ outlook" → {"email": "maria.silva@outlook.com", "phone": null}
-- "Consultoria 🔥" → {"email": null, "phone": null}`
+2. Identifique emails mesmo escritos de forma criativa:
+   - "arroba" ou "@" = @
+   - "ponto" ou "." = .
+   - Espaços entre caracteres
+   - Underscores, hífens, números
+
+3. Identifique telefones em QUALQUER formato:
+   - Com/sem DDD, com/sem código do país
+   - Com/sem parênteses, espaços, hífens
+   - Após emojis (📱, ☎️, 📞, 📲)
+   - Após palavras-chave (WhatsApp, Zap, Tel, Fone, Contato, Agende, Ligue)
+
+4. Ignore emails genéricos (noreply@, no-reply@, info@)
+5. Retorne SOMENTE JSON: {"full_name": "...", "email": "...", "phone": "..."}
+6. Se não encontrar, use null
+
+EXEMPLOS PRÁTICOS:
+- "Dra. Maria Silva\n📧 contato@gmail.com | 📱11 99999-9999" → {"full_name": "Maria Silva", "email": "contato@gmail.com", "phone": "11999999999"}
+- "João Santos - Dermatologista\nWhatsApp: (11) 98765-4321" → {"full_name": "João Santos", "email": null, "phone": "11987654321"}
+- "Clínica Beleza\nEmail: clinica@outlook.com" → {"full_name": null, "email": "clinica@outlook.com", "phone": null}
+- "Ana Costa | Nutricionista\n📱 11 9 8765-4321" → {"full_name": "Ana Costa", "email": null, "phone": "11987654321"}`
         },
         {
           role: 'user',
@@ -340,17 +514,42 @@ EXEMPLOS DE BIO:
         }
       ],
       temperature: 0.3,
-      max_tokens: 100,
+      max_tokens: 150,
       response_format: { type: "json_object" }
     });
 
     const result = response.choices[0]?.message?.content?.trim();
 
+    // Rastrear custos da API
+    if (response.usage) {
+      costMetrics.total_calls++;
+      costMetrics.contact_extraction_calls++;
+      costMetrics.total_prompt_tokens += response.usage.prompt_tokens;
+      costMetrics.total_completion_tokens += response.usage.completion_tokens;
+      costMetrics.total_tokens += response.usage.total_tokens;
+      const callCost = (response.usage.prompt_tokens * GPT4O_MINI_INPUT_COST) +
+                       (response.usage.completion_tokens * GPT4O_MINI_OUTPUT_COST);
+      costMetrics.total_cost_usd += callCost;
+    }
+
     if (!result) {
-      return { email: null, phone: null };
+      return { full_name: null, email: null, phone: null };
     }
 
     const parsed = JSON.parse(result);
+
+    // Extrair e limpar nome completo
+    let full_name = parsed.full_name;
+    if (full_name && typeof full_name === 'string') {
+      full_name = full_name.trim();
+      // Remover títulos profissionais (Dr., Dra., etc.)
+      full_name = full_name.replace(/^(Dr\.?a?|Professor\.?a?)\s+/i, '').trim();
+      if (full_name.length < 3) {
+        full_name = null;
+      }
+    } else {
+      full_name = null;
+    }
 
     // Validar email extraído
     let email = parsed.email;
@@ -368,11 +567,11 @@ EXEMPLOS DE BIO:
       }
     }
 
-    return { email, phone };
+    return { full_name, email, phone };
 
   } catch (error: any) {
     console.log(`   ⚠️  Erro ao usar AI para extrair contatos: ${error.message}`);
-    return { email: null, phone: null };
+    return { full_name: null, email: null, phone: null };
   }
 }
 
@@ -433,6 +632,18 @@ EXEMPLOS:
     });
 
     const result = response.choices[0]?.message?.content?.trim();
+
+    // Rastrear custos da API
+    if (response.usage) {
+      costMetrics.total_calls++;
+      costMetrics.name_extraction_calls++;
+      costMetrics.total_prompt_tokens += response.usage.prompt_tokens;
+      costMetrics.total_completion_tokens += response.usage.completion_tokens;
+      costMetrics.total_tokens += response.usage.total_tokens;
+      const callCost = (response.usage.prompt_tokens * GPT4O_MINI_INPUT_COST) +
+                       (response.usage.completion_tokens * GPT4O_MINI_OUTPUT_COST);
+      costMetrics.total_cost_usd += callCost;
+    }
 
     if (!result || result.length < 3) {
       return null;
@@ -527,6 +738,165 @@ function extractFullNameFromUsername(username: string): string {
 }
 
 /**
+ * Extrai cidade e estado de hashtags
+ */
+function extractCityStateFromHashtags(hashtags: string[] | null): { city: string | null; state: string | null; neighborhood: string | null } {
+  if (!hashtags || hashtags.length === 0) {
+    return { city: null, state: null, neighborhood: null };
+  }
+
+  // Mapa de cidades brasileiras principais (lowercase)
+  const cityMap: Record<string, { city: string; state: string }> = {
+    'saopaulo': { city: 'São Paulo', state: 'SP' },
+    'riodejaneiro': { city: 'Rio de Janeiro', state: 'RJ' },
+    'belohorizonte': { city: 'Belo Horizonte', state: 'MG' },
+    'brasilia': { city: 'Brasília', state: 'DF' },
+    'curitiba': { city: 'Curitiba', state: 'PR' },
+    'fortaleza': { city: 'Fortaleza', state: 'CE' },
+    'salvador': { city: 'Salvador', state: 'BA' },
+    'recife': { city: 'Recife', state: 'PE' },
+    'portoalegre': { city: 'Porto Alegre', state: 'RS' },
+    'manaus': { city: 'Manaus', state: 'AM' },
+    'goiania': { city: 'Goiânia', state: 'GO' },
+    'campinas': { city: 'Campinas', state: 'SP' },
+    'natal': { city: 'Natal', state: 'RN' },
+    'florianopolis': { city: 'Florianópolis', state: 'SC' },
+    'vitoria': { city: 'Vitória', state: 'ES' }
+  };
+
+  // Bairros conhecidos do Rio de Janeiro e São Paulo
+  const neighborhoodMap: Record<string, { neighborhood: string; city: string; state: string }> = {
+    'barradatijuca': { neighborhood: 'Barra da Tijuca', city: 'Rio de Janeiro', state: 'RJ' },
+    'copacabana': { neighborhood: 'Copacabana', city: 'Rio de Janeiro', state: 'RJ' },
+    'ipanema': { neighborhood: 'Ipanema', city: 'Rio de Janeiro', state: 'RJ' },
+    'leblon': { neighborhood: 'Leblon', city: 'Rio de Janeiro', state: 'RJ' },
+    'botafogo': { neighborhood: 'Botafogo', city: 'Rio de Janeiro', state: 'RJ' },
+    'tucuruvi': { neighborhood: 'Tucuruvi', city: 'São Paulo', state: 'SP' },
+    'moema': { neighborhood: 'Moema', city: 'São Paulo', state: 'SP' },
+    'pinheiros': { neighborhood: 'Pinheiros', city: 'São Paulo', state: 'SP' },
+    'vilamariana': { neighborhood: 'Vila Mariana', city: 'São Paulo', state: 'SP' },
+    'zonanorte': { neighborhood: 'Zona Norte', city: 'São Paulo', state: 'SP' },
+    'zonasul': { neighborhood: 'Zona Sul', city: 'São Paulo', state: 'SP' }
+  };
+
+  let city: string | null = null;
+  let state: string | null = null;
+  let neighborhood: string | null = null;
+
+  for (const tag of hashtags) {
+    const tagLower = tag.toLowerCase().replace(/[^a-z]/g, '');
+
+    // Verificar bairros primeiro (mais específico)
+    if (neighborhoodMap[tagLower]) {
+      neighborhood = neighborhoodMap[tagLower].neighborhood;
+      city = neighborhoodMap[tagLower].city;
+      state = neighborhoodMap[tagLower].state;
+      break; // Bairro é mais específico, podemos parar
+    }
+
+    // Verificar cidades
+    if (cityMap[tagLower]) {
+      city = cityMap[tagLower].city;
+      state = cityMap[tagLower].state;
+    }
+  }
+
+  return { city, state, neighborhood };
+}
+
+/**
+ * Extrai telefone de link do WhatsApp
+ */
+function extractPhoneFromWhatsAppLink(websiteUrl: string): string | null {
+  if (!websiteUrl) return null;
+
+  // Padrões de links WhatsApp
+  const patterns = [
+    /wa\.me\/(\d+)/,
+    /whatsapp\.com\/send\?phone=(\d+)/,
+    /api\.whatsapp\.com\/send\?phone=(\d+)/,
+    /message\/([A-Z0-9]+)/i  // WhatsApp Business link code
+  ];
+
+  for (const pattern of patterns) {
+    const match = websiteUrl.match(pattern);
+    if (match && match[1]) {
+      const phone = match[1].replace(/\D+/g, '');
+      if (isValidPhone(phone)) {
+        return phone;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Detecta se full_name é na verdade um endereço
+ */
+function extractAddressFromFullName(fullName: string): { address: string | null; city: string | null; state: string | null; zipCode: string | null } {
+  if (!fullName) {
+    return { address: null, city: null, state: null, zipCode: null };
+  }
+
+  // Padrões que indicam endereço
+  const addressIndicators = [
+    /\b(rua|av|avenida|alameda|travessa|praça|largo)\b/i,
+    /\d{5}-?\d{3}/, // CEP
+    /\b(brasil|brazil)\b/i,
+    /,\s*\d+\s*,/ // Número de endereço
+  ];
+
+  const hasAddressIndicator = addressIndicators.some(pattern => pattern.test(fullName));
+
+  if (!hasAddressIndicator) {
+    return { address: null, city: null, state: null, zipCode: null };
+  }
+
+  // Extrair CEP
+  const zipMatch = fullName.match(/(\d{5}-?\d{3})/);
+  const zipCode = zipMatch ? zipMatch[1].replace('-', '') : null;
+
+  // Extrair cidade (geralmente antes de "Brazil" ou após vírgula)
+  let city: string | null = null;
+  const cityMatch = fullName.match(/,\s*([^,]+),?\s*(Brazil|Brasil)?/i);
+  if (cityMatch) {
+    city = cityMatch[1].trim();
+  }
+
+  // Tentar extrair estado (sigla de 2 letras)
+  const stateMatch = fullName.match(/\b([A-Z]{2})\b/);
+  const state = stateMatch ? stateMatch[1] : null;
+
+  return {
+    address: fullName,
+    city,
+    state,
+    zipCode
+  };
+}
+
+/**
+ * Separa primeiro nome e sobrenome
+ */
+function splitFirstLastName(fullName: string): { firstName: string | null; lastName: string | null } {
+  if (!fullName || fullName.length < 3) {
+    return { firstName: null, lastName: null };
+  }
+
+  const parts = fullName.trim().split(/\s+/);
+
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: null };
+  }
+
+  const firstName = parts[0];
+  const lastName = parts.slice(1).join(' ');
+
+  return { firstName, lastName };
+}
+
+/**
  * Enriquece um lead específico
  */
 async function enrichLead(lead: InstagramLead): Promise<EnrichmentResult> {
@@ -541,76 +911,90 @@ async function enrichLead(lead: InstagramLead): Promise<EnrichmentResult> {
     enriched: {
       full_name: lead.full_name,
       email: lead.email,
-      phone: lead.phone
+      phone: lead.phone,
+      first_name: null,
+      last_name: null,
+      city: null,
+      state: null,
+      neighborhood: null,
+      address: null,
+      zip_code: null
     },
-    sources: []
+    sources: [],
+    consent_indicators: []
   };
 
-  // 1. FULL NAME - Se estiver vazio ou igual ao username, tentar extrair
-  if (!lead.full_name || lead.full_name === lead.username) {
-    // Primeiro tentar com regex (rápido e grátis)
-    let extractedName = extractFullNameFromUsername(lead.username);
+  // Detectar indicadores de consentimento para marketing
+  result.consent_indicators = detectConsentIndicators(lead.bio, lead.website);
 
-    // Se o resultado não tiver espaços E for longo, usar AI para melhorar
-    const needsAI = !extractedName.includes(' ') && extractedName.length > 15;
-
-    if (needsAI) {
-      console.log(`   🤖 Usando AI para extrair nome de: ${lead.username}`);
-      const aiName = await extractNameWithAI(lead.username);
-      if (aiName) {
-        extractedName = aiName;
-        result.sources.push('username-ai');
-      }
-    }
-
-    if (extractedName !== lead.username && extractedName.length >= 3) {
-      result.enriched.full_name = extractedName;
-      if (!result.sources.includes('username-ai')) {
-        result.sources.push('username');
-      }
-      console.log(`   ✅ Nome extraído: ${extractedName}`);
-    }
-  }
-
-  // 2. EMAIL - Tentar extrair da bio
-  if (!lead.email && lead.bio) {
-    const emailFromBio = extractEmailFromBio(lead.bio);
-    if (emailFromBio) {
-      result.enriched.email = emailFromBio;
-      result.sources.push('bio');
-      console.log(`   ✅ Email encontrado na bio: ${emailFromBio}`);
-    }
-  }
-
-  // 3. PHONE - Tentar extrair da bio
-  if (!lead.phone && lead.bio) {
-    const phoneFromBio = extractPhoneFromBio(lead.bio);
-    if (phoneFromBio) {
-      result.enriched.phone = phoneFromBio;
-      result.sources.push('bio');
-      console.log(`   ✅ Telefone encontrado na bio: ${phoneFromBio}`);
-    }
-  }
-
-  // 3.5. Se não achou email/phone na bio com regex, tentar com AI
-  if ((!result.enriched.email || !result.enriched.phone) && lead.bio && lead.bio.length > 20) {
-    console.log(`   🤖 Usando AI para extrair contatos da bio`);
+  // 1. TENTAR EXTRAIR NOME + EMAIL + TELEFONE DA BIO COM AI (PRIORIDADE MÁXIMA)
+  if (lead.bio && lead.bio.length > 20) {
+    console.log(`   🤖 Usando AI para extrair nome/contatos da bio`);
     const aiContacts = await extractContactsWithAI(lead.bio);
 
+    // 1.1. Nome da bio tem PRIORIDADE sobre username
+    if (aiContacts.full_name && aiContacts.full_name.length >= 3) {
+      result.enriched.full_name = aiContacts.full_name;
+      result.sources.push('bio-ai');
+      console.log(`   ✅ Nome encontrado na bio: ${aiContacts.full_name}`);
+    }
+
+    // 1.2. Email da bio
     if (!result.enriched.email && aiContacts.email) {
       result.enriched.email = aiContacts.email;
       result.sources.push('bio-ai');
-      console.log(`   ✅ Email encontrado com AI: ${aiContacts.email}`);
+      console.log(`   ✅ Email encontrado na bio: ${aiContacts.email}`);
     }
 
+    // 1.3. Telefone da bio
     if (!result.enriched.phone && aiContacts.phone) {
       result.enriched.phone = aiContacts.phone;
       result.sources.push('bio-ai');
-      console.log(`   ✅ Telefone encontrado com AI: ${aiContacts.phone}`);
+      console.log(`   ✅ Telefone encontrado na bio: ${aiContacts.phone}`);
     }
   }
 
-  // 4. EMAIL/PHONE - Tentar extrair do website
+  // 2. FALLBACK: Extrair EMAIL da bio com regex (se AI não encontrou)
+  if (!result.enriched.email && lead.bio) {
+    const emailFromBio = extractEmailFromBio(lead.bio);
+    if (emailFromBio) {
+      result.enriched.email = emailFromBio;
+      result.sources.push('bio-regex');
+      console.log(`   ✅ Email encontrado na bio (regex): ${emailFromBio}`);
+    }
+  }
+
+  // 3. FALLBACK: Extrair PHONE da bio com regex (se AI não encontrou)
+  if (!result.enriched.phone && lead.bio) {
+    const phoneFromBio = extractPhoneFromBio(lead.bio);
+    if (phoneFromBio) {
+      result.enriched.phone = phoneFromBio;
+      result.sources.push('bio-regex');
+      console.log(`   ✅ Telefone encontrado na bio (regex): ${phoneFromBio}`);
+    }
+  }
+
+  // 4. FALLBACK: Extrair nome do USERNAME (se não encontrou na bio)
+  if (!result.enriched.full_name && (!lead.full_name || lead.full_name === lead.username)) {
+    console.log(`   🤖 Usando AI para extrair nome do username: ${lead.username}`);
+    const aiName = await extractNameWithAI(lead.username);
+
+    if (aiName && aiName.length >= 3) {
+      result.enriched.full_name = aiName;
+      result.sources.push('username-ai');
+      console.log(`   ✅ Nome extraído do username: ${aiName}`);
+    } else {
+      // Último fallback: usar regex no username
+      const extractedName = extractFullNameFromUsername(lead.username);
+      if (extractedName !== lead.username && extractedName.length >= 3) {
+        result.enriched.full_name = extractedName;
+        result.sources.push('username-regex');
+        console.log(`   ✅ Nome extraído do username (regex): ${extractedName}`);
+      }
+    }
+  }
+
+  // 5. EMAIL/PHONE - Tentar extrair do website
   if ((!result.enriched.email || !result.enriched.phone) && lead.website) {
     const websiteData = await extractFromWebsite(lead.website);
 
@@ -627,35 +1011,180 @@ async function enrichLead(lead: InstagramLead): Promise<EnrichmentResult> {
     }
   }
 
+  // 5. PHONE - Tentar extrair de link WhatsApp
+  if (!result.enriched.phone && lead.website) {
+    const phoneFromWhatsApp = extractPhoneFromWhatsAppLink(lead.website);
+    if (phoneFromWhatsApp) {
+      result.enriched.phone = phoneFromWhatsApp;
+      result.sources.push('whatsapp-link');
+      console.log(`   ✅ Telefone extraído de link WhatsApp: ${phoneFromWhatsApp}`);
+    }
+  }
+
+  // 6. CITY/STATE/NEIGHBORHOOD - Extrair de hashtags (bio + posts combinados)
+  const allHashtags = [...(lead.hashtags_bio || []), ...(lead.hashtags_posts || [])];
+  const locationFromHashtags = extractCityStateFromHashtags(allHashtags);
+  if (locationFromHashtags.city) {
+    result.enriched.city = locationFromHashtags.city;
+    result.enriched.state = locationFromHashtags.state;
+    result.enriched.neighborhood = locationFromHashtags.neighborhood;
+    result.sources.push('hashtags');
+    console.log(`   ✅ Localização extraída de hashtags: ${locationFromHashtags.neighborhood ? locationFromHashtags.neighborhood + ', ' : ''}${locationFromHashtags.city}/${locationFromHashtags.state}`);
+  }
+
+  // 7. ADDRESS - Verificar se full_name é endereço
+  if (result.enriched.full_name) {
+    const addressData = extractAddressFromFullName(result.enriched.full_name);
+    if (addressData.address) {
+      result.enriched.address = addressData.address;
+      result.enriched.zip_code = addressData.zipCode;
+
+      // Sobrescrever cidade/estado se encontrado no endereço
+      if (addressData.city && !result.enriched.city) {
+        result.enriched.city = addressData.city;
+      }
+      if (addressData.state && !result.enriched.state) {
+        result.enriched.state = addressData.state;
+      }
+
+      // Limpar full_name para tentar extrair nome real
+      result.enriched.full_name = null;
+      result.sources.push('address-from-fullname');
+      console.log(`   ✅ Endereço detectado em full_name: ${addressData.city || ''}${addressData.state ? '/' + addressData.state : ''} (CEP: ${addressData.zipCode || 'N/A'})`);
+    }
+  }
+
+  // 8. FIRST_NAME/LAST_NAME - Separar nome completo
+  if (result.enriched.full_name) {
+    const { firstName, lastName } = splitFirstLastName(result.enriched.full_name);
+    result.enriched.first_name = firstName;
+    result.enriched.last_name = lastName;
+    if (firstName) {
+      console.log(`   ✅ Nome separado: ${firstName}${lastName ? ' ' + lastName : ''}`);
+    }
+  }
+
   return result;
 }
 
 /**
- * Atualiza lead no banco de dados
+ * Detecta indicadores de consentimento para marketing direto na bio
  */
-async function updateLead(result: EnrichmentResult): Promise<boolean> {
-  try {
-    const { error } = await supabase
-      .from('instagram_leads')
-      .update({
-        full_name: result.enriched.full_name,
-        email: result.enriched.email,
-        phone: result.enriched.phone,
-        dado_enriquecido: true,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', result.id);
+function detectConsentIndicators(bio: string | null, website: string | null): string[] {
+  const indicators: string[] = [];
 
-    if (error) {
-      console.error(`   ❌ Erro ao atualizar lead ${result.id}:`, error.message);
-      return false;
+  if (!bio && !website) return indicators;
+
+  const text = `${bio || ''} ${website || ''}`.toLowerCase();
+
+  // Padrões que indicam abertura para contato comercial
+  const patterns = {
+    'parcerias': /parcerias?|parceria comercial|partner/i,
+    'orcamento': /orçamento|cotação|solicite.*orçamento/i,
+    'consulta': /consulta gratuita|agende.*consulta|marque.*consulta/i,
+    'contato_comercial': /aceito contato|contato comercial|fale.*conosco/i,
+    'whatsapp_business': /whatsapp.*atendimento|whatsapp.*comercial|whatsapp business/i,
+    'agende': /agende|agendar|marque.*horário|reserve.*horário/i,
+    'link_agendamento': /calendly|agendor|schedule|booking/i,
+    'orcamentos': /solicite|peça.*orçamento|pedir.*orçamento/i,
+    'atendimento': /atendimento|suporte|help desk/i,
+    'formulario': /formulário|preencha|cadastr/i,
+    'email_contato': /contato.*@|email.*contato/i,
+    'dm_aberto': /dm.*aberto|direct.*aberto|respondo.*dm/i
+  };
+
+  for (const [key, pattern] of Object.entries(patterns)) {
+    if (pattern.test(text)) {
+      indicators.push(key);
     }
-
-    return true;
-  } catch (error: any) {
-    console.error(`   ❌ Erro ao atualizar lead ${result.id}:`, error.message);
-    return false;
   }
+
+  // Presença de telefone/email na bio indica abertura
+  if (bio) {
+    if (/\+?\d{2,3}\s*\(?\d{2}\)?[\s-]?\d{4,5}[\s-]?\d{4}/.test(bio)) {
+      indicators.push('telefone_publico');
+    }
+    if (/[a-z0-9._-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(bio)) {
+      indicators.push('email_publico');
+    }
+  }
+
+  return indicators;
+}
+
+/**
+ * Gera arquivo CSV com os resultados do enriquecimento
+ */
+function generateCSV(results: EnrichmentResult[]): string {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+  const filename = `enriquecimento-leads-${timestamp}.csv`;
+  const filepath = join(process.cwd(), filename);
+
+  // Cabeçalho do CSV
+  const headers = [
+    'username',
+    'full_name',
+    'first_name',
+    'last_name',
+    'email',
+    'phone',
+    'city',
+    'state',
+    'neighborhood',
+    'address',
+    'zip_code',
+    'sources',
+    'utilizavel_facebook', // nome + (telefone OU email)
+    'indicadores_consentimento', // Indicadores de abertura para marketing
+    'score_consentimento' // Quantidade de indicadores (0-N)
+  ].join(',');
+
+  // Linhas de dados
+  const rows = results.map(r => {
+    const utilizavel = (r.enriched.first_name && (r.enriched.phone || r.enriched.email)) ? 'SIM' : 'NAO';
+    const indicadores = r.consent_indicators.join('; ');
+    const scoreConsentimento = r.consent_indicators.length;
+
+    return [
+      r.username,
+      escapeCSV(r.enriched.full_name),
+      escapeCSV(r.enriched.first_name),
+      escapeCSV(r.enriched.last_name),
+      escapeCSV(r.enriched.email),
+      escapeCSV(r.enriched.phone),
+      escapeCSV(r.enriched.city),
+      escapeCSV(r.enriched.state),
+      escapeCSV(r.enriched.neighborhood),
+      escapeCSV(r.enriched.address),
+      escapeCSV(r.enriched.zip_code),
+      escapeCSV(r.sources.join('; ')),
+      utilizavel,
+      escapeCSV(indicadores),
+      scoreConsentimento
+    ].join(',');
+  });
+
+  // Combinar cabeçalho + dados
+  const csvContent = [headers, ...rows].join('\n');
+
+  // Salvar arquivo
+  writeFileSync(filepath, csvContent, 'utf-8');
+
+  return filename;
+}
+
+/**
+ * Escapa caracteres especiais para CSV
+ */
+function escapeCSV(value: string | null): string {
+  if (!value) return '';
+
+  // Se contém vírgula, aspas ou quebra de linha, envolver em aspas
+  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+
+  return value;
 }
 
 /**
@@ -664,13 +1193,15 @@ async function updateLead(result: EnrichmentResult): Promise<boolean> {
 async function main() {
   console.log('🔍 ENRIQUECIMENTO DE LEADS DO INSTAGRAM\n');
 
-  // 1. Buscar apenas leads não enriquecidos
+  // 1. Buscar apenas leads não enriquecidos (LIMITADO A 50 PARA VALIDAÇÃO)
   console.log('📊 Buscando leads não enriquecidos da tabela instagram_leads...');
+  console.log('⚠️  MODO VALIDAÇÃO: Processando 50 leads + análise de consentimento\n');
   const { data: leads, error } = await supabase
     .from('instagram_leads')
-    .select('id, username, full_name, bio, email, phone, website')
+    .select('id, username, full_name, bio, email, phone, website, hashtags_bio, hashtags_posts, segment')
     .eq('dado_enriquecido', false)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(50);  // VALIDAÇÃO: 50 leads para análise profunda
 
   if (error) {
     console.error('❌ Erro ao buscar leads:', error.message);
@@ -721,8 +1252,7 @@ async function main() {
 
     if (hasChanges) {
       enrichedCount++;
-      console.log(`   📝 Atualizando no banco... (fontes: ${result.sources.join(', ')})`);
-      await updateLead(result);
+      console.log(`   ✅ Enriquecido (fontes: ${result.sources.join(', ')})`);
     } else {
       console.log(`   ℹ️  Sem novos dados encontrados`);
     }
@@ -762,6 +1292,54 @@ async function main() {
         }
       });
   }
+
+  // 6. Gerar CSV com resultados
+  console.log('\n📄 Gerando arquivo CSV...');
+  const csvFilename = generateCSV(results);
+  console.log(`✅ CSV gerado: ${csvFilename}`);
+
+  // 7. Calcular leads utilizáveis para Facebook
+  const utilizaveis = results.filter(r =>
+    r.enriched.first_name && (r.enriched.phone || r.enriched.email)
+  ).length;
+  const taxaUtilizavel = ((utilizaveis / results.length) * 100).toFixed(1);
+
+  console.log('\n📊 MÉTRICAS FACEBOOK CUSTOM AUDIENCE:');
+  console.log(`   Leads utilizáveis (nome + telefone/email): ${utilizaveis}/${results.length} (${taxaUtilizavel}%)`);
+  console.log(`   Meta: 75%`);
+  console.log(`   Status: ${parseFloat(taxaUtilizavel) >= 75 ? '✅ META ATINGIDA!' : '❌ Abaixo da meta'}`);
+
+  // 7.1 Análise de consentimento para marketing direto
+  const comIndicadores = results.filter(r => r.consent_indicators.length > 0).length;
+  const comAltoConsentimento = results.filter(r => r.consent_indicators.length >= 2).length;
+  const indicadoresMaisComuns = results
+    .flatMap(r => r.consent_indicators)
+    .reduce((acc, ind) => {
+      acc[ind] = (acc[ind] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+  console.log('\n🔒 ANÁLISE DE CONSENTIMENTO PARA MARKETING:');
+  console.log(`   Leads com indicadores de consentimento: ${comIndicadores}/${results.length} (${((comIndicadores / results.length) * 100).toFixed(1)}%)`);
+  console.log(`   Leads com alto consentimento (2+ indicadores): ${comAltoConsentimento}/${results.length} (${((comAltoConsentimento / results.length) * 100).toFixed(1)}%)`);
+  console.log(`   Top 5 indicadores mais comuns:`);
+  Object.entries(indicadoresMaisComuns)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .forEach(([ind, count]) => {
+      console.log(`      - ${ind}: ${count} leads`);
+    });
+
+  // 8. Relatório de custos OpenAI
+  console.log('\n💰 CUSTOS OPENAI (GPT-4o-mini):');
+  console.log(`   Total de chamadas: ${costMetrics.total_calls}`);
+  console.log(`   - Extração de nomes: ${costMetrics.name_extraction_calls}`);
+  console.log(`   - Extração de contatos: ${costMetrics.contact_extraction_calls}`);
+  console.log(`   Tokens de entrada: ${costMetrics.total_prompt_tokens.toLocaleString()}`);
+  console.log(`   Tokens de saída: ${costMetrics.total_completion_tokens.toLocaleString()}`);
+  console.log(`   Total de tokens: ${costMetrics.total_tokens.toLocaleString()}`);
+  console.log(`   Custo total: $${costMetrics.total_cost_usd.toFixed(4)}`);
+  console.log(`   Custo por lead: $${(costMetrics.total_cost_usd / results.length).toFixed(4)}`);
 
   console.log('\n🎉 Enriquecimento concluído!');
 }
