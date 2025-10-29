@@ -329,6 +329,84 @@ function isValidPhone(phone: string): boolean {
 }
 
 /**
+ * Normaliza telefone brasileiro adicionando código de país se necessário
+ */
+function normalizePhone(phone: string): string {
+  if (!phone) return phone;
+
+  // Já tem código de país (começa com 55 e tem 12-13 dígitos)
+  if (phone.startsWith('55') && phone.length >= 12 && phone.length <= 13) {
+    return phone;
+  }
+
+  // Telefone brasileiro sem código de país (10-11 dígitos)
+  if (phone.length >= 10 && phone.length <= 11) {
+    const ddd = parseInt(phone.substring(0, 2));
+    const validDDDs = [
+      11, 12, 13, 14, 15, 16, 17, 18, 19, // São Paulo
+      21, 22, 24, // Rio de Janeiro
+      27, 28, // Espírito Santo
+      31, 32, 33, 34, 35, 37, 38, // Minas Gerais
+      41, 42, 43, 44, 45, 46, // Paraná
+      47, 48, 49, // Santa Catarina
+      51, 53, 54, 55, // Rio Grande do Sul
+      61, // Distrito Federal
+      62, 64, // Goiás
+      63, // Tocantins
+      65, 66, // Mato Grosso
+      67, // Mato Grosso do Sul
+      68, 69, // Acre/Rondônia
+      71, 73, 74, 75, 77, // Bahia
+      79, // Sergipe
+      81, 87, // Pernambuco
+      82, // Alagoas
+      83, // Paraíba
+      84, // Rio Grande do Norte
+      85, 88, // Ceará
+      86, 89, // Piauí
+      91, 93, 94, // Pará
+      92, 97, // Amazonas
+      95, // Roraima
+      96, // Amapá
+      98, 99  // Maranhão
+    ];
+
+    if (validDDDs.includes(ddd)) {
+      return '55' + phone;
+    }
+  }
+
+  // Retorna sem modificação para outros casos
+  return phone;
+}
+
+/**
+ * Extrai telefone de URLs do WhatsApp (wa.me)
+ */
+function extractPhoneFromWhatsAppUrl(url: string): string | null {
+  if (!url) return null;
+
+  // Padrões de URLs do WhatsApp
+  const patterns = [
+    /wa\.me\/(\d+)/i,                        // wa.me/5511999999999
+    /api\.whatsapp\.com\/send\?phone=(\d+)/i, // api.whatsapp.com/send?phone=5511999999999
+    /whatsapp:\/\/send\?phone=(\d+)/i        // whatsapp://send?phone=5511999999999
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      const phone = match[1];
+      if (isValidPhone(phone)) {
+        return phone;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Extrai telefone da bio usando regex
  */
 function extractPhoneFromBio(bio: string): string | null {
@@ -422,18 +500,29 @@ async function extractFromWebsite(websiteUrl: string): Promise<{ email: string |
 
     const html = response.data;
 
-    // Extrair email com validação
+    // Extrair email com validação (padrões melhorados)
     let email: string | null = null;
-    const emailMatches = html.match(/\b[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+\b/g);
-    if (emailMatches) {
-      // Tentar todos os matches até encontrar um válido
-      for (const match of emailMatches) {
-        const candidate = match.toLowerCase();
+
+    // Padrões específicos para aumentar taxa de captura
+    const emailPatterns = [
+      // Padrão 1: href="mailto:email@domain.com"
+      /href=["']mailto:([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)["']/gi,
+      // Padrão 2: >email@domain.com< (dentro de tags)
+      />([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)</g,
+      // Padrão 3: email padrão em qualquer lugar
+      /\b[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+\b/g
+    ];
+
+    for (const pattern of emailPatterns) {
+      const matches = Array.from(html.matchAll(pattern)) as RegExpMatchArray[];
+      for (const match of matches) {
+        const candidate = (match[1] || match[0]).toLowerCase().trim();
         if (isValidEmail(candidate)) {
           email = candidate;
           break;
         }
       }
+      if (email) break;
     }
 
     // Extrair telefone com validação
@@ -465,9 +554,15 @@ async function extractFromWebsite(websiteUrl: string): Promise<{ email: string |
 }
 
 /**
- * Usa GPT-4o Mini para extrair NOME COMPLETO, email e telefone da bio
+ * Usa GPT-4o Mini para extrair NOME COMPLETO, email, telefone e LOCALIZAÇÃO da bio
  */
-async function extractContactsWithAI(bio: string): Promise<{ full_name: string | null; email: string | null; phone: string | null }> {
+async function extractContactsWithAI(bio: string): Promise<{
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  state: string | null;
+}> {
   try {
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -477,7 +572,7 @@ async function extractContactsWithAI(bio: string): Promise<{ full_name: string |
           content: `Você é um especialista em extrair informações de contato de biografias do Instagram.
 
 TAREFA:
-Extraia NOME COMPLETO, EMAIL e TELEFONE da bio, se existirem.
+Extraia NOME COMPLETO, EMAIL, TELEFONE e LOCALIZAÇÃO (cidade/estado) da bio, se existirem.
 
 REGRAS IMPORTANTES:
 1. NOME COMPLETO (CRÍTICO):
@@ -498,15 +593,20 @@ REGRAS IMPORTANTES:
    - Após emojis (📱, ☎️, 📞, 📲)
    - Após palavras-chave (WhatsApp, Zap, Tel, Fone, Contato, Agende, Ligue)
 
-4. Ignore emails genéricos (noreply@, no-reply@, info@)
-5. Retorne SOMENTE JSON: {"full_name": "...", "email": "...", "phone": "..."}
-6. Se não encontrar, use null
+4. LOCALIZAÇÃO (NOVO):
+   - Procure por menções a cidade/estado na bio
+   - Exemplos: "São Paulo - SP", "Rio de Janeiro/RJ", "Salvador, BA", "Curitiba"
+   - Extraia city e state separadamente
+   - Use sigla de 2 letras para state (SP, RJ, MG, etc)
+
+5. Ignore emails genéricos (noreply@, no-reply@, info@)
+6. Retorne SOMENTE JSON: {"full_name": "...", "email": "...", "phone": "...", "city": "...", "state": "..."}
+7. Se não encontrar, use null
 
 EXEMPLOS PRÁTICOS:
-- "Dra. Maria Silva\n📧 contato@gmail.com | 📱11 99999-9999" → {"full_name": "Maria Silva", "email": "contato@gmail.com", "phone": "11999999999"}
-- "João Santos - Dermatologista\nWhatsApp: (11) 98765-4321" → {"full_name": "João Santos", "email": null, "phone": "11987654321"}
-- "Clínica Beleza\nEmail: clinica@outlook.com" → {"full_name": null, "email": "clinica@outlook.com", "phone": null}
-- "Ana Costa | Nutricionista\n📱 11 9 8765-4321" → {"full_name": "Ana Costa", "email": null, "phone": "11987654321"}`
+- "Dra. Maria Silva\nSão Paulo - SP\n📧 contato@gmail.com" → {"full_name": "Maria Silva", "email": "contato@gmail.com", "phone": null, "city": "São Paulo", "state": "SP"}
+- "João Santos | Salvador, BA\nWhatsApp: (71) 98765-4321" → {"full_name": "João Santos", "email": null, "phone": "71987654321", "city": "Salvador", "state": "BA"}
+- "Ana Costa | Nutricionista\nRio de Janeiro\n📱 21 9 8765-4321" → {"full_name": "Ana Costa", "email": null, "phone": "21987654321", "city": "Rio de Janeiro", "state": "RJ"}`
         },
         {
           role: 'user',
@@ -514,7 +614,7 @@ EXEMPLOS PRÁTICOS:
         }
       ],
       temperature: 0.3,
-      max_tokens: 150,
+      max_tokens: 200,
       response_format: { type: "json_object" }
     });
 
@@ -533,7 +633,7 @@ EXEMPLOS PRÁTICOS:
     }
 
     if (!result) {
-      return { full_name: null, email: null, phone: null };
+      return { full_name: null, email: null, phone: null, city: null, state: null };
     }
 
     const parsed = JSON.parse(result);
@@ -567,11 +667,27 @@ EXEMPLOS PRÁTICOS:
       }
     }
 
-    return { full_name, email, phone };
+    // Extrair localização
+    let city = parsed.city || null;
+    let state = parsed.state || null;
+
+    // Limpar e validar city
+    if (city && typeof city === 'string') {
+      city = city.trim();
+      if (city.length < 3) city = null;
+    }
+
+    // Limpar e validar state (deve ser sigla de 2 letras)
+    if (state && typeof state === 'string') {
+      state = state.trim().toUpperCase();
+      if (state.length !== 2) state = null;
+    }
+
+    return { full_name, email, phone, city, state };
 
   } catch (error: any) {
     console.log(`   ⚠️  Erro ao usar AI para extrair contatos: ${error.message}`);
-    return { full_name: null, email: null, phone: null };
+    return { full_name: null, email: null, phone: null, city: null, state: null };
   }
 }
 
@@ -805,33 +921,6 @@ function extractCityStateFromHashtags(hashtags: string[] | null): { city: string
 }
 
 /**
- * Extrai telefone de link do WhatsApp
- */
-function extractPhoneFromWhatsAppLink(websiteUrl: string): string | null {
-  if (!websiteUrl) return null;
-
-  // Padrões de links WhatsApp
-  const patterns = [
-    /wa\.me\/(\d+)/,
-    /whatsapp\.com\/send\?phone=(\d+)/,
-    /api\.whatsapp\.com\/send\?phone=(\d+)/,
-    /message\/([A-Z0-9]+)/i  // WhatsApp Business link code
-  ];
-
-  for (const pattern of patterns) {
-    const match = websiteUrl.match(pattern);
-    if (match && match[1]) {
-      const phone = match[1].replace(/\D+/g, '');
-      if (isValidPhone(phone)) {
-        return phone;
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
  * Detecta se full_name é na verdade um endereço
  */
 function extractAddressFromFullName(fullName: string): { address: string | null; city: string | null; state: string | null; zipCode: string | null } {
@@ -948,9 +1037,17 @@ async function enrichLead(lead: InstagramLead): Promise<EnrichmentResult> {
 
     // 1.3. Telefone da bio
     if (!result.enriched.phone && aiContacts.phone) {
-      result.enriched.phone = aiContacts.phone;
+      result.enriched.phone = normalizePhone(aiContacts.phone);
       result.sources.push('bio-ai');
-      console.log(`   ✅ Telefone encontrado na bio: ${aiContacts.phone}`);
+      console.log(`   ✅ Telefone encontrado na bio: ${result.enriched.phone}`);
+    }
+
+    // 1.4. Localização da bio (city/state) - TEM PRIORIDADE sobre hashtags
+    if (!result.enriched.city && aiContacts.city) {
+      result.enriched.city = aiContacts.city;
+      result.enriched.state = aiContacts.state;
+      result.sources.push('bio-ai-location');
+      console.log(`   ✅ Localização encontrada na bio: ${aiContacts.city}${aiContacts.state ? '/' + aiContacts.state : ''}`);
     }
   }
 
@@ -968,9 +1065,9 @@ async function enrichLead(lead: InstagramLead): Promise<EnrichmentResult> {
   if (!result.enriched.phone && lead.bio) {
     const phoneFromBio = extractPhoneFromBio(lead.bio);
     if (phoneFromBio) {
-      result.enriched.phone = phoneFromBio;
+      result.enriched.phone = normalizePhone(phoneFromBio);
       result.sources.push('bio-regex');
-      console.log(`   ✅ Telefone encontrado na bio (regex): ${phoneFromBio}`);
+      console.log(`   ✅ Telefone encontrado na bio (regex): ${result.enriched.phone}`);
     }
   }
 
@@ -994,7 +1091,17 @@ async function enrichLead(lead: InstagramLead): Promise<EnrichmentResult> {
     }
   }
 
-  // 5. EMAIL/PHONE - Tentar extrair do website
+  // 5. PHONE - Tentar extrair de link WhatsApp PRIMEIRO (mais preciso que scraping)
+  if (!result.enriched.phone && lead.website) {
+    const phoneFromWhatsApp = extractPhoneFromWhatsAppUrl(lead.website);
+    if (phoneFromWhatsApp) {
+      result.enriched.phone = normalizePhone(phoneFromWhatsApp);
+      result.sources.push('whatsapp-url');
+      console.log(`   ✅ Telefone extraído de link WhatsApp: ${result.enriched.phone}`);
+    }
+  }
+
+  // 6. EMAIL/PHONE - Tentar extrair do website (scraping HTML)
   if ((!result.enriched.email || !result.enriched.phone) && lead.website) {
     const websiteData = await extractFromWebsite(lead.website);
 
@@ -1005,19 +1112,9 @@ async function enrichLead(lead: InstagramLead): Promise<EnrichmentResult> {
     }
 
     if (!result.enriched.phone && websiteData.phone) {
-      result.enriched.phone = websiteData.phone;
+      result.enriched.phone = normalizePhone(websiteData.phone);
       result.sources.push('website');
-      console.log(`   ✅ Telefone encontrado no website: ${websiteData.phone}`);
-    }
-  }
-
-  // 5. PHONE - Tentar extrair de link WhatsApp
-  if (!result.enriched.phone && lead.website) {
-    const phoneFromWhatsApp = extractPhoneFromWhatsAppLink(lead.website);
-    if (phoneFromWhatsApp) {
-      result.enriched.phone = phoneFromWhatsApp;
-      result.sources.push('whatsapp-link');
-      console.log(`   ✅ Telefone extraído de link WhatsApp: ${phoneFromWhatsApp}`);
+      console.log(`   ✅ Telefone encontrado no website: ${result.enriched.phone}`);
     }
   }
 
