@@ -1,0 +1,422 @@
+{
+  "name": "Instagram Leads Enriquecidos",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "1",
+      "name": "Cron Diário (2 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": "instagram_leads",
+        "select": "id, username, full_name, bio, email, phone, website, hashtags_bio, hashtags_posts, segment",
+        "filterType": "manual",
+        "matchMode": "matchAny",
+        "conditions": {
+          "conditions": [
+            {
+              "keyName": "dado_enriquecido",
+              "keyValue": "false",
+              "condition": "equals"
+            }
+          ]
+        },
+        "sort": {
+          "values": [
+            {
+              "key": "created_at",
+              "direction": "desc"
+            }
+          ]
+        },
+        "limit": 100,
+        "options": {}
+      },
+      "id": "2",
+      "name": "Supabase: Buscar Leads Não Enriquecidos",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3",
+      "name": "IF: Tem Leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Importar o service de enriquecimento\nconst { enrichSingleLead } = require('/Users/marseau/Developer/WhatsAppSalon-N8N/src/services/instagram-lead-enrichment.service.ts');\n\n// Processar todos os leads recebidos\nconst leads = $input.all();\nconst enrichedResults = [];\n\nconsole.log(`\\n📊 Processando ${leads.length} leads...`);\n\nfor (let i = 0; i < leads.length; i++) {\n  const lead = leads[i].json;\n  \n  console.log(`\\n[${i + 1}/${leads.length}] @${lead.username}`);\n  \n  try {\n    // Enriquecer lead individualmente\n    const result = await enrichSingleLead(lead);\n    enrichedResults.push(result);\n    \n    // Delay de 500ms entre chamadas para evitar rate limiting\n    await new Promise(resolve => setTimeout(resolve, 500));\n    \n  } catch (error) {\n    console.error(`   ❌ Erro ao enriquecer @${lead.username}:`, error.message);\n    \n    // Mesmo com erro, marcar como processado para não travar\n    enrichedResults.push({\n      id: lead.id,\n      username: lead.username,\n      enriched: {},\n      sources: [],\n      should_mark_enriched: true\n    });\n  }\n}\n\nconsole.log(`\\n✅ ${enrichedResults.length} leads processados\\n`);\n\nreturn enrichedResults;"
+      },
+      "id": "4",
+      "name": "Code: Enriquecer Todos os Leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "5",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": "instagram_leads",
+        "filterType": "manual",
+        "matchMode": "matchAny",
+        "conditions": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.id }}",
+              "condition": "equals"
+            }
+          ]
+        },
+        "updateFields": {
+          "fields": [
+            {
+              "fieldName": "full_name",
+              "fieldValue": "={{ $json.enriched.full_name || null }}"
+            },
+            {
+              "fieldName": "first_name",
+              "fieldValue": "={{ $json.enriched.first_name || null }}"
+            },
+            {
+              "fieldName": "last_name",
+              "fieldValue": "={{ $json.enriched.last_name || null }}"
+            },
+            {
+              "fieldName": "email",
+              "fieldValue": "={{ $json.enriched.email || null }}"
+            },
+            {
+              "fieldName": "phone",
+              "fieldValue": "={{ $json.enriched.phone || null }}"
+            },
+            {
+              "fieldName": "city",
+              "fieldValue": "={{ $json.enriched.city || null }}"
+            },
+            {
+              "fieldName": "state",
+              "fieldValue": "={{ $json.enriched.state || null }}"
+            },
+            {
+              "fieldName": "address",
+              "fieldValue": "={{ $json.enriched.address || null }}"
+            },
+            {
+              "fieldName": "zip_code",
+              "fieldValue": "={{ $json.enriched.zip_code || null }}"
+            },
+            {
+              "fieldName": "dado_enriquecido",
+              "fieldValue": "true"
+            },
+            {
+              "fieldName": "updated_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6",
+      "name": "Supabase: Update Lead Enriquecido",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        200
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": "instagram_leads",
+        "select": "count",
+        "filterType": "manual",
+        "matchMode": "matchAny",
+        "conditions": {
+          "conditions": [
+            {
+              "keyName": "dado_enriquecido",
+              "keyValue": "false",
+              "condition": "equals"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7",
+      "name": "Supabase: Verificar Leads Restantes",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        200
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.count }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8",
+      "name": "IF: Ainda Tem Leads Não Enriquecidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "9",
+      "name": "NoOp: Workflow Completo",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        300
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron Diário (2 AM)": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Buscar Leads Não Enriquecidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Buscar Leads Não Enriquecidos": {
+      "main": [
+        [
+          {
+            "node": "IF: Tem Leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Tem Leads?": {
+      "main": [
+        [
+          {
+            "node": "Code: Enriquecer Todos os Leads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NoOp: Workflow Completo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Enriquecer Todos os Leads": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Update Lead Enriquecido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Update Lead Enriquecido": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        null,
+        [
+          {
+            "node": "Supabase: Verificar Leads Restantes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Verificar Leads Restantes": {
+      "main": [
+        [
+          {
+            "node": "IF: Ainda Tem Leads Não Enriquecidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Ainda Tem Leads Não Enriquecidos?": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Buscar Leads Não Enriquecidos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NoOp: Workflow Completo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "instanceId": "local"
+  },
+  "id": "instagram-leads-enrichment",
+  "tags": [
+    {
+      "createdAt": "2025-10-29T20:00:00.000Z",
+      "updatedAt": "2025-10-29T20:00:00.000Z",
+      "id": "1",
+      "name": "Instagram"
+    },
+    {
+      "createdAt": "2025-10-29T20:00:00.000Z",
+      "updatedAt": "2025-10-29T20:00:00.000Z",
+      "id": "2",
+      "name": "Enrichment"
+    }
+  ]
+}
