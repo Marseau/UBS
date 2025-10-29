@@ -286,6 +286,26 @@ export async function scrapeInstagramUserSearch(
         // Delay após carregar página (simular leitura do perfil)
         await antiDetectionDelay();
 
+        // CRÍTICO: Clicar no botão "... mais" para expandir bio completa (se existir)
+        try {
+          const moreButtonClicked = await page.evaluate(() => {
+            const elements = Array.from(document.querySelectorAll('header section div, header section span'));
+            const maisButton = elements.find(el => el.textContent?.trim() === 'mais');
+            if (maisButton) {
+              (maisButton as HTMLElement).click();
+              return true;
+            }
+            return false;
+          });
+
+          if (moreButtonClicked) {
+            console.log(`   ✅ Botão "mais" clicado - bio expandida`);
+            await new Promise(resolve => setTimeout(resolve, 800));
+          }
+        } catch (error: any) {
+          // Silencioso - não é crítico se falhar
+        }
+
         // Extrair dados do perfil (estratégia multi-seletor para robustez)
         const profileData = await page.evaluate(() => {
           // FULL NAME: Múltiplas estratégias de extração
@@ -311,14 +331,16 @@ export async function scrapeInstagramUserSearch(
             }
           }
 
-          // BIO: Múltiplos seletores
+          // BIO: Múltiplos seletores (atualizados para capturar bio expandida)
           let bio = '';
           const bioSelectors = [
-            'header section div.-vDIg span',  // Novo seletor específico
-            'header section div[data-testid]',
-            'header section span._ap3a',
-            'header section > div > div:nth-child(2) span',
-            'main header section > div > div span'
+            'header section h1._ap3a._aaco._aacu._aacx._aad6._aade',  // Container principal da bio
+            'header section span._ap3a._aaco._aacu._aacx._aad6._aade', // Texto da bio dentro do span
+            'header section div > span._ap3a',                         // Span direto dentro de div
+            'header section div[style*="white-space"]',                 // Div com estilo de quebra de linha
+            'header section h1 > span',                                 // Span dentro do h1
+            'header section div[data-testid]',                          // Fallback com data-testid
+            'header section span._ap3a'                                 // Fallback genérico
           ];
 
           for (const selector of bioSelectors) {

@@ -801,14 +801,62 @@ export async function scrapeInstagramTag(
           // EXTRAIR DADOS VISUALMENTE DA PÁGINA ATUAL usando CSS selectors
           console.log(`   📊 Extraindo dados visíveis da página do perfil...`);
 
+          // CRÍTICO: Clicar no botão "... mais" para expandir bio completa (se existir)
+          try {
+            const moreButtonClicked = await page.evaluate(() => {
+              const elements = Array.from(document.querySelectorAll('header section div, header section span'));
+              const maisButton = elements.find(el => el.textContent?.trim() === 'mais');
+              if (maisButton) {
+                (maisButton as HTMLElement).click();
+                return true;
+              }
+              return false;
+            });
+
+            if (moreButtonClicked) {
+              console.log(`   ✅ Botão "mais" clicado - bio expandida`);
+              await new Promise(resolve => setTimeout(resolve, 800));
+            }
+          } catch (error: any) {
+            // Silencioso - não é crítico se falhar
+          }
+
           const profileData = await page.evaluate(() => {
             // Extrair nome completo (h2 ou span no header)
             const fullNameEl = document.querySelector('header section h2, header section span');
             const full_name = fullNameEl ? fullNameEl.textContent?.trim() || '' : '';
 
-            // Extrair bio
-            const bioEl = document.querySelector('header section div[data-testid], header section span._ap3a');
-            const bio = bioEl ? bioEl.textContent?.trim() || '' : '';
+            // Extrair bio (MÚLTIPLOS SELETORES para capturar bio COMPLETA, não truncada)
+            let bio = '';
+            const bioSelectors = [
+              // Seletores atualizados do Instagram (2024/2025)
+              'header section h1._ap3a._aaco._aacu._aacx._aad6._aade',  // Container principal da bio
+              'header section span._ap3a._aaco._aacu._aacx._aad6._aade', // Texto da bio dentro do span
+              'header section div > span._ap3a',                         // Span direto dentro de div
+              'header section div[style*="white-space"]',                 // Div com estilo de quebra de linha
+              'header section h1 > span',                                 // Span dentro do h1
+              'header section div[data-testid]',                          // Fallback com data-testid
+              'header section span._ap3a'                                 // Fallback genérico
+            ];
+
+            for (const selector of bioSelectors) {
+              const el = document.querySelector(selector);
+              if (el && el.textContent && el.textContent.trim().length > 10) {
+                bio = el.textContent.trim();
+                console.log(`✅ Bio capturada via seletor: ${selector}`);
+                break; // Pegou a bio, para de procurar
+              }
+            }
+
+            // Se ainda não achou, tentar pegar todo o texto da section (menos cabeçalho)
+            if (!bio || bio.length < 10) {
+              const sectionEl = document.querySelector('header section');
+              if (sectionEl) {
+                const fullText = sectionEl.textContent || '';
+                // Remover contadores (números grandes)
+                bio = fullText.replace(/\d+[.,]?\d*\s*(mil|K|M|seguidores|publicações|seguindo)/gi, '').trim();
+              }
+            }
 
             // Extrair números (followers, following, posts) - SELETORES ABRANGENTES
             const stats: string[] = [];
@@ -1123,13 +1171,60 @@ export async function scrapeInstagramProfile(username: string): Promise<{
     // Delay humano após carregar página
     await humanDelay();
 
+    // CRÍTICO: Clicar no botão "... mais" para expandir bio completa (se existir)
+    try {
+      const moreButtonClicked = await page.evaluate(() => {
+        const elements = Array.from(document.querySelectorAll('header section div, header section span'));
+        const maisButton = elements.find(el => el.textContent?.trim() === 'mais');
+        if (maisButton) {
+          (maisButton as HTMLElement).click();
+          return true;
+        }
+        return false;
+      });
+
+      if (moreButtonClicked) {
+        console.log(`   ✅ Botão "mais" clicado - bio expandida`);
+        await new Promise(resolve => setTimeout(resolve, 800));
+      }
+    } catch (error: any) {
+      // Silencioso - não é crítico se falhar
+    }
+
+    // Extrair bio via CSS selector (tem prioridade sobre JSON pois JSON pode estar truncado)
+    const bioFromDOM = await page.evaluate(() => {
+      const bioSelectors = [
+        'header section h1._ap3a._aaco._aacu._aacx._aad6._aade',
+        'header section span._ap3a._aaco._aacu._aacx._aad6._aade',
+        'header section div > span._ap3a',
+        'header section div[style*="white-space"]',
+        'header section h1 > span',
+        'header section div[data-testid]',
+        'header section span._ap3a'
+      ];
+
+      for (const selector of bioSelectors) {
+        const el = document.querySelector(selector);
+        if (el && el.textContent && el.textContent.trim().length > 10) {
+          return el.textContent.trim();
+        }
+      }
+      return null;
+    });
+
     // Extrair HTML completo da página (MESMA LÓGICA DO SCRIPT FUNCIONAL)
     const html = await page.content();
 
     // Aplicar REGEX para extrair dados do JSON embutido no HTML
+    // NOTA: O JSON do Instagram às vezes trunca a bio com "|... mais"
+    // Por isso o seletor CSS tem prioridade para capturar bio completa
     const usernameMatch = html.match(/"username":"([^"]+)"/);
     const fullNameMatch = html.match(/"full_name":"([^"]+)"/);
-    const bioMatch = html.match(/"biography":"([^"]+)"/);
+
+    // Bio: capturar incluindo quebras de linha escapadas (\n, \r, etc)
+    // Regex mais robusto que aceita escapes
+    const bioMatch = html.match(/"biography":"((?:[^"\\]|\\.)*)"/);
+
     const followersMatch = html.match(/"edge_followed_by":\{"count":([0-9]+)\}/);
     const followingMatch = html.match(/"edge_follow":\{"count":([0-9]+)\}/);
     const postsMatch = html.match(/"edge_owner_to_timeline_media":\{"count":([0-9]+)\}/);
@@ -1149,7 +1244,8 @@ export async function scrapeInstagramProfile(username: string): Promise<{
     const profileData = {
       username: decodeInstagramString(usernameMatch[1]),
       full_name: decodeInstagramString(fullNameMatch ? fullNameMatch[1] : null),
-      bio: decodeInstagramString(bioMatch ? bioMatch[1] : null),
+      // Bio do CSS selector tem prioridade (bio expandida), fallback para JSON
+      bio: bioFromDOM || decodeInstagramString(bioMatch ? bioMatch[1] : null),
       followers: followersMatch ? followersMatch[1] : '0',
       following: followingMatch ? followingMatch[1] : '0',
       posts: postsMatch ? postsMatch[1] : '0',
