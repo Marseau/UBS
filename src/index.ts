@@ -553,6 +553,16 @@ try {
   console.error('❌ Failed to load Instagram Webhook routes:', error);
 }
 
+// Instagram Enrichment Routes - Enrich lead data via API (used by N8N workflow)
+try {
+  const instagramEnrichmentRoutes = require('./routes/instagram-enrichment.routes');
+  const router = 'default' in instagramEnrichmentRoutes ? instagramEnrichmentRoutes.default : instagramEnrichmentRoutes;
+  app.use('/api/instagram', router);
+  console.log('✅ Instagram Enrichment routes loaded - N8N INTEGRATION READY');
+} catch (error) {
+  console.error('❌ Failed to load Instagram Enrichment routes:', error);
+}
+
 // Account Actions Routes - Record social media actions (multi-platform)
 try {
   const accountActionsRoutes = require('./routes/account-actions.routes');

@@ -1,0 +1,294 @@
+{
+  "name": "Instagram Leads Enriquecidos",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Cron Diário (2 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "getAll",
+        "tableId": "instagram_leads",
+        "returnAll": false,
+        "limit": 100,
+        "filterType": "string",
+        "filterString": "dado_enriquecido=eq.false",
+        "sort": "-created_at"
+      },
+      "id": "supabase-select",
+      "name": "Supabase: Buscar Leads",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "if-has-leads",
+      "name": "IF: Tem Leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-batch",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/instagram/enrich-lead",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "http-enrich",
+      "name": "HTTP: Enriquecer Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "update",
+        "tableId": "instagram_leads",
+        "filterType": "string",
+        "filterString": "id=eq.{{ $json.id }}",
+        "updateFields": {
+          "full_name": "={{ $json.full_name }}",
+          "first_name": "={{ $json.first_name }}",
+          "last_name": "={{ $json.last_name }}",
+          "email": "={{ $json.email }}",
+          "phone": "={{ $json.phone }}",
+          "city": "={{ $json.city }}",
+          "state": "={{ $json.state }}",
+          "address": "={{ $json.address }}",
+          "zip_code": "={{ $json.zip_code }}",
+          "dado_enriquecido": true,
+          "updated_at": "={{ $now.toISO() }}"
+        }
+      },
+      "id": "supabase-update",
+      "name": "Supabase: Update Lead",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1340, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "getAll",
+        "tableId": "instagram_leads",
+        "returnAll": false,
+        "limit": 1,
+        "filterType": "string",
+        "filterString": "dado_enriquecido=eq.false",
+        "options": {
+          "select": "count"
+        }
+      },
+      "id": "supabase-count",
+      "name": "Supabase: Count Restantes",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1560, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.count }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "if-has-more",
+      "name": "IF: Tem Mais Leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {},
+      "id": "noop-done",
+      "name": "Workflow Completo",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2000, 300]
+    }
+  ],
+  "connections": {
+    "Cron Diário (2 AM)": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Buscar Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Buscar Leads": {
+      "main": [
+        [
+          {
+            "node": "IF: Tem Leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Tem Leads?": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Workflow Completo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Enriquecer Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Count Restantes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Enriquecer Lead": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Update Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Update Lead": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Count Restantes": {
+      "main": [
+        [
+          {
+            "node": "IF: Tem Mais Leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Tem Mais Leads?": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Buscar Leads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Workflow Completo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "local"
+  },
+  "tags": []
+}
