@@ -1,0 +1,1027 @@
+{
+  "name": "Instagram Follow Unfollow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-follow",
+      "name": "Cron Follow (10 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 200]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 20 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-check",
+      "name": "Cron Check (8 PM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 600]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 23 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-unfollow",
+      "name": "Cron Unfollow (11 PM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 1000]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "instagram_leads",
+        "returnAll": false,
+        "limit": 100,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "follow_status",
+              "condition": "eq",
+              "keyValue": "not_followed"
+            },
+            {
+              "keyName": "dado_enriquecido",
+              "condition": "eq",
+              "keyValue": "true"
+            }
+          ]
+        },
+        "sort": {
+          "field": "created_at",
+          "direction": "desc"
+        }
+      },
+      "id": "supabase-select-follow",
+      "name": "Supabase: Buscar Para Follow",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [460, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "instagram_leads",
+        "returnAll": false,
+        "limit": 200,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "follow_status",
+              "condition": "eq",
+              "keyValue": "following"
+            }
+          ]
+        },
+        "sort": {
+          "field": "followed_at",
+          "direction": "asc"
+        }
+      },
+      "id": "supabase-select-check",
+      "name": "Supabase: Buscar Para Check",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [460, 600],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "instagram_leads",
+        "returnAll": false,
+        "limit": 500,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "follow_status",
+              "condition": "eq",
+              "keyValue": "following"
+            }
+          ]
+        },
+        "additionalFields": {
+          "filter": "followed_at.lt.{{ $now.minus({ days: 3 }).toISO() }}"
+        },
+        "sort": {
+          "field": "followed_at",
+          "direction": "asc"
+        }
+      },
+      "id": "supabase-select-unfollow",
+      "name": "Supabase: Buscar Para Unfollow",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [460, 1000],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "if-has-follow",
+      "name": "IF: Tem Leads Para Follow?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "if-has-check",
+      "name": "IF: Tem Leads Para Check?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "if-has-unfollow",
+      "name": "IF: Tem Leads Para Unfollow?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 1000]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-follow",
+      "name": "Split Follow",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [900, 100]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-check",
+      "name": "Split Check",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [900, 500]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-unfollow",
+      "name": "Split Unfollow",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [900, 900]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/instagram/follow-lead",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ JSON.stringify({ lead_id: $json.id, username: $json.username }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "http-follow",
+      "name": "HTTP: Follow Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1120, 100]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/instagram/check-follow-back",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ JSON.stringify({ lead_id: $json.id, username: $json.username }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "http-check",
+      "name": "HTTP: Check Follow Back",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1120, 500]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/instagram/unfollow-lead",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ JSON.stringify({ lead_id: $json.id, username: $json.username }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "http-unfollow",
+      "name": "HTTP: Unfollow Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1120, 900]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "instagram_leads",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.lead_id }}"
+            }
+          ]
+        },
+        "updateFields": {
+          "fields": [
+            {
+              "column": "follow_status",
+              "fieldValue": "={{ $json.follow_status }}"
+            },
+            {
+              "column": "followed_at",
+              "fieldValue": "={{ $json.followed_at }}"
+            },
+            {
+              "column": "last_follow_attempt_at",
+              "fieldValue": "={{ $json.last_follow_attempt_at }}"
+            },
+            {
+              "column": "updated_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "supabase-update-follow",
+      "name": "Supabase: Update Lead (Follow)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1340, 100],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "instagram_leads",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.lead_id }}"
+            }
+          ]
+        },
+        "updateFields": {
+          "fields": [
+            {
+              "column": "follow_status",
+              "fieldValue": "={{ $json.follow_status }}"
+            },
+            {
+              "column": "updated_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "supabase-update-check",
+      "name": "Supabase: Update Lead (Check)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1340, 500],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "instagram_leads",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.lead_id }}"
+            }
+          ]
+        },
+        "updateFields": {
+          "fields": [
+            {
+              "column": "follow_status",
+              "fieldValue": "={{ $json.follow_status }}"
+            },
+            {
+              "column": "unfollowed_at",
+              "fieldValue": "={{ $json.unfollowed_at }}"
+            },
+            {
+              "column": "updated_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "supabase-update-unfollow",
+      "name": "Supabase: Update Lead (Unfollow)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1340, 900],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "account_actions",
+        "fieldsToSend": "defineBelow",
+        "fields": {
+          "fields": [
+            {
+              "column": "lead_id",
+              "fieldValue": "={{ $json.lead_id }}"
+            },
+            {
+              "column": "username",
+              "fieldValue": "={{ $json.username }}"
+            },
+            {
+              "column": "action_type",
+              "fieldValue": "={{ $json.action_type }}"
+            },
+            {
+              "column": "executed_at",
+              "fieldValue": "={{ $json.executed_at }}"
+            },
+            {
+              "column": "success",
+              "fieldValue": "={{ $json.success }}"
+            },
+            {
+              "column": "error_message",
+              "fieldValue": "={{ $json.error_message }}"
+            },
+            {
+              "column": "execution_method",
+              "fieldValue": "n8n_workflow"
+            },
+            {
+              "column": "source_platform",
+              "fieldValue": "instagram"
+            }
+          ]
+        }
+      },
+      "id": "supabase-insert-follow",
+      "name": "Supabase: Insert Action (Follow)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1560, 100],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "account_actions",
+        "fieldsToSend": "defineBelow",
+        "fields": {
+          "fields": [
+            {
+              "column": "lead_id",
+              "fieldValue": "={{ $json.lead_id }}"
+            },
+            {
+              "column": "username",
+              "fieldValue": "={{ $json.username }}"
+            },
+            {
+              "column": "action_type",
+              "fieldValue": "check_follow_back"
+            },
+            {
+              "column": "executed_at",
+              "fieldValue": "={{ $json.checked_at }}"
+            },
+            {
+              "column": "success",
+              "fieldValue": "={{ $json.success }}"
+            },
+            {
+              "column": "execution_method",
+              "fieldValue": "n8n_workflow"
+            },
+            {
+              "column": "source_platform",
+              "fieldValue": "instagram"
+            }
+          ]
+        }
+      },
+      "id": "supabase-insert-check",
+      "name": "Supabase: Insert Action (Check)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1560, 500],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "account_actions",
+        "fieldsToSend": "defineBelow",
+        "fields": {
+          "fields": [
+            {
+              "column": "lead_id",
+              "fieldValue": "={{ $json.lead_id }}"
+            },
+            {
+              "column": "username",
+              "fieldValue": "={{ $json.username }}"
+            },
+            {
+              "column": "action_type",
+              "fieldValue": "={{ $json.action_type }}"
+            },
+            {
+              "column": "executed_at",
+              "fieldValue": "={{ $json.executed_at }}"
+            },
+            {
+              "column": "success",
+              "fieldValue": "={{ $json.success }}"
+            },
+            {
+              "column": "error_message",
+              "fieldValue": "={{ $json.error_message }}"
+            },
+            {
+              "column": "execution_method",
+              "fieldValue": "n8n_workflow"
+            },
+            {
+              "column": "source_platform",
+              "fieldValue": "instagram"
+            }
+          ]
+        }
+      },
+      "id": "supabase-insert-unfollow",
+      "name": "Supabase: Insert Action (Unfollow)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1560, 900],
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "👥 *Follow executado*\n\n@{{ $json.username }}\nStatus: {{ $json.success ? '✅ Sucesso' : '❌ Erro' }}\nHorário: {{ $json.executed_at }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-follow",
+      "name": "Telegram: Notificar Follow",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1780, 100],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "{{ $json.followed_back ? '🎉 *Follow Back Detectado!*' : '⏳ *Aguardando Follow Back*' }}\n\n@{{ $json.username }}\nHorário: {{ $json.checked_at }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-check",
+      "name": "Telegram: Notificar Check",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1780, 500],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "🗑️ *Unfollow executado*\n\n@{{ $json.username }}\nMotivo: Sem follow back em 3 dias\nStatus: {{ $json.success ? '✅ Sucesso' : '❌ Erro' }}\nHorário: {{ $json.executed_at }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-unfollow",
+      "name": "Telegram: Notificar Unfollow",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1780, 900],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "id": "wait-follow",
+      "name": "Wait 2s (Follow)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2000, 100]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "id": "wait-check",
+      "name": "Wait 2s (Check)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2000, 500]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "id": "wait-unfollow",
+      "name": "Wait 2s (Unfollow)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2000, 900]
+    },
+    {
+      "parameters": {},
+      "id": "noop-done-follow",
+      "name": "Done Follow",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2220, 200]
+    },
+    {
+      "parameters": {},
+      "id": "noop-done-check",
+      "name": "Done Check",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2220, 600]
+    },
+    {
+      "parameters": {},
+      "id": "noop-done-unfollow",
+      "name": "Done Unfollow",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2220, 1000]
+    }
+  ],
+  "connections": {
+    "Cron Follow (10 AM)": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Buscar Para Follow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cron Check (8 PM)": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Buscar Para Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cron Unfollow (11 PM)": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Buscar Para Unfollow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Buscar Para Follow": {
+      "main": [
+        [
+          {
+            "node": "IF: Tem Leads Para Follow?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Buscar Para Check": {
+      "main": [
+        [
+          {
+            "node": "IF: Tem Leads Para Check?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Buscar Para Unfollow": {
+      "main": [
+        [
+          {
+            "node": "IF: Tem Leads Para Unfollow?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Tem Leads Para Follow?": {
+      "main": [
+        [
+          {
+            "node": "Split Follow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Done Follow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Tem Leads Para Check?": {
+      "main": [
+        [
+          {
+            "node": "Split Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Done Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Tem Leads Para Unfollow?": {
+      "main": [
+        [
+          {
+            "node": "Split Unfollow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Done Unfollow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Follow": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Follow Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Check": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Check Follow Back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Unfollow": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Unfollow Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Follow Lead": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Update Lead (Follow)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Check Follow Back": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Update Lead (Check)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Unfollow Lead": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Update Lead (Unfollow)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Update Lead (Follow)": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Action (Follow)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Update Lead (Check)": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Action (Check)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Update Lead (Unfollow)": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Action (Unfollow)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Action (Follow)": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Notificar Follow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Action (Check)": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Notificar Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Action (Unfollow)": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Notificar Unfollow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Notificar Follow": {
+      "main": [
+        [
+          {
+            "node": "Wait 2s (Follow)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Notificar Check": {
+      "main": [
+        [
+          {
+            "node": "Wait 2s (Check)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Notificar Unfollow": {
+      "main": [
+        [
+          {
+            "node": "Wait 2s (Unfollow)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 2s (Follow)": {
+      "main": [
+        [
+          {
+            "node": "Split Follow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 2s (Check)": {
+      "main": [
+        [
+          {
+            "node": "Split Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 2s (Unfollow)": {
+      "main": [
+        [
+          {
+            "node": "Split Unfollow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "local"
+  },
+  "tags": []
+}
