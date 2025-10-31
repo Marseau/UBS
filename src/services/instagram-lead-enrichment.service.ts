@@ -10,10 +10,11 @@ interface InstagramLead {
   id: string;
   username: string;
   full_name?: string | null;
+  profession?: string | null;
   bio?: string | null;
   email?: string | null;
   phone?: string | null;
-  website?: string | null;
+  website?: string | null;  // Link da bio do Instagram (Linktree, WhatsApp, site, etc)
   hashtags_bio?: any[];
   hashtags_posts?: any[];
   segment?: string | null;
@@ -23,6 +24,7 @@ interface EnrichedData {
   full_name?: string | null;
   first_name?: string | null;
   last_name?: string | null;
+  profession?: string | null;  // Qualificação profissional específica (Cardiologista, Nutricionista, etc)
   email?: string | null;
   phone?: string | null;
   city?: string | null;
@@ -193,12 +195,19 @@ function extractPhoneFromWhatsAppUrl(url: string): string | null {
 // EXTRAÇÃO COM AI (GPT-4o-mini)
 // ============================================
 
-async function extractContactsWithAI(bio: string): Promise<{
+async function extractContactsWithAI(
+  fullName: string | null,
+  bio: string | null,
+  website: string | null
+): Promise<{
   full_name: string | null;
+  profession: string | null;
   email: string | null;
   phone: string | null;
   city: string | null;
   state: string | null;
+  address: string | null;
+  zip_code: string | null;
   business_category: string | null;
   hashtags_bio: string[];
 }> {
@@ -208,80 +217,86 @@ async function extractContactsWithAI(bio: string): Promise<{
       messages: [
         {
           role: 'system',
-          content: `Você é um especialista em extrair informações de biografias do Instagram.
+          content: `Você é um analista especialista em extrair informações de perfis do Instagram.
+
+Fontes fornecidas:
+1. FULL_NAME (nome completo do perfil)
+2. BIO (biografia do perfil)
+3. WEBSITE (link da bio: Linktree, WhatsApp, Bio.site, etc.)
 
 TAREFA:
-Extraia NOME, EMAIL, TELEFONE, LOCALIZAÇÃO, CATEGORIA DE NEGÓCIO e HASHTAGS da bio.
+Gerar um JSON com os campos:
+{
+ "full_name": "...",
+ "profession": "...",
+ "email": "...",
+ "phone": "...",
+ "city": "...",
+ "state": "...",
+ "address": "...",
+ "zip_code": "...",
+ "business_category": "...",
+ "hashtags_bio": [...]
+}
 
-REGRAS DE EXTRAÇÃO:
+### Regras Gerais:
+- Use TODAS as fontes, priorizando: FULL_NAME > BIO > WEBSITE
+- Retorne null para dados ausentes e [] para hashtags vazias
 
-1. NOME (MUITO IMPORTANTE - SEJA RIGOROSO):
-   - Extraia APENAS nomes próprios completos de PESSOAS (mínimo nome + sobrenome)
-   - NÃO extraia profissão isolada ou profissão + sobrenome
-   - NÃO extraia nome de empresa/clínica sem ser nome de pessoa
-   - Remova prefixos profissionais (Dr., Dra., Nutricionista, Fisioterapeuta, etc)
+#### 1. full_name
+- Extraia apenas nome e sobrenome de pessoa física
+- Remova títulos (Dr., Dra.) e apelidos profissionais (Nutri, Fisio, Psico, Dra, Dr, etc.)
+- Remova qualificações completas (Nutricionista, Advogado, Personal Trainer, etc.)
+- Nomes corporativos ou genéricos → null
+- Exemplos:
+  * "Dr. João Silva" → "João Silva"
+  * "Nutri Fabi Montanholi" → "Fabi Montanholi"
+  * "Dra. Carla Santos Nutricionista" → "Carla Santos"
+  * "Fisio Ana Paula" → "Ana Paula"
+  * "Nutricionista Silva" → null (só profissão + sobrenome)
 
-   Exemplos VÁLIDOS:
-   - "Dr. João Silva" → "João Silva" ✅
-   - "Nutricionista Maria Santos" → "Maria Santos" ✅
-   - "Pedro Oliveira | Fisioterapeuta" → "Pedro Oliveira" ✅
+#### 2. profession
+- Qualificação profissional específica (ex: Cardiologista, Personal Trainer, Nutricionista Esportiva)
+- Pode vir de qualquer fonte
+- Se múltiplas, escolha a mais específica | Senão, null
 
-   Exemplos INVÁLIDOS (retorne null):
-   - "Nutricionista Silva" → null ❌ (só profissão + sobrenome)
-   - "Dr. Santos" → null ❌ (só título + sobrenome)
-   - "Massoterapia" → null ❌ (só profissão)
-   - "Clínica Bem Estar" → null ❌ (nome de empresa, não pessoa)
-   - "Fisioterapeuta" → null ❌ (só profissão)
+#### 3. email
+- Formato válido: *@*.*
+- Ignore emails genéricos ou falsos
 
-   Se não houver nome completo (nome + sobrenome) de PESSOA, retorne null
+#### 4. phone
+- Aceite: (11) 99999-9999 | 11999999999 | +5511999999999
+- Retorne apenas dígitos | Valide DDD brasileiro
 
-2. EMAIL:
-   - Formato válido: xxx@dominio.com
-   - Ignore emails genéricos/falsos
+#### 5. localização (city, state, address, zip_code)
+- Extraia de BIO/WEBSITE
+- state: sigla 2 letras (SP, RJ, MG, BA...)
+- address: endereço completo com rua, número, complemento
+- zip_code: apenas números do CEP (8 dígitos)
+- Exemplos:
+  * "São Paulo - SP" → city: "São Paulo", state: "SP"
+  * "Rua Sergipe, 128 Jardim Vitoria, Itabuna 45605460" → address: "Rua Sergipe, 128 Jardim Vitoria", city: "Itabuna", zip_code: "45605460"
+  * "Av. Paulista, 1000 - São Paulo/SP CEP: 01310-100" → address: "Av. Paulista, 1000", city: "São Paulo", state: "SP", zip_code: "01310100"
 
-3. TELEFONE:
-   - Formatos aceitos: (11) 99999-9999, 11999999999, +5511999999999
-   - Retorne apenas números (sem formatação)
-   - Valide DDD brasileiro
+#### 6. business_category
+- Classifique por domínio: saude, beleza, fitness, odontologia, veterinaria, educacao, juridico, consultoria, tecnologia, outros
+- Baseie-se em profession e bio
+- Ex: "Personal Trainer" → fitness | Se não identificar → null
 
-4. LOCALIZAÇÃO:
-   - Procure por menções a cidade/estado na bio
-   - Exemplos: "São Paulo - SP", "Rio de Janeiro/RJ", "Salvador, BA", "Curitiba"
-   - Extraia city e state separadamente
-   - Use sigla de 2 letras para state (SP, RJ, MG, etc)
-
-5. BUSINESS_CATEGORY:
-   - Identifique a categoria de negócio com base no conteúdo da bio
-   - Categorias válidas:
-     * "saude" - Profissionais de saúde (médicos, fisioterapeutas, psicólogos, nutricionistas, etc)
-     * "beleza" - Estética, salões, cabeleireiros, maquiagem, etc
-     * "fitness" - Personal trainers, academias, pilates, yoga, etc
-     * "odontologia" - Dentistas e clínicas odontológicas
-     * "veterinaria" - Veterinários e pet shops
-     * "educacao" - Professores, cursos, escolas
-     * "juridico" - Advogados e consultoria jurídica
-     * "consultoria" - Consultores e coaches
-     * "tecnologia" - TI, desenvolvimento, design
-     * "outros" - Quando não se encaixa nas anteriores
-   - Se não for possível identificar, retorne null
-
-6. HASHTAGS:
-   - Extraia TODAS as hashtags presentes na bio (com #)
-   - Retorne como array de strings sem o símbolo #
-   - Exemplo: "#saude #fisioterapia" → ["saude", "fisioterapia"]
-
-RESPOSTA:
-Retorne JSON com: {"full_name": "...", "email": "...", "phone": "...", "city": "...", "state": "...", "business_category": "...", "hashtags_bio": [...]}
-Use null para campos não encontrados e [] para hashtags vazias.
+#### 7. hashtags_bio
+- Extraia todas #hashtags (sem #, em minúsculas)
+- Ex: "#Saúde #Fisio" → ["saude", "fisio"]
 
 EXEMPLOS:
-- "Dr. João Silva | Acupuntura #saude\nSão Paulo - SP\n📧 joao@clinica.com" → {"full_name": "João Silva", "email": "joao@clinica.com", "phone": null, "city": "São Paulo", "state": "SP", "business_category": "saude", "hashtags_bio": ["saude"]}
-- "Personal Trainer #fitness #treino\n(11) 98765-4321" → {"full_name": null, "email": null, "phone": "11987654321", "city": null, "state": null, "business_category": "fitness", "hashtags_bio": ["fitness", "treino"]}
-- "Advogado Trabalhista | Salvador, BA" → {"full_name": null, "email": null, "phone": null, "city": "Salvador", "state": "BA", "business_category": "juridico", "hashtags_bio": []}`
+1. FULL_NAME: "Dr. João Silva", BIO: "Acupuntura #saude\\nSão Paulo-SP\\n📧 joao@clinica.com"
+→ {"full_name":"João Silva","profession":"Acupunturista","email":"joao@clinica.com","phone":null,"city":"São Paulo","state":"SP","business_category":"saude","hashtags_bio":["saude"]}
+
+2. FULL_NAME: "Maria Santos - Personal Trainer", BIO: "#fitness #treino\\n(11)98765-4321"
+→ {"full_name":"Maria Santos","profession":"Personal Trainer","email":null,"phone":"11987654321","city":null,"state":null,"business_category":"fitness","hashtags_bio":["fitness","treino"]}`
         },
         {
           role: 'user',
-          content: bio
+          content: `FULL_NAME: ${fullName || 'N/A'}\nBIO: ${bio || 'N/A'}\nWEBSITE: ${website || 'N/A'}`
         }
       ],
       temperature: 0.3,
@@ -291,7 +306,7 @@ EXEMPLOS:
 
     const result = response.choices[0]?.message?.content;
     if (!result) {
-      return { full_name: null, email: null, phone: null, city: null, state: null, business_category: null, hashtags_bio: [] };
+      return { full_name: null, profession: null, email: null, phone: null, city: null, state: null, address: null, zip_code: null, business_category: null, hashtags_bio: [] };
     }
 
     const parsed = JSON.parse(result);
@@ -334,6 +349,27 @@ EXEMPLOS:
       if (state.length !== 2) state = null;
     }
 
+    // Extrair endereço
+    let address = parsed.address || null;
+    if (address && typeof address === 'string') {
+      address = address.trim();
+      if (address.length < 5) address = null;
+    }
+
+    // Extrair CEP (apenas números, 8 dígitos)
+    let zip_code = parsed.zip_code || null;
+    if (zip_code && typeof zip_code === 'string') {
+      zip_code = zip_code.replace(/\D/g, ''); // Remover não-dígitos
+      if (zip_code.length !== 8) zip_code = null;
+    }
+
+    // Extrair profession (qualificação profissional específica)
+    let profession = parsed.profession || null;
+    if (profession && typeof profession === 'string') {
+      profession = profession.trim();
+      if (profession.length < 3) profession = null;
+    }
+
     // Extrair business_category
     let business_category = parsed.business_category || null;
     if (business_category && typeof business_category === 'string') {
@@ -348,11 +384,11 @@ EXEMPLOS:
         .map((tag: string) => tag.trim().toLowerCase());
     }
 
-    return { full_name, email, phone, city, state, business_category, hashtags_bio };
+    return { full_name, profession, email, phone, city, state, address, zip_code, business_category, hashtags_bio };
 
   } catch (error) {
     console.error('   ⚠️  Erro na API OpenAI:', error instanceof Error ? error.message : 'Erro desconhecido');
-    return { full_name: null, email: null, phone: null, city: null, state: null, business_category: null, hashtags_bio: [] };
+    return { full_name: null, profession: null, email: null, phone: null, city: null, state: null, address: null, zip_code: null, business_category: null, hashtags_bio: [] };
   }
 }
 
@@ -692,40 +728,24 @@ export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentR
   const sources: string[] = [];
 
   console.log(`\n🔍 Enriquecendo @${lead.username}`);
+  console.log(`   📋 Dados disponíveis: bio=${!!lead.bio}, website=${!!lead.website}, full_name="${lead.full_name || 'N/A'}"`);
 
-  // 1. NOME - Tentar extrair da bio com AI APENAS se não houver nome válido
-  // Validar se full_name atual é válido (não é profissão isolada)
-  const hasValidFullName = lead.full_name &&
-    lead.full_name.trim().length > 0 &&
-    lead.full_name.split(/\s+/).length >= 2; // Pelo menos 2 palavras (nome + sobrenome)
-
-  if (hasValidFullName) {
-    console.log(`   ℹ️  Full name já existe e é válido: "${lead.full_name}" - pulando extração`);
-  }
-
-  if (lead.bio && !hasValidFullName) {
-    console.log('   🤖 Extraindo nome da bio com AI...');
-    const aiContacts = await extractContactsWithAI(lead.bio);
+  // 1. ANÁLISE COM IA - SEMPRE executar quando houver bio ou website
+  // A IA vai limpar full_name, extrair profession, email, phone, etc
+  if (lead.bio || lead.website) {
+    console.log('   🤖 Analisando full_name, bio e website com AI...');
+    const aiContacts = await extractContactsWithAI(lead.full_name || null, lead.bio || null, lead.website || null);
+    console.log(`   📊 Resultado da IA:`, JSON.stringify(aiContacts, null, 2));
 
     if (aiContacts.full_name) {
-      // Validar se o nome extraído é realmente melhor que o existente
-      const aiNameParts = aiContacts.full_name.split(/\s+/);
-      const existingNameParts = lead.full_name ? lead.full_name.split(/\s+/) : [];
-
-      // Usar AI se:
-      // 1. Não há nome existente, OU
-      // 2. Nome AI tem mais palavras (mais completo), OU
-      // 3. Nome existente tem apenas 1 palavra (incompleto)
-      if (!lead.full_name || aiNameParts.length > existingNameParts.length || existingNameParts.length === 1) {
-        enriched.full_name = aiContacts.full_name;
-        const { first_name, last_name } = splitFullName(aiContacts.full_name);
-        enriched.first_name = first_name;
-        enriched.last_name = last_name;
-        sources.push('bio-ai');
-        console.log(`   ✅ Nome encontrado: ${aiContacts.full_name}`);
-      } else {
-        console.log(`   ℹ️  Nome AI "${aiContacts.full_name}" não é melhor que existente "${lead.full_name}" - mantendo`);
-      }
+      // A IA sempre limpa e corrige o full_name (remove títulos, profissões, emojis)
+      // Exemplo: "Karine Martins | NUTRICIONISTA 🦋" → "Karine Martins"
+      enriched.full_name = aiContacts.full_name;
+      const { first_name, last_name } = splitFullName(aiContacts.full_name);
+      enriched.first_name = first_name;
+      enriched.last_name = last_name;
+      sources.push('bio-ai');
+      console.log(`   ✅ Nome limpo pela IA: "${aiContacts.full_name}" (original: "${lead.full_name || 'N/A'}")`);
     }
 
     // Email da bio
@@ -750,6 +770,27 @@ export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentR
       console.log(`   ✅ Localização: ${aiContacts.city}${aiContacts.state ? '/' + aiContacts.state : ''}`);
     }
 
+    // Endereço completo
+    if (aiContacts.address) {
+      enriched.address = aiContacts.address;
+      sources.push('bio-address');
+      console.log(`   ✅ Endereço: ${aiContacts.address}`);
+    }
+
+    // CEP
+    if (aiContacts.zip_code) {
+      enriched.zip_code = aiContacts.zip_code;
+      sources.push('bio-zipcode');
+      console.log(`   ✅ CEP: ${aiContacts.zip_code}`);
+    }
+
+    // Profession (qualificação profissional específica)
+    if (aiContacts.profession) {
+      enriched.profession = aiContacts.profession;
+      sources.push('bio-profession');
+      console.log(`   ✅ Profissão: ${aiContacts.profession}`);
+    }
+
     // Business category da bio
     if (aiContacts.business_category) {
       enriched.business_category = aiContacts.business_category;
@@ -757,21 +798,34 @@ export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentR
       console.log(`   ✅ Categoria: ${aiContacts.business_category}`);
     }
 
-    // Hashtags da bio com REGEX (mais rápido e barato que AI)
+    // Hashtags da bio (guardar as da IA)
     if (aiContacts.hashtags_bio && aiContacts.hashtags_bio.length > 0) {
       enriched.hashtags_bio = aiContacts.hashtags_bio;
-      sources.push('bio-hashtags-ai');
-      console.log(`   ✅ Hashtags (AI): ${aiContacts.hashtags_bio.join(', ')}`);
+      console.log(`   ℹ️  Hashtags da IA: ${aiContacts.hashtags_bio.join(', ')}`);
     }
   }
 
-  // 1.5 HASHTAGS COM REGEX (fallback se AI não encontrou)
-  if (lead.bio && (!enriched.hashtags_bio || enriched.hashtags_bio.length === 0)) {
+  // 1.5 HASHTAGS - SEMPRE extrair com REGEX e combinar com IA
+  if (lead.bio) {
     const hashtagsFromRegex = extractHashtagsFromText(lead.bio);
-    if (hashtagsFromRegex.length > 0) {
-      enriched.hashtags_bio = hashtagsFromRegex;
-      sources.push('bio-hashtags-regex');
-      console.log(`   ✅ Hashtags (regex): ${hashtagsFromRegex.join(', ')}`);
+    const hashtagsFromAI = enriched.hashtags_bio || [];
+
+    // Combinar hashtags da IA + regex (sem duplicatas)
+    const allHashtags = [...new Set([...hashtagsFromAI, ...hashtagsFromRegex])];
+
+    if (allHashtags.length > 0) {
+      enriched.hashtags_bio = allHashtags;
+
+      if (hashtagsFromRegex.length > 0 && hashtagsFromAI.length > 0) {
+        sources.push('bio-hashtags-combined');
+        console.log(`   ✅ Hashtags combinadas (${hashtagsFromAI.length} IA + ${hashtagsFromRegex.length} regex): ${allHashtags.join(', ')}`);
+      } else if (hashtagsFromRegex.length > 0) {
+        sources.push('bio-hashtags-regex');
+        console.log(`   ✅ Hashtags (regex): ${hashtagsFromRegex.join(', ')}`);
+      } else {
+        sources.push('bio-hashtags-ai');
+        console.log(`   ✅ Hashtags (AI): ${hashtagsFromAI.join(', ')}`);
+      }
     }
   }
 

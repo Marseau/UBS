@@ -1,6 +1,5 @@
 import express, { Request, Response } from 'express';
 import { enrichSingleLead } from '../services/instagram-lead-enrichment.service';
-import { ensureCorrectAccount, OperationType } from '../services/instagram-official-session.service';
 
 const router = express.Router();
 
@@ -34,10 +33,7 @@ router.post('/enrich-lead', express.text({ type: '*/*', limit: '10mb' }), async 
 
     console.log(`\n🔍 Enriquecendo lead via API: @${lead.username}`);
 
-    // Garantir que está logado com conta não-oficial (scraping)
-    await ensureCorrectAccount(OperationType.SCRAPING);
-
-    // Enriquecer lead
+    // Enriquecer lead (apenas análise de IA, sem Puppeteer)
     const result = await enrichSingleLead(lead);
 
     console.log(`   ✅ Lead enriquecido: ${result.sources.length} fontes`);
@@ -49,6 +45,7 @@ router.post('/enrich-lead', express.text({ type: '*/*', limit: '10mb' }), async 
       full_name: result.enriched.full_name || lead.full_name || null,
       first_name: result.enriched.first_name || lead.first_name || null,
       last_name: result.enriched.last_name || lead.last_name || null,
+      profession: result.enriched.profession || lead.profession || null,
       email: result.enriched.email || lead.email || null,
       phone: result.enriched.phone || lead.phone || null,
       city: result.enriched.city || lead.city || null,
