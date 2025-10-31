@@ -78,3 +78,8 @@ instagram-cookies.json
 *.backup.gz
 db_cluster*.backup*
 Modelo*.svg
+
+# Puppeteer User Data Directories (sessões isoladas)
+puppeteer-data/
+instagram-cookies.json
+instagram-official-cookies.json

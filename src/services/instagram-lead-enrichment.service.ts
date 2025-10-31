@@ -29,6 +29,8 @@ interface EnrichedData {
   state?: string | null;
   address?: string | null;
   zip_code?: string | null;
+  business_category?: string | null;
+  hashtags_bio?: string[];
 }
 
 interface EnrichmentResponse {
@@ -197,6 +199,8 @@ async function extractContactsWithAI(bio: string): Promise<{
   phone: string | null;
   city: string | null;
   state: string | null;
+  business_category: string | null;
+  hashtags_bio: string[];
 }> {
   try {
     const response = await openai.chat.completions.create({
@@ -204,18 +208,32 @@ async function extractContactsWithAI(bio: string): Promise<{
       messages: [
         {
           role: 'system',
-          content: `Você é um especialista em extrair informações de contato de biografias do Instagram.
+          content: `Você é um especialista em extrair informações de biografias do Instagram.
 
 TAREFA:
-Extraia NOME COMPLETO, EMAIL, TELEFONE e LOCALIZAÇÃO (cidade/estado) da bio, se existirem.
+Extraia NOME, EMAIL, TELEFONE, LOCALIZAÇÃO, CATEGORIA DE NEGÓCIO e HASHTAGS da bio.
 
 REGRAS DE EXTRAÇÃO:
 
-1. NOME:
-   - Extraia apenas se houver nome de PESSOA ou EMPRESA clara
-   - Ignore apenas username ou apelidos vagos
-   - Exemplo válido: "João Silva", "Dr. Pedro", "Clínica Bem Estar"
-   - Exemplo inválido: "Massoterapia", "Receitas"
+1. NOME (MUITO IMPORTANTE - SEJA RIGOROSO):
+   - Extraia APENAS nomes próprios completos de PESSOAS (mínimo nome + sobrenome)
+   - NÃO extraia profissão isolada ou profissão + sobrenome
+   - NÃO extraia nome de empresa/clínica sem ser nome de pessoa
+   - Remova prefixos profissionais (Dr., Dra., Nutricionista, Fisioterapeuta, etc)
+
+   Exemplos VÁLIDOS:
+   - "Dr. João Silva" → "João Silva" ✅
+   - "Nutricionista Maria Santos" → "Maria Santos" ✅
+   - "Pedro Oliveira | Fisioterapeuta" → "Pedro Oliveira" ✅
+
+   Exemplos INVÁLIDOS (retorne null):
+   - "Nutricionista Silva" → null ❌ (só profissão + sobrenome)
+   - "Dr. Santos" → null ❌ (só título + sobrenome)
+   - "Massoterapia" → null ❌ (só profissão)
+   - "Clínica Bem Estar" → null ❌ (nome de empresa, não pessoa)
+   - "Fisioterapeuta" → null ❌ (só profissão)
+
+   Se não houver nome completo (nome + sobrenome) de PESSOA, retorne null
 
 2. EMAIL:
    - Formato válido: xxx@dominio.com
@@ -232,14 +250,34 @@ REGRAS DE EXTRAÇÃO:
    - Extraia city e state separadamente
    - Use sigla de 2 letras para state (SP, RJ, MG, etc)
 
+5. BUSINESS_CATEGORY:
+   - Identifique a categoria de negócio com base no conteúdo da bio
+   - Categorias válidas:
+     * "saude" - Profissionais de saúde (médicos, fisioterapeutas, psicólogos, nutricionistas, etc)
+     * "beleza" - Estética, salões, cabeleireiros, maquiagem, etc
+     * "fitness" - Personal trainers, academias, pilates, yoga, etc
+     * "odontologia" - Dentistas e clínicas odontológicas
+     * "veterinaria" - Veterinários e pet shops
+     * "educacao" - Professores, cursos, escolas
+     * "juridico" - Advogados e consultoria jurídica
+     * "consultoria" - Consultores e coaches
+     * "tecnologia" - TI, desenvolvimento, design
+     * "outros" - Quando não se encaixa nas anteriores
+   - Se não for possível identificar, retorne null
+
+6. HASHTAGS:
+   - Extraia TODAS as hashtags presentes na bio (com #)
+   - Retorne como array de strings sem o símbolo #
+   - Exemplo: "#saude #fisioterapia" → ["saude", "fisioterapia"]
+
 RESPOSTA:
-Retorne JSON com: {"full_name": "...", "email": "...", "phone": "...", "city": "...", "state": "..."}
-Use null para campos não encontrados.
+Retorne JSON com: {"full_name": "...", "email": "...", "phone": "...", "city": "...", "state": "...", "business_category": "...", "hashtags_bio": [...]}
+Use null para campos não encontrados e [] para hashtags vazias.
 
 EXEMPLOS:
-- "Dr. João Silva | Acupuntura\nSão Paulo - SP\n📧 joao@clinica.com" → {"full_name": "João Silva", "email": "joao@clinica.com", "phone": null, "city": "São Paulo", "state": "SP"}
-- "Massoterapia • Agende: (11) 98765-4321" → {"full_name": null, "email": null, "phone": "11987654321", "city": null, "state": null}
-- "João Santos | Salvador, BA\nWhatsApp: (71) 98765-4321" → {"full_name": "João Santos", "email": null, "phone": "71987654321", "city": "Salvador", "state": "BA"}`
+- "Dr. João Silva | Acupuntura #saude\nSão Paulo - SP\n📧 joao@clinica.com" → {"full_name": "João Silva", "email": "joao@clinica.com", "phone": null, "city": "São Paulo", "state": "SP", "business_category": "saude", "hashtags_bio": ["saude"]}
+- "Personal Trainer #fitness #treino\n(11) 98765-4321" → {"full_name": null, "email": null, "phone": "11987654321", "city": null, "state": null, "business_category": "fitness", "hashtags_bio": ["fitness", "treino"]}
+- "Advogado Trabalhista | Salvador, BA" → {"full_name": null, "email": null, "phone": null, "city": "Salvador", "state": "BA", "business_category": "juridico", "hashtags_bio": []}`
         },
         {
           role: 'user',
@@ -253,7 +291,7 @@ EXEMPLOS:
 
     const result = response.choices[0]?.message?.content;
     if (!result) {
-      return { full_name: null, email: null, phone: null, city: null, state: null };
+      return { full_name: null, email: null, phone: null, city: null, state: null, business_category: null, hashtags_bio: [] };
     }
 
     const parsed = JSON.parse(result);
@@ -296,11 +334,25 @@ EXEMPLOS:
       if (state.length !== 2) state = null;
     }
 
-    return { full_name, email, phone, city, state };
+    // Extrair business_category
+    let business_category = parsed.business_category || null;
+    if (business_category && typeof business_category === 'string') {
+      business_category = business_category.trim().toLowerCase();
+    }
+
+    // Extrair hashtags da bio
+    let hashtags_bio: string[] = [];
+    if (Array.isArray(parsed.hashtags_bio)) {
+      hashtags_bio = parsed.hashtags_bio
+        .filter((tag: any) => typeof tag === 'string' && tag.trim().length > 0)
+        .map((tag: string) => tag.trim().toLowerCase());
+    }
+
+    return { full_name, email, phone, city, state, business_category, hashtags_bio };
 
   } catch (error) {
     console.error('   ⚠️  Erro na API OpenAI:', error instanceof Error ? error.message : 'Erro desconhecido');
-    return { full_name: null, email: null, phone: null, city: null, state: null };
+    return { full_name: null, email: null, phone: null, city: null, state: null, business_category: null, hashtags_bio: [] };
   }
 }
 
@@ -347,6 +399,175 @@ EXEMPLOS:
   } catch (error) {
     return null;
   }
+}
+
+// ============================================
+// EXTRAÇÃO DE HASHTAGS COM REGEX
+// ============================================
+
+/**
+ * Extrai hashtags de uma string usando regex (mais rápido e barato que AI)
+ */
+function extractHashtagsFromText(text: string): string[] {
+  if (!text) return [];
+
+  const hashtagRegex = /#[a-záàâãéèêíïóôõöúçñA-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ\w]+/gi;
+  const matches = text.match(hashtagRegex);
+
+  if (!matches) return [];
+
+  // Remover # e converter para lowercase
+  return matches.map(tag => tag.substring(1).toLowerCase());
+}
+
+// ============================================
+// EXTRAÇÃO DE LOCALIZAÇÃO POR DDD
+// ============================================
+
+const DDD_TO_LOCATION: Record<number, { city: string; state: string }> = {
+  // São Paulo
+  11: { city: 'São Paulo', state: 'SP' },
+  12: { city: 'São José dos Campos', state: 'SP' },
+  13: { city: 'Santos', state: 'SP' },
+  14: { city: 'Bauru', state: 'SP' },
+  15: { city: 'Sorocaba', state: 'SP' },
+  16: { city: 'Ribeirão Preto', state: 'SP' },
+  17: { city: 'São José do Rio Preto', state: 'SP' },
+  18: { city: 'Presidente Prudente', state: 'SP' },
+  19: { city: 'Campinas', state: 'SP' },
+
+  // Rio de Janeiro
+  21: { city: 'Rio de Janeiro', state: 'RJ' },
+  22: { city: 'Campos dos Goytacazes', state: 'RJ' },
+  24: { city: 'Volta Redonda', state: 'RJ' },
+
+  // Espírito Santo
+  27: { city: 'Vitória', state: 'ES' },
+  28: { city: 'Cachoeiro de Itapemirim', state: 'ES' },
+
+  // Minas Gerais
+  31: { city: 'Belo Horizonte', state: 'MG' },
+  32: { city: 'Juiz de Fora', state: 'MG' },
+  33: { city: 'Governador Valadares', state: 'MG' },
+  34: { city: 'Uberlândia', state: 'MG' },
+  35: { city: 'Poços de Caldas', state: 'MG' },
+  37: { city: 'Divinópolis', state: 'MG' },
+  38: { city: 'Montes Claros', state: 'MG' },
+
+  // Paraná
+  41: { city: 'Curitiba', state: 'PR' },
+  42: { city: 'Ponta Grossa', state: 'PR' },
+  43: { city: 'Londrina', state: 'PR' },
+  44: { city: 'Maringá', state: 'PR' },
+  45: { city: 'Foz do Iguaçu', state: 'PR' },
+  46: { city: 'Pato Branco', state: 'PR' },
+
+  // Santa Catarina
+  47: { city: 'Joinville', state: 'SC' },
+  48: { city: 'Florianópolis', state: 'SC' },
+  49: { city: 'Chapecó', state: 'SC' },
+
+  // Rio Grande do Sul
+  51: { city: 'Porto Alegre', state: 'RS' },
+  53: { city: 'Pelotas', state: 'RS' },
+  54: { city: 'Caxias do Sul', state: 'RS' },
+  55: { city: 'Santa Maria', state: 'RS' },
+
+  // Distrito Federal e Goiás
+  61: { city: 'Brasília', state: 'DF' },
+  62: { city: 'Goiânia', state: 'GO' },
+  64: { city: 'Rio Verde', state: 'GO' },
+
+  // Tocantins
+  63: { city: 'Palmas', state: 'TO' },
+
+  // Mato Grosso
+  65: { city: 'Cuiabá', state: 'MT' },
+  66: { city: 'Rondonópolis', state: 'MT' },
+
+  // Mato Grosso do Sul
+  67: { city: 'Campo Grande', state: 'MS' },
+
+  // Acre
+  68: { city: 'Rio Branco', state: 'AC' },
+
+  // Rondônia
+  69: { city: 'Porto Velho', state: 'RO' },
+
+  // Bahia
+  71: { city: 'Salvador', state: 'BA' },
+  73: { city: 'Ilhéus', state: 'BA' },
+  74: { city: 'Juazeiro', state: 'BA' },
+  75: { city: 'Feira de Santana', state: 'BA' },
+  77: { city: 'Vitória da Conquista', state: 'BA' },
+
+  // Sergipe
+  79: { city: 'Aracaju', state: 'SE' },
+
+  // Pernambuco
+  81: { city: 'Recife', state: 'PE' },
+  87: { city: 'Petrolina', state: 'PE' },
+
+  // Alagoas
+  82: { city: 'Maceió', state: 'AL' },
+
+  // Paraíba
+  83: { city: 'João Pessoa', state: 'PB' },
+
+  // Rio Grande do Norte
+  84: { city: 'Natal', state: 'RN' },
+
+  // Ceará
+  85: { city: 'Fortaleza', state: 'CE' },
+  88: { city: 'Sobral', state: 'CE' },
+
+  // Piauí
+  86: { city: 'Teresina', state: 'PI' },
+  89: { city: 'Picos', state: 'PI' },
+
+  // Pará
+  91: { city: 'Belém', state: 'PA' },
+  93: { city: 'Santarém', state: 'PA' },
+  94: { city: 'Marabá', state: 'PA' },
+
+  // Amazonas
+  92: { city: 'Manaus', state: 'AM' },
+  97: { city: 'Coari', state: 'AM' },
+
+  // Roraima
+  95: { city: 'Boa Vista', state: 'RR' },
+
+  // Amapá
+  96: { city: 'Macapá', state: 'AP' },
+
+  // Maranhão
+  98: { city: 'São Luís', state: 'MA' },
+  99: { city: 'Imperatriz', state: 'MA' }
+};
+
+/**
+ * Extrai localização (city/state) a partir do DDD do telefone
+ */
+function extractLocationFromPhone(phone: string): { city: string | null; state: string | null } {
+  if (!phone) return { city: null, state: null };
+
+  const cleanPhone = phone.replace(/\D/g, '');
+  let ddd: number;
+
+  // Telefone com código do país (55)
+  if (cleanPhone.startsWith('55') && cleanPhone.length >= 12) {
+    ddd = parseInt(cleanPhone.substring(2, 4));
+  }
+  // Telefone sem código do país
+  else if (cleanPhone.length >= 10) {
+    ddd = parseInt(cleanPhone.substring(0, 2));
+  }
+  else {
+    return { city: null, state: null };
+  }
+
+  const location = DDD_TO_LOCATION[ddd];
+  return location || { city: null, state: null };
 }
 
 // ============================================
@@ -472,18 +693,39 @@ export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentR
 
   console.log(`\n🔍 Enriquecendo @${lead.username}`);
 
-  // 1. NOME - Tentar extrair da bio com AI primeiro
-  if (lead.bio) {
+  // 1. NOME - Tentar extrair da bio com AI APENAS se não houver nome válido
+  // Validar se full_name atual é válido (não é profissão isolada)
+  const hasValidFullName = lead.full_name &&
+    lead.full_name.trim().length > 0 &&
+    lead.full_name.split(/\s+/).length >= 2; // Pelo menos 2 palavras (nome + sobrenome)
+
+  if (hasValidFullName) {
+    console.log(`   ℹ️  Full name já existe e é válido: "${lead.full_name}" - pulando extração`);
+  }
+
+  if (lead.bio && !hasValidFullName) {
     console.log('   🤖 Extraindo nome da bio com AI...');
     const aiContacts = await extractContactsWithAI(lead.bio);
 
     if (aiContacts.full_name) {
-      enriched.full_name = aiContacts.full_name;
-      const { first_name, last_name } = splitFullName(aiContacts.full_name);
-      enriched.first_name = first_name;
-      enriched.last_name = last_name;
-      sources.push('bio-ai');
-      console.log(`   ✅ Nome encontrado: ${aiContacts.full_name}`);
+      // Validar se o nome extraído é realmente melhor que o existente
+      const aiNameParts = aiContacts.full_name.split(/\s+/);
+      const existingNameParts = lead.full_name ? lead.full_name.split(/\s+/) : [];
+
+      // Usar AI se:
+      // 1. Não há nome existente, OU
+      // 2. Nome AI tem mais palavras (mais completo), OU
+      // 3. Nome existente tem apenas 1 palavra (incompleto)
+      if (!lead.full_name || aiNameParts.length > existingNameParts.length || existingNameParts.length === 1) {
+        enriched.full_name = aiContacts.full_name;
+        const { first_name, last_name } = splitFullName(aiContacts.full_name);
+        enriched.first_name = first_name;
+        enriched.last_name = last_name;
+        sources.push('bio-ai');
+        console.log(`   ✅ Nome encontrado: ${aiContacts.full_name}`);
+      } else {
+        console.log(`   ℹ️  Nome AI "${aiContacts.full_name}" não é melhor que existente "${lead.full_name}" - mantendo`);
+      }
     }
 
     // Email da bio
@@ -506,6 +748,30 @@ export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentR
       enriched.state = aiContacts.state;
       sources.push('bio-location');
       console.log(`   ✅ Localização: ${aiContacts.city}${aiContacts.state ? '/' + aiContacts.state : ''}`);
+    }
+
+    // Business category da bio
+    if (aiContacts.business_category) {
+      enriched.business_category = aiContacts.business_category;
+      sources.push('bio-category');
+      console.log(`   ✅ Categoria: ${aiContacts.business_category}`);
+    }
+
+    // Hashtags da bio com REGEX (mais rápido e barato que AI)
+    if (aiContacts.hashtags_bio && aiContacts.hashtags_bio.length > 0) {
+      enriched.hashtags_bio = aiContacts.hashtags_bio;
+      sources.push('bio-hashtags-ai');
+      console.log(`   ✅ Hashtags (AI): ${aiContacts.hashtags_bio.join(', ')}`);
+    }
+  }
+
+  // 1.5 HASHTAGS COM REGEX (fallback se AI não encontrou)
+  if (lead.bio && (!enriched.hashtags_bio || enriched.hashtags_bio.length === 0)) {
+    const hashtagsFromRegex = extractHashtagsFromText(lead.bio);
+    if (hashtagsFromRegex.length > 0) {
+      enriched.hashtags_bio = hashtagsFromRegex;
+      sources.push('bio-hashtags-regex');
+      console.log(`   ✅ Hashtags (regex): ${hashtagsFromRegex.join(', ')}`);
     }
   }
 
@@ -551,7 +817,18 @@ export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentR
     }
   }
 
-  // 5. LOCALIZAÇÃO - Extrair de hashtags (menor prioridade)
+  // 5. LOCALIZAÇÃO - Extrair do DDD do telefone (prioridade média)
+  if (!enriched.city && enriched.phone) {
+    const locationFromPhone = extractLocationFromPhone(enriched.phone);
+    if (locationFromPhone.city) {
+      enriched.city = locationFromPhone.city;
+      enriched.state = locationFromPhone.state;
+      sources.push('phone-ddd');
+      console.log(`   ✅ Localização (DDD): ${locationFromPhone.city}/${locationFromPhone.state}`);
+    }
+  }
+
+  // 6. LOCALIZAÇÃO - Extrair de hashtags (menor prioridade)
   if (!enriched.city && (lead.hashtags_bio || lead.hashtags_posts)) {
     const locationFromHashtags = extractLocationFromHashtags(
       lead.hashtags_bio || [],

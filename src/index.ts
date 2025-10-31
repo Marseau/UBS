@@ -563,6 +563,16 @@ try {
   console.error('❌ Failed to load Instagram Enrichment routes:', error);
 }
 
+// Instagram Follow Routes - Follow/unfollow automation (used by N8N workflow)
+try {
+  const instagramFollowRoutes = require('./routes/instagram-follow.routes');
+  const router = 'default' in instagramFollowRoutes ? instagramFollowRoutes.default : instagramFollowRoutes;
+  app.use('/api/instagram', router);
+  console.log('✅ Instagram Follow routes loaded - FOLLOW/UNFOLLOW AUTOMATION READY');
+} catch (error) {
+  console.error('❌ Failed to load Instagram Follow routes:', error);
+}
+
 // Account Actions Routes - Record social media actions (multi-platform)
 try {
   const accountActionsRoutes = require('./routes/account-actions.routes');

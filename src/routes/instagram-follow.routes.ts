@@ -1,59 +1,15 @@
 import express, { Request, Response } from 'express';
 import * as InstagramAutomation from '../services/instagram-automation.service';
 import * as InstagramAutomationRefactored from '../services/instagram-automation-refactored.service';
+import {
+  switchToAlternativeAccount,
+  switchToOfficialAccount,
+  getOfficialLoggedUsername,
+  ensureCorrectAccount,
+  OperationType
+} from '../services/instagram-official-session.service';
 
 const router = express.Router();
-
-/**
- * POST /api/instagram/follow-lead
- *
- * Executa a ação de seguir um lead no Instagram
- * Retorna apenas o resultado da ação (sucesso/erro)
- * O workflow N8N persiste os dados usando nós Supabase
- */
-router.post('/follow-lead', async (req: Request, res: Response) => {
-  try {
-    const { lead_id, username } = req.body;
-
-    if (!lead_id || !username) {
-      return res.status(400).json({
-        error: 'Campos obrigatórios faltando',
-        required: ['lead_id', 'username']
-      });
-    }
-
-    console.log(`\n👥 Seguindo lead: @${username}`);
-
-    // TODO: Integrar com Puppeteer/Instagram API para seguir de verdade
-    // Por enquanto, simula a ação de follow
-    const followSuccess = true;
-    const errorMessage = null;
-
-    console.log(`   ✅ Follow executado com sucesso`);
-
-    // Retornar dados para o workflow N8N persistir
-    return res.status(200).json({
-      success: followSuccess,
-      lead_id,
-      username,
-      action_type: 'follow',
-      executed_at: new Date().toISOString(),
-      error_message: errorMessage,
-      // Dados para UPDATE em instagram_leads (workflow faz isso)
-      follow_status: 'following',
-      followed_at: new Date().toISOString(),
-      last_follow_attempt_at: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('❌ Erro ao seguir lead:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Erro ao seguir lead',
-      message: error instanceof Error ? error.message : 'Erro desconhecido'
-    });
-  }
-});
 
 /**
  * POST /api/instagram/check-follow-back
@@ -74,6 +30,9 @@ router.post('/check-follow-back', async (req: Request, res: Response) => {
     }
 
     console.log(`\n🔍 Verificando follow back: @${username}`);
+
+    // Garantir que está logado com conta oficial (@ubs.sistemas)
+    await ensureCorrectAccount(OperationType.ENGAGEMENT);
 
     // Executar verificação via Puppeteer
     const result = await InstagramAutomation.checkFollowBack(username);
@@ -147,6 +106,9 @@ router.post('/unfollow-lead', async (req: Request, res: Response) => {
 
     console.log(`\n🗑️  Aplicando unfollow: @${username}`);
 
+    // Garantir que está logado com conta oficial (@ubs.sistemas)
+    await ensureCorrectAccount(OperationType.ENGAGEMENT);
+
     // Executar unfollow via Puppeteer
     const result = await InstagramAutomation.unfollowUser(username);
 
@@ -208,6 +170,9 @@ router.post('/batch-engagement', async (req: Request, res: Response) => {
 
     console.log(`\n🎯 [BATCH] Processando ${usernames.length} usuários via API...`);
 
+    // Garantir que está logado com conta oficial (@ubs.sistemas)
+    await ensureCorrectAccount(OperationType.ENGAGEMENT);
+
     // Executar batch engagement usando serviço refatorado (padrões do scraper)
     const result = await InstagramAutomationRefactored.processBatchEngagement(usernames);
 
@@ -242,6 +207,9 @@ router.post('/engage-lead', async (req: Request, res: Response) => {
     }
 
     console.log(`\n🎯 Engajamento completo: @${username}`);
+
+    // Garantir que está logado com conta oficial (@ubs.sistemas)
+    await ensureCorrectAccount(OperationType.ENGAGEMENT);
 
     const timestamp = new Date().toISOString();
 
@@ -391,6 +359,41 @@ router.post('/comment-post', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: 'Erro ao comentar',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+/**
+ * POST /api/instagram/switch-account
+ *
+ * Endpoint de teste para trocar de conta do Instagram
+ * Faz logout da conta atual e login com credenciais alternativas
+ */
+router.post('/switch-account', async (req: Request, res: Response) => {
+  try {
+    console.log('\n🔄 [API] Requisição de troca de conta recebida');
+
+    // Verificar conta atual antes do switch
+    const currentUsername = getOfficialLoggedUsername();
+    console.log(`   Conta atual: ${currentUsername || 'não detectada'}`);
+
+    // Executar switch de conta
+    const newUsername = await switchToAlternativeAccount();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Troca de conta concluída com sucesso',
+      previous_account: currentUsername,
+      current_account: newUsername,
+      switched_at: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao trocar de conta:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao trocar de conta',
       message: error instanceof Error ? error.message : 'Erro desconhecido'
     });
   }

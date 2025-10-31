@@ -347,6 +347,12 @@ export interface InstagramProfileData {
   phone: string | null;
   website: string | null;
   business_category: string | null;
+  // Campos de localização (business accounts)
+  city?: string | null;
+  state?: string | null;
+  neighborhood?: string | null;
+  address?: string | null;
+  zip_code?: string | null;
   activity_score?: number; // Score de atividade (0-100)
   is_active?: boolean; // Se a conta está ativa
   language?: string; // ISO 639-1 language code (pt, en, es, etc)
@@ -822,39 +828,113 @@ export async function scrapeInstagramTag(
           }
 
           const profileData = await page.evaluate(() => {
-            // Extrair nome completo (h2 ou span no header)
-            const fullNameEl = document.querySelector('header section h2, header section span');
-            const full_name = fullNameEl ? fullNameEl.textContent?.trim() || '' : '';
+            // Extrair nome completo - SELETOR CORRETO baseado em inspeção real
+            // Instagram: username está em index 0-2, full_name geralmente em index 3
+            let full_name = '';
+            const debugLogs: string[] = [];
 
-            // Extrair bio (MÚLTIPLOS SELETORES para capturar bio COMPLETA, não truncada)
-            let bio = '';
-            const bioSelectors = [
-              // Seletores atualizados do Instagram (2024/2025)
-              'header section h1._ap3a._aaco._aacu._aacx._aad6._aade',  // Container principal da bio
-              'header section span._ap3a._aaco._aacu._aacx._aad6._aade', // Texto da bio dentro do span
-              'header section div > span._ap3a',                         // Span direto dentro de div
-              'header section div[style*="white-space"]',                 // Div com estilo de quebra de linha
-              'header section h1 > span',                                 // Span dentro do h1
-              'header section div[data-testid]',                          // Fallback com data-testid
-              'header section span._ap3a'                                 // Fallback genérico
-            ];
+            const headerSection = document.querySelector('header section');
+            if (headerSection) {
+              const allSpans = Array.from(headerSection.querySelectorAll('span'));
+              debugLogs.push(`Total spans encontrados: ${allSpans.length}`);
 
-            for (const selector of bioSelectors) {
-              const el = document.querySelector(selector);
-              if (el && el.textContent && el.textContent.trim().length > 10) {
-                bio = el.textContent.trim();
-                console.log(`✅ Bio capturada via seletor: ${selector}`);
-                break; // Pegou a bio, para de procurar
+              // Pegar username primeiro para comparar
+              const usernameEl = document.querySelector('header h2');
+              const username = usernameEl?.textContent?.trim() || '';
+              debugLogs.push(`Username detectado: "${username}"`);
+
+              // Procurar pelo span que contém o nome (não é username, não é número, não é endereço)
+              for (let i = 0; i < allSpans.length; i++) {
+                const span = allSpans[i];
+                const text = span.textContent?.trim() || '';
+
+                if (!text) {
+                  debugLogs.push(`[${i}] VAZIO - ignorado`);
+                  continue;
+                }
+
+                debugLogs.push(`[${i}] "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+
+                // Pular username
+                if (text === username) {
+                  debugLogs.push(`    ↳ FILTRO: é username`);
+                  continue;
+                }
+
+                // Pular números (contadores de seguidores/posts)
+                if (/^\d+[.,]?\d*\s*(mil|K|M|seguidores|posts|seguindo)?$/i.test(text)) {
+                  debugLogs.push(`    ↳ FILTRO: é número/contador`);
+                  continue;
+                }
+
+                // Pular endereços (tem CEP ou muitas vírgulas)
+                if (/\d{5}-?\d{3}/.test(text) || text.split(',').length >= 3) {
+                  debugLogs.push(`    ↳ FILTRO: é endereço (CEP ou vírgulas)`);
+                  continue;
+                }
+
+                // Pular texto muito longo (provavelmente é a bio, não o nome)
+                if (text.length > 100) {
+                  debugLogs.push(`    ↳ FILTRO: texto longo (${text.length} chars)`);
+                  continue;
+                }
+
+                // Pular textos genéricos
+                if (text === 'Ícone de link' || text === 'Doe Sangue') {
+                  debugLogs.push(`    ↳ FILTRO: texto genérico`);
+                  continue;
+                }
+
+                // Se chegou aqui, provavelmente é o nome!
+                full_name = text;
+                debugLogs.push(`    ✅ FULL NAME SELECIONADO!`);
+                break;
               }
             }
 
-            // Se ainda não achou, tentar pegar todo o texto da section (menos cabeçalho)
+            // Retornar debugLogs também
+            (window as any).__fullNameDebug = debugLogs;
+
+            // Bio - ESTRATÉGIA COMPLETA para capturar TODOS os elementos da bio
+            // Instagram divide a bio em múltiplos elementos: div (categoria) + spans (descrição) + h1 (endereço)
+            let bio = '';
+            const bioElements: string[] = [];
+
+            // Capturar todos os elementos de bio dentro de header section
+            // Classe _ap3a marca elementos de bio do Instagram
+            // IMPORTANTE: Usar EXATAMENTE os mesmos seletores de scrapeInstagramProfile()
+            const bioEls = Array.from(document.querySelectorAll('header section ._ap3a._aaco._aacu._aacy._aad6._aade, header section ._ap3a._aaco._aacu._aacx._aad7._aade, header section h1._ap3a'));
+
+            bioEls.forEach((el: any) => {
+              const text = el.textContent?.trim();
+              // Pular textos muito curtos ou contadores de seguidores
+              if (text && text.length > 3 && !text.match(/^\d+[\s\S]*seguidores?$/i)) {
+                bioElements.push(text);
+              }
+            });
+
+            // Se encontrou elementos, juntar com quebras de linha
+            if (bioElements.length > 0) {
+              bio = bioElements.join('\n');
+            }
+
+            // Estratégia 2: Fallback para seletor único se nada foi encontrado
             if (!bio || bio.length < 10) {
-              const sectionEl = document.querySelector('header section');
-              if (sectionEl) {
-                const fullText = sectionEl.textContent || '';
-                // Remover contadores (números grandes)
-                bio = fullText.replace(/\d+[.,]?\d*\s*(mil|K|M|seguidores|publicações|seguindo)/gi, '').trim();
+              const bioSelectors = [
+                'header section h1._ap3a._aaco._aacu._aacx._aad6._aade',
+                'header section span._ap3a._aaco._aacu._aacx._aad6._aade',
+                'header section div > span._ap3a',
+                'header section div[style*="white-space"]',
+                'header section h1 > span',
+                'header section span._ap3a'
+              ];
+
+              for (const selector of bioSelectors) {
+                const el = document.querySelector(selector);
+                if (el && el.textContent && el.textContent.trim().length > 10) {
+                  bio = el.textContent.trim();
+                  break;
+                }
               }
             }
 
@@ -900,9 +980,52 @@ export async function scrapeInstagramTag(
             const emailMatch = document.body.innerHTML.match(/mailto:([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
             const email = emailMatch ? emailMatch[1] : null;
 
-            // Extrair website
-            const websiteEl = document.querySelector('header section a[href^="http"]');
-            const website = websiteEl ? websiteEl.getAttribute('href') : null;
+            // CAPTURAR LINK LIMPO DA BIO (visível no DOM, não wrapeado)
+            // Estratégia: procurar link que está DENTRO do container de bio text
+            // Não pegar botões de redes sociais (Threads, etc)
+            let website_visible = null;
+
+            // Procurar especificamente por links dentro do texto da bio
+            // Evitar: botões, ícones, links de seguir, etc
+            const bioLinks = Array.from(document.querySelectorAll('header section a[href^="http"]'))
+              .filter((a: any) => {
+                const text = a.textContent?.trim() || '';
+
+                // Excluir links que são botões ou têm role="button"
+                const isButton = a.getAttribute('role') === 'button' || a.closest('button');
+                if (isButton) return false;
+
+                // Excluir links que são ícones (texto muito curto ou vazio)
+                if (text.length < 3) return false;
+
+                // Excluir se o texto é exatamente o username (link de Threads)
+                const usernameFromHeader = document.querySelector('header section h2')?.textContent?.trim() || '';
+                if (text === usernameFromHeader || text.startsWith('Threads')) return false;
+
+                // Incluir apenas se parecer URL: tem ponto, barra, ou começa com http
+                const looksLikeUrl = text.includes('.') || text.includes('/') || text.startsWith('http') || text.startsWith('wa.me');
+
+                return looksLikeUrl;
+              });
+
+            if (bioLinks.length > 0) {
+              const firstBioLink = bioLinks[0] as HTMLAnchorElement;
+              // Capturar o texto visível do link (não o href que pode estar wrapeado)
+              website_visible = firstBioLink.textContent?.trim() || null;
+
+              // Se o texto visível não parecer uma URL, pegar o href mesmo
+              if (website_visible && !website_visible.startsWith('http')) {
+                // Se for apenas domínio (ex: "example.com"), adicionar https://
+                if (website_visible.includes('.') && !website_visible.includes('://')) {
+                  website_visible = 'https://' + website_visible;
+                } else if (website_visible.startsWith('wa.me')) {
+                  // WhatsApp link
+                  website_visible = 'https://' + website_visible;
+                } else {
+                  website_visible = firstBioLink.getAttribute('href');
+                }
+              }
+            }
 
             return {
               full_name,
@@ -912,7 +1035,7 @@ export async function scrapeInstagramTag(
               is_business_account: isBusiness,
               is_verified: isVerified,
               email,
-              website
+              website_visible
             };
           });
 
@@ -921,10 +1044,76 @@ export async function scrapeInstagramTag(
           const followers_count = profileData.stats[1] ? parseInstagramCount(profileData.stats[1]) : 0;
           const following_count = profileData.stats[2] ? parseInstagramCount(profileData.stats[2]) : 0;
 
+          // EXTRAIR HTML COMPLETO para capturar dados via REGEX (phone, localização, etc)
+          const html = await page.content();
+
+          // ESTRATÉGIA: Procurar o bloco JSON específico do perfil (não do viewer)
+          const profileUserBlockMatch = html.match(/"graphql":\{"user":\{([^}]+(?:\{[^}]*\})*[^}]*)\}\}/);
+          let profileJsonBlock = profileUserBlockMatch ? profileUserBlockMatch[1] : html;
+
+          // ESTRATÉGIA FULL NAME: Meta tags OG (MAIS CONFIÁVEL que DOM/JSON)
+          const ogTitleMatch = html.match(/<meta property="og:title" content="([^"]+)/);
+          let fullNameFromOG: string | null = null;
+          if (ogTitleMatch) {
+            const ogTitle = ogTitleMatch[1];
+            const fullNameRegex = new RegExp(`^(.+?)\\s*\\(@${username}\\)`);
+            const nameMatch = ogTitle.match(fullNameRegex);
+            if (nameMatch) {
+              fullNameFromOG = nameMatch[1].trim();
+              console.log(`   ✅ Full name encontrado no OG meta tag: "${fullNameFromOG}"`);
+            }
+          }
+
+          // Fallback: JSON
+          const fullNameMatch = profileJsonBlock.match(/"full_name":"([^"]+)"/);
+          const fullNameFromJson = fullNameMatch ? fullNameMatch[1] : null;
+
+          // Escolher melhor fonte (prioridade: OG > JSON > DOM)
+          const finalFullName = fullNameFromOG || fullNameFromJson || profileData.full_name;
+
+          // ESTRATÉGIA BIO: Meta description (contém bio institucional completa)
+          // Format: "X seguidores, Y seguindo, Z posts — Full Name (@username) no Instagram: "Bio text aqui""
+          const metaDescBioMatch = html.match(/<meta[^>]+content="[^"]*—[^"]*no Instagram:\s*&quot;([^&]+)&quot;/);
+          let bioFromMeta: string | null = null;
+          if (metaDescBioMatch) {
+            bioFromMeta = metaDescBioMatch[1].trim();
+            console.log(`   ✅ Bio completa encontrada na meta description (${bioFromMeta.length} chars)`);
+          }
+
+          // ESTRATÉGIA BIO: JSON (fallback)
+          const bioJsonMatch = profileJsonBlock.match(/"biography":"([^"]+)"/);
+          const bioFromJson = bioJsonMatch ? bioJsonMatch[1] : null;
+
+          // CRÍTICO: Bio completa - DOM tem TODO o conteúdo (categoria + descrição + endereço)
+          // - DOM bio: COMPLETA com todos os elementos (prioridade máxima)
+          // - Meta description: Fallback caso DOM falhe
+          // - JSON: Último fallback
+          const bioComplete = profileData.bio || bioFromMeta || bioFromJson;
+          const bioForLocationParsing = profileData.bio || bioFromJson; // DOM para parsing de localização
+
+          console.log(`   📝 Bio completa (${bioComplete ? bioComplete.length : 0} chars): ${bioComplete ? bioComplete.substring(0, 80) + '...' : 'N/A'}`);
+          console.log(`   📍 Bio para parsing localização: ${bioForLocationParsing ? bioForLocationParsing.substring(0, 60) + '...' : 'N/A'}`);
+
+          // Regex para capturar outros dados do JSON embutido no HTML
+          const phoneMatch = profileJsonBlock.match(/"public_phone_number":"([^"]+)"/);
+          const businessCategoryMatch = profileJsonBlock.match(/"category_name":"([^"]+)"/);
+          const cityMatch = profileJsonBlock.match(/"city_name":"([^"]+)"/);
+          const addressMatch = profileJsonBlock.match(/"address_street":"([^"]+)"/);
+          const publicAddressMatch = profileJsonBlock.match(/"public_address":"([^"]+)"/);
+          const zipCodeMatch = profileJsonBlock.match(/"zip_code":"([^"]+)"/);
+          const stateMatch = profileJsonBlock.match(/"state_name":"([^"]+)"|"region_name":"([^"]+)"/);
+          const neighborhoodMatch = profileJsonBlock.match(/"neighborhood":"([^"]+)"/);
+
+          // PROCESSAR WEBSITE: Usar link visível do DOM, decodificar se necessário
+          let cleanWebsite: string | null = null;
+          if (profileData.website_visible) {
+            cleanWebsite = decodeInstagramWrappedUrl(profileData.website_visible);
+          }
+
           const completeProfile: InstagramProfileData = {
             username: username,
-            full_name: profileData.full_name || null,
-            bio: profileData.bio || null,
+            full_name: finalFullName,
+            bio: bioComplete || null,
             followers_count: followers_count,
             following_count: following_count,
             posts_count: posts_count,
@@ -932,9 +1121,16 @@ export async function scrapeInstagramTag(
             is_business_account: profileData.is_business_account,
             is_verified: profileData.is_verified,
             email: profileData.email,
-            phone: null, // Não visível na página
-            website: profileData.website,
-            business_category: null // Não facilmente extraível
+            phone: decodeInstagramString(phoneMatch ? phoneMatch[1] : null),
+            website: cleanWebsite, // Link limpo da bio (não wrapeado)
+            business_category: decodeInstagramString(businessCategoryMatch ? businessCategoryMatch[1] : null),
+            // Campos de localização extraídos do JSON do HTML
+            city: decodeInstagramString(cityMatch ? cityMatch[1] : null),
+            state: decodeInstagramString(stateMatch ? (stateMatch[1] || stateMatch[2]) : null),
+            neighborhood: decodeInstagramString(neighborhoodMatch ? neighborhoodMatch[1] : null),
+            address: decodeInstagramString(addressMatch ? addressMatch[1] : null) ||
+                     decodeInstagramString(publicAddressMatch ? publicAddressMatch[1] : null),
+            zip_code: decodeInstagramString(zipCodeMatch ? zipCodeMatch[1] : null)
           };
 
           // EXTRAIR EMAIL DA BIO se não tiver email público
@@ -942,6 +1138,41 @@ export async function scrapeInstagramTag(
             const emailFromBio = extractEmailFromBio(completeProfile.bio);
             if (emailFromBio) {
               completeProfile.email = emailFromBio;
+            }
+          }
+
+          // EXTRAIR TELEFONE DO LINK WHATSAPP se não tiver telefone público
+          if (!completeProfile.phone && completeProfile.website) {
+            const phoneFromWhatsApp = extractPhoneFromWhatsApp(completeProfile.website);
+            if (phoneFromWhatsApp) {
+              completeProfile.phone = phoneFromWhatsApp;
+
+              // EXTRAIR ESTADO DO DDD se não tiver estado
+              if (!completeProfile.state) {
+                const stateFromPhone = getStateFromPhone(phoneFromWhatsApp);
+                if (stateFromPhone) {
+                  completeProfile.state = stateFromPhone;
+                }
+              }
+            }
+          }
+
+          // EXTRAIR LOCALIZAÇÃO DA BIO se não tiver dados de localização
+          // IMPORTANTE: Usar bioForLocationParsing (DOM) que contém endereço completo
+          if (bioForLocationParsing && (!completeProfile.city || !completeProfile.address || !completeProfile.zip_code)) {
+            const locationFromBio = extractLocationFromBio(bioForLocationParsing);
+
+            if (!completeProfile.address && locationFromBio.address) {
+              completeProfile.address = locationFromBio.address;
+            }
+            if (!completeProfile.city && locationFromBio.city) {
+              completeProfile.city = locationFromBio.city;
+            }
+            if (!completeProfile.state && locationFromBio.state) {
+              completeProfile.state = locationFromBio.state;
+            }
+            if (!completeProfile.zip_code && locationFromBio.zip_code) {
+              completeProfile.zip_code = locationFromBio.zip_code;
             }
           }
 
@@ -1016,6 +1247,22 @@ export async function scrapeInstagramTag(
           processedUsernames.add(username);
           consecutiveDuplicates = 0; // Resetar contador ao encontrar perfil novo
           console.log(`   ✅ Perfil APROVADO e adicionado: @${username} (${followers_count} seguidores, ${posts_count} posts)`);
+          console.log(`   👤 Full Name: ${completeProfile.full_name || 'N/A'}`);
+          console.log(`   📝 Bio: ${completeProfile.bio ? (completeProfile.bio.length > 80 ? completeProfile.bio.substring(0, 80) + '...' : completeProfile.bio) : 'N/A'}`);
+          console.log(`   🔗 Website: ${completeProfile.website || 'N/A'}`);
+          console.log(`   📧 Email: ${completeProfile.email || 'N/A'}`);
+          console.log(`   📱 Telefone: ${completeProfile.phone || 'N/A'}`);
+
+          // Localização - sempre mostrar, mesmo se null
+          const locationParts: string[] = [];
+          if (completeProfile.city) locationParts.push(completeProfile.city);
+          if (completeProfile.state) locationParts.push(completeProfile.state);
+          if (completeProfile.neighborhood) locationParts.push(`(${completeProfile.neighborhood})`);
+          console.log(`   📍 Localização: ${locationParts.length > 0 ? locationParts.join(', ') : 'N/A'}`);
+          console.log(`   🏠 Endereço: ${completeProfile.address || 'N/A'}`);
+          console.log(`   📮 CEP: ${completeProfile.zip_code || 'N/A'}`);
+          console.log(`   💼 Categoria: ${completeProfile.business_category || 'N/A'}`)
+
           console.log(`   📊 Total coletado (aprovados): ${foundProfiles.length}/${maxProfiles}`);
 
           // ANTI-DETECÇÃO: Delay antes de retornar ao feed (3-5s)
@@ -1140,32 +1387,177 @@ function decodeInstagramString(value: string | null): string | null {
 }
 
 /**
+ * Extrai telefone de link WhatsApp (wa.me ou api.whatsapp.com)
+ * @param url - URL do WhatsApp
+ * @returns Telefone formatado ou null
+ */
+function extractPhoneFromWhatsApp(url: string | null): string | null {
+  if (!url) return null;
+
+  // Match wa.me/5577999232121 ou api.whatsapp.com/send?phone=5577999232121
+  const waMatch = url.match(/(?:wa\.me\/|phone=)(\d+)/);
+  if (!waMatch) return null;
+
+  const phone = waMatch[1];
+
+  // Formato brasileiro: +55 XX XXXXX-XXXX ou +55 XX XXXX-XXXX
+  if (phone.startsWith('55') && phone.length >= 12) {
+    const country = phone.substring(0, 2); // 55
+    const ddd = phone.substring(2, 4); // 77
+    const number = phone.substring(4); // 999232121
+
+    if (number.length === 9) {
+      // Celular: +55 77 99923-2121
+      return `+${country} ${ddd} ${number.substring(0, 5)}-${number.substring(5)}`;
+    } else if (number.length === 8) {
+      // Fixo: +55 77 9923-2121
+      return `+${country} ${ddd} ${number.substring(0, 4)}-${number.substring(4)}`;
+    }
+  }
+
+  // Retorna sem formatação se não conseguir formatar
+  return `+${phone}`;
+}
+
+/**
+ * Mapeia DDD brasileiro para UF
+ * @param phone - Telefone formatado
+ * @returns Código do estado (UF) ou null
+ */
+function extractLocationFromBio(bio: string | null): {
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+} {
+  if (!bio) {
+    return { address: null, city: null, state: null, zip_code: null };
+  }
+
+  // Extrair CEP (formato: 12345-678 ou 12345678)
+  const cepMatch = bio.match(/\b(\d{5}-?\d{3})\b/);
+  const zip_code = cepMatch ? cepMatch[1] : null;
+
+  // Extrair endereço (geralmente começa com Rua, Av, Avenida, etc)
+  const addressMatch = bio.match(/((?:Rua|Av\.?|Avenida|Travessa|Praça|Alameda)[^,]+,\s*\d+)/i);
+  const address = addressMatch ? addressMatch[1].trim() : null;
+
+  // Extrair cidade e estado do padrão: "Cidade, Estado CEP" ou "Cidade, Estado"
+  // Exemplo: "Rio de Janeiro, Rio de Janeiro 20211030"
+  let city: string | null = null;
+  let state: string | null = null;
+
+  // Procurar padrão: ", Cidade, Estado" antes do CEP
+  const locationMatch = bio.match(/,\s*([^,]+),\s*([^,\d]+?)[\s\d]*$/);
+  if (locationMatch) {
+    city = locationMatch[1].trim();
+    const stateName = locationMatch[2].trim();
+
+    // Converter nome de estado para sigla
+    const stateMap: { [key: string]: string } = {
+      'Rio de Janeiro': 'RJ',
+      'São Paulo': 'SP',
+      'Minas Gerais': 'MG',
+      'Bahia': 'BA',
+      'Paraná': 'PR',
+      'Rio Grande do Sul': 'RS',
+      'Pernambuco': 'PE',
+      'Ceará': 'CE',
+      // ... outros estados
+    };
+
+    state = stateMap[stateName] || stateName;
+  }
+
+  return { address, city, state, zip_code };
+}
+
+function getStateFromPhone(phone: string | null): string | null {
+  if (!phone) return null;
+
+  // Extrair DDD do telefone formatado: +55 77 99923-2121
+  const dddMatch = phone.match(/\+55\s(\d{2})\s/);
+  if (!dddMatch) return null;
+
+  const ddd = dddMatch[1];
+
+  // Mapa de DDD para UF (principais)
+  const dddToState: { [key: string]: string } = {
+    '11': 'SP', '12': 'SP', '13': 'SP', '14': 'SP', '15': 'SP', '16': 'SP', '17': 'SP', '18': 'SP', '19': 'SP',
+    '21': 'RJ', '22': 'RJ', '24': 'RJ',
+    '27': 'ES', '28': 'ES',
+    '31': 'MG', '32': 'MG', '33': 'MG', '34': 'MG', '35': 'MG', '37': 'MG', '38': 'MG',
+    '41': 'PR', '42': 'PR', '43': 'PR', '44': 'PR', '45': 'PR', '46': 'PR',
+    '47': 'SC', '48': 'SC', '49': 'SC',
+    '51': 'RS', '53': 'RS', '54': 'RS', '55': 'RS',
+    '61': 'DF',
+    '62': 'GO', '64': 'GO',
+    '63': 'TO',
+    '65': 'MT', '66': 'MT',
+    '67': 'MS',
+    '68': 'AC',
+    '69': 'RO',
+    '71': 'BA', '73': 'BA', '74': 'BA', '75': 'BA', '77': 'BA',
+    '79': 'SE',
+    '81': 'PE', '87': 'PE',
+    '82': 'AL',
+    '83': 'PB',
+    '84': 'RN',
+    '85': 'CE', '88': 'CE',
+    '86': 'PI', '89': 'PI',
+    '91': 'PA', '93': 'PA', '94': 'PA',
+    '92': 'AM', '97': 'AM',
+    '95': 'RR',
+    '96': 'AP',
+    '98': 'MA', '99': 'MA'
+  };
+
+  return dddToState[ddd] || null;
+}
+
+/**
+ * Decodifica URL wrapeada do Instagram (l.instagram.com/?u=...)
+ * Retorna a URL limpa original
+ */
+function decodeInstagramWrappedUrl(wrappedUrl: string | null): string | null {
+  if (!wrappedUrl) return null;
+
+  // Se não for URL wrapeada, retornar como está
+  if (!wrappedUrl.includes('l.instagram.com/?u=')) {
+    return wrappedUrl;
+  }
+
+  try {
+    // Extrair parâmetro 'u' da URL
+    const url = new URL(wrappedUrl);
+    const encodedUrl = url.searchParams.get('u');
+
+    if (!encodedUrl) return wrappedUrl;
+
+    // Decodificar URL
+    const decodedUrl = decodeURIComponent(encodedUrl);
+
+    console.log(`   🔗 URL decodificada: ${wrappedUrl.substring(0, 50)}... → ${decodedUrl}`);
+    return decodedUrl;
+  } catch (error: any) {
+    console.warn(`   ⚠️  Erro ao decodificar URL: ${error.message}`);
+    return wrappedUrl;
+  }
+}
+
+/**
  * Scrape de um perfil do Instagram - retorna dados do perfil
  *
  * @param username - Username do Instagram (sem @)
  */
-export async function scrapeInstagramProfile(username: string): Promise<{
-  username: string;
-  full_name: string;
-  bio: string;
-  followers: string;
-  followers_count: number;
-  following_count: number;
-  posts_count: number;
-  profile_pic_url: string;
-  is_business_account: boolean;
-  is_verified: boolean;
-  email: string | null;
-  phone: string | null;
-  website: string | null;
-  business_category: string | null;
-}> {
+export async function scrapeInstagramProfile(username: string): Promise<InstagramProfileData & { followers: string }> {
   const { page, requestId, cleanup } = await createIsolatedContext();
   console.log(`🔒 Request ${requestId} iniciada para scrape-profile: "${username}"`);
   try {
     const url = `https://www.instagram.com/${username}/`;
 
     console.log(`   ➡️ Navegando para: ${url}`);
+    // Como agora usamos JSON (não DOM), podemos usar domcontentloaded que é mais rápido
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
 
     // Delay humano após carregar página
@@ -1185,46 +1577,220 @@ export async function scrapeInstagramProfile(username: string): Promise<{
 
       if (moreButtonClicked) {
         console.log(`   ✅ Botão "mais" clicado - bio expandida`);
-        await new Promise(resolve => setTimeout(resolve, 800));
+        // CRÍTICO: Instagram renderiza via React - precisa aguardar MUITO
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
     } catch (error: any) {
       // Silencioso - não é crítico se falhar
     }
 
-    // Extrair bio via CSS selector (tem prioridade sobre JSON pois JSON pode estar truncado)
-    const bioFromDOM = await page.evaluate(() => {
-      const bioSelectors = [
-        'header section h1._ap3a._aaco._aacu._aacx._aad6._aade',
-        'header section span._ap3a._aaco._aacu._aacx._aad6._aade',
-        'header section div > span._ap3a',
-        'header section div[style*="white-space"]',
-        'header section h1 > span',
-        'header section div[data-testid]',
-        'header section span._ap3a'
-      ];
+    // CRÍTICO: Aguardar React renderizar completamente o DOM
+    // Instagram é SPA que demora para hidratar conteúdo
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
-      for (const selector of bioSelectors) {
-        const el = document.querySelector(selector);
-        if (el && el.textContent && el.textContent.trim().length > 10) {
-          return el.textContent.trim();
+    // Extrair bio via CSS selector e link limpo da bio
+    const domData = await page.evaluate(() => {
+      // Full Name - SELETOR CORRETO baseado em inspeção real
+      let full_name = '';
+      const debugLogs: string[] = [];
+
+      const headerSection = document.querySelector('header section');
+      if (headerSection) {
+        const allSpans = Array.from(headerSection.querySelectorAll('span'));
+        debugLogs.push(`Total spans encontrados: ${allSpans.length}`);
+
+        // Pegar username primeiro para comparar
+        const usernameEl = document.querySelector('header h2');
+        const username = usernameEl?.textContent?.trim() || '';
+        debugLogs.push(`Username detectado: "${username}"`);
+
+        // Procurar pelo span que contém o nome (não é username, não é número, não é endereço)
+        for (let i = 0; i < allSpans.length; i++) {
+          const span = allSpans[i];
+          const text = span.textContent?.trim() || '';
+
+          if (!text) {
+            debugLogs.push(`[${i}] VAZIO - ignorado`);
+            continue;
+          }
+
+          debugLogs.push(`[${i}] "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+
+          // Pular username
+          if (text === username) {
+            debugLogs.push(`    ↳ FILTRO: é username`);
+            continue;
+          }
+
+          // Pular números (contadores de seguidores/posts)
+          if (/^\d+[.,]?\d*\s*(mil|K|M|seguidores|posts|seguindo)?$/i.test(text)) {
+            debugLogs.push(`    ↳ FILTRO: é número/contador`);
+            continue;
+          }
+
+          // Pular endereços (tem CEP ou muitas vírgulas)
+          if (/\d{5}-?\d{3}/.test(text) || text.split(',').length >= 3) {
+            debugLogs.push(`    ↳ FILTRO: é endereço (CEP ou vírgulas)`);
+            continue;
+          }
+
+          // Pular texto muito longo (provavelmente é a bio, não o nome)
+          if (text.length > 100) {
+            debugLogs.push(`    ↳ FILTRO: texto longo (${text.length} chars)`);
+            continue;
+          }
+
+          // Pular textos genéricos
+          if (text === 'Ícone de link' || text === 'Doe Sangue') {
+            debugLogs.push(`    ↳ FILTRO: texto genérico`);
+            continue;
+          }
+
+          // Se chegou aqui, provavelmente é o nome!
+          full_name = text;
+          debugLogs.push(`    ✅ FULL NAME SELECIONADO!`);
+          break;
         }
       }
-      return null;
+
+      // Salvar debug no window
+      (window as any).__fullNameDebug = debugLogs;
+
+      // Bio - ESTRATÉGIA COMPLETA para capturar TODOS os elementos da bio
+      // Instagram divide a bio em múltiplos elementos: div (categoria) + spans (descrição) + h1 (endereço)
+      let bio = null;
+      const bioElements: string[] = [];
+
+      // Capturar todos os elementos de bio dentro de header section
+      // Classe _ap3a marca elementos de bio do Instagram
+      const bioEls = Array.from(document.querySelectorAll('header section ._ap3a._aaco._aacu._aacy._aad6._aade, header section ._ap3a._aaco._aacu._aacx._aad7._aade, header section h1._ap3a'));
+
+      bioEls.forEach((el: any) => {
+        const text = el.textContent?.trim();
+        if (text && text.length > 3 && !text.match(/^\d+[\s\S]*seguidores?$/i)) {
+          bioElements.push(text);
+        }
+      });
+
+      // Se encontrou elementos, juntar com quebras de linha
+      if (bioElements.length > 0) {
+        bio = bioElements.join('\n');
+      }
+
+      // Fallback: tentar apenas h1
+      if (!bio || bio.length < 10) {
+        const bioH1 = document.querySelector('header section h1');
+        if (bioH1 && bioH1.textContent) {
+          bio = bioH1.textContent.trim();
+        }
+      }
+
+      // Link da bio (visível no DOM, filtrado para evitar links de botões/threads)
+      let website_visible = null;
+      const bioLinks = Array.from(document.querySelectorAll('header section a[href^="http"]'))
+        .filter((a: any) => {
+          const text = a.textContent?.trim() || '';
+          const isButton = a.getAttribute('role') === 'button' || a.closest('button');
+          const looksLikeUrl = text.includes('.') || text.startsWith('http');
+          const isIcon = text.length < 3;
+          return !isButton && looksLikeUrl && !isIcon;
+        });
+
+      if (bioLinks.length > 0) {
+        const firstBioLink = bioLinks[0] as HTMLAnchorElement;
+        website_visible = firstBioLink.textContent?.trim() || null;
+
+        if (website_visible && !website_visible.startsWith('http')) {
+          if (website_visible.includes('.') && !website_visible.includes('://')) {
+            website_visible = 'https://' + website_visible;
+          } else {
+            website_visible = firstBioLink.getAttribute('href');
+          }
+        }
+      }
+
+      return { full_name, bio, website_visible };
     });
+
+    // DEBUG: Imprimir logs da extração de full_name
+    const debugLogs = await page.evaluate(() => (window as any).__fullNameDebug || []);
+    console.log(`\n🔍 DEBUG - Extração de Full Name para @${username}:`);
+    debugLogs.forEach((log: string) => console.log(`   ${log}`));
+    console.log(`   Resultado final DOM: "${domData.full_name || 'NULL'}"\n`);
 
     // Extrair HTML completo da página (MESMA LÓGICA DO SCRIPT FUNCIONAL)
     const html = await page.content();
 
-    // Aplicar REGEX para extrair dados do JSON embutido no HTML
-    // NOTA: O JSON do Instagram às vezes trunca a bio com "|... mais"
-    // Por isso o seletor CSS tem prioridade para capturar bio completa
-    const usernameMatch = html.match(/"username":"([^"]+)"/);
-    const fullNameMatch = html.match(/"full_name":"([^"]+)"/);
+    // CRÍTICO: Extrair full_name de múltiplas fontes (ordem de prioridade)
 
-    // Bio: capturar incluindo quebras de linha escapadas (\n, \r, etc)
-    // Regex mais robusto que aceita escapes
+    // Estratégia 1: Meta tags OG (Open Graph) - MAIS CONFIÁVEL
+    // Instagram SEMPRE inclui o full_name nas meta tags, mesmo que não esteja no JSON
+    const ogTitleMatch = html.match(/<meta property="og:title" content="([^"]+)/);
+    let fullNameFromOG: string | null = null;
+    if (ogTitleMatch) {
+      // OG title format: "Full Name (@username) • Fotos e vídeos do Instagram"
+      const ogTitle = ogTitleMatch[1];
+      const fullNameRegex = new RegExp(`^(.+?)\\s*\\(@${username}\\)`);
+      const nameMatch = ogTitle.match(fullNameRegex);
+      if (nameMatch) {
+        fullNameFromOG = nameMatch[1].trim();
+        console.log(`   ✅ Full name encontrado no OG meta tag: "${fullNameFromOG}"`);
+      }
+    }
+
+    // Estratégia 2: Meta description (fallback)
+    const metaDescMatch = html.match(/<meta content="[^"]*—\s*([^(]+)\s*\(@${username}\)/);
+    let fullNameFromDesc: string | null = null;
+    if (metaDescMatch) {
+      fullNameFromDesc = metaDescMatch[1].trim();
+      console.log(`   ✅ Full name encontrado no meta description: "${fullNameFromDesc}"`);
+    }
+
+    // Estratégia 3: JSON (menos confiável - Instagram removeu em algumas versões)
+    const profileDataRegex = new RegExp(`"username":"${username}"[\\s\\S]{1,500}?"full_name":"([^"]+)"`, 'g');
+    const matches = Array.from(html.matchAll(profileDataRegex));
+    let fullNameFromJson: string | null = null;
+    if (matches.length > 0) {
+      fullNameFromJson = matches[matches.length - 1][1];
+      console.log(`   ✅ Full name encontrado no JSON: "${fullNameFromJson}"`);
+    }
+
+    // Escolher a melhor fonte (prioridade: OG > Desc > JSON > DOM)
+    const finalFullName = fullNameFromOG || fullNameFromDesc || fullNameFromJson || domData.full_name;
+    if (!finalFullName) {
+      console.log(`   ⚠️  Full name NÃO encontrado em nenhuma fonte para @${username}`);
+    }
+
+    // CRÍTICO: Extrair bio completa de múltiplas fontes (ordem de prioridade)
+
+    // Estratégia 1: Meta description - contém bio completa
+    // Format: "X seguidores, Y seguindo, Z posts — Full Name (@username) no Instagram: "Bio text aqui""
+    const metaDescBioMatch = html.match(/<meta[^>]+content="[^"]*—[^"]*no Instagram:\s*&quot;([^&]+)&quot;/);
+    let bioFromMeta: string | null = null;
+    if (metaDescBioMatch) {
+      bioFromMeta = metaDescBioMatch[1].trim();
+      console.log(`   ✅ Bio completa encontrada na meta description (${bioFromMeta.length} chars)`);
+    }
+
+    // Estratégia 2: JSON biography field
     const bioMatch = html.match(/"biography":"((?:[^"\\]|\\.)*)"/);
+    let bioFromJson: string | null = bioMatch ? decodeInstagramString(bioMatch[1]) : null;
+    if (bioFromJson) {
+      console.log(`   ✅ Bio encontrada no JSON (${bioFromJson.length} chars)`);
+    }
 
+    // CRÍTICO: Bio completa - DOM tem TODO o conteúdo (categoria + descrição + endereço)
+    // - DOM bio: COMPLETA com todos os elementos (prioridade máxima)
+    // - Meta description: Fallback caso DOM falhe
+    // - JSON: Último fallback
+    const bioComplete = domData.bio || bioFromMeta || bioFromJson;
+    const bioForLocationParsing = domData.bio || bioFromJson; // DOM para parsing de localização
+
+    console.log(`   📝 Bio completa (${bioComplete ? bioComplete.length : 0} chars): ${bioComplete ? bioComplete.substring(0, 80) + '...' : 'N/A'}`);
+    console.log(`   📍 Bio para parsing localização: ${bioForLocationParsing ? bioForLocationParsing.substring(0, 60) + '...' : 'N/A'}`);
+
+    // Extrair outros dados do HTML completo
+    const usernameMatch = html.match(/"username":"([^"]+)"/);
     const followersMatch = html.match(/"edge_followed_by":\{"count":([0-9]+)\}/);
     const followingMatch = html.match(/"edge_follow":\{"count":([0-9]+)\}/);
     const postsMatch = html.match(/"edge_owner_to_timeline_media":\{"count":([0-9]+)\}/);
@@ -1236,16 +1802,38 @@ export async function scrapeInstagramProfile(username: string): Promise<{
     const websiteMatch = html.match(/"external_url":"([^"]+)"/);
     const categoryMatch = html.match(/"category_name":"([^"]+)"/);
 
+    // Campos de localização (business accounts)
+    const cityMatch = html.match(/"city_name":"([^"]+)"/);
+    const addressMatch = html.match(/"address_street":"([^"]+)"/);
+    const publicAddressMatch = html.match(/"public_address":"([^"]+)"/);
+    const zipCodeMatch = html.match(/"zip_code":"([^"]+)"/);
+    const stateMatch = html.match(/"state_name":"([^"]+)"|"region_name":"([^"]+)"/);
+    const neighborhoodMatch = html.match(/"neighborhood":"([^"]+)"/);
+
     if (!usernameMatch) {
       console.error(`   ❌ Não foi possível extrair dados de @${username}`);
       throw new Error('Perfil não encontrado ou dados não disponíveis');
     }
 
+    // Processar website: usar link visível do DOM, decodificar se necessário
+    let cleanWebsite: string | null = null;
+    if (domData.website_visible) {
+      cleanWebsite = decodeInstagramWrappedUrl(domData.website_visible);
+    } else if (websiteMatch) {
+      // Fallback: tentar decodificar o link do JSON
+      const websiteFromJSON = decodeInstagramString(websiteMatch[1]);
+      cleanWebsite = decodeInstagramWrappedUrl(websiteFromJSON);
+    }
+
     const profileData = {
-      username: decodeInstagramString(usernameMatch[1]),
-      full_name: decodeInstagramString(fullNameMatch ? fullNameMatch[1] : null),
-      // Bio do CSS selector tem prioridade (bio expandida), fallback para JSON
-      bio: bioFromDOM || decodeInstagramString(bioMatch ? bioMatch[1] : null),
+      // Username: usar parâmetro da função (perfil solicitado) em vez do regex (pode ser do viewer)
+      username: username,
+      // CRÍTICO: Full name - usar melhor fonte disponível
+      // Prioridade: OG meta tags > Meta description > JSON > DOM
+      full_name: finalFullName,
+      // CRÍTICO: Bio completa - usar bio do DOM (contém TUDO)
+      // Prioridade: DOM (completo) > Meta description > JSON
+      bio: bioComplete,
       followers: followersMatch ? followersMatch[1] : '0',
       following: followingMatch ? followingMatch[1] : '0',
       posts: postsMatch ? postsMatch[1] : '0',
@@ -1254,8 +1842,15 @@ export async function scrapeInstagramProfile(username: string): Promise<{
       is_verified: isVerifiedMatch ? isVerifiedMatch[1] === 'true' : false,
       email: decodeInstagramString(emailMatch ? emailMatch[1] : null),
       phone: decodeInstagramString(phoneMatch ? phoneMatch[1] : null),
-      website: decodeInstagramString(websiteMatch ? websiteMatch[1] : null),
-      business_category: decodeInstagramString(categoryMatch ? categoryMatch[1] : null)
+      website: cleanWebsite, // Link limpo da bio (decodificado)
+      business_category: decodeInstagramString(categoryMatch ? categoryMatch[1] : null),
+      // Dados de localização
+      city: decodeInstagramString(cityMatch ? cityMatch[1] : null),
+      address: decodeInstagramString(addressMatch ? addressMatch[1] : null) ||
+               decodeInstagramString(publicAddressMatch ? publicAddressMatch[1] : null),
+      state: decodeInstagramString(stateMatch ? (stateMatch[1] || stateMatch[2]) : null),
+      neighborhood: decodeInstagramString(neighborhoodMatch ? neighborhoodMatch[1] : null),
+      zip_code: decodeInstagramString(zipCodeMatch ? zipCodeMatch[1] : null)
     };
 
     // Se não encontrou email público, tentar extrair da bio
@@ -1266,12 +1861,61 @@ export async function scrapeInstagramProfile(username: string): Promise<{
       }
     }
 
+    // EXTRAIR TELEFONE DO LINK WHATSAPP se não tiver telefone público
+    if (!profileData.phone && profileData.website) {
+      const phoneFromWhatsApp = extractPhoneFromWhatsApp(profileData.website);
+      if (phoneFromWhatsApp) {
+        profileData.phone = phoneFromWhatsApp;
+
+        // EXTRAIR ESTADO DO DDD se não tiver estado
+        if (!profileData.state) {
+          const stateFromPhone = getStateFromPhone(phoneFromWhatsApp);
+          if (stateFromPhone) {
+            profileData.state = stateFromPhone;
+          }
+        }
+      }
+    }
+
+    // EXTRAIR LOCALIZAÇÃO DA BIO (usar bioForLocationParsing que contém endereço completo)
+    if (bioForLocationParsing && (!profileData.city || !profileData.address || !profileData.zip_code)) {
+      const locationFromBio = extractLocationFromBio(bioForLocationParsing);
+
+      if (!profileData.address && locationFromBio.address) {
+        profileData.address = locationFromBio.address;
+      }
+      if (!profileData.city && locationFromBio.city) {
+        profileData.city = locationFromBio.city;
+      }
+      if (!profileData.state && locationFromBio.state) {
+        profileData.state = locationFromBio.state;
+      }
+      if (!profileData.zip_code && locationFromBio.zip_code) {
+        profileData.zip_code = locationFromBio.zip_code;
+      }
+    }
+
     // Converter contadores para números
     const followersCount = parseInstagramCount(profileData.followers);
     const followingCount = parseInstagramCount(profileData.following);
     const postsCount = parseInstagramCount(profileData.posts);
 
     console.log(`   ✅ Dados extraídos: @${username} (${followersCount} seguidores, ${postsCount} posts)`);
+    console.log(`   👤 Full Name: ${profileData.full_name || 'N/A'}`);
+    console.log(`   📝 Bio: ${profileData.bio ? (profileData.bio.length > 80 ? profileData.bio.substring(0, 80) + '...' : profileData.bio) : 'N/A'}`);
+    console.log(`   🔗 Website: ${profileData.website || 'N/A'}`);
+    console.log(`   📧 Email: ${profileData.email || 'N/A'}`);
+    console.log(`   📱 Telefone: ${profileData.phone || 'N/A'}`);
+
+    // Logging de localização - sempre mostrar, mesmo se null
+    const locationParts: string[] = [];
+    if (profileData.city) locationParts.push(profileData.city);
+    if (profileData.state) locationParts.push(profileData.state);
+    if (profileData.neighborhood) locationParts.push(`(${profileData.neighborhood})`);
+    console.log(`   📍 Localização: ${locationParts.length > 0 ? locationParts.join(', ') : 'N/A'}`);
+    console.log(`   🏠 Endereço: ${profileData.address || 'N/A'}`);
+    console.log(`   📮 CEP: ${profileData.zip_code || 'N/A'}`);
+    console.log(`   💼 Categoria: ${profileData.business_category || 'N/A'}`)
 
     return {
       username: profileData.username ?? username,
@@ -1287,7 +1931,13 @@ export async function scrapeInstagramProfile(username: string): Promise<{
       email: profileData.email,
       phone: profileData.phone,
       website: profileData.website,
-      business_category: profileData.business_category
+      business_category: profileData.business_category,
+      // Campos de localização
+      city: profileData.city,
+      state: profileData.state,
+      neighborhood: profileData.neighborhood,
+      address: profileData.address,
+      zip_code: profileData.zip_code
     };
 
     console.log(`✅ SCRAPE-PROFILE CONCLUÍDO: dados coletados para "@${username}"`);

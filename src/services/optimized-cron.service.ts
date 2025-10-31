@@ -68,9 +68,10 @@ class OptimizedCronService {
     });
 
     // 5. Risk Assessment - 09:00 and 21:00 daily
-    this.scheduleJob("risk-assessment", "0 9,21 * * *", async () => {
-      await this.calculateRiskAssessment();
-    });
+    // ⚠️ DESABILITADO TEMPORARIAMENTE - Função calculate_risk_score não existe no banco
+    // this.scheduleJob("risk-assessment", "0 9,21 * * *", async () => {
+    //   await this.calculateRiskAssessment();
+    // });
 
     console.log(
       `✅ Optimized Cron Service initialized with ${this.jobs.size} jobs`,
@@ -220,8 +221,13 @@ class OptimizedCronService {
 
   /**
    * 5. Risk Assessment - Calculate tenant risk scores
+   * ⚠️ DESABILITADO TEMPORARIAMENTE - Função calculate_risk_score não existe no banco
    */
   private async calculateRiskAssessment(): Promise<void> {
+    console.warn("⚠️ Risk assessment DESABILITADO - função calculate_risk_score não existe no banco");
+    return;
+
+    /* CÓDIGO ORIGINAL COMENTADO - REQUER FUNÇÃO SQL NO BANCO
     const supabase = getAdminClient();
 
     try {
@@ -237,6 +243,7 @@ class OptimizedCronService {
       console.error("❌ Risk assessment calculation failed:", error);
       throw error;
     }
+    */
   }
 
   /**

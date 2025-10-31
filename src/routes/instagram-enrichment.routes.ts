@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import { enrichSingleLead } from '../services/instagram-lead-enrichment.service';
+import { ensureCorrectAccount, OperationType } from '../services/instagram-official-session.service';
 
 const router = express.Router();
 
@@ -9,9 +10,19 @@ const router = express.Router();
  * Enriquece um único lead do Instagram
  * Usado pelo workflow N8N
  */
-router.post('/enrich-lead', async (req: Request, res: Response) => {
+router.post('/enrich-lead', express.text({ type: '*/*', limit: '10mb' }), async (req: Request, res: Response) => {
   try {
-    const lead = req.body;
+    // Parse manual do JSON para lidar com caracteres especiais
+    let lead: any;
+    try {
+      lead = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    } catch (parseError) {
+      // Se falhar, tentar limpar caracteres problemáticos
+      const cleanBody = typeof req.body === 'string'
+        ? req.body.replace(/\\"/g, '\\\\"')
+        : JSON.stringify(req.body);
+      lead = JSON.parse(cleanBody);
+    }
 
     // Validar campos obrigatórios
     if (!lead.id || !lead.username) {
@@ -22,6 +33,9 @@ router.post('/enrich-lead', async (req: Request, res: Response) => {
     }
 
     console.log(`\n🔍 Enriquecendo lead via API: @${lead.username}`);
+
+    // Garantir que está logado com conta não-oficial (scraping)
+    await ensureCorrectAccount(OperationType.SCRAPING);
 
     // Enriquecer lead
     const result = await enrichSingleLead(lead);
@@ -41,6 +55,8 @@ router.post('/enrich-lead', async (req: Request, res: Response) => {
       state: result.enriched.state || lead.state || null,
       address: result.enriched.address || lead.address || null,
       zip_code: result.enriched.zip_code || lead.zip_code || null,
+      business_category: result.enriched.business_category || lead.business_category || null,
+      hashtags_bio: result.enriched.hashtags_bio || lead.hashtags_bio || [],
       sources: result.sources
     };
 

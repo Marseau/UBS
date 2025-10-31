@@ -91,18 +91,28 @@ async function isLoggedIn(page: Page): Promise<boolean> {
 }
 
 async function detectLoggedInUsername(page: Page): Promise<string | null> {
+  // Estratégia 1: Ler cookie ds_user (mais rápido)
   try {
     const cookies = await page.cookies();
     const dsUserCookie = cookies.find(cookie => cookie.name === 'ds_user');
     if (dsUserCookie?.value) {
+      console.log(`   ✅ Username detectado via cookie ds_user: ${dsUserCookie.value}`);
       return dsUserCookie.value;
     }
   } catch (error: any) {
     console.warn(`⚠️  Erro ao ler cookie ds_user: ${error.message}`);
   }
 
+  // Estratégia 2: Garantir que estamos na página do Instagram e tentar ler do DOM
   try {
-    return await page.evaluate(() => {
+    const currentUrl = page.url();
+    if (!currentUrl.includes('instagram.com')) {
+      console.log('   🌐 Navegando para Instagram para detectar username...');
+      await page.goto('https://www.instagram.com/', { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {});
+      await humanDelay(1500, 800);
+    }
+
+    const usernameFromDOM = await page.evaluate(() => {
       const profileIcon = document.querySelector<SVGElement>('svg[aria-label="Perfil"], svg[aria-label="Profile"]');
       const profileLink = profileIcon ? profileIcon.closest<HTMLAnchorElement>('a[href^="/"][href$="/"]') : null;
       const href = profileLink?.getAttribute('href');
@@ -125,10 +135,32 @@ async function detectLoggedInUsername(page: Page): Promise<string | null> {
 
       return null;
     });
+
+    if (usernameFromDOM) {
+      console.log(`   ✅ Username detectado via DOM: ${usernameFromDOM}`);
+      return usernameFromDOM;
+    }
   } catch (error: any) {
     console.warn(`⚠️  Erro ao detectar usuário logado via DOM: ${error.message}`);
-    return null;
   }
+
+  // Estratégia 3: Tentar extrair do HTML da página (fallback final)
+  try {
+    const html = await page.content();
+    const usernameMatch = html.match(/"username":"([^"]+)"/);
+    if (usernameMatch && usernameMatch[1]) {
+      // Validar que não é um username genérico ou de outro perfil
+      const username = usernameMatch[1];
+      if (username && !username.includes('instagram') && username.length > 2) {
+        console.log(`   ✅ Username detectado via JSON no HTML: ${username}`);
+        return username;
+      }
+    }
+  } catch (error: any) {
+    console.warn(`⚠️  Erro ao extrair username do HTML: ${error.message}`);
+  }
+
+  return null;
 }
 
 async function performAutoLogin(page: Page): Promise<boolean> {
@@ -272,7 +304,13 @@ export async function ensureLoggedSession(): Promise<void> {
     if (loggedUsername) {
       console.log(`👤 Usuário autenticado: @${loggedUsername}`);
     } else {
-      console.log('⚠️  Não foi possível detectar o username logado.');
+      console.error('❌ FALHA CRÍTICA: Não foi possível detectar o username logado.');
+      console.error('❌ Isso indica que a sessão pode estar inválida ou não logada.');
+      console.error('❌ O scraping será interrompido para evitar erros.');
+
+      // Limpar e falhar
+      await cleanupOnFailure();
+      throw new Error('Sessão do Instagram inválida: username não detectado. Faça login manual e tente novamente.');
     }
 
     // ⚠️ IMPORTANTE: Fechar sessionPage após login para reduzir abas abertas

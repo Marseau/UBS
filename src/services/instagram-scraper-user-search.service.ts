@@ -30,6 +30,12 @@ export interface InstagramProfileData {
   phone: string | null;
   website: string | null;
   business_category: string | null;
+  // Campos de localização (business accounts)
+  city?: string | null;
+  state?: string | null;
+  neighborhood?: string | null;
+  address?: string | null;
+  zip_code?: string | null;
   activity_score?: number; // Score de atividade (0-100)
   is_active?: boolean; // Se a conta está ativa
   recent_post_dates?: string[]; // ISO strings dos posts mais recentes
