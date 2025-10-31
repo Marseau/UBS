@@ -553,6 +553,21 @@ export async function scrapeInstagramUserSearch(
         // ========================================
         console.log(`   ✅ Perfil aprovado - Iniciando extração de hashtags dos posts...`);
 
+        // LOG DETALHADO DOS DADOS EXTRAÍDOS
+        console.log(`\n   📊 DADOS EXTRAÍDOS:`);
+        console.log(`   👤 Username: @${completeProfile.username}`);
+        console.log(`   👤 Full Name: ${completeProfile.full_name || 'N/A'}`);
+        console.log(`   📝 Bio: ${completeProfile.bio ? (completeProfile.bio.length > 80 ? completeProfile.bio.substring(0, 80) + '...' : completeProfile.bio) : 'N/A'}`);
+        console.log(`   🔗 Website: ${completeProfile.website || 'N/A'}`);
+        console.log(`   📧 Email: ${completeProfile.email || 'N/A'}`);
+        console.log(`   📱 Telefone: ${completeProfile.phone || 'N/A'}`);
+        console.log(`   📍 Localização: ${completeProfile.city ? `${completeProfile.city}, ${completeProfile.state || ''}` : 'N/A'}`);
+        console.log(`   🏠 Endereço: ${completeProfile.address || 'N/A'}`);
+        console.log(`   📮 CEP: ${completeProfile.zip_code || 'N/A'}`);
+        console.log(`   💼 Categoria: ${completeProfile.business_category || 'N/A'}`);
+        console.log(`   📊 Seguidores: ${completeProfile.followers_count} | Posts: ${completeProfile.posts_count}`);
+        console.log(`   ✅ Activity Score: ${completeProfile.activity_score}/100 ${completeProfile.is_active ? '(ATIVA ✅)' : '(INATIVA ❌)'}\n`);
+
         const postsHashtags = await extractHashtagsFromPosts(page, 3);
         if (postsHashtags && postsHashtags.length > 0) {
           completeProfile.hashtags_posts = postsHashtags;
