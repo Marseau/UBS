@@ -47,30 +47,104 @@ export function getExpectedUsername(operationType: OperationType): string {
 /**
  * Verifica se a conta logada está correta para o tipo de operação
  * Se não estiver, faz switch automático
+ *
+ * LÓGICA ROBUSTA:
+ * 1. Abre browser e vai para Instagram
+ * 2. Verifica se está logado (URL não é /accounts/login)
+ * 3. Detecta username atual via cookies/DOM
+ * 4. Compara com esperado
+ * 5. Se diferente: logout + login correto
  */
 export async function ensureCorrectAccount(operationType: OperationType): Promise<string> {
   const expectedUsername = getExpectedUsername(operationType);
-  const currentUsername = getOfficialLoggedUsername();
 
   console.log(`\n🔍 [ACCOUNT-CHECK] Operação: ${operationType}`);
   console.log(`   Conta esperada: @${expectedUsername}`);
-  console.log(`   Conta atual: ${currentUsername ? '@' + currentUsername : 'não detectada'}`);
 
-  // Se já está na conta correta, retorna
-  if (currentUsername && currentUsername.toLowerCase().includes(expectedUsername.toLowerCase().split('@')[0])) {
-    console.log(`   ✅ Conta correta já logada!\n`);
-    return currentUsername;
+  // Garantir browser inicializado (sem fazer login ainda)
+  await ensureBrowserInstance();
+
+  if (!browserInstance) {
+    throw new Error('Browser não disponível');
   }
 
-  // Precisa trocar de conta
-  console.log(`   🔄 Precisa trocar de conta...\n`);
+  // Criar página temporária para verificação
+  const checkPage = await browserInstance.newPage();
 
-  if (operationType === OperationType.ENGAGEMENT) {
-    // Trocar para conta oficial (ubs.sistemas)
-    return await switchToOfficialAccount();
-  } else {
-    // Trocar para conta não-oficial (francomarcio887)
-    return await switchToAlternativeAccount();
+  try {
+    // Carregar cookies salvos
+    await loadCookies(checkPage);
+
+    // Navegar para Instagram
+    await checkPage.goto('https://www.instagram.com/', {
+      waitUntil: 'networkidle2',
+      timeout: 60000
+    }).catch(() => {});
+
+    await humanDelay(2000, 1000);
+
+    // Verificar URL atual
+    const currentUrl = checkPage.url();
+    console.log(`   URL atual: ${currentUrl}`);
+
+    // Se não está logado, fazer login
+    if (currentUrl.includes('/accounts/login')) {
+      console.log(`   ⚠️  Não está logado, fazendo login...`);
+      await checkPage.close();
+
+      if (operationType === OperationType.ENGAGEMENT) {
+        return await switchToOfficialAccount();
+      } else {
+        return await switchToAlternativeAccount();
+      }
+    }
+
+    // Está logado, detectar username
+    const detectedUsername = await detectLoggedInUsername(checkPage);
+    console.log(`   Conta atual detectada: ${detectedUsername ? '@' + detectedUsername : 'não detectada'}`);
+
+    if (!detectedUsername) {
+      console.log(`   ⚠️  Não foi possível detectar username, forçando re-login...`);
+      await checkPage.close();
+
+      if (operationType === OperationType.ENGAGEMENT) {
+        return await switchToOfficialAccount();
+      } else {
+        return await switchToAlternativeAccount();
+      }
+    }
+
+    // Comparar username detectado com esperado
+    const expectedUsernameClean = expectedUsername.includes('@')
+      ? expectedUsername.split('@')[0]
+      : expectedUsername;
+
+    const isCorrectAccount = detectedUsername.toLowerCase().includes(expectedUsernameClean.toLowerCase());
+
+    if (isCorrectAccount) {
+      console.log(`   ✅ Conta correta já logada!\n`);
+
+      // Atualizar variável global
+      loggedUsername = detectedUsername;
+
+      await checkPage.close();
+      return detectedUsername;
+    }
+
+    // Precisa trocar de conta
+    console.log(`   🔄 Precisa trocar de conta (atual: @${detectedUsername}, esperado: @${expectedUsername})...\n`);
+    await checkPage.close();
+
+    if (operationType === OperationType.ENGAGEMENT) {
+      return await switchToOfficialAccount();
+    } else {
+      return await switchToAlternativeAccount();
+    }
+
+  } catch (error: any) {
+    console.error(`❌ [ACCOUNT-CHECK] Erro: ${error.message}`);
+    await checkPage.close().catch(() => {});
+    throw error;
   }
 }
 
@@ -484,7 +558,9 @@ export async function ensureOfficialLoggedSession(): Promise<void> {
 }
 
 export async function createOfficialAuthenticatedPage(): Promise<Page> {
-  await ensureOfficialLoggedSession();
+  // NÃO chamar ensureOfficialLoggedSession() aqui porque ensureCorrectAccount já validou
+  // Apenas garantir que o browser existe
+  await ensureBrowserInstance();
 
   if (!browserInstance) {
     throw new Error('[OFICIAL] Browser não inicializado.');
@@ -492,17 +568,8 @@ export async function createOfficialAuthenticatedPage(): Promise<Page> {
 
   const page = await browserInstance.newPage();
 
-  if (sessionPage && !sessionPage.isClosed()) {
-    try {
-      const cookies = await sessionPage.cookies();
-      if (cookies.length > 0) {
-        await page.setCookie(...cookies);
-        console.log(`🔑 [OFICIAL] Cookies aplicados na nova página (${cookies.length})`);
-      }
-    } catch (error: any) {
-      console.warn(`⚠️  [OFICIAL] Não foi possível copiar cookies para nova página: ${error.message}`);
-    }
-  }
+  // Carregar cookies do arquivo (mais confiável que sessionPage)
+  await loadCookies(page);
 
   return page;
 }
