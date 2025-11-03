@@ -1,6 +1,86 @@
-// Automação Instagram - Copiando padrões do scraping que funciona
+// Automação Instagram - Browser compartilhado (sessão oficial)
 import { Page } from 'puppeteer';
-import { createOfficialAuthenticatedPage } from './instagram-official-session.service';
+import { createOfficialAuthenticatedPage, closeOfficialBrowser } from './instagram-official-session.service';
+
+/**
+ * Mutex simples para garantir que apenas 1 batch rode por vez
+ */
+let batchInProgress = false;
+
+/**
+ * Página compartilhada reutilizada entre batches
+ * Evita abrir múltiplas abas desnecessariamente
+ */
+let sharedPage: Page | null = null;
+
+/**
+ * Pool de comentários variados para parecer mais humano
+ * Categorias: Entusiasmo, Apoio, Admiração, Interesse
+ */
+/**
+ * Pool de comentários: APENAS EMOJIS (neutros para qualquer contexto)
+ * Evita situações embaraçosas em posts antigos ou de contexto específico
+ */
+const COMMENT_POOL = {
+  entusiasmo: [
+    '🔥🔥🔥',
+    '👏👏👏',
+    '🚀🚀🚀',
+    '💪💪💪',
+    '✨✨✨'
+  ],
+  apoio: [
+    '🙏🙏🙏',
+    '💯💯💯',
+    '🌟🌟🌟',
+    '👊👊👊',
+    '💙💙💙'
+  ],
+  admiracao: [
+    '😍😍😍',
+    '❤️❤️❤️',
+    '💕💕💕',
+    '👌👌👌',
+    '🙌🙌🙌'
+  ],
+  interesse: [
+    '👀👀👀',
+    '💡💡💡',
+    '🤔🤔🤔',
+    '😊😊😊',
+    '👍👍👍'
+  ]
+};
+
+/**
+ * Seleciona um comentário aleatório de todas as categorias
+ * Distribui uniformemente entre as 4 categorias para variedade
+ */
+function getRandomComment(): string {
+  // Selecionar categoria aleatória
+  const categories = Object.keys(COMMENT_POOL) as Array<keyof typeof COMMENT_POOL>;
+  const randomCategory = categories[Math.floor(Math.random() * categories.length)];
+
+  // Verificar se categoria existe (type guard)
+  if (!randomCategory || !COMMENT_POOL[randomCategory]) {
+    return '🔥🔥🔥'; // Fallback seguro
+  }
+
+  // Selecionar comentário aleatório da categoria
+  const categoryComments = COMMENT_POOL[randomCategory];
+  const randomComment = categoryComments[Math.floor(Math.random() * categoryComments.length)];
+
+  // Validar que o comentário não é undefined
+  if (!randomComment) {
+    return '🔥🔥🔥'; // Fallback seguro
+  }
+
+  console.log(`   💬 Comentário selecionado [${randomCategory}]: "${randomComment}"`);
+
+  return randomComment;
+}
+
+// createIsolatedBrowser() removida - batch-engagement usa sessão oficial compartilhada
 
 /**
  * Delay aleatório humanizado (2-5 segundos)
@@ -363,14 +443,18 @@ async function performLikeFirstPost(page: Page, username: string): Promise<{ suc
 
 /**
  * Comenta no primeiro post do perfil
+ * Se nenhum comentário for especificado, escolhe um aleatório do pool
  */
 async function performCommentFirstPost(
   page: Page,
   username: string,
-  commentText: string = '👏👏👏'
-): Promise<{ success: boolean; post_url: string | null; error_message: string | null }> {
+  commentText?: string
+): Promise<{ success: boolean; post_url: string | null; error_message: string | null; comment_used: string }> {
   try {
-    console.log(`💬 [COMMENT] Comentando "${commentText}" no post de @${username}...`);
+    // Se não foi especificado comentário, escolher um aleatório
+    const finalComment = commentText || getRandomComment();
+
+    console.log(`💬 [COMMENT] Comentando "${finalComment}" no post de @${username}...`);
 
     // Aguardar delay anti-detecção
     await antiDetectionDelay();
@@ -424,7 +508,7 @@ async function performCommentFirstPost(
 
     // Digitar comentário letra por letra
     console.log(`⌨️  Digitando comentário...`);
-    for (const char of commentText) {
+    for (const char of finalComment) {
       await page.keyboard.type(char);
       await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 100));
     }
@@ -453,7 +537,7 @@ async function performCommentFirstPost(
       throw new Error('Botão de publicar não encontrado');
     }
 
-    console.log(`✅ Comentário "${commentText}" publicado`);
+    console.log(`✅ Comentário "${finalComment}" publicado`);
 
     await humanDelay();
 
@@ -462,17 +546,18 @@ async function performCommentFirstPost(
     await page.goBack();
     await humanDelay();
 
-    return { success: true, post_url: postUrl, error_message: null };
+    return { success: true, post_url: postUrl, error_message: null, comment_used: finalComment };
 
   } catch (error: any) {
     console.error(`❌ Erro ao comentar: ${error.message}`);
-    return { success: false, post_url: null, error_message: error.message };
+    return { success: false, post_url: null, error_message: error.message, comment_used: '' };
   }
 }
 
 /**
  * Processa batch de até 10 usuários com engajamento completo
  * SEGUINDO PADRÃO DO SCRAPING
+ * COM MUTEX para evitar execução paralela
  */
 export async function processBatchEngagement(
   usernames: string[]
@@ -488,7 +573,52 @@ export async function processBatchEngagement(
     actions: {
       follow?: { success: boolean };
       like?: { success: boolean; post_url?: string };
-      comment?: { success: boolean; post_url?: string };
+      comment?: { success: boolean; post_url?: string; comment_text?: string };
+    };
+    error_message?: string;
+  }>;
+}> {
+  // MUTEX: Aguardar se já tem batch rodando
+  if (batchInProgress) {
+    console.log('⏳ [MUTEX] Outro batch em execução, aguardando...');
+
+    // Aguardar até batch atual terminar (polling a cada 500ms)
+    while (batchInProgress) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    console.log('✅ [MUTEX] Batch anterior finalizado, iniciando novo batch');
+  }
+
+  // Marcar como em execução
+  batchInProgress = true;
+
+  try {
+    return await executeBatch(usernames);
+  } finally {
+    // Liberar mutex
+    batchInProgress = false;
+  }
+}
+
+/**
+ * Execução interna do batch (sem mutex)
+ */
+async function executeBatch(
+  usernames: string[]
+): Promise<{
+  success: boolean;
+  processed_count: number;
+  skipped_count: number;
+  timestamp: string;
+  leads: Array<{
+    username: string;
+    processed: boolean;
+    already_following: boolean;
+    actions: {
+      follow?: { success: boolean };
+      like?: { success: boolean; post_url?: string };
+      comment?: { success: boolean; post_url?: string; comment_text?: string };
     };
     error_message?: string;
   }>;
@@ -501,7 +631,7 @@ export async function processBatchEngagement(
     actions: {
       follow?: { success: boolean };
       like?: { success: boolean; post_url?: string };
-      comment?: { success: boolean; post_url?: string };
+      comment?: { success: boolean; post_url?: string; comment_text?: string };
     };
     error_message?: string;
   }> = [];
@@ -518,8 +648,15 @@ export async function processBatchEngagement(
 
     console.log(`\n🎯 [BATCH] Processando ${usernames.length} usuários...`);
 
-    // Criar página autenticada
-    page = await createOfficialAuthenticatedPage();
+    // Reutilizar página compartilhada ou criar nova se necessário
+    if (!sharedPage || sharedPage.isClosed()) {
+      console.log('📄 Criando nova página compartilhada...');
+      sharedPage = await createOfficialAuthenticatedPage();
+    } else {
+      console.log('♻️  Reutilizando página compartilhada existente');
+    }
+
+    page = sharedPage;
 
     let processedCount = 0;
     let skippedCount = 0;
@@ -583,8 +720,8 @@ export async function processBatchEngagement(
           continue;
         }
 
-        // 5. COMMENT
-        const commentResult = await performCommentFirstPost(page, username, '👏👏👏');
+        // 5. COMMENT (sem passar comentário = usa aleatório do pool)
+        const commentResult = await performCommentFirstPost(page, username);
 
         // Resultado final
         results.push({
@@ -594,7 +731,11 @@ export async function processBatchEngagement(
           actions: {
             follow: { success: true },
             like: { success: true, post_url: likeResult.post_url ?? undefined },
-            comment: { success: commentResult.success, post_url: commentResult.post_url ?? undefined }
+            comment: {
+              success: commentResult.success,
+              post_url: commentResult.post_url ?? undefined,
+              comment_text: commentResult.comment_used // Incluir comentário usado
+            }
           },
           error_message: commentResult.success ? undefined : commentResult.error_message ?? undefined
         });
@@ -644,15 +785,8 @@ export async function processBatchEngagement(
       leads: results
     };
   } finally {
-    // Fechar página ao final (a menos que esteja em modo debug)
-    const keepOpen = process.env.INSTAGRAM_DEBUG_KEEP_OPEN === 'true';
-
-    if (keepOpen) {
-      console.log(`\n🔍 [DEBUG] Browser mantido aberto para inspeção manual`);
-      console.log(`⚠️  Feche o browser manualmente quando terminar`);
-    } else if (page && !page.isClosed()) {
-      await page.close();
-      console.log(`\n🔒 Página fechada`);
-    }
+    // NÃO fechar página - mantém sessão oficial aberta para próximas chamadas
+    // O browser compartilhado é gerenciado pelo instagram-official-session.service
+    console.log(`\n✅ Batch finalizado - sessão oficial mantida aberta`);
   }
 }
