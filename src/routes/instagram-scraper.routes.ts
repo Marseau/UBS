@@ -395,8 +395,8 @@ router.post('/cleanup-pages', async (req: Request, res: Response) => {
     const pagesBefore = await browser.pages();
     const statsBefore = getContextStats();
 
-    console.log(`⏳ [CLEANUP] Aguardando 120s antes de limpar páginas...`);
-    await new Promise(resolve => setTimeout(resolve, 120000)); // Wait 120s
+    console.log(`⏳ [CLEANUP] Aguardando 60s antes de limpar páginas...`);
+    await new Promise(resolve => setTimeout(resolve, 60000)); // Wait 60s
 
     console.log(`🧹 [CLEANUP] Limpando ${statsBefore.activeCount} páginas gerenciadas...`);
 
