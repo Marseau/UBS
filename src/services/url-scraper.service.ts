@@ -157,6 +157,17 @@ export class UrlScraperService {
     // Must not be all same digits
     if (/^(\d)\1+$/.test(cleaned)) return false;
 
+    // Filter common fake/test numbers
+    const fakeNumbers = [
+      '99999999999', '11111111111', '00000000000',
+      '12345678901', '98765432109', '99996666666'
+    ];
+    if (fakeNumbers.includes(cleaned)) return false;
+
+    // Reject numbers with too many repeating digits (like 11994777911)
+    const uniqueDigits = new Set(cleaned.split('')).size;
+    if (uniqueDigits < 5) return false; // Needs at least 5 different digits
+
     return true;
   }
 
@@ -192,9 +203,17 @@ export class UrlScraperService {
       const phoneRegex = /\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4}/g;
       const htmlPhones = html.match(phoneRegex) || [];
 
-      const allPhones = [...whatsappPhones, ...textPhones, ...htmlPhones]
-        .map(p => p.replace(/[^0-9]/g, ''))
-        .filter(p => this.isValidBrazilianPhone(p));
+      // Combine, deduplicate, validate and limit
+      const cleanedFbPhones = [...whatsappPhones, ...textPhones, ...htmlPhones].map(p => p.replace(/[^0-9]/g, ''));
+      const uniqueFbPhones = [...new Set(cleanedFbPhones)];
+
+      const allPhones: string[] = [];
+      for (const phone of uniqueFbPhones) {
+        if (allPhones.length >= 4) break;
+        if (this.isValidBrazilianPhone(phone)) {
+          allPhones.push(phone);
+        }
+      }
 
       console.log(`  ✅ [FACEBOOK] Encontrado: ${emails.length} emails, ${allPhones.length} telefones`);
       return { emails, phones: allPhones };
@@ -245,9 +264,17 @@ export class UrlScraperService {
       const phoneRegex = /\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4}/g;
       const htmlPhones = html.match(phoneRegex) || [];
 
-      const allPhones = [...whatsappPhones, ...textPhones, ...htmlPhones]
-        .map(p => p.replace(/[^0-9]/g, ''))
-        .filter(p => this.isValidBrazilianPhone(p));
+      // Combine, deduplicate, validate and limit
+      const cleanedYtPhones = [...whatsappPhones, ...textPhones, ...htmlPhones].map(p => p.replace(/[^0-9]/g, ''));
+      const uniqueYtPhones = [...new Set(cleanedYtPhones)];
+
+      const allPhones: string[] = [];
+      for (const phone of uniqueYtPhones) {
+        if (allPhones.length >= 4) break;
+        if (this.isValidBrazilianPhone(phone)) {
+          allPhones.push(phone);
+        }
+      }
 
       console.log(`  ✅ [YOUTUBE] Encontrado: ${emails.length} emails, ${allPhones.length} telefones`);
       return { emails, phones: allPhones };
@@ -340,27 +367,56 @@ export class UrlScraperService {
 
       // 2. Extract WhatsApp phones from links
       const whatsappPhones = this.extractWhatsAppPhones(html);
-      console.log(`🔍 [DEBUG] WhatsApp phones extraídos: ${JSON.stringify(whatsappPhones)}`);
+      console.log(`🔍 [DEBUG] WhatsApp phones: ${whatsappPhones.length} encontrados`);
       if (whatsappPhones.length > 0) sources.whatsapp_links = true;
 
       // 3. Extract phones from visible text WITH context
       const textPhones = this.extractPhonesFromText(visibleText);
-      console.log(`🔍 [DEBUG] Text phones extraídos: ${JSON.stringify(textPhones)}`);
+      console.log(`🔍 [DEBUG] Text phones: ${textPhones.length} encontrados`);
 
       // 4. Extract phones from HTML WITHOUT context (catch phones in page data)
       const phoneRegex = /\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4}/g;
       const htmlPhones = html.match(phoneRegex) || [];
-      console.log(`🔍 [DEBUG] HTML phones extraídos: ${JSON.stringify(htmlPhones)}`);
+      console.log(`🔍 [DEBUG] HTML phones extraídos: ${htmlPhones.length} encontrados`);
 
-      // Combine and clean phones
-      const cleanedPhones = [...whatsappPhones, ...textPhones, ...htmlPhones].map(p => p.replace(/[^0-9]/g, ''));
-      console.log(`🔍 [DEBUG] Phones após limpeza: ${JSON.stringify(cleanedPhones)}`);
+      // Clean all phones
+      const cleanedWhatsApp = whatsappPhones.map(p => p.replace(/[^0-9]/g, ''));
+      const cleanedText = textPhones.map(p => p.replace(/[^0-9]/g, ''));
+      const cleanedHtml = htmlPhones.map(p => p.replace(/[^0-9]/g, ''));
 
-      let allPhones = cleanedPhones.filter(p => {
-        const isValid = this.isValidBrazilianPhone(p);
-        console.log(`🔍 [DEBUG] Validando "${p}": ${isValid}`);
-        return isValid;
-      });
+      // Remove duplicatas em cada categoria
+      const uniqueWhatsApp = [...new Set(cleanedWhatsApp)];
+      const uniqueText = [...new Set(cleanedText)];
+      const uniqueHtml = [...new Set(cleanedHtml)];
+
+      // Validar com PRIORIDADE: WhatsApp > Text > HTML
+      let allPhones: string[] = [];
+
+      // 1. Primeiro WhatsApp links (prioridade máxima)
+      for (const phone of uniqueWhatsApp) {
+        if (allPhones.length >= 4) break;
+        if (this.isValidBrazilianPhone(phone)) {
+          allPhones.push(phone);
+        }
+      }
+
+      // 2. Depois text phones com contexto
+      for (const phone of uniqueText) {
+        if (allPhones.length >= 4) break;
+        if (!allPhones.includes(phone) && this.isValidBrazilianPhone(phone)) {
+          allPhones.push(phone);
+        }
+      }
+
+      // 3. Por último HTML phones
+      for (const phone of uniqueHtml) {
+        if (allPhones.length >= 4) break;
+        if (!allPhones.includes(phone) && this.isValidBrazilianPhone(phone)) {
+          allPhones.push(phone);
+        }
+      }
+
+      console.log(`✅ [DEBUG] Phones validados: ${allPhones.length} (WhatsApp sempre primeiro)`);
 
       let allEmails = [...validEmails];
 
