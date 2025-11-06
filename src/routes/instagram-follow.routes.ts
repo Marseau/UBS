@@ -6,6 +6,7 @@ import {
   switchToOfficialAccount,
   getOfficialLoggedUsername,
   ensureCorrectAccount,
+  closeOfficialBrowser,
   OperationType
 } from '../services/instagram-official-session.service';
 
@@ -146,37 +147,82 @@ router.post('/unfollow-lead', async (req: Request, res: Response) => {
  */
 router.post('/batch-engagement', async (req: Request, res: Response) => {
   try {
-    const { usernames } = req.body;
+    const { leads } = req.body;
 
-    if (!Array.isArray(usernames)) {
+    // Aceitar tanto formato antigo (usernames array) quanto novo (leads array de objetos)
+    let leadsData: Array<{ lead_id: string; username: string }>;
+
+    if (Array.isArray(req.body.usernames)) {
+      // Formato antigo: array de strings
+      leadsData = req.body.usernames.map((username: string, index: number) => ({
+        lead_id: `legacy_${index}_${Date.now()}`,
+        username
+      }));
+    } else if (Array.isArray(leads)) {
+      // Formato novo: array de objetos { lead_id, username }
+      leadsData = leads;
+    } else {
       return res.status(400).json({
-        error: 'usernames deve ser um array',
-        example: { usernames: ['user1', 'user2', 'user3'] }
+        error: 'Body inválido. Envie "leads" como array de objetos',
+        example: {
+          leads: [
+            { lead_id: '123', username: 'user1' },
+            { lead_id: '456', username: 'user2' }
+          ]
+        }
       });
     }
 
-    if (usernames.length === 0) {
+    if (leadsData.length === 0) {
       return res.status(400).json({
-        error: 'usernames não pode ser vazio'
+        error: 'Array de leads não pode ser vazio'
       });
     }
 
-    if (usernames.length > 10) {
+    if (leadsData.length > 10) {
       return res.status(400).json({
-        error: 'Máximo de 10 usuários por batch',
-        received: usernames.length
+        error: 'Máximo de 10 leads por batch',
+        received: leadsData.length
       });
     }
 
-    console.log(`\n🎯 [BATCH] Processando ${usernames.length} usuários via API...`);
+    // Validar estrutura dos objetos
+    for (const lead of leadsData) {
+      if (!lead.username || !lead.lead_id) {
+        return res.status(400).json({
+          error: 'Cada lead deve ter "lead_id" e "username"',
+          received: lead
+        });
+      }
+    }
+
+    console.log(`\n🎯 [BATCH] Processando ${leadsData.length} leads via API...`);
 
     // Garantir que está logado com conta oficial (@ubs.sistemas)
     await ensureCorrectAccount(OperationType.ENGAGEMENT);
 
+    // Extrair apenas usernames para processar
+    const usernames = leadsData.map(l => l.username);
+
     // Executar batch engagement usando serviço refatorado (padrões do scraper)
     const result = await InstagramAutomationRefactored.processBatchEngagement(usernames);
 
-    return res.status(200).json(result);
+    // Enriquecer resultado com lead_id
+    const enrichedLeads = result.leads.map((leadResult, index) => {
+      const leadData = leadsData[index];
+      if (!leadData) {
+        throw new Error(`Lead data missing for index ${index}`);
+      }
+      return {
+        lead_id: leadData.lead_id,
+        ...leadResult
+      };
+    });
+
+    return res.status(200).json({
+      ...result,
+      leads: enrichedLeads
+    });
 
   } catch (error) {
     console.error('❌ Erro no batch engagement:', error);
@@ -188,81 +234,7 @@ router.post('/batch-engagement', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * POST /api/instagram/engage-lead
- *
- * Executa engajamento completo: Follow + Like + Comment
- * Retorna apenas o resultado das ações (sucesso/erro)
- * O workflow N8N persiste os dados usando nós Supabase
- */
-router.post('/engage-lead', async (req: Request, res: Response) => {
-  try {
-    const { lead_id, username, comment_text = '👏👏👏' } = req.body;
-
-    if (!lead_id || !username) {
-      return res.status(400).json({
-        error: 'Campos obrigatórios faltando',
-        required: ['lead_id', 'username']
-      });
-    }
-
-    console.log(`\n🎯 Engajamento completo: @${username}`);
-
-    // Garantir que está logado com conta oficial (@ubs.sistemas)
-    await ensureCorrectAccount(OperationType.ENGAGEMENT);
-
-    const timestamp = new Date().toISOString();
-
-    // Executar engajamento completo via Puppeteer
-    const result = await InstagramAutomation.engageLead(username, comment_text);
-
-    console.log(`   ✅ Engajamento completo executado`);
-
-    // Retornar dados consolidados para o workflow N8N persistir
-    return res.status(200).json({
-      success: result.success,
-      lead_id,
-      username,
-      executed_at: timestamp,
-      // Dados para UPDATE em instagram_leads
-      follow_status: 'following',
-      followed_at: timestamp,
-      last_follow_attempt_at: timestamp,
-      // Dados das ações executadas
-      actions: {
-        follow: {
-          action_type: 'follow',
-          success: result.actions.follow.success,
-          executed_at: timestamp,
-          error_message: result.actions.follow.error_message
-        },
-        like: {
-          action_type: 'like',
-          success: result.actions.like.success,
-          executed_at: timestamp,
-          post_url: result.actions.like.post_url,
-          error_message: result.actions.like.error_message
-        },
-        comment: {
-          action_type: 'comment',
-          success: result.actions.comment.success,
-          executed_at: timestamp,
-          post_url: result.actions.comment.post_url,
-          comment_text,
-          error_message: result.actions.comment.error_message
-        }
-      }
-    });
-
-  } catch (error) {
-    console.error('❌ Erro ao executar engajamento:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Erro ao executar engajamento',
-      message: error instanceof Error ? error.message : 'Erro desconhecido'
-    });
-  }
-});
+// engage-lead endpoint deletado - use /batch-engagement em vez disso
 
 /**
  * POST /api/instagram/like-post
@@ -370,7 +342,7 @@ router.post('/comment-post', async (req: Request, res: Response) => {
  * Endpoint de teste para trocar de conta do Instagram
  * Faz logout da conta atual e login com credenciais alternativas
  */
-router.post('/switch-account', async (req: Request, res: Response) => {
+router.post('/switch-account', async (_req: Request, res: Response) => {
   try {
     console.log('\n🔄 [API] Requisição de troca de conta recebida');
 
@@ -394,6 +366,36 @@ router.post('/switch-account', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: 'Erro ao trocar de conta',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+/**
+ * POST /api/instagram/close-browser
+ *
+ * Fecha o browser do Instagram (sessão oficial)
+ * Use este endpoint ao FINAL do processamento de batch para liberar recursos
+ */
+router.post('/close-browser', async (_req: Request, res: Response) => {
+  try {
+    console.log('\n🚪 [API] Requisição para fechar browser recebida');
+
+    await closeOfficialBrowser();
+
+    console.log('✅ Browser fechado com sucesso');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Browser fechado com sucesso',
+      closed_at: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao fechar browser:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao fechar browser',
       message: error instanceof Error ? error.message : 'Erro desconhecido'
     });
   }

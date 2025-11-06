@@ -6,6 +6,16 @@ import {
   InstagramProfileData
 } from '../services/instagram-scraper-single.service';
 import { scrapeInstagramUserSearch } from '../services/instagram-scraper-user-search.service';
+import { UrlScraperService } from '../services/url-scraper.service';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const supabase = createClient(
+  process.env.SUPABASE_URL || 'https://qsdfyffuonywmtnlycri.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
 
 const router = Router();
 
@@ -559,6 +569,80 @@ router.get('/debug-page', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao debugar página',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/scrape-url
+ * Scrape URL para extrair emails e telefones
+ *
+ * Body:
+ * {
+ *   "lead_id": 123,
+ *   "url": "https://doity.com.br/...",
+ *   "update_database": true (opcional, default: false)
+ * }
+ */
+router.post('/scrape-url', async (req: Request, res: Response) => {
+  try {
+    const { lead_id, url, update_database = false } = req.body;
+
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo "url" é obrigatório'
+      });
+    }
+
+    console.log(`🔍 [SCRAPE-URL] Iniciando scraping: ${url}`);
+
+    // Scrape URL
+    const result = await UrlScraperService.scrapeUrl(url);
+
+    // Se update_database=true e lead_id fornecido, atualizar no banco
+    if (update_database && lead_id) {
+      const { error: updateError } = await supabase
+        .from('instagram_leads')
+        .update({
+          email: result.emails[0] || null,
+          phone: result.phones[0] || null,
+          additional_emails: result.emails.slice(1),
+          additional_phones: result.phones.slice(1),
+          url_enriched: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', lead_id);
+
+      if (updateError) {
+        console.error(`❌ [SCRAPE-URL] Erro ao atualizar lead ${lead_id}:`, updateError);
+        return res.status(500).json({
+          success: false,
+          message: 'Erro ao atualizar lead no banco',
+          scraping_result: result,
+          error: updateError.message
+        });
+      }
+
+      console.log(`✅ [SCRAPE-URL] Lead ${lead_id} atualizado com sucesso`);
+    }
+
+    return res.status(200).json({
+      success: true,
+      lead_id,
+      url,
+      emails: result.emails,
+      phones: result.phones,
+      total_contacts: result.emails.length + result.phones.length,
+      database_updated: update_database && lead_id ? true : false
+    });
+
+  } catch (error: any) {
+    console.error('❌ [SCRAPE-URL] Erro:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao scraping URL',
       error: error.message
     });
   }

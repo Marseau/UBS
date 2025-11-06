@@ -1,0 +1,276 @@
+{
+  "name": "Instagram Leads Enriquecidos - FIXED",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Cron Diário (2 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 304]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "instagram_leads",
+        "limit": 100,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "dado_enriquecido",
+              "condition": "eq",
+              "keyValue": "false"
+            }
+          ]
+        }
+      },
+      "id": "supabase-select",
+      "name": "Supabase: Buscar Leads",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [464, 304],
+      "credentials": {
+        "supabaseApi": {
+          "id": "QTLIbdCBpZio7YIz",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [768, 288],
+      "id": "split-batches",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.15.5:3000/api/instagram/enrich-lead",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "name": "username",
+              "value": "={{ $json.username }}"
+            },
+            {
+              "name": "bio",
+              "value": "={{ $json.bio }}"
+            },
+            {
+              "name": "website",
+              "value": "={{ $json.website }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "http-enrich",
+      "name": "HTTP: Enriquecer Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1040, 304],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "instagram_leads",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "full_name",
+              "fieldValue": "={{ $json.full_name }}"
+            },
+            {
+              "fieldId": "first_name",
+              "fieldValue": "={{ $json.first_name }}"
+            },
+            {
+              "fieldId": "last_name",
+              "fieldValue": "={{ $json.last_name }}"
+            },
+            {
+              "fieldId": "email",
+              "fieldValue": "={{ $json.email }}"
+            },
+            {
+              "fieldId": "phone",
+              "fieldValue": "={{ $json.phone }}"
+            },
+            {
+              "fieldId": "city",
+              "fieldValue": "={{ $json.city }}"
+            },
+            {
+              "fieldId": "state",
+              "fieldValue": "={{ $json.state }}"
+            },
+            {
+              "fieldId": "address",
+              "fieldValue": "={{ $json.address }}"
+            },
+            {
+              "fieldId": "zip_code",
+              "fieldValue": "={{ $json.zip_code }}"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            },
+            {
+              "fieldId": "dado_enriquecido",
+              "fieldValue": "true"
+            },
+            {
+              "fieldId": "language",
+              "fieldValue": "pt_BR"
+            },
+            {
+              "fieldId": "country",
+              "fieldValue": "Brasil"
+            },
+            {
+              "fieldId": "is_active",
+              "fieldValue": "true"
+            },
+            {
+              "fieldId": "interaction_count",
+              "fieldValue": "={{ $json.interaction_count || 0 }}"
+            },
+            {
+              "fieldId": "business_category",
+              "fieldValue": "={{ $json.business_category }}"
+            },
+            {
+              "fieldId": "hashtags_bio",
+              "fieldValue": "={{ $json.hashtags_bio }}"
+            }
+          ]
+        }
+      },
+      "id": "supabase-update",
+      "name": "Supabase: Update Lead",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1328, 304],
+      "credentials": {
+        "supabaseApi": {
+          "id": "QTLIbdCBpZio7YIz",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "noop-done",
+      "name": "Workflow Completo",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [656, 544]
+    }
+  ],
+  "connections": {
+    "Cron Diário (2 AM)": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Buscar Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Buscar Leads": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Workflow Completo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        null,
+        [
+          {
+            "node": "HTTP: Enriquecer Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Enriquecer Lead": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Update Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Update Lead": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": []
+}

@@ -1,9 +1,9 @@
 import { franc } from 'franc-min';
 
 export interface LanguageDetection {
-  language: string;  // ISO 639-1 code (pt, en, es, etc)
+  language: string | null;  // ISO 639-1 code (pt, en, es, etc) ou null se não detectado
   confidence: 'low' | 'medium' | 'high';
-  method: 'franc' | 'default';  // franc library ou default fallback
+  method: 'franc' | 'unknown';  // franc library ou unknown (não detectado)
 }
 
 /**
@@ -40,30 +40,55 @@ const ISO_639_3_TO_639_1: Record<string, string> = {
   'zho': 'zh',  // Chinês
   'ara': 'ar',  // Árabe
   'rus': 'ru',  // Russo
-  'hin': 'hi',  // Hindi
-  'und': 'pt'   // Indefinido → default pt
+  'hin': 'hi'   // Hindi
+  // 'und' removido - será tratado como null
 };
+
+/**
+ * Detecta caracteres CJK (Chinese, Japanese, Korean)
+ * Estes idiomas NÃO podem ser confundidos com português
+ */
+function hasCJKCharacters(text: string): boolean {
+  // Unicode ranges para CJK:
+  // \u3040-\u309F: Hiragana (japonês)
+  // \u30A0-\u30FF: Katakana (japonês)
+  // \u4E00-\u9FAF: Kanji/Hanzi (japonês/chinês)
+  // \uAC00-\uD7AF: Hangul (coreano)
+  const cjkPattern = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\uAC00-\uD7AF]/;
+  return cjkPattern.test(text);
+}
 
 /**
  * Detecta idioma de um perfil Instagram usando franc-min
  * ESTRATÉGIA ROBUSTA:
- * 1. Normaliza o texto (remove URLs, emojis, hashtags)
- * 2. Usa biblioteca franc (baseada em n-grams) para detecção
- * 3. Valida comprimento mínimo de texto (10 caracteres)
- * 4. Default para 'pt' (português) se não detectar
+ * 1. Detecta caracteres CJK (chinês/japonês/coreano) ANTES de franc
+ * 2. Normaliza o texto (remove URLs, emojis, hashtags)
+ * 3. Usa biblioteca franc (baseada em n-grams) para detecção
+ * 4. Valida comprimento mínimo de texto (10 caracteres)
+ * 5. Retorna null se não detectar (sem fallback para 'pt')
  */
 export async function detectLanguage(
   bio: string | null,
   username?: string
 ): Promise<LanguageDetection> {
 
-  // Se não tem bio, retorna default pt
+  // Se não tem bio, retorna null
   if (!bio || bio.trim().length === 0) {
-    console.log(`🇧🇷 Default: pt (bio vazia)`);
+    console.log(`❓ Unknown: null (bio vazia)`);
     return {
-      language: 'pt',
+      language: null,
       confidence: 'low',
-      method: 'default'
+      method: 'unknown'
+    };
+  }
+
+  // DETECÇÃO PRÉVIA: Se tem caracteres CJK, não pode ser português
+  if (hasCJKCharacters(bio)) {
+    console.log(`❓ Unknown: null (caracteres CJK detectados - japonês/chinês/coreano)`);
+    return {
+      language: null,
+      confidence: 'low',
+      method: 'unknown'
     };
   }
 
@@ -72,19 +97,29 @@ export async function detectLanguage(
 
   // Valida comprimento mínimo (10 caracteres após normalização)
   if (normalizedBio.length < 10) {
-    console.log(`🇧🇷 Default: pt (texto muito curto após normalização: ${normalizedBio.length} chars)`);
+    console.log(`❓ Unknown: null (texto muito curto após normalização: ${normalizedBio.length} chars)`);
     return {
-      language: 'pt',
+      language: null,
       confidence: 'low',
-      method: 'default'
+      method: 'unknown'
     };
   }
 
   // Detecta idioma usando franc
   const detectedISO3 = franc(normalizedBio, { minLength: 5 });
 
+  // Se franc retornou 'und' (indefinido) ou idioma não mapeado, retorna null
+  if (detectedISO3 === 'und' || !ISO_639_3_TO_639_1[detectedISO3]) {
+    console.log(`❓ Unknown: null (franc não conseguiu detectar - ISO3: ${detectedISO3})`);
+    return {
+      language: null,
+      confidence: 'low',
+      method: 'unknown'
+    };
+  }
+
   // Mapeia ISO 639-3 para ISO 639-1
-  const detectedLang = ISO_639_3_TO_639_1[detectedISO3] || 'pt';
+  const detectedLang = ISO_639_3_TO_639_1[detectedISO3];
 
   // Define confiança baseada no comprimento do texto
   let confidence: 'low' | 'medium' | 'high';
@@ -94,16 +129,6 @@ export async function detectLanguage(
     confidence = 'medium';
   } else {
     confidence = 'low';
-  }
-
-  // Se franc retornou 'und' (indefinido), usa default
-  if (detectedISO3 === 'und') {
-    console.log(`🇧🇷 Default: pt (franc não conseguiu detectar - ISO3: ${detectedISO3})`);
-    return {
-      language: 'pt',
-      confidence: 'low',
-      method: 'default'
-    };
   }
 
   console.log(`🎯 Language detected: ${detectedLang} (${confidence}) - franc ISO3: ${detectedISO3}`);
