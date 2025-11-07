@@ -577,6 +577,7 @@ export async function scrapeInstagramTag(
     const foundProfiles: InstagramProfileData[] = [];
     const processedUsernames = new Set<string>();
     const processedPostLinks = new Set<string>();
+    const clickedGridPositions = new Set<string>(); // NOVO: Rastrear posições clicadas (x,y)
     let attemptsWithoutNewPost = 0;
     let consecutiveDuplicates = 0; // Contador de duplicatas consecutivas
 
@@ -666,22 +667,63 @@ export async function scrapeInstagramTag(
       let selectedHandle: ElementHandle<Element> | null = null;
       let selectedUrl: string | null = null;
 
+      // CORREÇÃO: Rastrear posições do GRID (x, y) em vez de URLs
+      const postsWithPosition: Array<{
+        handle: ElementHandle<Element>;
+        href: string;
+        x: number;
+        y: number;
+        gridKey: string; // Chave única "x-y"
+      }> = [];
+
       for (const handle of anchorHandles) {
         const href = await handle.evaluate((node: Element) => (node as HTMLAnchorElement).href || '');
-        if (!href || processedPostLinks.has(href)) {
+        if (!href) {
           await handle.dispose();
           continue;
         }
-        selectedHandle = handle;
-        selectedUrl = href;
-        console.log(`   ✅ Post selecionado (não processado): ${href}`);
+
+        // Pegar posição do elemento no grid
+        const box = await handle.boundingBox();
+        if (!box) {
+          await handle.dispose();
+          continue; // Pular elementos sem bounding box
+        }
+
+        // Arredondar para grid de 50px (Instagram usa grid fixo)
+        const x = Math.round(box.x / 50) * 50;
+        const y = Math.round(box.y / 50) * 50;
+        const gridKey = `${x}-${y}`;
+
+        postsWithPosition.push({ handle, href, x, y, gridKey });
+      }
+
+      // ORDENAR por posição VERTICAL (top) - de cima para baixo
+      postsWithPosition.sort((a, b) => a.y - b.y);
+
+      console.log(`   📊 Posts ordenados verticalmente: ${postsWithPosition.slice(0, 5).map(p => `(${p.x},${p.y})`).join(', ')}...`);
+
+      // Agora selecionar o PRIMEIRO cuja POSIÇÃO não foi clicada
+      for (const post of postsWithPosition) {
+        if (clickedGridPositions.has(post.gridKey)) {
+          console.log(`   ⏭️  Posição já clicada: (${post.x}, ${post.y}) [${post.gridKey}]`);
+          await post.handle.dispose();
+          continue;
+        }
+        selectedHandle = post.handle;
+        selectedUrl = post.href;
+        console.log(`   ✅ Post selecionado na posição (${post.x}, ${post.y}) [${post.gridKey}]: ${post.href}`);
+
+        // MARCAR POSIÇÃO como clicada IMEDIATAMENTE
+        clickedGridPositions.add(post.gridKey);
+        console.log(`   🔒 Posição (${post.x}, ${post.y}) marcada como clicada`);
         break;
       }
 
       // Dispose remaining handles we decided not to use to avoid leaks
-      for (const handle of anchorHandles) {
-        if (handle !== selectedHandle) {
-          await handle.dispose();
+      for (const post of postsWithPosition) {
+        if (post.handle !== selectedHandle) {
+          await post.handle.dispose();
         }
       }
 
