@@ -11,6 +11,14 @@ import {
   extractHashtagsFromPosts
 } from './instagram-profile.utils';
 import { createIsolatedContext } from './instagram-context-manager.service';
+import { discoverHashtagVariations, HashtagVariation } from './instagram-hashtag-discovery.service';
+import { createClient } from '@supabase/supabase-js';
+
+// Supabase client para verificações de duplicatas
+const supabase = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
 
 // Controla instância única de browser e página de sessão
 let browserInstance: Browser | null = null;
@@ -370,993 +378,1151 @@ export async function scrapeInstagramTag(
   searchTerm: string,
   maxProfiles: number = 10
 ): Promise<InstagramProfileData[]> {
+  // Normalizar termo ANTES de criar contexto
+  const normalizedTerm = searchTerm
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  console.log(`🔎 Termo: "${searchTerm}" → "#${normalizedTerm}"`);
+
+  // Criar contexto UMA VEZ para discovery E scraping
   const { page, requestId, cleanup } = await createIsolatedContext();
-  console.log(`🔒 Request ${requestId} iniciada para scrape-tag: "${searchTerm}"`);
+  console.log(`🔒 Request ${requestId} iniciada para discovery + scrape-tag: "${searchTerm}"`);
+
+  let variations: any[] = [];
+  let priorityHashtags: any[] = [];
+
+  // 🆕 DESCOBRIR VARIAÇÕES DE HASHTAGS COM PRIORIZAÇÃO POR SCORE (mesma página)
+  console.log(`\n🔍 Descobrindo variações inteligentes de #${normalizedTerm}...`);
+
   try {
-    // Normalizar termo
-    const normalizedTerm = searchTerm
-      .toLowerCase()
-      .replace(/\s+/g, '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
+    variations = await discoverHashtagVariations(page, normalizedTerm);
+    priorityHashtags = variations.filter(v => v.priority_score >= 80);
+  } catch (discoveryError: any) {
+    console.log(`❌ Erro ao descobrir variações: ${discoveryError.message}`);
+  }
 
-    console.log(`🔎 Termo: "${searchTerm}" → "#${normalizedTerm}"`);
+  try {
+    console.log(`\n📊 Análise de variações:`);
+    console.log(`   Total descobertas: ${variations.length}`);
+    console.log(`   Prioritárias (score ≥ 80): ${priorityHashtags.length}`);
 
-    // 1. IR PARA PÁGINA INICIAL
-    console.log(`🏠 Navegando para página inicial...`);
-    await page.goto('https://www.instagram.com/', { waitUntil: 'networkidle2', timeout: 120000 });
-    await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
-
-    // 2. GARANTIR CAMPO DE BUSCA VISÍVEL
-    console.log(`🔍 Garantindo abertura do campo de busca...`);
-    const searchPanelOpened = await page.evaluate(() => {
-      const icon = document.querySelector('svg[aria-label="Pesquisar"], svg[aria-label="Search"]');
-      if (!icon) {
-        return false;
-      }
-      const clickable = icon.closest('a, button, div[role="button"]');
-      if (clickable instanceof HTMLElement) {
-        clickable.click();
-        return true;
-      }
-      return false;
-    });
-
-    if (!searchPanelOpened) {
-      console.log(`   ⚠️  Ícone de busca não clicável, tentando atalho de teclado "/"`);
-      await page.keyboard.press('/');
-      await new Promise(resolve => setTimeout(resolve, 600));
-    }
-
-    // Mesmo que nenhum botão seja clicado, tentaremos focar o input direto
-    const searchInputSelector = 'input[placeholder*="Pesquis"], input[placeholder*="Search"], input[aria-label*="Pesquis"], input[aria-label*="Search"]';
-    const searchInput = await page.waitForSelector(searchInputSelector, { timeout: 5000, visible: true }).catch(() => null);
-    const hashtagUrl = `https://www.instagram.com/explore/tags/${normalizedTerm}/`;
-
-    if (!searchInput) {
-      console.log('   ⚠️  Campo de busca não encontrado; navegando direto para hashtag.');
-      await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
+    if (priorityHashtags.length > 0) {
+      console.log(`\n🎯 Hashtags que serão scrapadas (ordenadas por score):`);
+      priorityHashtags.forEach((v, i) => {
+        console.log(`   ${i + 1}. #${v.hashtag} - ${v.post_count_formatted} - Score: ${v.priority_score}`);
+      });
     } else {
-      let navigatedViaSearch = false;
+      console.log(`   ⚠️  Nenhuma hashtag prioritária encontrada. Usando hashtag original: #${normalizedTerm}`);
+    }
+
+    // Persistir variações descobertas no Supabase (para rastreabilidade futura)
+    if (variations.length > 0) {
       try {
-        await searchInput.evaluate((element: any) => {
-          if (element instanceof HTMLInputElement) {
-            element.focus();
-            element.value = '';
-            element.dispatchEvent(new Event('input', { bubbles: true }));
-          }
-        });
+        const variationsToInsert = variations.map(v => ({
+          parent_hashtag: normalizedTerm,
+          hashtag: v.hashtag,
+          post_count: v.post_count,
+          post_count_formatted: v.post_count_formatted,
+          priority_score: v.priority_score,
+          volume_category: v.volume_category,
+          discovered_at: new Date().toISOString()
+        }));
 
-        // 3. DIGITAR HASHTAG (letra por letra, como humano)
-        const searchQuery = `#${normalizedTerm}`;
-        console.log(`⌨️  Digitando "${searchQuery}" (simulando humano)...`);
+        const { error } = await supabase
+          .from('instagram_hashtag_variations')
+          .upsert(variationsToInsert, { onConflict: 'hashtag', ignoreDuplicates: false });
 
-        for (const char of searchQuery) {
-          await page.keyboard.type(char);
-          await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 150));
+        if (error) {
+          console.log(`   ⚠️  Erro ao persistir variações: ${error.message}`);
+        } else {
+          console.log(`   ✅ ${variations.length} variações persistidas no banco`);
         }
-
-        // 4. AGUARDAR SUGESTÕES
-        console.log(`⏳ Aguardando sugestões aparecerem...`);
-        await page.waitForFunction((term) => {
-          const links = Array.from(document.querySelectorAll('a'));
-          return links.some(link => link.href.includes(`/explore/tags/${term}`));
-        }, { timeout: 8000 }, normalizedTerm).catch(() => {
-          throw new Error('Nenhuma sugestão de hashtag encontrada.');
-        });
-
-        // 5. CLICAR NA HASHTAG SUGERIDA
-        console.log(`👆 Clicando na hashtag sugerida...`);
-        const clickedHashtag = await page.evaluate((term) => {
-          const links = Array.from(document.querySelectorAll('a'));
-          const hashtagLink = links.find(link => link.href.includes(`/explore/tags/${term}`));
-          if (hashtagLink) {
-            (hashtagLink as HTMLElement).click();
-            return true;
-          }
-          return false;
-        }, normalizedTerm);
-
-        if (!clickedHashtag) {
-          throw new Error('Não foi possível clicar na hashtag sugerida.');
-        }
-
-        navigatedViaSearch = true;
-      } catch (searchError: any) {
-        console.log(`   ⚠️  Falha ao usar busca (${searchError.message}). Navegando direto para hashtag.`);
-        await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
+      } catch (dbError: any) {
+        console.log(`   ⚠️  Erro ao acessar banco: ${dbError.message}`);
       }
     }
 
-    // 6. AGUARDAR MURAL CARREGAR
-    console.log(`⏳ Aguardando mural de posts carregar...`);
-    // IMPORTANTE: Não usar 'article' pois hashtag murals têm estrutura diferente do home feed
-    const postSelector = 'a[href*="/p/"], a[href*="/reel/"]';
+    // 🆕 DETERMINAR LISTA DE HASHTAGS A SCRAPAR (todas as prioritárias OU fallback para original)
+    const hashtagsToScrape = priorityHashtags.length > 0
+      ? priorityHashtags.map(h => h.hashtag)
+      : [normalizedTerm];
 
-    const waitForHashtagMural = async (context: string, throwOnFail = false): Promise<boolean> => {
-      try {
-        // Debug: verificar URL atual
-        const currentUrl = page.url();
-        console.log(`   🔍 URL atual: ${currentUrl}`);
+    console.log(`\n🎯 Total de hashtags que serão scrapadas: ${hashtagsToScrape.length}`);
+    console.log(`   📊 Perfis por hashtag: ${maxProfiles} (cada hashtag terá até ${maxProfiles} perfis scrapados)\n`);
 
-        // Esperar URL correta (aceita AMBAS: /explore/tags/ OU /explore/search/)
-        await page.waitForFunction(
-          (term) => {
-            const url = window.location.href;
-            const isTagsPage = url.includes(`/explore/tags/${term}`);
-            const isSearchPage = url.includes('/explore/search/') && url.includes(`%23${term}`);
-            return isTagsPage || isSearchPage;
-          },
-          { timeout: 30000 },
-          normalizedTerm
-        );
-        console.log(`   ✅ Página de hashtag/busca confirmada`);
+    // 🆕 ARRAY ACUMULADOR PARA TODOS OS PERFIS DE TODAS AS HASHTAGS
+    const allFoundProfiles: any[] = [];
 
-        // Esperar posts aparecerem (O MAIS IMPORTANTE!)
-        const postsFound = await page.waitForFunction(
-          (selector) => {
-            const posts = document.querySelectorAll(selector);
-            return posts.length > 0;
-          },
-          { timeout: 30000 },
-          postSelector
-        );
+    // 🆕 LOOP EXTERNO: ITERAR SOBRE CADA HASHTAG PRIORITÁRIA
+    for (let hashtagIndex = 0; hashtagIndex < hashtagsToScrape.length; hashtagIndex++) {
+      const hashtagToScrape = hashtagsToScrape[hashtagIndex];
 
-        // Contar posts encontrados
-        const postCount = await page.evaluate((selector) => {
-          return document.querySelectorAll(selector).length;
-        }, postSelector);
+      console.log(`\n${'='.repeat(80)}`);
+      console.log(`🎯 SCRAPANDO HASHTAG ${hashtagIndex + 1}/${hashtagsToScrape.length}: #${hashtagToScrape}`);
+      console.log(`${'='.repeat(80)}\n`);
 
-        console.log(`   ✅ Mural carregado com ${postCount} posts`);
+      // 🆕 ARRAY LOCAL PARA PERFIS DESTA HASHTAG
+      const foundProfiles: any[] = [];
 
-        return true;
-      } catch (error: any) {
-        // Debug adicional em caso de erro
-        const currentUrl = page.url();
-        const pageContent = await page.content();
-        const hasLoginForm = pageContent.includes('loginForm') || pageContent.includes('Login');
+      // 1. IR PARA PÁGINA INICIAL
+      console.log(`\n🏠 Navegando para página inicial...`);
+      await page.goto('https://www.instagram.com/', { waitUntil: 'networkidle2', timeout: 120000 });
+      await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
 
-        const postCount = await page.evaluate((selector) => {
-          return document.querySelectorAll(selector).length;
-        }, postSelector);
-
-        console.log(`   ⚠️  ${context}: timeout ao aguardar mural`);
-        console.log(`   📍 URL final: ${currentUrl}`);
-        console.log(`   📊 Posts encontrados: ${postCount}`);
-        console.log(`   🔐 Página de login detectada: ${hasLoginForm ? 'SIM' : 'NÃO'}`);
-        console.log(`   ❌ Erro: ${error?.message || error}`);
-
-        if (throwOnFail) {
-          throw new Error(`Mural da hashtag não carregou a tempo. URL: ${currentUrl}, Posts: ${postCount}, Login: ${hasLoginForm}`);
+      // 2. GARANTIR CAMPO DE BUSCA VISÍVEL
+      console.log(`🔍 Garantindo abertura do campo de busca...`);
+      const searchPanelOpened = await page.evaluate(() => {
+        const icon = document.querySelector('svg[aria-label="Pesquisar"], svg[aria-label="Search"]');
+        if (!icon) {
+          return false;
+        }
+        const clickable = icon.closest('a, button, div[role="button"]');
+        if (clickable instanceof HTMLElement) {
+          clickable.click();
+          return true;
         }
         return false;
+      });
+
+      if (!searchPanelOpened) {
+        console.log(`   ⚠️  Ícone de busca não clicável, tentando atalho de teclado "/"`);
+        await page.keyboard.press('/');
+        await new Promise(resolve => setTimeout(resolve, 600));
       }
-    };
 
-    await waitForHashtagMural('Carregamento inicial', true);
+      // Mesmo que nenhum botão seja clicado, tentaremos focar o input direto
+      const searchInputSelector = 'input[placeholder*="Pesquis"], input[placeholder*="Search"], input[aria-label*="Pesquis"], input[aria-label*="Search"]';
+      const searchInput = await page.waitForSelector(searchInputSelector, { timeout: 5000, visible: true }).catch(() => null);
+      const hashtagUrl = `https://www.instagram.com/explore/tags/${hashtagToScrape}/`;
 
-    // 7. PROCESSAR POSTS DO MURAL
-    console.log(`🖼️  Iniciando processamento dos posts do mural...`);
-
-    // DEBUG: Verificar estrutura REAL do mural de hashtag
-    const debugInfo = await page.evaluate(() => {
-      const allLinks = Array.from(document.querySelectorAll('a'));
-      const articles = Array.from(document.querySelectorAll('article'));
-
-      // Tentar diferentes seletores
-      const selectors = {
-        'article a[href*="/p/"]': document.querySelectorAll('article a[href*="/p/"]').length,
-        'article a[href*="/reel/"]': document.querySelectorAll('article a[href*="/reel/"]').length,
-        'a[href*="/p/"]': document.querySelectorAll('a[href*="/p/"]').length,
-        'a[href*="/reel/"]': document.querySelectorAll('a[href*="/reel/"]').length,
-        'article div[role="button"]': document.querySelectorAll('article div[role="button"]').length,
-        'article img': document.querySelectorAll('article img').length,
-      };
-
-      // Estrutura do primeiro article
-      const firstArticle = articles[0];
-      const firstArticleHTML = firstArticle ? firstArticle.outerHTML.substring(0, 500) : 'Nenhum article';
-
-      return {
-        url: window.location.href,
-        totalLinks: allLinks.length,
-        totalArticles: articles.length,
-        selectorResults: selectors,
-        firstArticleHTML,
-        linksWithP: allLinks.filter(a => a.href.includes('/p/')).slice(0, 5).map(a => a.href)
-      };
-    });
-    console.log(`\n🔍 ===== DEBUG MURAL =====`);
-    console.log(`📍 URL: ${debugInfo.url}`);
-    console.log(`📊 Articles encontrados: ${debugInfo.totalArticles}`);
-    console.log(`🔗 Resultados dos seletores:`, JSON.stringify(debugInfo.selectorResults, null, 2));
-    console.log(`📄 Primeiro article (HTML):`, debugInfo.firstArticleHTML);
-    console.log(`🔗 Primeiros 5 links com /p/:`, debugInfo.linksWithP);
-    console.log(`========================\n`);
-
-    const foundProfiles: InstagramProfileData[] = [];
-    const processedUsernames = new Set<string>();
-    const processedPostLinks = new Set<string>();
-    const clickedGridPositions = new Set<string>(); // NOVO: Rastrear posições clicadas (x,y)
-    let attemptsWithoutNewPost = 0;
-    let consecutiveDuplicates = 0; // Contador de duplicatas consecutivas
-
-    const clickPostElement = async (
-      anchorHandle: ElementHandle<Element>,
-      url: string
-    ): Promise<boolean> => {
-      try {
-        console.log(`   🖱️  Preparando clique REAL com movimento de mouse...`);
-
-        // 1. Obter posição do elemento na tela
-        const box = await anchorHandle.boundingBox();
-        if (!box) {
-          throw new Error('Elemento não tem boundingBox (não visível)');
-        }
-
-        console.log(`   📍 Elemento em: x=${box.x}, y=${box.y}, width=${box.width}, height=${box.height}`);
-
-        // 2. Scroll suave até o elemento ficar visível
-        await anchorHandle.evaluate((element) => {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        });
-        await new Promise(resolve => setTimeout(resolve, 800));
-
-        // 3. Mover mouse até o centro do elemento (simulando humano)
-        const x = box.x + box.width / 2;
-        const y = box.y + box.height / 2;
-
-        console.log(`   👆 Movendo mouse para (${Math.round(x)}, ${Math.round(y)})...`);
-
-        // Movimento em etapas (mais humano)
-        const currentPos = await page.evaluate(() => ({ x: 0, y: 0 }));
-        const steps = 10;
-        for (let i = 1; i <= steps; i++) {
-          const stepX = currentPos.x + ((x - currentPos.x) * i) / steps;
-          const stepY = currentPos.y + ((y - currentPos.y) * i) / steps;
-          await page.mouse.move(stepX, stepY);
-          await new Promise(resolve => setTimeout(resolve, 20));
-        }
-
-        // 4. Pequena pausa antes do clique (comportamento humano)
-        await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 200));
-
-        // 5. Clicar com mouse real
-        console.log(`   💥 Executando clique...`);
-        await page.mouse.click(x, y, { delay: 100 });
-
-        // 6. Aguardar navegação E validar que post abriu
-        console.log(`   ⏳ Aguardando post abrir...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // VALIDAR que a URL mudou para o post
-        const currentUrl = page.url();
-        const isPostPage = currentUrl.includes('/p/') || currentUrl.includes('/reel/');
-
-        if (!isPostPage) {
-          console.log(`   ❌ Post NÃO abriu! URL atual: ${currentUrl}`);
-          return false;
-        }
-
-        console.log(`   ✅ Post abriu confirmado: ${currentUrl}`);
-
-        // ANTI-DETECÇÃO: Delay após abrir post (3-5s)
-        await antiDetectionDelay();
-
-        return true;
-
-      } catch (clickError: any) {
-        console.log(`   ⚠️  Clique no post falhou (${clickError.message}). Navegando por URL direta...`);
+      if (!searchInput) {
+        console.log('   ⚠️  Campo de busca não encontrado; navegando direto para hashtag.');
+        await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
+      } else {
+        let navigatedViaSearch = false;
         try {
-          await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          return true;
-        } catch (gotoError: any) {
-          console.log(`   ❌  Falha ao abrir post por URL (${gotoError.message})`);
-          return false;
-        }
-      }
-    };
-
-    while (foundProfiles.length < maxProfiles && attemptsWithoutNewPost < 8 && consecutiveDuplicates < 3) {
-      console.log(`\n📊 Status: ${foundProfiles.length}/${maxProfiles} perfis, tentativa ${attemptsWithoutNewPost}/8, duplicatas consecutivas ${consecutiveDuplicates}/3`);
-
-      const anchorHandles = await page.$$(postSelector);
-      console.log(`   🔍 Encontrados ${anchorHandles.length} elementos com seletor: ${postSelector}`);
-
-      let selectedHandle: ElementHandle<Element> | null = null;
-      let selectedUrl: string | null = null;
-
-      // CORREÇÃO: Rastrear posições do GRID (x, y) em vez de URLs
-      const postsWithPosition: Array<{
-        handle: ElementHandle<Element>;
-        href: string;
-        x: number;
-        y: number;
-        gridKey: string; // Chave única "x-y"
-      }> = [];
-
-      for (const handle of anchorHandles) {
-        const href = await handle.evaluate((node: Element) => (node as HTMLAnchorElement).href || '');
-        if (!href) {
-          await handle.dispose();
-          continue;
-        }
-
-        // Pegar posição do elemento no grid
-        const box = await handle.boundingBox();
-        if (!box) {
-          await handle.dispose();
-          continue; // Pular elementos sem bounding box
-        }
-
-        // Arredondar para grid de 50px (Instagram usa grid fixo)
-        const x = Math.round(box.x / 50) * 50;
-        const y = Math.round(box.y / 50) * 50;
-        const gridKey = `${x}-${y}`;
-
-        postsWithPosition.push({ handle, href, x, y, gridKey });
-      }
-
-      // ORDENAR por posição VERTICAL (top) - de cima para baixo
-      postsWithPosition.sort((a, b) => a.y - b.y);
-
-      console.log(`   📊 Posts ordenados verticalmente: ${postsWithPosition.slice(0, 5).map(p => `(${p.x},${p.y})`).join(', ')}...`);
-
-      // Agora selecionar o PRIMEIRO cuja POSIÇÃO não foi clicada
-      for (const post of postsWithPosition) {
-        if (clickedGridPositions.has(post.gridKey)) {
-          console.log(`   ⏭️  Posição já clicada: (${post.x}, ${post.y}) [${post.gridKey}]`);
-          await post.handle.dispose();
-          continue;
-        }
-        selectedHandle = post.handle;
-        selectedUrl = post.href;
-        console.log(`   ✅ Post selecionado na posição (${post.x}, ${post.y}) [${post.gridKey}]: ${post.href}`);
-
-        // MARCAR POSIÇÃO como clicada IMEDIATAMENTE
-        clickedGridPositions.add(post.gridKey);
-        console.log(`   🔒 Posição (${post.x}, ${post.y}) marcada como clicada`);
-        break;
-      }
-
-      // Dispose remaining handles we decided not to use to avoid leaks
-      for (const post of postsWithPosition) {
-        if (post.handle !== selectedHandle) {
-          await post.handle.dispose();
-        }
-      }
-
-      if (!selectedHandle || !selectedUrl) {
-        attemptsWithoutNewPost++;
-        console.log(`   🔄 Nenhum novo post visível (tentativa ${attemptsWithoutNewPost}/8). Fazendo scroll...`);
-        await page.evaluate(() => {
-          window.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
-        });
-        // Delay variável após scroll (2-4 segundos)
-        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 2000));
-        continue;
-      }
-
-      console.log(`\n   🖼️  Abrindo post: ${selectedUrl}`);
-      const opened = await clickPostElement(selectedHandle, selectedUrl);
-      await selectedHandle.dispose();
-
-      if (!opened) {
-        processedPostLinks.add(selectedUrl);
-        attemptsWithoutNewPost++;
-        await waitForHashtagMural('Após falha ao abrir post');
-        continue;
-      }
-
-      attemptsWithoutNewPost = 0;
-      processedPostLinks.add(selectedUrl);
-
-      try {
-        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
-
-        console.log(`   🔍 Extraindo username do AUTOR (owner) do post...`);
-
-        // EXTRAIR DO JSON EMBARCADO NO HTML
-        // IMPORTANTE: Pegar o "owner" do post, NÃO o "viewer" (usuário logado)!
-        const html = await page.content();
-
-        // Tentar extrair owner do post (padrão: "owner":{"username":"AUTOR"})
-        let usernameMatch = html.match(/"owner":\s*\{\s*"username"\s*:\s*"([^"]+)"/);
-        let username = usernameMatch ? usernameMatch[1] : null;
-
-        // Fallback: Se não encontrou owner, tentar pegar do header do post
-        if (!username) {
-          console.log(`   🔄 Owner não encontrado, tentando header do post...`);
-          usernameMatch = html.match(/<header[^>]*>[\s\S]*?href="\/([^/"]+)\//);
-          username = usernameMatch ? usernameMatch[1] : null;
-        }
-
-        console.log(`   📋 Username do autor extraído: ${username || 'FALHOU'}`);
-
-        if (!username) {
-          console.log(`   ⚠️  Não foi possível identificar o autor do post.`);
-          console.log(`   📄 Salvando HTML para debug...`);
-          const fs = require('fs');
-          fs.writeFileSync('/tmp/instagram-post-debug.html', html.substring(0, 50000));
-          console.log(`   💾 HTML salvo em /tmp/instagram-post-debug.html (primeiros 50KB)`);
-
-          try {
-            await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
-          } catch {
-            // ignore
-          }
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          const feedReady = await waitForHashtagMural('Retorno após post sem autor');
-          if (!feedReady) {
-            attemptsWithoutNewPost++;
-          }
-          continue;
-        }
-
-        if (username === loggedUsername) {
-          console.log(`   ⏭️  Post do próprio usuário logado, pulando...`);
-          try {
-            await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
-          } catch {
-            // ignore
-          }
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          const feedReady = await waitForHashtagMural('Retorno após detectar usuário logado');
-          if (!feedReady) {
-            attemptsWithoutNewPost++;
-          }
-          continue;
-        }
-
-        if (processedUsernames.has(username)) {
-          console.log(`   ⏭️  @${username} já processado, pulando... (${consecutiveDuplicates} duplicatas consecutivas)`);
-          console.log(`   ⏳ Aguardando 20 segundos para auto-scroll do Instagram carregar novos posts...`);
-
-          // Aguardar 20 segundos para permitir auto-scroll do Instagram
-          await new Promise(resolve => setTimeout(resolve, 20000));
-
-          // Tentar voltar ao feed da hashtag
-          try {
-            await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
-          } catch {
-            // ignore
-          }
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          const feedReady = await waitForHashtagMural('Retorno após duplicado');
-          if (!feedReady) {
-            attemptsWithoutNewPost++;
-          }
-
-          // Incrementar contador de duplicatas APÓS aguardar
-          consecutiveDuplicates++;
-          console.log(`   📊 Duplicatas consecutivas: ${consecutiveDuplicates}/3`);
-          continue;
-        }
-
-        // NAVEGAR PARA O PERFIL e EXTRAIR DADOS DIRETAMENTE
-        console.log(`   👤 Navegando para o perfil de @${username}...`);
-
-        try {
-          await page.goto(`https://www.instagram.com/${username}/`, {
-            waitUntil: 'networkidle2',
-            timeout: 30000
+          await searchInput.evaluate((element: any) => {
+            if (element instanceof HTMLInputElement) {
+              element.focus();
+              element.value = '';
+              element.dispatchEvent(new Event('input', { bubbles: true }));
+            }
           });
 
-          // Aguardar perfil carregar
-          await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+          // 3. DIGITAR HASHTAG (letra por letra, como humano)
+          const searchQuery = `#${hashtagToScrape}`;
+          console.log(`⌨️  Digitando "${searchQuery}" (simulando humano)...`);
 
-          // EXTRAIR DADOS VISUALMENTE DA PÁGINA ATUAL usando CSS selectors
-          console.log(`   📊 Extraindo dados visíveis da página do perfil...`);
-
-          // CRÍTICO: Clicar no botão "... mais" para expandir bio completa (se existir)
-          try {
-            const moreButtonClicked = await page.evaluate(() => {
-              const elements = Array.from(document.querySelectorAll('header section div, header section span'));
-              const maisButton = elements.find(el => el.textContent?.trim() === 'mais');
-              if (maisButton) {
-                (maisButton as HTMLElement).click();
-                return true;
-              }
-              return false;
-            });
-
-            if (moreButtonClicked) {
-              console.log(`   ✅ Botão "mais" clicado - bio expandida`);
-              await new Promise(resolve => setTimeout(resolve, 800));
-            }
-          } catch (error: any) {
-            // Silencioso - não é crítico se falhar
+          for (const char of searchQuery) {
+            await page.keyboard.type(char);
+            await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 150));
           }
 
-          const profileData = await page.evaluate(() => {
-            // Extrair nome completo - SELETOR CORRETO baseado em inspeção real
-            // Instagram: username está em index 0-2, full_name geralmente em index 3
-            let full_name = '';
-            const debugLogs: string[] = [];
+          // 4. AGUARDAR SUGESTÕES
+          console.log(`⏳ Aguardando sugestões aparecerem...`);
+          await page.waitForFunction((term) => {
+            const links = Array.from(document.querySelectorAll('a'));
+            return links.some(link => link.href.includes(`/explore/tags/${term}`));
+          }, { timeout: 8000 }, hashtagToScrape).catch(() => {
+            throw new Error('Nenhuma sugestão de hashtag encontrada.');
+          });
 
-            const headerSection = document.querySelector('header section');
-            if (headerSection) {
-              const allSpans = Array.from(headerSection.querySelectorAll('span'));
-              debugLogs.push(`Total spans encontrados: ${allSpans.length}`);
+          // 5. CLICAR NA HASHTAG SUGERIDA
+          console.log(`👆 Clicando na hashtag sugerida...`);
+          const clickedHashtag = await page.evaluate((term) => {
+            const links = Array.from(document.querySelectorAll('a'));
+            const hashtagLink = links.find(link => link.href.includes(`/explore/tags/${term}`));
+            if (hashtagLink) {
+              (hashtagLink as HTMLElement).click();
+              return true;
+            }
+            return false;
+          }, hashtagToScrape);
 
-              // Pegar username primeiro para comparar
-              const usernameEl = document.querySelector('header h2');
-              const username = usernameEl?.textContent?.trim() || '';
-              debugLogs.push(`Username detectado: "${username}"`);
+          if (!clickedHashtag) {
+            throw new Error('Não foi possível clicar na hashtag sugerida.');
+          }
 
-              // Procurar pelo span que contém o nome (não é username, não é número, não é endereço)
-              for (let i = 0; i < allSpans.length; i++) {
-                const span = allSpans[i];
-                const text = span.textContent?.trim() || '';
+          navigatedViaSearch = true;
+        } catch (searchError: any) {
+          console.log(`   ⚠️  Falha ao usar busca (${searchError.message}). Navegando direto para hashtag.`);
+          await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
+        }
+      }
 
-                if (!text) {
-                  debugLogs.push(`[${i}] VAZIO - ignorado`);
-                  continue;
-                }
+      // 6. AGUARDAR MURAL CARREGAR
+      console.log(`⏳ Aguardando mural de posts carregar...`);
+      // IMPORTANTE: Não usar 'article' pois hashtag murals têm estrutura diferente do home feed
+      const postSelector = 'a[href*="/p/"], a[href*="/reel/"]';
 
-                debugLogs.push(`[${i}] "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+      const waitForHashtagMural = async (context: string, throwOnFail = false): Promise<boolean> => {
+        try {
+          // Debug: verificar URL atual
+          const currentUrl = page.url();
+          console.log(`   🔍 URL atual: ${currentUrl}`);
 
-                // Pular username
-                if (text === username) {
-                  debugLogs.push(`    ↳ FILTRO: é username`);
-                  continue;
-                }
+          // Esperar URL correta (aceita AMBAS: /explore/tags/ OU /explore/search/)
+          await page.waitForFunction(
+            (term) => {
+              const url = window.location.href;
+              const isTagsPage = url.includes(`/explore/tags/${term}`);
+              const isSearchPage = url.includes('/explore/search/') && url.includes(`%23${term}`);
+              return isTagsPage || isSearchPage;
+            },
+            { timeout: 30000 },
+            hashtagToScrape
+          );
+          console.log(`   ✅ Página de hashtag/busca confirmada`);
 
-                // Pular números (contadores de seguidores/posts)
-                if (/^\d+[.,]?\d*\s*(mil|K|M|seguidores|posts|seguindo)?$/i.test(text)) {
-                  debugLogs.push(`    ↳ FILTRO: é número/contador`);
-                  continue;
-                }
+          // Esperar posts aparecerem (O MAIS IMPORTANTE!)
+          const postsFound = await page.waitForFunction(
+            (selector) => {
+              const posts = document.querySelectorAll(selector);
+              return posts.length > 0;
+            },
+            { timeout: 30000 },
+            postSelector
+          );
 
-                // Pular endereços (tem CEP ou muitas vírgulas)
-                if (/\d{5}-?\d{3}/.test(text) || text.split(',').length >= 3) {
-                  debugLogs.push(`    ↳ FILTRO: é endereço (CEP ou vírgulas)`);
-                  continue;
-                }
+          // Contar posts encontrados
+          const postCount = await page.evaluate((selector) => {
+            return document.querySelectorAll(selector).length;
+          }, postSelector);
 
-                // Pular texto muito longo (provavelmente é a bio, não o nome)
-                if (text.length > 100) {
-                  debugLogs.push(`    ↳ FILTRO: texto longo (${text.length} chars)`);
-                  continue;
-                }
+          console.log(`   ✅ Mural carregado com ${postCount} posts`);
 
-                // Pular textos genéricos
-                if (text === 'Ícone de link' || text === 'Doe Sangue') {
-                  debugLogs.push(`    ↳ FILTRO: texto genérico`);
-                  continue;
-                }
+          return true;
+        } catch (error: any) {
+          // Debug adicional em caso de erro
+          const currentUrl = page.url();
+          const pageContent = await page.content();
+          const hasLoginForm = pageContent.includes('loginForm') || pageContent.includes('Login');
 
-                // Se chegou aqui, provavelmente é o nome!
-                full_name = text;
-                debugLogs.push(`    ✅ FULL NAME SELECIONADO!`);
-                break;
+          const postCount = await page.evaluate((selector) => {
+            return document.querySelectorAll(selector).length;
+          }, postSelector);
+
+          console.log(`   ⚠️  ${context}: timeout ao aguardar mural`);
+          console.log(`   📍 URL final: ${currentUrl}`);
+          console.log(`   📊 Posts encontrados: ${postCount}`);
+          console.log(`   🔐 Página de login detectada: ${hasLoginForm ? 'SIM' : 'NÃO'}`);
+          console.log(`   ❌ Erro: ${error?.message || error}`);
+
+          if (throwOnFail) {
+            throw new Error(`Mural da hashtag não carregou a tempo. URL: ${currentUrl}, Posts: ${postCount}, Login: ${hasLoginForm}`);
+          }
+          return false;
+        }
+      };
+
+      await waitForHashtagMural('Carregamento inicial', true);
+
+      // 7. PROCESSAR POSTS DO MURAL
+      console.log(`🖼️  Iniciando processamento dos posts do mural...`);
+
+      // DEBUG: Verificar estrutura REAL do mural de hashtag
+      const debugInfo = await page.evaluate(() => {
+        const allLinks = Array.from(document.querySelectorAll('a'));
+        const articles = Array.from(document.querySelectorAll('article'));
+
+        // Tentar diferentes seletores
+        const selectors = {
+          'article a[href*="/p/"]': document.querySelectorAll('article a[href*="/p/"]').length,
+          'article a[href*="/reel/"]': document.querySelectorAll('article a[href*="/reel/"]').length,
+          'a[href*="/p/"]': document.querySelectorAll('a[href*="/p/"]').length,
+          'a[href*="/reel/"]': document.querySelectorAll('a[href*="/reel/"]').length,
+          'article div[role="button"]': document.querySelectorAll('article div[role="button"]').length,
+          'article img': document.querySelectorAll('article img').length,
+        };
+
+        // Estrutura do primeiro article
+        const firstArticle = articles[0];
+        const firstArticleHTML = firstArticle ? firstArticle.outerHTML.substring(0, 500) : 'Nenhum article';
+
+        return {
+          url: window.location.href,
+          totalLinks: allLinks.length,
+          totalArticles: articles.length,
+          selectorResults: selectors,
+          firstArticleHTML,
+          linksWithP: allLinks.filter(a => a.href.includes('/p/')).slice(0, 5).map(a => a.href)
+        };
+      });
+      console.log(`\n🔍 ===== DEBUG MURAL =====`);
+      console.log(`📍 URL: ${debugInfo.url}`);
+      console.log(`📊 Articles encontrados: ${debugInfo.totalArticles}`);
+      console.log(`🔗 Resultados dos seletores:`, JSON.stringify(debugInfo.selectorResults, null, 2));
+      console.log(`📄 Primeiro article (HTML):`, debugInfo.firstArticleHTML);
+      console.log(`🔗 Primeiros 5 links com /p/:`, debugInfo.linksWithP);
+      console.log(`========================\n`);
+
+      const processedUsernames = new Set<string>();
+      const processedPostLinks = new Set<string>();
+      const clickedGridPositions = new Set<string>(); // NOVO: Rastrear posições clicadas (x,y)
+      let attemptsWithoutNewPost = 0;
+      let consecutiveDuplicates = 0; // Contador de duplicatas consecutivas
+
+      const clickPostElement = async (
+        anchorHandle: ElementHandle<Element>,
+        url: string
+      ): Promise<boolean> => {
+        try {
+          console.log(`   🖱️  Preparando clique REAL com movimento de mouse...`);
+
+          // 1. Obter posição do elemento na tela
+          const box = await anchorHandle.boundingBox();
+          if (!box) {
+            throw new Error('Elemento não tem boundingBox (não visível)');
+          }
+
+          console.log(`   📍 Elemento em: x=${box.x}, y=${box.y}, width=${box.width}, height=${box.height}`);
+
+          // 2. Scroll suave até o elemento ficar visível
+          await anchorHandle.evaluate((element) => {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+          await new Promise(resolve => setTimeout(resolve, 800));
+
+          // 3. Mover mouse até o centro do elemento (simulando humano)
+          const x = box.x + box.width / 2;
+          const y = box.y + box.height / 2;
+
+          console.log(`   👆 Movendo mouse para (${Math.round(x)}, ${Math.round(y)})...`);
+
+          // Movimento em etapas (mais humano)
+          const currentPos = await page.evaluate(() => ({ x: 0, y: 0 }));
+          const steps = 10;
+          for (let i = 1; i <= steps; i++) {
+            const stepX = currentPos.x + ((x - currentPos.x) * i) / steps;
+            const stepY = currentPos.y + ((y - currentPos.y) * i) / steps;
+            await page.mouse.move(stepX, stepY);
+            await new Promise(resolve => setTimeout(resolve, 20));
+          }
+
+          // 4. Pequena pausa antes do clique (comportamento humano)
+          await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 200));
+
+          // 5. Clicar com mouse real
+          console.log(`   💥 Executando clique...`);
+          await page.mouse.click(x, y, { delay: 100 });
+
+          // 6. Aguardar navegação E validar que post abriu
+          console.log(`   ⏳ Aguardando post abrir...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          // VALIDAR que a URL mudou para o post
+          const currentUrl = page.url();
+          const isPostPage = currentUrl.includes('/p/') || currentUrl.includes('/reel/');
+
+          if (!isPostPage) {
+            console.log(`   ❌ Post NÃO abriu! URL atual: ${currentUrl}`);
+            return false;
+          }
+
+          console.log(`   ✅ Post abriu confirmado: ${currentUrl}`);
+
+          // ANTI-DETECÇÃO: Delay após abrir post (3-5s)
+          await antiDetectionDelay();
+
+          return true;
+
+        } catch (clickError: any) {
+          console.log(`   ⚠️  Clique no post falhou (${clickError.message}). Navegando por URL direta...`);
+          try {
+            await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            return true;
+          } catch (gotoError: any) {
+            console.log(`   ❌  Falha ao abrir post por URL (${gotoError.message})`);
+            return false;
+          }
+        }
+      };
+
+        // 🆕 LOOP INTERNO: SCRAPAR ATÉ maxProfiles PARA ESTA HASHTAG
+        while (foundProfiles.length < maxProfiles && attemptsWithoutNewPost < 8 && consecutiveDuplicates < 3) {
+          console.log(`\n📊 Status (#${hashtagToScrape}): ${foundProfiles.length}/${maxProfiles} perfis, tentativa ${attemptsWithoutNewPost}/8, duplicatas consecutivas ${consecutiveDuplicates}/3`);
+
+        const anchorHandles = await page.$$(postSelector);
+        console.log(`   🔍 Encontrados ${anchorHandles.length} elementos com seletor: ${postSelector}`);
+
+        let selectedHandle: ElementHandle<Element> | null = null;
+        let selectedUrl: string | null = null;
+
+        // CORREÇÃO: Rastrear posições do GRID (x, y) em vez de URLs
+        const postsWithPosition: Array<{
+          handle: ElementHandle<Element>;
+          href: string;
+          x: number;
+          y: number;
+          gridKey: string; // Chave única "x-y"
+        }> = [];
+
+        for (const handle of anchorHandles) {
+          const href = await handle.evaluate((node: Element) => (node as HTMLAnchorElement).href || '');
+          if (!href) {
+            await handle.dispose();
+            continue;
+          }
+
+          // Pegar posição do elemento no grid
+          const box = await handle.boundingBox();
+          if (!box) {
+            await handle.dispose();
+            continue; // Pular elementos sem bounding box
+          }
+
+          // Arredondar para grid de 50px (Instagram usa grid fixo)
+          const x = Math.round(box.x / 50) * 50;
+          const y = Math.round(box.y / 50) * 50;
+          const gridKey = `${x}-${y}`;
+
+          postsWithPosition.push({ handle, href, x, y, gridKey });
+        }
+
+        // ORDENAR por posição VERTICAL (top) - de cima para baixo
+        postsWithPosition.sort((a, b) => a.y - b.y);
+
+        console.log(`   📊 Posts ordenados verticalmente: ${postsWithPosition.slice(0, 5).map(p => `(${p.x},${p.y})`).join(', ')}...`);
+
+        // Agora selecionar o PRIMEIRO cuja POSIÇÃO não foi clicada
+        for (const post of postsWithPosition) {
+          if (clickedGridPositions.has(post.gridKey)) {
+            console.log(`   ⏭️  Posição já clicada: (${post.x}, ${post.y}) [${post.gridKey}]`);
+            await post.handle.dispose();
+            continue;
+          }
+          selectedHandle = post.handle;
+          selectedUrl = post.href;
+          console.log(`   ✅ Post selecionado na posição (${post.x}, ${post.y}) [${post.gridKey}]: ${post.href}`);
+
+          // MARCAR POSIÇÃO como clicada IMEDIATAMENTE
+          clickedGridPositions.add(post.gridKey);
+          console.log(`   🔒 Posição (${post.x}, ${post.y}) marcada como clicada`);
+          break;
+        }
+
+        // Dispose remaining handles we decided not to use to avoid leaks
+        for (const post of postsWithPosition) {
+          if (post.handle !== selectedHandle) {
+            await post.handle.dispose();
+          }
+        }
+
+        if (!selectedHandle || !selectedUrl) {
+          attemptsWithoutNewPost++;
+          console.log(`   🔄 Nenhum novo post visível (tentativa ${attemptsWithoutNewPost}/8). Fazendo scroll...`);
+          await page.evaluate(() => {
+            window.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+          });
+          // Delay variável após scroll (2-4 segundos)
+          await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 2000));
+          continue;
+        }
+
+        console.log(`\n   🖼️  Abrindo post: ${selectedUrl}`);
+        const opened = await clickPostElement(selectedHandle, selectedUrl);
+        await selectedHandle.dispose();
+
+        if (!opened) {
+          processedPostLinks.add(selectedUrl);
+          attemptsWithoutNewPost++;
+          await waitForHashtagMural('Após falha ao abrir post');
+          continue;
+        }
+
+        attemptsWithoutNewPost = 0;
+        processedPostLinks.add(selectedUrl);
+
+        try {
+          await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+
+          console.log(`   🔍 Extraindo username do AUTOR (owner) do post...`);
+
+          // EXTRAIR DO JSON EMBARCADO NO HTML
+          // IMPORTANTE: Pegar o "owner" do post, NÃO o "viewer" (usuário logado)!
+          const html = await page.content();
+
+          // Tentar extrair owner do post (padrão: "owner":{"username":"AUTOR"})
+          let usernameMatch = html.match(/"owner":\s*\{\s*"username"\s*:\s*"([^"]+)"/);
+          let username = usernameMatch ? usernameMatch[1] : null;
+
+          // Fallback: Se não encontrou owner, tentar pegar do header do post
+          if (!username) {
+            console.log(`   🔄 Owner não encontrado, tentando header do post...`);
+            usernameMatch = html.match(/<header[^>]*>[\s\S]*?href="\/([^/"]+)\//);
+            username = usernameMatch ? usernameMatch[1] : null;
+          }
+
+          console.log(`   📋 Username do autor extraído: ${username || 'FALHOU'}`);
+
+          if (!username) {
+            console.log(`   ⚠️  Não foi possível identificar o autor do post.`);
+            console.log(`   📄 Salvando HTML para debug...`);
+            const fs = require('fs');
+            fs.writeFileSync('/tmp/instagram-post-debug.html', html.substring(0, 50000));
+            console.log(`   💾 HTML salvo em /tmp/instagram-post-debug.html (primeiros 50KB)`);
+
+            try {
+              await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
+            } catch {
+              // ignore
+            }
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const feedReady = await waitForHashtagMural('Retorno após post sem autor');
+            if (!feedReady) {
+              attemptsWithoutNewPost++;
+            }
+            continue;
+          }
+
+          if (username === loggedUsername) {
+            console.log(`   ⏭️  Post do próprio usuário logado, pulando...`);
+            try {
+              await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
+            } catch {
+              // ignore
+            }
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const feedReady = await waitForHashtagMural('Retorno após detectar usuário logado');
+            if (!feedReady) {
+              attemptsWithoutNewPost++;
+            }
+            continue;
+          }
+
+          // 🆕 VERIFICAR SE USERNAME JÁ EXISTE NO BANCO (ANTES de processar perfil completo)
+          console.log(`   🔍 Verificando se @${username} já existe no banco de dados...`);
+          try {
+            const { data: existingLead, error: checkError } = await supabase
+              .from('instagram_leads')
+              .select('username')
+              .eq('username', username)
+              .single();
+
+            if (existingLead) {
+              console.log(`   ⏭️  @${username} JÁ EXISTE no banco! Pulando extração de perfil...`);
+              processedUsernames.add(username); // Marcar como processado para evitar reprocessar nesta sessão
+              consecutiveDuplicates++;
+              console.log(`   📊 Duplicatas consecutivas: ${consecutiveDuplicates}/3`);
+
+              // Retornar ao mural
+              try {
+                await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
+              } catch {
+                // ignore
               }
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              const feedReady = await waitForHashtagMural('Retorno após detectar duplicata no BD');
+              if (!feedReady) {
+                attemptsWithoutNewPost++;
+              }
+              continue;
             }
 
-            // Retornar debugLogs também
-            (window as any).__fullNameDebug = debugLogs;
+            console.log(`   ✅ @${username} não existe no banco. Prosseguindo com extração de perfil...`);
+          } catch (dbError: any) {
+            console.log(`   ⚠️  Erro ao verificar banco de dados: ${dbError.message}`);
+            console.log(`   🔄 Continuando com extração de perfil (fail-safe)...`);
+          }
 
-            // Bio - ESTRATÉGIA COMPLETA para capturar TODOS os elementos da bio
-            // Instagram divide a bio em múltiplos elementos: div (categoria) + spans (descrição) + h1 (endereço)
-            let bio = '';
-            const bioElements: string[] = [];
+          if (processedUsernames.has(username)) {
+            console.log(`   ⏭️  @${username} já processado, pulando... (${consecutiveDuplicates} duplicatas consecutivas)`);
+            console.log(`   ⏳ Aguardando 20 segundos para auto-scroll do Instagram carregar novos posts...`);
 
-            // Capturar todos os elementos de bio dentro de header section
-            // Classe _ap3a marca elementos de bio do Instagram
-            // IMPORTANTE: Usar EXATAMENTE os mesmos seletores de scrapeInstagramProfile()
-            const bioEls = Array.from(document.querySelectorAll('header section ._ap3a._aaco._aacu._aacy._aad6._aade, header section ._ap3a._aaco._aacu._aacx._aad7._aade, header section h1._ap3a'));
+            // Aguardar 20 segundos para permitir auto-scroll do Instagram
+            await new Promise(resolve => setTimeout(resolve, 20000));
 
-            bioEls.forEach((el: any) => {
-              const text = el.textContent?.trim();
-              // Pular textos muito curtos ou contadores de seguidores
-              if (text && text.length > 3 && !text.match(/^\d+[\s\S]*seguidores?$/i)) {
-                bioElements.push(text);
-              }
+            // Tentar voltar ao feed da hashtag
+            try {
+              await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
+            } catch {
+              // ignore
+            }
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const feedReady = await waitForHashtagMural('Retorno após duplicado');
+            if (!feedReady) {
+              attemptsWithoutNewPost++;
+            }
+
+            // Incrementar contador de duplicatas APÓS aguardar
+            consecutiveDuplicates++;
+            console.log(`   📊 Duplicatas consecutivas: ${consecutiveDuplicates}/3`);
+            continue;
+          }
+
+          // NAVEGAR PARA O PERFIL e EXTRAIR DADOS DIRETAMENTE
+          console.log(`   👤 Navegando para o perfil de @${username}...`);
+
+          try {
+            await page.goto(`https://www.instagram.com/${username}/`, {
+              waitUntil: 'networkidle2',
+              timeout: 30000
             });
 
-            // Se encontrou elementos, juntar com quebras de linha
-            if (bioElements.length > 0) {
-              bio = bioElements.join('\n');
+            // Aguardar perfil carregar
+            await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+
+            // EXTRAIR DADOS VISUALMENTE DA PÁGINA ATUAL usando CSS selectors
+            console.log(`   📊 Extraindo dados visíveis da página do perfil...`);
+
+            // CRÍTICO: Clicar no botão "... mais" para expandir bio completa (se existir)
+            try {
+              const moreButtonClicked = await page.evaluate(() => {
+                const elements = Array.from(document.querySelectorAll('header section div, header section span'));
+                const maisButton = elements.find(el => el.textContent?.trim() === 'mais');
+                if (maisButton) {
+                  (maisButton as HTMLElement).click();
+                  return true;
+                }
+                return false;
+              });
+
+              if (moreButtonClicked) {
+                console.log(`   ✅ Botão "mais" clicado - bio expandida`);
+                await new Promise(resolve => setTimeout(resolve, 800));
+              }
+            } catch (error: any) {
+              // Silencioso - não é crítico se falhar
             }
 
-            // Estratégia 2: Fallback para seletor único se nada foi encontrado
-            if (!bio || bio.length < 10) {
-              const bioSelectors = [
-                'header section h1._ap3a._aaco._aacu._aacx._aad6._aade',
-                'header section span._ap3a._aaco._aacu._aacx._aad6._aade',
-                'header section div > span._ap3a',
-                'header section div[style*="white-space"]',
-                'header section h1 > span',
-                'header section span._ap3a'
-              ];
+            const profileData = await page.evaluate(() => {
+              // Extrair nome completo - SELETOR CORRETO baseado em inspeção real
+              // Instagram: username está em index 0-2, full_name geralmente em index 3
+              let full_name = '';
+              const debugLogs: string[] = [];
 
-              for (const selector of bioSelectors) {
-                const el = document.querySelector(selector);
-                if (el && el.textContent && el.textContent.trim().length > 10) {
-                  bio = el.textContent.trim();
+              const headerSection = document.querySelector('header section');
+              if (headerSection) {
+                const allSpans = Array.from(headerSection.querySelectorAll('span'));
+                debugLogs.push(`Total spans encontrados: ${allSpans.length}`);
+
+                // Pegar username primeiro para comparar
+                const usernameEl = document.querySelector('header h2');
+                const username = usernameEl?.textContent?.trim() || '';
+                debugLogs.push(`Username detectado: "${username}"`);
+
+                // Procurar pelo span que contém o nome (não é username, não é número, não é endereço)
+                for (let i = 0; i < allSpans.length; i++) {
+                  const span = allSpans[i];
+                  const text = span.textContent?.trim() || '';
+
+                  if (!text) {
+                    debugLogs.push(`[${i}] VAZIO - ignorado`);
+                    continue;
+                  }
+
+                  debugLogs.push(`[${i}] "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+
+                  // Pular username
+                  if (text === username) {
+                    debugLogs.push(`    ↳ FILTRO: é username`);
+                    continue;
+                  }
+
+                  // Pular números (contadores de seguidores/posts)
+                  if (/^\d+[.,]?\d*\s*(mil|K|M|seguidores|posts|seguindo)?$/i.test(text)) {
+                    debugLogs.push(`    ↳ FILTRO: é número/contador`);
+                    continue;
+                  }
+
+                  // Pular endereços (tem CEP ou muitas vírgulas)
+                  if (/\d{5}-?\d{3}/.test(text) || text.split(',').length >= 3) {
+                    debugLogs.push(`    ↳ FILTRO: é endereço (CEP ou vírgulas)`);
+                    continue;
+                  }
+
+                  // Pular texto muito longo (provavelmente é a bio, não o nome)
+                  if (text.length > 100) {
+                    debugLogs.push(`    ↳ FILTRO: texto longo (${text.length} chars)`);
+                    continue;
+                  }
+
+                  // Pular textos genéricos
+                  if (text === 'Ícone de link' || text === 'Doe Sangue') {
+                    debugLogs.push(`    ↳ FILTRO: texto genérico`);
+                    continue;
+                  }
+
+                  // Se chegou aqui, provavelmente é o nome!
+                  full_name = text;
+                  debugLogs.push(`    ✅ FULL NAME SELECIONADO!`);
                   break;
                 }
               }
-            }
 
-            // Extrair números (followers, following, posts) - SELETORES ABRANGENTES
-            const stats: string[] = [];
+              // Retornar debugLogs também
+              (window as any).__fullNameDebug = debugLogs;
 
-            // Tentar múltiplos seletores para encontrar os números
-            const selectors = [
-              'header section ul li span',  // Mais genérico
-              'header section ul li button span',
-              'header section ul li a span',
-              'header section ul span',
-              'header ul li span',
-              'header span[class*="x"]'  // Classes do Instagram começam com x
-            ];
+              // Bio - ESTRATÉGIA COMPLETA para capturar TODOS os elementos da bio
+              // Instagram divide a bio em múltiplos elementos: div (categoria) + spans (descrição) + h1 (endereço)
+              let bio = '';
+              const bioElements: string[] = [];
 
-            for (const selector of selectors) {
-              const elements = document.querySelectorAll(selector);
-              elements.forEach(el => {
+              // Capturar todos os elementos de bio dentro de header section
+              // Classe _ap3a marca elementos de bio do Instagram
+              // IMPORTANTE: Usar EXATAMENTE os mesmos seletores de scrapeInstagramProfile()
+              const bioEls = Array.from(document.querySelectorAll('header section ._ap3a._aaco._aacu._aacy._aad6._aade, header section ._ap3a._aaco._aacu._aacx._aad7._aade, header section h1._ap3a'));
+
+              bioEls.forEach((el: any) => {
                 const text = el.textContent?.trim();
-                // Capturar apenas texto que contenha números E não seja muito longo (ex: bio)
-                if (text && /\d/.test(text) && text.length < 20) {
-                  if (!stats.includes(text)) {  // Evitar duplicados
-                    stats.push(text);
+                // Pular textos muito curtos ou contadores de seguidores
+                if (text && text.length > 3 && !text.match(/^\d+[\s\S]*seguidores?$/i)) {
+                  bioElements.push(text);
+                }
+              });
+
+              // Se encontrou elementos, juntar com quebras de linha
+              if (bioElements.length > 0) {
+                bio = bioElements.join('\n');
+              }
+
+              // Estratégia 2: Fallback para seletor único se nada foi encontrado
+              if (!bio || bio.length < 10) {
+                const bioSelectors = [
+                  'header section h1._ap3a._aaco._aacu._aacx._aad6._aade',
+                  'header section span._ap3a._aaco._aacu._aacx._aad6._aade',
+                  'header section div > span._ap3a',
+                  'header section div[style*="white-space"]',
+                  'header section h1 > span',
+                  'header section span._ap3a'
+                ];
+
+                for (const selector of bioSelectors) {
+                  const el = document.querySelector(selector);
+                  if (el && el.textContent && el.textContent.trim().length > 10) {
+                    bio = el.textContent.trim();
+                    break;
                   }
                 }
-              });
+              }
 
-              // Se já encontrou 3 números, parar
-              if (stats.length >= 3) break;
-            }
+              // Extrair números (followers, following, posts) - SELETORES ABRANGENTES
+              const stats: string[] = [];
 
-            // Extrair foto de perfil
-            const profilePicEl = document.querySelector('header img') as HTMLImageElement;
-            const profile_pic_url = profilePicEl ? profilePicEl.src : '';
+              // Tentar múltiplos seletores para encontrar os números
+              const selectors = [
+                'header section ul li span',  // Mais genérico
+                'header section ul li button span',
+                'header section ul li a span',
+                'header section ul span',
+                'header ul li span',
+                'header span[class*="x"]'  // Classes do Instagram começam com x
+              ];
 
-            // Verificar se é business/verificado
-            const isBusiness = document.body.innerHTML.includes('business_account') ||
-                               document.body.innerHTML.includes('Category');
-            const isVerified = !!document.querySelector('svg[aria-label="Verified"]');
+              for (const selector of selectors) {
+                const elements = document.querySelectorAll(selector);
+                elements.forEach(el => {
+                  const text = el.textContent?.trim();
+                  // Capturar apenas texto que contenha números E não seja muito longo (ex: bio)
+                  if (text && /\d/.test(text) && text.length < 20) {
+                    if (!stats.includes(text)) {  // Evitar duplicados
+                      stats.push(text);
+                    }
+                  }
+                });
 
-            // Extrair email (se visível)
-            const emailMatch = document.body.innerHTML.match(/mailto:([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
-            const email = emailMatch ? emailMatch[1] : null;
+                // Se já encontrou 3 números, parar
+                if (stats.length >= 3) break;
+              }
 
-            // CAPTURAR LINK LIMPO DA BIO (visível no DOM, não wrapeado)
-            // Estratégia: procurar link que está DENTRO do container de bio text
-            // Não pegar botões de redes sociais (Threads, etc)
-            let website_visible = null;
+              // Extrair foto de perfil
+              const profilePicEl = document.querySelector('header img') as HTMLImageElement;
+              const profile_pic_url = profilePicEl ? profilePicEl.src : '';
 
-            // Procurar especificamente por links dentro do texto da bio
-            // Evitar: botões, ícones, links de seguir, etc
-            const bioLinks = Array.from(document.querySelectorAll('header section a[href^="http"]'))
-              .filter((a: any) => {
-                const text = a.textContent?.trim() || '';
+              // Verificar se é business/verificado
+              const isBusiness = document.body.innerHTML.includes('business_account') ||
+                                 document.body.innerHTML.includes('Category');
+              const isVerified = !!document.querySelector('svg[aria-label="Verified"]');
 
-                // Excluir links que são botões ou têm role="button"
-                const isButton = a.getAttribute('role') === 'button' || a.closest('button');
-                if (isButton) return false;
+              // Extrair email (se visível)
+              const emailMatch = document.body.innerHTML.match(/mailto:([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
+              const email = emailMatch ? emailMatch[1] : null;
 
-                // Excluir links que são ícones (texto muito curto ou vazio)
-                if (text.length < 3) return false;
+              // CAPTURAR LINK LIMPO DA BIO (visível no DOM, não wrapeado)
+              // Estratégia: procurar link que está DENTRO do container de bio text
+              // Não pegar botões de redes sociais (Threads, etc)
+              let website_visible = null;
 
-                // Excluir se o texto é exatamente o username (link de Threads)
-                const usernameFromHeader = document.querySelector('header section h2')?.textContent?.trim() || '';
-                if (text === usernameFromHeader || text.startsWith('Threads')) return false;
+              // Procurar especificamente por links dentro do texto da bio
+              // Evitar: botões, ícones, links de seguir, etc
+              const bioLinks = Array.from(document.querySelectorAll('header section a[href^="http"]'))
+                .filter((a: any) => {
+                  const text = a.textContent?.trim() || '';
 
-                // Incluir apenas se parecer URL: tem ponto, barra, ou começa com http
-                const looksLikeUrl = text.includes('.') || text.includes('/') || text.startsWith('http') || text.startsWith('wa.me');
+                  // Excluir links que são botões ou têm role="button"
+                  const isButton = a.getAttribute('role') === 'button' || a.closest('button');
+                  if (isButton) return false;
 
-                return looksLikeUrl;
-              });
+                  // Excluir links que são ícones (texto muito curto ou vazio)
+                  if (text.length < 3) return false;
 
-            if (bioLinks.length > 0) {
-              const firstBioLink = bioLinks[0] as HTMLAnchorElement;
-              // Capturar o texto visível do link (não o href que pode estar wrapeado)
-              website_visible = firstBioLink.textContent?.trim() || null;
+                  // Excluir se o texto é exatamente o username (link de Threads)
+                  const usernameFromHeader = document.querySelector('header section h2')?.textContent?.trim() || '';
+                  if (text === usernameFromHeader || text.startsWith('Threads')) return false;
 
-              // Se o texto visível não parecer uma URL, pegar o href mesmo
-              if (website_visible && !website_visible.startsWith('http')) {
-                // Se for apenas domínio (ex: "example.com"), adicionar https://
-                if (website_visible.includes('.') && !website_visible.includes('://')) {
-                  website_visible = 'https://' + website_visible;
-                } else if (website_visible.startsWith('wa.me')) {
-                  // WhatsApp link
-                  website_visible = 'https://' + website_visible;
-                } else {
-                  website_visible = firstBioLink.getAttribute('href');
+                  // Incluir apenas se parecer URL: tem ponto, barra, ou começa com http
+                  const looksLikeUrl = text.includes('.') || text.includes('/') || text.startsWith('http') || text.startsWith('wa.me');
+
+                  return looksLikeUrl;
+                });
+
+              if (bioLinks.length > 0) {
+                const firstBioLink = bioLinks[0] as HTMLAnchorElement;
+                // Capturar o texto visível do link (não o href que pode estar wrapeado)
+                website_visible = firstBioLink.textContent?.trim() || null;
+
+                // Se o texto visível não parecer uma URL, pegar o href mesmo
+                if (website_visible && !website_visible.startsWith('http')) {
+                  // Se for apenas domínio (ex: "example.com"), adicionar https://
+                  if (website_visible.includes('.') && !website_visible.includes('://')) {
+                    website_visible = 'https://' + website_visible;
+                  } else if (website_visible.startsWith('wa.me')) {
+                    // WhatsApp link
+                    website_visible = 'https://' + website_visible;
+                  } else {
+                    website_visible = firstBioLink.getAttribute('href');
+                  }
                 }
+              }
+
+              return {
+                full_name,
+                bio,
+                stats,
+                profile_pic_url,
+                is_business_account: isBusiness,
+                is_verified: isVerified,
+                email,
+                website_visible
+              };
+            });
+
+            // Processar os números extraídos (primeiro=posts, segundo=followers, terceiro=following)
+            const posts_count = profileData.stats[0] ? parseInstagramCount(profileData.stats[0]) : 0;
+            const followers_count = profileData.stats[1] ? parseInstagramCount(profileData.stats[1]) : 0;
+            const following_count = profileData.stats[2] ? parseInstagramCount(profileData.stats[2]) : 0;
+
+            // EXTRAIR HTML COMPLETO para capturar dados via REGEX (phone, localização, etc)
+            const html = await page.content();
+
+            // ESTRATÉGIA: Procurar o bloco JSON específico do perfil (não do viewer)
+            const profileUserBlockMatch = html.match(/"graphql":\{"user":\{([^}]+(?:\{[^}]*\})*[^}]*)\}\}/);
+            let profileJsonBlock = profileUserBlockMatch ? profileUserBlockMatch[1] : html;
+
+            // ESTRATÉGIA FULL NAME: Meta tags OG (MAIS CONFIÁVEL que DOM/JSON)
+            const ogTitleMatch = html.match(/<meta property="og:title" content="([^"]+)/);
+            let fullNameFromOG: string | null = null;
+            if (ogTitleMatch) {
+              const ogTitle = ogTitleMatch[1];
+              const fullNameRegex = new RegExp(`^(.+?)\\s*\\(@${username}\\)`);
+              const nameMatch = ogTitle.match(fullNameRegex);
+              if (nameMatch) {
+                fullNameFromOG = nameMatch[1].trim();
+                console.log(`   ✅ Full name encontrado no OG meta tag: "${fullNameFromOG}"`);
               }
             }
 
-            return {
-              full_name,
-              bio,
-              stats,
-              profile_pic_url,
-              is_business_account: isBusiness,
-              is_verified: isVerified,
-              email,
-              website_visible
+            // Fallback: JSON
+            const fullNameMatch = profileJsonBlock.match(/"full_name":"([^"]+)"/);
+            const fullNameFromJson = fullNameMatch ? fullNameMatch[1] : null;
+
+            // Escolher melhor fonte (prioridade: OG > JSON > DOM)
+            const finalFullName = fullNameFromOG || fullNameFromJson || profileData.full_name;
+
+            // ESTRATÉGIA BIO: Meta description (contém bio institucional completa)
+            // Format: "X seguidores, Y seguindo, Z posts — Full Name (@username) no Instagram: "Bio text aqui""
+            const metaDescBioMatch = html.match(/<meta[^>]+content="[^"]*—[^"]*no Instagram:\s*&quot;([^&]+)&quot;/);
+            let bioFromMeta: string | null = null;
+            if (metaDescBioMatch) {
+              bioFromMeta = metaDescBioMatch[1].trim();
+              console.log(`   ✅ Bio completa encontrada na meta description (${bioFromMeta.length} chars)`);
+            }
+
+            // ESTRATÉGIA BIO: JSON (fallback)
+            const bioJsonMatch = profileJsonBlock.match(/"biography":"([^"]+)"/);
+            const bioFromJson = bioJsonMatch ? bioJsonMatch[1] : null;
+
+            // CRÍTICO: Bio completa - DOM tem TODO o conteúdo (categoria + descrição + endereço)
+            // - DOM bio: COMPLETA com todos os elementos (prioridade máxima)
+            // - Meta description: Fallback caso DOM falhe
+            // - JSON: Último fallback
+            const bioComplete = profileData.bio || bioFromMeta || bioFromJson;
+            const bioForLocationParsing = profileData.bio || bioFromJson; // DOM para parsing de localização
+
+            console.log(`   📝 Bio completa (${bioComplete ? bioComplete.length : 0} chars): ${bioComplete ? bioComplete.substring(0, 80) + '...' : 'N/A'}`);
+            console.log(`   📍 Bio para parsing localização: ${bioForLocationParsing ? bioForLocationParsing.substring(0, 60) + '...' : 'N/A'}`);
+
+            // Regex para capturar outros dados do JSON embutido no HTML
+            const phoneMatch = profileJsonBlock.match(/"public_phone_number":"([^"]+)"/);
+            const businessCategoryMatch = profileJsonBlock.match(/"category_name":"([^"]+)"/);
+            const cityMatch = profileJsonBlock.match(/"city_name":"([^"]+)"/);
+            const addressMatch = profileJsonBlock.match(/"address_street":"([^"]+)"/);
+            const publicAddressMatch = profileJsonBlock.match(/"public_address":"([^"]+)"/);
+            const zipCodeMatch = profileJsonBlock.match(/"zip_code":"([^"]+)"/);
+            const stateMatch = profileJsonBlock.match(/"state_name":"([^"]+)"|"region_name":"([^"]+)"/);
+            const neighborhoodMatch = profileJsonBlock.match(/"neighborhood":"([^"]+)"/);
+
+            // PROCESSAR WEBSITE: Usar link visível do DOM, decodificar se necessário
+            let cleanWebsite: string | null = null;
+            if (profileData.website_visible) {
+              cleanWebsite = decodeInstagramWrappedUrl(profileData.website_visible);
+            }
+
+            const completeProfile: InstagramProfileData = {
+              username: username,
+              full_name: finalFullName,
+              bio: bioComplete || null,
+              followers_count: followers_count,
+              following_count: following_count,
+              posts_count: posts_count,
+              profile_pic_url: profileData.profile_pic_url || null,
+              is_business_account: profileData.is_business_account,
+              is_verified: profileData.is_verified,
+              email: profileData.email,
+              phone: decodeInstagramString(phoneMatch ? phoneMatch[1] : null),
+              website: cleanWebsite, // Link limpo da bio (não wrapeado)
+              business_category: decodeInstagramString(businessCategoryMatch ? businessCategoryMatch[1] : null),
+              // Campos de localização extraídos do JSON do HTML
+              city: decodeInstagramString(cityMatch ? cityMatch[1] : null),
+              state: decodeInstagramString(stateMatch ? (stateMatch[1] || stateMatch[2]) : null),
+              neighborhood: decodeInstagramString(neighborhoodMatch ? neighborhoodMatch[1] : null),
+              address: decodeInstagramString(addressMatch ? addressMatch[1] : null) ||
+                       decodeInstagramString(publicAddressMatch ? publicAddressMatch[1] : null),
+              zip_code: decodeInstagramString(zipCodeMatch ? zipCodeMatch[1] : null)
             };
-          });
 
-          // Processar os números extraídos (primeiro=posts, segundo=followers, terceiro=following)
-          const posts_count = profileData.stats[0] ? parseInstagramCount(profileData.stats[0]) : 0;
-          const followers_count = profileData.stats[1] ? parseInstagramCount(profileData.stats[1]) : 0;
-          const following_count = profileData.stats[2] ? parseInstagramCount(profileData.stats[2]) : 0;
-
-          // EXTRAIR HTML COMPLETO para capturar dados via REGEX (phone, localização, etc)
-          const html = await page.content();
-
-          // ESTRATÉGIA: Procurar o bloco JSON específico do perfil (não do viewer)
-          const profileUserBlockMatch = html.match(/"graphql":\{"user":\{([^}]+(?:\{[^}]*\})*[^}]*)\}\}/);
-          let profileJsonBlock = profileUserBlockMatch ? profileUserBlockMatch[1] : html;
-
-          // ESTRATÉGIA FULL NAME: Meta tags OG (MAIS CONFIÁVEL que DOM/JSON)
-          const ogTitleMatch = html.match(/<meta property="og:title" content="([^"]+)/);
-          let fullNameFromOG: string | null = null;
-          if (ogTitleMatch) {
-            const ogTitle = ogTitleMatch[1];
-            const fullNameRegex = new RegExp(`^(.+?)\\s*\\(@${username}\\)`);
-            const nameMatch = ogTitle.match(fullNameRegex);
-            if (nameMatch) {
-              fullNameFromOG = nameMatch[1].trim();
-              console.log(`   ✅ Full name encontrado no OG meta tag: "${fullNameFromOG}"`);
+            // EXTRAIR EMAIL DA BIO se não tiver email público
+            if (!completeProfile.email && completeProfile.bio) {
+              const emailFromBio = extractEmailFromBio(completeProfile.bio);
+              if (emailFromBio) {
+                completeProfile.email = emailFromBio;
+              }
             }
-          }
 
-          // Fallback: JSON
-          const fullNameMatch = profileJsonBlock.match(/"full_name":"([^"]+)"/);
-          const fullNameFromJson = fullNameMatch ? fullNameMatch[1] : null;
+            // EXTRAIR TELEFONE DO LINK WHATSAPP se não tiver telefone público
+            if (!completeProfile.phone && completeProfile.website) {
+              const phoneFromWhatsApp = extractPhoneFromWhatsApp(completeProfile.website);
+              if (phoneFromWhatsApp) {
+                completeProfile.phone = phoneFromWhatsApp;
 
-          // Escolher melhor fonte (prioridade: OG > JSON > DOM)
-          const finalFullName = fullNameFromOG || fullNameFromJson || profileData.full_name;
-
-          // ESTRATÉGIA BIO: Meta description (contém bio institucional completa)
-          // Format: "X seguidores, Y seguindo, Z posts — Full Name (@username) no Instagram: "Bio text aqui""
-          const metaDescBioMatch = html.match(/<meta[^>]+content="[^"]*—[^"]*no Instagram:\s*&quot;([^&]+)&quot;/);
-          let bioFromMeta: string | null = null;
-          if (metaDescBioMatch) {
-            bioFromMeta = metaDescBioMatch[1].trim();
-            console.log(`   ✅ Bio completa encontrada na meta description (${bioFromMeta.length} chars)`);
-          }
-
-          // ESTRATÉGIA BIO: JSON (fallback)
-          const bioJsonMatch = profileJsonBlock.match(/"biography":"([^"]+)"/);
-          const bioFromJson = bioJsonMatch ? bioJsonMatch[1] : null;
-
-          // CRÍTICO: Bio completa - DOM tem TODO o conteúdo (categoria + descrição + endereço)
-          // - DOM bio: COMPLETA com todos os elementos (prioridade máxima)
-          // - Meta description: Fallback caso DOM falhe
-          // - JSON: Último fallback
-          const bioComplete = profileData.bio || bioFromMeta || bioFromJson;
-          const bioForLocationParsing = profileData.bio || bioFromJson; // DOM para parsing de localização
-
-          console.log(`   📝 Bio completa (${bioComplete ? bioComplete.length : 0} chars): ${bioComplete ? bioComplete.substring(0, 80) + '...' : 'N/A'}`);
-          console.log(`   📍 Bio para parsing localização: ${bioForLocationParsing ? bioForLocationParsing.substring(0, 60) + '...' : 'N/A'}`);
-
-          // Regex para capturar outros dados do JSON embutido no HTML
-          const phoneMatch = profileJsonBlock.match(/"public_phone_number":"([^"]+)"/);
-          const businessCategoryMatch = profileJsonBlock.match(/"category_name":"([^"]+)"/);
-          const cityMatch = profileJsonBlock.match(/"city_name":"([^"]+)"/);
-          const addressMatch = profileJsonBlock.match(/"address_street":"([^"]+)"/);
-          const publicAddressMatch = profileJsonBlock.match(/"public_address":"([^"]+)"/);
-          const zipCodeMatch = profileJsonBlock.match(/"zip_code":"([^"]+)"/);
-          const stateMatch = profileJsonBlock.match(/"state_name":"([^"]+)"|"region_name":"([^"]+)"/);
-          const neighborhoodMatch = profileJsonBlock.match(/"neighborhood":"([^"]+)"/);
-
-          // PROCESSAR WEBSITE: Usar link visível do DOM, decodificar se necessário
-          let cleanWebsite: string | null = null;
-          if (profileData.website_visible) {
-            cleanWebsite = decodeInstagramWrappedUrl(profileData.website_visible);
-          }
-
-          const completeProfile: InstagramProfileData = {
-            username: username,
-            full_name: finalFullName,
-            bio: bioComplete || null,
-            followers_count: followers_count,
-            following_count: following_count,
-            posts_count: posts_count,
-            profile_pic_url: profileData.profile_pic_url || null,
-            is_business_account: profileData.is_business_account,
-            is_verified: profileData.is_verified,
-            email: profileData.email,
-            phone: decodeInstagramString(phoneMatch ? phoneMatch[1] : null),
-            website: cleanWebsite, // Link limpo da bio (não wrapeado)
-            business_category: decodeInstagramString(businessCategoryMatch ? businessCategoryMatch[1] : null),
-            // Campos de localização extraídos do JSON do HTML
-            city: decodeInstagramString(cityMatch ? cityMatch[1] : null),
-            state: decodeInstagramString(stateMatch ? (stateMatch[1] || stateMatch[2]) : null),
-            neighborhood: decodeInstagramString(neighborhoodMatch ? neighborhoodMatch[1] : null),
-            address: decodeInstagramString(addressMatch ? addressMatch[1] : null) ||
-                     decodeInstagramString(publicAddressMatch ? publicAddressMatch[1] : null),
-            zip_code: decodeInstagramString(zipCodeMatch ? zipCodeMatch[1] : null)
-          };
-
-          // EXTRAIR EMAIL DA BIO se não tiver email público
-          if (!completeProfile.email && completeProfile.bio) {
-            const emailFromBio = extractEmailFromBio(completeProfile.bio);
-            if (emailFromBio) {
-              completeProfile.email = emailFromBio;
-            }
-          }
-
-          // EXTRAIR TELEFONE DO LINK WHATSAPP se não tiver telefone público
-          if (!completeProfile.phone && completeProfile.website) {
-            const phoneFromWhatsApp = extractPhoneFromWhatsApp(completeProfile.website);
-            if (phoneFromWhatsApp) {
-              completeProfile.phone = phoneFromWhatsApp;
-
-              // EXTRAIR ESTADO DO DDD se não tiver estado
-              if (!completeProfile.state) {
-                const stateFromPhone = getStateFromPhone(phoneFromWhatsApp);
-                if (stateFromPhone) {
-                  completeProfile.state = stateFromPhone;
+                // EXTRAIR ESTADO DO DDD se não tiver estado
+                if (!completeProfile.state) {
+                  const stateFromPhone = getStateFromPhone(phoneFromWhatsApp);
+                  if (stateFromPhone) {
+                    completeProfile.state = stateFromPhone;
+                  }
                 }
               }
             }
-          }
 
-          // EXTRAIR LOCALIZAÇÃO DA BIO se não tiver dados de localização
-          // IMPORTANTE: Usar bioForLocationParsing (DOM) que contém endereço completo
-          if (bioForLocationParsing && (!completeProfile.city || !completeProfile.address || !completeProfile.zip_code)) {
-            const locationFromBio = extractLocationFromBio(bioForLocationParsing);
+            // EXTRAIR LOCALIZAÇÃO DA BIO se não tiver dados de localização
+            // IMPORTANTE: Usar bioForLocationParsing (DOM) que contém endereço completo
+            if (bioForLocationParsing && (!completeProfile.city || !completeProfile.address || !completeProfile.zip_code)) {
+              const locationFromBio = extractLocationFromBio(bioForLocationParsing);
 
-            if (!completeProfile.address && locationFromBio.address) {
-              completeProfile.address = locationFromBio.address;
+              if (!completeProfile.address && locationFromBio.address) {
+                completeProfile.address = locationFromBio.address;
+              }
+              if (!completeProfile.city && locationFromBio.city) {
+                completeProfile.city = locationFromBio.city;
+              }
+              if (!completeProfile.state && locationFromBio.state) {
+                completeProfile.state = locationFromBio.state;
+              }
+              if (!completeProfile.zip_code && locationFromBio.zip_code) {
+                completeProfile.zip_code = locationFromBio.zip_code;
+              }
             }
-            if (!completeProfile.city && locationFromBio.city) {
-              completeProfile.city = locationFromBio.city;
+
+            // EXTRAIR HASHTAGS DA BIO
+            if (completeProfile.bio) {
+              const bioHashtags = extractHashtags(completeProfile.bio, 10);
+              if (bioHashtags.length > 0) {
+                completeProfile.hashtags_bio = bioHashtags;
+                console.log(`   🏷️  Hashtags da bio (${bioHashtags.length}): ${bioHashtags.join(', ')}`);
+              }
             }
-            if (!completeProfile.state && locationFromBio.state) {
-              completeProfile.state = locationFromBio.state;
+
+            // ========================================
+            // VALIDAÇÕES ANTES DE ADICIONAR AO RESULTADO
+            // ========================================
+
+            // VALIDAÇÃO 1: CALCULAR ACTIVITY SCORE
+            const activityScore = calculateActivityScore(completeProfile);
+            completeProfile.activity_score = activityScore.score;
+            completeProfile.is_active = activityScore.isActive;
+
+            console.log(`   📊 Activity Score: ${activityScore.score}/100 (${activityScore.isActive ? 'ATIVA ✅' : 'INATIVA ❌'})`);
+            console.log(`   📈 ${activityScore.postsPerMonth.toFixed(1)} posts/mês`);
+            if (activityScore.reasons.length > 0) {
+              console.log(`   💡 Razões: ${activityScore.reasons.join(', ')}`);
             }
-            if (!completeProfile.zip_code && locationFromBio.zip_code) {
-              completeProfile.zip_code = locationFromBio.zip_code;
+
+            if (!activityScore.isActive) {
+              console.log(`   ❌ Perfil REJEITADO por baixo activity score - não será contabilizado`);
+              processedUsernames.add(username); // Marcar como processado para não tentar novamente
+              continue; // PULA para o próximo perfil
             }
-          }
 
-          // EXTRAIR HASHTAGS DA BIO
-          if (completeProfile.bio) {
-            const bioHashtags = extractHashtags(completeProfile.bio, 10);
-            if (bioHashtags.length > 0) {
-              completeProfile.hashtags_bio = bioHashtags;
-              console.log(`   🏷️  Hashtags da bio (${bioHashtags.length}): ${bioHashtags.join(', ')}`);
+            // VALIDAÇÃO 2: IDIOMA = PORTUGUÊS
+            console.log(`   🌍 Detectando idioma da bio...`);
+            const languageDetection = await detectLanguage(completeProfile.bio, completeProfile.username);
+            completeProfile.language = languageDetection.language;
+            console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
+
+            if (languageDetection.language !== 'pt') {
+              console.log(`   ❌ Perfil REJEITADO por idioma não-português (${languageDetection.language}) - não será contabilizado`);
+              processedUsernames.add(username); // Marcar como processado para não tentar novamente
+              continue; // PULA para o próximo perfil
             }
-          }
 
-          // ========================================
-          // VALIDAÇÕES ANTES DE ADICIONAR AO RESULTADO
-          // ========================================
+            // ========================================
+            // EXTRAÇÃO DE HASHTAGS DOS POSTS (4 posts)
+            // ========================================
+            console.log(`   🏷️  Extraindo hashtags dos posts...`);
+            try {
+              const profileUrl = `https://www.instagram.com/${username}/`;
+              await page.goto(profileUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+              await new Promise(resolve => setTimeout(resolve, 2000));
 
-          // VALIDAÇÃO 1: CALCULAR ACTIVITY SCORE
-          const activityScore = calculateActivityScore(completeProfile);
-          completeProfile.activity_score = activityScore.score;
-          completeProfile.is_active = activityScore.isActive;
-
-          console.log(`   📊 Activity Score: ${activityScore.score}/100 (${activityScore.isActive ? 'ATIVA ✅' : 'INATIVA ❌'})`);
-          console.log(`   📈 ${activityScore.postsPerMonth.toFixed(1)} posts/mês`);
-          if (activityScore.reasons.length > 0) {
-            console.log(`   💡 Razões: ${activityScore.reasons.join(', ')}`);
-          }
-
-          if (!activityScore.isActive) {
-            console.log(`   ❌ Perfil REJEITADO por baixo activity score - não será contabilizado`);
-            processedUsernames.add(username); // Marcar como processado para não tentar novamente
-            continue; // PULA para o próximo perfil
-          }
-
-          // VALIDAÇÃO 2: IDIOMA = PORTUGUÊS
-          console.log(`   🌍 Detectando idioma da bio...`);
-          const languageDetection = await detectLanguage(completeProfile.bio, completeProfile.username);
-          completeProfile.language = languageDetection.language;
-          console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
-
-          if (languageDetection.language !== 'pt') {
-            console.log(`   ❌ Perfil REJEITADO por idioma não-português (${languageDetection.language}) - não será contabilizado`);
-            processedUsernames.add(username); // Marcar como processado para não tentar novamente
-            continue; // PULA para o próximo perfil
-          }
-
-          // ========================================
-          // EXTRAÇÃO DE HASHTAGS DOS POSTS (4 posts)
-          // ========================================
-          console.log(`   🏷️  Extraindo hashtags dos posts...`);
-          try {
-            const profileUrl = `https://www.instagram.com/${username}/`;
-            await page.goto(profileUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            const postHashtags = await extractHashtagsFromPosts(page, 3);
-            if (postHashtags && postHashtags.length > 0) {
-              completeProfile.hashtags_posts = postHashtags;
-              console.log(`   ✅ ${postHashtags.length} hashtags extraídas dos posts`);
-            } else {
+              const postHashtags = await extractHashtagsFromPosts(page, 2);
+              if (postHashtags && postHashtags.length > 0) {
+                completeProfile.hashtags_posts = postHashtags;
+                console.log(`   ✅ ${postHashtags.length} hashtags extraídas dos posts`);
+              } else {
+                completeProfile.hashtags_posts = null;
+                console.log(`   ⚠️  Nenhuma hashtag encontrada nos posts`);
+              }
+            } catch (hashtagError: any) {
+              console.log(`   ⚠️  Erro ao extrair hashtags dos posts: ${hashtagError.message}`);
               completeProfile.hashtags_posts = null;
-              console.log(`   ⚠️  Nenhuma hashtag encontrada nos posts`);
             }
-          } catch (hashtagError: any) {
-            console.log(`   ⚠️  Erro ao extrair hashtags dos posts: ${hashtagError.message}`);
-            completeProfile.hashtags_posts = null;
+
+            // ========================================
+            // PERFIL APROVADO NAS VALIDAÇÕES - ADICIONAR AO RESULTADO
+            // ========================================
+            foundProfiles.push(completeProfile);
+            processedUsernames.add(username);
+            consecutiveDuplicates = 0; // Resetar contador ao encontrar perfil novo
+            console.log(`   ✅ Perfil APROVADO e adicionado: @${username} (${followers_count} seguidores, ${posts_count} posts)`);
+            console.log(`   👤 Full Name: ${completeProfile.full_name || 'N/A'}`);
+            console.log(`   📝 Bio: ${completeProfile.bio ? (completeProfile.bio.length > 80 ? completeProfile.bio.substring(0, 80) + '...' : completeProfile.bio) : 'N/A'}`);
+            console.log(`   🔗 Website: ${completeProfile.website || 'N/A'}`);
+            console.log(`   📧 Email: ${completeProfile.email || 'N/A'}`);
+            console.log(`   📱 Telefone: ${completeProfile.phone || 'N/A'}`);
+
+            // Localização - sempre mostrar, mesmo se null
+            const locationParts: string[] = [];
+            if (completeProfile.city) locationParts.push(completeProfile.city);
+            if (completeProfile.state) locationParts.push(completeProfile.state);
+            if (completeProfile.neighborhood) locationParts.push(`(${completeProfile.neighborhood})`);
+            console.log(`   📍 Localização: ${locationParts.length > 0 ? locationParts.join(', ') : 'N/A'}`);
+            console.log(`   🏠 Endereço: ${completeProfile.address || 'N/A'}`);
+            console.log(`   📮 CEP: ${completeProfile.zip_code || 'N/A'}`);
+            console.log(`   💼 Categoria: ${completeProfile.business_category || 'N/A'}`)
+
+            console.log(`   📊 Total coletado (aprovados): ${foundProfiles.length}/${maxProfiles}`);
+
+            // ANTI-DETECÇÃO: Delay antes de retornar ao feed (3-5s)
+            console.log(`   🛡️  Aguardando antes de retornar ao feed...`);
+            await antiDetectionDelay();
+
+          } catch (profileError: any) {
+            console.log(`   ⚠️  Erro ao extrair dados de @${username}: ${profileError.message}`);
+            console.log(`   ⏭️  Continuando com próximo perfil...`);
           }
 
-          // ========================================
-          // PERFIL APROVADO NAS VALIDAÇÕES - ADICIONAR AO RESULTADO
-          // ========================================
-          foundProfiles.push(completeProfile);
-          processedUsernames.add(username);
-          consecutiveDuplicates = 0; // Resetar contador ao encontrar perfil novo
-          console.log(`   ✅ Perfil APROVADO e adicionado: @${username} (${followers_count} seguidores, ${posts_count} posts)`);
-          console.log(`   👤 Full Name: ${completeProfile.full_name || 'N/A'}`);
-          console.log(`   📝 Bio: ${completeProfile.bio ? (completeProfile.bio.length > 80 ? completeProfile.bio.substring(0, 80) + '...' : completeProfile.bio) : 'N/A'}`);
-          console.log(`   🔗 Website: ${completeProfile.website || 'N/A'}`);
-          console.log(`   📧 Email: ${completeProfile.email || 'N/A'}`);
-          console.log(`   📱 Telefone: ${completeProfile.phone || 'N/A'}`);
+          console.log(`   ⬅️  Retornando para o mural da hashtag...`);
+          await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 }).catch(() => {});
+          await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+          const feedReadyAfterProfile = await waitForHashtagMural('Retorno após coletar perfil');
+          if (!feedReadyAfterProfile) {
+            attemptsWithoutNewPost++;
+            continue;
+          }
 
-          // Localização - sempre mostrar, mesmo se null
-          const locationParts: string[] = [];
-          if (completeProfile.city) locationParts.push(completeProfile.city);
-          if (completeProfile.state) locationParts.push(completeProfile.state);
-          if (completeProfile.neighborhood) locationParts.push(`(${completeProfile.neighborhood})`);
-          console.log(`   📍 Localização: ${locationParts.length > 0 ? locationParts.join(', ') : 'N/A'}`);
-          console.log(`   🏠 Endereço: ${completeProfile.address || 'N/A'}`);
-          console.log(`   📮 CEP: ${completeProfile.zip_code || 'N/A'}`);
-          console.log(`   💼 Categoria: ${completeProfile.business_category || 'N/A'}`)
-
-          console.log(`   📊 Total coletado (aprovados): ${foundProfiles.length}/${maxProfiles}`);
-
-          // ANTI-DETECÇÃO: Delay antes de retornar ao feed (3-5s)
-          console.log(`   🛡️  Aguardando antes de retornar ao feed...`);
-          await antiDetectionDelay();
-
-        } catch (profileError: any) {
-          console.log(`   ⚠️  Erro ao extrair dados de @${username}: ${profileError.message}`);
-          console.log(`   ⏭️  Continuando com próximo perfil...`);
-        }
-
-        console.log(`   ⬅️  Retornando para o mural da hashtag...`);
-        await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 }).catch(() => {});
-        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
-        const feedReadyAfterProfile = await waitForHashtagMural('Retorno após coletar perfil');
-        if (!feedReadyAfterProfile) {
-          attemptsWithoutNewPost++;
+        } catch (error: any) {
+          console.log(`   ❌ Erro ao processar post (${error.message}). Tentando retornar ao mural...`);
+          await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 }).catch(() => {});
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          const feedReadyAfterError = await waitForHashtagMural('Retorno após erro');
+          if (!feedReadyAfterError) {
+            attemptsWithoutNewPost++;
+          }
           continue;
         }
+      } // 🆕 FIM DO WHILE INTERNO (SCRAPING DESTA HASHTAG)
 
-      } catch (error: any) {
-        console.log(`   ❌ Erro ao processar post (${error.message}). Tentando retornar ao mural...`);
-        await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 }).catch(() => {});
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const feedReadyAfterError = await waitForHashtagMural('Retorno após erro');
-        if (!feedReadyAfterError) {
-          attemptsWithoutNewPost++;
-        }
-        continue;
+      // 🆕 EXPLICAR POR QUE O LOOP DESTA HASHTAG PAROU
+      if (foundProfiles.length >= maxProfiles) {
+        console.log(`\n🎯 Meta desta hashtag atingida: ${foundProfiles.length}/${maxProfiles} perfis coletados`);
+      } else if (consecutiveDuplicates >= 3) {
+        console.log(`\n⏹️  Scraping interrompido: 3 duplicatas consecutivas (mesmo aguardando auto-scroll)`);
+        console.log(`   💡 Esta hashtag parece esgotada - todos os perfis já foram coletados anteriormente`);
+      } else if (attemptsWithoutNewPost >= 8) {
+        console.log(`\n⏹️  Scraping interrompido: 8 tentativas sem encontrar novos posts`);
+        console.log(`   🛡️  Limite reduzido para evitar detecção de bot pelo Instagram`);
       }
-    }
 
-    // Explicar por que o loop parou
-    if (foundProfiles.length >= maxProfiles) {
-      console.log(`\n🎯 Meta atingida: ${foundProfiles.length}/${maxProfiles} perfis coletados`);
-    } else if (consecutiveDuplicates >= 3) {
-      console.log(`\n⏹️  Scraping interrompido: 3 duplicatas consecutivas (mesmo aguardando auto-scroll)`);
-      console.log(`   💡 Esta hashtag parece esgotada - todos os perfis já foram coletados anteriormente`);
-    } else if (attemptsWithoutNewPost >= 8) {
-      console.log(`\n⏹️  Scraping interrompido: 8 tentativas sem encontrar novos posts`);
-      console.log(`   🛡️  Limite reduzido para evitar detecção de bot pelo Instagram`);
-    }
+      console.log(`\n✅ Scraping desta hashtag concluído: ${foundProfiles.length} perfis encontrados`);
+      if (foundProfiles.length > 0) {
+        const usernames = foundProfiles.slice(0, 5).map(p => `@${p.username}`).join(', ');
+        console.log(`👥 Perfis extraídos: ${usernames}${foundProfiles.length > 5 ? '...' : ''}`);
+        console.log(`📊 Dados completos coletados: username, bio, ${foundProfiles[0].followers_count} seguidores, etc.`);
+      }
 
-    console.log(`\n✅ Scraping concluído: ${foundProfiles.length} perfis encontrados`);
-    if (foundProfiles.length > 0) {
-      const usernames = foundProfiles.slice(0, 5).map(p => `@${p.username}`).join(', ');
-      console.log(`👥 Perfis extraídos: ${usernames}${foundProfiles.length > 5 ? '...' : ''}`);
-      console.log(`📊 Dados completos coletados: username, bio, ${foundProfiles[0].followers_count} seguidores, etc.`);
-    }
+      // 🆕 ATUALIZAR ESTATÍSTICAS DESTA HASHTAG NO BANCO
+      console.log(`\n📊 Atualizando estatísticas da hashtag #${hashtagToScrape} no banco...`);
+      try {
+        // Buscar valores atuais antes de incrementar
+        const { data: currentStats } = await supabase
+          .from('instagram_hashtag_variations')
+          .select('scrape_count, leads_found')
+          .eq('hashtag', hashtagToScrape)
+          .single();
 
-    console.log(`✅ SCRAPE-TAG CONCLUÍDO: ${foundProfiles.length} perfis coletados para "${searchTerm}"`);
-    return foundProfiles;
+        const newScrapeCount = (currentStats?.scrape_count || 0) + 1;
+        const newLeadsFound = (currentStats?.leads_found || 0) + foundProfiles.length;
+
+        const { error: updateError } = await supabase
+          .from('instagram_hashtag_variations')
+          .update({
+            last_scraped_at: new Date().toISOString(),
+            scrape_count: newScrapeCount,
+            leads_found: newLeadsFound
+          })
+          .eq('hashtag', hashtagToScrape);
+
+        if (updateError) {
+          console.log(`   ⚠️  Erro ao atualizar estatísticas: ${updateError.message}`);
+        } else {
+          console.log(`   ✅ Estatísticas atualizadas: scrape_count=${newScrapeCount}, leads_found=${newLeadsFound}`);
+        }
+      } catch (dbError: any) {
+        console.log(`   ⚠️  Erro ao acessar banco: ${dbError.message}`);
+      }
+
+      // 🆕 ACUMULAR PERFIS DESTA HASHTAG NO RESULTADO TOTAL
+      allFoundProfiles.push(...foundProfiles);
+      console.log(`\n📊 Progresso total: ${allFoundProfiles.length} perfis coletados de ${hashtagIndex + 1} hashtag(s)\n`);
+
+  } // 🆕 FIM DO LOOP DE HASHTAGS (for hashtagIndex)
+
+  // 🆕 RESULTADO FINAL DE TODAS AS HASHTAGS
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`✅ SCRAPE-TAG CONCLUÍDO: ${allFoundProfiles.length} perfis coletados de ${hashtagsToScrape.length} hashtag(s)`);
+  console.log(`${'='.repeat(80)}\n`);
+
+  if (allFoundProfiles.length > 0) {
+    const usernames = allFoundProfiles.slice(0, 10).map(p => `@${p.username}`).join(', ');
+    console.log(`👥 Amostra de perfis: ${usernames}${allFoundProfiles.length > 10 ? '...' : ''}`);
+  }
+
+  return allFoundProfiles;
 
   } catch (error: any) {
     console.error(`❌ Erro ao scrape tag "${searchTerm}":`, error.message);

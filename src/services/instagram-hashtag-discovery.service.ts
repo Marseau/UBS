@@ -62,13 +62,18 @@ export function parseInstagramPostCount(formatted: string): number {
   // Remove "posts" e espaços
   const cleaned = formatted.toLowerCase().replace(/\s*posts?\s*/gi, '').trim();
 
-  // Detectar multiplicador
+  // Detectar multiplicador (IMPORTANTE: checar "mil" ANTES de "mi")
   let multiplier = 1;
   let numberPart = cleaned;
 
-  if (cleaned.includes('mi')) {
+  if (cleaned.includes('mil')) {
+    // "mil" em português = thousand
+    multiplier = 1_000;
+    numberPart = cleaned.replace(/mil/gi, '').trim();
+  } else if (cleaned.includes('mi')) {
+    // "mi" = millions
     multiplier = 1_000_000;
-    numberPart = cleaned.replace(/mi(l)?/gi, '').trim();
+    numberPart = cleaned.replace(/mi/gi, '').trim();
   } else if (cleaned.includes('k')) {
     multiplier = 1_000;
     numberPart = cleaned.replace(/k/gi, '').trim();
@@ -103,21 +108,29 @@ export async function discoverHashtagVariations(
     await page.goto('https://www.instagram.com/', { waitUntil: 'networkidle2' });
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // 2. Clicar no campo de busca
-    console.log('🔍 Abrindo campo de busca...');
-    const searchSelectors = [
+    // 2. Abrir campo de busca usando atalho de teclado (MAIS CONFIÁVEL)
+    console.log('🔍 Abrindo campo de busca com atalho "/" ...');
+
+    // Usar atalho de teclado "/" - funciona em qualquer lugar do Instagram
+    await page.keyboard.press('/');
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Aguardar input aparecer
+
+    // Agora buscar o campo de input
+    const searchInputSelectors = [
       'input[placeholder*="Pesquis"]',
       'input[placeholder*="Search"]',
       'input[aria-label*="Pesquis"]',
-      'input[aria-label*="Search"]'
+      'input[aria-label*="Search"]',
+      'input[type="text"]'
     ];
 
     let searchInput: any = null;
-    for (const selector of searchSelectors) {
+    for (const selector of searchInputSelectors) {
       try {
-        const element = await page.waitForSelector(selector, { timeout: 5000 });
+        const element = await page.waitForSelector(selector, { timeout: 3000 });
         if (element) {
           searchInput = element;
+          console.log(`   ✅ Campo de busca encontrado: ${selector}`);
           break;
         }
       } catch {
@@ -126,47 +139,178 @@ export async function discoverHashtagVariations(
     }
 
     if (!searchInput) {
-      throw new Error('Campo de busca não encontrado');
+      throw new Error('Campo de busca não encontrado após clicar no ícone');
     }
 
-    await searchInput.click();
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // 3. Digitar hashtag no campo de busca DEVAGAR para trigger dropdown
+    console.log(`⌨️  Digitando "#${parentHashtag}" (devagar para trigger dropdown)...`);
+    await searchInput.type(`#${parentHashtag}`, { delay: 150 }); // Delay maior = 150ms entre cada tecla
 
-    // 3. Digitar hashtag no campo de busca
-    console.log(`⌨️  Digitando "#${parentHashtag}"...`);
-    await searchInput.type(`#${parentHashtag}`, { delay: 100 });
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // 4. AGUARDAR DROPDOWN DE SUGESTÕES CARREGAR COMPLETAMENTE (CRITICAL!)
+    console.log('⏳ Aguardando Instagram carregar dropdown com 5 sugestões...');
 
-    // 4. Extrair sugestões de hashtags do dropdown
+    // Aguardar ATIVAMENTE até ter pelo menos 5 sugestões (ou timeout após 15 segundos)
+    const startTime = Date.now();
+    const maxWaitTime = 15000; // 15 segundos
+    let hashtagLinksCount = 0;
+
+    while (Date.now() - startTime < maxWaitTime) {
+      // Contar quantas sugestões já apareceram
+      hashtagLinksCount = await page.evaluate(() => {
+        // @ts-ignore
+        const links = document.querySelectorAll('a[href*="/explore/tags/"]');
+        return links.length;
+      });
+
+      console.log(`   📊 ${hashtagLinksCount} sugestões carregadas até agora...`);
+
+      // Se já tem 5 ou mais sugestões, aguardar mais 2 segundos para estabilizar e sair
+      if (hashtagLinksCount >= 5) {
+        console.log('   ✅ 5+ sugestões detectadas! Aguardando estabilização...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        break;
+      }
+
+      // Aguardar 500ms antes de checar novamente
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // Verificar se conseguiu carregar sugestões
+    if (hashtagLinksCount === 0) {
+      console.log('   ⚠️  Timeout: Nenhuma sugestão de hashtag encontrada após 15s');
+
+      // DEBUG: Tirar screenshot e HTML para entender o que está acontecendo
+      try {
+        const screenshot = await page.screenshot({ encoding: 'base64', fullPage: false });
+        console.log('   📸 Screenshot capturado (primeiros 200 chars):', screenshot.substring(0, 200));
+
+        const htmlDebug = await page.evaluate(() => {
+          // @ts-ignore
+          const searchInput = document.querySelector('input[placeholder*="Pesquis"], input[placeholder*="Search"]');
+          // @ts-ignore
+          const allLinks = document.querySelectorAll('a[href*="/explore/"]');
+          return {
+            inputExists: !!searchInput,
+            // @ts-ignore
+            inputValue: searchInput ? searchInput.value : null,
+            // @ts-ignore
+            inputFocused: searchInput ? searchInput === document.activeElement : false,
+            totalExploreLinks: allLinks.length,
+            // @ts-ignore
+            sampleLinks: Array.from(allLinks).slice(0, 5).map(l => l.href)
+          };
+        });
+
+        console.log('   🔍 Debug HTML:', JSON.stringify(htmlDebug, null, 2));
+      } catch (debugError) {
+        console.log('   ⚠️  Erro ao capturar debug:', (debugError as Error).message);
+      }
+
+      return []; // Retorna vazio
+    }
+
+    console.log(`   ✅ Dropdown carregado com ${hashtagLinksCount} sugestões. Processando...`);
+
+    // 5. Extrair sugestões de hashtags do dropdown
     console.log('📊 Extraindo variações sugeridas...');
 
     const variations = await page.evaluate(() => {
       const results: Array<{ hashtag: string; postCount: string }> = [];
 
-      // Procurar elementos que contenham hashtags e contagem de posts
-      // @ts-ignore - Código executado no browser context
-      const allElements = Array.from(document.querySelectorAll('*'));
+      // ESTRATÉGIA 1: Buscar links específicos de hashtag
+      // @ts-ignore
+      const hashtagLinks = document.querySelectorAll('a[href*="/explore/tags/"]');
+      // @ts-ignore
+      console.log(`   [DEBUG] Links de hashtag encontrados: ${hashtagLinks.length}`);
 
       // @ts-ignore
-      for (const element of allElements) {
+      for (const link of hashtagLinks) {
         // @ts-ignore
-        const text = element.textContent || '';
+        const href = link.getAttribute('href') || '';
+        const hashtagMatch = href.match(/\/explore\/tags\/([^/]+)/);
 
-        // Detectar padrão: #hashtag seguido de "X mi posts" ou "X mil posts"
-        const hashtagMatch = text.match(/#(\w+)/);
-        const postCountMatch = text.match(/(\d+[.,]?\d*\s*(mi|mil|k)\s*posts?)/i);
-
-        if (hashtagMatch && postCountMatch) {
+        if (hashtagMatch) {
           const hashtag = hashtagMatch[1];
-          const postCount = postCountMatch[0];
 
-          // Verificar se já não foi adicionado
-          if (!results.find(r => r.hashtag === hashtag)) {
+          // Buscar contagem de posts no elemento ou em elementos próximos
+          // @ts-ignore
+          let postCount = '';
+
+          // Tentar encontrar no parent mais próximo
+          // @ts-ignore
+          const parent = link.closest('div[role="button"], div[role="menuitem"], a, div');
+          if (parent) {
+            // @ts-ignore
+            const textContent = parent.textContent || '';
+            const postCountMatch = textContent.match(/(\d+[.,]?\d*\s*(mi|mil|k)\s*posts?)/i);
+            if (postCountMatch) {
+              postCount = postCountMatch[0];
+            }
+          }
+
+          // Se não encontrou no parent, buscar em siblings
+          if (!postCount) {
+            // @ts-ignore
+            const nextElement = link.nextElementSibling;
+            if (nextElement) {
+              // @ts-ignore
+              const textContent = nextElement.textContent || '';
+              const postCountMatch = textContent.match(/(\d+[.,]?\d*\s*(mi|mil|k)\s*posts?)/i);
+              if (postCountMatch) {
+                postCount = postCountMatch[0];
+              }
+            }
+          }
+
+          // Adicionar apenas se encontrou contagem e não é duplicata
+          if (postCount && !results.find(r => r.hashtag === hashtag)) {
             results.push({ hashtag, postCount });
+            // @ts-ignore
+            console.log(`   [DEBUG] Hashtag encontrada: #${hashtag} - ${postCount}`);
 
             // Limitar a 5 resultados
             if (results.length >= 5) break;
           }
+        }
+      }
+
+      // ESTRATÉGIA 2 (FALLBACK): Buscar por padrão de texto se strategy 1 falhou
+      if (results.length === 0) {
+        // @ts-ignore
+        console.log('   [DEBUG] Fallback: buscando por padrão de texto...');
+
+        // Buscar divs que contenham hashtags
+        // @ts-ignore
+        const allDivs = document.querySelectorAll('div, span, a');
+
+        // @ts-ignore
+        for (const element of allDivs) {
+          // @ts-ignore
+          const text = element.textContent || '';
+
+          // Procurar padrão: #hashtag + contagem de posts na mesma linha ou elemento
+          const lines = text.split('\n');
+
+          // @ts-ignore
+          for (const line of lines) {
+            const hashtagMatch = line.match(/#(\w+)/);
+            const postCountMatch = line.match(/(\d+[.,]?\d*\s*(mi|mil|k)\s*posts?)/i);
+
+            if (hashtagMatch && postCountMatch) {
+              const hashtag = hashtagMatch[1];
+              const postCount = postCountMatch[0];
+
+              if (!results.find(r => r.hashtag === hashtag)) {
+                results.push({ hashtag, postCount });
+                // @ts-ignore
+                console.log(`   [DEBUG] Hashtag encontrada (fallback): #${hashtag} - ${postCount}`);
+
+                if (results.length >= 5) break;
+              }
+            }
+          }
+
+          if (results.length >= 5) break;
         }
       }
 
