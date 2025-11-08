@@ -93,6 +93,22 @@ async function humanDelay(): Promise<void> {
 }
 
 /**
+ * Delay aleatório humanizado com parâmetros customizáveis
+ */
+async function customDelay(minMs: number, maxMs: number): Promise<void> {
+  const delay = minMs + Math.random() * (maxMs - minMs);
+  console.log(`   ⏳ Aguardando ${(delay / 1000).toFixed(1)}s (delay humano)...`);
+  await new Promise(resolve => setTimeout(resolve, delay));
+}
+
+/**
+ * Random integer entre min e max (inclusive)
+ */
+function randomInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+/**
  * Delay maior entre ações críticas (3-6 segundos)
  * COPIADO DO SCRAPING
  */
@@ -598,6 +614,388 @@ export async function processBatchEngagement(
   } finally {
     // Liberar mutex
     batchInProgress = false;
+  }
+}
+
+/**
+ * Envia DM personalizado para um lead
+ * USANDO PÁGINA COMPARTILHADA (não cria browser isolado)
+ */
+export async function sendDirectMessageShared(username: string, message: string): Promise<{
+  success: boolean;
+  sent_at: string | null;
+  error_message: string | null;
+}> {
+  try {
+    console.log(`\n💬 [DM] Enviando mensagem para @${username}...`);
+
+    // Reutilizar página compartilhada ou criar nova se necessário
+    if (!sharedPage || sharedPage.isClosed()) {
+      console.log('📄 Criando nova página compartilhada...');
+      sharedPage = await createOfficialAuthenticatedPage();
+    } else {
+      console.log('♻️  Reutilizando página compartilhada existente');
+    }
+
+    const page = sharedPage;
+
+    // Navegar para perfil do lead
+    await navigateToProfile(page, username);
+    await customDelay(2000, 4000);
+
+    // Procurar botão "Mensagem" ou "Message"
+    console.log('🔍 Procurando botão de mensagem...');
+
+    const messageButtonClicked = await page.evaluate(() => {
+      // @ts-ignore
+      const buttons = Array.from(document.querySelectorAll('button'));
+
+      // @ts-ignore
+      for (const button of buttons) {
+        // @ts-ignore
+        const text = (button.textContent || '').trim();
+
+        // Procurar botão "Mensagem" ou "Message"
+        if (text === 'Mensagem' || text === 'Message' || text.includes('Enviar mensagem')) {
+          console.log(`[DM-BUTTON] Botão encontrado: "${text}"`);
+          // @ts-ignore
+          button.click();
+          return true;
+        }
+      }
+
+      console.log('[DM-BUTTON] Botão de mensagem não encontrado');
+      return false;
+    });
+
+    if (!messageButtonClicked) {
+      throw new Error('Botão de mensagem não encontrado no perfil');
+    }
+
+    // Aguardar modal de DM abrir
+    await customDelay(2000, 3000);
+    console.log('📝 Modal de mensagem aberto');
+
+    // Procurar textarea de mensagem
+    console.log('🔍 Procurando campo de texto...');
+
+    // Tentar múltiplos seletores (Instagram muda frequentemente)
+    const textareaSelectors = [
+      'textarea[placeholder*="Mensagem"]',
+      'textarea[placeholder*="Message"]',
+      'div[contenteditable="true"]',
+      'textarea',
+      '[role="textbox"]'
+    ];
+
+    let textareaFound = false;
+
+    for (const selector of textareaSelectors) {
+      try {
+        await page.waitForSelector(selector, { timeout: 5000 });
+
+        // Clicar e focar no campo
+        await page.click(selector);
+        await customDelay(500, 1000);
+
+        // Digitar mensagem caractere por caractere (mais humano)
+        console.log('⌨️  Digitando mensagem...');
+        await page.keyboard.type(message, { delay: randomInt(50, 150) });
+        await customDelay(1000, 2000);
+
+        textareaFound = true;
+        console.log('✅ Mensagem digitada com sucesso');
+        break;
+
+      } catch (err) {
+        // Tentar próximo seletor
+        continue;
+      }
+    }
+
+    if (!textareaFound) {
+      throw new Error('Campo de texto não encontrado no modal de DM');
+    }
+
+    // Procurar e clicar no botão "Enviar"
+    console.log('🔍 Procurando botão Enviar...');
+
+    const sendButtonClicked = await page.evaluate(() => {
+      // @ts-ignore
+      const buttons = Array.from(document.querySelectorAll('button'));
+
+      // @ts-ignore
+      for (const button of buttons) {
+        // @ts-ignore
+        const text = (button.textContent || '').trim();
+
+        // Procurar botão "Enviar" ou "Send"
+        if (text === 'Enviar' || text === 'Send') {
+          console.log(`[SEND-BUTTON] Botão encontrado: "${text}"`);
+          // @ts-ignore
+          button.click();
+          return true;
+        }
+      }
+
+      console.log('[SEND-BUTTON] Botão Enviar não encontrado');
+      return false;
+    });
+
+    if (!sendButtonClicked) {
+      throw new Error('Botão Enviar não encontrado');
+    }
+
+    // Aguardar envio
+    await customDelay(2000, 3000);
+    console.log('✅ DM enviado com sucesso!');
+
+    return {
+      success: true,
+      sent_at: new Date().toISOString(),
+      error_message: null
+    };
+
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido ao enviar DM';
+    console.error(`❌ Erro ao enviar DM para @${username}:`, errorMsg);
+
+    return {
+      success: false,
+      sent_at: null,
+      error_message: errorMsg
+    };
+  }
+}
+
+/**
+ * Verifica se um usuário nos segue de volta
+ * USANDO PÁGINA COMPARTILHADA (não cria browser isolado)
+ */
+export async function checkFollowBackShared(username: string): Promise<{
+  success: boolean;
+  followed_back: boolean;
+  error_message: string | null;
+}> {
+  try {
+    console.log(`\n🔍 [CHECK] Verificando follow back de @${username}...`);
+
+    // Reutilizar página compartilhada ou criar nova se necessário
+    if (!sharedPage || sharedPage.isClosed()) {
+      console.log('📄 Criando nova página compartilhada...');
+      sharedPage = await createOfficialAuthenticatedPage();
+    } else {
+      console.log('♻️  Reutilizando página compartilhada existente');
+    }
+
+    const page = sharedPage;
+
+    // Navegar para perfil
+    await navigateToProfile(page, username);
+    await humanDelay();
+
+    // Aguardar botões carregarem
+    await page.waitForSelector('button', { timeout: 10000 });
+
+    // 🔍 DETECÇÃO MELHORADA: Procurar badge "Segue você" de múltiplas formas
+    const followsYou = await page.evaluate(() => {
+      // Método 1: Procurar por texto específico em spans
+      // @ts-ignore
+      const spans = Array.from(document.querySelectorAll('span'));
+      // @ts-ignore
+      for (const span of spans) {
+        // @ts-ignore
+        const text = (span.textContent || '').trim();
+        if (text === 'Segue você' || text === 'Follows you') {
+          console.log(`[BADGE-SPAN] Badge encontrado em <span>: "${text}"`);
+          return true;
+        }
+      }
+
+      // Método 2: Procurar em elementos com role
+      // @ts-ignore
+      const roleElements = Array.from(document.querySelectorAll('[role]'));
+      // @ts-ignore
+      for (const element of roleElements) {
+        // @ts-ignore
+        const text = (element.textContent || '').trim();
+        if (text === 'Segue você' || text === 'Follows you') {
+          console.log(`[BADGE-ROLE] Badge encontrado em [role]: "${text}"`);
+          return true;
+        }
+      }
+
+      // Método 3: Procurar em divs próximos ao header do perfil
+      // @ts-ignore
+      const allDivs = Array.from(document.querySelectorAll('div'));
+      // @ts-ignore
+      for (const div of allDivs) {
+        // @ts-ignore
+        const text = (div.textContent || '').trim();
+        // Verificar se é exatamente o texto do badge (sem caracteres extras)
+        if (text === 'Segue você' || text === 'Follows you') {
+          console.log(`[BADGE-DIV] Badge encontrado em <div>: "${text}"`);
+          return true;
+        }
+      }
+
+      // Método 4: Buscar por variações parciais (mais permissivo)
+      // @ts-ignore
+      const allElements = Array.from(document.querySelectorAll('*'));
+      // @ts-ignore
+      for (const element of allElements) {
+        // @ts-ignore
+        const text = element.textContent || '';
+
+        // Verificar variações
+        if (text.includes('Segue você') ||
+            text.includes('Follows you') ||
+            text.includes('te segue') ||
+            text.includes('follows you')) {
+          console.log(`[BADGE-PARTIAL] Badge encontrado (parcial): "${text}"`);
+          return true;
+        }
+      }
+
+      console.log('[BADGE-NOT-FOUND] Badge "Segue você" não encontrado');
+      return false;
+    });
+
+    console.log(followsYou ? `✅ @${username} nos segue de volta!` : `⏳ @${username} ainda não nos seguiu`);
+
+    return {
+      success: true,
+      followed_back: followsYou,
+      error_message: null
+    };
+
+  } catch (error: any) {
+    console.error(`❌ Erro ao verificar follow back de @${username}:`, error.message);
+
+    return {
+      success: false,
+      followed_back: false,
+      error_message: error.message
+    };
+  }
+}
+
+/**
+ * Deixa de seguir um usuário
+ * USANDO PÁGINA COMPARTILHADA (não cria browser isolado)
+ */
+export async function unfollowUserShared(username: string): Promise<{
+  success: boolean;
+  error_message: string | null;
+  was_not_following: boolean;
+}> {
+  try {
+    console.log(`\n🗑️  [UNFOLLOW] Aplicando unfollow em @${username}...`);
+
+    // Reutilizar página compartilhada ou criar nova se necessário
+    if (!sharedPage || sharedPage.isClosed()) {
+      console.log('📄 Criando nova página compartilhada...');
+      sharedPage = await createOfficialAuthenticatedPage();
+    } else {
+      console.log('♻️  Reutilizando página compartilhada existente');
+    }
+
+    const page = sharedPage;
+
+    // Navegar para perfil
+    await navigateToProfile(page, username);
+    await humanDelay();
+
+    // Aguardar botões carregarem
+    await page.waitForSelector('button', { timeout: 10000 });
+
+    // Procurar botão "Seguindo" / "Following"
+    const buttons = await page.$$('button');
+    let notFollowing = false;
+
+    for (const button of buttons) {
+      const text = await page.evaluate(el => el.textContent, button);
+
+      if (text && (text.includes('Seguir') || text.includes('Follow')) && !text.includes('Seguindo')) {
+        notFollowing = true;
+        console.log(`⚠️  Não estava seguindo @${username}`);
+        break;
+      }
+    }
+
+    if (notFollowing) {
+      return {
+        success: true,
+        error_message: null,
+        was_not_following: true
+      };
+    }
+
+    // Procurar e clicar no botão "Seguindo"
+    let foundFollowingButton = false;
+    for (const button of buttons) {
+      const text = await page.evaluate(el => el.textContent, button);
+      if (text && (text.includes('Seguindo') || text.includes('Following'))) {
+        await button.click();
+        foundFollowingButton = true;
+        break;
+      }
+    }
+
+    if (!foundFollowingButton) {
+      throw new Error('Botão "Seguindo" não encontrado');
+    }
+
+    // Aguardar popup de confirmação aparecer
+    console.log(`   ⏳ Aguardando popup de unfollow carregar...`);
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Procurar por elemento com texto "Deixar de seguir" / "Unfollow"
+    console.log(`   🔍 Procurando opção "Deixar de seguir" no popup...`);
+
+    const unfollowClicked = await page.evaluate(() => {
+      // @ts-ignore - Código executado no browser context
+      const allElements = Array.from(document.querySelectorAll('button, div[role="menuitem"], span[role="menuitem"], [role="button"]'));
+
+      // @ts-ignore
+      for (const element of allElements) {
+        // @ts-ignore
+        const text = element.textContent || '';
+
+        if (text.includes('Deixar de seguir') || text.includes('Unfollow')) {
+          // @ts-ignore
+          element.click();
+          return true;
+        }
+      }
+
+      return false;
+    });
+
+    if (!unfollowClicked) {
+      throw new Error('Botão "Deixar de seguir" não encontrado no popup');
+    }
+
+    console.log(`   ✅ Clicou em "Deixar de seguir"`);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log(`✅ Unfollow executado em @${username}`);
+
+    await humanDelay();
+
+    return {
+      success: true,
+      error_message: null,
+      was_not_following: false
+    };
+
+  } catch (error: any) {
+    console.error(`❌ Erro ao dar unfollow em @${username}:`, error.message);
+
+    return {
+      success: false,
+      error_message: error.message,
+      was_not_following: false
+    };
   }
 }
 

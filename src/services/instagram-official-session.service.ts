@@ -70,6 +70,7 @@ export async function ensureCorrectAccount(operationType: OperationType): Promis
 
   // Criar página temporária para verificação
   const checkPage = await browserInstance.newPage();
+  let detectedUsername: string | null = null;
 
   try {
     // Carregar cookies salvos
@@ -90,7 +91,11 @@ export async function ensureCorrectAccount(operationType: OperationType): Promis
     // Se não está logado, fazer login
     if (currentUrl.includes('/accounts/login')) {
       console.log(`   ⚠️  Não está logado, fazendo login...`);
-      await checkPage.close();
+
+      // IMPORTANTE: Fechar página ANTES de chamar switch
+      if (!checkPage.isClosed()) {
+        await checkPage.close().catch(() => {});
+      }
 
       if (operationType === OperationType.ENGAGEMENT) {
         return await switchToOfficialAccount();
@@ -99,13 +104,21 @@ export async function ensureCorrectAccount(operationType: OperationType): Promis
       }
     }
 
-    // Está logado, detectar username
-    const detectedUsername = await detectLoggedInUsername(checkPage);
+    // Está logado, detectar username - AGUARDAR COMPLETAR
+    detectedUsername = await detectLoggedInUsername(checkPage);
+
+    // Aguardar um pouco para garantir que todas as operações assíncronas finalizaram
+    await humanDelay(500, 200);
+
     console.log(`   Conta atual detectada: ${detectedUsername ? '@' + detectedUsername : 'não detectada'}`);
 
     if (!detectedUsername) {
       console.log(`   ⚠️  Não foi possível detectar username, forçando re-login...`);
-      await checkPage.close();
+
+      // IMPORTANTE: Fechar página ANTES de chamar switch
+      if (!checkPage.isClosed()) {
+        await checkPage.close().catch(() => {});
+      }
 
       if (operationType === OperationType.ENGAGEMENT) {
         return await switchToOfficialAccount();
@@ -127,13 +140,21 @@ export async function ensureCorrectAccount(operationType: OperationType): Promis
       // Atualizar variável global
       loggedUsername = detectedUsername;
 
-      await checkPage.close();
+      // Fechar página com segurança
+      if (!checkPage.isClosed()) {
+        await checkPage.close().catch(() => {});
+      }
+
       return detectedUsername;
     }
 
     // Precisa trocar de conta
     console.log(`   🔄 Precisa trocar de conta (atual: @${detectedUsername}, esperado: @${expectedUsername})...\n`);
-    await checkPage.close();
+
+    // IMPORTANTE: Fechar página ANTES de chamar switch
+    if (!checkPage.isClosed()) {
+      await checkPage.close().catch(() => {});
+    }
 
     if (operationType === OperationType.ENGAGEMENT) {
       return await switchToOfficialAccount();
@@ -143,7 +164,12 @@ export async function ensureCorrectAccount(operationType: OperationType): Promis
 
   } catch (error: any) {
     console.error(`❌ [ACCOUNT-CHECK] Erro: ${error.message}`);
-    await checkPage.close().catch(() => {});
+
+    // Fechar página com segurança mesmo em caso de erro
+    if (!checkPage.isClosed()) {
+      await checkPage.close().catch(() => {});
+    }
+
     throw error;
   }
 }
@@ -220,8 +246,16 @@ async function isLoggedIn(page: Page): Promise<boolean> {
 }
 
 async function detectLoggedInUsername(page: Page): Promise<string | null> {
+  // PROTEÇÃO: Verificar se página ainda está aberta
+  if (page.isClosed()) {
+    console.warn(`⚠️  [OFICIAL] Página já fechada, não é possível detectar username`);
+    return null;
+  }
+
   // Método 1: Cookie ds_user (mais confiável)
   try {
+    if (page.isClosed()) return null;
+
     const cookies = await page.cookies();
     console.log(`🔍 [OFICIAL] Total de cookies: ${cookies.length}`);
 
@@ -238,6 +272,8 @@ async function detectLoggedInUsername(page: Page): Promise<string | null> {
 
   // Método 2: Procurar username próximo ao botão "Switch" (top-right corner)
   try {
+    if (page.isClosed()) return null;
+
     console.log(`🔍 [OFICIAL] Tentando detectar via botão Switch (Método 2)...`);
 
     const { username, debug } = await page.evaluate(() => {
@@ -301,6 +337,8 @@ async function detectLoggedInUsername(page: Page): Promise<string | null> {
 
   // Método 3: JSON embutido do Instagram (viewer object)
   try {
+    if (page.isClosed()) return null;
+
     const username = await page.evaluate(() => {
       const scripts = Array.from(document.querySelectorAll('script'));
       for (const script of scripts) {
@@ -757,9 +795,12 @@ export async function switchToAlternativeAccount(): Promise<string> {
         // Aguardar navegação carregar
         await humanDelay(2000, 1000);
 
-        // Tentar detectar username
+        // Tentar detectar username - AGUARDAR COMPLETAR
         sessionPage = page;
         const detectedUsername = await detectLoggedInUsername(page);
+
+        // Aguardar um pouco para garantir que todas operações assíncronas finalizaram
+        await humanDelay(500, 200);
 
         if (detectedUsername) {
           // Verificar se é a conta correta (extrair username do email alternativo)
@@ -843,9 +884,12 @@ export async function switchToAlternativeAccount(): Promise<string> {
 
       await humanDelay(2000, 1000);
 
-      // Detectar username
+      // Detectar username - AGUARDAR COMPLETAR
       sessionPage = page;
       const detectedUsername = await detectLoggedInUsername(page);
+
+      // Aguardar um pouco para garantir que todas operações assíncronas finalizaram
+      await humanDelay(500, 200);
 
       if (!detectedUsername) {
         throw new Error('Não foi possível detectar o username da conta alternativa após login');
@@ -857,7 +901,10 @@ export async function switchToAlternativeAccount(): Promise<string> {
       return detectedUsername;
 
     } catch (error: any) {
-      await page.close();
+      // Fechar página com segurança
+      if (!page.isClosed()) {
+        await page.close().catch(() => {});
+      }
       throw error;
     }
 
@@ -915,9 +962,12 @@ export async function switchToOfficialAccount(): Promise<string> {
         // Aguardar navegação carregar
         await humanDelay(2000, 1000);
 
-        // Tentar detectar username
+        // Tentar detectar username - AGUARDAR COMPLETAR
         sessionPage = page;
         const detectedUsername = await detectLoggedInUsername(page);
+
+        // Aguardar um pouco para garantir que todas operações assíncronas finalizaram
+        await humanDelay(500, 200);
 
         if (detectedUsername) {
           // Verificar se é a conta correta
@@ -999,9 +1049,12 @@ export async function switchToOfficialAccount(): Promise<string> {
 
       await humanDelay(2000, 1000);
 
-      // Detectar username
+      // Detectar username - AGUARDAR COMPLETAR
       sessionPage = page;
       const detectedUsername = await detectLoggedInUsername(page);
+
+      // Aguardar um pouco para garantir que todas operações assíncronas finalizaram
+      await humanDelay(500, 200);
 
       if (!detectedUsername) {
         throw new Error('Não foi possível detectar o username da conta oficial após login');
@@ -1013,7 +1066,10 @@ export async function switchToOfficialAccount(): Promise<string> {
       return detectedUsername;
 
     } catch (error: any) {
-      await page.close();
+      // Fechar página com segurança
+      if (!page.isClosed()) {
+        await page.close().catch(() => {});
+      }
       throw error;
     }
 

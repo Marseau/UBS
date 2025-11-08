@@ -573,6 +573,16 @@ try {
   console.error('❌ Failed to load Instagram Follow routes:', error);
 }
 
+// Instagram Hashtag Discovery Routes - Automatic hashtag variation discovery
+try {
+  const instagramHashtagDiscoveryRoutes = require('./routes/instagram-hashtag-discovery.routes');
+  const router = 'default' in instagramHashtagDiscoveryRoutes ? instagramHashtagDiscoveryRoutes.default : instagramHashtagDiscoveryRoutes;
+  app.use('/api/instagram', router);
+  console.log('✅ Instagram Hashtag Discovery routes loaded - SMART HASHTAG VARIATION DISCOVERY READY');
+} catch (error) {
+  console.error('❌ Failed to load Instagram Hashtag Discovery routes:', error);
+}
+
 // Account Actions Routes - Record social media actions (multi-platform)
 try {
   const accountActionsRoutes = require('./routes/account-actions.routes');

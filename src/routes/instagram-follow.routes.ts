@@ -1,5 +1,4 @@
 import express, { Request, Response } from 'express';
-import * as InstagramAutomation from '../services/instagram-automation.service';
 import * as InstagramAutomationRefactored from '../services/instagram-automation-refactored.service';
 import {
   switchToAlternativeAccount,
@@ -9,6 +8,7 @@ import {
   closeOfficialBrowser,
   OperationType
 } from '../services/instagram-official-session.service';
+import { generatePersonalizedDM } from '../services/instagram-dm-personalization.service';
 
 const router = express.Router();
 
@@ -35,15 +35,15 @@ router.post('/check-follow-back', async (req: Request, res: Response) => {
     // Garantir que está logado com conta oficial (@ubs.sistemas)
     await ensureCorrectAccount(OperationType.ENGAGEMENT);
 
-    // Executar verificação via Puppeteer
-    const result = await InstagramAutomation.checkFollowBack(username);
+    // Executar verificação usando PÁGINA COMPARTILHADA (sem browser isolado)
+    const result = await InstagramAutomationRefactored.checkFollowBackShared(username);
 
     if (!result.success) {
       throw new Error(result.error_message || 'Erro ao verificar follow back');
     }
 
     const followedBack = result.followed_back;
-    const newStatus = followedBack ? 'followed_back' : 'following';
+    const newStatus = followedBack ? 'followed_back' : 'followed';
     const statusChanged = current_status !== newStatus;
 
     // Determinar se deve notificar
@@ -110,8 +110,8 @@ router.post('/unfollow-lead', async (req: Request, res: Response) => {
     // Garantir que está logado com conta oficial (@ubs.sistemas)
     await ensureCorrectAccount(OperationType.ENGAGEMENT);
 
-    // Executar unfollow via Puppeteer
-    const result = await InstagramAutomation.unfollowUser(username);
+    // Executar unfollow usando PÁGINA COMPARTILHADA (sem browser isolado)
+    const result = await InstagramAutomationRefactored.unfollowUserShared(username);
 
     console.log(`   ✅ Unfollow executado`);
 
@@ -366,6 +366,79 @@ router.post('/switch-account', async (_req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: 'Erro ao trocar de conta',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+/**
+ * POST /api/instagram/send-dm
+ *
+ * Envia DM personalizado via IA para lead qualificado
+ * Gera mensagem com GPT-4o baseado no perfil do lead
+ * Registra em instagram_dm_outreach para rastreabilidade
+ */
+router.post('/send-dm', async (req: Request, res: Response) => {
+  try {
+    const { lead_id, username, full_name, business_category, segment, has_phone, has_email } = req.body;
+
+    if (!lead_id || !username) {
+      return res.status(400).json({
+        error: 'Campos obrigatórios faltando',
+        required: ['lead_id', 'username']
+      });
+    }
+
+    console.log(`\n💬 Iniciando DM outreach para @${username}...`);
+
+    // Garantir que está logado com conta oficial (@ubs.sistemas)
+    await ensureCorrectAccount(OperationType.ENGAGEMENT);
+
+    // 1. Gerar mensagem personalizada com GPT-4o
+    console.log('🤖 Gerando mensagem personalizada com GPT-4o...');
+    const personalizedDM = await generatePersonalizedDM({
+      username,
+      full_name,
+      business_category,
+      segment,
+      has_phone: has_phone || false,
+      has_email: has_email || false
+    });
+
+    console.log(`   📝 Mensagem gerada: "${personalizedDM.message}"`);
+    console.log(`   🔢 Tokens usados: ${personalizedDM.tokens_used}`);
+
+    // 2. Enviar DM via Puppeteer
+    console.log('📤 Enviando DM via Instagram...');
+    const dmResult = await InstagramAutomationRefactored.sendDirectMessageShared(
+      username,
+      personalizedDM.message
+    );
+
+    if (!dmResult.success) {
+      throw new Error(dmResult.error_message || 'Erro ao enviar DM');
+    }
+
+    console.log(`   ✅ DM enviado com sucesso!`);
+
+    // 3. Retornar dados para o workflow N8N persistir em Supabase
+    return res.status(200).json({
+      success: true,
+      lead_id,
+      username,
+      message_text: personalizedDM.message,
+      message_generated_by: personalizedDM.model,
+      generation_prompt: personalizedDM.prompt_used,
+      tokens_used: personalizedDM.tokens_used,
+      sent_at: dmResult.sent_at,
+      delivery_status: 'sent'
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao enviar DM:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao enviar DM',
       message: error instanceof Error ? error.message : 'Erro desconhecido'
     });
   }
