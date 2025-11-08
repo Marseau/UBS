@@ -464,8 +464,22 @@ export async function scrapeInstagramTag(
       console.log(`🎯 SCRAPANDO HASHTAG ${hashtagIndex + 1}/${hashtagsToScrape.length}: #${hashtagToScrape}`);
       console.log(`${'='.repeat(80)}\n`);
 
+      // 🆕 RETRY LOGIC: Tentar até 3 vezes antes de pular para próxima hashtag
+      let retryCount = 0;
+      const MAX_RETRIES = 3;
+      let hashtagSuccess = false;
+
       // 🆕 ARRAY LOCAL PARA PERFIS DESTA HASHTAG
       const foundProfiles: any[] = [];
+
+      while (retryCount < MAX_RETRIES && !hashtagSuccess) {
+        if (retryCount > 0) {
+          console.log(`\n🔄 RETRY ${retryCount}/${MAX_RETRIES} para #${hashtagToScrape}...`);
+          await new Promise(resolve => setTimeout(resolve, 5000)); // 5s entre retries
+        }
+
+        try {
+          retryCount++;
 
       // 1. IR PARA PÁGINA INICIAL
       console.log(`\n🏠 Navegando para página inicial...`);
@@ -599,17 +613,30 @@ export async function scrapeInstagramTag(
           // Debug adicional em caso de erro
           const currentUrl = page.url();
           const pageContent = await page.content();
-          const hasLoginForm = pageContent.includes('loginForm') || pageContent.includes('Login');
 
+          // 🔧 DETECTOR MELHORADO: Se encontrou posts, NÃO é página de login
           const postCount = await page.evaluate((selector) => {
             return document.querySelectorAll(selector).length;
           }, postSelector);
+
+          // 🆕 CRITÉRIO ROBUSTO: 15+ posts = mural carregou com sucesso (mesmo com timeout)
+          const muralLoaded = postCount >= 15;
+
+          // Só detecta login se REALMENTE tem form E tem 0 posts
+          const hasLoginForm = (pageContent.includes('loginForm') || pageContent.includes('Login')) && postCount === 0;
 
           console.log(`   ⚠️  ${context}: timeout ao aguardar mural`);
           console.log(`   📍 URL final: ${currentUrl}`);
           console.log(`   📊 Posts encontrados: ${postCount}`);
           console.log(`   🔐 Página de login detectada: ${hasLoginForm ? 'SIM' : 'NÃO'}`);
+          console.log(`   ${muralLoaded ? '✅ MURAL CARREGOU (15+ posts)' : '❌ Mural não carregou'}`);
           console.log(`   ❌ Erro: ${error?.message || error}`);
+
+          // 🆕 Se mural carregou (15+ posts), retorna sucesso mesmo com timeout
+          if (muralLoaded) {
+            console.log(`   ✅ Ignorando timeout - mural carregou com ${postCount} posts`);
+            return true;
+          }
 
           if (throwOnFail) {
             throw new Error(`Mural da hashtag não carregou a tempo. URL: ${currentUrl}, Posts: ${postCount}, Login: ${hasLoginForm}`);
@@ -1505,6 +1532,19 @@ export async function scrapeInstagramTag(
       } catch (dbError: any) {
         console.log(`   ⚠️  Erro ao acessar banco: ${dbError.message}`);
       }
+
+          // 🆕 Se chegou aqui, hashtag foi scrapada com sucesso
+          hashtagSuccess = true;
+          console.log(`✅ Hashtag #${hashtagToScrape} scrapada com sucesso!`);
+
+        } catch (hashtagError: any) {
+          console.error(`❌ Erro ao scrape hashtag #${hashtagToScrape} (tentativa ${retryCount}/${MAX_RETRIES}):`, hashtagError.message);
+
+          if (retryCount >= MAX_RETRIES) {
+            console.log(`⚠️  Máximo de retries atingido para #${hashtagToScrape}. Pulando para próxima hashtag...`);
+          }
+        }
+      } // FIM DO WHILE (retry loop)
 
       // 🆕 ACUMULAR PERFIS DESTA HASHTAG NO RESULTADO TOTAL
       allFoundProfiles.push(...foundProfiles);
