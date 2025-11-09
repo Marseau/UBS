@@ -887,11 +887,15 @@ export async function checkFollowBackShared(username: string): Promise<{
  */
 export async function checkLeadEngagementShared(leadUsername: string): Promise<{
   success: boolean;
+  lead_id: string | null;
+  actions_taken: string[];
   liked_posts: string[];
   commented_posts: string[];
   total_likes: number;
   total_comments: number;
   engagement_score: number;
+  followed_back: boolean;
+  message: string;
   error_message: string | null;
 }> {
   try {
@@ -928,148 +932,173 @@ export async function checkLeadEngagementShared(leadUsername: string): Promise<{
 
     console.log(`👤 Nossa conta: @${ourUsername}`);
 
-    // 1. Navegar para NOSSO perfil
-    console.log(`🏠 Navegando para nosso perfil @${ourUsername}...`);
-    await page.goto(`https://www.instagram.com/${ourUsername}/`, {
+    // 1. Navegar para página de Notificações
+    console.log(`🔔 Navegando para página de Notificações...`);
+    await page.goto('https://www.instagram.com/accounts/activity/', {
       waitUntil: 'networkidle2',
       timeout: 30000
     });
     await humanDelay();
 
-    // 2. Coletar URLs dos últimos 3-5 posts
-    console.log(`📸 Coletando últimos posts...`);
-    const postUrls = await page.evaluate(() => {
+    // 2. Procurar interações do lead nas notificações
+    console.log(`🔍 Procurando interações de @${leadUsername} nas notificações...`);
+
+    // Scroll para carregar mais notificações
+    await page.evaluate(() => {
       // @ts-ignore
-      const links = Array.from(document.querySelectorAll('a[href*="/p/"]'));
-      const urls: string[] = [];
-      // @ts-ignore
-      for (const link of links) {
-        // @ts-ignore
-        const href = (link as HTMLAnchorElement).href;
-        if (href.includes('/p/') && !urls.includes(href)) {
-          urls.push(href);
-        }
-        if (urls.length >= 5) break; // Limitar a 5 posts
-      }
-      return urls;
+      window.scrollTo(0, document.body.scrollHeight);
     });
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
-    console.log(`   ✅ ${postUrls.length} posts encontrados`);
-
-    if (postUrls.length === 0) {
-      console.log(`   ⚠️  Nenhum post encontrado no perfil`);
-      return {
-        success: true,
-        liked_posts: [],
-        commented_posts: [],
-        total_likes: 0,
-        total_comments: 0,
-        engagement_score: 0,
-        error_message: null
+    const interactions = await page.evaluate((username) => {
+      const results = {
+        likes: [] as string[],
+        comments: [] as string[],
+        followedBack: false,
+        foundFollowBackButton: false
       };
+
+      // @ts-ignore
+      const notificationElements = Array.from(document.querySelectorAll('div, span'));
+
+      // @ts-ignore
+      for (const element of notificationElements) {
+        // @ts-ignore
+        const text = element.textContent || '';
+        const lowerText = text.toLowerCase();
+
+        // Verificar se menciona o username do lead
+        if (lowerText.includes(username.toLowerCase())) {
+
+          // 1. CURTIDA EM REEL/POST (ignorar "curtiu seu comentário")
+          if ((lowerText.includes('curtiu seu reel') || lowerText.includes('curtiram seu reel') ||
+               lowerText.includes('curtiu sua publicação') || lowerText.includes('curtiram sua publicação') ||
+               lowerText.includes('liked your reel') || lowerText.includes('liked your post')) &&
+              !lowerText.includes('comentário') && !lowerText.includes('comment')) {
+
+            // Tentar extrair o post/reel ID do link próximo
+            // @ts-ignore
+            const parent = element.closest('div');
+            if (parent) {
+              // @ts-ignore
+              const linkElement = parent.querySelector('a[href*="/reel/"], a[href*="/p/"]');
+              if (linkElement) {
+                // @ts-ignore
+                const href = linkElement.getAttribute('href') || linkElement.href;
+                if (href) {
+                  const match = href.match(/\/(reel|p)\/([^\/\?]+)/);
+                  if (match && match[2]) {
+                    const postId = match[2];
+                    if (!results.likes.includes(postId)) {
+                      results.likes.push(postId);
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // 2. COMENTÁRIO (texto que menciona "comentou" mas não "curtiu seu comentário")
+          if ((lowerText.includes('comentou') || lowerText.includes('commented')) &&
+              !lowerText.includes('curtiu seu comentário') && !lowerText.includes('liked your comment')) {
+
+            // @ts-ignore
+            const parent = element.closest('div');
+            if (parent) {
+              // @ts-ignore
+              const linkElement = parent.querySelector('a[href*="/reel/"], a[href*="/p/"]');
+              if (linkElement) {
+                // @ts-ignore
+                const href = linkElement.getAttribute('href') || linkElement.href;
+                if (href) {
+                  const match = href.match(/\/(reel|p)\/([^\/\?]+)/);
+                  if (match && match[2]) {
+                    const postId = match[2];
+                    if (!results.comments.includes(postId)) {
+                      results.comments.push(postId);
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // 3. NOVO SEGUIDOR - Procurar botão "Seguir de volta"
+          if (lowerText.includes('começou a seguir') || lowerText.includes('started following')) {
+            results.foundFollowBackButton = true;
+          }
+        }
+      }
+
+      return results;
+    }, leadUsername);
+
+    const likedPosts = interactions.likes;
+    const commentedPosts = interactions.comments;
+
+    console.log(`   ❤️  Curtidas em reels/posts: ${likedPosts.length}`);
+    console.log(`   💬 Comentários: ${commentedPosts.length}`);
+
+    if (likedPosts.length > 0) {
+      console.log(`   📋 Posts curtidos:`, likedPosts);
+    }
+    if (commentedPosts.length > 0) {
+      console.log(`   📋 Posts comentados:`, commentedPosts);
     }
 
-    const likedPosts: string[] = [];
-    const commentedPosts: string[] = [];
-
-    // 3. Verificar cada post (curtidas e comentários)
-    for (let i = 0; i < Math.min(postUrls.length, 3); i++) {
-      const postUrl = postUrls[i];
-      if (!postUrl) continue;
-
-      const postId = postUrl.split('/p/')[1]?.split('/')[0] || `post_${i}`;
-
-      console.log(`\n📷 Verificando post ${i + 1}/3: ${postId}`);
+    // 3. Se encontrou botão "Seguir de volta", clicar nele
+    if (interactions.foundFollowBackButton) {
+      console.log(`   🔔 Lead começou a seguir! Procurando botão "Seguir de volta"...`);
 
       try {
-        await page.goto(postUrl, { waitUntil: 'networkidle2', timeout: 20000 });
-        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+        const followedBack = await page.evaluate((username) => {
+          // @ts-ignore
+          const allElements = Array.from(document.querySelectorAll('div, span, button'));
 
-        // Verificar curtidas: clicar em contador de likes
-        try {
-          // Procurar link de curtidas ou contador de likes
-          const likesButton = await page.evaluateHandle(() => {
+          // @ts-ignore
+          for (const element of allElements) {
             // @ts-ignore
-            const links = Array.from(document.querySelectorAll('a[href*="/liked_by/"]'));
-            if (links.length > 0) return links[0];
+            const text = (element.textContent || '').toLowerCase();
 
-            // @ts-ignore
-            const spans = Array.from(document.querySelectorAll('span'));
-            // @ts-ignore
-            for (const span of spans) {
+            // Encontrar elemento que menciona o username E "começou a seguir"
+            if (text.includes(username.toLowerCase()) &&
+                (text.includes('começou a seguir') || text.includes('started following'))) {
+
+              // Procurar botão "Seguir de volta" próximo
               // @ts-ignore
-              const text = (span.textContent || '').toLowerCase();
-              if (text.includes('curtida') || text.includes('like')) {
+              const parent = element.closest('div');
+              if (parent) {
                 // @ts-ignore
-                const clickable = span.closest('a, button, div[role="button"]');
-                if (clickable) return clickable;
+                const buttons = parent.querySelectorAll('button');
+                // @ts-ignore
+                for (const button of buttons) {
+                  // @ts-ignore
+                  const buttonText = (button.textContent || '').toLowerCase();
+                  if (buttonText.includes('seguir de volta') || buttonText.includes('follow back')) {
+                    // @ts-ignore
+                    button.click();
+                    return true;
+                  }
+                }
               }
             }
-            return null;
-          });
-
-          const likesElement = likesButton.asElement();
-          if (likesElement) {
-            await likesElement.click();
-            await page.waitForSelector('div[role="dialog"]', { timeout: 5000 });
-            await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
-
-            // Procurar @leadUsername na lista de curtidas
-            const userLiked = await page.evaluate((username) => {
-              // @ts-ignore
-              const allText = document.body.innerText;
-              return allText.includes(`@${username}`) || allText.includes(username);
-            }, leadUsername);
-
-            if (userLiked) {
-              console.log(`   ❤️  @${leadUsername} CURTIU este post!`);
-              likedPosts.push(postId);
-            }
-
-            // Fechar modal
-            const closeButton = await page.$('button[aria-label*="Fechar"], button[aria-label*="Close"]');
-            if (closeButton) {
-              await closeButton.click();
-              await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 500));
-            } else {
-              await page.keyboard.press('Escape');
-              await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 500));
-            }
           }
-        } catch (likeError) {
-          console.log(`   ⚠️  Erro ao verificar curtidas: ${(likeError as Error).message}`);
+          return false;
+        }, leadUsername);
+
+        if (followedBack) {
+          console.log(`   ✅ Seguiu de volta @${leadUsername}!`);
+          interactions.followedBack = true;
+          await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+        } else {
+          console.log(`   ⚠️  Botão "Seguir de volta" não encontrado`);
         }
-
-        // Verificar comentários: scroll na seção de comentários
-        try {
-          const comments = await page.evaluate((username) => {
-            // @ts-ignore
-            const commentElements = Array.from(document.querySelectorAll('span, div'));
-            // @ts-ignore
-            for (const element of commentElements) {
-              // @ts-ignore
-              const text = element.textContent || '';
-              if (text.includes(`@${username}`) || text.includes(username)) {
-                return true;
-              }
-            }
-            return false;
-          }, leadUsername);
-
-          if (comments) {
-            console.log(`   💬 @${leadUsername} COMENTOU neste post!`);
-            commentedPosts.push(postId);
-          }
-        } catch (commentError) {
-          console.log(`   ⚠️  Erro ao verificar comentários: ${(commentError as Error).message}`);
-        }
-
-      } catch (postError) {
-        console.log(`   ❌ Erro ao processar post: ${(postError as Error).message}`);
+      } catch (followError) {
+        console.log(`   ❌ Erro ao seguir de volta: ${(followError as Error).message}`);
       }
     }
 
-    // 4. Calcular engagement score
+    // 3. Calcular engagement score
     const totalLikes = likedPosts.length;
     const totalComments = commentedPosts.length;
 
@@ -1083,11 +1112,15 @@ export async function checkLeadEngagementShared(leadUsername: string): Promise<{
 
     return {
       success: true,
+      lead_id: null,
+      actions_taken: [],
       liked_posts: likedPosts,
       commented_posts: commentedPosts,
       total_likes: totalLikes,
       total_comments: totalComments,
       engagement_score: engagementScore,
+      followed_back: interactions.followedBack,
+      message: `Engajamento detectado: ${totalLikes} curtidas, ${totalComments} comentários`,
       error_message: null
     };
 
@@ -1096,11 +1129,253 @@ export async function checkLeadEngagementShared(leadUsername: string): Promise<{
 
     return {
       success: false,
+      lead_id: null,
+      actions_taken: [],
       liked_posts: [],
       commented_posts: [],
       total_likes: 0,
       total_comments: 0,
       engagement_score: 0,
+      followed_back: false,
+      message: 'Erro ao verificar engajamento',
+      error_message: error.message
+    };
+  }
+}
+
+/**
+ * Verifica TODAS as notificações do Instagram e retorna interações detectadas
+ * Detecta: curtidas em reels/posts, comentários, novos seguidores
+ * Clica automaticamente em "Seguir de volta" para novos seguidores
+ */
+export async function checkAllNotifications(): Promise<{
+  success: boolean;
+  interactions: Array<{
+    username: string;
+    liked_posts: string[];
+    commented_posts: string[];
+    followed_back: boolean;
+  }>;
+  error_message: string | null;
+}> {
+  try {
+    console.log(`\n📊 [CHECK-ALL] Verificando todas as notificações do Instagram...`);
+
+    // Reutilizar página compartilhada ou criar nova
+    if (!sharedPage || sharedPage.isClosed()) {
+      console.log('📄 Criando nova página compartilhada...');
+      sharedPage = await createOfficialAuthenticatedPage();
+    } else {
+      console.log('♻️  Reutilizando página compartilhada existente');
+    }
+
+    const page = sharedPage;
+
+    // Navegar para página de Notificações
+    console.log(`🔔 Navegando para página de Notificações...`);
+    await page.goto('https://www.instagram.com/accounts/activity/', {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    });
+    await humanDelay();
+
+    // Scroll para carregar mais notificações
+    console.log(`📜 Carregando mais notificações...`);
+    await page.evaluate(() => {
+      // @ts-ignore
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Extrair TODAS as interações das notificações
+    console.log(`🔍 Extraindo interações...`);
+
+    const allInteractions = await page.evaluate(() => {
+      const userInteractions: Record<string, {
+        username: string;
+        likes: string[];
+        comments: string[];
+        isNewFollower: boolean;
+      }> = {};
+
+      // @ts-ignore
+      const notificationElements = Array.from(document.querySelectorAll('div, span'));
+
+      // @ts-ignore
+      for (const element of notificationElements) {
+        // @ts-ignore
+        const text = element.textContent || '';
+        const lowerText = text.toLowerCase();
+
+        // Tentar extrair username da notificação
+        // Padrão: "roamhub24 curtiu seu reel" ou "roamhub24 e benditocoworking curtiram..."
+        const usernameMatch = text.match(/^([a-zA-Z0-9._]+)/);
+        if (!usernameMatch) continue;
+
+        const username = usernameMatch[1];
+
+        // Inicializar registro do usuário se não existir
+        if (!userInteractions[username]) {
+          userInteractions[username] = {
+            username: username,
+            likes: [],
+            comments: [],
+            isNewFollower: false
+          };
+        }
+
+        // 1. CURTIDA EM REEL/POST (ignorar "curtiu seu comentário")
+        if ((lowerText.includes('curtiu seu reel') || lowerText.includes('curtiram seu reel') ||
+             lowerText.includes('curtiu sua publicação') || lowerText.includes('curtiram sua publicação') ||
+             lowerText.includes('liked your reel') || lowerText.includes('liked your post')) &&
+            !lowerText.includes('comentário') && !lowerText.includes('comment')) {
+
+          // @ts-ignore
+          const parent = element.closest('div');
+          if (parent) {
+            // @ts-ignore
+            const linkElement = parent.querySelector('a[href*="/reel/"], a[href*="/p/"]');
+            if (linkElement) {
+              // @ts-ignore
+              const href = linkElement.getAttribute('href') || linkElement.href;
+              if (href) {
+                const match = href.match(/\/(reel|p)\/([^\/\?]+)/);
+                if (match && match[2]) {
+                  const postId = match[2];
+                  if (!userInteractions[username].likes.includes(postId)) {
+                    userInteractions[username].likes.push(postId);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // 2. COMENTÁRIO
+        if ((lowerText.includes('comentou') || lowerText.includes('commented')) &&
+            !lowerText.includes('curtiu seu comentário') && !lowerText.includes('liked your comment')) {
+
+          // @ts-ignore
+          const parent = element.closest('div');
+          if (parent) {
+            // @ts-ignore
+            const linkElement = parent.querySelector('a[href*="/reel/"], a[href*="/p/"]');
+            if (linkElement) {
+              // @ts-ignore
+              const href = linkElement.getAttribute('href') || linkElement.href;
+              if (href) {
+                const match = href.match(/\/(reel|p)\/([^\/\?]+)/);
+                if (match && match[2]) {
+                  const postId = match[2];
+                  if (!userInteractions[username].comments.includes(postId)) {
+                    userInteractions[username].comments.push(postId);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // 3. NOVO SEGUIDOR
+        if (lowerText.includes('começou a seguir') || lowerText.includes('started following')) {
+          userInteractions[username].isNewFollower = true;
+        }
+      }
+
+      return Object.values(userInteractions);
+    });
+
+    console.log(`\n📊 Total de usuários com interações detectadas: ${allInteractions.length}`);
+
+    // Clicar em "Seguir de volta" para todos os novos seguidores
+    const processedInteractions: Array<{
+      username: string;
+      liked_posts: string[];
+      commented_posts: string[];
+      followed_back: boolean;
+    }> = [];
+
+    for (const interaction of allInteractions) {
+      const result = {
+        username: interaction.username,
+        liked_posts: interaction.likes,
+        commented_posts: interaction.comments,
+        followed_back: false
+      };
+
+      console.log(`\n👤 @${interaction.username}:`);
+      console.log(`   ❤️  Curtidas: ${interaction.likes.length}`);
+      console.log(`   💬 Comentários: ${interaction.comments.length}`);
+      console.log(`   👥 Novo seguidor: ${interaction.isNewFollower ? 'Sim' : 'Não'}`);
+
+      // Se é novo seguidor, clicar em "Seguir de volta"
+      if (interaction.isNewFollower) {
+        try {
+          console.log(`   🔄 Procurando botão "Seguir de volta"...`);
+
+          const followedBack = await page.evaluate((username) => {
+            // @ts-ignore
+            const allElements = Array.from(document.querySelectorAll('div, span, button'));
+
+            // @ts-ignore
+            for (const element of allElements) {
+              // @ts-ignore
+              const text = (element.textContent || '').toLowerCase();
+
+              if (text.includes(username.toLowerCase()) &&
+                  (text.includes('começou a seguir') || text.includes('started following'))) {
+
+                // @ts-ignore
+                const parent = element.closest('div');
+                if (parent) {
+                  // @ts-ignore
+                  const buttons = parent.querySelectorAll('button');
+                  // @ts-ignore
+                  for (const button of buttons) {
+                    // @ts-ignore
+                    const buttonText = (button.textContent || '').toLowerCase();
+                    if (buttonText.includes('seguir de volta') || buttonText.includes('follow back')) {
+                      // @ts-ignore
+                      button.click();
+                      return true;
+                    }
+                  }
+                }
+              }
+            }
+            return false;
+          }, interaction.username);
+
+          if (followedBack) {
+            console.log(`   ✅ Seguiu de volta!`);
+            result.followed_back = true;
+            await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+          } else {
+            console.log(`   ⚠️  Botão não encontrado`);
+          }
+        } catch (followError) {
+          console.log(`   ❌ Erro ao seguir: ${(followError as Error).message}`);
+        }
+      }
+
+      processedInteractions.push(result);
+    }
+
+    console.log(`\n✅ [CHECK-ALL] Verificação concluída!`);
+    console.log(`📊 Total de interações processadas: ${processedInteractions.length}`);
+
+    return {
+      success: true,
+      interactions: processedInteractions,
+      error_message: null
+    };
+
+  } catch (error: any) {
+    console.error(`❌ [CHECK-ALL] Erro ao verificar notificações:`, error.message);
+
+    return {
+      success: false,
+      interactions: [],
       error_message: error.message
     };
   }

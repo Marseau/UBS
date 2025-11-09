@@ -648,6 +648,139 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/instagram-scraper/scrape-input-users
+ * Scrape perfis diretamente de uma lista de usernames (sem buscar por hashtag)
+ *
+ * Body:
+ * {
+ *   "usernames": ["roamhub24", "clicachados.app", "benditocoworking"],
+ *   "target_segment": "coworking" (opcional)
+ * }
+ */
+router.post('/scrape-input-users', async (req: Request, res: Response) => {
+  const reqId = `INPUT_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  try {
+    const {
+      usernames,
+      target_segment
+    } = req.body;
+
+    if (!usernames || !Array.isArray(usernames) || usernames.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo "usernames" é obrigatório e deve ser um array não-vazio'
+      });
+    }
+
+    console.log(`\n🔍 [${reqId}] ========== SCRAPE-INPUT-USERS INICIADO ==========`);
+    console.log(`🔍 [${reqId}] ${usernames.length} usernames recebidos`);
+
+    const validatedProfiles: InstagramProfileData[] = [];
+    const errors: any[] = [];
+
+    // Scrapar cada username
+    for (const username of usernames) {
+      try {
+        console.log(`\n👤 [${reqId}] Scrapando @${username}...`);
+
+        const profileData = await scrapeInstagramProfile(username);
+
+        if (profileData) {
+          validatedProfiles.push(profileData);
+          console.log(`   ✅ Perfil @${username} scrapado com sucesso`);
+        } else {
+          console.log(`   ⚠️  Perfil @${username} retornou dados vazios`);
+          errors.push({ username, error: 'Dados vazios retornados' });
+        }
+
+      } catch (error: any) {
+        console.error(`   ❌ Erro ao scrapar @${username}:`, error.message);
+        errors.push({ username, error: error.message });
+      }
+    }
+
+    // Salvar no banco se houver perfis validados
+    if (validatedProfiles.length > 0) {
+      console.log(`\n💾 [${reqId}] Salvando ${validatedProfiles.length} perfis no banco...`);
+
+      for (const profile of validatedProfiles) {
+        try {
+          const { data: existing } = await supabase
+            .from('instagram_leads')
+            .select('id')
+            .eq('username', profile.username)
+            .single();
+
+          if (existing) {
+            console.log(`   ⚠️  @${profile.username} já existe - pulando`);
+            continue;
+          }
+
+          const { error: insertError } = await supabase
+            .from('instagram_leads')
+            .insert({
+              username: profile.username,
+              full_name: profile.full_name,
+              bio: profile.bio,
+              website: profile.website,
+              followers_count: profile.followers_count,
+              following_count: profile.following_count,
+              posts_count: profile.posts_count,
+              profile_pic_url: profile.profile_pic_url,
+              is_verified: profile.is_verified,
+              is_business_account: profile.is_business_account,
+              email: profile.email,
+              phone: profile.phone,
+              business_category: profile.business_category,
+              city: profile.city,
+              state: profile.state,
+              neighborhood: profile.neighborhood,
+              address: profile.address,
+              zip_code: profile.zip_code,
+              segment: target_segment || null,
+              source: 'engagement_notifications',
+              scraped_at: new Date().toISOString()
+            });
+
+          if (insertError) {
+            console.error(`   ❌ Erro ao salvar @${profile.username}:`, insertError.message);
+            errors.push({ username: profile.username, error: insertError.message });
+          } else {
+            console.log(`   ✅ @${profile.username} salvo no banco`);
+          }
+
+        } catch (dbError: any) {
+          console.error(`   ❌ Erro BD @${profile.username}:`, dbError.message);
+          errors.push({ username: profile.username, error: dbError.message });
+        }
+      }
+    }
+
+    console.log(`\n✅ [${reqId}] ========== SCRAPE-INPUT-USERS CONCLUÍDO ==========`);
+    console.log(`📊 [${reqId}] Resumo:`);
+    console.log(`   - Usernames recebidos: ${usernames.length}`);
+    console.log(`   - Perfis scrapados: ${validatedProfiles.length}`);
+    console.log(`   - Erros: ${errors.length}`);
+
+    return res.status(200).json({
+      success: true,
+      scraped_count: validatedProfiles.length,
+      total_requested: usernames.length,
+      profiles: validatedProfiles,
+      errors: errors.length > 0 ? errors : undefined
+    });
+
+  } catch (error: any) {
+    console.error(`❌ [${reqId}] Erro geral:`, error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao processar usernames',
+      error: error.message
+    });
+  }
+});
+
 console.log('🔍 [DEBUG] Instagram Scraper Routes - All routes registered, exporting router');
 
 export default router;

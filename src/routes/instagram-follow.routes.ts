@@ -15,53 +15,43 @@ const router = express.Router();
 /**
  * POST /api/instagram/check-engagement
  *
- * Verifica engajamento do lead em NOSSOS posts (curtidas e comentários)
- * Abre perfil @ubs.sistemas e verifica últimos 3 posts
- * Retorna JSON com lista de posts curtidos/comentados e score de engajamento
+ * Verifica notificações do Instagram e detecta interações
+ * 1. Detecta curtidas em reels/posts
+ * 2. Detecta comentários
+ * 3. Detecta novos seguidores → Clica em "Seguir de volta" automaticamente
+ *
+ * Retorna lista de usernames que interagiram para processar depois
  */
 router.post('/check-engagement', async (req: Request, res: Response) => {
   try {
-    const { lead_id, username } = req.body;
-
-    if (!lead_id || !username) {
-      return res.status(400).json({
-        error: 'Campos obrigatórios faltando',
-        required: ['lead_id', 'username']
-      });
-    }
-
-    console.log(`\n📊 Verificando engajamento de @${username}...`);
+    console.log(`\n📊 Verificando notificações do Instagram...`);
 
     // Garantir que está logado com conta oficial (@ubs.sistemas)
     await ensureCorrectAccount(OperationType.ENGAGEMENT);
 
     // Executar verificação usando PÁGINA COMPARTILHADA
-    const result = await InstagramAutomationRefactored.checkLeadEngagementShared(username);
+    const result = await InstagramAutomationRefactored.checkAllNotifications();
 
     if (!result.success) {
-      throw new Error(result.error_message || 'Erro ao verificar engajamento');
+      throw new Error(result.error_message || 'Erro ao verificar notificações');
     }
 
-    console.log(`   ✅ Verificação concluída - Score: ${result.engagement_score}/100`);
+    console.log(`   ✅ Verificação concluída`);
+    console.log(`   📋 Total de interações: ${result.interactions.length}`);
 
-    // Retornar dados para o workflow N8N decidir e persistir
+    // Retornar lista de usernames que interagiram
     return res.status(200).json({
       success: true,
-      lead_id,
-      username,
-      liked_posts: result.liked_posts,
-      commented_posts: result.commented_posts,
-      total_likes: result.total_likes,
-      total_comments: result.total_comments,
-      engagement_score: result.engagement_score,
+      total_interactions: result.interactions.length,
+      interactions: result.interactions,
       checked_at: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('❌ Erro ao verificar engajamento:', error);
+    console.error('❌ Erro ao verificar notificações:', error);
     return res.status(500).json({
       success: false,
-      error: 'Erro ao verificar engajamento',
+      error: 'Erro ao verificar notificações',
       message: error instanceof Error ? error.message : 'Erro desconhecido'
     });
   }
