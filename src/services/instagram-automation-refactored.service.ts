@@ -881,6 +881,232 @@ export async function checkFollowBackShared(username: string): Promise<{
 }
 
 /**
+ * Verifica engajamento do lead em NOSSOS posts (curtidas e comentários)
+ * Abre NOSSO perfil (@ubs.sistemas) e verifica últimos posts
+ * USANDO PÁGINA COMPARTILHADA (não cria browser isolado)
+ */
+export async function checkLeadEngagementShared(leadUsername: string): Promise<{
+  success: boolean;
+  liked_posts: string[];
+  commented_posts: string[];
+  total_likes: number;
+  total_comments: number;
+  engagement_score: number;
+  error_message: string | null;
+}> {
+  try {
+    console.log(`\n📊 [ENGAGEMENT] Verificando engajamento de @${leadUsername} em nossos posts...`);
+
+    // Reutilizar página compartilhada ou criar nova se necessário
+    if (!sharedPage || sharedPage.isClosed()) {
+      console.log('📄 Criando nova página compartilhada...');
+      sharedPage = await createOfficialAuthenticatedPage();
+    } else {
+      console.log('♻️  Reutilizando página compartilhada existente');
+    }
+
+    const page = sharedPage;
+
+    // Detectar nosso username atual (conta oficial logada)
+    const ourUsername = await page.evaluate(() => {
+      // @ts-ignore
+      // Procurar nosso username no HTML
+      // @ts-ignore
+      const links = Array.from(document.querySelectorAll('a[href*="/"]'));
+      // @ts-ignore
+      for (const link of links) {
+        // @ts-ignore
+        const href = (link as HTMLAnchorElement).href;
+        // @ts-ignore
+        const match = href.match(/instagram\.com\/([^\/\?]+)/);
+        if (match && match[1] && !match[1].includes('explore') && !match[1].includes('direct')) {
+          return match[1];
+        }
+      }
+      return 'ubs.sistemas'; // fallback
+    });
+
+    console.log(`👤 Nossa conta: @${ourUsername}`);
+
+    // 1. Navegar para NOSSO perfil
+    console.log(`🏠 Navegando para nosso perfil @${ourUsername}...`);
+    await page.goto(`https://www.instagram.com/${ourUsername}/`, {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    });
+    await humanDelay();
+
+    // 2. Coletar URLs dos últimos 3-5 posts
+    console.log(`📸 Coletando últimos posts...`);
+    const postUrls = await page.evaluate(() => {
+      // @ts-ignore
+      const links = Array.from(document.querySelectorAll('a[href*="/p/"]'));
+      const urls: string[] = [];
+      // @ts-ignore
+      for (const link of links) {
+        // @ts-ignore
+        const href = (link as HTMLAnchorElement).href;
+        if (href.includes('/p/') && !urls.includes(href)) {
+          urls.push(href);
+        }
+        if (urls.length >= 5) break; // Limitar a 5 posts
+      }
+      return urls;
+    });
+
+    console.log(`   ✅ ${postUrls.length} posts encontrados`);
+
+    if (postUrls.length === 0) {
+      console.log(`   ⚠️  Nenhum post encontrado no perfil`);
+      return {
+        success: true,
+        liked_posts: [],
+        commented_posts: [],
+        total_likes: 0,
+        total_comments: 0,
+        engagement_score: 0,
+        error_message: null
+      };
+    }
+
+    const likedPosts: string[] = [];
+    const commentedPosts: string[] = [];
+
+    // 3. Verificar cada post (curtidas e comentários)
+    for (let i = 0; i < Math.min(postUrls.length, 3); i++) {
+      const postUrl = postUrls[i];
+      if (!postUrl) continue;
+
+      const postId = postUrl.split('/p/')[1]?.split('/')[0] || `post_${i}`;
+
+      console.log(`\n📷 Verificando post ${i + 1}/3: ${postId}`);
+
+      try {
+        await page.goto(postUrl, { waitUntil: 'networkidle2', timeout: 20000 });
+        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+
+        // Verificar curtidas: clicar em contador de likes
+        try {
+          // Procurar link de curtidas ou contador de likes
+          const likesButton = await page.evaluateHandle(() => {
+            // @ts-ignore
+            const links = Array.from(document.querySelectorAll('a[href*="/liked_by/"]'));
+            if (links.length > 0) return links[0];
+
+            // @ts-ignore
+            const spans = Array.from(document.querySelectorAll('span'));
+            // @ts-ignore
+            for (const span of spans) {
+              // @ts-ignore
+              const text = (span.textContent || '').toLowerCase();
+              if (text.includes('curtida') || text.includes('like')) {
+                // @ts-ignore
+                const clickable = span.closest('a, button, div[role="button"]');
+                if (clickable) return clickable;
+              }
+            }
+            return null;
+          });
+
+          const likesElement = likesButton.asElement();
+          if (likesElement) {
+            await likesElement.click();
+            await page.waitForSelector('div[role="dialog"]', { timeout: 5000 });
+            await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+
+            // Procurar @leadUsername na lista de curtidas
+            const userLiked = await page.evaluate((username) => {
+              // @ts-ignore
+              const allText = document.body.innerText;
+              return allText.includes(`@${username}`) || allText.includes(username);
+            }, leadUsername);
+
+            if (userLiked) {
+              console.log(`   ❤️  @${leadUsername} CURTIU este post!`);
+              likedPosts.push(postId);
+            }
+
+            // Fechar modal
+            const closeButton = await page.$('button[aria-label*="Fechar"], button[aria-label*="Close"]');
+            if (closeButton) {
+              await closeButton.click();
+              await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 500));
+            } else {
+              await page.keyboard.press('Escape');
+              await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 500));
+            }
+          }
+        } catch (likeError) {
+          console.log(`   ⚠️  Erro ao verificar curtidas: ${(likeError as Error).message}`);
+        }
+
+        // Verificar comentários: scroll na seção de comentários
+        try {
+          const comments = await page.evaluate((username) => {
+            // @ts-ignore
+            const commentElements = Array.from(document.querySelectorAll('span, div'));
+            // @ts-ignore
+            for (const element of commentElements) {
+              // @ts-ignore
+              const text = element.textContent || '';
+              if (text.includes(`@${username}`) || text.includes(username)) {
+                return true;
+              }
+            }
+            return false;
+          }, leadUsername);
+
+          if (comments) {
+            console.log(`   💬 @${leadUsername} COMENTOU neste post!`);
+            commentedPosts.push(postId);
+          }
+        } catch (commentError) {
+          console.log(`   ⚠️  Erro ao verificar comentários: ${(commentError as Error).message}`);
+        }
+
+      } catch (postError) {
+        console.log(`   ❌ Erro ao processar post: ${(postError as Error).message}`);
+      }
+    }
+
+    // 4. Calcular engagement score
+    const totalLikes = likedPosts.length;
+    const totalComments = commentedPosts.length;
+
+    // Score: curtida = 20 pontos, comentário = 40 pontos (max 100)
+    const engagementScore = Math.min(100, (totalLikes * 20) + (totalComments * 40));
+
+    console.log(`\n📊 Resultado do engajamento:`);
+    console.log(`   ❤️  Curtidas: ${totalLikes}`);
+    console.log(`   💬 Comentários: ${totalComments}`);
+    console.log(`   📈 Score: ${engagementScore}/100`);
+
+    return {
+      success: true,
+      liked_posts: likedPosts,
+      commented_posts: commentedPosts,
+      total_likes: totalLikes,
+      total_comments: totalComments,
+      engagement_score: engagementScore,
+      error_message: null
+    };
+
+  } catch (error: any) {
+    console.error(`❌ Erro ao verificar engajamento de @${leadUsername}:`, error.message);
+
+    return {
+      success: false,
+      liked_posts: [],
+      commented_posts: [],
+      total_likes: 0,
+      total_comments: 0,
+      engagement_score: 0,
+      error_message: error.message
+    };
+  }
+}
+
+/**
  * Deixa de seguir um usuário
  * USANDO PÁGINA COMPARTILHADA (não cria browser isolado)
  */
