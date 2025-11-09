@@ -713,9 +713,17 @@ export async function scrapeInstagramTag(
           });
           await new Promise(resolve => setTimeout(resolve, 800));
 
-          // 3. Mover mouse até o centro do elemento (simulando humano)
-          const x = box.x + box.width / 2;
-          const y = box.y + box.height / 2;
+          // 3. RECALCULAR posição após scroll
+          const boxAfterScroll = await anchorHandle.boundingBox();
+          if (!boxAfterScroll) {
+            throw new Error('Elemento não visível após scroll');
+          }
+
+          console.log(`   📍 Posição após scroll: x=${boxAfterScroll.x}, y=${boxAfterScroll.y}`);
+
+          // 4. Mover mouse até o centro do elemento (simulando humano)
+          const x = boxAfterScroll.x + boxAfterScroll.width / 2;
+          const y = boxAfterScroll.y + boxAfterScroll.height / 2;
 
           console.log(`   👆 Movendo mouse para (${Math.round(x)}, ${Math.round(y)})...`);
 
@@ -729,14 +737,14 @@ export async function scrapeInstagramTag(
             await new Promise(resolve => setTimeout(resolve, 20));
           }
 
-          // 4. Pequena pausa antes do clique (comportamento humano)
+          // 5. Pequena pausa antes do clique (comportamento humano)
           await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 200));
 
-          // 5. Clicar com mouse real
+          // 6. Clicar com mouse real
           console.log(`   💥 Executando clique...`);
           await page.mouse.click(x, y, { delay: 100 });
 
-          // 6. Aguardar navegação E validar que post abriu
+          // 7. Aguardar navegação E validar que post abriu
           console.log(`   ⏳ Aguardando post abrir...`);
           await new Promise(resolve => setTimeout(resolve, 2000));
 
