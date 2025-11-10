@@ -9,6 +9,7 @@ import {
   OperationType
 } from '../services/instagram-official-session.service';
 import { generatePersonalizedDM } from '../services/instagram-dm-personalization.service';
+import { supabase } from '../config/supabase';
 
 const router = express.Router();
 
@@ -24,7 +25,12 @@ const router = express.Router();
  */
 router.post('/check-engagement', async (req: Request, res: Response) => {
   try {
+    const { since } = req.body; // ISO timestamp da última verificação
+
     console.log(`\n📊 Verificando notificações do Instagram...`);
+    if (since) {
+      console.log(`   🕐 Filtrando interações desde: ${since}`);
+    }
 
     // Garantir que está logado com conta oficial (@ubs.sistemas)
     await ensureCorrectAccount(OperationType.ENGAGEMENT);
@@ -37,13 +43,34 @@ router.post('/check-engagement', async (req: Request, res: Response) => {
     }
 
     console.log(`   ✅ Verificação concluída`);
-    console.log(`   📋 Total de interações: ${result.interactions.length}`);
+    console.log(`   📋 Total de interações encontradas: ${result.interactions.length}`);
+
+    // FILTRAR apenas as mais recentes que 'since' (se fornecido)
+    let filteredInteractions = result.interactions;
+
+    if (since) {
+      const sinceDate = new Date(since);
+      filteredInteractions = result.interactions.filter(interaction => {
+        // Se não tem data de notificação, incluir (assume que é recente)
+        if (!interaction.notification_date) return true;
+
+        const notifDate = new Date(interaction.notification_date);
+        return notifDate > sinceDate;
+      });
+
+      const filteredOut = result.interactions.length - filteredInteractions.length;
+      console.log(`   ✅ Novas interações (desde ${since}): ${filteredInteractions.length}`);
+      console.log(`   ⏭️  Já processadas anteriormente: ${filteredOut}`);
+    }
 
     // Retornar lista de usernames que interagiram
     return res.status(200).json({
       success: true,
-      total_interactions: result.interactions.length,
-      interactions: result.interactions,
+      total_interactions: filteredInteractions.length,
+      interactions: filteredInteractions,
+      total_found: result.interactions.length,
+      filtered_out: result.interactions.length - filteredInteractions.length,
+      since: since || null,
       checked_at: new Date().toISOString()
     });
 
@@ -466,7 +493,32 @@ router.post('/send-dm', async (req: Request, res: Response) => {
 
     console.log(`   ✅ DM enviado com sucesso!`);
 
-    // 3. Retornar dados para o workflow N8N persistir em Supabase
+    // 3. Persistir no banco de dados
+    console.log('💾 Salvando registro no banco...');
+    const { data: dmRecord, error: dbError } = await supabase
+      .from('instagram_dm_outreach')
+      .insert({
+        lead_id,
+        username,
+        full_name: full_name || null,
+        business_category: business_category || null,
+        message_text: personalizedDM.message,
+        message_generated_by: personalizedDM.model,
+        generation_prompt: personalizedDM.prompt_used,
+        sent_at: dmResult.sent_at,
+        delivery_status: 'sent'
+      })
+      .select()
+      .single();
+
+    if (dbError) {
+      console.error('⚠️  Erro ao salvar no banco (DM foi enviado!):', dbError);
+      // Não falhar a request se DM foi enviado com sucesso
+    } else {
+      console.log(`   ✅ Registro salvo no banco: ${dmRecord.id}`);
+    }
+
+    // 4. Retornar sucesso
     return res.status(200).json({
       success: true,
       lead_id,
@@ -476,7 +528,8 @@ router.post('/send-dm', async (req: Request, res: Response) => {
       generation_prompt: personalizedDM.prompt_used,
       tokens_used: personalizedDM.tokens_used,
       sent_at: dmResult.sent_at,
-      delivery_status: 'sent'
+      delivery_status: 'sent',
+      dm_record_id: dmRecord?.id || null
     });
 
   } catch (error) {
@@ -514,6 +567,46 @@ router.post('/close-browser', async (_req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: 'Erro ao fechar browser',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+/**
+ * POST /api/instagram/inspect-profile-html
+ *
+ * DEBUG: Extrai HTML de um perfil usando sessão autenticada
+ * Para diagnosticar estrutura de botões
+ */
+router.post('/inspect-profile-html', async (req: Request, res: Response) => {
+  try {
+    const { username } = req.body;
+
+    if (!username) {
+      return res.status(400).json({
+        error: 'Username obrigatório'
+      });
+    }
+
+    console.log(`\n🔍 [DEBUG] Inspecionando HTML do perfil @${username}...`);
+
+    // Garantir que está logado com conta oficial
+    await ensureCorrectAccount(OperationType.ENGAGEMENT);
+
+    // Usar função de inspeção do serviço refatorado
+    const htmlInfo = await InstagramAutomationRefactored.inspectProfileHTML(username);
+
+    return res.status(200).json({
+      success: true,
+      username,
+      ...htmlInfo
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao inspecionar HTML:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao inspecionar HTML',
       message: error instanceof Error ? error.message : 'Erro desconhecido'
     });
   }

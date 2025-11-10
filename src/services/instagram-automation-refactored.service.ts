@@ -643,48 +643,57 @@ export async function sendDirectMessageShared(username: string, message: string)
     await navigateToProfile(page, username);
     await customDelay(2000, 4000);
 
-    // Procurar botão "Mensagem" ou "Message"
-    console.log('🔍 Procurando botão de mensagem...');
+    // Procurar e clicar no botão com role="button" e tabindex="0"
+    console.log('🔍 Procurando botão "Enviar mensagem" (role=button)...');
 
-    const messageButtonClicked = await page.evaluate(() => {
-      // @ts-ignore
-      const buttons = Array.from(document.querySelectorAll('button'));
+    const buttonClicked = await page.evaluate(() => {
+      // @ts-ignore - Procurar div[role="button"][tabindex="0"] com texto relacionado a mensagem
+      const buttons = Array.from(document.querySelectorAll('div[role="button"][tabindex="0"]'));
+
+      console.log(`[DM-BUTTON] Total de div[role=button][tabindex=0] encontrados: ${buttons.length}`);
 
       // @ts-ignore
       for (const button of buttons) {
         // @ts-ignore
-        const text = (button.textContent || '').trim();
+        const text = (button.textContent || '').toLowerCase().trim();
+        // @ts-ignore
+        const ariaLabel = (button.getAttribute('aria-label') || '').toLowerCase();
 
-        // Procurar botão "Mensagem" ou "Message"
-        if (text === 'Mensagem' || text === 'Message' || text.includes('Enviar mensagem')) {
-          console.log(`[DM-BUTTON] Botão encontrado: "${text}"`);
+        console.log(`[DM-BUTTON] Verificando: text="${text.substring(0, 30)}", aria-label="${ariaLabel}"`);
+
+        // Procurar por "enviar mensagem", "message", etc
+        if (text.includes('enviar mensagem') || text.includes('send message') ||
+            text.includes('mensagem') || text.includes('message') ||
+            ariaLabel.includes('message') || ariaLabel.includes('mensagem')) {
+          console.log(`[DM-BUTTON] ✅ Botão encontrado! Clicando...`);
           // @ts-ignore
           button.click();
           return true;
         }
       }
 
-      console.log('[DM-BUTTON] Botão de mensagem não encontrado');
+      console.log('[DM-BUTTON] ❌ Nenhum botão de mensagem encontrado');
       return false;
     });
 
-    if (!messageButtonClicked) {
-      throw new Error('Botão de mensagem não encontrado no perfil');
+    if (!buttonClicked) {
+      throw new Error(`Botão de mensagem não encontrado no perfil @${username}`);
     }
 
-    // Aguardar modal de DM abrir
+    console.log('✅ Botão clicado, aguardando modal/popup abrir...');
     await customDelay(2000, 3000);
-    console.log('📝 Modal de mensagem aberto');
 
     // Procurar textarea de mensagem
     console.log('🔍 Procurando campo de texto...');
 
-    // Tentar múltiplos seletores (Instagram muda frequentemente)
+    // Seletores baseados na estrutura real do Instagram (aria-placeholder="Mensagem...")
     const textareaSelectors = [
+      'div[contenteditable="true"][role="textbox"][aria-placeholder*="Mensagem"]',
+      'div[contenteditable="true"][role="textbox"][aria-placeholder*="Message"]',
+      'div[contenteditable="true"][role="textbox"]',
       'textarea[placeholder*="Mensagem"]',
       'textarea[placeholder*="Message"]',
       'div[contenteditable="true"]',
-      'textarea',
       '[role="textbox"]'
     ];
 
@@ -703,8 +712,13 @@ export async function sendDirectMessageShared(username: string, message: string)
         await page.keyboard.type(message, { delay: randomInt(50, 150) });
         await customDelay(1000, 2000);
 
+        // Enviar mensagem pressionando Enter (mais confiável que clicar no botão)
+        console.log('📤 Enviando mensagem com Enter...');
+        await page.keyboard.press('Enter');
+        await customDelay(1000, 2000);
+
         textareaFound = true;
-        console.log('✅ Mensagem digitada com sucesso');
+        console.log('✅ Mensagem digitada e enviada com sucesso');
         break;
 
       } catch (err) {
@@ -717,37 +731,7 @@ export async function sendDirectMessageShared(username: string, message: string)
       throw new Error('Campo de texto não encontrado no modal de DM');
     }
 
-    // Procurar e clicar no botão "Enviar"
-    console.log('🔍 Procurando botão Enviar...');
-
-    const sendButtonClicked = await page.evaluate(() => {
-      // @ts-ignore
-      const buttons = Array.from(document.querySelectorAll('button'));
-
-      // @ts-ignore
-      for (const button of buttons) {
-        // @ts-ignore
-        const text = (button.textContent || '').trim();
-
-        // Procurar botão "Enviar" ou "Send"
-        if (text === 'Enviar' || text === 'Send') {
-          console.log(`[SEND-BUTTON] Botão encontrado: "${text}"`);
-          // @ts-ignore
-          button.click();
-          return true;
-        }
-      }
-
-      console.log('[SEND-BUTTON] Botão Enviar não encontrado');
-      return false;
-    });
-
-    if (!sendButtonClicked) {
-      throw new Error('Botão Enviar não encontrado');
-    }
-
-    // Aguardar envio
-    await customDelay(2000, 3000);
+    // Mensagem já foi enviada com Enter acima
     console.log('✅ DM enviado com sucesso!');
 
     return {
@@ -1152,9 +1136,11 @@ export async function checkAllNotifications(): Promise<{
   success: boolean;
   interactions: Array<{
     username: string;
-    liked_posts: string[];
-    commented_posts: string[];
+    liked: boolean;
+    commented: boolean;
+    is_new_follower: boolean;
     followed_back: boolean;
+    notification_date: string | null;
   }>;
   error_message: string | null;
 }> {
@@ -1190,95 +1176,218 @@ export async function checkAllNotifications(): Promise<{
     // Extrair TODAS as interações das notificações
     console.log(`🔍 Extraindo interações...`);
 
+    // DEBUG: Extrair estrutura de notificações
+    const debugInfo = await page.evaluate(() => {
+      const samples: any[] = [];
+
+      // Pegar primeiras 10 notificações como sample (buscar curtidas em reel/post)
+      // @ts-ignore
+      const allSpans = Array.from(document.querySelectorAll('span'));
+      let count = 0;
+
+      // @ts-ignore
+      for (const span of allSpans) {
+        // @ts-ignore
+        const text = span.textContent || '';
+
+        // Buscar especificamente curtidas em reel/post (não comentário)
+        const hasReelLike = (text.includes('curtiu seu reel') || text.includes('curtiram seu reel') ||
+                            text.includes('curtiu sua publicação') || text.includes('curtiram sua publicação')) &&
+                            !text.includes('comentário');
+
+        const hasComment = text.includes('comentou') && !text.includes('curtiu seu comentário');
+        const hasFollow = text.includes('começou a seguir');
+
+        if (hasReelLike || hasComment || hasFollow) {
+          if (count >= 10) break;
+
+          // @ts-ignore
+          const parent = span.closest('div');
+          // @ts-ignore
+          const grandParent = parent ? parent.closest('div') : null;
+          // @ts-ignore
+          const greatGrandParent = grandParent ? grandParent.closest('div') : null;
+          // @ts-ignore
+          const allLinksGrand = grandParent ? Array.from(grandParent.querySelectorAll('a')) : [];
+          // @ts-ignore
+          const allLinksGreat = greatGrandParent ? Array.from(greatGrandParent.querySelectorAll('a')) : [];
+
+          samples.push({
+            type: hasReelLike ? 'REEL_LIKE' : (hasComment ? 'COMMENT' : 'FOLLOW'),
+            text: text.substring(0, 150),
+            // @ts-ignore
+            linksFromGrandParent: allLinksGrand.map(a => ({ href: a.getAttribute('href'), role: a.getAttribute('role') })),
+            // @ts-ignore
+            linksFromGreatGrandParent: allLinksGreat.map(a => ({ href: a.getAttribute('href'), role: a.getAttribute('role') })),
+            // @ts-ignore
+            htmlSnippet: greatGrandParent ? greatGrandParent.outerHTML.substring(0, 3000) : 'no great-grandparent'
+          });
+
+          count++;
+        }
+      }
+
+      return samples;
+    });
+
+    console.log(`\n🔍 DEBUG - Samples de notificações:`);
+    console.log(JSON.stringify(debugInfo, null, 2));
+
     const allInteractions = await page.evaluate(() => {
       const userInteractions: Record<string, {
         username: string;
-        likes: string[];
-        comments: string[];
+        liked: boolean;
+        commented: boolean;
         isNewFollower: boolean;
+        notificationTime: string | null;
       }> = {};
 
+      // Função para validar se é um username válido do Instagram
+      const isValidUsername = (username: string): boolean => {
+        if (!username || username.length < 3 || username.length > 30) return false;
+
+        // Filtrar palavras reservadas/UI do Instagram
+        const reservedWords = [
+          'hoje', 'ontem', 'esta', 'semana', 'mes', 'ano',
+          'seguindo', 'seguir', 'seguido', 'verificado',
+          'sugest', 'meta', 'instagram', 'pesquisa', 'explorar',
+          'reels', 'mensagens', 'notifica', 'novo', 'criar',
+          'painel', 'perfil', 'configura', 'mais', 'tamb',
+          'sobre', 'ajuda', 'imprensa', 'api', 'carreiras',
+          'privacidade', 'termos', 'localiza', 'idioma', 'ver'
+        ];
+
+        const lowerUsername = username.toLowerCase();
+        if (reservedWords.includes(lowerUsername)) return false;
+        if (/^\d+$/.test(username)) return false;
+        if (!/^[a-zA-Z0-9._]+$/.test(username)) return false;
+
+        return true;
+      };
+
+      // Função para converter tempo relativo em timestamp ISO
+      const parseRelativeTime = (timeText: string): string | null => {
+        const now = new Date();
+
+        // Padrões: "22 h", "1 d", "2 d", "3 sem", "1 mes"
+        const hourMatch = timeText.match(/(\d+)\s*h/);
+        const dayMatch = timeText.match(/(\d+)\s*d/);
+        const weekMatch = timeText.match(/(\d+)\s*sem/);
+        const monthMatch = timeText.match(/(\d+)\s*mes/);
+
+        if (hourMatch && hourMatch[1]) {
+          const hours = parseInt(hourMatch[1], 10);
+          now.setHours(now.getHours() - hours);
+          return now.toISOString();
+        }
+
+        if (dayMatch && dayMatch[1]) {
+          const days = parseInt(dayMatch[1], 10);
+          now.setDate(now.getDate() - days);
+          return now.toISOString();
+        }
+
+        if (weekMatch && weekMatch[1]) {
+          const weeks = parseInt(weekMatch[1], 10);
+          now.setDate(now.getDate() - (weeks * 7));
+          return now.toISOString();
+        }
+
+        if (monthMatch && monthMatch[1]) {
+          const months = parseInt(monthMatch[1], 10);
+          now.setMonth(now.getMonth() - months);
+          return now.toISOString();
+        }
+
+        return null;
+      };
+
+      // Buscar todos os spans com texto de notificação
       // @ts-ignore
-      const notificationElements = Array.from(document.querySelectorAll('div, span'));
+      const allSpans = Array.from(document.querySelectorAll('span'));
 
       // @ts-ignore
-      for (const element of notificationElements) {
+      for (const span of allSpans) {
         // @ts-ignore
-        const text = element.textContent || '';
-        const lowerText = text.toLowerCase();
+        const text = span.textContent || '';
 
-        // Tentar extrair username da notificação
-        // Padrão: "roamhub24 curtiu seu reel" ou "roamhub24 e benditocoworking curtiram..."
-        const usernameMatch = text.match(/^([a-zA-Z0-9._]+)/);
-        if (!usernameMatch) continue;
+        // 1. CURTIDA EM REEL/POST (NÃO "curtiu seu comentário")
+        const hasReelLike = (text.includes('curtiu seu reel') || text.includes('curtiram seu reel') ||
+                            text.includes('curtiu sua publicação') || text.includes('curtiram sua publicação')) &&
+                            !text.includes('comentário');
 
-        const username = usernameMatch[1];
-
-        // Inicializar registro do usuário se não existir
-        if (!userInteractions[username]) {
-          userInteractions[username] = {
-            username: username,
-            likes: [],
-            comments: [],
-            isNewFollower: false
-          };
-        }
-
-        // 1. CURTIDA EM REEL/POST (ignorar "curtiu seu comentário")
-        if ((lowerText.includes('curtiu seu reel') || lowerText.includes('curtiram seu reel') ||
-             lowerText.includes('curtiu sua publicação') || lowerText.includes('curtiram sua publicação') ||
-             lowerText.includes('liked your reel') || lowerText.includes('liked your post')) &&
-            !lowerText.includes('comentário') && !lowerText.includes('comment')) {
-
-          // @ts-ignore
-          const parent = element.closest('div');
-          if (parent) {
-            // @ts-ignore
-            const linkElement = parent.querySelector('a[href*="/reel/"], a[href*="/p/"]');
-            if (linkElement) {
-              // @ts-ignore
-              const href = linkElement.getAttribute('href') || linkElement.href;
-              if (href) {
-                const match = href.match(/\/(reel|p)\/([^\/\?]+)/);
-                if (match && match[2]) {
-                  const postId = match[2];
-                  if (!userInteractions[username].likes.includes(postId)) {
-                    userInteractions[username].likes.push(postId);
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        // 2. COMENTÁRIO
-        if ((lowerText.includes('comentou') || lowerText.includes('commented')) &&
-            !lowerText.includes('curtiu seu comentário') && !lowerText.includes('liked your comment')) {
-
-          // @ts-ignore
-          const parent = element.closest('div');
-          if (parent) {
-            // @ts-ignore
-            const linkElement = parent.querySelector('a[href*="/reel/"], a[href*="/p/"]');
-            if (linkElement) {
-              // @ts-ignore
-              const href = linkElement.getAttribute('href') || linkElement.href;
-              if (href) {
-                const match = href.match(/\/(reel|p)\/([^\/\?]+)/);
-                if (match && match[2]) {
-                  const postId = match[2];
-                  if (!userInteractions[username].comments.includes(postId)) {
-                    userInteractions[username].comments.push(postId);
-                  }
-                }
-              }
-            }
-          }
-        }
+        // 2. COMENTÁRIO (NÃO "curtiu seu comentário")
+        const hasComment = text.includes('comentou') && !text.includes('curtiu seu comentário');
 
         // 3. NOVO SEGUIDOR
-        if (lowerText.includes('começou a seguir') || lowerText.includes('started following')) {
-          userInteractions[username].isNewFollower = true;
+        const hasFollow = text.includes('começou a seguir');
+
+        if (!hasReelLike && !hasComment && !hasFollow) continue;
+
+        // Buscar todos os links de perfil dentro do container pai
+        // @ts-ignore
+        const parent = span.closest('div');
+        if (!parent) continue;
+
+        // Extrair timestamp da notificação (ex: "22 h", "1 d")
+        // @ts-ignore
+        let notificationTimestamp: string | null = null;
+        // @ts-ignore
+        const timeAbbr = parent.querySelector('abbr');
+        if (timeAbbr) {
+          // @ts-ignore
+          const timeText = timeAbbr.textContent || '';
+          notificationTimestamp = parseRelativeTime(timeText);
+        }
+
+        // @ts-ignore
+        const profileLinks = Array.from(parent.querySelectorAll('a[href^="/"]'));
+
+        // @ts-ignore
+        for (const link of profileLinks) {
+          // @ts-ignore
+          const href = link.getAttribute('href') || '';
+          const usernameMatch = href.match(/^\/([a-zA-Z0-9._]+)\/?$/);
+
+          if (!usernameMatch) continue;
+          const username = usernameMatch[1];
+
+          if (!isValidUsername(username)) continue;
+
+          // Inicializar registro do usuário
+          if (!userInteractions[username]) {
+            userInteractions[username] = {
+              username: username,
+              liked: false,
+              commented: false,
+              isNewFollower: false,
+              notificationTime: notificationTimestamp
+            };
+          }
+
+          // Marcar tipo de interação (mantém o timestamp mais recente)
+          if (hasReelLike) {
+            userInteractions[username].liked = true;
+            // Atualizar timestamp se for mais recente
+            if (notificationTimestamp && (!userInteractions[username].notificationTime ||
+                notificationTimestamp > userInteractions[username].notificationTime)) {
+              userInteractions[username].notificationTime = notificationTimestamp;
+            }
+          }
+          if (hasComment) {
+            userInteractions[username].commented = true;
+            if (notificationTimestamp && (!userInteractions[username].notificationTime ||
+                notificationTimestamp > userInteractions[username].notificationTime)) {
+              userInteractions[username].notificationTime = notificationTimestamp;
+            }
+          }
+          if (hasFollow) {
+            userInteractions[username].isNewFollower = true;
+            if (notificationTimestamp && (!userInteractions[username].notificationTime ||
+                notificationTimestamp > userInteractions[username].notificationTime)) {
+              userInteractions[username].notificationTime = notificationTimestamp;
+            }
+          }
         }
       }
 
@@ -1287,26 +1396,39 @@ export async function checkAllNotifications(): Promise<{
 
     console.log(`\n📊 Total de usuários com interações detectadas: ${allInteractions.length}`);
 
+    // Debug: Mostrar quantos de cada tipo
+    const likedCount = allInteractions.filter(i => i.liked).length;
+    const commentedCount = allInteractions.filter(i => i.commented).length;
+    const followersCount = allInteractions.filter(i => i.isNewFollower).length;
+    console.log(`   ❤️  Com curtidas: ${likedCount}`);
+    console.log(`   💬 Com comentários: ${commentedCount}`);
+    console.log(`   👥 Novos seguidores: ${followersCount}`);
+
     // Clicar em "Seguir de volta" para todos os novos seguidores
     const processedInteractions: Array<{
       username: string;
-      liked_posts: string[];
-      commented_posts: string[];
+      liked: boolean;
+      commented: boolean;
+      is_new_follower: boolean;
       followed_back: boolean;
+      notification_date: string | null;
     }> = [];
 
     for (const interaction of allInteractions) {
       const result = {
         username: interaction.username,
-        liked_posts: interaction.likes,
-        commented_posts: interaction.comments,
-        followed_back: false
+        liked: interaction.liked,
+        commented: interaction.commented,
+        is_new_follower: interaction.isNewFollower,
+        followed_back: false,
+        notification_date: interaction.notificationTime
       };
 
       console.log(`\n👤 @${interaction.username}:`);
-      console.log(`   ❤️  Curtidas: ${interaction.likes.length}`);
-      console.log(`   💬 Comentários: ${interaction.comments.length}`);
+      console.log(`   ❤️  Curtiu post/reel: ${interaction.liked ? 'Sim' : 'Não'}`);
+      console.log(`   💬 Comentou: ${interaction.commented ? 'Sim' : 'Não'}`);
       console.log(`   👥 Novo seguidor: ${interaction.isNewFollower ? 'Sim' : 'Não'}`);
+      console.log(`   📅 Data notificação: ${interaction.notificationTime || 'N/A'}`);
 
       // Se é novo seguidor, clicar em "Seguir de volta"
       if (interaction.isNewFollower) {
@@ -1315,26 +1437,39 @@ export async function checkAllNotifications(): Promise<{
 
           const followedBack = await page.evaluate((username) => {
             // @ts-ignore
-            const allElements = Array.from(document.querySelectorAll('div, span, button'));
+            const allSpans = Array.from(document.querySelectorAll('span'));
 
             // @ts-ignore
-            for (const element of allElements) {
+            for (const span of allSpans) {
               // @ts-ignore
-              const text = (element.textContent || '').toLowerCase();
+              const text = (span.textContent || '').toLowerCase();
 
               if (text.includes(username.toLowerCase()) &&
-                  (text.includes('começou a seguir') || text.includes('started following'))) {
+                  text.includes('começou a seguir')) {
+
+                // Procurar botão "Seguir de volta" próximo ao texto
+                // @ts-ignore
+                const container = span.closest('div');
+                if (!container) continue;
+
+                // Buscar em múltiplos níveis
+                // @ts-ignore
+                const parent = container.parentElement;
+                // @ts-ignore
+                const grandParent = parent ? parent.parentElement : null;
 
                 // @ts-ignore
-                const parent = element.closest('div');
-                if (parent) {
+                const containers = [container, parent, grandParent].filter(c => c);
+
+                // @ts-ignore
+                for (const c of containers) {
                   // @ts-ignore
-                  const buttons = parent.querySelectorAll('button');
+                  const buttons = c.querySelectorAll('button');
                   // @ts-ignore
                   for (const button of buttons) {
                     // @ts-ignore
                     const buttonText = (button.textContent || '').toLowerCase();
-                    if (buttonText.includes('seguir de volta') || buttonText.includes('follow back')) {
+                    if (buttonText.includes('seguir de volta') || buttonText.includes('seguir')) {
                       // @ts-ignore
                       button.click();
                       return true;
@@ -1362,16 +1497,47 @@ export async function checkAllNotifications(): Promise<{
     }
 
     console.log(`\n✅ [CHECK-ALL] Verificação concluída!`);
-    console.log(`📊 Total de interações processadas: ${processedInteractions.length}`);
+    console.log(`📊 Total de interações brutas: ${processedInteractions.length}`);
+
+    // Filtrar apenas interações válidas (com curtida, comentário, novo seguidor ou follow_back)
+    const validInteractions = processedInteractions.filter(i =>
+      i.liked ||
+      i.commented ||
+      i.is_new_follower ||
+      i.followed_back
+    );
+
+    console.log(`✅ Interações válidas (após filtro): ${validInteractions.length}`);
+
+    // Fechar página de notificações para liberar recursos
+    try {
+      if (sharedPage && !sharedPage.isClosed()) {
+        await sharedPage.close();
+        sharedPage = null;
+        console.log(`🚪 Página de notificações fechada`);
+      }
+    } catch (closeError) {
+      console.log(`⚠️  Erro ao fechar página: ${(closeError as Error).message}`);
+    }
 
     return {
       success: true,
-      interactions: processedInteractions,
+      interactions: validInteractions,
       error_message: null
     };
 
   } catch (error: any) {
     console.error(`❌ [CHECK-ALL] Erro ao verificar notificações:`, error.message);
+
+    // Tentar fechar página mesmo em caso de erro
+    try {
+      if (sharedPage && !sharedPage.isClosed()) {
+        await sharedPage.close();
+        sharedPage = null;
+      }
+    } catch (closeError) {
+      // Ignorar erro ao fechar
+    }
 
     return {
       success: false,
@@ -1687,5 +1853,106 @@ async function executeBatch(
     // NÃO fechar página - mantém sessão oficial aberta para próximas chamadas
     // O browser compartilhado é gerenciado pelo instagram-official-session.service
     console.log(`\n✅ Batch finalizado - sessão oficial mantida aberta`);
+  }
+}
+
+/**
+ * DEBUG: Inspeciona HTML de um perfil para diagnóstico de estrutura
+ * USANDO PÁGINA COMPARTILHADA autenticada
+ */
+export async function inspectProfileHTML(username: string): Promise<{
+  buttons: Array<{ text: string; ariaLabel: string | null; classes: string; innerHTML: string }>;
+  messageElements: Array<{ tag: string; text: string; ariaLabel: string | null; href: string; classes: string }>;
+}> {
+  try {
+    console.log(`\n🔍 [DEBUG] Inspecionando HTML de @${username}...`);
+
+    // Reutilizar página compartilhada ou criar nova
+    if (!sharedPage || sharedPage.isClosed()) {
+      console.log('📄 Criando nova página compartilhada...');
+      sharedPage = await createOfficialAuthenticatedPage();
+    } else {
+      console.log('♻️  Reutilizando página compartilhada existente');
+    }
+
+    const page = sharedPage;
+
+    // Navegar para perfil
+    await navigateToProfile(page, username);
+    await customDelay(2000, 4000);
+
+    console.log('📋 Extraindo estrutura de botões...');
+
+    // Extrair informações de todos os botões
+    const buttonsInfo = await page.evaluate(() => {
+      // @ts-ignore
+      const buttons = Array.from(document.querySelectorAll('button'));
+
+      // @ts-ignore
+      return buttons.map(btn => {
+        // @ts-ignore
+        const text = (btn.textContent || '').trim();
+        // @ts-ignore
+        const ariaLabel = btn.getAttribute('aria-label');
+        // @ts-ignore
+        const classes = btn.className;
+        // @ts-ignore
+        const innerHTML = btn.innerHTML.substring(0, 200);
+
+        return { text, ariaLabel, classes, innerHTML };
+      }).filter(btn => btn.text.length > 0 || btn.ariaLabel);
+    });
+
+    console.log(`   Total de botões: ${buttonsInfo.length}`);
+
+    // Procurar elementos com "message" ou "mensagem"
+    console.log('🔍 Procurando elementos de mensagem...');
+
+    const messageElements = await page.evaluate(() => {
+      // @ts-ignore
+      const clickable = Array.from(document.querySelectorAll('a, button, div[role="button"], span[role="button"]'));
+      const matches: Array<{ tag: string; text: string; ariaLabel: string | null; href: string; classes: string }> = [];
+
+      // @ts-ignore
+      for (const el of clickable) {
+        // @ts-ignore
+        const text = (el.textContent || '').trim();
+        // @ts-ignore
+        const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+        // @ts-ignore
+        const href = el.getAttribute('href') || '';
+
+        if (text.toLowerCase().includes('message') || text.toLowerCase().includes('mensagem') ||
+            ariaLabel.includes('message') || ariaLabel.includes('mensagem') ||
+            href.includes('direct')) {
+          matches.push({
+            // @ts-ignore
+            tag: el.tagName,
+            text: text.substring(0, 100),
+            // @ts-ignore
+            ariaLabel: el.getAttribute('aria-label'),
+            href: href,
+            // @ts-ignore
+            classes: el.className
+          });
+        }
+
+        if (matches.length >= 30) break; // Limitar a 30 matches
+      }
+
+      return matches;
+    });
+
+    console.log(`   Elementos de mensagem: ${messageElements.length}`);
+
+    return {
+      buttons: buttonsInfo,
+      messageElements
+    };
+
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
+    console.error(`❌ Erro ao inspecionar HTML de @${username}:`, errorMsg);
+    throw error;
   }
 }

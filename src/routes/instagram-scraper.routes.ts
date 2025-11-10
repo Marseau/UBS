@@ -663,7 +663,8 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
   try {
     const {
       usernames,
-      target_segment
+      target_segment,
+      engagement_data // Array com dados de engajamento por username
     } = req.body;
 
     if (!usernames || !Array.isArray(usernames) || usernames.length === 0) {
@@ -673,87 +674,196 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
       });
     }
 
+    // Criar mapa de engajamento para fácil acesso
+    const engagementMap = new Map();
+    if (engagement_data && Array.isArray(engagement_data)) {
+      engagement_data.forEach((item: any) => {
+        engagementMap.set(item.username, item);
+      });
+    }
+
     console.log(`\n🔍 [${reqId}] ========== SCRAPE-INPUT-USERS INICIADO ==========`);
     console.log(`🔍 [${reqId}] ${usernames.length} usernames recebidos`);
+    console.log(`🔍 [${reqId}] Dados de engajamento: ${engagement_data ? 'SIM' : 'NÃO'}`);
 
     const validatedProfiles: InstagramProfileData[] = [];
     const errors: any[] = [];
 
-    // Scrapar cada username
-    for (const username of usernames) {
-      try {
-        console.log(`\n👤 [${reqId}] Scrapando @${username}...`);
+    // Se temos engagement_data, NÃO fazer scraping - apenas atualizar banco
+    const hasEngagementData = engagement_data && Array.isArray(engagement_data) && engagement_data.length > 0;
 
-        const profileData = await scrapeInstagramProfile(username);
+    if (!hasEngagementData) {
+      // MODO NORMAL: Scrapar cada username usando scrapeInstagramUserSearch
+      console.log(`📊 [${reqId}] Modo: SCRAPING COMPLETO`);
 
-        if (profileData) {
-          validatedProfiles.push(profileData);
-          console.log(`   ✅ Perfil @${username} scrapado com sucesso`);
-        } else {
-          console.log(`   ⚠️  Perfil @${username} retornou dados vazios`);
-          errors.push({ username, error: 'Dados vazios retornados' });
+      for (const username of usernames) {
+        try {
+          console.log(`\n👤 [${reqId}] Scrapando @${username}...`);
+
+          // Usar scrapeInstagramUserSearch com username como termo de busca
+          // skipValidations = true para perfis de engajamento (sem filtro de idioma/activity)
+          const profiles = await scrapeInstagramUserSearch(username, 1, true);
+
+          if (profiles && profiles.length > 0) {
+            const profileData = profiles[0];
+            if (profileData) {
+              validatedProfiles.push(profileData);
+              console.log(`   ✅ Perfil @${username} scrapado com sucesso`);
+              console.log(`   🏷️  Hashtags bio: ${profileData.hashtags_bio?.length || 0}`);
+              console.log(`   🏷️  Hashtags posts: ${profileData.hashtags_posts?.length || 0}`);
+            } else {
+              console.log(`   ⚠️  Perfil @${username} retornou dados vazios`);
+              errors.push({ username, error: 'Dados vazios retornados' });
+            }
+          } else {
+            console.log(`   ⚠️  Perfil @${username} não encontrado`);
+            errors.push({ username, error: 'Perfil não encontrado' });
+          }
+
+        } catch (error: any) {
+          console.error(`   ❌ Erro ao scrapar @${username}:`, error.message);
+          errors.push({ username, error: error.message });
         }
-
-      } catch (error: any) {
-        console.error(`   ❌ Erro ao scrapar @${username}:`, error.message);
-        errors.push({ username, error: error.message });
       }
+    } else {
+      // MODO ENGAJAMENTO: Pular scraping completamente
+      console.log(`💬 [${reqId}] Modo: APENAS ATUALIZAÇÃO DE ENGAJAMENTO (sem scraping)`);
     }
 
-    // Salvar no banco se houver perfis validados
-    if (validatedProfiles.length > 0) {
-      console.log(`\n💾 [${reqId}] Salvando ${validatedProfiles.length} perfis no banco...`);
+    // Processar TODOS os usernames - incluindo os que já existem
+    console.log(`\n💾 [${reqId}] Processando ${usernames.length} usernames para salvar/atualizar no banco...`);
 
-      for (const profile of validatedProfiles) {
-        try {
-          const { data: existing } = await supabase
-            .from('instagram_leads')
-            .select('id')
-            .eq('username', profile.username)
-            .single();
+    for (const username of usernames) {
+      try {
+        // Buscar perfil existente
+        const { data: existing } = await supabase
+          .from('instagram_leads')
+          .select('id, username, full_name, engagement_score, interaction_count')
+          .eq('username', username)
+          .single();
 
-          if (existing) {
-            console.log(`   ⚠️  @${profile.username} já existe - pulando`);
-            continue;
+        // Obter dados de engajamento para este username
+        const engagement = engagementMap.get(username);
+
+        // Calcular interaction_type e engagement_score
+        let lastInteractionType: string | null = null;
+        let engagementScore = 0;
+        let hasCommented = false;
+        let followStatus = 'not_followed';
+        let followedAt: string | null = null;
+
+        if (engagement) {
+          if (engagement.commented) {
+            lastInteractionType = 'comment';
+            engagementScore += 20;
+            hasCommented = true;
+          } else if (engagement.liked) {
+            lastInteractionType = 'like';
+            engagementScore += 10;
           }
 
-          const { error: insertError } = await supabase
-            .from('instagram_leads')
-            .insert({
-              username: profile.username,
-              full_name: profile.full_name,
-              bio: profile.bio,
-              website: profile.website,
-              followers_count: profile.followers_count,
-              following_count: profile.following_count,
-              posts_count: profile.posts_count,
-              profile_pic_url: profile.profile_pic_url,
-              is_verified: profile.is_verified,
-              is_business_account: profile.is_business_account,
-              email: profile.email,
-              phone: profile.phone,
-              business_category: profile.business_category,
-              city: profile.city,
-              state: profile.state,
-              neighborhood: profile.neighborhood,
-              address: profile.address,
-              zip_code: profile.zip_code,
-              segment: target_segment || null,
-              source: 'engagement_notifications',
-              scraped_at: new Date().toISOString()
-            });
-
-          if (insertError) {
-            console.error(`   ❌ Erro ao salvar @${profile.username}:`, insertError.message);
-            errors.push({ username: profile.username, error: insertError.message });
-          } else {
-            console.log(`   ✅ @${profile.username} salvo no banco`);
+          if (engagement.is_new_follower) {
+            lastInteractionType = 'follow';
+            engagementScore += 30;
+            followStatus = 'followed'; // Usar 'followed' em vez de 'following'
+            followedAt = engagement.notification_date || new Date().toISOString();
           }
-
-        } catch (dbError: any) {
-          console.error(`   ❌ Erro BD @${profile.username}:`, dbError.message);
-          errors.push({ username: profile.username, error: dbError.message });
         }
+
+        // Se perfil já existe E temos dados de engajamento, ATUALIZAR
+        if (existing && engagement) {
+          console.log(`   🔄 @${username} já existe - ATUALIZANDO dados de engajamento...`);
+
+          const { error: updateError } = await supabase
+            .from('instagram_leads')
+            .update({
+              has_commented: hasCommented,
+              last_interaction_type: lastInteractionType,
+              interaction_count: (existing.interaction_count || 0) + 1,
+              engagement_score: (existing.engagement_score || 0) + engagementScore,
+              follow_status: followStatus !== 'not_followed' ? followStatus : undefined,
+              followed_at: followedAt || undefined,
+              last_check_notified_at: engagement.notification_date || new Date().toISOString()
+            })
+            .eq('username', username);
+
+          if (updateError) {
+            console.error(`   ❌ Erro ao atualizar @${username}:`, updateError.message);
+            errors.push({ username, error: updateError.message });
+          } else {
+            console.log(`   ✅ @${username} atualizado no banco com engagement_score +${engagementScore}`);
+            // Adicionar aos perfis validados para retornar na resposta
+            validatedProfiles.push({
+              username,
+              full_name: existing.full_name,
+              engagement_score: (existing.engagement_score || 0) + engagementScore,
+              interaction_count: (existing.interaction_count || 0) + 1,
+              last_interaction_type: lastInteractionType,
+              has_commented: hasCommented
+            } as any);
+          }
+          continue;
+        }
+
+        // Se perfil já existe MAS NÃO temos engagement_data, pular
+        if (existing && !engagement) {
+          console.log(`   ⚠️  @${username} já existe (sem dados de engajamento) - pulando`);
+          continue;
+        }
+
+        // Se perfil NÃO existe, buscar nos perfis scrapados e inserir
+        const profile = validatedProfiles.find(p => p.username === username);
+        if (!profile) {
+          console.log(`   ⚠️  @${username} não foi scrapado - pulando inserção`);
+          continue;
+        }
+
+        const { error: insertError } = await supabase
+          .from('instagram_leads')
+          .insert({
+            username: profile.username,
+            full_name: profile.full_name,
+            bio: profile.bio,
+            website: profile.website,
+            followers_count: profile.followers_count,
+            following_count: profile.following_count,
+            posts_count: profile.posts_count,
+            profile_pic_url: profile.profile_pic_url,
+            is_verified: profile.is_verified,
+            is_business_account: profile.is_business_account,
+            email: profile.email,
+            phone: profile.phone,
+            business_category: profile.business_category,
+            city: profile.city,
+            state: profile.state,
+            neighborhood: profile.neighborhood,
+            address: profile.address,
+            zip_code: profile.zip_code,
+            segment: target_segment || null,
+            search_term_used: 'engagement_notifications',
+            captured_at: new Date().toISOString(),
+            hashtags_bio: profile.hashtags_bio || null,
+            hashtags_posts: profile.hashtags_posts || null,
+            // Dados de engajamento
+            has_commented: hasCommented,
+            last_interaction_type: lastInteractionType,
+            interaction_count: engagementScore > 0 ? 1 : 0,
+            engagement_score: engagementScore,
+            follow_status: followStatus,
+            followed_at: followedAt,
+            last_check_notified_at: engagement?.notification_date || null
+          });
+
+        if (insertError) {
+          console.error(`   ❌ Erro ao salvar @${profile.username}:`, insertError.message);
+          errors.push({ username: profile.username, error: insertError.message });
+        } else {
+          console.log(`   ✅ @${username} salvo no banco`);
+        }
+
+      } catch (dbError: any) {
+        console.error(`   ❌ Erro BD @${username}:`, dbError.message);
+        errors.push({ username, error: dbError.message });
       }
     }
 
