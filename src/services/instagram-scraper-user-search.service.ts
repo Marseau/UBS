@@ -168,14 +168,16 @@ async function extractUsernamesFromSearchDialog(page: Page, maxResults: number):
 
 /**
  * Busca usuários do Instagram via campo de busca
- * Retorna apenas usuários com activity_score >= 50
+ * Retorna apenas usuários com activity_score >= 50 (a menos que skipValidations = true)
  *
  * @param searchTerm - Termo de busca (ex: "gestor de tráfego")
  * @param maxProfiles - Máximo de perfis validados a retornar (padrão: 5)
+ * @param skipValidations - Se true, ignora validações de idioma e activity score (padrão: false)
  */
 export async function scrapeInstagramUserSearch(
   searchTerm: string,
-  maxProfiles: number = 5
+  maxProfiles: number = 5,
+  skipValidations: boolean = false
 ): Promise<InstagramProfileData[]> {
   const { page, requestId, cleanup } = await createIsolatedContext();
   console.log(`🔒 Request ${requestId} iniciada para scrape-users: "${searchTerm}"`);
@@ -517,6 +519,29 @@ export async function scrapeInstagramUserSearch(
         }
 
         // ========================================
+        // VALIDAÇÃO 0: VERIFICAR SE PERFIL JÁ EXISTE NO BANCO (ANTES DE TODAS AS VALIDAÇÕES)
+        // ========================================
+        console.log(`   🔍 Verificando se @${username} já existe no banco de dados...`);
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(
+          process.env.SUPABASE_URL || '',
+          process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+        );
+
+        const { data: existingLead } = await supabase
+          .from('instagram_leads')
+          .select('username')
+          .eq('username', username)
+          .single();
+
+        if (existingLead) {
+          console.log(`   ⏭️  @${username} JÁ EXISTE no banco! Pulando TODAS as validações e extração de hashtags...`);
+          continue;
+        }
+
+        console.log(`   ✅ @${username} não existe no banco. Prosseguindo com validações...`);
+
+        // ========================================
         // VALIDAÇÃO ANTES DE CLICAR NOS POSTS
         // ========================================
 
@@ -531,19 +556,19 @@ export async function scrapeInstagramUserSearch(
           console.log(`   💡 Razões: ${activityScore.reasons.join(', ')}`);
         }
 
-        // VALIDAÇÃO 1: Activity Score >= 50
-        if (!activityScore.isActive) {
+        // VALIDAÇÃO 1: Activity Score >= 50 (apenas se validações ativas)
+        if (!skipValidations && !activityScore.isActive) {
           console.log(`   ❌ Perfil rejeitado por baixo activity score - PULANDO extração de hashtags dos posts`);
           continue;
         }
 
-        // VALIDAÇÃO 2: Idioma = Português
+        // VALIDAÇÃO 2: Idioma = Português (apenas se validações ativas)
         console.log(`   🌍 Detectando idioma da bio...`);
         const languageDetection = await detectLanguage(completeProfile.bio, completeProfile.username);
         completeProfile.language = languageDetection.language;
         console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
 
-        if (languageDetection.language !== 'pt') {
+        if (!skipValidations && languageDetection.language !== 'pt') {
           console.log(`   ❌ Perfil rejeitado por idioma não-português (${languageDetection.language}) - PULANDO extração de hashtags dos posts`);
           continue;
         }
@@ -568,7 +593,7 @@ export async function scrapeInstagramUserSearch(
         console.log(`   📊 Seguidores: ${completeProfile.followers_count} | Posts: ${completeProfile.posts_count}`);
         console.log(`   ✅ Activity Score: ${completeProfile.activity_score}/100 ${completeProfile.is_active ? '(ATIVA ✅)' : '(INATIVA ❌)'}\n`);
 
-        const postsHashtags = await extractHashtagsFromPosts(page, 3);
+        const postsHashtags = await extractHashtagsFromPosts(page, 2);
         if (postsHashtags && postsHashtags.length > 0) {
           completeProfile.hashtags_posts = postsHashtags;
           console.log(`   🏷️  Top hashtags dos posts (${postsHashtags.length}): ${postsHashtags.join(', ')}`);

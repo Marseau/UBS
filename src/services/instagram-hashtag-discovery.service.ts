@@ -230,7 +230,7 @@ export async function discoverHashtagVariations(
         const hashtagMatch = href.match(/\/explore\/tags\/([^/]+)/);
 
         if (hashtagMatch) {
-          const hashtag = hashtagMatch[1];
+          const hashtag = decodeURIComponent(hashtagMatch[1]);
 
           // Buscar contagem de posts no elemento ou em elementos próximos
           // @ts-ignore
