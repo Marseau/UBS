@@ -8,7 +8,8 @@ import {
   extractHashtags,
   extractEmailFromBio,
   parseInstagramCount,
-  extractHashtagsFromPosts
+  extractHashtagsFromPosts,
+  retryWithBackoff
 } from './instagram-profile.utils';
 import { createIsolatedContext } from './instagram-context-manager.service';
 import { discoverHashtagVariations, HashtagVariation } from './instagram-hashtag-discovery.service';
@@ -218,7 +219,8 @@ async function ensureLoggedSession(): Promise<void> {
       browserInstance = await puppeteer.launch({
         headless: false, // Visível no Mac para login manual
         defaultViewport: null,
-        args: ['--start-maximized']
+        args: ['--start-maximized'],
+        protocolTimeout: 120000 // 2 minutos para operações lentas do Instagram (4x padrão de 30s)
       });
     }
 
@@ -366,6 +368,16 @@ export interface InstagramProfileData {
   language?: string; // ISO 639-1 language code (pt, en, es, etc)
   hashtags_bio?: string[] | null; // Hashtags extraídas da bio
   hashtags_posts?: string[] | null; // Hashtags extraídas dos posts (4 posts)
+  is_competitor?: boolean; // Se é concorrente (10k-100k + business)
+  lead_source?: string; // 'competitor_identified' ou 'hashtag_search'
+  followers?: Array<{
+    username: string;
+    full_name: string | null;
+    profile_pic_url: string | null;
+    is_verified: boolean;
+    is_private: boolean;
+  }>; // Seguidores do concorrente (se aplicável)
+  followers_scraped_count?: number; // Quantidade de seguidores scrapados
 }
 
 /**
@@ -1424,7 +1436,14 @@ export async function scrapeInstagramTag(
               await page.goto(profileUrl, { waitUntil: 'networkidle2', timeout: 30000 });
               await new Promise(resolve => setTimeout(resolve, 2000));
 
-              const postHashtags = await extractHashtagsFromPosts(page, 2);
+              // Envolver com retry mechanism (máx 2 tentativas, backoff 3s)
+              console.log(`   🔄 Iniciando extração de hashtags com retry automático...`);
+              const postHashtags = await retryWithBackoff(
+                () => extractHashtagsFromPosts(page, 2),
+                2, // máximo 2 tentativas (evita espera excessiva)
+                3000 // backoff de 3s
+              );
+
               if (postHashtags && postHashtags.length > 0) {
                 completeProfile.hashtags_posts = postHashtags;
                 console.log(`   ✅ ${postHashtags.length} hashtags extraídas dos posts`);
@@ -1433,17 +1452,15 @@ export async function scrapeInstagramTag(
                 console.log(`   ⚠️  Nenhuma hashtag encontrada nos posts`);
               }
             } catch (hashtagError: any) {
-              console.log(`   ⚠️  Erro ao extrair hashtags dos posts: ${hashtagError.message}`);
+              console.log(`   ⚠️  Erro ao extrair hashtags dos posts após retries: ${hashtagError.message}`);
               completeProfile.hashtags_posts = null;
             }
 
             // ========================================
             // PERFIL APROVADO NAS VALIDAÇÕES - ADICIONAR AO RESULTADO
             // ========================================
-            foundProfiles.push(completeProfile);
-            processedUsernames.add(username);
-            consecutiveDuplicates = 0; // Resetar contador ao encontrar perfil novo
-            console.log(`   ✅ Perfil APROVADO e adicionado: @${username} (${followers_count} seguidores, ${posts_count} posts)`);
+
+            console.log(`   ✅ Perfil APROVADO: @${username} (${followers_count} seguidores, ${posts_count} posts)`);
             console.log(`   👤 Full Name: ${completeProfile.full_name || 'N/A'}`);
             console.log(`   📝 Bio: ${completeProfile.bio ? (completeProfile.bio.length > 80 ? completeProfile.bio.substring(0, 80) + '...' : completeProfile.bio) : 'N/A'}`);
             console.log(`   🔗 Website: ${completeProfile.website || 'N/A'}`);
@@ -1458,7 +1475,60 @@ export async function scrapeInstagramTag(
             console.log(`   📍 Localização: ${locationParts.length > 0 ? locationParts.join(', ') : 'N/A'}`);
             console.log(`   🏠 Endereço: ${completeProfile.address || 'N/A'}`);
             console.log(`   📮 CEP: ${completeProfile.zip_code || 'N/A'}`);
-            console.log(`   💼 Categoria: ${completeProfile.business_category || 'N/A'}`)
+            console.log(`   💼 Categoria: ${completeProfile.business_category || 'N/A'}`);
+
+            // ========================================
+            // VALIDAÇÃO 3: IDENTIFICAR CONCORRENTES E SCRAPEAR SEGUIDORES
+            // ========================================
+            const isCompetitor =
+              (followers_count >= 10000 && followers_count <= 100000) &&
+              completeProfile.is_business_account === true;
+
+            if (isCompetitor) {
+              console.log(`\n   🎯 CONCORRENTE IDENTIFICADO! (${followers_count.toLocaleString()} seguidores + business account)`);
+              console.log(`   👥 Iniciando scraping de 50 seguidores...`);
+
+              try {
+                // Importar serviço de followers scraper
+                const { scrapeInstagramFollowers } = await import('./instagram-followers-scraper.service');
+
+                // Scrapear 50 seguidores do concorrente
+                const followersResult = await scrapeInstagramFollowers(username, 50);
+
+                if (followersResult.success && followersResult.followers.length > 0) {
+                  // Adicionar seguidores ao objeto do perfil (fica em memória)
+                  completeProfile.followers = followersResult.followers;
+                  completeProfile.is_competitor = true;
+                  completeProfile.lead_source = 'competitor_identified';
+                  completeProfile.followers_scraped_count = followersResult.followers.length;
+
+                  console.log(`   ✅ ${followersResult.followers.length} seguidores coletados com sucesso!`);
+                  console.log(`   📦 Seguidores salvos em memória (serão persistidos pelo N8N)`);
+                } else {
+                  console.log(`   ⚠️  Falha ao scrapear seguidores: ${followersResult.error_message || 'Erro desconhecido'}`);
+                  completeProfile.is_competitor = true;
+                  completeProfile.lead_source = 'competitor_identified';
+                  completeProfile.followers = [];
+                  completeProfile.followers_scraped_count = 0;
+                }
+              } catch (followersError: any) {
+                console.log(`   ❌ Erro ao scrapear seguidores: ${followersError.message}`);
+                completeProfile.is_competitor = true;
+                completeProfile.lead_source = 'competitor_identified';
+                completeProfile.followers = [];
+                completeProfile.followers_scraped_count = 0;
+              }
+
+              console.log(`   ⏭️  Continuando para próximo perfil...\n`);
+            } else {
+              console.log(`   👤 Consumidor comum (não é concorrente)`);
+              completeProfile.is_competitor = false;
+              completeProfile.lead_source = 'hashtag_search';
+            }
+
+            foundProfiles.push(completeProfile);
+            processedUsernames.add(username);
+            consecutiveDuplicates = 0; // Resetar contador ao encontrar perfil novo
 
             console.log(`   📊 Total coletado (aprovados): ${foundProfiles.length}/${maxProfiles}`);
 
