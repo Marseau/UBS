@@ -6,6 +6,7 @@ import {
   InstagramProfileData
 } from '../services/instagram-scraper-single.service';
 import { scrapeInstagramUserSearch } from '../services/instagram-scraper-user-search.service';
+import { scrapeInstagramFollowers } from '../services/instagram-followers-scraper.service';
 import { UrlScraperService } from '../services/url-scraper.service';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
@@ -468,6 +469,9 @@ router.get('/status', (req: Request, res: Response) => {
       'POST /scrape-tag': 'Scrape hashtag específica - retorna perfis completos',
       'POST /scrape-users': 'Busca usuários validados (PT + activity >= 50) - retorna perfis com hashtags',
       'POST /scrape-profile': 'Scrape perfil específico - retorna dados do perfil',
+      'POST /scrape-followers': 'Scrape seguidores de concorrente - gera leads B2C (NEW)',
+      'POST /scrape-input-users': 'Scrape lista específica de usernames',
+      'POST /scrape-url': 'Extrai emails/telefones de URLs',
       'POST /cleanup-pages': 'Limpa todas as páginas abertas SEM fechar o browser',
       'POST /close-browser': 'Fechar browser Puppeteer',
       'GET /debug-page': 'Debug: mostra elementos da página atual',
@@ -645,6 +649,157 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
       message: 'Erro ao scraping URL',
       error: error.message
     });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/scrape-followers
+ * Scrape seguidores de um perfil concorrente (para gerar leads B2C)
+ *
+ * Body:
+ * {
+ *   "competitor_username": "colagenopremium",
+ *   "max_followers": 50,
+ *   "target_segment": "consumidoras_beleza_estetica" (opcional)
+ * }
+ */
+router.post('/scrape-followers', async (req: Request, res: Response) => {
+  const reqId = `FOLLOWERS_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  try {
+    const {
+      competitor_username,
+      max_followers = 50,
+      target_segment
+    } = req.body;
+
+    if (!competitor_username) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo "competitor_username" é obrigatório'
+      });
+    }
+
+    console.log(`\n👥 [${reqId}] ========== SCRAPE-FOLLOWERS INICIADO ==========`);
+    console.log(`👥 [${reqId}] Concorrente: @${competitor_username}`);
+    console.log(`👥 [${reqId}] Max seguidores: ${max_followers}`);
+
+    // Scrape seguidores
+    const result = await scrapeInstagramFollowers(competitor_username, max_followers);
+
+    if (!result.success) {
+      throw new Error(result.error_message || 'Erro ao scrapear seguidores');
+    }
+
+    console.log(`\n📊 [${reqId}] Salvando ${result.followers.length} seguidores no banco...`);
+
+    const savedFollowers = [];
+    const errors = [];
+
+    for (const follower of result.followers) {
+      try {
+        // Verificar se já existe
+        const { data: existing } = await supabase
+          .from('instagram_leads')
+          .select('id, username')
+          .eq('username', follower.username)
+          .single();
+
+        if (existing) {
+          console.log(`   ⚠️  @${follower.username} já existe - pulando`);
+          continue;
+        }
+
+        // Inserir novo lead
+        const { data: inserted, error: insertError } = await supabase
+          .from('instagram_leads')
+          .insert({
+            username: follower.username,
+            full_name: follower.full_name,
+            profile_pic_url: follower.profile_pic_url,
+            is_verified: follower.is_verified,
+            is_private: follower.is_private,
+            segment: target_segment || null,
+            search_term_used: `follower_of_${competitor_username}`,
+            lead_source: 'competitor_follower',
+            captured_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error(`   ❌ Erro ao salvar @${follower.username}:`, insertError.message);
+          errors.push({ username: follower.username, error: insertError.message });
+        } else {
+          console.log(`   ✅ @${follower.username} salvo como lead B2C`);
+          savedFollowers.push(inserted);
+        }
+
+      } catch (dbError: any) {
+        console.error(`   ❌ Erro BD @${follower.username}:`, dbError.message);
+        errors.push({ username: follower.username, error: dbError.message });
+      }
+    }
+
+    console.log(`\n✅ [${reqId}] ========== SCRAPE-FOLLOWERS CONCLUÍDO ==========`);
+    console.log(`📊 [${reqId}] Resumo:`);
+    console.log(`   - Seguidores scrapados: ${result.followers.length}`);
+    console.log(`   - Salvos como leads: ${savedFollowers.length}`);
+    console.log(`   - Já existiam: ${result.followers.length - savedFollowers.length - errors.length}`);
+    console.log(`   - Erros: ${errors.length}`);
+
+    return res.status(200).json({
+      success: true,
+      competitor_username,
+      total_followers_scraped: result.followers.length,
+      new_leads_saved: savedFollowers.length,
+      already_existed: result.followers.length - savedFollowers.length - errors.length,
+      errors: errors.length > 0 ? errors : undefined,
+      followers: result.followers
+    });
+
+  } catch (error: any) {
+    console.error(`❌ [${reqId}] Erro ao scrapear seguidores:`, error);
+
+    // Capturar screenshot do erro
+    let screenshotBase64: string | null = null;
+    try {
+      const { getBrowserInstance } = await import('../services/instagram-session.service');
+      const browser = getBrowserInstance();
+
+      if (browser) {
+        const allPages = await browser.pages();
+        const currentPage = allPages.find(p => !p.isClosed() && p.url().includes('instagram.com'));
+
+        if (currentPage) {
+          console.log(`📸 [${reqId}] Capturando screenshot do erro...`);
+          const screenshot = await currentPage.screenshot({
+            type: 'png',
+            fullPage: true
+          });
+          screenshotBase64 = Buffer.from(screenshot).toString('base64');
+          console.log(`✅ [${reqId}] Screenshot capturado`);
+        }
+      }
+    } catch (screenshotError: any) {
+      console.error('⚠️ Erro ao capturar screenshot:', screenshotError.message);
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao scrapear seguidores',
+      error: error.message,
+      screenshot_base64: screenshotBase64,
+      error_details: {
+        endpoint: 'scrape-followers',
+        request_id: reqId,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } finally {
+    // Limpeza de contextos
+    const { cleanupAllContexts } = await import('../services/instagram-context-manager.service');
+    await cleanupAllContexts();
+    console.log(`🧹 [${reqId}] Páginas limpas ao final da execução`);
   }
 });
 
