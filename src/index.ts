@@ -520,13 +520,31 @@ try {
   console.error("❌ Failed to load video concatenation routes:", error);
 }
 
-// Canva Hybrid Video Routes - Generate Instagram reels with Canva templates
+// Canva Hybrid Video Routes - Generate Instagram reels with Canva templates (PNG estático)
 try {
   const canvaHybridVideoRoutes = require('./routes/canva-hybrid-video.routes');
   app.use('/api/canva-hybrid-video', 'default' in canvaHybridVideoRoutes ? canvaHybridVideoRoutes.default : canvaHybridVideoRoutes);
-  console.log('✅ Canva Hybrid Video routes loaded successfully - INSTAGRAM REEL GENERATION READY');
+  console.log('✅ Canva Hybrid Video routes loaded successfully - INSTAGRAM REEL GENERATION READY (PNG)');
 } catch (error) {
   console.error("❌ Failed to load canva hybrid video routes:", error);
+}
+
+// Canva Animated Video Routes - Generate Instagram reels with Canva MP4 exports (animações)
+try {
+  const canvaAnimatedVideoRoutes = require('./routes/canva-animated-video.routes');
+  app.use('/api/canva-animated-video', 'default' in canvaAnimatedVideoRoutes ? canvaAnimatedVideoRoutes.default : canvaAnimatedVideoRoutes);
+  console.log('✅ Canva Animated Video routes loaded successfully - INSTAGRAM REEL GENERATION READY (MP4 ANIMATED)');
+} catch (error) {
+  console.error("❌ Failed to load canva animated video routes:", error);
+}
+
+// Canva Audio-Only Sync Routes - ZERO RE-ENCODING (preserva 100% transições)
+try {
+  const canvaAudioSyncRoutes = require('./routes/canva-audio-sync.routes');
+  app.use('/api/canva-audio-sync', 'default' in canvaAudioSyncRoutes ? canvaAudioSyncRoutes.default : canvaAudioSyncRoutes);
+  console.log('✅ Canva Audio-Only Sync routes loaded - ZERO RE-ENCODING (transições preservadas)');
+} catch (error) {
+  console.error("❌ Failed to load canva audio sync routes:", error);
 }
 
 // Instagram Scraper Routes - Execute Puppeteer scraping on Mac, save to Supabase
@@ -541,6 +559,46 @@ try {
   console.log('✅ Instagram Scraper routes loaded successfully - LEAD SCRAPING VIA MAC READY');
 } catch (error) {
   console.error("❌ Failed to load Instagram scraper routes:", error);
+}
+
+// Hashtag Suggestions Routes - AI-powered hashtag co-occurrence analysis
+try {
+  const hashtagSuggestionsRoutes = require('./routes/hashtag-suggestions.routes');
+  const router = 'default' in hashtagSuggestionsRoutes ? hashtagSuggestionsRoutes.default : hashtagSuggestionsRoutes;
+  app.use('/api/hashtag-suggestions', router);
+  console.log('✅ Hashtag Suggestions routes loaded - AI CO-OCCURRENCE ANALYSIS READY');
+} catch (error) {
+  console.error("❌ Failed to load Hashtag Suggestions routes:", error);
+}
+
+// Hashtag Scoring Routes - Lead scoring by hashtag & cluster
+try {
+  const hashtagScoringRoutes = require('./routes/hashtag-scoring.routes');
+  const router = 'default' in hashtagScoringRoutes ? hashtagScoringRoutes.default : hashtagScoringRoutes;
+  app.use('/api/hashtag-scoring', router);
+  console.log('✅ Hashtag Scoring routes loaded - LEAD SCORING BY CLUSTER READY');
+} catch (error) {
+  console.error("❌ Failed to load Hashtag Scoring routes:", error);
+}
+
+// Hashtag Expansion Routes - Auto-expand search terms from hashtag analysis
+try {
+  const hashtagExpansionRoutes = require('./routes/hashtag-expansion.routes');
+  const router = 'default' in hashtagExpansionRoutes ? hashtagExpansionRoutes.default : hashtagExpansionRoutes;
+  app.use('/api/hashtag-expansion', router);
+  console.log('✅ Hashtag Expansion routes loaded - AUTO-EXPAND SEARCH TERMS READY');
+} catch (error) {
+  console.error("❌ Failed to load Hashtag Expansion routes:", error);
+}
+
+// Lead Search Terms Routes - Populate and manage search terms table
+try {
+  const leadSearchTermsRoutes = require('./routes/lead-search-terms.routes');
+  const router = 'default' in leadSearchTermsRoutes ? leadSearchTermsRoutes.default : leadSearchTermsRoutes;
+  app.use('/api/lead-search-terms', router);
+  console.log('✅ Lead Search Terms routes loaded - TABLE POPULATION READY');
+} catch (error) {
+  console.error("❌ Failed to load Lead Search Terms routes:", error);
 }
 
 // Instagram Webhook Routes - Capture interactions (comments, DMs, mentions) for auto-follow
