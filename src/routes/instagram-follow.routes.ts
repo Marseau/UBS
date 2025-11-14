@@ -9,7 +9,7 @@ import {
   OperationType
 } from '../services/instagram-official-session.service';
 import { generatePersonalizedDM } from '../services/instagram-dm-personalization.service';
-import { supabase } from '../config/supabase';
+import { supabase, supabaseAdmin } from '../config/database';
 
 const router = express.Router();
 
@@ -495,7 +495,7 @@ router.post('/send-dm', async (req: Request, res: Response) => {
 
     // 3. Persistir no banco de dados
     console.log('💾 Salvando registro no banco...');
-    const { data: dmRecord, error: dbError } = await supabase
+    const { data: dmRecord, error: dbError } = await supabaseAdmin
       .from('instagram_dm_outreach')
       .insert({
         lead_id,

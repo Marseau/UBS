@@ -10,6 +10,13 @@ import {
   extractHashtagsFromPosts
 } from './instagram-profile.utils';
 import { createIsolatedContext } from './instagram-context-manager.service';
+import { createClient } from '@supabase/supabase-js';
+
+// Supabase client para salvar perfis imediatamente
+const supabase = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
 
 export { closeBrowser } from './instagram-session.service';
 
@@ -42,6 +49,7 @@ export interface InstagramProfileData {
   language?: string; // ISO 639-1 language code (pt, en, es, etc)
   hashtags_bio?: string[]; // Hashtags extraídas da bio (max 10)
   hashtags_posts?: string[]; // Top 10 hashtags dos posts recentes
+  search_term_used?: string | null; // Termo de busca usado para encontrar este perfil
 }
 
 /**
@@ -498,7 +506,8 @@ export async function scrapeInstagramUserSearch(
           phone: null,
           website: profileData.website,
           business_category: null,
-          recent_post_dates: profileData.recent_post_dates
+          recent_post_dates: profileData.recent_post_dates,
+          search_term_used: searchTerm // Termo de busca usado para encontrar este perfil
         };
 
         // Extrair email da bio se não tiver email público
@@ -602,6 +611,38 @@ export async function scrapeInstagramUserSearch(
           console.log(`   ⚠️  Nenhuma hashtag encontrada nos posts`);
         }
 
+        // 💾 SALVAR NO BANCO IMEDIATAMENTE (não acumular em memória)
+        try {
+          // Converter activity_score (0-100) para lead_score (0-1)
+          const leadScore = completeProfile.activity_score ? completeProfile.activity_score / 100 : null;
+
+          // Remover campos que não existem no banco
+          const { recent_post_dates, ...profileData } = completeProfile;
+
+          // Adicionar campos adicionais necessários para o banco
+          const profileToSave = {
+            ...profileData,
+            captured_at: new Date().toISOString(),
+            lead_source: 'user_search',
+            lead_score: leadScore,
+            // segment e search_term_id podem ser NULL para scraping manual
+            segment: null,
+            search_term_id: null
+          };
+
+          const { error: insertError } = await supabase
+            .from('instagram_leads')
+            .insert(profileToSave);
+
+          if (insertError) {
+            console.log(`   ⚠️  Erro ao salvar @${username} no banco: ${insertError.message}`);
+          } else {
+            console.log(`   ✅ Perfil @${username} SALVO NO BANCO`);
+          }
+        } catch (dbError: any) {
+          console.log(`   ⚠️  Erro ao salvar @${username}: ${dbError.message}`);
+        }
+
         // PERFIL APROVADO NAS 2 VALIDAÇÕES + HASHTAGS EXTRAÍDAS
         validatedProfiles.push(completeProfile);
         console.log(`   ✅ Perfil validado e adicionado (${validatedProfiles.length}/${maxProfiles})`);
@@ -613,6 +654,14 @@ export async function scrapeInstagramUserSearch(
 
       } catch (profileError: any) {
         console.log(`   ⚠️  Erro ao processar @${username}: ${profileError.message}`);
+
+        // Se for detached frame, Instagram detectou scraping → ENCERRAR IMEDIATAMENTE
+        if (profileError.message.includes('detached Frame')) {
+          console.log(`\n🚨 DETACHED FRAME DETECTADO - Instagram detectou scraping`);
+          console.log(`   💾 Perfis já salvos no banco: ${validatedProfiles.length}`);
+          console.log(`   🛑 ENCERRANDO SESSÃO IMEDIATAMENTE (sem retry)`);
+          break; // Sai do loop, retorna perfis salvos
+        }
 
         // Delay mesmo em caso de erro (para não parecer bot)
         const errorDelay = 2000 + Math.random() * 1500; // 2-3.5s

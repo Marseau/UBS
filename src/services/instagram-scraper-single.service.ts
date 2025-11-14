@@ -435,6 +435,7 @@ export interface InstagramProfileData {
   hashtags_posts?: string[] | null; // Hashtags extraídas dos posts (4 posts)
   has_relevant_audience?: boolean; // Se tem audiência relevante (10k-300k followers)
   lead_source?: string; // 'profile_with_audience' ou 'hashtag_search'
+  search_term_used?: string | null; // Termo de busca ou hashtag usado para encontrar este perfil
   followers?: Array<{
     username: string;
     full_name: string | null;
@@ -446,6 +447,18 @@ export interface InstagramProfileData {
 }
 
 /**
+ * Resultado do scraping de hashtag com metadados
+ * 🆕 Inclui flag de resultado parcial e estatísticas
+ */
+export interface HashtagScrapeResult {
+  profiles: InstagramProfileData[];
+  is_partial: boolean; // true se não atingiu maxProfiles (timeout, detached frame, etc)
+  requested: number; // Quantidade solicitada
+  collected: number; // Quantidade coletada
+  completion_rate: string; // Percentual de conclusão (ex: "75.0%")
+}
+
+/**
  * Scrape de uma hashtag do Instagram - retorna dados completos dos perfis
  *
  * @param searchTerm - Termo de busca (hashtag)
@@ -454,7 +467,7 @@ export interface InstagramProfileData {
 export async function scrapeInstagramTag(
   searchTerm: string,
   maxProfiles: number = 10
-): Promise<InstagramProfileData[]> {
+): Promise<HashtagScrapeResult> {
   // Normalizar termo ANTES de criar contexto
   const normalizedTerm = searchTerm
     .toLowerCase()
@@ -470,6 +483,9 @@ export async function scrapeInstagramTag(
 
   let variations: any[] = [];
   let priorityHashtags: any[] = [];
+  // 🆕 VARIÁVEIS DECLARADAS AQUI para estarem acessíveis no catch
+  const allFoundProfiles: any[] = [];
+  let hashtagsToScrape: string[] = [normalizedTerm]; // Fallback para hashtag original
 
   // 🆕 DESCOBRIR VARIAÇÕES DE HASHTAGS COM PRIORIZAÇÃO POR SCORE (mesma página)
   console.log(`\n🔍 Descobrindo variações inteligentes de #${normalizedTerm}...`);
@@ -523,15 +539,12 @@ export async function scrapeInstagramTag(
     }
 
     // 🆕 DETERMINAR LISTA DE HASHTAGS A SCRAPAR (todas as prioritárias OU fallback para original)
-    const hashtagsToScrape = priorityHashtags.length > 0
+    hashtagsToScrape = priorityHashtags.length > 0
       ? priorityHashtags.map(h => h.hashtag)
       : [normalizedTerm];
 
     console.log(`\n🎯 Total de hashtags que serão scrapadas: ${hashtagsToScrape.length}`);
     console.log(`   📊 Perfis por hashtag: ${maxProfiles} (cada hashtag terá até ${maxProfiles} perfis scrapados)\n`);
-
-    // 🆕 ARRAY ACUMULADOR PARA TODOS OS PERFIS DE TODAS AS HASHTAGS
-    const allFoundProfiles: any[] = [];
 
     // 🆕 LOOP EXTERNO: ITERAR SOBRE CADA HASHTAG PRIORITÁRIA
     for (let hashtagIndex = 0; hashtagIndex < hashtagsToScrape.length; hashtagIndex++) {
@@ -563,7 +576,31 @@ export async function scrapeInstagramTag(
       const hashtagUrl = `https://www.instagram.com/explore/tags/${hashtagToScrape}/`;
 
       console.log(`\n🎯 Navegando DIRETO para hashtag: ${hashtagUrl}`);
-      await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
+
+      // Verificar se página está válida ANTES de navegar
+      try {
+        const isPageClosed = page.isClosed();
+        if (isPageClosed) {
+          throw new Error('Page is closed');
+        }
+
+        // Testar se consegue avaliar (frame válido)
+        await page.evaluate(() => window.location.href).catch(() => {
+          throw new Error('Page frame is detached before navigation');
+        });
+      } catch (checkError: any) {
+        console.log(`⚠️  Página corrompida detectada ANTES de navegar: ${checkError.message}`);
+        throw new Error(`Page invalidated: ${checkError.message}`);
+      }
+
+      // Navegar para hashtag
+      try {
+        await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
+        console.log(`   ✅ Navegação concluída`);
+      } catch (navError: any) {
+        console.log(`   ❌ Erro durante navegação: ${navError.message}`);
+        throw navError;
+      }
 
       // Delay generoso após navegação para garantir renderização completa
       const postNavDelay = 4000 + Math.random() * 2000; // 4-6s
@@ -807,7 +844,7 @@ export async function scrapeInstagramTag(
         }
       };
 
-        // 🆕 LOOP INTERNO: SCRAPAR ATÉ maxProfiles PARA ESTA HASHTAG
+        // LOOP INTERNO: SCRAPAR ATÉ maxProfiles PARA ESTA HASHTAG
         while (foundProfiles.length < maxProfiles && attemptsWithoutNewPost < 8 && consecutiveDuplicates < 3) {
           console.log(`\n📊 Status (#${hashtagToScrape}): ${foundProfiles.length}/${maxProfiles} perfis, tentativa ${attemptsWithoutNewPost}/8, duplicatas consecutivas ${consecutiveDuplicates}/3`);
 
@@ -1370,11 +1407,12 @@ export async function scrapeInstagramTag(
               business_category: decodeInstagramString(businessCategoryMatch ? businessCategoryMatch[1] : null),
               // Campos de localização extraídos do JSON do HTML
               city: decodeInstagramString(cityMatch ? cityMatch[1] : null),
-              state: decodeInstagramString(stateMatch ? (stateMatch[1] || stateMatch[2]) : null),
+              state: normalizeStateName(decodeInstagramString(stateMatch ? (stateMatch[1] || stateMatch[2]) : null)),
               neighborhood: decodeInstagramString(neighborhoodMatch ? neighborhoodMatch[1] : null),
               address: decodeInstagramString(addressMatch ? addressMatch[1] : null) ||
                        decodeInstagramString(publicAddressMatch ? publicAddressMatch[1] : null),
-              zip_code: decodeInstagramString(zipCodeMatch ? zipCodeMatch[1] : null)
+              zip_code: decodeInstagramString(zipCodeMatch ? zipCodeMatch[1] : null),
+              search_term_used: hashtagToScrape // Hashtag que foi usada para encontrar este perfil
             };
 
             // EXTRAIR EMAIL DA BIO se não tiver email público
@@ -1512,7 +1550,36 @@ export async function scrapeInstagramTag(
             console.log(`   📮 CEP: ${completeProfile.zip_code || 'N/A'}`);
             console.log(`   💼 Categoria: ${completeProfile.business_category || 'N/A'}`);
 
-            // Adicionar perfil à lista (sem processar seguidores)
+            // 💾 SALVAR NO BANCO IMEDIATAMENTE (não acumular em memória)
+            try {
+              // Converter activity_score (0-100) para lead_score (0-1)
+              const leadScore = completeProfile.activity_score ? completeProfile.activity_score / 100 : null;
+
+              // Adicionar campos adicionais necessários para o banco
+              const profileToSave = {
+                ...completeProfile,
+                captured_at: new Date().toISOString(),
+                lead_source: 'hashtag_search',
+                lead_score: leadScore,
+                // segment e search_term_id podem ser NULL para scraping manual
+                segment: null,
+                search_term_id: null
+              };
+
+              const { error: insertError } = await supabase
+                .from('instagram_leads')
+                .insert(profileToSave);
+
+              if (insertError) {
+                console.log(`   ⚠️  Erro ao salvar @${username} no banco: ${insertError.message}`);
+              } else {
+                console.log(`   ✅ Perfil @${username} SALVO NO BANCO`);
+              }
+            } catch (dbError: any) {
+              console.log(`   ⚠️  Erro ao salvar @${username}: ${dbError.message}`);
+            }
+
+            // Adicionar ao array só para contagem/retorno
             foundProfiles.push(completeProfile);
             processedUsernames.add(username);
             consecutiveDuplicates = 0; // Resetar contador ao encontrar perfil novo
@@ -1605,13 +1672,30 @@ export async function scrapeInstagramTag(
         } catch (hashtagError: any) {
           console.error(`❌ Erro ao scrape hashtag #${hashtagToScrape} (tentativa ${retryCount}/${MAX_RETRIES}):`, hashtagError.message);
 
+          // Se for detached frame, Instagram detectou scraping → ENCERRAR TUDO IMEDIATAMENTE
+          if (hashtagError.message.includes('detached Frame')) {
+            console.log(`\n🚨 DETACHED FRAME DETECTADO - Instagram detectou scraping`);
+            console.log(`   💾 Perfis já salvos no banco: ${foundProfiles.length}`);
+            console.log(`   🛑 ENCERRANDO SESSÃO IMEDIATAMENTE (sem retry)`);
+
+            // Acumular perfis desta hashtag
+            allFoundProfiles.push(...foundProfiles);
+
+            // ENCERRAR LOOP DE HASHTAGS (não processar mais nenhuma)
+            hashtagIndex = hashtagsToScrape.length; // força saída do for loop
+            break; // Sai do while de retry
+          }
+
           if (retryCount >= MAX_RETRIES) {
-            console.log(`⚠️  Máximo de retries atingido para #${hashtagToScrape}. Pulando para próxima hashtag...`);
+            console.log(`⚠️  Máximo de retries atingido para #${hashtagToScrape}. Aceitando ${foundProfiles.length} perfis coletados`);
           }
         }
       } // FIM DO WHILE (retry loop)
 
-      // 🆕 ACUMULAR PERFIS DESTA HASHTAG NO RESULTADO TOTAL
+      // 🆕 ACUMULAR PERFIS DESTA HASHTAG NO RESULTADO TOTAL (mesmo se houve erro)
+      if (foundProfiles.length > 0) {
+        console.log(`✅ Acumulando ${foundProfiles.length} perfis da hashtag #${hashtagToScrape}`);
+      }
       allFoundProfiles.push(...foundProfiles);
       console.log(`\n📊 Progresso total: ${allFoundProfiles.length} perfis coletados de ${hashtagIndex + 1} hashtag(s)\n`);
 
@@ -1627,11 +1711,45 @@ export async function scrapeInstagramTag(
     console.log(`👥 Amostra de perfis: ${usernames}${allFoundProfiles.length > 10 ? '...' : ''}`);
   }
 
-  return allFoundProfiles;
+  // 🆕 CONSTRUIR RESULTADO COM METADADOS
+  const totalRequested = maxProfiles * hashtagsToScrape.length;
+  const isPartial = allFoundProfiles.length < totalRequested && allFoundProfiles.length > 0;
+  const completionRate = totalRequested > 0
+    ? ((allFoundProfiles.length / totalRequested) * 100).toFixed(1) + '%'
+    : '0%';
+
+  if (isPartial) {
+    console.log(`⚠️  RESULTADO PARCIAL: ${allFoundProfiles.length}/${totalRequested} perfis (${completionRate})`);
+    console.log(`   Possíveis causas: timeout, detached frame, ou falta de perfis nas hashtags`);
+  }
+
+  return {
+    profiles: allFoundProfiles,
+    is_partial: isPartial,
+    requested: totalRequested,
+    collected: allFoundProfiles.length,
+    completion_rate: completionRate
+  };
 
   } catch (error: any) {
     console.error(`❌ Erro ao scrape tag "${searchTerm}":`, error.message);
-    throw error;
+
+    // 🆕 NÃO PERDER OS PERFIS COLETADOS! Retornar mesmo com erro
+    console.log(`⚠️  Retornando ${allFoundProfiles.length} perfis coletados antes do erro`);
+
+    const totalRequested = maxProfiles * hashtagsToScrape.length;
+    const isPartial = allFoundProfiles.length < totalRequested;
+    const completionRate = totalRequested > 0
+      ? ((allFoundProfiles.length / totalRequested) * 100).toFixed(1) + '%'
+      : '0%';
+
+    return {
+      profiles: allFoundProfiles,
+      is_partial: true, // Sempre parcial se caiu no catch
+      requested: totalRequested,
+      collected: allFoundProfiles.length,
+      completion_rate: completionRate
+    };
   } finally {
     console.log(`🔓 Request ${requestId} finalizada (scrape-tag: "${searchTerm}")`);
     await cleanup();
@@ -1697,6 +1815,39 @@ function decodeInstagramString(value: string | null): string | null {
       .replace(/\\n/g, ' ')
       .replace(/\\\\/g, '\\');
   }
+}
+
+/**
+ * Converte nome de estado brasileiro para sigla (máximo 2 caracteres)
+ */
+function normalizeStateName(stateName: string | null): string | null {
+  if (!stateName) return null;
+
+  const stateMap: Record<string, string> = {
+    'acre': 'AC', 'alagoas': 'AL', 'amapá': 'AP', 'amapa': 'AP',
+    'amazonas': 'AM', 'bahia': 'BA', 'ceará': 'CE', 'ceara': 'CE',
+    'distrito federal': 'DF', 'espírito santo': 'ES', 'espirito santo': 'ES',
+    'goiás': 'GO', 'goias': 'GO', 'maranhão': 'MA', 'maranhao': 'MA',
+    'mato grosso': 'MT', 'mato grosso do sul': 'MS',
+    'minas gerais': 'MG', 'pará': 'PA', 'para': 'PA',
+    'paraíba': 'PB', 'paraiba': 'PB', 'paraná': 'PR', 'parana': 'PR',
+    'pernambuco': 'PE', 'piauí': 'PI', 'piaui': 'PI',
+    'rio de janeiro': 'RJ', 'rio grande do norte': 'RN',
+    'rio grande do sul': 'RS', 'rondônia': 'RO', 'rondonia': 'RO',
+    'roraima': 'RR', 'santa catarina': 'SC',
+    'são paulo': 'SP', 'sao paulo': 'SP',
+    'sergipe': 'SE', 'tocantins': 'TO'
+  };
+
+  const normalized = stateName.toLowerCase().trim();
+
+  // Se já é uma sigla de 2 letras, retorna em uppercase
+  if (normalized.length === 2) {
+    return normalized.toUpperCase();
+  }
+
+  // Procura no mapeamento
+  return stateMap[normalized] || null;
 }
 
 /**
