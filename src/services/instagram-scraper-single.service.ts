@@ -49,6 +49,71 @@ async function antiDetectionDelay(): Promise<void> {
 }
 
 /**
+ * Converte nome completo do estado brasileiro para sigla (2 caracteres)
+ * Aceita nome com ou sem acentos, maiúsculas/minúsculas
+ * Se já for sigla, retorna direto
+ */
+function convertStateToAbbreviation(stateName: string | null): string | null {
+  if (!stateName) return null;
+
+  const state = stateName.trim();
+
+  // Se já é sigla (2 caracteres), retorna uppercase
+  if (state.length === 2) {
+    return state.toUpperCase();
+  }
+
+  // Normalizar: remover acentos e converter para lowercase
+  const normalized = state
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+  // Mapeamento completo de estados brasileiros
+  const stateMap: { [key: string]: string } = {
+    // Região Norte
+    'acre': 'AC',
+    'amapa': 'AP',
+    'amazonas': 'AM',
+    'para': 'PA',
+    'rondonia': 'RO',
+    'roraima': 'RR',
+    'tocantins': 'TO',
+
+    // Região Nordeste
+    'alagoas': 'AL',
+    'bahia': 'BA',
+    'ceara': 'CE',
+    'maranhao': 'MA',
+    'paraiba': 'PB',
+    'pernambuco': 'PE',
+    'piaui': 'PI',
+    'rio grande do norte': 'RN',
+    'sergipe': 'SE',
+
+    // Região Centro-Oeste
+    'distrito federal': 'DF',
+    'goias': 'GO',
+    'mato grosso do sul': 'MS',
+    'mato grosso': 'MT',
+
+    // Região Sudeste
+    'espirito santo': 'ES',
+    'minas gerais': 'MG',
+    'rio de janeiro': 'RJ',
+    'sao paulo': 'SP',
+
+    // Região Sul
+    'parana': 'PR',
+    'rio grande do sul': 'RS',
+    'santa catarina': 'SC'
+  };
+
+  return stateMap[normalized] || null;
+}
+
+/**
  * Delay longo entre processamento de hashtags/perfis (30-40 segundos)
  * Previne rate limiting agressivo do Instagram
  */
@@ -368,15 +433,15 @@ export interface InstagramProfileData {
   language?: string; // ISO 639-1 language code (pt, en, es, etc)
   hashtags_bio?: string[] | null; // Hashtags extraídas da bio
   hashtags_posts?: string[] | null; // Hashtags extraídas dos posts (4 posts)
-  is_competitor?: boolean; // Se é concorrente (10k-100k + business)
-  lead_source?: string; // 'competitor_identified' ou 'hashtag_search'
+  has_relevant_audience?: boolean; // Se tem audiência relevante (10k-300k followers)
+  lead_source?: string; // 'profile_with_audience' ou 'hashtag_search'
   followers?: Array<{
     username: string;
     full_name: string | null;
     profile_pic_url: string | null;
     is_verified: boolean;
     is_private: boolean;
-  }>; // Seguidores do concorrente (se aplicável)
+  }>; // Seguidores do perfil (se tem audiência relevante)
   followers_scraped_count?: number; // Quantidade de seguidores scrapados
 }
 
@@ -1248,13 +1313,30 @@ export async function scrapeInstagramTag(
               };
             });
 
-            // Processar os números extraídos (primeiro=posts, segundo=followers, terceiro=following)
-            const posts_count = profileData.stats[0] ? parseInstagramCount(profileData.stats[0]) : 0;
-            const followers_count = profileData.stats[1] ? parseInstagramCount(profileData.stats[1]) : 0;
-            const following_count = profileData.stats[2] ? parseInstagramCount(profileData.stats[2]) : 0;
-
             // EXTRAIR HTML COMPLETO para capturar dados via REGEX (phone, localização, etc)
             const html = await page.content();
+
+            // 🔥 EXTRAÇÃO CORRETA: Filtrar stats por palavra-chave
+            // DOM retorna duplicatas: ["991 posts", "991", "207 mil seguidores", "207 mil", "138 seguindo", "138"]
+            // Precisamos pegar apenas os que contêm a palavra-chave!
+
+            const postsText = profileData.stats.find((s: string) =>
+              s.toLowerCase().includes('post') || s.toLowerCase().includes('publicaç')
+            ) || '';
+
+            const followersText = profileData.stats.find((s: string) =>
+              s.toLowerCase().includes('seguidor') || s.toLowerCase().includes('follower')
+            ) || '';
+
+            const followingText = profileData.stats.find((s: string) =>
+              s.toLowerCase().includes('seguindo') || s.toLowerCase().includes('following')
+            ) || '';
+
+            let posts_count = parseInstagramCount(postsText);
+            let followers_count = parseInstagramCount(followersText);
+            let following_count = parseInstagramCount(followingText);
+
+            console.log(`   📊 Stats extraídos: ${posts_count} posts, ${followers_count} seguidores, ${following_count} seguindo`);
 
             // ESTRATÉGIA: Procurar o bloco JSON específico do perfil (não do viewer)
             const profileUserBlockMatch = html.match(/"graphql":\{"user":\{([^}]+(?:\{[^}]*\})*[^}]*)\}\}/);
@@ -1478,14 +1560,14 @@ export async function scrapeInstagramTag(
             console.log(`   💼 Categoria: ${completeProfile.business_category || 'N/A'}`);
 
             // ========================================
-            // VALIDAÇÃO 3: IDENTIFICAR CONCORRENTES E SCRAPEAR SEGUIDORES
+            // VALIDAÇÃO 3: IDENTIFICAR PERFIS COM AUDIÊNCIA RELEVANTE E SCRAPEAR SEGUIDORES
             // ========================================
-            const isCompetitor =
-              (followers_count >= 10000 && followers_count <= 100000) &&
-              completeProfile.is_business_account === true;
+            // Qualquer perfil com 10k-300k followers tem audiência de consumidores potenciais
+            const hasRelevantAudience = (followers_count >= 10000 && followers_count <= 300000);
 
-            if (isCompetitor) {
-              console.log(`\n   🎯 CONCORRENTE IDENTIFICADO! (${followers_count.toLocaleString()} seguidores + business account)`);
+            if (hasRelevantAudience) {
+              console.log(`\n   🎯 AUDIÊNCIA RELEVANTE DETECTADA!`);
+              console.log(`   📊 Seguidores do perfil: ${followers_count.toLocaleString()}`);
               console.log(`   👥 Iniciando scraping de 50 seguidores...`);
 
               try {
@@ -1493,36 +1575,37 @@ export async function scrapeInstagramTag(
                 const { scrapeInstagramFollowers } = await import('./instagram-followers-scraper.service');
 
                 // Scrapear 50 seguidores do concorrente
-                const followersResult = await scrapeInstagramFollowers(username, 50);
+                // 🔥 PASSAR A PÁGINA ATUAL como parâmetro (evitar "detached frame")
+                const followersResult = await scrapeInstagramFollowers(username, 50, page);
 
                 if (followersResult.success && followersResult.followers.length > 0) {
                   // Adicionar seguidores ao objeto do perfil (fica em memória)
                   completeProfile.followers = followersResult.followers;
-                  completeProfile.is_competitor = true;
-                  completeProfile.lead_source = 'competitor_identified';
+                  completeProfile.has_relevant_audience = true;
+                  completeProfile.lead_source = 'profile_with_audience';
                   completeProfile.followers_scraped_count = followersResult.followers.length;
 
                   console.log(`   ✅ ${followersResult.followers.length} seguidores coletados com sucesso!`);
                   console.log(`   📦 Seguidores salvos em memória (serão persistidos pelo N8N)`);
                 } else {
                   console.log(`   ⚠️  Falha ao scrapear seguidores: ${followersResult.error_message || 'Erro desconhecido'}`);
-                  completeProfile.is_competitor = true;
-                  completeProfile.lead_source = 'competitor_identified';
+                  completeProfile.has_relevant_audience = true;
+                  completeProfile.lead_source = 'profile_with_audience';
                   completeProfile.followers = [];
                   completeProfile.followers_scraped_count = 0;
                 }
               } catch (followersError: any) {
                 console.log(`   ❌ Erro ao scrapear seguidores: ${followersError.message}`);
-                completeProfile.is_competitor = true;
-                completeProfile.lead_source = 'competitor_identified';
+                completeProfile.has_relevant_audience = true;
+                completeProfile.lead_source = 'profile_with_audience';
                 completeProfile.followers = [];
                 completeProfile.followers_scraped_count = 0;
               }
 
               console.log(`   ⏭️  Continuando para próximo perfil...\n`);
             } else {
-              console.log(`   👤 Consumidor comum (não é concorrente)`);
-              completeProfile.is_competitor = false;
+              console.log(`   👤 Perfil com audiência menor (< 10k ou > 300k)`);
+              completeProfile.has_relevant_audience = false;
               completeProfile.lead_source = 'hashtag_search';
             }
 
@@ -1872,22 +1955,179 @@ function decodeInstagramWrappedUrl(wrappedUrl: string | null): string | null {
 }
 
 /**
- * Scrape de um perfil do Instagram - retorna dados do perfil
- *
+ * 🔍 Busca perfil via campo de busca do Instagram (COPIADO DO scrape-users)
+ * @param page - Página Puppeteer já autenticada
+ * @param username - Username para buscar
+ */
+async function searchProfileHumanLike(page: any, username: string): Promise<void> {
+  console.log(`   🔍 Buscando via campo de pesquisa: @${username}`);
+
+  try {
+    // 1. Navegar para home do Instagram primeiro (se necessário)
+    if (!page.url().includes('instagram.com')) {
+      await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded' });
+      await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000)); // 1.5-2.5s
+    }
+
+    // 2. ABRIR CAMPO DE BUSCA (clica no ícone SVG) - COM PROTEÇÃO CONTRA DETACHED FRAME
+    console.log(`   🖱️  Clicando no ícone de busca...`);
+    let searchPanelOpened = false;
+    try {
+      searchPanelOpened = await page.evaluate(() => {
+        const icon = document.querySelector('svg[aria-label="Pesquisar"], svg[aria-label="Search"]');
+        if (!icon) return false;
+        const clickable = icon.closest('a, button, div[role="button"]');
+        if (clickable instanceof HTMLElement) {
+          clickable.click();
+          return true;
+        }
+        return false;
+      });
+    } catch (evalError: any) {
+      console.log(`   ⚠️  Erro ao clicar no ícone (${evalError.message}), tentando fallback`);
+      searchPanelOpened = false;
+    }
+
+    if (searchPanelOpened) {
+      // ✅ Click funcionou! Aguardar painel de busca abrir (comportamento humano)
+      console.log(`   ✅ Ícone clicado, aguardando painel de busca abrir...`);
+      await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 700)); // 0.8-1.5s
+    } else {
+      console.log(`   ⚠️  Ícone de busca não encontrado, tentando atalho "/"`);
+      await page.keyboard.press('/');
+      await new Promise(resolve => setTimeout(resolve, 600 + Math.random() * 400)); // 0.6-1s
+    }
+
+    // 3. AGUARDAR CAMPO DE BUSCA APARECER
+    const searchInputSelector = 'input[placeholder*="Pesquis"], input[placeholder*="Search"], input[aria-label*="Pesquis"], input[aria-label*="Search"]';
+    const searchInput = await page.waitForSelector(searchInputSelector, { timeout: 8000, visible: true }).catch(() => null);
+
+    if (!searchInput) {
+      throw new Error('Campo de busca não encontrado após 8 segundos');
+    }
+
+    // 4. LIMPAR E DIGITAR USERNAME (letra por letra, como humano) - COM PROTEÇÃO
+    console.log(`   ⌨️  Digitando "${username}"...`);
+    try {
+      await searchInput.evaluate((element: any) => {
+        if (element instanceof HTMLInputElement) {
+          element.focus();
+          element.value = '';
+          element.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      });
+    } catch (evalError: any) {
+      console.log(`   ⚠️  Erro ao focar campo (${evalError.message}), tentando via keyboard`);
+      // Fallback: tentar focar via click
+      await searchInput.click().catch(() => {});
+    }
+
+    // Digitar letra por letra - COMPORTAMENTO SUPER HUMANO COM ERROS
+    try {
+      const usernameArray = username.split('');
+
+      for (let i = 0; i < usernameArray.length; i++) {
+        const char = usernameArray[i];
+
+        // 15% de chance de erro de digitação (exceto no último caractere)
+        const shouldMakeTypo = Math.random() < 0.15 && i < usernameArray.length - 1;
+
+        if (shouldMakeTypo) {
+          // Digitar caractere errado
+          const wrongChars = 'qwertyuiopasdfghjklzxcvbnm0123456789';
+          const wrongChar = wrongChars[Math.floor(Math.random() * wrongChars.length)];
+          await page.keyboard.type(wrongChar);
+          console.log(`   ⌨️  Erro de digitação: "${wrongChar}" (será corrigido)`);
+          await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300)); // 200-500ms perceber erro
+
+          // Corrigir: Backspace
+          await page.keyboard.press('Backspace');
+          await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 200)); // 150-350ms
+
+          // Digitar caractere correto
+          await page.keyboard.type(char);
+          await new Promise(resolve => setTimeout(resolve, 180 + Math.random() * 320)); // 180-500ms (mais lento após erro)
+        } else {
+          // Digitação normal (mais lenta que antes)
+          await page.keyboard.type(char);
+          await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 350)); // 150-500ms (antes era 100-250ms)
+        }
+      }
+
+      console.log(`   ⏳ Aguardando sugestões aparecerem...`);
+      await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1500)); // 2-3.5s (antes era 1.5-2.5s)
+    } catch (keyboardError: any) {
+      console.log(`   ⚠️  Erro ao digitar (${keyboardError.message}), tentando URL direta`);
+      throw new Error(`Keyboard input failed: ${keyboardError.message}`);
+    }
+
+    // 5. CLICAR NO PRIMEIRO RESULTADO (o perfil exato) - COM PROTEÇÃO
+    console.log(`   🎯 Procurando perfil @${username} nos resultados...`);
+    let profileClicked = false;
+    try {
+      profileClicked = await page.evaluate((usr: string) => {
+        // Procurar link que aponta para o perfil exato
+        const links = Array.from(document.querySelectorAll('a'));
+        const profileLink = links.find(link =>
+          link.href.includes(`/${usr}/`) ||
+          link.href.endsWith(`/${usr}`)
+        );
+
+        if (profileLink) {
+          profileLink.click();
+          return true;
+        }
+        return false;
+      }, username);
+    } catch (evalError: any) {
+      console.log(`   ⚠️  Erro ao clicar no perfil (${evalError.message}), tentando Enter`);
+      profileClicked = false;
+    }
+
+    if (profileClicked) {
+      console.log(`   ✅ Clicou no perfil @${username}`);
+      await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000)); // 2-3s
+    } else {
+      console.log(`   ⏎ Perfil não encontrado nos resultados, pressionando Enter...`);
+      try {
+        await page.keyboard.press('Enter');
+        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+      } catch (enterError: any) {
+        console.log(`   ⚠️  Erro ao pressionar Enter (${enterError.message}), tentando URL direta`);
+        throw new Error(`Enter key failed: ${enterError.message}`);
+      }
+    }
+
+  } catch (error: any) {
+    console.warn(`   ⚠️  Busca falhou: ${error.message}, usando URL direta como fallback`);
+    await page.goto(`https://www.instagram.com/${username}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  }
+}
+
+/**
+ * 🎯 Scrape de perfil usando página já existente (para batch processing)
+ * NÃO cria novo contexto, NÃO fecha a página - responsabilidade do caller
+ * @param page - Página Puppeteer já autenticada
  * @param username - Username do Instagram (sem @)
  */
-export async function scrapeInstagramProfile(username: string): Promise<InstagramProfileData & { followers: string }> {
-  const { page, requestId, cleanup } = await createIsolatedContext();
-  console.log(`🔒 Request ${requestId} iniciada para scrape-profile: "${username}"`);
+export async function scrapeProfileWithExistingPage(page: any, username: string): Promise<InstagramProfileData & { followers: string }> {
   try {
-    const url = `https://www.instagram.com/${username}/`;
+    // Usar busca humana ao invés de URL direta
+    await searchProfileHumanLike(page, username);
 
-    console.log(`   ➡️ Navegando para: ${url}`);
-    // Como agora usamos JSON (não DOM), podemos usar domcontentloaded que é mais rápido
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
+    // Delay humano após carregar página (variável)
+    const initialDelay = 800 + Math.random() * 700; // 0.8-1.5s
+    await new Promise(resolve => setTimeout(resolve, initialDelay));
 
-    // Delay humano após carregar página
-    await humanDelay();
+    // Simular scroll suave para baixo (comportamento humano) - COM PROTEÇÃO
+    try {
+      await page.evaluate(() => {
+        window.scrollBy({ top: 200, behavior: 'smooth' });
+      });
+      await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 500)); // 0.5-1s
+    } catch (scrollError: any) {
+      console.log(`   ⚠️  Erro ao fazer scroll (${scrollError.message}), continuando...`);
+    }
 
     // CRÍTICO: Clicar no botão "... mais" para expandir bio completa (se existir)
     try {
@@ -1903,16 +2143,18 @@ export async function scrapeInstagramProfile(username: string): Promise<Instagra
 
       if (moreButtonClicked) {
         console.log(`   ✅ Botão "mais" clicado - bio expandida`);
-        // CRÍTICO: Instagram renderiza via React - precisa aguardar MUITO
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        // CRÍTICO: Instagram renderiza via React + delay humano variável
+        const expandDelay = 2500 + Math.random() * 1000; // 2.5-3.5s
+        await new Promise(resolve => setTimeout(resolve, expandDelay));
       }
     } catch (error: any) {
       // Silencioso - não é crítico se falhar
     }
 
-    // CRÍTICO: Aguardar React renderizar completamente o DOM
-    // Instagram é SPA que demora para hidratar conteúdo
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // CRÍTICO: Aguardar React renderizar + simular "leitura" da bio
+    // Delay variável para parecer mais humano
+    const readingDelay = 1500 + Math.random() * 1500; // 1.5-3s
+    await new Promise(resolve => setTimeout(resolve, readingDelay));
 
     // Extrair bio via CSS selector e link limpo da bio
     const domData = await page.evaluate(() => {
@@ -1985,7 +2227,7 @@ export async function scrapeInstagramProfile(username: string): Promise<Instagra
       // Bio - ESTRATÉGIA COMPLETA para capturar TODOS os elementos da bio
       // Instagram divide a bio em múltiplos elementos: div (categoria) + spans (descrição) + h1 (endereço)
       let bio = null;
-      const bioElements: string[] = [];
+      const bioElementsSet = new Set<string>(); // Usar Set para evitar duplicatas
 
       // Capturar todos os elementos de bio dentro de header section
       // Classe _ap3a marca elementos de bio do Instagram
@@ -1994,13 +2236,13 @@ export async function scrapeInstagramProfile(username: string): Promise<Instagra
       bioEls.forEach((el: any) => {
         const text = el.textContent?.trim();
         if (text && text.length > 3 && !text.match(/^\d+[\s\S]*seguidores?$/i)) {
-          bioElements.push(text);
+          bioElementsSet.add(text); // Set evita duplicatas automaticamente
         }
       });
 
       // Se encontrou elementos, juntar com quebras de linha
-      if (bioElements.length > 0) {
-        bio = bioElements.join('\n');
+      if (bioElementsSet.size > 0) {
+        bio = Array.from(bioElementsSet).join('\n');
       }
 
       // Fallback: tentar apenas h1
@@ -2035,7 +2277,31 @@ export async function scrapeInstagramProfile(username: string): Promise<Instagra
         }
       }
 
-      return { full_name, bio, website_visible };
+      // Extrair stats (followers, following, posts) - ARRAY COM DUPLICATAS
+      const stats: string[] = [];
+      const selectors = [
+        'header section ul li span',
+        'header section ul li button span',
+        'header section ul li a span',
+        'header section ul span',
+        'header ul li span',
+        'header span[class*="x"]'
+      ];
+
+      for (const selector of selectors) {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+          const text = el.textContent?.trim();
+          if (text && /\d/.test(text) && text.length < 20) {
+            if (!stats.includes(text)) {
+              stats.push(text);
+            }
+          }
+        });
+        if (stats.length >= 6) break; // Capturar duplicatas: 6 = 3 pares
+      }
+
+      return { full_name, bio, website_visible, stats };
     });
 
     // DEBUG: Imprimir logs da extração de full_name
@@ -2043,6 +2309,34 @@ export async function scrapeInstagramProfile(username: string): Promise<Instagra
     console.log(`\n🔍 DEBUG - Extração de Full Name para @${username}:`);
     debugLogs.forEach((log: string) => console.log(`   ${log}`));
     console.log(`   Resultado final DOM: "${domData.full_name || 'NULL'}"\n`);
+
+    // 🔥 EXTRAÇÃO CORRETA: Filtrar stats por palavra-chave
+    // DOM retorna duplicatas: ["991 posts", "991", "207 mil seguidores", "207 mil", "138 seguindo", "138"]
+    console.log(`\n🔍 DEBUG - Stats extraídos do DOM: [${domData.stats.join(', ')}]`);
+
+    const postsText = domData.stats.find((s: string) =>
+      s.toLowerCase().includes('post') || s.toLowerCase().includes('publicaç')
+    ) || '';
+
+    const followersText = domData.stats.find((s: string) =>
+      s.toLowerCase().includes('seguidor') || s.toLowerCase().includes('follower')
+    ) || '';
+
+    const followingText = domData.stats.find((s: string) =>
+      s.toLowerCase().includes('seguindo') || s.toLowerCase().includes('following')
+    ) || '';
+
+    const posts_count_from_dom = parseInstagramCount(postsText);
+    const followers_count_from_dom = parseInstagramCount(followersText);
+    const following_count_from_dom = parseInstagramCount(followingText);
+
+    console.log(`   📊 Posts: "${postsText}" → ${posts_count_from_dom}`);
+    console.log(`   📈 Seguidores: "${followersText}" → ${followers_count_from_dom}`);
+    console.log(`   👥 Seguindo: "${followingText}" → ${following_count_from_dom}\n`);
+
+    // Micro-delay: simular usuário olhando os stats (comportamento humano)
+    const statsDelay = 400 + Math.random() * 600; // 0.4-1s
+    await new Promise(resolve => setTimeout(resolve, statsDelay));
 
     // Extrair HTML completo da página (MESMA LÓGICA DO SCRIPT FUNCIONAL)
     const html = await page.content();
@@ -2160,9 +2454,9 @@ export async function scrapeInstagramProfile(username: string): Promise<Instagra
       // CRÍTICO: Bio completa - usar bio do DOM (contém TUDO)
       // Prioridade: DOM (completo) > Meta description > JSON
       bio: bioComplete,
-      followers: followersMatch ? followersMatch[1] : '0',
-      following: followingMatch ? followingMatch[1] : '0',
-      posts: postsMatch ? postsMatch[1] : '0',
+      followers: followers_count_from_dom.toString(),
+      following: following_count_from_dom.toString(),
+      posts: posts_count_from_dom.toString(),
       profile_pic_url: decodeInstagramString(profilePicMatch ? profilePicMatch[1] : null),
       is_business_account: isBusinessMatch ? isBusinessMatch[1] === 'true' : false,
       is_verified: isVerifiedMatch ? isVerifiedMatch[1] === 'true' : false,
@@ -2174,7 +2468,7 @@ export async function scrapeInstagramProfile(username: string): Promise<Instagra
       city: decodeInstagramString(cityMatch ? cityMatch[1] : null),
       address: decodeInstagramString(addressMatch ? addressMatch[1] : null) ||
                decodeInstagramString(publicAddressMatch ? publicAddressMatch[1] : null),
-      state: decodeInstagramString(stateMatch ? (stateMatch[1] || stateMatch[2]) : null),
+      state: convertStateToAbbreviation(decodeInstagramString(stateMatch ? (stateMatch[1] || stateMatch[2]) : null)),
       neighborhood: decodeInstagramString(neighborhoodMatch ? neighborhoodMatch[1] : null),
       zip_code: decodeInstagramString(zipCodeMatch ? zipCodeMatch[1] : null)
     };
@@ -2197,29 +2491,30 @@ export async function scrapeInstagramProfile(username: string): Promise<Instagra
         if (!profileData.state) {
           const stateFromPhone = getStateFromPhone(phoneFromWhatsApp);
           if (stateFromPhone) {
-            profileData.state = stateFromPhone;
+            profileData.state = convertStateToAbbreviation(stateFromPhone);
           }
         }
       }
     }
 
     // EXTRAIR LOCALIZAÇÃO DA BIO (usar bioForLocationParsing que contém endereço completo)
-    if (bioForLocationParsing && (!profileData.city || !profileData.address || !profileData.zip_code)) {
-      const locationFromBio = extractLocationFromBio(bioForLocationParsing);
-
-      if (!profileData.address && locationFromBio.address) {
-        profileData.address = locationFromBio.address;
-      }
-      if (!profileData.city && locationFromBio.city) {
-        profileData.city = locationFromBio.city;
-      }
-      if (!profileData.state && locationFromBio.state) {
-        profileData.state = locationFromBio.state;
-      }
-      if (!profileData.zip_code && locationFromBio.zip_code) {
-        profileData.zip_code = locationFromBio.zip_code;
-      }
-    }
+    // ⚠️ DESABILITADO: extractLocationFromBio está muito bugado, capturando bio inteira como city
+    // Vamos confiar apenas nos dados estruturados do JSON do Instagram
+    // if (bioForLocationParsing && (!profileData.city || !profileData.address || !profileData.zip_code)) {
+    //   const locationFromBio = extractLocationFromBio(bioForLocationParsing);
+    //   if (!profileData.address && locationFromBio.address) {
+    //     profileData.address = locationFromBio.address;
+    //   }
+    //   if (!profileData.city && locationFromBio.city) {
+    //     profileData.city = locationFromBio.city;
+    //   }
+    //   if (!profileData.state && locationFromBio.state) {
+    //     profileData.state = convertStateToAbbreviation(locationFromBio.state);
+    //   }
+    //   if (!profileData.zip_code && locationFromBio.zip_code) {
+    //     profileData.zip_code = locationFromBio.zip_code;
+    //   }
+    // }
 
     // Converter contadores para números
     const followersCount = parseInstagramCount(profileData.followers);
@@ -2269,6 +2564,25 @@ export async function scrapeInstagramProfile(username: string): Promise<Instagra
     console.log(`✅ SCRAPE-PROFILE CONCLUÍDO: dados coletados para "@${username}"`);
     return profileResult;
 
+  } catch (error: any) {
+    console.error(`❌ Erro ao scrape perfil "@${username}":`, error.message);
+    throw error;
+  }
+}
+
+/**
+ * 🔄 Wrapper para backward compatibility - cria contexto próprio e fecha após scrape
+ * Para BATCH processing, use `scrapeProfileWithExistingPage` diretamente
+ * @param username - Username do Instagram (sem @)
+ */
+export async function scrapeInstagramProfile(username: string): Promise<InstagramProfileData & { followers: string }> {
+  const { page, requestId, cleanup } = await createIsolatedContext();
+  console.log(`🔒 Request ${requestId} iniciada para scrape-profile: "${username}"`);
+
+  try {
+    const result = await scrapeProfileWithExistingPage(page, username);
+    console.log(`✅ SCRAPE-PROFILE CONCLUÍDO: dados coletados para "@${username}"`);
+    return result;
   } catch (error: any) {
     console.error(`❌ Erro ao scrape perfil "@${username}":`, error.message);
     throw error;

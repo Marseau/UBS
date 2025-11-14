@@ -2,9 +2,11 @@ import { Router, Request, Response } from 'express';
 import {
   scrapeInstagramTag,
   scrapeInstagramProfile,
+  scrapeProfileWithExistingPage,
   closeBrowser,
   InstagramProfileData
 } from '../services/instagram-scraper-single.service';
+import { createIsolatedContext } from '../services/instagram-context-manager.service';
 import { scrapeInstagramUserSearch } from '../services/instagram-scraper-user-search.service';
 import { scrapeInstagramFollowers } from '../services/instagram-followers-scraper.service';
 import { UrlScraperService } from '../services/url-scraper.service';
@@ -384,6 +386,401 @@ router.post('/scrape-profile', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/instagram-scraper/scrape-profiles-batch
+ * Scrape múltiplos perfis SEQUENCIALMENTE (1 por vez, mesma sessão)
+ * Body: { usernames: string[] }
+ */
+router.post('/scrape-profiles-batch', async (req: Request, res: Response) => {
+  const reqId = `BATCH_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  try {
+    const { usernames } = req.body;
+
+    if (!usernames || !Array.isArray(usernames) || usernames.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo "usernames" é obrigatório e deve ser array não vazio'
+      });
+    }
+
+    // ⚠️ VALIDAÇÃO: Detectar se N8N enviou objetos ao invés de strings
+    const invalidUsernames = usernames.filter(u => typeof u !== 'string');
+    if (invalidUsernames.length > 0) {
+      console.error(`\n❌ [${reqId}] ERRO: N8N enviou objetos ao invés de strings!`);
+      console.error(`   Recebido: ${JSON.stringify(usernames, null, 2)}`);
+      return res.status(400).json({
+        success: false,
+        message: 'Array "usernames" deve conter apenas STRINGS, não objetos',
+        hint: 'No N8N, use: {{ $json.username }} ou {{ $("node").all().map(item => item.json.username) }}',
+        received: usernames
+      });
+    }
+
+    console.log(`\n👥 [${reqId}] ========== SCRAPE-PROFILES-BATCH INICIADO ==========`);
+    console.log(`👥 [${reqId}] Total de perfis: ${usernames.length}`);
+    console.log(`📋 [${reqId}] Usernames: ${usernames.map(u => `@${u}`).join(', ')}`);
+    console.log(`⚠️  [${reqId}] Processamento SEQUENCIAL (1 por vez, mesma sessão)\n`);
+
+    // DEBUG: Contar páginas ANTES
+    const { getBrowserInstance } = await import('../services/instagram-session.service');
+    const browser = getBrowserInstance();
+    if (browser) {
+      const pagesBefore = await browser.pages();
+      console.log(`📊 [${reqId}] ANTES: ${pagesBefore.length} páginas abertas no browser`);
+    }
+
+    const results: any[] = [];
+    const errors: any[] = [];
+
+    // 🔑 Criar contexto UMA VEZ para todo o batch (mantém sessão aberta)
+    const { page, requestId, cleanup } = await createIsolatedContext();
+    console.log(`🔒 Contexto criado: ${requestId} - será reutilizado para todos os perfis\n`);
+
+    try {
+      // Processar SEQUENCIALMENTE (1 por vez) com MESMA PÁGINA
+      for (let i = 0; i < usernames.length; i++) {
+        const username = usernames[i];
+        console.log(`\n[${i + 1}/${usernames.length}] Processando @${username}...`);
+
+        try {
+          // 🎯 Usar função que NÃO cria/fecha contexto
+          const profileData = await scrapeProfileWithExistingPage(page, username);
+
+          console.log(`   ✅ @${username}: ${profileData.followers_count || 0} seguidores, ${profileData.posts_count || 0} posts`);
+
+          // ========================================
+          // 🚫 VALIDAÇÕES EARLY-EXIT (3 FILTROS)
+          // ========================================
+
+          // VALIDAÇÃO 1: FOLLOWERS < 250
+          const currentFollowersCount = profileData.followers_count || 0;
+          if (currentFollowersCount < 250) {
+            console.log(`   🚫 REJEITADO (Validação 1/3): @${username} tem apenas ${currentFollowersCount} seguidores (mínimo: 250)`);
+
+            // Delay humano: analisando decisão de rejeitar
+            await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 1200)); // 0.8-2s
+
+            try {
+              console.log(`   🗑️  Removendo do banco...`);
+              await supabase.from('instagram_leads').delete().eq('username', username);
+              await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 800)); // 0.5-1.3s após deleção
+              console.log(`   ✅ Removido`);
+            } catch {}
+
+            errors.push({
+              username,
+              success: false,
+              error: `Rejeitado: ${currentFollowersCount} seguidores < 250 (mínimo)`
+            });
+
+            // Pausa antes de ir para o próximo (pensando/descansando)
+            const pauseDelay = 1200 + Math.random() * 1800; // 1.2-3s
+            console.log(`   ⏭️  Pulando para próximo perfil (aguardando ${(pauseDelay/1000).toFixed(1)}s)...\n`);
+            await new Promise(resolve => setTimeout(resolve, pauseDelay));
+            continue;
+          }
+
+          // VALIDAÇÃO 2: ACTIVITY SCORE < 50
+          const { calculateActivityScore } = await import('../services/instagram-profile.utils');
+          const activityScore = calculateActivityScore(profileData);
+          (profileData as any).activity_score = activityScore.score;
+          (profileData as any).is_active = activityScore.isActive;
+
+          console.log(`   📊 Activity Score: ${activityScore.score}/100 (${activityScore.isActive ? 'ATIVA ✅' : 'INATIVA ❌'})`);
+
+          if (!activityScore.isActive) {
+            console.log(`   🚫 REJEITADO (Validação 2/3): Activity score muito baixo (score: ${activityScore.score})`);
+
+            // Delay humano: analisando decisão de rejeitar
+            await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 1200)); // 0.8-2s
+
+            try {
+              console.log(`   🗑️  Removendo do banco...`);
+              await supabase.from('instagram_leads').delete().eq('username', username);
+              await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 800)); // 0.5-1.3s após deleção
+              console.log(`   ✅ Removido`);
+            } catch {}
+
+            errors.push({
+              username,
+              success: false,
+              error: `Rejeitado: Activity score ${activityScore.score} < 50 (inativo)`
+            });
+
+            // Pausa antes de ir para o próximo (pensando/descansando)
+            const pauseDelay = 1200 + Math.random() * 1800; // 1.2-3s
+            console.log(`   ⏭️  Pulando para próximo perfil (aguardando ${(pauseDelay/1000).toFixed(1)}s)...\n`);
+            await new Promise(resolve => setTimeout(resolve, pauseDelay));
+            continue;
+          }
+
+          // VALIDAÇÃO 3: IDIOMA != PT
+          const { detectLanguage } = await import('../services/language-country-detector.service');
+          console.log(`   🌍 Detectando idioma da bio...`);
+          const languageDetection = await detectLanguage(profileData.bio || '', username);
+          (profileData as any).language = languageDetection.language;
+          console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
+
+          if (languageDetection.language !== 'pt') {
+            console.log(`   🚫 REJEITADO (Validação 3/3): Idioma não-português (${languageDetection.language})`);
+
+            // Delay humano: analisando decisão de rejeitar
+            await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 1200)); // 0.8-2s
+
+            try {
+              console.log(`   🗑️  Removendo do banco...`);
+              await supabase.from('instagram_leads').delete().eq('username', username);
+              await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 800)); // 0.5-1.3s após deleção
+              console.log(`   ✅ Removido`);
+            } catch {}
+
+            errors.push({
+              username,
+              success: false,
+              error: `Rejeitado: Idioma ${languageDetection.language} != pt (português)`
+            });
+
+            // Pausa antes de ir para o próximo (pensando/descansando)
+            const pauseDelay = 1200 + Math.random() * 1800; // 1.2-3s
+            console.log(`   ⏭️  Pulando para próximo perfil (aguardando ${(pauseDelay/1000).toFixed(1)}s)...\n`);
+            await new Promise(resolve => setTimeout(resolve, pauseDelay));
+            continue;
+          }
+
+          console.log(`   ✅ PERFIL APROVADO NAS 3 VALIDAÇÕES - Prosseguindo com scraping completo...\n`);
+
+          // ========================================
+          // 🆕 EXTRAÇÃO DE HASHTAGS DOS POSTS (2 posts)
+          // ========================================
+          console.log(`   🏷️  Extraindo hashtags dos últimos 2 posts...`);
+          try {
+            const { extractHashtagsFromPosts, retryWithBackoff } = await import('../services/instagram-profile.utils');
+
+            const profileUrl = `https://www.instagram.com/${username}/`;
+            await page.goto(profileUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Envolver com retry mechanism (máx 2 tentativas, backoff 3s)
+            const postHashtags = await retryWithBackoff(
+              () => extractHashtagsFromPosts(page, 2),
+              2, // máximo 2 tentativas
+              3000 // backoff de 3s
+            );
+
+            if (postHashtags && postHashtags.length > 0) {
+              (profileData as any).hashtags_posts = postHashtags;
+              console.log(`   ✅ ${postHashtags.length} hashtags extraídas dos posts`);
+            } else {
+              (profileData as any).hashtags_posts = null;
+              console.log(`   ⚠️  Nenhuma hashtag encontrada nos posts`);
+            }
+          } catch (hashtagError: any) {
+            console.log(`   ⚠️  Erro ao extrair hashtags dos posts: ${hashtagError.message}`);
+            (profileData as any).hashtags_posts = null;
+          }
+
+          // ========================================
+          // 🆕 SCRAPING DE SEGUIDORES (10K-300K followers)
+          // ========================================
+          const followersCount = profileData.followers_count || 0;
+          const hasRelevantAudience = (followersCount >= 10000 && followersCount <= 300000);
+
+          if (hasRelevantAudience) {
+            console.log(`\n   🎯 AUDIÊNCIA RELEVANTE DETECTADA!`);
+            console.log(`   📊 Seguidores do perfil: ${followersCount.toLocaleString()}`);
+            console.log(`   👥 Iniciando scraping de 50 seguidores...`);
+
+            try {
+              const { scrapeInstagramFollowers } = await import('../services/instagram-followers-scraper.service');
+
+              // Scrapear 50 seguidores do concorrente
+              const followersResult = await scrapeInstagramFollowers(username, 50, page);
+
+              if (followersResult.success && followersResult.followers.length > 0) {
+                // Adicionar seguidores ao objeto do perfil
+                (profileData as any).followers = followersResult.followers;
+                (profileData as any).has_relevant_audience = true;
+                (profileData as any).lead_source = 'profile_with_audience';
+                (profileData as any).followers_scraped_count = followersResult.followers.length;
+
+                console.log(`   ✅ ${followersResult.followers.length} seguidores coletados com sucesso!`);
+                console.log(`   📦 Seguidores salvos em memória (serão persistidos pelo N8N)`);
+              } else {
+                console.log(`   ⚠️  Falha ao scrapear seguidores: ${followersResult.error_message || 'Erro desconhecido'}`);
+                (profileData as any).has_relevant_audience = true;
+                (profileData as any).lead_source = 'profile_with_audience';
+                (profileData as any).followers = [];
+                (profileData as any).followers_scraped_count = 0;
+              }
+            } catch (followersError: any) {
+              console.log(`   ❌ Erro ao scrapear seguidores: ${followersError.message}`);
+              (profileData as any).has_relevant_audience = true;
+              (profileData as any).lead_source = 'profile_with_audience';
+              (profileData as any).followers = [];
+              (profileData as any).followers_scraped_count = 0;
+            }
+
+            console.log(`   ⏭️  Continuando para próximo perfil...\n`);
+          } else {
+            console.log(`   👤 Perfil com audiência fora do range (< 10K ou > 300K)`);
+            (profileData as any).has_relevant_audience = false;
+            (profileData as any).lead_source = 'hashtag_search';
+          }
+
+          results.push({
+            username,
+            success: true,
+            data: profileData
+          });
+
+        } catch (error: any) {
+          console.error(`   ❌ Erro em @${username}:`, error.message);
+
+          errors.push({
+            username,
+            success: false,
+            error: error.message
+          });
+        }
+
+        // Delay entre perfis (comportamento HUMANO com padrões variados)
+        if (i < usernames.length - 1) {
+          let delay: number;
+
+          // 10% de chance de pausa longa (usuário distraído/multitarefa)
+          if (Math.random() < 0.1) {
+            delay = 8000 + Math.random() * 7000; // 8-15 segundos
+            console.log(`   😴 Pausa longa (simulando distração)...`);
+          }
+          // 20% de chance de pausa média-longa (lendo bio com atenção)
+          else if (Math.random() < 0.2) {
+            delay = 5000 + Math.random() * 4000; // 5-9 segundos
+            console.log(`   📖 Lendo com atenção...`);
+          }
+          // 70% de chance de pausa normal (navegação rápida)
+          else {
+            delay = 3000 + Math.random() * 3000; // 3-6 segundos
+            console.log(`   👀 Navegação normal...`);
+          }
+
+          console.log(`   ⏳ Aguardando ${(delay / 1000).toFixed(1)}s antes do próximo...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    } finally {
+      // 🔓 Fechar contexto APENAS NO FINAL do batch
+      console.log(`\n🔓 [${reqId}] Fechando contexto ${requestId} após processar todos os perfis...`);
+      await cleanup();
+      console.log(`🏁 [${reqId}] Contexto encerrado - sessão completa!\n`);
+    }
+
+    // DEBUG: Contar páginas DEPOIS
+    if (browser) {
+      const pagesAfter = await browser.pages();
+      console.log(`📊 [${reqId}] DEPOIS: ${pagesAfter.length} páginas abertas no browser`);
+    }
+
+    // Log consolidado dos perfis extraídos (igual ao scrape-tag)
+    const allProfiles = results.map(r => r.data).filter(Boolean);
+    console.log(`\n📊 [${reqId}] Resumo dos ${allProfiles.length} perfis extraídos:`);
+
+    const profilesWithEmail = allProfiles.filter(p => p.email).length;
+    const profilesWithPhone = allProfiles.filter(p => p.phone).length;
+    const profilesWithWebsite = allProfiles.filter(p => p.website).length;
+    const profilesWithLocation = allProfiles.filter(p => p.city || p.state || p.address).length;
+    const businessAccounts = allProfiles.filter(p => p.is_business_account).length;
+
+    console.log(`   📧 Emails encontrados: ${profilesWithEmail}/${allProfiles.length}`);
+    console.log(`   📱 Telefones encontrados: ${profilesWithPhone}/${allProfiles.length}`);
+    console.log(`   🔗 Websites encontrados: ${profilesWithWebsite}/${allProfiles.length}`);
+    console.log(`   📍 Localizações encontradas: ${profilesWithLocation}/${allProfiles.length}`);
+    console.log(`   💼 Contas business: ${businessAccounts}/${allProfiles.length}`);
+
+    if (profilesWithLocation > 0) {
+      console.log(`\n   📍 Perfis com localização:`);
+      allProfiles
+        .filter(p => p.city || p.state)
+        .slice(0, 5) // Mostrar apenas os primeiros 5
+        .forEach(p => {
+          const locationParts: string[] = [];
+          if (p.city) locationParts.push(p.city);
+          if (p.state) locationParts.push(p.state);
+          console.log(`      @${p.username}: ${locationParts.join(', ')}`);
+        });
+      if (profilesWithLocation > 5) {
+        console.log(`      ... e mais ${profilesWithLocation - 5} perfis`);
+      }
+    }
+
+    console.log(`\n📊 [${reqId}] ========== RESUMO ==========`);
+    console.log(`✅ Sucessos: ${results.length}/${usernames.length}`);
+    console.log(`❌ Erros: ${errors.length}/${usernames.length}`);
+    console.log(`✅ [${reqId}] ========== BATCH FINALIZADO ==========\n`);
+
+    return res.status(200).json({
+      success: true,
+      total: usernames.length,
+      succeeded: results.length,
+      failed: errors.length,
+      results: results,
+      errors: errors
+    });
+
+  } catch (error: any) {
+    console.error(`❌ [${reqId}] Erro no batch:`, error);
+
+    // 🚨 CAPTURAR SCREENSHOT PARA N8N ENVIAR AO TELEGRAM
+    let screenshotBase64: string | null = null;
+    try {
+      const { getBrowserInstance } = await import('../services/instagram-session.service');
+      const browser = getBrowserInstance();
+
+      if (browser) {
+        const allPages = await browser.pages();
+        const currentPage = allPages.find(p => !p.isClosed() && p.url().includes('instagram.com'));
+
+        if (currentPage) {
+          console.log(`📸 [${reqId}] Capturando screenshot do erro...`);
+          const screenshot = await currentPage.screenshot({
+            type: 'png',
+            fullPage: true
+          });
+          screenshotBase64 = Buffer.from(screenshot).toString('base64');
+          const sizeKB = ((screenshotBase64?.length || 0) / 1024).toFixed(1);
+          console.log(`✅ [${reqId}] Screenshot capturado (${sizeKB} KB)`);
+        }
+      }
+    } catch (screenshotError: any) {
+      console.error('⚠️ Erro ao capturar screenshot:', screenshotError.message);
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Erro no processamento batch',
+      error: error.message,
+      screenshot_base64: screenshotBase64,
+      error_details: {
+        endpoint: 'scrape-profiles-batch',
+        request_id: reqId,
+        timestamp: new Date().toISOString()
+      },
+      data: {
+        usernames: req.body.usernames || [],
+        total: req.body.usernames?.length || 0,
+        succeeded: 0,
+        failed: 0,
+        results: [],
+        errors: []
+      }
+    });
+  } finally {
+    // 🔥 FORÇAR LIMPEZA DE TODAS AS PÁGINAS AO FINAL
+    const { cleanupAllContexts } = await import('../services/instagram-context-manager.service');
+    await cleanupAllContexts();
+    console.log(`🧹 [${reqId}] Todas as páginas foram limpas ao final da execução`);
+  }
+});
+
+/**
  * POST /api/instagram-scraper/cleanup-pages
  * Limpa todas as páginas abertas SEM fechar o browser
  * Útil para N8N chamar entre execuções
@@ -692,8 +1089,8 @@ router.post('/scrape-followers', async (req: Request, res: Response) => {
 
     console.log(`\n📊 [${reqId}] Salvando ${result.followers.length} seguidores no banco...`);
 
-    const savedFollowers = [];
-    const errors = [];
+    const savedFollowers: any[] = [];
+    const errors: any[] = [];
 
     for (const follower of result.followers) {
       try {

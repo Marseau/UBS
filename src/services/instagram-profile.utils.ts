@@ -1,5 +1,41 @@
 // @ts-nocheck - utilidades compartilhadas para análise de perfis Instagram
 
+/**
+ * Retry mechanism com backoff exponencial para operações propensas a timeout
+ * @param fn - Função assíncrona para executar
+ * @param maxRetries - Número máximo de tentativas (padrão: 3)
+ * @param baseDelay - Delay base em ms para backoff (padrão: 2000ms)
+ * @returns Promise com resultado da função ou erro após todas as tentativas
+ */
+export async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 2000
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      const isLastAttempt = attempt === maxRetries - 1;
+
+      if (isLastAttempt) {
+        console.log(`   ❌ Todas as ${maxRetries} tentativas falharam. Último erro: ${lastError.message}`);
+        throw lastError;
+      }
+
+      // Backoff exponencial: 2s, 4s, 8s...
+      const delay = baseDelay * Math.pow(2, attempt);
+      console.log(`   ⏳ Tentativa ${attempt + 1}/${maxRetries} falhou (${lastError.message}). Retry em ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw lastError || new Error('Retry failed without error');
+}
+
 export interface ActivityScore {
   isActive: boolean;
   score: number;
@@ -235,7 +271,7 @@ export function calculateActivityScore(profile: ProfileForScoring): ActivityScor
  */
 export async function extractHashtagsFromPosts(page: any, maxPosts: number = 4): Promise<string[] | null> {
   try {
-    console.log(`   🔍 Clicando nos últimos ${maxPosts} posts para extrair hashtags (6s por post)...`);
+    console.log(`   🔍 Clicando nos últimos ${maxPosts} posts para extrair hashtags (3s por post, timeout individual de 15s)...`);
 
     const allHashtags = new Set<string>();
     const profileUrl = page.url();
@@ -248,8 +284,14 @@ export async function extractHashtagsFromPosts(page: any, maxPosts: number = 4):
       try {
         // Voltar para a página do perfil se não for a primeira iteração
         if (i > 0) {
-          await page.goto(profileUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await Promise.race([
+            page.goto(profileUrl, { waitUntil: 'networkidle2', timeout: 15000 }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Navigation timeout')), 15000))
+          ]).catch((err: Error) => {
+            console.log(`   ⚠️  Timeout ao retornar ao perfil (post ${i + 1}): ${err.message}`);
+            return null;
+          });
+          await new Promise(resolve => setTimeout(resolve, 1500));
         }
 
         // Tentar múltiplos seletores para encontrar posts no grid
@@ -263,28 +305,44 @@ export async function extractHashtagsFromPosts(page: any, maxPosts: number = 4):
         let postClicked = false;
 
         for (const selector of postSelectors) {
-          const postCount = await page.evaluate((sel: string) => {
-            return document.querySelectorAll(sel).length;
-          }, selector);
+          try {
+            // Timeout individual para page.evaluate
+            const postCount = await Promise.race([
+              page.evaluate((sel: string) => {
+                return document.querySelectorAll(sel).length;
+              }, selector),
+              new Promise<number>((_, reject) =>
+                setTimeout(() => reject(new Error('Evaluate timeout')), 10000)
+              )
+            ]).catch(() => 0);
 
-          if (postCount > 0) {
-            // CLICAR diretamente no post (não usar goto)
-            const clicked = await page.evaluate((sel: string, index: number) => {
-              const posts = Array.from(document.querySelectorAll(sel));
-              if (posts.length > index) {
-                const post = posts[index] as HTMLElement;
-                post.click();
-                return true;
+            if (postCount > 0) {
+              // CLICAR diretamente no post (não usar goto) com timeout
+              const clicked = await Promise.race([
+                page.evaluate((sel: string, index: number) => {
+                  const posts = Array.from(document.querySelectorAll(sel));
+                  if (posts.length > index) {
+                    const post = posts[index] as HTMLElement;
+                    post.click();
+                    return true;
+                  }
+                  return false;
+                }, selector, i),
+                new Promise<boolean>((_, reject) =>
+                  setTimeout(() => reject(new Error('Click timeout')), 10000)
+                )
+              ]).catch(() => false);
+
+              if (clicked) {
+                console.log(`   🖱️  Clique no post ${i + 1}/${maxPosts} realizado`);
+                postClicked = true;
+                await new Promise(resolve => setTimeout(resolve, 3000)); // 3 SEGUNDOS por post (otimizado)
+                break;
               }
-              return false;
-            }, selector, i);
-
-            if (clicked) {
-              console.log(`   🖱️  Clique no post ${i + 1}/${maxPosts} realizado`);
-              postClicked = true;
-              await new Promise(resolve => setTimeout(resolve, 6000)); // 6 SEGUNDOS por post
-              break;
             }
+          } catch (selectorError) {
+            console.log(`   ⚠️  Erro com seletor ${selector}: ${(selectorError as Error).message}`);
+            continue;
           }
         }
 
@@ -293,35 +351,43 @@ export async function extractHashtagsFromPosts(page: any, maxPosts: number = 4):
           break;
         }
 
-        // Extrair hashtags da legenda do post (no modal aberto)
-        const postHashtags = await page.evaluate(() => {
-          const captionSelectors = [
-            'article h1',
-            'article span[dir="auto"]',
-            'div[class*="Caption"] span',
-            'article div span'
-          ];
+        // Extrair hashtags da legenda do post (no modal aberto) com timeout
+        const postHashtags = await Promise.race([
+          page.evaluate(() => {
+            const captionSelectors = [
+              'article h1',
+              'article span[dir="auto"]',
+              'div[class*="Caption"] span',
+              'article div span'
+            ];
 
-          let captionText = '';
-          for (const selector of captionSelectors) {
-            const elements = document.querySelectorAll(selector);
-            for (const el of Array.from(elements)) {
-              const text = el.textContent || '';
-              if (text.includes('#') && text.length > 0) {
-                captionText += ' ' + text;
+            let captionText = '';
+            for (const selector of captionSelectors) {
+              const elements = document.querySelectorAll(selector);
+              for (const el of Array.from(elements)) {
+                const text = el.textContent || '';
+                if (text.includes('#') && text.length > 0) {
+                  captionText += ' ' + text;
+                }
               }
             }
-          }
 
-          const hashtagPattern = /#([a-zA-Z0-9_áàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ]+)/g;
-          const matches = captionText.match(hashtagPattern);
+            const hashtagPattern = /#([a-zA-Z0-9_áàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ]+)/g;
+            const matches = captionText.match(hashtagPattern);
 
-          if (!matches || matches.length === 0) {
-            return [];
-          }
+            if (!matches || matches.length === 0) {
+              return [];
+            }
 
-          const uniqueHashtags = [...new Set(matches.map(tag => tag.substring(1).toLowerCase()))];
-          return uniqueHashtags;
+            const uniqueHashtags = [...new Set(matches.map(tag => tag.substring(1).toLowerCase()))];
+            return uniqueHashtags;
+          }),
+          new Promise<string[]>((_, reject) =>
+            setTimeout(() => reject(new Error('Hashtag extraction timeout')), 10000)
+          )
+        ]).catch((err: Error) => {
+          console.log(`   ⚠️  Erro ao extrair hashtags do post ${i + 1}: ${err.message}`);
+          return [];
         });
 
         if (postHashtags.length > 0) {
