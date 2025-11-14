@@ -558,91 +558,17 @@ export async function scrapeInstagramTag(
         try {
           retryCount++;
 
-      // 1. IR PARA PÁGINA INICIAL
-      console.log(`\n🏠 Navegando para página inicial...`);
-      await page.goto('https://www.instagram.com/', { waitUntil: 'networkidle2', timeout: 120000 });
-      await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
-
-      // 2. GARANTIR CAMPO DE BUSCA VISÍVEL
-      console.log(`🔍 Garantindo abertura do campo de busca...`);
-      const searchPanelOpened = await page.evaluate(() => {
-        const icon = document.querySelector('svg[aria-label="Pesquisar"], svg[aria-label="Search"]');
-        if (!icon) {
-          return false;
-        }
-        const clickable = icon.closest('a, button, div[role="button"]');
-        if (clickable instanceof HTMLElement) {
-          clickable.click();
-          return true;
-        }
-        return false;
-      });
-
-      if (!searchPanelOpened) {
-        console.log(`   ⚠️  Ícone de busca não clicável, tentando atalho de teclado "/"`);
-        await page.keyboard.press('/');
-        await new Promise(resolve => setTimeout(resolve, 600));
-      }
-
-      // Mesmo que nenhum botão seja clicado, tentaremos focar o input direto
-      const searchInputSelector = 'input[placeholder*="Pesquis"], input[placeholder*="Search"], input[aria-label*="Pesquis"], input[aria-label*="Search"]';
-      const searchInput = await page.waitForSelector(searchInputSelector, { timeout: 5000, visible: true }).catch(() => null);
+      // 🆕 ESTRATÉGIA ULTRA-ROBUSTA: Navegar DIRETO para URL da hashtag
+      // (Evita campo de busca → previne erro 429 e detached frame)
       const hashtagUrl = `https://www.instagram.com/explore/tags/${hashtagToScrape}/`;
 
-      if (!searchInput) {
-        console.log('   ⚠️  Campo de busca não encontrado; navegando direto para hashtag.');
-        await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
-      } else {
-        let navigatedViaSearch = false;
-        try {
-          await searchInput.evaluate((element: any) => {
-            if (element instanceof HTMLInputElement) {
-              element.focus();
-              element.value = '';
-              element.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-          });
+      console.log(`\n🎯 Navegando DIRETO para hashtag: ${hashtagUrl}`);
+      await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
 
-          // 3. DIGITAR HASHTAG (letra por letra, como humano)
-          const searchQuery = `#${hashtagToScrape}`;
-          console.log(`⌨️  Digitando "${searchQuery}" (simulando humano)...`);
-
-          for (const char of searchQuery) {
-            await page.keyboard.type(char);
-            await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 150));
-          }
-
-          // 4. AGUARDAR SUGESTÕES
-          console.log(`⏳ Aguardando sugestões aparecerem...`);
-          await page.waitForFunction((term) => {
-            const links = Array.from(document.querySelectorAll('a'));
-            return links.some(link => link.href.includes(`/explore/tags/${term}`));
-          }, { timeout: 8000 }, hashtagToScrape).catch(() => {
-            throw new Error('Nenhuma sugestão de hashtag encontrada.');
-          });
-
-          // 5. CLICAR NA HASHTAG SUGERIDA
-          console.log(`👆 Clicando na hashtag sugerida...`);
-          const clickedHashtag = await page.evaluate((term) => {
-            const links = Array.from(document.querySelectorAll('a'));
-            const hashtagLink = links.find(link => link.href.includes(`/explore/tags/${term}`));
-            if (hashtagLink) {
-              (hashtagLink as HTMLElement).click();
-              return true;
-            }
-            return false;
-          }, hashtagToScrape);
-
-          if (!clickedHashtag) {
-            throw new Error('Não foi possível clicar na hashtag sugerida.');
-          }
-
-          navigatedViaSearch = true;
-        } catch (searchError: any) {
-          console.log(`   ⚠️  Falha ao usar busca (${searchError.message}). Navegando direto para hashtag.`);
-          await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
-        }
-      }
+      // Delay generoso após navegação para garantir renderização completa
+      const postNavDelay = 4000 + Math.random() * 2000; // 4-6s
+      console.log(`   ⏳ Aguardando ${(postNavDelay/1000).toFixed(1)}s para renderização completa...`);
+      await new Promise(resolve => setTimeout(resolve, postNavDelay));
 
       // 6. AGUARDAR MURAL CARREGAR
       console.log(`⏳ Aguardando mural de posts carregar...`);
@@ -678,10 +604,20 @@ export async function scrapeInstagramTag(
             postSelector
           );
 
-          // Contar posts encontrados
-          const postCount = await page.evaluate((selector) => {
-            return document.querySelectorAll(selector).length;
-          }, postSelector);
+          // Contar posts encontrados (com proteção anti-detached frame)
+          let postCount = 0;
+          try {
+            postCount = await page.evaluate((selector) => {
+              return document.querySelectorAll(selector).length;
+            }, postSelector);
+          } catch (evalError: any) {
+            console.log(`   ⚠️  Erro ao contar posts (detached frame?): ${evalError.message}`);
+            // Tentar novamente após delay
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            postCount = await page.evaluate((selector) => {
+              return document.querySelectorAll(selector).length;
+            }, postSelector).catch(() => 0);
+          }
 
           console.log(`   ✅ Mural carregado com ${postCount} posts`);
 
@@ -692,9 +628,15 @@ export async function scrapeInstagramTag(
           const pageContent = await page.content();
 
           // 🔧 DETECTOR MELHORADO: Se encontrou posts, NÃO é página de login
-          const postCount = await page.evaluate((selector) => {
-            return document.querySelectorAll(selector).length;
-          }, postSelector);
+          let postCount = 0;
+          try {
+            postCount = await page.evaluate((selector) => {
+              return document.querySelectorAll(selector).length;
+            }, postSelector);
+          } catch (evalError) {
+            // Ignora erro de detached frame no fallback
+            postCount = 0;
+          }
 
           // 🆕 CRITÉRIO ROBUSTO: 15+ posts = mural carregou com sucesso (mesmo com timeout)
           const muralLoaded = postCount >= 15;
@@ -727,34 +669,40 @@ export async function scrapeInstagramTag(
       // 7. PROCESSAR POSTS DO MURAL
       console.log(`🖼️  Iniciando processamento dos posts do mural...`);
 
-      // DEBUG: Verificar estrutura REAL do mural de hashtag
-      const debugInfo = await page.evaluate(() => {
-        const allLinks = Array.from(document.querySelectorAll('a'));
-        const articles = Array.from(document.querySelectorAll('article'));
+      // DEBUG: Verificar estrutura REAL do mural de hashtag (com proteção anti-detached)
+      let debugInfo: any = { url: '', totalLinks: 0, totalArticles: 0, selectorResults: {}, firstArticleHTML: '', linksWithP: [] };
+      try {
+        debugInfo = await page.evaluate(() => {
+          const allLinks = Array.from(document.querySelectorAll('a'));
+          const articles = Array.from(document.querySelectorAll('article'));
 
-        // Tentar diferentes seletores
-        const selectors = {
-          'article a[href*="/p/"]': document.querySelectorAll('article a[href*="/p/"]').length,
-          'article a[href*="/reel/"]': document.querySelectorAll('article a[href*="/reel/"]').length,
-          'a[href*="/p/"]': document.querySelectorAll('a[href*="/p/"]').length,
-          'a[href*="/reel/"]': document.querySelectorAll('a[href*="/reel/"]').length,
-          'article div[role="button"]': document.querySelectorAll('article div[role="button"]').length,
-          'article img': document.querySelectorAll('article img').length,
-        };
+          // Tentar diferentes seletores
+          const selectors = {
+            'article a[href*="/p/"]': document.querySelectorAll('article a[href*="/p/"]').length,
+            'article a[href*="/reel/"]': document.querySelectorAll('article a[href*="/reel/"]').length,
+            'a[href*="/p/"]': document.querySelectorAll('a[href*="/p/"]').length,
+            'a[href*="/reel/"]': document.querySelectorAll('a[href*="/reel/"]').length,
+            'article div[role="button"]': document.querySelectorAll('article div[role="button"]').length,
+            'article img': document.querySelectorAll('article img').length,
+          };
 
-        // Estrutura do primeiro article
-        const firstArticle = articles[0];
-        const firstArticleHTML = firstArticle ? firstArticle.outerHTML.substring(0, 500) : 'Nenhum article';
+          // Estrutura do primeiro article
+          const firstArticle = articles[0];
+          const firstArticleHTML = firstArticle ? firstArticle.outerHTML.substring(0, 500) : 'Nenhum article';
 
-        return {
-          url: window.location.href,
-          totalLinks: allLinks.length,
-          totalArticles: articles.length,
-          selectorResults: selectors,
-          firstArticleHTML,
-          linksWithP: allLinks.filter(a => a.href.includes('/p/')).slice(0, 5).map(a => a.href)
-        };
-      });
+          return {
+            url: window.location.href,
+            totalLinks: allLinks.length,
+            totalArticles: articles.length,
+            selectorResults: selectors,
+            firstArticleHTML,
+            linksWithP: allLinks.filter(a => a.href.includes('/p/')).slice(0, 5).map(a => a.href)
+          };
+        });
+      } catch (debugError: any) {
+        console.log(`   ⚠️  Erro ao coletar debug info (detached frame?): ${debugError.message}`);
+      }
+
       console.log(`\n🔍 ===== DEBUG MURAL =====`);
       console.log(`📍 URL: ${debugInfo.url}`);
       console.log(`📊 Articles encontrados: ${debugInfo.totalArticles}`);
@@ -804,8 +752,13 @@ export async function scrapeInstagramTag(
 
           console.log(`   👆 Movendo mouse para (${Math.round(x)}, ${Math.round(y)})...`);
 
-          // Movimento em etapas (mais humano)
-          const currentPos = await page.evaluate(() => ({ x: 0, y: 0 }));
+          // Movimento em etapas (mais humano) - com proteção anti-detached
+          let currentPos = { x: 0, y: 0 };
+          try {
+            currentPos = await page.evaluate(() => ({ x: 0, y: 0 }));
+          } catch (evalError) {
+            // Ignora erro e usa posição padrão
+          }
           const steps = 10;
           for (let i = 1; i <= steps; i++) {
             const stepX = currentPos.x + ((x - currentPos.x) * i) / steps;
@@ -1559,56 +1512,7 @@ export async function scrapeInstagramTag(
             console.log(`   📮 CEP: ${completeProfile.zip_code || 'N/A'}`);
             console.log(`   💼 Categoria: ${completeProfile.business_category || 'N/A'}`);
 
-            // ========================================
-            // VALIDAÇÃO 3: IDENTIFICAR PERFIS COM AUDIÊNCIA RELEVANTE E SCRAPEAR SEGUIDORES
-            // ========================================
-            // Qualquer perfil com 10k-300k followers tem audiência de consumidores potenciais
-            const hasRelevantAudience = (followers_count >= 10000 && followers_count <= 300000);
-
-            if (hasRelevantAudience) {
-              console.log(`\n   🎯 AUDIÊNCIA RELEVANTE DETECTADA!`);
-              console.log(`   📊 Seguidores do perfil: ${followers_count.toLocaleString()}`);
-              console.log(`   👥 Iniciando scraping de 50 seguidores...`);
-
-              try {
-                // Importar serviço de followers scraper
-                const { scrapeInstagramFollowers } = await import('./instagram-followers-scraper.service');
-
-                // Scrapear 50 seguidores do concorrente
-                // 🔥 PASSAR A PÁGINA ATUAL como parâmetro (evitar "detached frame")
-                const followersResult = await scrapeInstagramFollowers(username, 50, page);
-
-                if (followersResult.success && followersResult.followers.length > 0) {
-                  // Adicionar seguidores ao objeto do perfil (fica em memória)
-                  completeProfile.followers = followersResult.followers;
-                  completeProfile.has_relevant_audience = true;
-                  completeProfile.lead_source = 'profile_with_audience';
-                  completeProfile.followers_scraped_count = followersResult.followers.length;
-
-                  console.log(`   ✅ ${followersResult.followers.length} seguidores coletados com sucesso!`);
-                  console.log(`   📦 Seguidores salvos em memória (serão persistidos pelo N8N)`);
-                } else {
-                  console.log(`   ⚠️  Falha ao scrapear seguidores: ${followersResult.error_message || 'Erro desconhecido'}`);
-                  completeProfile.has_relevant_audience = true;
-                  completeProfile.lead_source = 'profile_with_audience';
-                  completeProfile.followers = [];
-                  completeProfile.followers_scraped_count = 0;
-                }
-              } catch (followersError: any) {
-                console.log(`   ❌ Erro ao scrapear seguidores: ${followersError.message}`);
-                completeProfile.has_relevant_audience = true;
-                completeProfile.lead_source = 'profile_with_audience';
-                completeProfile.followers = [];
-                completeProfile.followers_scraped_count = 0;
-              }
-
-              console.log(`   ⏭️  Continuando para próximo perfil...\n`);
-            } else {
-              console.log(`   👤 Perfil com audiência menor (< 10k ou > 300k)`);
-              completeProfile.has_relevant_audience = false;
-              completeProfile.lead_source = 'hashtag_search';
-            }
-
+            // Adicionar perfil à lista (sem processar seguidores)
             foundProfiles.push(completeProfile);
             processedUsernames.add(username);
             consecutiveDuplicates = 0; // Resetar contador ao encontrar perfil novo
