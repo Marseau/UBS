@@ -848,6 +848,21 @@ export async function scrapeInstagramTag(
         while (foundProfiles.length < maxProfiles && attemptsWithoutNewPost < 8 && consecutiveDuplicates < 3) {
           console.log(`\n📊 Status (#${hashtagToScrape}): ${foundProfiles.length}/${maxProfiles} perfis, tentativa ${attemptsWithoutNewPost}/8, duplicatas consecutivas ${consecutiveDuplicates}/3`);
 
+          // CORREÇÃO: Garantir que o drawer de pesquisa está fechado no início de cada iteração
+          try {
+            await page.evaluate(() => {
+              // Clicar fora do drawer para fechá-lo se estiver aberto
+              const mainContent = document.querySelector('main') || document.querySelector('section');
+              if (mainContent) {
+                const event = new MouseEvent('click', { bubbles: true });
+                mainContent.dispatchEvent(event);
+              }
+            });
+            await new Promise(resolve => setTimeout(resolve, 300));
+          } catch {
+            // Ignorar erros
+          }
+
         const anchorHandles = await page.$$(postSelector);
         console.log(`   🔍 Encontrados ${anchorHandles.length} elementos com seletor: ${postSelector}`);
 
@@ -926,6 +941,33 @@ export async function scrapeInstagramTag(
         }
 
         console.log(`\n   🖼️  Abrindo post: ${selectedUrl}`);
+
+        // CORREÇÃO: Fechar painel lateral de pesquisa se estiver aberto (interfere nos cliques)
+        try {
+          const searchDrawerOpen = await page.evaluate(() => {
+            // Detectar se o drawer de pesquisa está aberto (cobre parte da tela)
+            const drawer = document.querySelector('div[style*="width: 397px"]') ||
+                          document.querySelector('div[role="dialog"]') ||
+                          document.querySelector('div[class*="x1n2onr6"][style*="left: 0px"]');
+            return !!drawer;
+          });
+
+          if (searchDrawerOpen) {
+            console.log(`   🔧 Fechando painel lateral de pesquisa...`);
+            // Pressionar ESC para fechar o drawer
+            await page.keyboard.press('Escape');
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Recalcular posição do elemento após fechar drawer
+            const newBox = await selectedHandle.boundingBox();
+            if (newBox) {
+              console.log(`   📍 Nova posição após fechar drawer: x=${newBox.x}, y=${newBox.y}`);
+            }
+          }
+        } catch (drawerError) {
+          // Ignorar erro de detecção do drawer
+        }
+
         const opened = await clickPostElement(selectedHandle, selectedUrl);
         await selectedHandle.dispose();
 
