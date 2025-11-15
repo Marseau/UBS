@@ -53,6 +53,51 @@ export interface InstagramProfileData {
 }
 
 /**
+ * Sanitiza dados para inserção no banco (similar ao toSQL do N8N)
+ * Garante que valores vazios viram NULL e limita tamanhos de campos
+ */
+function sanitizeForDatabase(profile: any): any {
+  const sanitize = (value: any, maxLength?: number): any => {
+    // NULL, undefined ou string vazia → null
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    // String - limitar tamanho se especificado
+    if (typeof value === 'string' && maxLength) {
+      return value.substring(0, maxLength);
+    }
+
+    return value;
+  };
+
+  return {
+    username: sanitize(profile.username),
+    full_name: sanitize(profile.full_name),
+    bio: sanitize(profile.bio),
+    profile_pic_url: sanitize(profile.profile_pic_url),
+    is_business_account: profile.is_business_account,
+    is_verified: profile.is_verified,
+    followers_count: profile.followers_count,
+    following_count: profile.following_count,
+    posts_count: profile.posts_count,
+    email: sanitize(profile.email),
+    phone: sanitize(profile.phone),
+    website: sanitize(profile.website),
+    business_category: sanitize(profile.business_category),
+    city: sanitize(profile.city, 100), // MAX 100 caracteres
+    state: sanitize(profile.state, 2), // MAX 2 caracteres
+    neighborhood: sanitize(profile.neighborhood, 100), // MAX 100 caracteres
+    activity_score: profile.activity_score || 0,
+    is_active: profile.is_active,
+    language: sanitize(profile.language, 10), // MAX 10 caracteres
+    hashtags_bio: profile.hashtags_bio || null,
+    hashtags_posts: profile.hashtags_posts || null,
+    search_term_used: sanitize(profile.search_term_used)
+  };
+}
+
+/**
  * Delay aleatório para simular comportamento humano (2-5 segundos)
  */
 async function humanDelay(): Promise<void> {
@@ -619,9 +664,12 @@ export async function scrapeInstagramUserSearch(
           // Remover campos que não existem no banco
           const { recent_post_dates, ...profileData } = completeProfile;
 
+          // Sanitizar dados (similar ao toSQL do N8N)
+          const sanitizedProfile = sanitizeForDatabase(profileData);
+
           // Adicionar campos adicionais necessários para o banco
           const profileToSave = {
-            ...profileData,
+            ...sanitizedProfile,
             captured_at: new Date().toISOString(),
             lead_source: 'user_search',
             lead_score: leadScore,
