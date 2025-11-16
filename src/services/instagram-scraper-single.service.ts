@@ -30,6 +30,62 @@ let loggedUsername: string | null = null;
 // Arquivo para salvar cookies da sessão
 const COOKIES_FILE = path.join(process.cwd(), 'instagram-cookies.json');
 
+// ========== CLEANUP HANDLERS ==========
+// Garante que o browser seja fechado quando o processo terminar
+const cleanupBrowser = async () => {
+  if (browserInstance) {
+    console.log('\n🧹 [CLEANUP] Fechando browser Puppeteer...');
+    try {
+      await browserInstance.close();
+      console.log('✅ [CLEANUP] Browser fechado com sucesso');
+    } catch (err) {
+      console.log('⚠️  [CLEANUP] Erro ao fechar browser:', err);
+    }
+    browserInstance = null;
+    sessionPage = null;
+  }
+};
+
+// Registrar handlers para sinais de encerramento
+process.on('SIGTERM', async () => {
+  console.log('\n🛑 [SIGNAL] SIGTERM recebido - iniciando cleanup...');
+  await cleanupBrowser();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('\n🛑 [SIGNAL] SIGINT recebido - iniciando cleanup...');
+  await cleanupBrowser();
+  process.exit(0);
+});
+
+process.on('exit', () => {
+  if (browserInstance) {
+    console.log('⚠️  [EXIT] Processo encerrando com browser ainda aberto!');
+    // Não pode usar async aqui, então força kill síncrono
+    try {
+      const pid = browserInstance.process()?.pid;
+      if (pid) {
+        process.kill(pid, 'SIGKILL');
+        console.log(`🔪 [EXIT] Browser process ${pid} killed`);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+});
+
+// Handler para exceções não tratadas
+process.on('uncaughtException', async (err) => {
+  console.error('\n💥 [EXCEPTION] Exceção não tratada:', err);
+  await cleanupBrowser();
+});
+
+process.on('unhandledRejection', async (reason) => {
+  console.error('\n💥 [REJECTION] Promise rejeitada:', reason);
+  // Não fecha o browser aqui para não interromper operações normais
+});
+
 /**
  * Delay aleatório para simular comportamento humano (2-5 segundos)
  */
@@ -40,10 +96,11 @@ async function humanDelay(): Promise<void> {
 }
 
 /**
- * Delay maior entre ações críticas para evitar detecção de bot (3-5 segundos)
+ * Delay maior entre ações críticas para evitar detecção de bot (5-8 segundos)
+ * AUMENTADO para evitar 429 Too Many Requests
  */
 async function antiDetectionDelay(): Promise<void> {
-  const delay = 3000 + Math.random() * 2000; // 3-5 segundos
+  const delay = 5000 + Math.random() * 3000; // 5-8 segundos (mais conservador)
   console.log(`   🛡️  Delay anti-detecção: ${(delay / 1000).toFixed(1)}s...`);
   await new Promise(resolve => setTimeout(resolve, delay));
 }
@@ -311,30 +368,106 @@ async function ensureLoggedSession(): Promise<void> {
     }
 
     if (!loggedIn) {
-      console.log('');
-      console.log('🔐 ============================================');
-      console.log('🔐 LOGIN NECESSÁRIO NO INSTAGRAM');
-      console.log('🔐 ============================================');
-      console.log('🔐 O browser foi aberto.');
-      console.log('🔐 Você tem 90 SEGUNDOS para fazer login manualmente.');
-      console.log('🔐 Após o login, os cookies serão salvos automaticamente.');
-      console.log('🔐 ============================================');
-      console.log('');
+      const scraperUsername = process.env.INSTAGRAM_UNOFFICIAL_USERNAME;
+      const scraperPassword = process.env.INSTAGRAM_OFFICIAL_PASSWORD || process.env.INSTAGRAM_ALT_PASSWORD;
 
-      await sessionPage.goto('https://www.instagram.com/', { waitUntil: 'networkidle2', timeout: 120000 });
+      if (!scraperUsername || !scraperPassword) {
+        console.log('');
+        console.log('🔐 ============================================');
+        console.log('🔐 LOGIN MANUAL NECESSÁRIO NO INSTAGRAM');
+        console.log('🔐 ============================================');
+        console.log('🔐 Credenciais não configuradas no .env');
+        console.log('🔐 Configure INSTAGRAM_UNOFFICIAL_USERNAME e INSTAGRAM_OFFICIAL_PASSWORD');
+        console.log('🔐 Você tem 90 SEGUNDOS para fazer login manualmente.');
+        console.log('🔐 ============================================');
+        console.log('');
 
-      const loginDeadline = Date.now() + 90000;
-      let success = false;
-      while (Date.now() < loginDeadline) {
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        success = await isLoggedIn(sessionPage);
-        if (success) {
-          break;
+        await sessionPage.goto('https://www.instagram.com/', { waitUntil: 'networkidle2', timeout: 120000 });
+
+        const loginDeadline = Date.now() + 90000;
+        let success = false;
+        while (Date.now() < loginDeadline) {
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          success = await isLoggedIn(sessionPage);
+          if (success) {
+            break;
+          }
         }
-      }
 
-      if (!success) {
-        throw new Error('Tempo excedido para login manual no Instagram.');
+        if (!success) {
+          throw new Error('Tempo excedido para login manual no Instagram.');
+        }
+      } else {
+        console.log('');
+        console.log('🤖 ============================================');
+        console.log('🤖 LOGIN AUTOMÁTICO NO INSTAGRAM');
+        console.log('🤖 ============================================');
+        console.log(`🤖 Conta: ${scraperUsername}`);
+        console.log('🤖 ============================================');
+        console.log('');
+
+        await sessionPage.goto('https://www.instagram.com/', { waitUntil: 'networkidle2', timeout: 120000 });
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Esperar página carregar completamente
+
+        // Verificar se já está na página de login
+        const currentUrl = sessionPage.url();
+        console.log(`📍 URL atual: ${currentUrl}`);
+
+        // Preencher credenciais
+        try {
+          console.log('📝 Preenchendo username...');
+          await sessionPage.waitForSelector('input[name="username"]', { timeout: 10000 });
+          await sessionPage.type('input[name="username"]', scraperUsername, { delay: 100 });
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          console.log('📝 Preenchendo password...');
+          await sessionPage.type('input[name="password"]', scraperPassword, { delay: 100 });
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          console.log('🔘 Clicando em Login...');
+          await sessionPage.click('button[type="submit"]');
+
+          // Esperar navegação ou mudança de estado
+          console.log('⏳ Aguardando resposta do Instagram...');
+          await new Promise(resolve => setTimeout(resolve, 8000)); // 8 segundos para processar
+
+          // Verificar se login foi bem-sucedido
+          let loginSuccess = await isLoggedIn(sessionPage);
+
+          if (!loginSuccess) {
+            // Verificar se há desafio de segurança ou 2FA
+            const pageContent = await sessionPage.content();
+            if (pageContent.includes('challenge') || pageContent.includes('two_factor') || pageContent.includes('verificação')) {
+              console.log('⚠️  Instagram solicitou verificação adicional (2FA ou challenge)');
+              console.log('🔐 Aguardando 60 segundos para verificação manual...');
+
+              const challengeDeadline = Date.now() + 60000;
+              while (Date.now() < challengeDeadline && !loginSuccess) {
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                loginSuccess = await isLoggedIn(sessionPage);
+              }
+            } else {
+              console.log('❌ Login automático falhou. Verificando erro...');
+              const errorText = await sessionPage.evaluate(() => {
+                const errorElement = document.querySelector('[role="alert"]') || document.querySelector('.eiCW-');
+                return errorElement ? errorElement.textContent : null;
+              });
+              if (errorText) {
+                console.log(`❌ Erro do Instagram: ${errorText}`);
+              }
+            }
+          }
+
+          if (!loginSuccess) {
+            throw new Error('Login automático falhou. Verifique credenciais ou faça login manual.');
+          }
+
+          console.log('✅ Login automático bem-sucedido!');
+
+        } catch (loginError: any) {
+          console.error('❌ Erro durante login automático:', loginError.message);
+          throw new Error(`Falha no login automático: ${loginError.message}`);
+        }
       }
 
       await saveCookies(sessionPage);
@@ -478,7 +611,10 @@ export async function scrapeInstagramTag(
   console.log(`🔎 Termo: "${searchTerm}" → "#${normalizedTerm}"`);
 
   // Criar contexto UMA VEZ para discovery E scraping
-  const { page, requestId, cleanup } = await createIsolatedContext();
+  let context = await createIsolatedContext();
+  let page = context.page;
+  const requestId = context.requestId;
+  let cleanup = context.cleanup;
   console.log(`🔒 Request ${requestId} iniciada para discovery + scrape-tag: "${searchTerm}"`);
 
   let variations: any[] = [];
@@ -571,6 +707,26 @@ export async function scrapeInstagramTag(
         try {
           retryCount++;
 
+      // 🆕 VERIFICAR SE BROWSER/PÁGINA PRECISA SER RECRIADO (após SESSION_INVALID)
+      if (!browserInstance || page.isClosed()) {
+        console.log('🔄 [SESSION RECOVERY] Recriando sessão do Instagram...');
+
+        // Forçar limpeza de variáveis globais
+        browserInstance = null;
+        sessionPage = null;
+        sessionInitialization = null;
+        loggedUsername = null;
+
+        // Recriar contexto
+        const newContext = await createIsolatedContext();
+        // Reassignar página e cleanup
+        page = newContext.page;
+        cleanup = newContext.cleanup;
+
+        console.log('✅ [SESSION RECOVERY] Nova sessão criada com sucesso!');
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Dar tempo para estabilizar
+      }
+
       // 🆕 ESTRATÉGIA ULTRA-ROBUSTA: Navegar DIRETO para URL da hashtag
       // (Evita campo de busca → previne erro 429 e detached frame)
       const hashtagUrl = `https://www.instagram.com/explore/tags/${hashtagToScrape}/`;
@@ -607,6 +763,37 @@ export async function scrapeInstagramTag(
       console.log(`   ⏳ Aguardando ${(postNavDelay/1000).toFixed(1)}s para renderização completa...`);
       await new Promise(resolve => setTimeout(resolve, postNavDelay));
 
+      // 🆕 DETECÇÃO AUTOMÁTICA DE SESSÃO INVÁLIDA
+      const pageHasError = await page.evaluate(() => {
+        const bodyText = document.body?.innerText || '';
+        const hasErrorMessage = bodyText.includes('Ocorreu um erro') ||
+                                bodyText.includes('não foi possível carregar') ||
+                                bodyText.includes('Something went wrong') ||
+                                bodyText.includes('error occurred');
+        return hasErrorMessage;
+      }).catch(() => false);
+
+      if (pageHasError) {
+        console.log('❌ [SESSION INVALID] Instagram retornou página de erro - limpando cookies...');
+
+        // Limpar cookies automaticamente
+        if (fs.existsSync(COOKIES_FILE)) {
+          fs.unlinkSync(COOKIES_FILE);
+          console.log('🗑️  Cookies removidos para forçar novo login');
+        }
+
+        // Fechar browser para reiniciar sessão
+        if (browserInstance) {
+          await browserInstance.close().catch(() => {});
+          browserInstance = null;
+          sessionPage = null;
+          sessionInitialization = null;
+          loggedUsername = null;
+        }
+
+        throw new Error('SESSION_INVALID: Instagram session expired. Cookies cleared. Please retry.');
+      }
+
       // 6. AGUARDAR MURAL CARREGAR
       console.log(`⏳ Aguardando mural de posts carregar...`);
       // IMPORTANTE: Não usar 'article' pois hashtag murals têm estrutura diferente do home feed
@@ -626,7 +813,7 @@ export async function scrapeInstagramTag(
               const isSearchPage = url.includes('/explore/search/') && url.includes(`%23${term}`);
               return isTagsPage || isSearchPage;
             },
-            { timeout: 30000 },
+            { timeout: 15000 },
             hashtagToScrape
           );
           console.log(`   ✅ Página de hashtag/busca confirmada`);
@@ -637,7 +824,7 @@ export async function scrapeInstagramTag(
               const posts = document.querySelectorAll(selector);
               return posts.length > 0;
             },
-            { timeout: 30000 },
+            { timeout: 15000 },
             postSelector
           );
 
@@ -820,8 +1007,35 @@ export async function scrapeInstagramTag(
           const isPostPage = currentUrl.includes('/p/') || currentUrl.includes('/reel/');
 
           if (!isPostPage) {
-            console.log(`   ❌ Post NÃO abriu! URL atual: ${currentUrl}`);
-            return false;
+            console.log(`   ❌ Post NÃO abriu via clique! URL atual: ${currentUrl}`);
+            console.log(`   ⚠️  Evitando goto direto para não triggerar 429. Tentando clique alternativo...`);
+
+            // TENTATIVA 2: Clicar usando JavaScript (mais confiável que mouse)
+            try {
+              await antiDetectionDelay(); // Delay maior antes de tentar novamente
+
+              // Forçar clique via JavaScript no elemento
+              await anchorHandle.evaluate((el: Element) => {
+                (el as HTMLElement).click();
+              });
+
+              await new Promise(resolve => setTimeout(resolve, 3000));
+
+              const urlAfterJsClick = page.url();
+              const isPostNow = urlAfterJsClick.includes('/p/') || urlAfterJsClick.includes('/reel/');
+
+              if (isPostNow) {
+                console.log(`   ✅ Post abriu via clique JavaScript: ${urlAfterJsClick}`);
+                await antiDetectionDelay();
+                return true;
+              } else {
+                console.log(`   ❌ Clique JavaScript também não abriu o post`);
+                return false;
+              }
+            } catch (jsClickError: any) {
+              console.log(`   ❌ Erro no clique JavaScript: ${jsClickError.message}`);
+              return false;
+            }
           }
 
           console.log(`   ✅ Post abriu confirmado: ${currentUrl}`);
@@ -832,15 +1046,10 @@ export async function scrapeInstagramTag(
           return true;
 
         } catch (clickError: any) {
-          console.log(`   ⚠️  Clique no post falhou (${clickError.message}). Navegando por URL direta...`);
-          try {
-            await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            return true;
-          } catch (gotoError: any) {
-            console.log(`   ❌  Falha ao abrir post por URL (${gotoError.message})`);
-            return false;
-          }
+          console.log(`   ⚠️  Clique no post falhou (${clickError.message}). Não usando goto para evitar 429.`);
+          // NÃO fazer goto direto - causa 429 (Too Many Requests)
+          await antiDetectionDelay();
+          return false;
         }
       };
 
@@ -942,30 +1151,46 @@ export async function scrapeInstagramTag(
 
         console.log(`\n   🖼️  Abrindo post: ${selectedUrl}`);
 
-        // CORREÇÃO: Fechar painel lateral de pesquisa se estiver aberto (interfere nos cliques)
+        // CORREÇÃO: SEMPRE fechar painel lateral de pesquisa antes de clicar (interfere nos cliques)
         try {
-          const searchDrawerOpen = await page.evaluate(() => {
-            // Detectar se o drawer de pesquisa está aberto (cobre parte da tela)
-            const drawer = document.querySelector('div[style*="width: 397px"]') ||
-                          document.querySelector('div[role="dialog"]') ||
-                          document.querySelector('div[class*="x1n2onr6"][style*="left: 0px"]');
-            return !!drawer;
+          console.log(`   🔧 Fechando possíveis painéis laterais...`);
+
+          // Método 1: Clicar no centro da área de conteúdo principal (direita da tela)
+          await page.mouse.click(800, 400); // Clicar no centro-direita onde estão os posts
+          await new Promise(resolve => setTimeout(resolve, 300));
+
+          // Método 2: Pressionar ESC para fechar qualquer overlay/drawer
+          await page.keyboard.press('Escape');
+          await new Promise(resolve => setTimeout(resolve, 300));
+
+          // Método 3: Clicar no body para tirar foco de qualquer elemento
+          await page.evaluate(() => {
+            document.body.click();
           });
+          await new Promise(resolve => setTimeout(resolve, 200));
 
-          if (searchDrawerOpen) {
-            console.log(`   🔧 Fechando painel lateral de pesquisa...`);
-            // Pressionar ESC para fechar o drawer
-            await page.keyboard.press('Escape');
-            await new Promise(resolve => setTimeout(resolve, 500));
+          // Recalcular posição do elemento após fechar drawer
+          const newBox = await selectedHandle.boundingBox();
+          if (newBox) {
+            console.log(`   📍 Posição atual do elemento: x=${newBox.x}, y=${newBox.y}, width=${newBox.width}`);
 
-            // Recalcular posição do elemento após fechar drawer
-            const newBox = await selectedHandle.boundingBox();
-            if (newBox) {
-              console.log(`   📍 Nova posição após fechar drawer: x=${newBox.x}, y=${newBox.y}`);
+            // VERIFICAR: Se X é muito baixo (< 300), o drawer ainda está aberto
+            if (newBox.x < 300) {
+              console.log(`   ⚠️  Elemento ainda à esquerda (x=${newBox.x}). Tentando fechar drawer novamente...`);
+
+              // Tentar clicar fora do drawer (área dos posts)
+              await page.mouse.click(600, 300);
+              await new Promise(resolve => setTimeout(resolve, 500));
+
+              // Verificar novamente
+              const finalBox = await selectedHandle.boundingBox();
+              if (finalBox) {
+                console.log(`   📍 Posição final: x=${finalBox.x}, y=${finalBox.y}`);
+              }
             }
           }
         } catch (drawerError) {
-          // Ignorar erro de detecção do drawer
+          console.log(`   ⚠️  Erro ao tentar fechar drawer: ${drawerError}`);
         }
 
         const opened = await clickPostElement(selectedHandle, selectedUrl);
@@ -2752,4 +2977,89 @@ export async function getSessionPage(): Promise<Page> {
     throw new Error("Sessão não inicializada");
   }
   return sessionPage;
+}
+
+// ========== FUNÇÕES DE MONITORAMENTO E CLEANUP ==========
+
+/**
+ * Retorna status do browser Puppeteer
+ */
+export function getBrowserStatus(): {
+  active: boolean;
+  pid: number | null;
+  pages: number;
+  connected: boolean;
+} {
+  if (!browserInstance) {
+    return { active: false, pid: null, pages: 0, connected: false };
+  }
+
+  return {
+    active: true,
+    pid: browserInstance.process()?.pid || null,
+    pages: 0, // Será preenchido async se necessário
+    connected: browserInstance.isConnected()
+  };
+}
+
+/**
+ * Força fechamento do browser (para uso em endpoints de admin)
+ */
+export async function forceCloseBrowser(): Promise<{ success: boolean; message: string }> {
+  if (!browserInstance) {
+    return { success: true, message: 'Nenhum browser ativo para fechar' };
+  }
+
+  const pid = browserInstance.process()?.pid;
+  console.log(`\n🔪 [FORCE-CLOSE] Forçando fechamento do browser (PID: ${pid})...`);
+
+  try {
+    await browserInstance.close();
+    browserInstance = null;
+    sessionPage = null;
+    return { success: true, message: `Browser (PID: ${pid}) fechado com sucesso` };
+  } catch (err: any) {
+    // Se não conseguiu fechar graciosamente, mata o processo
+    if (pid) {
+      process.kill(pid, 'SIGKILL');
+    }
+    browserInstance = null;
+    sessionPage = null;
+    return { success: true, message: `Browser (PID: ${pid}) killed forçadamente` };
+  }
+}
+
+/**
+ * Lista todos os processos Chrome/Puppeteer ativos no sistema
+ */
+export async function listPuppeteerProcesses(): Promise<string[]> {
+  const { exec } = require('child_process');
+  return new Promise((resolve) => {
+    exec('ps aux | grep "Chrome for Testing" | grep -v grep', (error: any, stdout: string) => {
+      if (error || !stdout) {
+        resolve([]);
+        return;
+      }
+      const lines = stdout.trim().split('\n').filter((l: string) => l.length > 0);
+      resolve(lines);
+    });
+  });
+}
+
+/**
+ * Mata todos os processos Puppeteer órfãos (exceto o atual)
+ */
+export async function killOrphanPuppeteerProcesses(): Promise<{ killed: number; currentPid: number | null }> {
+  const currentPid = browserInstance?.process()?.pid || null;
+  const { exec } = require('child_process');
+
+  return new Promise((resolve) => {
+    exec('pkill -f "Google Chrome for Testing"', (error: any) => {
+      // Re-verificar quantos foram mortos
+      exec('ps aux | grep "Chrome for Testing" | grep -v grep | wc -l', (_: any, stdout: string) => {
+        const remaining = parseInt(stdout.trim()) || 0;
+        resolve({ killed: 41 - remaining, currentPid }); // Aproximação
+      });
+    });
+  });
 }

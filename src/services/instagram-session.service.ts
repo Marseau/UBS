@@ -164,14 +164,15 @@ async function detectLoggedInUsername(page: Page): Promise<string | null> {
 }
 
 async function performAutoLogin(page: Page): Promise<boolean> {
-  const username = process.env.INSTAGRAM_USERNAME;
-  const password = process.env.INSTAGRAM_PASSWORD;
+  const username = process.env.INSTAGRAM_UNOFFICIAL_USERNAME || process.env.INSTAGRAM_USERNAME;
+  const password = process.env.INSTAGRAM_OFFICIAL_PASSWORD || process.env.INSTAGRAM_ALT_PASSWORD || process.env.INSTAGRAM_PASSWORD;
 
   if (!username || !password) {
+    console.log('⚠️  Credenciais não encontradas no .env (INSTAGRAM_UNOFFICIAL_USERNAME / INSTAGRAM_OFFICIAL_PASSWORD)');
     return false;
   }
 
-  console.log('🔐 Tentando login automático com variáveis de ambiente...');
+  console.log(`🤖 Tentando login automático com conta: ${username}`);
 
   try {
     await page.goto('https://www.instagram.com/accounts/login/', {
