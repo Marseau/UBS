@@ -30,6 +30,64 @@ let loggedUsername: string | null = null;
 // Arquivo para salvar cookies da sessão
 const COOKIES_FILE = path.join(process.cwd(), 'instagram-cookies.json');
 
+// ========== SISTEMA DE RESILIÊNCIA AUTOMÁTICA ==========
+interface ResilienceMetrics {
+  consecutiveErrors: number;
+  totalErrors: number;
+  totalSuccess: number;
+  lastErrorType: string | null;
+  lastErrorTime: number;
+  sessionRecoveries: number;
+  hashtagsSkipped: string[];
+  adaptiveDelayMultiplier: number;
+}
+
+const resilienceMetrics: ResilienceMetrics = {
+  consecutiveErrors: 0,
+  totalErrors: 0,
+  totalSuccess: 0,
+  lastErrorType: null,
+  lastErrorTime: 0,
+  sessionRecoveries: 0,
+  hashtagsSkipped: [],
+  adaptiveDelayMultiplier: 1.0
+};
+
+function updateResilienceOnSuccess(): void {
+  resilienceMetrics.consecutiveErrors = 0;
+  resilienceMetrics.totalSuccess++;
+  // Reduzir delay multiplier gradualmente após sucesso
+  if (resilienceMetrics.adaptiveDelayMultiplier > 1.0) {
+    resilienceMetrics.adaptiveDelayMultiplier = Math.max(1.0, resilienceMetrics.adaptiveDelayMultiplier * 0.9);
+  }
+}
+
+function updateResilienceOnError(errorType: string): void {
+  resilienceMetrics.consecutiveErrors++;
+  resilienceMetrics.totalErrors++;
+  resilienceMetrics.lastErrorType = errorType;
+  resilienceMetrics.lastErrorTime = Date.now();
+  // Aumentar delay multiplier para evitar mais erros
+  resilienceMetrics.adaptiveDelayMultiplier = Math.min(3.0, resilienceMetrics.adaptiveDelayMultiplier * 1.3);
+}
+
+function getAdaptiveDelay(baseDelay: number): number {
+  return baseDelay * resilienceMetrics.adaptiveDelayMultiplier;
+}
+
+function shouldSkipHashtag(): boolean {
+  // Se mais de 5 erros consecutivos, pular hashtag atual
+  return resilienceMetrics.consecutiveErrors >= 5;
+}
+
+function logResilienceStatus(): void {
+  const successRate = resilienceMetrics.totalSuccess + resilienceMetrics.totalErrors > 0
+    ? ((resilienceMetrics.totalSuccess / (resilienceMetrics.totalSuccess + resilienceMetrics.totalErrors)) * 100).toFixed(1)
+    : '0';
+
+  console.log(`\n📊 [RESILIÊNCIA] Taxa sucesso: ${successRate}% | Erros consecutivos: ${resilienceMetrics.consecutiveErrors} | Delay multiplier: ${resilienceMetrics.adaptiveDelayMultiplier.toFixed(2)}x | Recoveries: ${resilienceMetrics.sessionRecoveries}`);
+}
+
 // ========== CLEANUP HANDLERS ==========
 // Garante que o browser seja fechado quando o processo terminar
 const cleanupBrowser = async () => {
@@ -610,6 +668,17 @@ export async function scrapeInstagramTag(
 
   console.log(`🔎 Termo: "${searchTerm}" → "#${normalizedTerm}"`);
 
+  // 🆕 RESET MÉTRICAS DE RESILIÊNCIA PARA NOVA SESSÃO
+  resilienceMetrics.consecutiveErrors = 0;
+  resilienceMetrics.totalErrors = 0;
+  resilienceMetrics.totalSuccess = 0;
+  resilienceMetrics.lastErrorType = null;
+  resilienceMetrics.lastErrorTime = 0;
+  resilienceMetrics.sessionRecoveries = 0;
+  resilienceMetrics.hashtagsSkipped = [];
+  resilienceMetrics.adaptiveDelayMultiplier = 1.0;
+  console.log(`🔄 Métricas de resiliência resetadas para nova sessão`);
+
   // Criar contexto UMA VEZ para discovery E scraping
   let context = await createIsolatedContext();
   let page = context.page;
@@ -758,9 +827,58 @@ export async function scrapeInstagramTag(
         throw navError;
       }
 
-      // Delay generoso após navegação para garantir renderização completa
-      const postNavDelay = 4000 + Math.random() * 2000; // 4-6s
-      console.log(`   ⏳ Aguardando ${(postNavDelay/1000).toFixed(1)}s para renderização completa...`);
+      // 🆕 VERIFICAR SE INSTAGRAM REDIRECIONOU PARA PÁGINA DIFERENTE
+      let currentUrl = page.url();
+      console.log(`   🔍 URL atual: ${currentUrl}`);
+
+      // Detectar redirecionamentos suspeitos
+      const isLoginPage = currentUrl.includes('/accounts/login');
+      const isChallengePage = currentUrl.includes('/challenge') || currentUrl.includes('/checkpoint');
+      const isSuspiciousPage = currentUrl.includes('/sorry') || currentUrl.includes('/suspended');
+      let isExpectedPage = currentUrl.includes('/explore/tags/') || currentUrl.includes('/explore/search/');
+
+      if (isLoginPage) {
+        console.log('❌ [REDIRECT] Instagram redirecionou para página de LOGIN - sessão inválida');
+        throw new Error('SESSION_INVALID: Redirected to login page');
+      }
+
+      if (isChallengePage) {
+        console.log('❌ [REDIRECT] Instagram redirecionou para CHALLENGE/CAPTCHA - verificação necessária');
+        throw new Error('CHALLENGE_REQUIRED: Instagram requires verification');
+      }
+
+      if (isSuspiciousPage) {
+        console.log('❌ [REDIRECT] Instagram redirecionou para página SUSPENSA/BLOQUEADA');
+        throw new Error('ACCOUNT_RESTRICTED: Account may be temporarily restricted');
+      }
+
+      // 🆕 RECUPERAÇÃO: Se não está na página esperada, tentar voltar
+      if (!isExpectedPage) {
+        console.log(`⚠️  [REDIRECT] URL não corresponde à hashtag esperada!`);
+        console.log(`   Esperado: ${hashtagUrl}`);
+        console.log(`   Recebido: ${currentUrl}`);
+        console.log(`   🔄 Tentando voltar para a hashtag...`);
+
+        // Tentar navegar novamente para a URL correta
+        await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        // Verificar novamente
+        currentUrl = page.url();
+        isExpectedPage = currentUrl.includes('/explore/tags/') || currentUrl.includes('/explore/search/');
+
+        if (!isExpectedPage) {
+          console.log(`❌ [REDIRECT] Não conseguiu voltar para a hashtag. URL final: ${currentUrl}`);
+          throw new Error(`REDIRECT_RECOVERY_FAILED: Could not return to hashtag page`);
+        }
+
+        console.log(`   ✅ Recuperação bem-sucedida! Agora em: ${currentUrl}`);
+      }
+
+      // Delay generoso após navegação para garantir renderização completa (ADAPTATIVO)
+      const baseNavDelay = 4000 + Math.random() * 2000; // 4-6s base
+      const postNavDelay = getAdaptiveDelay(baseNavDelay);
+      console.log(`   ⏳ Aguardando ${(postNavDelay/1000).toFixed(1)}s para renderização completa... (multiplier: ${resilienceMetrics.adaptiveDelayMultiplier.toFixed(2)}x)`);
       await new Promise(resolve => setTimeout(resolve, postNavDelay));
 
       // 🆕 DETECÇÃO AUTOMÁTICA DE SESSÃO INVÁLIDA
@@ -1236,11 +1354,11 @@ export async function scrapeInstagramTag(
             console.log(`   💾 HTML salvo em /tmp/instagram-post-debug.html (primeiros 50KB)`);
 
             try {
-              await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
+              await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
             } catch {
               // ignore
             }
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 1500));
             const feedReady = await waitForHashtagMural('Retorno após post sem autor');
             if (!feedReady) {
               attemptsWithoutNewPost++;
@@ -1251,11 +1369,11 @@ export async function scrapeInstagramTag(
           if (username === loggedUsername) {
             console.log(`   ⏭️  Post do próprio usuário logado, pulando...`);
             try {
-              await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
+              await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
             } catch {
               // ignore
             }
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 1500));
             const feedReady = await waitForHashtagMural('Retorno após detectar usuário logado');
             if (!feedReady) {
               attemptsWithoutNewPost++;
@@ -1280,11 +1398,11 @@ export async function scrapeInstagramTag(
 
               // Retornar ao mural
               try {
-                await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
+                await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
               } catch {
                 // ignore
               }
-              await new Promise(resolve => setTimeout(resolve, 2000));
+              await new Promise(resolve => setTimeout(resolve, 1500));
               const feedReady = await waitForHashtagMural('Retorno após detectar duplicata no BD');
               if (!feedReady) {
                 attemptsWithoutNewPost++;
@@ -1300,18 +1418,18 @@ export async function scrapeInstagramTag(
 
           if (processedUsernames.has(username)) {
             console.log(`   ⏭️  @${username} já processado, pulando... (${consecutiveDuplicates} duplicatas consecutivas)`);
-            console.log(`   ⏳ Aguardando 20 segundos para auto-scroll do Instagram carregar novos posts...`);
+            console.log(`   ⏳ Aguardando 8 segundos para auto-scroll do Instagram carregar novos posts...`);
 
-            // Aguardar 20 segundos para permitir auto-scroll do Instagram
-            await new Promise(resolve => setTimeout(resolve, 20000));
+            // Aguardar 8 segundos (reduzido de 20s)
+            await new Promise(resolve => setTimeout(resolve, 8000));
 
             // Tentar voltar ao feed da hashtag
             try {
-              await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 });
+              await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
             } catch {
               // ignore
             }
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 1500));
             const feedReady = await waitForHashtagMural('Retorno após duplicado');
             if (!feedReady) {
               attemptsWithoutNewPost++;
@@ -1328,12 +1446,13 @@ export async function scrapeInstagramTag(
 
           try {
             await page.goto(`https://www.instagram.com/${username}/`, {
-              waitUntil: 'networkidle2',
-              timeout: 30000
+              waitUntil: 'domcontentloaded',  // Mais rápido - não espera network idle
+              timeout: 15000  // Reduzido para 15s
             });
 
-            // Aguardar perfil carregar
-            await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+            // Esperar elementos do perfil aparecerem (mais eficiente que esperar rede)
+            await page.waitForSelector('header section', { timeout: 10000 }).catch(() => {});
+            await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
 
             // EXTRAIR DADOS VISUALMENTE DA PÁGINA ATUAL usando CSS selectors
             console.log(`   📊 Extraindo dados visíveis da página do perfil...`);
@@ -1707,23 +1826,24 @@ export async function scrapeInstagramTag(
             }
 
             // EXTRAIR LOCALIZAÇÃO DA BIO se não tiver dados de localização
-            // IMPORTANTE: Usar bioForLocationParsing (DOM) que contém endereço completo
-            if (bioForLocationParsing && (!completeProfile.city || !completeProfile.address || !completeProfile.zip_code)) {
-              const locationFromBio = extractLocationFromBio(bioForLocationParsing);
-
-              if (!completeProfile.address && locationFromBio.address) {
-                completeProfile.address = locationFromBio.address;
-              }
-              if (!completeProfile.city && locationFromBio.city) {
-                completeProfile.city = locationFromBio.city;
-              }
-              if (!completeProfile.state && locationFromBio.state) {
-                completeProfile.state = locationFromBio.state;
-              }
-              if (!completeProfile.zip_code && locationFromBio.zip_code) {
-                completeProfile.zip_code = locationFromBio.zip_code;
-              }
-            }
+            // ⚠️ DESABILITADO: extractLocationFromBio está bugado, captura bio inteira como city
+            // Confiamos apenas nos dados estruturados do JSON do Instagram
+            // if (bioForLocationParsing && (!completeProfile.city || !completeProfile.address || !completeProfile.zip_code)) {
+            //   const locationFromBio = extractLocationFromBio(bioForLocationParsing);
+            //
+            //   if (!completeProfile.address && locationFromBio.address) {
+            //     completeProfile.address = locationFromBio.address;
+            //   }
+            //   if (!completeProfile.city && locationFromBio.city) {
+            //     completeProfile.city = locationFromBio.city;
+            //   }
+            //   if (!completeProfile.state && locationFromBio.state) {
+            //     completeProfile.state = locationFromBio.state;
+            //   }
+            //   if (!completeProfile.zip_code && locationFromBio.zip_code) {
+            //     completeProfile.zip_code = locationFromBio.zip_code;
+            //   }
+            // }
 
             // EXTRAIR HASHTAGS DA BIO
             if (completeProfile.bio) {
@@ -1866,8 +1986,8 @@ export async function scrapeInstagramTag(
           }
 
           console.log(`   ⬅️  Retornando para o mural da hashtag...`);
-          await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 }).catch(() => {});
-          await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+          await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+          await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
           const feedReadyAfterProfile = await waitForHashtagMural('Retorno após coletar perfil');
           if (!feedReadyAfterProfile) {
             attemptsWithoutNewPost++;
@@ -1876,8 +1996,8 @@ export async function scrapeInstagramTag(
 
         } catch (error: any) {
           console.log(`   ❌ Erro ao processar post (${error.message}). Tentando retornar ao mural...`);
-          await page.goto(hashtagUrl, { waitUntil: 'networkidle2', timeout: 120000 }).catch(() => {});
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+          await new Promise(resolve => setTimeout(resolve, 1500));
           const feedReadyAfterError = await waitForHashtagMural('Retorno após erro');
           if (!feedReadyAfterError) {
             attemptsWithoutNewPost++;
@@ -1937,10 +2057,27 @@ export async function scrapeInstagramTag(
 
           // 🆕 Se chegou aqui, hashtag foi scrapada com sucesso
           hashtagSuccess = true;
+          updateResilienceOnSuccess();
           console.log(`✅ Hashtag #${hashtagToScrape} scrapada com sucesso!`);
 
         } catch (hashtagError: any) {
           console.error(`❌ Erro ao scrape hashtag #${hashtagToScrape} (tentativa ${retryCount}/${MAX_RETRIES}):`, hashtagError.message);
+
+          // Atualizar métricas de resiliência
+          const errorType = hashtagError.message.includes('detached') ? 'DETACHED_FRAME'
+            : hashtagError.message.includes('SESSION_INVALID') ? 'SESSION_INVALID'
+            : hashtagError.message.includes('timeout') ? 'TIMEOUT'
+            : 'UNKNOWN';
+          updateResilienceOnError(errorType);
+
+          // 🆕 CIRCUIT BREAKER: Se muitos erros consecutivos, pular hashtag e continuar
+          if (shouldSkipHashtag()) {
+            console.log(`\n⚡ [CIRCUIT BREAKER] ${resilienceMetrics.consecutiveErrors} erros consecutivos detectados`);
+            console.log(`   🔄 Pulando #${hashtagToScrape} para evitar mais falhas`);
+            resilienceMetrics.hashtagsSkipped.push(hashtagToScrape);
+            resilienceMetrics.consecutiveErrors = 0; // Reset para próxima hashtag
+            break; // Sai do while de retry, vai para próxima hashtag
+          }
 
           // Se for detached frame, Instagram detectou scraping → ENCERRAR TUDO IMEDIATAMENTE
           if (hashtagError.message.includes('detached Frame')) {
@@ -1956,11 +2093,25 @@ export async function scrapeInstagramTag(
             break; // Sai do while de retry
           }
 
+          // 🆕 SESSION_INVALID: Tentar recuperar automaticamente
+          if (hashtagError.message.includes('SESSION_INVALID')) {
+            console.log(`\n🔄 [AUTO-RECOVERY] Tentando recuperar sessão...`);
+            resilienceMetrics.sessionRecoveries++;
+
+            // Esperar antes de retry (delay adaptativo)
+            const recoveryDelay = getAdaptiveDelay(10000);
+            console.log(`   ⏳ Aguardando ${(recoveryDelay/1000).toFixed(1)}s antes de recuperar...`);
+            await new Promise(resolve => setTimeout(resolve, recoveryDelay));
+          }
+
           if (retryCount >= MAX_RETRIES) {
             console.log(`⚠️  Máximo de retries atingido para #${hashtagToScrape}. Aceitando ${foundProfiles.length} perfis coletados`);
           }
         }
       } // FIM DO WHILE (retry loop)
+
+      // 🆕 LOG DE STATUS DE RESILIÊNCIA APÓS CADA HASHTAG
+      logResilienceStatus();
 
       // 🆕 ACUMULAR PERFIS DESTA HASHTAG NO RESULTADO TOTAL (mesmo se houve erro)
       if (foundProfiles.length > 0) {
@@ -1975,6 +2126,22 @@ export async function scrapeInstagramTag(
   console.log(`\n${'='.repeat(80)}`);
   console.log(`✅ SCRAPE-TAG CONCLUÍDO: ${allFoundProfiles.length} perfis coletados de ${hashtagsToScrape.length} hashtag(s)`);
   console.log(`${'='.repeat(80)}\n`);
+
+  // 🆕 RELATÓRIO FINAL DE RESILIÊNCIA
+  console.log(`\n📊 ========== RELATÓRIO DE RESILIÊNCIA ==========`);
+  const finalSuccessRate = resilienceMetrics.totalSuccess + resilienceMetrics.totalErrors > 0
+    ? ((resilienceMetrics.totalSuccess / (resilienceMetrics.totalSuccess + resilienceMetrics.totalErrors)) * 100).toFixed(1)
+    : '0';
+  console.log(`   Taxa de sucesso: ${finalSuccessRate}%`);
+  console.log(`   Total de sucessos: ${resilienceMetrics.totalSuccess}`);
+  console.log(`   Total de erros: ${resilienceMetrics.totalErrors}`);
+  console.log(`   Recuperações de sessão: ${resilienceMetrics.sessionRecoveries}`);
+  console.log(`   Hashtags puladas (circuit breaker): ${resilienceMetrics.hashtagsSkipped.length}`);
+  if (resilienceMetrics.hashtagsSkipped.length > 0) {
+    console.log(`   Hashtags puladas: ${resilienceMetrics.hashtagsSkipped.join(', ')}`);
+  }
+  console.log(`   Delay multiplier final: ${resilienceMetrics.adaptiveDelayMultiplier.toFixed(2)}x`);
+  console.log(`${'='.repeat(50)}\n`);
 
   if (allFoundProfiles.length > 0) {
     const usernames = allFoundProfiles.slice(0, 10).map(p => `@${p.username}`).join(', ');
