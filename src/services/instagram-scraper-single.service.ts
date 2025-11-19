@@ -755,10 +755,10 @@ export async function scrapeInstagramTag(
       }
     }
 
-    // 🆕 DETERMINAR LISTA DE HASHTAGS A SCRAPAR (todas as prioritárias OU fallback para original)
+    // 🆕 DETERMINAR LISTA DE HASHTAGS A SCRAPAR (SEMPRE começa com a original + sugestões prioritárias)
     hashtagsToScrape = priorityHashtags.length > 0
-      ? priorityHashtags.map(h => h.hashtag)
-      : [normalizedTerm];
+      ? [normalizedTerm, ...priorityHashtags.map(h => h.hashtag)]  // Original + sugestões
+      : [normalizedTerm];  // Só original se não houver sugestões
 
     console.log(`\n🎯 Total de hashtags que serão scrapadas: ${hashtagsToScrape.length}`);
     console.log(`   📊 Perfis por hashtag: ${maxProfiles} (cada hashtag terá até ${maxProfiles} perfis scrapados)\n`);
