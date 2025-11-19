@@ -13,6 +13,7 @@ import {
 } from './instagram-profile.utils';
 import { createIsolatedContext } from './instagram-context-manager.service';
 import { discoverHashtagVariations, HashtagVariation } from './instagram-hashtag-discovery.service';
+import { getAccountRotation } from './instagram-account-rotation.service';
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase client para verificações de duplicatas
@@ -40,6 +41,7 @@ interface ResilienceMetrics {
   sessionRecoveries: number;
   hashtagsSkipped: string[];
   adaptiveDelayMultiplier: number;
+  consecutiveSessionInvalid: number; // 🆕 CONTADOR DE SESSION_INVALID CONSECUTIVOS
 }
 
 const resilienceMetrics: ResilienceMetrics = {
@@ -50,16 +52,25 @@ const resilienceMetrics: ResilienceMetrics = {
   lastErrorTime: 0,
   sessionRecoveries: 0,
   hashtagsSkipped: [],
-  adaptiveDelayMultiplier: 1.0
+  adaptiveDelayMultiplier: 1.0,
+  consecutiveSessionInvalid: 0 // 🆕 INICIALIZA EM 0
 };
+
+// 🆕 LIMITE MÁXIMO DE SESSION_INVALID ANTES DE PARAR COMPLETAMENTE
+const MAX_CONSECUTIVE_SESSION_INVALID = 3;
 
 function updateResilienceOnSuccess(): void {
   resilienceMetrics.consecutiveErrors = 0;
+  resilienceMetrics.consecutiveSessionInvalid = 0; // 🆕 RESET contador de SESSION_INVALID
   resilienceMetrics.totalSuccess++;
   // Reduzir delay multiplier gradualmente após sucesso
   if (resilienceMetrics.adaptiveDelayMultiplier > 1.0) {
     resilienceMetrics.adaptiveDelayMultiplier = Math.max(1.0, resilienceMetrics.adaptiveDelayMultiplier * 0.9);
   }
+
+  // 🔄 ROTAÇÃO DE CONTAS: Registrar sucesso (reseta contadores de falha)
+  const rotation = getAccountRotation();
+  rotation.recordSuccess();
 }
 
 function updateResilienceOnError(errorType: string): void {
@@ -677,6 +688,7 @@ export async function scrapeInstagramTag(
   resilienceMetrics.sessionRecoveries = 0;
   resilienceMetrics.hashtagsSkipped = [];
   resilienceMetrics.adaptiveDelayMultiplier = 1.0;
+  resilienceMetrics.consecutiveSessionInvalid = 0; // 🆕 RESET contador de SESSION_INVALID
   console.log(`🔄 Métricas de resiliência resetadas para nova sessão`);
 
   // Criar contexto UMA VEZ para discovery E scraping
@@ -1192,6 +1204,52 @@ export async function scrapeInstagramTag(
 
         const anchorHandles = await page.$$(postSelector);
         console.log(`   🔍 Encontrados ${anchorHandles.length} elementos com seletor: ${postSelector}`);
+
+        // 🚫 DETECÇÃO DE SHADOWBAN: Mural sem posts visíveis
+        if (anchorHandles.length === 0) {
+          const pageAnalysis = await page.evaluate(() => {
+            const url = window.location.href;
+            const isHashtagPage = url.includes('/explore/tags/') || url.includes('/explore/search/keyword/');
+            const isProfilePage = url.match(/instagram\.com\/[^\/]+\/?$/);
+
+            // Detectar se é perfil privado
+            const isPrivate = document.body.innerText.includes('Esta conta é privada') ||
+                             document.body.innerText.includes('This Account is Private');
+
+            // Verificar se mural/grid existe (estrutura da página)
+            const hasGrid = !!document.querySelector('article') ||
+                           !!document.querySelector('main') ||
+                           !!document.querySelector('[role="main"]');
+
+            return { isHashtagPage, isProfilePage, isPrivate, hasGrid };
+          });
+
+          console.log(`\n🔍 Análise da página sem posts:`);
+          console.log(`   Hashtag/Search: ${pageAnalysis.isHashtagPage}`);
+          console.log(`   Perfil: ${pageAnalysis.isProfilePage}`);
+          console.log(`   Privado: ${pageAnalysis.isPrivate}`);
+          console.log(`   Grid existe: ${pageAnalysis.hasGrid}`);
+
+          // ⚠️ SHADOWBAN DETECTADO: Hashtag com grid mas sem posts
+          if (pageAnalysis.isHashtagPage && pageAnalysis.hasGrid && !pageAnalysis.isPrivate) {
+            console.log(`\n⚠️  POSSÍVEL SHADOWBAN: Página de hashtag com estrutura mas 0 posts visíveis`);
+            console.log(`   Tentativa ${attemptsWithoutNewPost}/8 sem posts`);
+
+            // Se já tentou 3+ vezes sem sucesso, considerar shadowban
+            if (attemptsWithoutNewPost >= 3) {
+              console.log(`\n🚨 SHADOWBAN CONFIRMADO: 3+ tentativas sem posts em hashtag`);
+              console.log(`   Esta conta provavelmente está bloqueada para hashtags`);
+
+              throw new Error('SESSION_INVALID: Shadowban detectado - mural de hashtag sem posts visíveis após múltiplas tentativas');
+            }
+          }
+
+          // Perfil privado → Não é erro, apenas skip
+          if (pageAnalysis.isPrivate) {
+            console.log(`\n🔒 Perfil privado detectado - pulando`);
+            break; // Sai do loop de scraping desta hashtag
+          }
+        }
 
         let selectedHandle: ElementHandle<Element> | null = null;
         let selectedUrl: string | null = null;
@@ -2093,15 +2151,73 @@ export async function scrapeInstagramTag(
             break; // Sai do while de retry
           }
 
-          // 🆕 SESSION_INVALID: Tentar recuperar automaticamente
+          // 🆕 SESSION_INVALID: Verificar limite e rotação de contas
           if (hashtagError.message.includes('SESSION_INVALID')) {
-            console.log(`\n🔄 [AUTO-RECOVERY] Tentando recuperar sessão...`);
-            resilienceMetrics.sessionRecoveries++;
+            resilienceMetrics.consecutiveSessionInvalid++;
 
-            // Esperar antes de retry (delay adaptativo)
-            const recoveryDelay = getAdaptiveDelay(10000);
-            console.log(`   ⏳ Aguardando ${(recoveryDelay/1000).toFixed(1)}s antes de recuperar...`);
-            await new Promise(resolve => setTimeout(resolve, recoveryDelay));
+            // 🔄 ROTAÇÃO DE CONTAS: Registrar falha
+            const rotation = getAccountRotation();
+            rotation.recordFailure();
+
+            console.log(`\n🚨 [SESSION_INVALID] Falha ${resilienceMetrics.consecutiveSessionInvalid}/${MAX_CONSECUTIVE_SESSION_INVALID}`);
+
+            // 🔄 VERIFICAR SE DEVE ROTACIONAR PARA PRÓXIMA CONTA
+            if (rotation.shouldRotate()) {
+              console.log(`\n🔄 ========== INICIANDO ROTAÇÃO DE CONTA ==========`);
+
+              const rotationResult = await rotation.rotateToNextAccount();
+
+              if (rotationResult.success && rotationResult.requiresWait) {
+                console.log(`\n⏰ Aguardando cooldown de ${rotationResult.waitMinutes} minutos...`);
+                console.log(`   Nova conta: ${rotationResult.newAccount}`);
+
+                // Aguardar cooldown
+                await new Promise(resolve => setTimeout(resolve, rotationResult.waitMinutes * 60 * 1000));
+
+                console.log(`\n✅ Cooldown completo - continuando com ${rotationResult.newAccount}`);
+
+                // Resetar contador de SESSION_INVALID (nova conta)
+                resilienceMetrics.consecutiveSessionInvalid = 0;
+                resilienceMetrics.sessionRecoveries++;
+
+              } else if (!rotationResult.success && rotationResult.requiresWait) {
+                // Cooldown global ou limite de ciclos atingido
+                console.log(`\n❌ ============================================`);
+                console.log(`❌ ${rotationResult.message}`);
+                console.log(`❌ ============================================`);
+                console.log(`\n💡 Ações recomendadas:`);
+                console.log(`   1. Aguardar ${rotationResult.waitMinutes} minutos`);
+                console.log(`   2. Verificar TODAS as contas no Instagram`);
+                console.log(`   3. Considerar adicionar mais contas`);
+                console.log(`   4. Verificar se IP está bloqueado\n`);
+
+                // FORÇAR SAÍDA COMPLETA
+                throw new Error(`ROTATION_LIMIT_REACHED: ${rotationResult.message}`);
+              }
+            } else {
+              // Não rotacionar ainda, mas verificar limite
+              if (resilienceMetrics.consecutiveSessionInvalid >= MAX_CONSECUTIVE_SESSION_INVALID) {
+                console.log(`\n❌ ============================================`);
+                console.log(`❌ LIMITE DE SESSION_INVALID ATINGIDO (${MAX_CONSECUTIVE_SESSION_INVALID})`);
+                console.log(`❌ Instagram detectou automação - PARANDO scraping`);
+                console.log(`❌ ============================================`);
+                console.log(`\n💡 Ações recomendadas:`);
+                console.log(`   1. Verificar conta no Instagram (possível shadowban)`);
+                console.log(`   2. Aguardar 30-60 minutos antes de tentar novamente`);
+                console.log(`   3. Sistema de rotação irá trocar conta automaticamente\n`);
+
+                // FORÇAR SAÍDA COMPLETA
+                throw new Error('MAX_SESSION_INVALID_REACHED: Stopping to prevent further detection');
+              }
+
+              console.log(`\n🔄 [AUTO-RECOVERY] Tentando recuperar sessão...`);
+              resilienceMetrics.sessionRecoveries++;
+
+              // Esperar antes de retry (delay adaptativo)
+              const recoveryDelay = getAdaptiveDelay(10000);
+              console.log(`   ⏳ Aguardando ${(recoveryDelay/1000).toFixed(1)}s antes de recuperar...`);
+              await new Promise(resolve => setTimeout(resolve, recoveryDelay));
+            }
           }
 
           if (retryCount >= MAX_RETRIES) {

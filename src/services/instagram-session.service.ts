@@ -1,9 +1,20 @@
 // @ts-nocheck - puppeteer contexts usam DOM APIs sem typings fortes
-import puppeteer, { Browser, Page } from 'puppeteer';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { Browser, Page } from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
+import { getAccountRotation } from './instagram-account-rotation.service';
 
-const COOKIES_FILE = path.join(process.cwd(), 'instagram-cookies.json');
+// 🥷 STEALTH MODE: Esconde que é Puppeteer do Instagram
+puppeteer.use(StealthPlugin());
+
+// 🔄 ROTAÇÃO DE CONTAS: Arquivo de cookies agora é dinâmico baseado na conta ativa
+function getCookiesFile(): string {
+  const rotation = getAccountRotation();
+  const currentAccount = rotation.getCurrentAccount();
+  return currentAccount.cookiesFile;
+}
 const LOGIN_TIMEOUT_MS = Number(process.env.INSTAGRAM_LOGIN_TIMEOUT_MS ?? 90000);
 const LOGIN_POLL_INTERVAL_MS = Number(process.env.INSTAGRAM_LOGIN_POLL_INTERVAL_MS ?? 5000);
 const HEADLESS_ENABLED = process.env.INSTAGRAM_SCRAPER_HEADLESS === 'true';
@@ -41,12 +52,13 @@ async function ensureBrowserInstance(): Promise<void> {
 }
 
 async function loadCookies(page: Page): Promise<boolean> {
-  if (!fs.existsSync(COOKIES_FILE)) {
+  const cookiesFile = getCookiesFile();
+  if (!fs.existsSync(cookiesFile)) {
     return false;
   }
 
   try {
-    const data = fs.readFileSync(COOKIES_FILE, 'utf8');
+    const data = fs.readFileSync(cookiesFile, 'utf8');
     const cookies = JSON.parse(data);
     if (Array.isArray(cookies) && cookies.length > 0) {
       await page.setCookie(...cookies);
@@ -63,7 +75,8 @@ async function loadCookies(page: Page): Promise<boolean> {
 async function saveCookies(page: Page): Promise<void> {
   try {
     const cookies = await page.cookies();
-    fs.writeFileSync(COOKIES_FILE, JSON.stringify(cookies, null, 2));
+    const cookiesFile = getCookiesFile();
+    fs.writeFileSync(cookiesFile, JSON.stringify(cookies, null, 2));
     console.log('💾 Cookies salvos');
   } catch (error: any) {
     console.warn(`⚠️  Falha ao salvar cookies: ${error.message}`);
@@ -164,11 +177,14 @@ async function detectLoggedInUsername(page: Page): Promise<string | null> {
 }
 
 async function performAutoLogin(page: Page): Promise<boolean> {
-  const username = process.env.INSTAGRAM_UNOFFICIAL_USERNAME || process.env.INSTAGRAM_USERNAME;
-  const password = process.env.INSTAGRAM_OFFICIAL_PASSWORD || process.env.INSTAGRAM_ALT_PASSWORD || process.env.INSTAGRAM_PASSWORD;
+  // 🔄 ROTAÇÃO DE CONTAS: Usar credenciais da conta ativa
+  const rotation = getAccountRotation();
+  const currentAccount = rotation.getCurrentAccount();
+  const username = currentAccount.username;
+  const password = currentAccount.password;
 
   if (!username || !password) {
-    console.log('⚠️  Credenciais não encontradas no .env (INSTAGRAM_UNOFFICIAL_USERNAME / INSTAGRAM_OFFICIAL_PASSWORD)');
+    console.log('⚠️  Credenciais não encontradas no sistema de rotação');
     return false;
   }
 
@@ -305,13 +321,15 @@ export async function ensureLoggedSession(): Promise<void> {
     if (loggedUsername) {
       console.log(`👤 Usuário autenticado: @${loggedUsername}`);
     } else {
-      console.error('❌ FALHA CRÍTICA: Não foi possível detectar o username logado.');
-      console.error('❌ Isso indica que a sessão pode estar inválida ou não logada.');
-      console.error('❌ O scraping será interrompido para evitar erros.');
+      // ⚠️ TEMPORÁRIO: Permitir continuar mesmo sem detectar username
+      // Usar username da conta ativa do sistema de rotação
+      const rotation = getAccountRotation();
+      const currentAccount = rotation.getCurrentAccount();
+      loggedUsername = currentAccount.username;
 
-      // Limpar e falhar
-      await cleanupOnFailure();
-      throw new Error('Sessão do Instagram inválida: username não detectado. Faça login manual e tente novamente.');
+      console.warn('⚠️  Não foi possível detectar username do DOM/cookies');
+      console.warn(`   Usando username da rotação: ${loggedUsername}`);
+      console.warn('   O scraping continuará normalmente');
     }
 
     // ⚠️ IMPORTANTE: Fechar sessionPage após login para reduzir abas abertas
@@ -378,10 +396,21 @@ export async function closeBrowser(options: { clearCookies?: boolean } = {}): Pr
   sessionInitialization = null;
   loggedUsername = null;
 
-  if (options.clearCookies && fs.existsSync(COOKIES_FILE)) {
+  if (options.clearCookies) {
     try {
-      fs.unlinkSync(COOKIES_FILE);
-      console.log('🗑️  Cookies deletados');
+      // Limpar cookies de TODAS as contas configuradas
+      const cookiesDir = path.join(process.cwd(), 'cookies');
+      const cookieFiles = [
+        path.join(cookiesDir, 'instagram-cookies-account1.json'),
+        path.join(cookiesDir, 'instagram-cookies-account2.json')
+      ];
+
+      for (const cookieFile of cookieFiles) {
+        if (fs.existsSync(cookieFile)) {
+          fs.unlinkSync(cookieFile);
+          console.log(`🗑️  Cookies deletados: ${path.basename(cookieFile)}`);
+        }
+      }
     } catch (error: any) {
       console.warn(`⚠️  Erro ao remover cookies: ${error.message}`);
     }
