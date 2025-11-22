@@ -123,11 +123,10 @@ interface ScrollDelayConfig {
 
 const INSTAGRAM_SCROLL_CONFIG: ScrollDelayConfig = {
   baseDelays: [
-    { maxScroll: 2000, delay: 5000 },    // Início: 5s (aumentado de 2s)
-    { maxScroll: 5000, delay: 8000 },    // Meio: 8s (aumentado de 5s)
-    { maxScroll: 10000, delay: 12000 },  // Avançado: 12s (aumentado de 10s)
-    { maxScroll: 20000, delay: 18000 },  // Profundo: 18s (aumentado de 15s)
-    { maxScroll: Infinity, delay: 25000 } // Extremo: 25s (aumentado de 20s)
+    { maxScroll: 2000, delay: 6500 },    // 0-2000px: 6.5s base (±20% = 5.2-7.8s)
+    { maxScroll: 5000, delay: 12000 },   // 2000-5000px: 12s
+    { maxScroll: 10000, delay: 18000 },  // 5000-10000px: 18s
+    { maxScroll: Infinity, delay: 25000 } // 10000px+: 25s
   ],
   duplicateMultipliers: [
     { threshold: 6, multiplier: 1.5 },   // 6+ duplicatas: +50%
@@ -195,13 +194,24 @@ async function scrollAndWaitIntelligently(
 
   const initialCount = await page.$$('a[href*="/p/"], a[href*="/reel/"]').then(handles => handles.length);
 
-  // 1. Fazer scroll
-  await page.evaluate((mult) => {
-    window.scrollBy({ top: window.innerHeight * mult, behavior: 'smooth' });
-  }, scrollMultiplier);
+  // 1. Fazer scroll GRADUAL/INCREMENTAL (força Instagram a carregar posts)
+  const totalScrollDistance = await page.evaluate(() => window.innerHeight) * scrollMultiplier;
+  const incrementSize = 300; // Scroll de 300px por vez (natural)
+  const numIncrements = Math.ceil(totalScrollDistance / incrementSize);
 
-  // 1.5. AGUARDAR scroll ser processado pelo navegador (crítico!)
-  await new Promise(resolve => setTimeout(resolve, 500));
+  console.log(`   📜 Scroll gradual: ${numIncrements} incrementos de ${incrementSize}px (total: ${totalScrollDistance.toFixed(0)}px)`);
+
+  for (let i = 0; i < numIncrements; i++) {
+    await page.evaluate((scrollAmount) => {
+      window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+    }, incrementSize);
+
+    // Pausa entre scrolls para Instagram carregar (simula humano)
+    await new Promise(resolve => setTimeout(resolve, 400 + Math.random() * 200)); // 400-600ms
+  }
+
+  // 1.5. AGUARDAR scroll final ser processado pelo navegador
+  await new Promise(resolve => setTimeout(resolve, 800));
 
   // 2. Calcular delay inteligente
   const delay = await calculateIntelligentDelay(page, consecutiveDuplicates);
@@ -1743,22 +1753,23 @@ export async function scrapeInstagramTag(
           console.log(`   🔄 Controle de colunas resetado (permitir nova seleção)`);
 
           // 🆕 SCROLL AGRESSIVO se muitas duplicatas (ampliar mais o mural)
-          let scrollMultiplier = 1.5; // Scroll normal aumentado (era 1x)
+          const scrollMultiplier = calculateScrollMultiplier(consecutiveDuplicates);
 
-          if (consecutiveDuplicates >= 6) {
-            scrollMultiplier = 4; // Super agressivo para muitas duplicatas
-            console.log(`   🚀 SCROLL SUPER AGRESSIVO (${consecutiveDuplicates} duplicatas) - pulando ${scrollMultiplier}x janela`);
-          } else if (consecutiveDuplicates >= 3) {
-            scrollMultiplier = 3; // Agressivo aumentado (era 2.5x)
-            console.log(`   🚀 SCROLL AGRESSIVO (${consecutiveDuplicates} duplicatas) - pulando ${scrollMultiplier}x janela`);
-          }
+          // 🎯 USAR FUNÇÃO INTELIGENTE DE SCROLL (com delays adaptativos por profundidade)
+          const scrollResult = await scrollAndWaitIntelligently(page, consecutiveDuplicates, scrollMultiplier);
 
-          await page.evaluate((multiplier) => {
-            window.scrollBy({ top: window.innerHeight * multiplier, behavior: 'smooth' });
-          }, scrollMultiplier);
-
-          // Delay otimizado após scroll (1-2 segundos)
-          await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+          // 💾 ATUALIZAR lastSavedScrollPosition após scroll
+          lastSavedScrollPosition = await page.evaluate(() => {
+            const bodyScroll = document.documentElement.scrollTop || document.body.scrollTop;
+            if (bodyScroll === 0) {
+              const mainContainer = document.querySelector('main') || document.querySelector('[role="main"]');
+              if (mainContainer && mainContainer.scrollTop > 0) {
+                return mainContainer.scrollTop;
+              }
+            }
+            return bodyScroll;
+          });
+          console.log(`   💾 Nova posição salva após scroll: ${lastSavedScrollPosition}px`);
           continue;
         }
 
@@ -1978,8 +1989,21 @@ export async function scrapeInstagramTag(
               } catch (navError: any) {
                 console.log(`   ⚠️  Erro ao retornar ao mural: ${navError.message}`);
               }
-              console.log(`   ⏳ Aguardando 10s para mural carregar...`);
-              await new Promise(resolve => setTimeout(resolve, 10000));
+
+              // ⏱️ DELAY ADAPTATIVO baseado na profundidade do scroll
+              let loadWaitTime = 5000; // Base: 5s
+              if (lastSavedScrollPosition > 10000) {
+                loadWaitTime = 25000; // 25s para posições muito avançadas
+              } else if (lastSavedScrollPosition > 5000) {
+                loadWaitTime = 18000; // 18s para posições avançadas
+              } else if (lastSavedScrollPosition > 2000) {
+                loadWaitTime = 12000; // 12s para posições médias
+              } else if (lastSavedScrollPosition > 0) {
+                loadWaitTime = 8000; // 8s para posições iniciais
+              }
+
+              console.log(`   ⏳ Aguardando ${loadWaitTime/1000}s para mural carregar (scroll: ${lastSavedScrollPosition}px)...`);
+              await new Promise(resolve => setTimeout(resolve, loadWaitTime));
 
               // 🔄 RE-APLICAR scroll (Instagram reseta durante os 10s)
               if (lastSavedScrollPosition > 0) {
@@ -2481,8 +2505,21 @@ export async function scrapeInstagramTag(
               } catch (navError: any) {
                 console.log(`   ⚠️  Erro ao retornar ao mural: ${navError.message}`);
               }
-              console.log(`   ⏳ Aguardando 10s para mural carregar...`);
-              await new Promise(resolve => setTimeout(resolve, 10000));
+
+              // ⏱️ DELAY ADAPTATIVO baseado na profundidade do scroll
+              let loadWaitTime = 5000; // Base: 5s
+              if (lastSavedScrollPosition > 10000) {
+                loadWaitTime = 25000; // 25s para posições muito avançadas
+              } else if (lastSavedScrollPosition > 5000) {
+                loadWaitTime = 18000; // 18s para posições avançadas
+              } else if (lastSavedScrollPosition > 2000) {
+                loadWaitTime = 12000; // 12s para posições médias
+              } else if (lastSavedScrollPosition > 0) {
+                loadWaitTime = 8000; // 8s para posições iniciais
+              }
+
+              console.log(`   ⏳ Aguardando ${loadWaitTime/1000}s para mural carregar (scroll: ${lastSavedScrollPosition}px)...`);
+              await new Promise(resolve => setTimeout(resolve, loadWaitTime));
 
               // 🔄 RE-APLICAR scroll (Instagram reseta durante os 10s)
               if (lastSavedScrollPosition > 0) {
@@ -2530,8 +2567,21 @@ export async function scrapeInstagramTag(
               } catch (navError: any) {
                 console.log(`   ⚠️  Erro ao retornar ao mural: ${navError.message}`);
               }
-              console.log(`   ⏳ Aguardando 10s para mural carregar...`);
-              await new Promise(resolve => setTimeout(resolve, 10000));
+
+              // ⏱️ DELAY ADAPTATIVO baseado na profundidade do scroll
+              let loadWaitTime = 5000; // Base: 5s
+              if (lastSavedScrollPosition > 10000) {
+                loadWaitTime = 25000; // 25s para posições muito avançadas
+              } else if (lastSavedScrollPosition > 5000) {
+                loadWaitTime = 18000; // 18s para posições avançadas
+              } else if (lastSavedScrollPosition > 2000) {
+                loadWaitTime = 12000; // 12s para posições médias
+              } else if (lastSavedScrollPosition > 0) {
+                loadWaitTime = 8000; // 8s para posições iniciais
+              }
+
+              console.log(`   ⏳ Aguardando ${loadWaitTime/1000}s para mural carregar (scroll: ${lastSavedScrollPosition}px)...`);
+              await new Promise(resolve => setTimeout(resolve, loadWaitTime));
 
               // 🔄 RE-APLICAR scroll (Instagram reseta durante os 10s)
               if (lastSavedScrollPosition > 0) {
