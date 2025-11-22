@@ -31,6 +31,31 @@ let loggedUsername: string | null = null;
 // Arquivo para salvar cookies da sessão
 const COOKIES_FILE = path.join(process.cwd(), 'instagram-cookies.json');
 
+// ========== CONFIGURAÇÕES ANTI-DETECÇÃO ==========
+const USER_AGENTS = [
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+];
+
+const VIEWPORT_SIZES = [
+  { width: 1920, height: 1080 },
+  { width: 1366, height: 768 },
+  { width: 1440, height: 900 },
+  { width: 1536, height: 864 },
+  { width: 1680, height: 1050 }
+];
+
+function getRandomUserAgent(): string {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
+function getRandomViewport(): { width: number; height: number } {
+  return VIEWPORT_SIZES[Math.floor(Math.random() * VIEWPORT_SIZES.length)];
+}
+
 // ========== SISTEMA DE RESILIÊNCIA AUTOMÁTICA ==========
 interface ResilienceMetrics {
   consecutiveErrors: number;
@@ -84,6 +109,147 @@ function updateResilienceOnError(errorType: string): void {
 
 function getAdaptiveDelay(baseDelay: number): number {
   return baseDelay * resilienceMetrics.adaptiveDelayMultiplier;
+}
+
+// ========== SISTEMA DE DELAYS INTELIGENTE PARA SCROLL ==========
+/**
+ * Configuração de delays adaptativos baseados em profundidade do scroll
+ */
+interface ScrollDelayConfig {
+  baseDelays: { maxScroll: number; delay: number }[];
+  duplicateMultipliers: { threshold: number; multiplier: number }[];
+  humanVariation: number; // Percentual de variação (ex: 0.2 = ±20%)
+}
+
+const INSTAGRAM_SCROLL_CONFIG: ScrollDelayConfig = {
+  baseDelays: [
+    { maxScroll: 2000, delay: 5000 },    // Início: 5s (aumentado de 2s)
+    { maxScroll: 5000, delay: 8000 },    // Meio: 8s (aumentado de 5s)
+    { maxScroll: 10000, delay: 12000 },  // Avançado: 12s (aumentado de 10s)
+    { maxScroll: 20000, delay: 18000 },  // Profundo: 18s (aumentado de 15s)
+    { maxScroll: Infinity, delay: 25000 } // Extremo: 25s (aumentado de 20s)
+  ],
+  duplicateMultipliers: [
+    { threshold: 6, multiplier: 1.5 },   // 6+ duplicatas: +50%
+    { threshold: 3, multiplier: 1.25 },  // 3+ duplicatas: +25%
+    { threshold: 0, multiplier: 1.0 }    // Normal: 100%
+  ],
+  humanVariation: 0.2 // ±20%
+};
+
+/**
+ * Calcula scroll multiplier baseado em duplicatas consecutivas
+ * Quanto mais duplicatas, mais agressivo o scroll para buscar conteúdo novo
+ */
+function calculateScrollMultiplier(consecutiveDuplicates: number): number {
+  if (consecutiveDuplicates >= 6) {
+    return 8.0; // Extremamente agressivo - pular muito conteúdo
+  } else if (consecutiveDuplicates >= 3) {
+    return 5.0; // Muito agressivo - tentar sair da zona de duplicatas
+  } else {
+    return 1.5; // Normal - scroll suave
+  }
+}
+
+/**
+ * Calcula delay inteligente baseado na profundidade do scroll e duplicatas
+ */
+async function calculateIntelligentDelay(
+  page: Page,
+  consecutiveDuplicates: number,
+  config: ScrollDelayConfig = INSTAGRAM_SCROLL_CONFIG
+): Promise<number> {
+  // 1. Obter posição atual do scroll
+  const scrollY = await page.evaluate(() => window.scrollY);
+
+  // 2. Encontrar delay base pela profundidade
+  const baseConfig = config.baseDelays.find(d => scrollY < d.maxScroll);
+  const baseDelay = baseConfig?.delay || 20000;
+
+  // 3. Aplicar multiplicador por duplicatas
+  const multiplierConfig = config.duplicateMultipliers.find(
+    m => consecutiveDuplicates >= m.threshold
+  );
+  const multiplier = multiplierConfig?.multiplier || 1.0;
+
+  // 4. Adicionar variação humana (±20%)
+  const variation = 1 + (Math.random() * 2 - 1) * config.humanVariation;
+
+  // 5. Calcular delay final
+  const finalDelay = Math.round(baseDelay * multiplier * variation);
+
+  console.log(`⏱️ Delay calculado: ${finalDelay}ms (scroll: ${scrollY}px, dups: ${consecutiveDuplicates}, base: ${baseDelay}ms, mult: ${multiplier}x, var: ${variation.toFixed(2)}x)`);
+
+  return finalDelay;
+}
+
+/**
+ * Faz scroll e aguarda posts carregarem de forma inteligente
+ * @returns { success: boolean, postsLoaded: number }
+ */
+async function scrollAndWaitIntelligently(
+  page: Page,
+  consecutiveDuplicates: number,
+  scrollMultiplier: number = 1.5
+): Promise<{ success: boolean; postsLoaded: number }> {
+
+  const initialCount = await page.$$('a[href*="/p/"], a[href*="/reel/"]').then(handles => handles.length);
+
+  // 1. Fazer scroll
+  await page.evaluate((mult) => {
+    window.scrollBy({ top: window.innerHeight * mult, behavior: 'smooth' });
+  }, scrollMultiplier);
+
+  // 1.5. AGUARDAR scroll ser processado pelo navegador (crítico!)
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // 2. Calcular delay inteligente
+  const delay = await calculateIntelligentDelay(page, consecutiveDuplicates);
+
+  // 3. Aguardar com monitoramento progressivo
+  const startTime = Date.now();
+  let lastCount = initialCount;
+  let stableChecks = 0;
+  const checkInterval = 1000; // Checar a cada 1s
+  const maxStableChecks = 3; // 3 segundos sem mudança = estável
+
+  while (Date.now() - startTime < delay) {
+    await new Promise(resolve => setTimeout(resolve, checkInterval));
+
+    const currentCount = await page.$$('a[href*="/p/"], a[href*="/reel/"]').then(handles => handles.length);
+    const newPosts = currentCount - initialCount;
+
+    // Critério de saída antecipada: 8+ posts novos (aumentado de 3 para dar mais tempo ao mural)
+    if (newPosts >= 8) {
+      const elapsed = Date.now() - startTime;
+      console.log(`✅ ${newPosts} posts carregados em ${(elapsed/1000).toFixed(1)}s (saída antecipada)`);
+      return { success: true, postsLoaded: newPosts };
+    }
+
+    // Detectar estabilização (count não muda por 3 segundos seguidos)
+    if (currentCount === lastCount) {
+      stableChecks++;
+      if (stableChecks >= maxStableChecks && newPosts > 0) {
+        console.log(`⏹️ Carregamento estabilizado (${newPosts} posts)`);
+        return { success: true, postsLoaded: newPosts };
+      }
+    } else {
+      stableChecks = 0;
+      lastCount = currentCount;
+    }
+  }
+
+  // Timeout atingido
+  const finalCount = await page.$$('a[href*="/p/"], a[href*="/reel/"]').then(handles => handles.length);
+  const finalNew = finalCount - initialCount;
+
+  if (finalNew === 0) {
+    console.log(`⚠️ Nenhum post novo após ${delay}ms - possível fim do mural`);
+    return { success: false, postsLoaded: 0 };
+  } else {
+    console.log(`⏱️ Timeout (${delay}ms) - ${finalNew} posts carregados`);
+    return { success: true, postsLoaded: finalNew };
+  }
 }
 
 function shouldSkipHashtag(): boolean {
@@ -407,18 +573,73 @@ async function ensureLoggedSession(): Promise<void> {
   sessionInitialization = (async () => {
     if (!browserInstance || !browserInstance.isConnected()) {
       console.log('🌐 Iniciando novo browser Puppeteer...');
+
+      // 🔒 CONFIGURAÇÕES ANTI-DETECÇÃO
+      const viewport = getRandomViewport();
+      const userAgent = getRandomUserAgent();
+
+      console.log(`   🎭 User-Agent: ${userAgent.substring(0, 50)}...`);
+      console.log(`   📐 Viewport: ${viewport.width}x${viewport.height}`);
+
       browserInstance = await puppeteer.launch({
         headless: false, // Visível no Mac para login manual
-        defaultViewport: null,
-        args: ['--start-maximized'],
+        defaultViewport: viewport,
+        args: [
+          '--disable-blink-features=AutomationControlled', // 🔥 Remove flag "navigator.webdriver"
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--disable-gpu',
+          '--disable-web-security',
+          '--disable-features=IsolateOrigins,site-per-process',
+          `--user-agent=${userAgent}`, // 🎭 User-Agent randomizado
+          `--window-size=${viewport.width},${viewport.height}` // 📐 Tamanho randomizado
+        ],
         protocolTimeout: 120000 // 2 minutos para operações lentas do Instagram (4x padrão de 30s)
       });
+
+      console.log('   ✅ Browser lançado com proteções anti-detecção');
     }
 
     if (!sessionPage || sessionPage.isClosed()) {
       const pages = await browserInstance.pages();
       sessionPage = pages[0] || await browserInstance.newPage();
-      console.log('📄 Instância de sessão criada ou reutilizada');
+
+      // 🔒 MASCARAR SINAIS DE AUTOMAÇÃO
+      await sessionPage.evaluateOnNewDocument(() => {
+        // Remove navigator.webdriver flag
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => false,
+        });
+
+        // Adiciona plugins fake
+        Object.defineProperty(navigator, 'plugins', {
+          get: () => [1, 2, 3, 4, 5],
+        });
+
+        // Adiciona languages
+        Object.defineProperty(navigator, 'languages', {
+          get: () => ['en-US', 'en', 'pt-BR', 'pt'],
+        });
+
+        // Chrome runtime
+        // @ts-ignore
+        window.chrome = {
+          runtime: {},
+        };
+
+        // Permissions
+        const originalQuery = window.navigator.permissions.query;
+        // @ts-ignore
+        window.navigator.permissions.query = (parameters) => (
+          parameters.name === 'notifications' ?
+            Promise.resolve({ state: Notification.permission }) :
+            originalQuery(parameters)
+        );
+      });
+
+      console.log('📄 Instância de sessão criada com proteções anti-detecção');
     }
 
     const cookiesLoaded = await loadCookies(sessionPage);
@@ -608,6 +829,107 @@ export async function closeBrowser(): Promise<void> {
 }
 
 /**
+ * Detecta erro de sessão e faz troca automática de conta
+ * @returns true se conseguiu recuperar com nova conta, false se não foi possível
+ */
+async function handleSessionError(page: Page, errorType: string): Promise<boolean> {
+  console.log(`\n🚨 ========== ERRO DE SESSÃO DETECTADO ==========`);
+  console.log(`   Tipo: ${errorType}`);
+  console.log(`   URL atual: ${page.url()}`);
+  console.log(`===============================================\n`);
+
+  // 🔄 Registrar falha no sistema de rotação
+  const rotation = getAccountRotation();
+
+  // 🚨 ERRO CRÍTICO (about:blank, URL vazia): Registrar 3 falhas para forçar rotação imediata
+  const currentUrl = page.url();
+  const isCriticalError = currentUrl === 'about:blank' || currentUrl === '' || currentUrl === 'data:,';
+
+  if (isCriticalError) {
+    console.log(`🚨 ERRO CRÍTICO - Forçando rotação imediata (registrando 3 falhas)...`);
+    rotation.recordFailure();
+    rotation.recordFailure();
+    rotation.recordFailure();
+  } else {
+    rotation.recordFailure();
+  }
+
+  // 🔍 Verificar se deve rotacionar para próxima conta
+  if (!rotation.shouldRotate()) {
+    console.log(`⚠️  Falha registrada mas ainda não atingiu limite para rotação`);
+    return false;
+  }
+
+  console.log(`🔄 Limite de falhas atingido - iniciando rotação de conta...`);
+
+  // 📤 Fechar browser e sessão atual
+  try {
+    console.log(`🔒 Fechando browser e sessão atual...`);
+    if (sessionPage && !sessionPage.isClosed()) {
+      await sessionPage.close().catch(() => {});
+    }
+    sessionPage = null;
+
+    if (browserInstance) {
+      await browserInstance.close().catch(() => {});
+    }
+    browserInstance = null;
+    sessionInitialization = null;
+    loggedUsername = null;
+
+    console.log(`✅ Browser fechado`);
+
+    // 🗑️ LIMPAR COOKIES DA CONTA BLOQUEADA
+    const cookiesFile = path.join(process.cwd(), 'instagram-cookies.json');
+    if (fs.existsSync(cookiesFile)) {
+      fs.unlinkSync(cookiesFile);
+      console.log(`🗑️  Cookies da conta bloqueada deletados`);
+    }
+  } catch (closeError: any) {
+    console.log(`⚠️  Erro ao fechar browser: ${closeError.message}`);
+  }
+
+  // 🔄 Rotacionar para próxima conta
+  const rotationResult = await rotation.rotateToNextAccount();
+
+  if (!rotationResult.success) {
+    console.log(`\n❌ ========================================`);
+    console.log(`❌ NÃO FOI POSSÍVEL ROTACIONAR CONTA`);
+    console.log(`❌ ${rotationResult.message}`);
+    console.log(`❌ ========================================\n`);
+
+    if (rotationResult.requiresWait) {
+      console.log(`⏰ Sistema requer aguardar ${rotationResult.waitMinutes} minutos antes de continuar`);
+    }
+
+    return false;
+  }
+
+  console.log(`\n✅ ========================================`);
+  console.log(`✅ ROTAÇÃO BEM-SUCEDIDA`);
+  console.log(`✅ Nova conta: ${rotationResult.newAccount}`);
+  console.log(`✅ ========================================\n`);
+
+  if (rotationResult.requiresWait && rotationResult.waitMinutes && rotationResult.waitMinutes > 0) {
+    console.log(`⏰ Aguardando ${rotationResult.waitMinutes} minutos para conta anterior "esfriar"...`);
+    const waitMs = rotationResult.waitMinutes * 60 * 1000;
+    await new Promise(resolve => setTimeout(resolve, waitMs));
+    console.log(`✅ Período de espera concluído`);
+  }
+
+  // 🔐 Inicializar nova sessão com nova conta
+  try {
+    console.log(`🔐 Iniciando nova sessão com conta ${rotationResult.newAccount}...`);
+    await ensureLoggedSession();
+    console.log(`✅ Nova sessão iniciada com sucesso!`);
+    return true;
+  } catch (sessionError: any) {
+    console.log(`❌ Erro ao inicializar nova sessão: ${sessionError.message}`);
+    return false;
+  }
+}
+
+/**
  * Interface para dados completos do perfil Instagram
  */
 export interface InstagramProfileData {
@@ -709,7 +1031,8 @@ export async function scrapeInstagramTag(
 
   try {
     variations = await discoverHashtagVariations(page, normalizedTerm);
-    priorityHashtags = variations.filter(v => v.priority_score >= 80);
+    // Filtrar por score >= 80 E post_count > 10K
+    priorityHashtags = variations.filter(v => v.priority_score >= 80 && v.post_count > 10000);
   } catch (discoveryError: any) {
     console.log(`❌ Erro ao descobrir variações: ${discoveryError.message}`);
   }
@@ -717,7 +1040,7 @@ export async function scrapeInstagramTag(
   try {
     console.log(`\n📊 Análise de variações:`);
     console.log(`   Total descobertas: ${variations.length}`);
-    console.log(`   Prioritárias (score ≥ 80): ${priorityHashtags.length}`);
+    console.log(`   Prioritárias (score ≥ 80 e > 10K posts): ${priorityHashtags.length}`);
 
     if (priorityHashtags.length > 0) {
       console.log(`\n🎯 Hashtags que serão scrapadas (ordenadas por score):`);
@@ -887,8 +1210,8 @@ export async function scrapeInstagramTag(
         console.log(`   ✅ Recuperação bem-sucedida! Agora em: ${currentUrl}`);
       }
 
-      // Delay generoso após navegação para garantir renderização completa (ADAPTATIVO)
-      const baseNavDelay = 4000 + Math.random() * 2000; // 4-6s base
+      // Delay otimizado após navegação (ADAPTATIVO)
+      const baseNavDelay = 2000 + Math.random() * 1000; // 2-3s base (reduzido de 4-6s)
       const postNavDelay = getAdaptiveDelay(baseNavDelay);
       console.log(`   ⏳ Aguardando ${(postNavDelay/1000).toFixed(1)}s para renderização completa... (multiplier: ${resilienceMetrics.adaptiveDelayMultiplier.toFixed(2)}x)`);
       await new Promise(resolve => setTimeout(resolve, postNavDelay));
@@ -906,15 +1229,57 @@ export async function scrapeInstagramTag(
       if (pageHasError) {
         console.log('❌ [SESSION INVALID] Instagram retornou página de erro - limpando cookies...');
 
-        // Limpar cookies automaticamente
-        if (fs.existsSync(COOKIES_FILE)) {
-          fs.unlinkSync(COOKIES_FILE);
-          console.log('🗑️  Cookies removidos para forçar novo login');
+        // 🔄 ROTAÇÃO: Limpar cookies da conta ATUAL (não o arquivo antigo!)
+        const rotation = getAccountRotation();
+        const currentAccount = rotation.getCurrentAccount();
+
+        if (fs.existsSync(currentAccount.cookiesFile)) {
+          fs.unlinkSync(currentAccount.cookiesFile);
+          console.log(`🗑️  Cookies da conta ${currentAccount.username} removidos`);
         }
 
-        // Fechar browser para reiniciar sessão
+        // Também remover arquivo antigo (legacy)
+        if (fs.existsSync(COOKIES_FILE)) {
+          fs.unlinkSync(COOKIES_FILE);
+        }
+
+        // 🚪 LOGOUT EXPLÍCITO antes de limpar (dar tempo do Instagram registrar)
+        if (sessionPage && browserInstance) {
+          try {
+            console.log('🚪 Fazendo logout da conta bloqueada...');
+            await sessionPage.goto('https://www.instagram.com/accounts/logout/', {
+              waitUntil: 'domcontentloaded',
+              timeout: 10000
+            }).catch(() => {});
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Aguardar logout processar
+            console.log('✅ Logout concluído');
+          } catch (logoutError) {
+            console.log('⚠️  Erro ao fazer logout (ignorando):', logoutError);
+          }
+        }
+
+        // 🧹 Fechar browser e limpar TODAS as páginas/contextos
         if (browserInstance) {
-          await browserInstance.close().catch(() => {});
+          try {
+            const contexts = browserInstance.browserContexts();
+            console.log(`🧹 Limpando ${contexts.length} contextos do browser...`);
+
+            for (const context of contexts) {
+              const pages = await context.pages();
+              for (const page of pages) {
+                await page.close().catch(() => {});
+              }
+              await context.close().catch(() => {});
+            }
+
+            await browserInstance.close().catch(() => {});
+            console.log('✅ Browser completamente limpo');
+          } catch (cleanupError) {
+            console.log('⚠️  Erro ao limpar browser:', cleanupError);
+            // Force close
+            await browserInstance.close().catch(() => {});
+          }
+
           browserInstance = null;
           sessionPage = null;
           sessionInitialization = null;
@@ -1020,6 +1385,10 @@ export async function scrapeInstagramTag(
 
       await waitForHashtagMural('Carregamento inicial', true);
 
+      // ⏳ Aguardar lazy loading inicial (waitForHashtagMural já esperou posts aparecerem)
+      console.log(`⏳ Aguardando 2s para lazy loading inicial...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       // 7. PROCESSAR POSTS DO MURAL
       console.log(`🖼️  Iniciando processamento dos posts do mural...`);
 
@@ -1068,8 +1437,33 @@ export async function scrapeInstagramTag(
       const processedUsernames = new Set<string>();
       const processedPostLinks = new Set<string>();
       const clickedGridPositions = new Set<string>(); // NOVO: Rastrear posições clicadas (x,y)
+      const attemptedPositionsInCycle = new Set<string>(); // 🆕 Rastrear posições tentadas no ciclo atual (reseta quando perfil aprovado)
       let attemptsWithoutNewPost = 0;
       let consecutiveDuplicates = 0; // Contador de duplicatas consecutivas
+
+      // 🎯 Sistema de 6 posts por coluna
+      let currentColumn: number | null = null; // Coluna sendo processada no momento
+      let postsTriedInCurrentColumn = 0; // Quantos posts já tentou na coluna atual
+      const MAX_POSTS_PER_COLUMN = 6; // Tentar até 6 posts por coluna antes de mudar
+
+      // 💾 SCROLL POSITION SAVE/RESTORE: Evita Instagram resetar para topo após page.goto()
+      let lastSavedScrollPosition = 0;
+
+      // 🔄 FUNÇÃO HELPER: Restaurar scroll após page.goto() (evita Instagram resetar para topo)
+      const restoreScrollPosition = async (): Promise<void> => {
+        if (lastSavedScrollPosition > 0) {
+          console.log(`   🔄 Restaurando scroll para posição ${lastSavedScrollPosition}px...`);
+          try {
+            await page.evaluate((scrollY) => {
+              window.scrollTo(0, scrollY);
+            }, lastSavedScrollPosition);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Aguardar scroll completar e Instagram renderizar
+            console.log(`   ✅ Scroll restaurado`);
+          } catch (scrollError: any) {
+            console.log(`   ⚠️  Erro ao restaurar scroll: ${scrollError.message}`);
+          }
+        }
+      };
 
       const clickPostElement = async (
         anchorHandle: ElementHandle<Element>,
@@ -1086,11 +1480,11 @@ export async function scrapeInstagramTag(
 
           console.log(`   📍 Elemento em: x=${box.x}, y=${box.y}, width=${box.width}, height=${box.height}`);
 
-          // 2. Scroll suave até o elemento ficar visível
+          // 2. Scroll otimizado até o elemento ficar visível
           await anchorHandle.evaluate((element) => {
-            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            element.scrollIntoView({ behavior: 'auto', block: 'center' }); // 'auto' é instantâneo
           });
-          await new Promise(resolve => setTimeout(resolve, 800));
+          await new Promise(resolve => setTimeout(resolve, 300)); // Reduzido de 800ms
 
           // 3. RECALCULAR posição após scroll
           const boxAfterScroll = await anchorHandle.boundingBox();
@@ -1106,19 +1500,19 @@ export async function scrapeInstagramTag(
 
           console.log(`   👆 Movendo mouse para (${Math.round(x)}, ${Math.round(y)})...`);
 
-          // Movimento em etapas (mais humano) - com proteção anti-detached
+          // Movimento otimizado em etapas (mais humano) - com proteção anti-detached
           let currentPos = { x: 0, y: 0 };
           try {
             currentPos = await page.evaluate(() => ({ x: 0, y: 0 }));
           } catch (evalError) {
             // Ignora erro e usa posição padrão
           }
-          const steps = 10;
+          const steps = 5; // Reduzido de 10 para 5 etapas
           for (let i = 1; i <= steps; i++) {
             const stepX = currentPos.x + ((x - currentPos.x) * i) / steps;
             const stepY = currentPos.y + ((y - currentPos.y) * i) / steps;
             await page.mouse.move(stepX, stepY);
-            await new Promise(resolve => setTimeout(resolve, 20));
+            await new Promise(resolve => setTimeout(resolve, 15)); // Reduzido de 20ms
           }
 
           // 5. Pequena pausa antes do clique (comportamento humano)
@@ -1184,8 +1578,23 @@ export async function scrapeInstagramTag(
       };
 
         // LOOP INTERNO: SCRAPAR ATÉ maxProfiles PARA ESTA HASHTAG
-        while (foundProfiles.length < maxProfiles && attemptsWithoutNewPost < 8 && consecutiveDuplicates < 3) {
-          console.log(`\n📊 Status (#${hashtagToScrape}): ${foundProfiles.length}/${maxProfiles} perfis, tentativa ${attemptsWithoutNewPost}/8, duplicatas consecutivas ${consecutiveDuplicates}/3`);
+        // Duplicata = mesmo username 2x na MESMA sessão (raro com lógica sequencial)
+        while (foundProfiles.length < maxProfiles && attemptsWithoutNewPost < 8 && consecutiveDuplicates < 8) {
+          console.log(`\n📊 Status (#${hashtagToScrape}): ${foundProfiles.length}/${maxProfiles} perfis, tentativa ${attemptsWithoutNewPost}/8, duplicatas REAIS: ${consecutiveDuplicates}`);
+          console.log(`   🔒 Posições já clicadas (${clickedGridPositions.size}): ${Array.from(clickedGridPositions).join(', ')}`);
+
+          // 💾 SALVAR SCROLL POSITION NO INÍCIO DE CADA ITERAÇÃO (reflete scroll atual após scroll down)
+          lastSavedScrollPosition = await page.evaluate(() => {
+            const bodyScroll = document.documentElement.scrollTop || document.body.scrollTop;
+            if (bodyScroll === 0) {
+              const mainContainer = document.querySelector('main') || document.querySelector('[role="main"]');
+              if (mainContainer && mainContainer.scrollTop > 0) {
+                return mainContainer.scrollTop;
+              }
+            }
+            return bodyScroll;
+          });
+          console.log(`   💾 Scroll atual no início da iteração: ${lastSavedScrollPosition}px`);
 
           // CORREÇÃO: Garantir que o drawer de pesquisa está fechado no início de cada iteração
           try {
@@ -1253,6 +1662,8 @@ export async function scrapeInstagramTag(
 
         let selectedHandle: ElementHandle<Element> | null = null;
         let selectedUrl: string | null = null;
+        let selectedGridKey: string | null = null; // 🆕 Para marcar depois se não for duplicata
+        let selectedPosition: { x: number; y: number } | null = null;
 
         // CORREÇÃO: Rastrear posições do GRID (x, y) em vez de URLs
         const postsWithPosition: Array<{
@@ -1285,25 +1696,28 @@ export async function scrapeInstagramTag(
           postsWithPosition.push({ handle, href, x, y, gridKey });
         }
 
-        // ORDENAR por posição VERTICAL (top) - de cima para baixo
+        // ✅ LÓGICA SIMPLES E NATURAL: Ordenar de cima para baixo (como humano lê)
+        // Ordenar apenas por posição VERTICAL (Y) - primeiro, segundo, terceiro...
         postsWithPosition.sort((a, b) => a.y - b.y);
 
-        console.log(`   📊 Posts ordenados verticalmente: ${postsWithPosition.slice(0, 5).map(p => `(${p.x},${p.y})`).join(', ')}...`);
+        console.log(`   📊 Posts ordenados sequencialmente (cima→baixo): ${postsWithPosition.slice(0, 5).map(p => `(${p.x},${p.y})`).join(', ')}...`);
 
-        // Agora selecionar o PRIMEIRO cuja POSIÇÃO não foi clicada
+        // 🎯 SEQUENCIAL: Clicar no PRIMEIRO post não-clicado (ordem natural)
         for (const post of postsWithPosition) {
+          // Pular posições já clicadas
           if (clickedGridPositions.has(post.gridKey)) {
             console.log(`   ⏭️  Posição já clicada: (${post.x}, ${post.y}) [${post.gridKey}]`);
             await post.handle.dispose();
             continue;
           }
+
+          // ✅ ENCONTROU O PRÓXIMO NÃO-CLICADO!
           selectedHandle = post.handle;
           selectedUrl = post.href;
-          console.log(`   ✅ Post selecionado na posição (${post.x}, ${post.y}) [${post.gridKey}]: ${post.href}`);
+          selectedGridKey = post.gridKey;
+          selectedPosition = { x: post.x, y: post.y };
 
-          // MARCAR POSIÇÃO como clicada IMEDIATAMENTE
-          clickedGridPositions.add(post.gridKey);
-          console.log(`   🔒 Posição (${post.x}, ${post.y}) marcada como clicada`);
+          console.log(`   ✅ Próximo post sequencial: (${post.x}, ${post.y}) [${post.gridKey}]: ${post.href}`);
           break;
         }
 
@@ -1317,11 +1731,34 @@ export async function scrapeInstagramTag(
         if (!selectedHandle || !selectedUrl) {
           attemptsWithoutNewPost++;
           console.log(`   🔄 Nenhum novo post visível (tentativa ${attemptsWithoutNewPost}/8). Fazendo scroll...`);
-          await page.evaluate(() => {
-            window.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
-          });
-          // Delay variável após scroll (2-4 segundos)
-          await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 2000));
+
+          // 🆕 LIMPAR lista de tentativas antes do scroll (novos posts podem aparecer nas mesmas posições)
+          attemptedPositionsInCycle.clear();
+          console.log(`   🔄 Lista de posições tentadas limpa antes do scroll`);
+
+          // 🔧 CRITICAL FIX: Resetar controle de colunas após scroll
+          // Sem isso, sistema fica travado esperando completar 6 posts da coluna anterior
+          currentColumn = null;
+          postsTriedInCurrentColumn = 0;
+          console.log(`   🔄 Controle de colunas resetado (permitir nova seleção)`);
+
+          // 🆕 SCROLL AGRESSIVO se muitas duplicatas (ampliar mais o mural)
+          let scrollMultiplier = 1.5; // Scroll normal aumentado (era 1x)
+
+          if (consecutiveDuplicates >= 6) {
+            scrollMultiplier = 4; // Super agressivo para muitas duplicatas
+            console.log(`   🚀 SCROLL SUPER AGRESSIVO (${consecutiveDuplicates} duplicatas) - pulando ${scrollMultiplier}x janela`);
+          } else if (consecutiveDuplicates >= 3) {
+            scrollMultiplier = 3; // Agressivo aumentado (era 2.5x)
+            console.log(`   🚀 SCROLL AGRESSIVO (${consecutiveDuplicates} duplicatas) - pulando ${scrollMultiplier}x janela`);
+          }
+
+          await page.evaluate((multiplier) => {
+            window.scrollBy({ top: window.innerHeight * multiplier, behavior: 'smooth' });
+          }, scrollMultiplier);
+
+          // Delay otimizado após scroll (1-2 segundos)
+          await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
           continue;
         }
 
@@ -1413,6 +1850,7 @@ export async function scrapeInstagramTag(
 
             try {
               await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await restoreScrollPosition(); // 🔄 Restaurar scroll
             } catch {
               // ignore
             }
@@ -1428,6 +1866,7 @@ export async function scrapeInstagramTag(
             console.log(`   ⏭️  Post do próprio usuário logado, pulando...`);
             try {
               await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await restoreScrollPosition(); // 🔄 Restaurar scroll
             } catch {
               // ignore
             }
@@ -1439,7 +1878,78 @@ export async function scrapeInstagramTag(
             continue;
           }
 
-          // 🆕 VERIFICAR SE USERNAME JÁ EXISTE NO BANCO (ANTES de processar perfil completo)
+          // 🎯 VERIFICAR MEMÓRIA PRIMEIRO (detectar duplicatas de sessão)
+          if (processedUsernames.has(username)) {
+            console.log(`   ⏭️  @${username} já processado na memória, pulando...`);
+            consecutiveDuplicates++;
+            console.log(`   📊 Duplicatas consecutivas: ${consecutiveDuplicates}/8`);
+
+            // 🔒 MARCAR POSIÇÃO como clicada
+            if (selectedGridKey && selectedPosition) {
+              clickedGridPositions.add(selectedGridKey);
+              console.log(`   🔒 Posição (${selectedPosition.x}, ${selectedPosition.y}) marcada como clicada (duplicata memória)`);
+            }
+
+            // ⏭️  LÓGICA SEQUENCIAL: Apenas volta ao mural e pega PRÓXIMO post (sem scroll!)
+            console.log(`   ⬅️  Voltando ao mural para clicar no PRÓXIMO post sequencial...`);
+            try {
+              await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await restoreScrollPosition(); // 🔄 Restaurar scroll
+              console.log(`   ✅ Voltou ao mural da hashtag`);
+            } catch (navError: any) {
+              console.log(`   ⚠️  Erro ao retornar ao mural: ${navError.message}`);
+            }
+            console.log(`   ⏳ Aguardando 10s para mural carregar...`);
+            await new Promise(resolve => setTimeout(resolve, 10000));
+
+            // 🔄 RE-APLICAR scroll (Instagram reseta durante os 10s)
+            if (lastSavedScrollPosition > 0) {
+              console.log(`   🔄 Re-aplicando scroll para ${lastSavedScrollPosition}px (Instagram resetou durante espera)...`);
+              try {
+                await page.evaluate((scrollY) => {
+                  window.scrollTo(0, scrollY);
+                }, lastSavedScrollPosition);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                console.log(`   ✅ Scroll re-aplicado`);
+              } catch (err: any) {
+                console.log(`   ⚠️  Erro ao re-aplicar scroll: ${err.message}`);
+              }
+            }
+
+            const feedReady = await waitForHashtagMural('Retorno após duplicata');
+            if (!feedReady) {
+              // 🚨 DETECTAR ERRO DE SESSÃO (about:blank, timeout, etc.)
+              const currentUrl = page.url();
+              const isSessionError = currentUrl === 'about:blank' || currentUrl === '' || currentUrl === 'data:,';
+
+              if (isSessionError) {
+                console.log(`🚨 ERRO DE SESSÃO DETECTADO: URL=${currentUrl}`);
+                const recovered = await handleSessionError(page, `URL inválida após duplicata memória: ${currentUrl}`);
+
+                if (recovered) {
+                  // Nova sessão iniciada - recriar página e continuar
+                  console.log(`✅ Sessão recuperada - recriando página...`);
+                  try {
+                    page = await createAuthenticatedPage();
+                    await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    continue;
+                  } catch (recreateError: any) {
+                    console.log(`❌ Erro ao recriar página: ${recreateError.message}`);
+                    break;
+                  }
+                } else {
+                  console.log(`❌ Não foi possível recuperar sessão - encerrando scraping`);
+                  break;
+                }
+              }
+
+              attemptsWithoutNewPost++;
+            }
+            continue;
+          }
+
+          // 🆕 VERIFICAR SE USERNAME JÁ EXISTE NO BANCO (DEPOIS de verificar memória)
           console.log(`   🔍 Verificando se @${username} já existe no banco de dados...`);
           try {
             const { data: existingLead, error: checkError } = await supabase
@@ -1451,18 +1961,68 @@ export async function scrapeInstagramTag(
             if (existingLead) {
               console.log(`   ⏭️  @${username} JÁ EXISTE no banco! Pulando extração de perfil...`);
               processedUsernames.add(username); // Marcar como processado para evitar reprocessar nesta sessão
-              consecutiveDuplicates++;
-              console.log(`   📊 Duplicatas consecutivas: ${consecutiveDuplicates}/3`);
+              console.log(`   ℹ️  Perfil já coletado anteriormente (não é duplicata desta sessão)`);
 
-              // Retornar ao mural
+              // 🔒 MARCAR POSIÇÃO como clicada (MESMO sendo duplicata! Senão clica infinitamente no mesmo)
+              if (selectedGridKey && selectedPosition) {
+                clickedGridPositions.add(selectedGridKey);
+                console.log(`   🔒 Posição (${selectedPosition.x}, ${selectedPosition.y}) marcada como clicada (duplicata)`);
+              }
+
+              // ⏭️  LÓGICA SEQUENCIAL: Apenas volta ao mural e pega PRÓXIMO post (sem scroll!)
+              console.log(`   ⬅️  Voltando ao mural para clicar no PRÓXIMO post sequencial...`);
               try {
                 await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-              } catch {
-                // ignore
+                await restoreScrollPosition(); // 🔄 Restaurar scroll
+                console.log(`   ✅ Voltou ao mural da hashtag`);
+              } catch (navError: any) {
+                console.log(`   ⚠️  Erro ao retornar ao mural: ${navError.message}`);
               }
-              await new Promise(resolve => setTimeout(resolve, 1500));
-              const feedReady = await waitForHashtagMural('Retorno após detectar duplicata no BD');
+              console.log(`   ⏳ Aguardando 10s para mural carregar...`);
+              await new Promise(resolve => setTimeout(resolve, 10000));
+
+              // 🔄 RE-APLICAR scroll (Instagram reseta durante os 10s)
+              if (lastSavedScrollPosition > 0) {
+                console.log(`   🔄 Re-aplicando scroll para ${lastSavedScrollPosition}px (Instagram resetou durante espera)...`);
+                try {
+                  await page.evaluate((scrollY) => {
+                    window.scrollTo(0, scrollY);
+                  }, lastSavedScrollPosition);
+                  await new Promise(resolve => setTimeout(resolve, 2000));
+                  console.log(`   ✅ Scroll re-aplicado`);
+                } catch (err: any) {
+                  console.log(`   ⚠️  Erro ao re-aplicar scroll: ${err.message}`);
+                }
+              }
+
+              const feedReady = await waitForHashtagMural('Retorno após duplicata');
               if (!feedReady) {
+                // 🚨 DETECTAR ERRO DE SESSÃO (about:blank, timeout, etc.)
+                const currentUrl = page.url();
+                const isSessionError = currentUrl === 'about:blank' || currentUrl === '' || currentUrl === 'data:,';
+
+                if (isSessionError) {
+                  console.log(`🚨 ERRO DE SESSÃO DETECTADO: URL=${currentUrl}`);
+                  const recovered = await handleSessionError(page, `URL inválida após duplicata: ${currentUrl}`);
+
+                  if (recovered) {
+                    // Nova sessão iniciada - recriar página e continuar
+                    console.log(`✅ Sessão recuperada - recriando página...`);
+                    try {
+                      page = await createAuthenticatedPage();
+                      await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                      await new Promise(resolve => setTimeout(resolve, 3000));
+                      continue;
+                    } catch (recreateError: any) {
+                      console.log(`❌ Erro ao recriar página: ${recreateError.message}`);
+                      break;
+                    }
+                  } else {
+                    console.log(`❌ Não foi possível recuperar sessão - encerrando scraping`);
+                    break;
+                  }
+                }
+
                 attemptsWithoutNewPost++;
               }
               continue;
@@ -1472,31 +2032,6 @@ export async function scrapeInstagramTag(
           } catch (dbError: any) {
             console.log(`   ⚠️  Erro ao verificar banco de dados: ${dbError.message}`);
             console.log(`   🔄 Continuando com extração de perfil (fail-safe)...`);
-          }
-
-          if (processedUsernames.has(username)) {
-            console.log(`   ⏭️  @${username} já processado, pulando... (${consecutiveDuplicates} duplicatas consecutivas)`);
-            console.log(`   ⏳ Aguardando 8 segundos para auto-scroll do Instagram carregar novos posts...`);
-
-            // Aguardar 8 segundos (reduzido de 20s)
-            await new Promise(resolve => setTimeout(resolve, 8000));
-
-            // Tentar voltar ao feed da hashtag
-            try {
-              await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-            } catch {
-              // ignore
-            }
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            const feedReady = await waitForHashtagMural('Retorno após duplicado');
-            if (!feedReady) {
-              attemptsWithoutNewPost++;
-            }
-
-            // Incrementar contador de duplicatas APÓS aguardar
-            consecutiveDuplicates++;
-            console.log(`   📊 Duplicatas consecutivas: ${consecutiveDuplicates}/3`);
-            continue;
           }
 
           // NAVEGAR PARA O PERFIL e EXTRAIR DADOS DIRETAMENTE
@@ -1510,7 +2045,7 @@ export async function scrapeInstagramTag(
 
             // Esperar elementos do perfil aparecerem (mais eficiente que esperar rede)
             await page.waitForSelector('header section', { timeout: 10000 }).catch(() => {});
-            await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
+            await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 500)); // Otimizado: 1-1.5s (era 1.5-2.5s)
 
             // EXTRAIR DADOS VISUALMENTE DA PÁGINA ATUAL usando CSS selectors
             console.log(`   📊 Extraindo dados visíveis da página do perfil...`);
@@ -1917,6 +2452,7 @@ export async function scrapeInstagramTag(
             // ========================================
 
             // VALIDAÇÃO 1: CALCULAR ACTIVITY SCORE
+            console.log(`   🔍 [DEBUG] recent_post_dates no perfil: ${completeProfile.recent_post_dates?.length || 0} datas`);
             const activityScore = calculateActivityScore(completeProfile);
             completeProfile.activity_score = activityScore.score;
             completeProfile.is_active = activityScore.isActive;
@@ -1930,6 +2466,43 @@ export async function scrapeInstagramTag(
             if (!activityScore.isActive) {
               console.log(`   ❌ Perfil REJEITADO por baixo activity score - não será contabilizado`);
               processedUsernames.add(username); // Marcar como processado para não tentar novamente
+
+              // 🔧 RESETAR controle de colunas após rejeição
+              currentColumn = null;
+              postsTriedInCurrentColumn = 0;
+              console.log(`   🔄 Controle de colunas resetado após rejeição`);
+
+              // 🔧 VOLTAR para o mural da hashtag ANTES de continuar
+              console.log(`   ⬅️  Retornando ao mural após rejeição (preservando scroll)...`);
+              try {
+                await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                await restoreScrollPosition(); // 🔄 Restaurar scroll
+                console.log(`   ✅ Voltou ao mural da hashtag`);
+              } catch (navError: any) {
+                console.log(`   ⚠️  Erro ao retornar ao mural: ${navError.message}`);
+              }
+              console.log(`   ⏳ Aguardando 10s para mural carregar...`);
+              await new Promise(resolve => setTimeout(resolve, 10000));
+
+              // 🔄 RE-APLICAR scroll (Instagram reseta durante os 10s)
+              if (lastSavedScrollPosition > 0) {
+                console.log(`   🔄 Re-aplicando scroll para ${lastSavedScrollPosition}px (Instagram resetou durante espera)...`);
+                try {
+                  await page.evaluate((scrollY) => {
+                    window.scrollTo(0, scrollY);
+                  }, lastSavedScrollPosition);
+                  await new Promise(resolve => setTimeout(resolve, 2000));
+                  console.log(`   ✅ Scroll re-aplicado`);
+                } catch (err: any) {
+                  console.log(`   ⚠️  Erro ao re-aplicar scroll: ${err.message}`);
+                }
+              }
+
+              const feedReady = await waitForHashtagMural('Retorno após rejeição de activity score');
+              if (!feedReady) {
+                attemptsWithoutNewPost++;
+              }
+
               continue; // PULA para o próximo perfil
             }
 
@@ -1942,6 +2515,43 @@ export async function scrapeInstagramTag(
             if (languageDetection.language !== 'pt') {
               console.log(`   ❌ Perfil REJEITADO por idioma não-português (${languageDetection.language}) - não será contabilizado`);
               processedUsernames.add(username); // Marcar como processado para não tentar novamente
+
+              // 🔧 RESETAR controle de colunas após rejeição
+              currentColumn = null;
+              postsTriedInCurrentColumn = 0;
+              console.log(`   🔄 Controle de colunas resetado após rejeição`);
+
+              // 🔧 VOLTAR para o mural da hashtag ANTES de continuar
+              console.log(`   ⬅️  Retornando ao mural após rejeição de idioma (preservando scroll)...`);
+              try {
+                await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                await restoreScrollPosition(); // 🔄 Restaurar scroll
+                console.log(`   ✅ Voltou ao mural da hashtag`);
+              } catch (navError: any) {
+                console.log(`   ⚠️  Erro ao retornar ao mural: ${navError.message}`);
+              }
+              console.log(`   ⏳ Aguardando 10s para mural carregar...`);
+              await new Promise(resolve => setTimeout(resolve, 10000));
+
+              // 🔄 RE-APLICAR scroll (Instagram reseta durante os 10s)
+              if (lastSavedScrollPosition > 0) {
+                console.log(`   🔄 Re-aplicando scroll para ${lastSavedScrollPosition}px (Instagram resetou durante espera)...`);
+                try {
+                  await page.evaluate((scrollY) => {
+                    window.scrollTo(0, scrollY);
+                  }, lastSavedScrollPosition);
+                  await new Promise(resolve => setTimeout(resolve, 2000));
+                  console.log(`   ✅ Scroll re-aplicado`);
+                } catch (err: any) {
+                  console.log(`   ⚠️  Erro ao re-aplicar scroll: ${err.message}`);
+                }
+              }
+
+              const feedReady = await waitForHashtagMural('Retorno após rejeição de idioma');
+              if (!feedReady) {
+                attemptsWithoutNewPost++;
+              }
+
               continue; // PULA para o próximo perfil
             }
 
@@ -1950,9 +2560,8 @@ export async function scrapeInstagramTag(
             // ========================================
             console.log(`   🏷️  Extraindo hashtags dos posts...`);
             try {
-              const profileUrl = `https://www.instagram.com/${username}/`;
-              await page.goto(profileUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-              await new Promise(resolve => setTimeout(resolve, 2000));
+              // ✅ JÁ ESTAMOS NO PERFIL - não precisa fazer goto() novamente!
+              // Isso evita adicionar entrada extra no histórico que quebra o goBack()
 
               // Envolver com retry mechanism (máx 2 tentativas, backoff 3s)
               console.log(`   🔄 Iniciando extração de hashtags com retry automático...`);
@@ -2022,6 +2631,16 @@ export async function scrapeInstagramTag(
                 console.log(`   ⚠️  Erro ao salvar @${username} no banco: ${insertError.message}`);
               } else {
                 console.log(`   ✅ Perfil @${username} SALVO NO BANCO`);
+
+                // 🆕 MARCAR POSIÇÃO como clicada SOMENTE quando perfil é APROVADO (não duplicata)
+                if (selectedGridKey && selectedPosition) {
+                  clickedGridPositions.add(selectedGridKey);
+                  console.log(`   🔒 Posição (${selectedPosition.x}, ${selectedPosition.y}) marcada como clicada`);
+                }
+
+                // 🆕 NÃO limpar attemptedPositionsInCycle aqui!
+                // Queremos continuar na próxima coluna, não voltar pro início
+                // A limpeza acontece apenas no scroll (quando esgotou posições visíveis)
               }
             } catch (dbError: any) {
               console.log(`   ⚠️  Erro ao salvar @${username}: ${dbError.message}`);
@@ -2030,7 +2649,7 @@ export async function scrapeInstagramTag(
             // Adicionar ao array só para contagem/retorno
             foundProfiles.push(completeProfile);
             processedUsernames.add(username);
-            consecutiveDuplicates = 0; // Resetar contador ao encontrar perfil novo
+            // ⚠️  NÃO resetar consecutiveDuplicates - precisa manter para detectar quando mural esgotou
 
             console.log(`   📊 Total coletado (aprovados): ${foundProfiles.length}/${maxProfiles}`);
 
@@ -2044,20 +2663,86 @@ export async function scrapeInstagramTag(
           }
 
           console.log(`   ⬅️  Retornando para o mural da hashtag...`);
-          await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+          // 🎯 LÓGICA SEQUENCIAL: Voltar para hashtag (Instagram SPA mantém scroll)
+          try {
+            await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await restoreScrollPosition(); // 🔄 Restaurar scroll
+            console.log(`   ✅ Voltou ao mural da hashtag`);
+          } catch (navError: any) {
+            console.log(`   ⚠️  Erro ao retornar ao mural: ${navError.message}`);
+          }
           await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
           const feedReadyAfterProfile = await waitForHashtagMural('Retorno após coletar perfil');
           if (!feedReadyAfterProfile) {
+            // 🚨 DETECTAR ERRO DE SESSÃO (about:blank, timeout, etc.)
+            const currentUrl = page.url();
+            const isSessionError = currentUrl === 'about:blank' || currentUrl === '' || currentUrl === 'data:,';
+
+            if (isSessionError) {
+              console.log(`🚨 ERRO DE SESSÃO DETECTADO: URL=${currentUrl}`);
+              const recovered = await handleSessionError(page, `URL inválida após coletar perfil: ${currentUrl}`);
+
+              if (recovered) {
+                // Nova sessão iniciada - recriar página e continuar
+                console.log(`✅ Sessão recuperada - recriando página...`);
+                try {
+                  page = await createAuthenticatedPage();
+                  await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                  await new Promise(resolve => setTimeout(resolve, 3000));
+                  continue;
+                } catch (recreateError: any) {
+                  console.log(`❌ Erro ao recriar página: ${recreateError.message}`);
+                  break;
+                }
+              } else {
+                console.log(`❌ Não foi possível recuperar sessão - encerrando scraping`);
+                break;
+              }
+            }
+
             attemptsWithoutNewPost++;
             continue;
           }
 
         } catch (error: any) {
           console.log(`   ❌ Erro ao processar post (${error.message}). Tentando retornar ao mural...`);
-          await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+          // 🎯 LÓGICA SEQUENCIAL: Voltar para hashtag (Instagram SPA mantém scroll)
+          try {
+            await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await restoreScrollPosition(); // 🔄 Restaurar scroll
+            console.log(`   ✅ Voltou ao mural da hashtag após erro`);
+          } catch (navError: any) {
+            console.log(`   ⚠️  Erro ao retornar ao mural: ${navError.message}`);
+          }
           await new Promise(resolve => setTimeout(resolve, 1500));
           const feedReadyAfterError = await waitForHashtagMural('Retorno após erro');
           if (!feedReadyAfterError) {
+            // 🚨 DETECTAR ERRO DE SESSÃO (about:blank, timeout, etc.)
+            const currentUrl = page.url();
+            const isSessionError = currentUrl === 'about:blank' || currentUrl === '' || currentUrl === 'data:,';
+
+            if (isSessionError) {
+              console.log(`🚨 ERRO DE SESSÃO DETECTADO: URL=${currentUrl}`);
+              const recovered = await handleSessionError(page, `URL inválida após erro: ${currentUrl}`);
+
+              if (recovered) {
+                // Nova sessão iniciada - recriar página e continuar
+                console.log(`✅ Sessão recuperada - recriando página...`);
+                try {
+                  page = await createAuthenticatedPage();
+                  await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                  await new Promise(resolve => setTimeout(resolve, 3000));
+                  continue;
+                } catch (recreateError: any) {
+                  console.log(`❌ Erro ao recriar página: ${recreateError.message}`);
+                  break;
+                }
+              } else {
+                console.log(`❌ Não foi possível recuperar sessão - encerrando scraping`);
+                break;
+              }
+            }
+
             attemptsWithoutNewPost++;
           }
           continue;
@@ -2067,8 +2752,8 @@ export async function scrapeInstagramTag(
       // 🆕 EXPLICAR POR QUE O LOOP DESTA HASHTAG PAROU
       if (foundProfiles.length >= maxProfiles) {
         console.log(`\n🎯 Meta desta hashtag atingida: ${foundProfiles.length}/${maxProfiles} perfis coletados`);
-      } else if (consecutiveDuplicates >= 3) {
-        console.log(`\n⏹️  Scraping interrompido: 3 duplicatas consecutivas (mesmo aguardando auto-scroll)`);
+      } else if (consecutiveDuplicates >= 5) {
+        console.log(`\n⏹️  Scraping interrompido: 5 duplicatas consecutivas (mesmo aguardando auto-scroll)`);
         console.log(`   💡 Esta hashtag parece esgotada - todos os perfis já foram coletados anteriormente`);
       } else if (attemptsWithoutNewPost >= 8) {
         console.log(`\n⏹️  Scraping interrompido: 8 tentativas sem encontrar novos posts`);
