@@ -512,13 +512,6 @@ export async function scrapeInstagramUserSearch(
           const websiteEl = document.querySelector('header section a[href^="http"]');
           const website = websiteEl ? websiteEl.getAttribute('href') : null;
 
-          // RECENT POSTS
-          const timeElements = Array.from(document.querySelectorAll('article time[datetime]'));
-          const recent_post_dates = timeElements
-            .slice(0, 12)
-            .map(el => el.getAttribute('datetime'))
-            .filter((value): value is string => !!value);
-
           return {
             full_name,
             bio,
@@ -528,8 +521,7 @@ export async function scrapeInstagramUserSearch(
             is_verified: isVerified,
             email,
             phone,
-            website,
-            recent_post_dates
+            website
           };
         });
 
@@ -551,7 +543,6 @@ export async function scrapeInstagramUserSearch(
           phone: null,
           website: profileData.website,
           business_category: null,
-          recent_post_dates: profileData.recent_post_dates,
           search_term_used: searchTerm // Termo de busca usado para encontrar este perfil
         };
 

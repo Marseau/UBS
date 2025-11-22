@@ -236,37 +236,63 @@ export async function discoverHashtagVariations(
           // @ts-ignore
           let postCount = '';
 
-          // Tentar encontrar no parent mais próximo
+          // MÉTODO 1: Buscar no parent mais próximo (3 níveis)
           // @ts-ignore
-          const parent = link.closest('div[role="button"], div[role="menuitem"], a, div');
-          if (parent) {
+          let currentElement = link;
+          for (let i = 0; i < 3; i++) {
             // @ts-ignore
-            const textContent = parent.textContent || '';
-            const postCountMatch = textContent.match(/(\d+[.,]?\d*\s*(mi|mil|k)\s*posts?)/i);
-            if (postCountMatch) {
-              postCount = postCountMatch[0];
+            const parent = currentElement.parentElement;
+            if (parent) {
+              // @ts-ignore
+              const textContent = parent.textContent || '';
+              const postCountMatch = textContent.match(/(\d+[.,]?\d*\s*(M|mi|mil|K|k)\s*posts?)/i);
+              if (postCountMatch) {
+                postCount = postCountMatch[0];
+                // @ts-ignore
+                console.log(`   [DEBUG] PostCount encontrado no parent nível ${i + 1}: ${postCount}`);
+                break;
+              }
+              currentElement = parent;
             }
           }
 
-          // Se não encontrou no parent, buscar em siblings
+          // MÉTODO 2: Buscar em TODOS os elementos filhos do container
+          if (!postCount) {
+            // @ts-ignore
+            const container = link.closest('div');
+            if (container) {
+              // @ts-ignore
+              const allText = container.textContent || '';
+              const postCountMatch = allText.match(/(\d+[.,]?\d*\s*(M|mi|mil|K|k)\s*posts?)/i);
+              if (postCountMatch) {
+                postCount = postCountMatch[0];
+                // @ts-ignore
+                console.log(`   [DEBUG] PostCount encontrado no container: ${postCount}`);
+              }
+            }
+          }
+
+          // MÉTODO 3: Buscar em siblings
           if (!postCount) {
             // @ts-ignore
             const nextElement = link.nextElementSibling;
             if (nextElement) {
               // @ts-ignore
               const textContent = nextElement.textContent || '';
-              const postCountMatch = textContent.match(/(\d+[.,]?\d*\s*(mi|mil|k)\s*posts?)/i);
+              const postCountMatch = textContent.match(/(\d+[.,]?\d*\s*(M|mi|mil|K|k)\s*posts?)/i);
               if (postCountMatch) {
                 postCount = postCountMatch[0];
+                // @ts-ignore
+                console.log(`   [DEBUG] PostCount encontrado no sibling: ${postCount}`);
               }
             }
           }
 
-          // Adicionar apenas se encontrou contagem e não é duplicata
-          if (postCount && !results.find(r => r.hashtag === hashtag)) {
-            results.push({ hashtag, postCount });
+          // ADICIONAR sempre, mesmo sem postCount (vamos inferir depois)
+          if (!results.find(r => r.hashtag === hashtag)) {
+            results.push({ hashtag, postCount: postCount || 'unknown' });
             // @ts-ignore
-            console.log(`   [DEBUG] Hashtag encontrada: #${hashtag} - ${postCount}`);
+            console.log(`   [DEBUG] Hashtag adicionada: #${hashtag} - ${postCount || 'SEM CONTAGEM'}`);
 
             // Limitar a 5 resultados
             if (results.length >= 5) break;

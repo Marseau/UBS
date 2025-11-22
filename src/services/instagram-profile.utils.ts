@@ -51,6 +51,7 @@ export interface ProfileForScoring {
   is_business_account: boolean;
   email: string | null;
   phone: string | null;
+  website: string | null; // 🔧 ADICIONADO - Campo faltante!
   is_verified: boolean;
   recent_post_dates?: string[] | null;
 }
@@ -144,119 +145,52 @@ export function extractHashtags(text: string | null, maxHashtags: number = 10): 
 }
 
 /**
- * Calcula score de atividade (0-100) para um perfil
+ * 🎯 SISTEMA DE VALIDAÇÃO SIMPLIFICADO PARA PERFIS B2C
+ *
+ * REGRA 1: TEM WEBSITE → APROVADO ✅
+ *
+ * REGRA 2: SEM WEBSITE → Precisa de:
+ *   - Bio > 25 caracteres E
+ *   - Followers > 100
+ *   → APROVADO ✅
+ *
+ * Caso contrário → REJEITADO ❌
  */
 export function calculateActivityScore(profile: ProfileForScoring): ActivityScore {
-  let score = 100;
   const reasons: string[] = [];
-  const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
-  if (profile.posts_count === 0) {
+  // REGRA 1: TEM WEBSITE → APROVADO
+  const hasWebsite = profile.website && profile.website.length > 0;
+  if (hasWebsite) {
+    reasons.push('✅ TEM WEBSITE → APROVADO');
     return {
-      isActive: false,
-      score: 0,
+      isActive: true,
+      score: 100,
       postsPerMonth: 0,
-      reasons: ['Nenhum post publicado']
+      reasons
     };
   }
 
-  const now = Date.now();
-  const recentDates = (profile.recent_post_dates || [])
-    .map(dateString => new Date(dateString))
-    .filter(date => Number.isFinite(date.getTime()))
-    .sort((a, b) => a.getTime() - b.getTime());
+  // REGRA 2: SEM WEBSITE → Verifica Bio + Followers (Following eliminado!)
+  const hasBio = profile.bio && profile.bio.length > 25;
+  const hasFollowers = profile.followers_count > 100;
 
-  let postsPerMonth = profile.posts_count / 12;
+  reasons.push(`Website: ❌`);
+  reasons.push(`Bio > 25 chars: ${hasBio ? '✅' : '❌'} (${profile.bio?.length || 0} chars)`);
+  reasons.push(`Followers > 100: ${hasFollowers ? '✅' : '❌'} (${profile.followers_count})`);
 
-  if (recentDates.length > 0) {
-    const latest = recentDates[recentDates.length - 1];
-    const earliest = recentDates[0];
-    const spanDays = Math.max(30, (latest.getTime() - earliest.getTime()) / DAY_IN_MS + 1);
-    const recentPostsPerMonth = recentDates.length / (spanDays / 30);
-    postsPerMonth = Math.max(postsPerMonth, recentPostsPerMonth);
+  const isApproved = hasBio && hasFollowers;
 
-    const daysSinceLastPost = (now - latest.getTime()) / DAY_IN_MS;
-
-    if (daysSinceLastPost > 120) {
-      score -= 40;
-      reasons.push('Sem posts recentes (>=120 dias)');
-    } else if (daysSinceLastPost > 60) {
-      score -= 25;
-      reasons.push('Último post há mais de 60 dias');
-    } else if (daysSinceLastPost > 30) {
-      score -= 15;
-      reasons.push('Último post há mais de 30 dias');
-    } else if (daysSinceLastPost <= 14) {
-      score += 10;
-      reasons.push('Postou nas últimas 2 semanas');
-    } else {
-      score += 5;
-      reasons.push('Postou no último mês');
-    }
-
-    const postsInLast90Days = recentDates.filter(date => now - date.getTime() <= 90 * DAY_IN_MS).length;
-    if (postsInLast90Days === 0) {
-      score -= 35;
-      reasons.push('Nenhum post nos últimos 90 dias');
-    } else if (postsInLast90Days >= 6) {
-      score += 10;
-      reasons.push('>=6 posts nos últimos 90 dias');
-    } else if (postsInLast90Days <= 2) {
-      score -= 10;
-      reasons.push('Poucos posts nos últimos 90 dias');
-    }
+  if (isApproved) {
+    reasons.push('✅ APROVADO - Bio + Followers');
   } else {
-    score -= 10;
-    reasons.push('Posts recentes indisponíveis');
+    reasons.push('❌ REJEITADO - Falta Bio>25 ou Followers>100');
   }
-
-  if (postsPerMonth < 1) {
-    score -= 25;
-    reasons.push(`Baixa frequência média: ${postsPerMonth.toFixed(1)} posts/mês`);
-  } else if (postsPerMonth >= 4) {
-    score += 10;
-    reasons.push(`Alta atividade: ${postsPerMonth.toFixed(1)} posts/mês`);
-  }
-
-  if (profile.followers_count > profile.posts_count * 100 && profile.posts_count < 50) {
-    score -= 25;
-    reasons.push('Muitos seguidores para poucos posts (possível compra)');
-  }
-
-  if (!profile.bio || profile.bio.length < 10) {
-    score -= 10;
-    reasons.push('Bio vazia ou muito curta');
-  } else {
-    score += 5;
-    reasons.push('Bio completa');
-  }
-
-  if (profile.is_business_account && !profile.email && !profile.phone) {
-    score -= 15;
-    reasons.push('Conta business sem contato público');
-  }
-
-  if (profile.is_verified) {
-    score += 15;
-    reasons.push('Conta verificada');
-  }
-
-  if (profile.followers_count < 100) {
-    score -= 20;
-    reasons.push('Poucos seguidores (<100)');
-  }
-
-  if (profile.following_count > profile.followers_count * 2 && profile.followers_count > 100) {
-    score -= 10;
-    reasons.push('Following >> Followers (comportamento suspeito)');
-  }
-
-  score = Math.max(0, Math.min(100, score));
 
   return {
-    isActive: score >= 50,
-    score,
-    postsPerMonth,
+    isActive: isApproved,
+    score: isApproved ? 75 : 0,
+    postsPerMonth: 0,
     reasons
   };
 }

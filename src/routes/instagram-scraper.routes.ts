@@ -4,12 +4,17 @@ import {
   scrapeInstagramProfile,
   scrapeProfileWithExistingPage,
   closeBrowser,
-  InstagramProfileData
+  InstagramProfileData,
+  getBrowserStatus,
+  forceCloseBrowser,
+  listPuppeteerProcesses,
+  killOrphanPuppeteerProcesses
 } from '../services/instagram-scraper-single.service';
 import { createIsolatedContext } from '../services/instagram-context-manager.service';
 import { scrapeInstagramUserSearch } from '../services/instagram-scraper-user-search.service';
 import { scrapeInstagramFollowers } from '../services/instagram-followers-scraper.service';
 import { UrlScraperService } from '../services/url-scraper.service';
+import { cleanOrphanPages, monitorOrphanPages, detectOrphanPages } from '../services/instagram-page-cleaner.service';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
@@ -31,13 +36,14 @@ console.log('🔍 [DEBUG] Instagram Scraper Routes - Module loaded and router cr
  * Body:
  * {
  *   "search_term": "gestor_de_trafego",
- *   "max_profiles": 10
+ *   "max_profiles": 10,
+ *   "account_profile": "conta1" (opcional, default: "default")
  * }
  */
 router.post('/scrape-tag', async (req: Request, res: Response) => {
   const reqId = `TAG_${Date.now()}_${Math.random().toString(36).substring(7)}`;
   try {
-    const { search_term, max_profiles = 20 } = req.body;
+    const { search_term, max_profiles = 20, account_profile = 'default' } = req.body;
 
     if (!search_term) {
       return res.status(400).json({
@@ -57,7 +63,7 @@ router.post('/scrape-tag', async (req: Request, res: Response) => {
       console.log(`📊 [${reqId}] ANTES: ${pagesBefore.length} páginas abertas no browser`);
     }
 
-    const profiles = await scrapeInstagramTag(search_term, max_profiles);
+    const result = await scrapeInstagramTag(search_term, max_profiles);
 
     // DEBUG: Contar páginas DEPOIS
     if (browser) {
@@ -65,24 +71,30 @@ router.post('/scrape-tag', async (req: Request, res: Response) => {
       console.log(`📊 [${reqId}] DEPOIS: ${pagesAfter.length} páginas abertas no browser`);
     }
 
+    // 🆕 LOG DE RESULTADO PARCIAL
+    if (result.is_partial) {
+      console.log(`⚠️  [${reqId}] RESULTADO PARCIAL: ${result.collected}/${result.requested} perfis (${result.completion_rate})`);
+      console.log(`   Possíveis causas: timeout, detached frame, ou falta de perfis na hashtag`);
+    }
+
     // Log consolidado dos perfis extraídos
-    console.log(`\n📊 [${reqId}] Resumo dos ${profiles.length} perfis extraídos:`);
+    console.log(`\n📊 [${reqId}] Resumo dos ${result.profiles.length} perfis extraídos:`);
 
-    const profilesWithEmail = profiles.filter(p => p.email).length;
-    const profilesWithPhone = profiles.filter(p => p.phone).length;
-    const profilesWithWebsite = profiles.filter(p => p.website).length;
-    const profilesWithLocation = profiles.filter(p => p.city || p.state || p.address).length;
-    const businessAccounts = profiles.filter(p => p.is_business_account).length;
+    const profilesWithEmail = result.profiles.filter(p => p.email).length;
+    const profilesWithPhone = result.profiles.filter(p => p.phone).length;
+    const profilesWithWebsite = result.profiles.filter(p => p.website).length;
+    const profilesWithLocation = result.profiles.filter(p => p.city || p.state || p.address).length;
+    const businessAccounts = result.profiles.filter(p => p.is_business_account).length;
 
-    console.log(`   📧 Emails encontrados: ${profilesWithEmail}/${profiles.length}`);
-    console.log(`   📱 Telefones encontrados: ${profilesWithPhone}/${profiles.length}`);
-    console.log(`   🔗 Websites encontrados: ${profilesWithWebsite}/${profiles.length}`);
-    console.log(`   📍 Localizações encontradas: ${profilesWithLocation}/${profiles.length}`);
-    console.log(`   💼 Contas business: ${businessAccounts}/${profiles.length}`);
+    console.log(`   📧 Emails encontrados: ${profilesWithEmail}/${result.profiles.length}`);
+    console.log(`   📱 Telefones encontrados: ${profilesWithPhone}/${result.profiles.length}`);
+    console.log(`   🔗 Websites encontrados: ${profilesWithWebsite}/${result.profiles.length}`);
+    console.log(`   📍 Localizações encontradas: ${profilesWithLocation}/${result.profiles.length}`);
+    console.log(`   💼 Contas business: ${businessAccounts}/${result.profiles.length}`);
 
     if (profilesWithLocation > 0) {
       console.log(`\n   📍 Perfis com localização:`);
-      profiles
+      result.profiles
         .filter(p => p.city || p.state)
         .slice(0, 5) // Mostrar apenas os primeiros 5
         .forEach(p => {
@@ -98,12 +110,53 @@ router.post('/scrape-tag', async (req: Request, res: Response) => {
 
     console.log(`✅ [${reqId}] ========== SCRAPE-TAG FINALIZADO ==========\n`);
 
+    // 🆕 VALIDAÇÃO: Resultado vazio pode indicar erro silencioso
+    if (result.collected === 0) {
+      console.warn(`⚠️  [${reqId}] ALERTA: Nenhum perfil encontrado para #${search_term}`);
+      console.warn(`   Possíveis causas:`);
+      console.warn(`   1. Hashtag sem posts`);
+      console.warn(`   2. Erro de 'detached frame' durante scraping`);
+      console.warn(`   3. Instagram bloqueou temporariamente`);
+
+      // Capturar screenshot para análise
+      let screenshotBase64: string | null = null;
+      try {
+        const { getBrowserInstance } = await import('../services/instagram-session.service');
+        const browser = getBrowserInstance();
+        if (browser) {
+          const allPages = await browser.pages();
+          const currentPage = allPages.find(p => !p.isClosed() && p.url().includes('instagram.com'));
+          if (currentPage) {
+            const screenshot = await currentPage.screenshot({ type: 'png', fullPage: true });
+            screenshotBase64 = Buffer.from(screenshot).toString('base64');
+          }
+        }
+      } catch {}
+
+      return res.status(200).json({
+        success: false, // ❌ Marcar como false quando vazio
+        message: 'Nenhum perfil encontrado - possível erro de scraping',
+        screenshot_base64: screenshotBase64,
+        partial_result: false,
+        data: {
+          search_term,
+          profiles: [],
+          total_found: 0,
+          expected: result.requested,
+          completion_rate: '0%'
+        }
+      });
+    }
+
     return res.status(200).json({
-      success: true,
+      success: result.collected > 0, // ✅ true se tem ALGUM dado
+      partial_result: result.is_partial, // 🆕 Flag para N8N saber
       data: {
         search_term,
-        profiles,
-        total_found: profiles.length
+        profiles: result.profiles,
+        total_found: result.collected,
+        expected: result.requested,
+        completion_rate: result.completion_rate
       }
     });
 
@@ -1438,6 +1491,319 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao processar usernames',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/get-next-hashtag
+ * Busca próxima hashtag disponível usando round-robin de contas
+ *
+ * Body:
+ * {
+ *   "account_profile": "conta1"
+ * }
+ *
+ * Returns:
+ * {
+ *   "success": true,
+ *   "hashtag": {
+ *     "id": "uuid",
+ *     "hashtag": "consultoria",
+ *     "segment": "marketing"
+ *   }
+ * }
+ */
+router.post('/get-next-hashtag', async (req: Request, res: Response) => {
+  try {
+    const { account_profile = 'default' } = req.body;
+
+    if (!account_profile) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo "account_profile" é obrigatório'
+      });
+    }
+
+    console.log(`🔍 Buscando próxima hashtag para conta: ${account_profile}`);
+
+    // Buscar hashtag ativa que NÃO foi processada por esta conta (round-robin)
+    const { data, error } = await supabase
+      .from('lead_search_terms')
+      .select('id, hashtag, segment, last_processed_account')
+      .eq('is_active', true)
+      .or(`last_processed_account.is.null,last_processed_account.neq.${account_profile}`)
+      .order('last_processed_at', { ascending: true, nullsFirst: true })
+      .limit(1)
+      .single();
+
+    if (error || !data) {
+      // Se não encontrou nenhuma, buscar qualquer uma ativa (todas já foram processadas por esta conta)
+      console.log(`⚠️  Nenhuma hashtag nova para ${account_profile}. Buscando qualquer ativa...`);
+
+      const { data: anyHashtag, error: anyError } = await supabase
+        .from('lead_search_terms')
+        .select('id, hashtag, segment, last_processed_account')
+        .eq('is_active', true)
+        .order('last_processed_at', { ascending: true, nullsFirst: true })
+        .limit(1)
+        .single();
+
+      if (anyError || !anyHashtag) {
+        return res.status(404).json({
+          success: false,
+          message: 'Nenhuma hashtag ativa disponível'
+        });
+      }
+
+      console.log(`✅ Hashtag encontrada (reprocessando): #${anyHashtag.hashtag} (última conta: ${anyHashtag.last_processed_account || 'nenhuma'})`);
+
+      return res.status(200).json({
+        success: true,
+        hashtag: anyHashtag
+      });
+    }
+
+    console.log(`✅ Hashtag encontrada: #${data.hashtag} (última conta: ${data.last_processed_account || 'nenhuma'})`);
+
+    return res.status(200).json({
+      success: true,
+      hashtag: data
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro ao buscar próxima hashtag:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar próxima hashtag',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/mark-hashtag-processed
+ * Marca hashtag como processada por uma conta
+ *
+ * Body:
+ * {
+ *   "hashtag_id": "uuid",
+ *   "account_profile": "conta1"
+ * }
+ */
+router.post('/mark-hashtag-processed', async (req: Request, res: Response) => {
+  try {
+    const { hashtag_id, account_profile = 'default' } = req.body;
+
+    if (!hashtag_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo "hashtag_id" é obrigatório'
+      });
+    }
+
+    console.log(`📝 Marcando hashtag ${hashtag_id} como processada por: ${account_profile}`);
+
+    const { error } = await supabase
+      .from('lead_search_terms')
+      .update({
+        last_processed_account: account_profile,
+        last_processed_at: new Date().toISOString()
+      })
+      .eq('id', hashtag_id);
+
+    if (error) {
+      throw error;
+    }
+
+    console.log(`✅ Hashtag marcada como processada por ${account_profile}`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Hashtag marcada como processada'
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro ao marcar hashtag:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao marcar hashtag como processada',
+      error: error.message
+    });
+  }
+});
+
+// ========== ENDPOINTS DE MONITORAMENTO E CLEANUP ==========
+
+/**
+ * GET /api/instagram-scraper/browser-status
+ * Retorna status do browser Puppeteer
+ */
+router.get('/browser-status', async (_req: Request, res: Response) => {
+  try {
+    const status = getBrowserStatus();
+    const processes = await listPuppeteerProcesses();
+
+    return res.status(200).json({
+      success: true,
+      browser: status,
+      systemProcesses: {
+        count: processes.length,
+        pids: processes.map((p: string) => {
+          const match = p.match(/\s+(\d+)\s+/);
+          return match ? parseInt(match[1] || '0') : 0;
+        }).filter((pid: number) => pid > 0)
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao obter status',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/force-close
+ * Força fechamento do browser Puppeteer (ADMIN)
+ */
+router.post('/force-close', async (_req: Request, res: Response) => {
+  try {
+    console.log('🔪 [ADMIN] Forçando fechamento do browser...');
+    const result = await forceCloseBrowser();
+
+    return res.status(200).json({
+      ...result
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao fechar browser',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/kill-orphans
+ * Mata todos os processos Puppeteer órfãos (ADMIN)
+ */
+router.post('/kill-orphans', async (_req: Request, res: Response) => {
+  try {
+    console.log('🔪 [ADMIN] Matando processos Puppeteer órfãos...');
+    const before = await listPuppeteerProcesses();
+    await killOrphanPuppeteerProcesses();
+    const after = await listPuppeteerProcesses();
+
+    return res.status(200).json({
+      success: true,
+      message: `Processos mortos: ${before.length - after.length}`,
+      before: before.length,
+      after: after.length
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao matar processos',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/instagram-scraper/orphan-pages
+ * Detecta páginas órfãs abertas no browser (para diagnóstico)
+ */
+router.get('/orphan-pages', async (_req: Request, res: Response) => {
+  try {
+    console.log('🔍 [DIAGNOSTIC] Detectando páginas órfãs...');
+    const orphans = await detectOrphanPages();
+
+    return res.status(200).json({
+      success: true,
+      totalPages: orphans.length,
+      blankPages: orphans.filter(p => p.isBlank).length,
+      closedPages: orphans.filter(p => p.isClosed).length,
+      pages: orphans
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao detectar páginas órfãs',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/instagram-scraper/monitor-pages
+ * Monitora páginas em tempo real (métricas resumidas)
+ */
+router.get('/monitor-pages', async (_req: Request, res: Response) => {
+  try {
+    const stats = await monitorOrphanPages();
+
+    return res.status(200).json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      stats
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao monitorar páginas',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/clean-orphan-pages
+ * Limpa páginas órfãs do browser (ADMIN)
+ *
+ * Body (opcional):
+ * {
+ *   "closeBlankPages": true,        // Fechar about:blank (default: true)
+ *   "closeNonInstagramPages": false, // Fechar não-Instagram (default: false)
+ *   "keepFirstPage": true,           // Manter primeira página (default: true)
+ *   "dryRun": false                  // Apenas simular (default: false)
+ * }
+ */
+router.post('/clean-orphan-pages', async (req: Request, res: Response) => {
+  try {
+    const {
+      closeBlankPages = true,
+      closeNonInstagramPages = false,
+      keepFirstPage = true,
+      dryRun = false
+    } = req.body;
+
+    console.log('🧹 [ADMIN] Iniciando limpeza de páginas órfãs...');
+    console.log(`   closeBlankPages: ${closeBlankPages}`);
+    console.log(`   closeNonInstagramPages: ${closeNonInstagramPages}`);
+    console.log(`   keepFirstPage: ${keepFirstPage}`);
+    console.log(`   dryRun: ${dryRun}`);
+
+    const result = await cleanOrphanPages({
+      closeBlankPages,
+      closeNonInstagramPages,
+      keepFirstPage,
+      dryRun
+    });
+
+    const statusCode = result.success ? 200 : 500;
+
+    return res.status(statusCode).json({
+      ...result,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao limpar páginas órfãs:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao limpar páginas órfãs',
       error: error.message
     });
   }

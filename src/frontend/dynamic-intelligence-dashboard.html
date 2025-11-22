@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧠 Dynamic Intelligence Dashboard 2.0</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+            margin-bottom: 20px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #f59e0b;
+        }
+
+        .btn-secondary:hover {
+            background: #d97706;
+        }
+
+        .btn-success {
+            background: #10b981;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: white;
+            font-size: 1.2em;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+        }
+
+        .stat-card .icon {
+            font-size: 1.2em;
+            margin-bottom: 4px;
+        }
+
+        .stat-card .label {
+            color: #666;
+            font-size: 0.7em;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-bottom: 3px;
+        }
+
+        .stat-card .value {
+            color: #333;
+            font-size: 1.4em;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+
+        .stat-card .change {
+            color: #10b981;
+            font-size: 0.7em;
+        }
+
+        .section-title {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .section-title h2 {
+            color: #667eea;
+            font-size: 1.8em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .chart-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .chart-card.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .chart-card h3 {
+            color: #667eea;
+            font-size: 1.3em;
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 350px;
+        }
+
+        .chart-container.tall {
+            height: 500px;
+        }
+
+        .clusters-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .cluster-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+
+        .cluster-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+
+        .cluster-card.active {
+            border: 3px solid #667eea;
+        }
+
+        .cluster-card h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        .cluster-card .cluster-stats {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .cluster-card .stat {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .cluster-card .stat strong {
+            color: #333;
+        }
+
+        .behavioral-insights {
+            background: white;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+            display: none;
+            font-size: 0.8em;
+        }
+
+        .behavioral-insights.visible {
+            display: block;
+        }
+
+        .behavioral-insights h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .insight-section {
+            margin-bottom: 10px;
+        }
+
+        .insight-section h4 {
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 0.95em;
+        }
+
+        .insight-section ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .insight-section li {
+            padding: 4px 0;
+            padding-left: 15px;
+            position: relative;
+            font-size: 0.9em;
+        }
+
+        .insight-section li:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-size: 1.2em;
+        }
+
+        .insight-section p {
+            font-size: 0.9em;
+            margin: 3px 0;
+        }
+
+        .behavioral-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .behavioral-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-right: 5px;
+        }
+
+        .badge.high {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge.medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge.low {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge.critical {
+            background: #fecaca;
+            color: #7f1d1d;
+        }
+
+        .trends-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .trend-card {
+            background: #f0fdf4;
+            border-left: 4px solid #10b981;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .trend-card.viral {
+            background: #fef3c7;
+            border-color: #f59e0b;
+        }
+
+        .trend-card .hashtag {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .trend-card .growth {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin-top: 10px;
+            font-size: 0.85em;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 6px 8px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: #667eea;
+            font-size: 0.9em;
+        }
+
+        tr:hover {
+            background: #f9fafb;
+        }
+
+        .error {
+            background: #fee;
+            border: 2px solid #fcc;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            color: #c33;
+        }
+
+        @media (max-width: 768px) {
+            .charts-grid, .clusters-list {
+                grid-template-columns: 1fr;
+            }
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 Dynamic Intelligence Dashboard 2.0</h1>
+            <p>Sistema inteligente, dinâmico e retroalimentado com GPT-4 | Clustering Semântico + Análise Comportamental + Detecção de Tendências</p>
+            <div class="header-actions">
+                <button class="btn" onclick="loadAllData()">
+                    <span>🔄</span> Atualizar Dados
+                </button>
+                <button class="btn btn-success" id="recalculateBtn" onclick="recalculateMetrics()" title="Recalcula métricas SEM chamar GPT-4 (GRATUITO)">
+                    <span>📊</span> Recalcular Métricas
+                </button>
+                <button class="btn btn-secondary" id="pipelineBtn" onclick="executePipeline()" title="Executa clustering completo via GPT-4 (PAGO ~$0.10)">
+                    <span>🚀</span> Pipeline Completo (GPT-4)
+                </button>
+                <button class="btn" id="populateSearchTermsBtn" onclick="populateSearchTerms()" title="Cria termos de busca a partir dos clusters GPT-4" style="background: #8b5cf6;">
+                    <span>🔍</span> Gerar Search Terms
+                </button>
+            </div>
+            <div id="lastExecutionInfo" style="margin-top: 10px; font-size: 0.85em; color: rgba(255,255,255,0.8);">
+                Carregando última execução...
+            </div>
+        </div>
+
+        <div id="loading" class="loading">⏳ Carregando dados...</div>
+        <div id="error-container"></div>
+
+        <!-- KPI Cards -->
+        <div id="stats-grid" class="stats-grid" style="display: none;"></div>
+
+        <!-- Charts Section -->
+        <div id="charts-section" style="display: none;">
+            <div class="section-title">
+                <h2>📊 Análise Visual de Hashtags</h2>
+            </div>
+
+            <div class="charts-grid">
+                <!-- Top Hashtags -->
+                <div class="chart-card full-width">
+                    <h3>🔥 Top 20 Hashtags por Frequência</h3>
+                    <div class="chart-container tall">
+                        <canvas id="topHashtagsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Distribuição por Clusters -->
+                <div class="chart-card">
+                    <h3>🎯 Distribuição por Clusters</h3>
+                    <div class="chart-container">
+                        <canvas id="clustersChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Taxa de Contato -->
+                <div class="chart-card">
+                    <h3>📞 Taxa de Contato por Cluster</h3>
+                    <div class="chart-container">
+                        <canvas id="contactRateChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Premium Hashtags -->
+                <div class="chart-card full-width">
+                    <h3>💎 Top 15 Hashtags Premium</h3>
+                    <div class="chart-container">
+                        <canvas id="premiumHashtagsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Search Terms -->
+                <div class="chart-card">
+                    <h3>📋 Registros de Search Terms</h3>
+                    <div class="chart-container">
+                        <canvas id="searchTermsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Quality Score -->
+                <div class="chart-card">
+                    <h3>⭐ Distribuição de Quality Score</h3>
+                    <div class="chart-container">
+                        <canvas id="qualityScoreChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Co-ocorrências -->
+                <div class="chart-card full-width">
+                    <h3>🔗 Top 10 Co-ocorrências de Hashtags</h3>
+                    <div class="table-container">
+                        <table id="cooccurrenceTable">
+                            <thead>
+                                <tr>
+                                    <th>Hashtag 1</th>
+                                    <th>Hashtag 2</th>
+                                    <th>Co-ocorrências</th>
+                                    <th>Confiança</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        
+        <!-- All Behavioral Insights -->
+        <div id="all-behavioral-section" style="display: none;">
+            <div class="section-title">
+                <h2>🧠 Análise Comportamental GPT-4 - Todos os Clusters</h2>
+            </div>
+            <div id="all-behavioral-insights" class="behavioral-grid"></div>
+        </div>
+
+        <!-- Clusters Section -->
+        <div id="clusters-section" style="display: none;">
+            <div class="section-title">
+                <h2>🤖 Clusters Dinâmicos GPT-4</h2>
+            </div>
+            <div id="clusters-list" class="clusters-list"></div>
+        </div>
+
+        <!-- Behavioral Insights -->
+        <div id="behavioral-insights" class="behavioral-insights"></div>
+
+        <!-- Trends Section -->
+        <div id="trends-section" style="display: none;">
+            <div class="section-title">
+                <h2>📈 Tendências Emergentes</h2>
+            </div>
+            <div id="trends-grid" class="trends-grid"></div>
+        </div>
+
+        <!-- Personas Section -->
+        <div id="personas-section" style="display: none;">
+            <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>🎭 Personas Dinâmicas (GPT-4/5)</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-success" id="recalcPersonaMetricsBtn" onclick="recalculatePersonaMetrics()" title="Recalcula métricas das personas existentes (GRATUITO)">
+                        <span>📊</span> Atualizar Métricas
+                    </button>
+                    <button class="btn" id="generatePersonasBtn" onclick="generatePersonas()" style="background: #ec4899;" title="Gera novas personas via GPT (CUSTO ~$0.15)">
+                        <span>🎭</span> Gerar Personas (GPT)
+                    </button>
+                </div>
+            </div>
+            <div id="personas-stats" style="margin-bottom: 20px;"></div>
+            <div id="personas-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 20px;"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin + '/api';
+        let charts = {};
+        let allClusters = [];
+
+        Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        Chart.register(ChartDataLabels);
+
+        async function fetchData(endpoint) {
+            const response = await fetch(`${API_BASE}${endpoint}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return await response.json();
+        }
+
+        function showError(message) {
+            document.getElementById('error-container').innerHTML = `<div class="error">❌ ${message}</div>`;
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('stats-grid').style.display = 'grid';
+            document.getElementById('charts-section').style.display = 'block';
+            document.getElementById('clusters-section').style.display = 'block';
+            document.getElementById('trends-section').style.display = 'block';
+        }
+
+        async function loadKPIs() {
+            const response = await fetchData('/hashtag-intelligence/kpis');
+            if (response?.success && response.data) {
+                const kpis = response.data;
+                const totalLeads = kpis.total_leads || 0;
+                const pctWithContact = totalLeads > 0 ? ((kpis.leads_with_contact / totalLeads) * 100).toFixed(1) : 0;
+                const pctWithoutContact = totalLeads > 0 ? ((kpis.leads_without_contact / totalLeads) * 100).toFixed(1) : 0;
+                const pctWithEmail = totalLeads > 0 ? ((kpis.leads_with_email / totalLeads) * 100).toFixed(1) : 0;
+                const pctWithPhone = totalLeads > 0 ? ((kpis.leads_with_phone / totalLeads) * 100).toFixed(1) : 0;
+
+                document.getElementById('stats-grid').innerHTML = `
+                    <!-- ========== SEÇÃO LEADS ========== -->
+                    <div style="grid-column: 1 / -1; background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 15px; border-radius: 12px; margin-bottom: 10px;">
+                        <h3 style="margin: 0; font-size: 1.3em;">👥 ESTATÍSTICAS DE LEADS</h3>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #667eea;">
+                        <div class="icon">📊</div>
+                        <div class="label">TOTAL</div>
+                        <div class="value">${totalLeads.toLocaleString()}</div>
+                        <div class="change">Base completa</div>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #10b981;">
+                        <div class="icon">✅</div>
+                        <div class="label">COM CONTATO</div>
+                        <div class="value">${(kpis.leads_with_contact || 0).toLocaleString()}</div>
+                        <div class="change" style="color: #10b981;">${pctWithContact}% do total</div>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #ef4444;">
+                        <div class="icon">❌</div>
+                        <div class="label">SEM CONTATO</div>
+                        <div class="value">${(kpis.leads_without_contact || 0).toLocaleString()}</div>
+                        <div class="change" style="color: #ef4444;">${pctWithoutContact}% do total</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="icon">📧</div>
+                        <div class="label">Com Email Principal</div>
+                        <div class="value">${(kpis.leads_with_email || 0).toLocaleString()}</div>
+                        <div class="change">${pctWithEmail}% do total</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="icon">📱</div>
+                        <div class="label">Com Phone Principal</div>
+                        <div class="value">${(kpis.leads_with_phone || 0).toLocaleString()}</div>
+                        <div class="change">${pctWithPhone}% do total</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="icon">📨</div>
+                        <div class="label">Com Emails Adicionais</div>
+                        <div class="value">${(kpis.leads_with_additional_emails || 0).toLocaleString()}</div>
+                        <div class="change">Campos extras</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="icon">📲</div>
+                        <div class="label">Com Phones Adicionais</div>
+                        <div class="value">${(kpis.leads_with_additional_phones || 0).toLocaleString()}</div>
+                        <div class="change">Campos extras</div>
+                    </div>
+
+                    <!-- ========== SEÇÃO HASHTAGS ========== -->
+                    <div style="grid-column: 1 / -1; background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 15px; border-radius: 12px; margin: 20px 0 10px 0;">
+                        <h3 style="margin: 0; font-size: 1.3em;">#️⃣ ESTATÍSTICAS DE HASHTAGS (Bio + Posts)</h3>
+                    </div>
+                    <!-- Hashtags TOTAL -->
+                    <div class="stat-card" style="border-left: 4px solid #667eea;">
+                        <div class="icon">📊</div>
+                        <div class="label">HASHTAGS ÚNICAS - TOTAL</div>
+                        <div class="value">${(kpis.unique_hashtags_total || 0).toLocaleString()}</div>
+                        <div class="change">${(kpis.occurrences_total || 0).toLocaleString()} ocorrências</div>
+                    </div>
+                    <!-- Hashtags COM CONTATO -->
+                    <div class="stat-card" style="border-left: 4px solid #10b981;">
+                        <div class="icon">✅</div>
+                        <div class="label">HASHTAGS - COM CONTATO</div>
+                        <div class="value">${(kpis.unique_hashtags_with_contact || 0).toLocaleString()}</div>
+                        <div class="change" style="color: #10b981;">${(kpis.occurrences_with_contact || 0).toLocaleString()} ocorrências</div>
+                    </div>
+                    <!-- Hashtags SEM CONTATO -->
+                    <div class="stat-card" style="border-left: 4px solid #ef4444;">
+                        <div class="icon">❌</div>
+                        <div class="label">HASHTAGS - SEM CONTATO</div>
+                        <div class="value">${(kpis.unique_hashtags_without_contact || 0).toLocaleString()}</div>
+                        <div class="change" style="color: #ef4444;">${(kpis.occurrences_without_contact || 0).toLocaleString()} ocorrências</div>
+                    </div>
+                    <!-- Detalhamento por fonte -->
+                    <div class="stat-card">
+                        <div class="icon">🏷️</div>
+                        <div class="label">Hashtags na Bio</div>
+                        <div class="value">${(kpis.total_hashtags_in_bio || 0).toLocaleString()}</div>
+                        <div class="change">${(kpis.leads_with_hashtags_bio || 0).toLocaleString()} leads</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="icon">📸</div>
+                        <div class="label">Hashtags em Posts</div>
+                        <div class="value">${(kpis.total_hashtags_in_posts || 0).toLocaleString()}</div>
+                        <div class="change">${(kpis.leads_with_hashtags_posts || 0).toLocaleString()} leads</div>
+                    </div>
+                `;
+            }
+        }
+
+        async function loadTopHashtags() {
+            const response = await fetchData('/hashtag-intelligence/top-hashtags?limit=20');
+            if (response?.success && response.data) {
+                const ctx = document.getElementById('topHashtagsChart').getContext('2d');
+                if (charts.topHashtags) charts.topHashtags.destroy();
+                charts.topHashtags = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: response.data.map(d => d.hashtag),
+                        datasets: [{
+                            label: 'Frequência',
+                            data: response.data.map(d => d.frequency),
+                            backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            datalabels: {
+                                anchor: 'end',
+                                align: 'end',
+                                color: '#667eea',
+                                font: { weight: 'bold' },
+                                formatter: (v) => v.toLocaleString()
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        async function loadClusterDistribution() {
+            console.log('[DEBUG] loadClusterDistribution iniciando...');
+            const response = await fetchData('/dynamic-intelligence/clusters');
+            console.log('[DEBUG] response:', response);
+            if (response?.success && response.clusters) {
+                console.log('[DEBUG] Clusters encontrados:', response.clusters.length);
+                const ctx = document.getElementById('clustersChart').getContext('2d');
+                if (charts.clusters) charts.clusters.destroy();
+                const colors = ['rgba(102, 126, 234, 0.8)', 'rgba(118, 75, 162, 0.8)',
+                               'rgba(237, 100, 166, 0.8)', 'rgba(255, 154, 158, 0.8)',
+                               'rgba(255, 198, 93, 0.8)', 'rgba(16, 185, 129, 0.8)',
+                               'rgba(59, 130, 246, 0.8)', 'rgba(251, 191, 36, 0.8)',
+                               'rgba(139, 92, 246, 0.8)'];
+                console.log('[DEBUG] Criando chart doughnut...');
+                charts.clusters = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: response.clusters.map(c => c.cluster_name),
+                        datasets: [{
+                            data: response.clusters.map(c => c.hashtag_count || 0),
+                            backgroundColor: colors
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' },
+                            datalabels: { color: 'white', font: { weight: 'bold', size: 14 } }
+                        }
+                    }
+                });
+            }
+        }
+
+        async function loadContactRateByCluster() {
+            const response = await fetchData('/dynamic-intelligence/clusters');
+            if (response?.success && response.clusters) {
+                const ctx = document.getElementById('contactRateChart').getContext('2d');
+                if (charts.contactRate) charts.contactRate.destroy();
+                charts.contactRate = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: response.clusters.map(c => c.cluster_name),
+                        datasets: [{
+                            label: 'Taxa de Contato (%)',
+                            data: response.clusters.map(c => ((c.conversion_rate || c.avg_contact_rate || 0) * 100).toFixed(1)),
+                            backgroundColor: 'rgba(16, 185, 129, 0.8)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            datalabels: {
+                                anchor: 'end',
+                                align: 'end',
+                                color: '#10b981',
+                                font: { weight: 'bold' },
+                                formatter: (v) => v + '%'
+                            }
+                        },
+                        scales: { y: { beginAtZero: true, max: 100 } }
+                    }
+                });
+            }
+        }
+
+        async function loadPremiumHashtags() {
+            const response = await fetchData('/hashtag-intelligence/premium-hashtags?limit=15&min_contact_rate=65&min_leads=20');
+            if (response?.success && response.data) {
+                const ctx = document.getElementById('premiumHashtagsChart').getContext('2d');
+                if (charts.premiumHashtags) charts.premiumHashtags.destroy();
+                charts.premiumHashtags = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: response.data.map(d => d.hashtag),
+                        datasets: [
+                            {
+                                label: 'Taxa de Contato (%)',
+                                data: response.data.map(d => parseFloat(d.contact_rate)),
+                                backgroundColor: 'rgba(251, 191, 36, 0.8)',
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Total Leads',
+                                data: response.data.map(d => d.total_leads),
+                                backgroundColor: 'rgba(139, 92, 246, 0.8)',
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top' }, datalabels: { display: false } },
+                        scales: {
+                            y: { type: 'linear', position: 'left', max: 100 },
+                            y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false } }
+                        }
+                    }
+                });
+            }
+        }
+
+        async function loadSearchTermsStats() {
+            const stats = await fetchData('/lead-search-terms/stats/summary');
+            if (stats?.data) {
+                const ctx = document.getElementById('searchTermsChart').getContext('2d');
+                if (charts.searchTerms) charts.searchTerms.destroy();
+                const modelData = stats.data.entries_by_model || {};
+                charts.searchTerms = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: Object.keys(modelData),
+                        datasets: [{
+                            data: Object.values(modelData),
+                            backgroundColor: ['rgba(102, 126, 234, 0.8)', 'rgba(251, 191, 36, 0.8)', 
+                                            'rgba(16, 185, 129, 0.8)', 'rgba(239, 68, 68, 0.8)']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' },
+                            datalabels: { color: 'white', font: { weight: 'bold' } }
+                        }
+                    }
+                });
+            }
+        }
+
+        async function loadQualityScoreDistribution() {
+            const response = await fetchData('/hashtag-intelligence/quality-distribution');
+            if (response?.success && response.data) {
+                const ctx = document.getElementById('qualityScoreChart').getContext('2d');
+                if (charts.qualityScore) charts.qualityScore.destroy();
+                charts.qualityScore = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(response.data),
+                        datasets: [{
+                            data: Object.values(response.data),
+                            backgroundColor: ['rgba(16, 185, 129, 0.8)', 'rgba(59, 130, 246, 0.8)',
+                                            'rgba(251, 191, 36, 0.8)', 'rgba(249, 115, 22, 0.8)',
+                                            'rgba(239, 68, 68, 0.8)']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            datalabels: { anchor: 'end', align: 'end', color: '#667eea', font: { weight: 'bold' } }
+                        }
+                    }
+                });
+            }
+        }
+
+        async function loadCooccurrenceTable() {
+            const response = await fetchData('/hashtag-intelligence/cooccurrences?limit=10');
+            if (response?.success && response.data) {
+                const tbody = document.querySelector('#cooccurrenceTable tbody');
+                tbody.innerHTML = response.data.map(row => {
+                    const conf = row.cooccurrence >= 50 ? 'high' : row.cooccurrence >= 20 ? 'medium' : 'low';
+                    const label = conf === 'high' ? 'Alta' : conf === 'medium' ? 'Média' : 'Baixa';
+                    return `<tr>
+                        <td><strong>#${row.hashtag1}</strong></td>
+                        <td><strong>#${row.hashtag2}</strong></td>
+                        <td>${row.cooccurrence}</td>
+                        <td><span class="badge ${conf}">${label}</span></td>
+                    </tr>`;
+                }).join('');
+            }
+        }
+
+        async function loadClusters() {
+            const response = await fetchData('/dynamic-intelligence/clusters');
+            if (response?.success && response.clusters) {
+                allClusters = response.clusters;
+                const container = document.getElementById('clusters-list');
+                container.innerHTML = allClusters.map(c => `
+                    <div class="cluster-card" onclick="selectCluster('${c.id}')">
+                        <h4>${c.cluster_name}</h4>
+                        <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">${c.cluster_description || ''}</p>
+                        <div class="cluster-stats">
+                            <div class="stat"><strong>${c.hashtag_count || 0}</strong> hashtags</div>
+                            <div class="stat"><strong>${c.total_leads || 0}</strong> leads</div>
+                            <div class="stat"><strong>${((c.conversion_rate || 0) * 100).toFixed(1)}%</strong> conversão</div>
+                            <div class="stat">Score: <strong>${c.priority_score || 0}</strong></div>
+                        </div>
+                        <div style="margin-top: 8px; font-size: 0.75em; color: #999;">GPT-4: ${c.generated_at ? c.generated_at.substring(0, 19).replace('T', ' ') : 'N/A'}</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function selectCluster(clusterId) {
+            document.querySelectorAll('.cluster-card').forEach(card => card.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+
+            const response = await fetchData(`/dynamic-intelligence/cluster/${clusterId}`);
+            if (response?.success && response.insights) {
+                const insights = response.insights;
+                const cluster = response.cluster;
+                const painBadge = insights.pain_intensity === 'crítica' ? 'critical' :
+                                 insights.pain_intensity === 'alta' ? 'high' :
+                                 insights.pain_intensity === 'média' ? 'medium' : 'low';
+
+                const container = document.getElementById('behavioral-insights');
+                container.innerHTML = `
+                    <h3>🧠 Análise Comportamental: ${cluster.cluster_name}</h3>
+                    <div class="insight-section">
+                        <h4>🔥 Pain Points <span class="badge ${painBadge}">${insights.pain_intensity}</span></h4>
+                        <ul>${(insights.pain_points || []).map(p => `<li>${p}</li>`).join('')}</ul>
+                    </div>
+                    <div class="insight-section">
+                        <h4>📈 Tendências Emergentes</h4>
+                        <ul>${(insights.emerging_trends || []).map(t => `<li>${t}</li>`).join('')}</ul>
+                    </div>
+                    <div class="insight-section">
+                        <h4>🎯 Perfil Psicográfico</h4>
+                        <p><strong>Consciência:</strong> ${insights.audience_awareness_level}</p>
+                        <p><strong>Estágio de Compra:</strong> ${insights.buying_stage}</p>
+                        <p><strong>Tom:</strong> ${insights.communication_tone}</p>
+                    </div>
+                    <div class="insight-section">
+                        <h4>💡 Recomendações</h4>
+                        <ul>${(insights.approach_recommendations || []).map(r => `<li>${r}</li>`).join('')}</ul>
+                    </div>
+                    <div class="insight-section">
+                        <h4>🧠 Gatilhos Mentais</h4>
+                        <div>${(insights.mental_triggers || []).map(t => `<span class="badge medium">${t}</span>`).join('')}</div>
+                    </div>
+                    <div class="insight-section">
+                        <h4>🚧 Objeções Comuns</h4>
+                        <ul>${(insights.common_objections || []).map(o => `<li>${o}</li>`).join('')}</ul>
+                    </div>
+                    <div class="insight-section">
+                        <h4>🎁 Oportunidades</h4>
+                        <ul>${(insights.market_gaps || []).map(g => `<li>${g}</li>`).join('')}</ul>
+                    </div>
+                `;
+                container.classList.add('visible');
+                container.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        async function loadTrends() {
+            const response = await fetchData('/dynamic-intelligence/trends?limit=20');
+            if (response?.success && response.trends) {
+                const container = document.getElementById('trends-grid');
+                container.innerHTML = response.trends.map(t => `
+                    <div class="trend-card ${t.trend_type === 'viral' ? 'viral' : ''}">
+                        <div class="hashtag">#${t.hashtag}</div>
+                        <div class="growth">📈 ${t.growth_rate.toFixed(0)}% crescimento</div>
+                        <div class="growth" style="font-size: 0.8em; margin-top: 5px;">${t.trend_type}</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function executePipeline() {
+            if (!confirm('⚠️ Isso vai chamar a API GPT-4 (custo ~$0.10).\n\nDeseja continuar?')) {
+                return;
+            }
+            const btn = document.getElementById('pipelineBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Executando GPT-4...';
+            try {
+                const response = await fetch(`${API_BASE}/dynamic-intelligence/execute-full-pipeline`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`✅ Pipeline executado!\n\nClusters: ${data.clusters_updated}\n\nRecarregando...`);
+                    await loadAllData();
+                    await loadLastExecution();
+                } else {
+                    alert('❌ Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Erro: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>🚀</span> Pipeline Completo (GPT-4)';
+            }
+        }
+
+        async function recalculateMetrics() {
+            const btn = document.getElementById('recalculateBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Recalculando...';
+            try {
+                const response = await fetch(`${API_BASE}/dynamic-intelligence/recalculate-metrics`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`✅ Métricas recalculadas (SEM GPT-4)!\n\nClusters atualizados: ${data.clusters_updated}\nErros: ${data.errors}\n\nRecarregando...`);
+                    await loadAllData();
+                    await loadLastExecution();
+                } else {
+                    alert('❌ Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Erro: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>📊</span> Recalcular Métricas';
+            }
+        }
+
+        async function populateSearchTerms() {
+            if (!confirm('🔍 Isso vai criar termos de busca baseados nos clusters GPT-4.\n\nDeseja continuar?')) {
+                return;
+            }
+            const btn = document.getElementById('populateSearchTermsBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Gerando...';
+            try {
+                const response = await fetch(`${API_BASE}/dynamic-intelligence/populate-search-terms`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`✅ Search Terms Gerados!\n\nCriados: ${data.terms_created}\nAtualizados: ${data.terms_updated}\nErros: ${data.errors}\nTotal: ${data.total_processed}\n\nRecarregando...`);
+                    await loadAllData();
+                    await loadLastExecution();
+                } else {
+                    alert('❌ Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Erro: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>🔍</span> Gerar Search Terms';
+            }
+        }
+
+        async function loadLastExecution() {
+            try {
+                const response = await fetch(`${API_BASE}/dynamic-intelligence/last-execution`);
+                if (!response.ok) {
+                    console.warn('Endpoint last-execution não disponível (servidor precisa reiniciar)');
+                    const container = document.getElementById('lastExecutionInfo');
+                    if (container) container.innerHTML = '⚠️ Reinicie o servidor para ver última execução';
+                    return;
+                }
+                const data = await response.json();
+
+                const container = document.getElementById('lastExecutionInfo');
+                if (!container) return;
+
+                let html = '';
+
+                if (data.last_full_pipeline) {
+                    const date = new Date(data.last_full_pipeline);
+                    html += `🚀 <strong>Último Pipeline (GPT-4):</strong> ${date.toLocaleDateString('pt-BR')} ${date.toLocaleTimeString('pt-BR')}`;
+                }
+
+                if (data.last_metrics_only) {
+                    const date = new Date(data.last_metrics_only);
+                    if (html) html += ' | ';
+                    html += `📊 <strong>Última Atualização:</strong> ${date.toLocaleDateString('pt-BR')} ${date.toLocaleTimeString('pt-BR')}`;
+                }
+
+                if (!html) {
+                    html = '⚠️ Nenhuma execução registrada ainda';
+                }
+
+                container.innerHTML = html;
+            } catch (error) {
+                console.warn('Erro ao carregar última execução:', error);
+                const container = document.getElementById('lastExecutionInfo');
+                if (container) container.innerHTML = '⚠️ Reinicie o servidor para habilitar';
+            }
+        }
+
+        
+        async function loadAllBehavioralInsights() {
+            try {
+                const response = await fetchData('/dynamic-intelligence/clusters');
+                if (response?.success && response.clusters) {
+                    const container = document.getElementById('all-behavioral-insights');
+                    if (!container) return;
+                    
+                    let html = '';
+                    for (const cluster of response.clusters) {
+                        const insightsResp = await fetchData(`/dynamic-intelligence/cluster/${cluster.id}`);
+                        if (insightsResp?.success && insightsResp.insights) {
+                            const insights = insightsResp.insights;
+                            const painBadge = insights.pain_intensity === 'crítica' ? 'critical' :
+                                           insights.pain_intensity === 'alta' ? 'high' :
+                                           insights.pain_intensity === 'média' ? 'medium' : 'low';
+                            
+                            html += `
+                                <div class="behavioral-insights visible" style="margin-bottom: 30px;">
+                                    <h3>🧠 ${cluster.cluster_name}</h3>
+                                    <div class="insight-section">
+                                        <h4>🔥 Pain Points <span class="badge ${painBadge}">${insights.pain_intensity}</span></h4>
+                                        <ul>${(insights.pain_points || []).map(p => `<li>${p}</li>`).join('')}</ul>
+                                    </div>
+                                    <div class="insight-section">
+                                        <h4>📈 Tendências Emergentes</h4>
+                                        <ul>${(insights.emerging_trends || []).map(t => `<li>${t}</li>`).join('')}</ul>
+                                    </div>
+                                    <div class="insight-section">
+                                        <h4>🎯 Perfil Psicográfico</h4>
+                                        <p><strong>Consciência:</strong> ${insights.audience_awareness_level}</p>
+                                        <p><strong>Estágio de Compra:</strong> ${insights.buying_stage}</p>
+                                        <p><strong>Tom:</strong> ${insights.communication_tone}</p>
+                                    </div>
+                                    <div class="insight-section">
+                                        <h4>💡 Recomendações</h4>
+                                        <ul>${(insights.approach_recommendations || []).map(r => `<li>${r}</li>`).join('')}</ul>
+                                    </div>
+                                    <div class="insight-section">
+                                        <h4>🧠 Gatilhos Mentais</h4>
+                                        <div>${(insights.mental_triggers || []).map(t => `<span class="badge medium">${t}</span>`).join('')}</div>
+                                    </div>
+                                    <div class="insight-section">
+                                        <h4>🚧 Objeções Comuns</h4>
+                                        <ul>${(insights.common_objections || []).map(o => `<li>${o}</li>`).join('')}</ul>
+                                    </div>
+                                    <div class="insight-section">
+                                        <h4>🎁 Oportunidades</h4>
+                                        <ul>${(insights.market_gaps || []).map(g => `<li>${g}</li>`).join('')}</ul>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }
+                    container.innerHTML = html;
+                    document.getElementById('all-behavioral-section').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading all behavioral insights:', error);
+            }
+        }
+
+
+        async function loadAllData() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('error-container').innerHTML = '';
+
+                await Promise.allSettled([
+                    loadKPIs(), loadTopHashtags(), loadClusterDistribution(),
+                    loadContactRateByCluster(), loadPremiumHashtags(), loadSearchTermsStats(),
+                    loadQualityScoreDistribution(), loadCooccurrenceTable(), loadClusters(), loadTrends(), loadAllBehavioralInsights(),
+                    loadLastExecution(), loadPersonas()
+                ]);
+
+                hideLoading();
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Erro ao carregar dashboard');
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // FUNÇÕES DE PERSONAS DINÂMICAS
+        // ═══════════════════════════════════════════════════════════════
+
+        async function loadPersonas() {
+            try {
+                const [personasResp, statsResp] = await Promise.all([
+                    fetchData('/dynamic-intelligence/personas'),
+                    fetchData('/dynamic-intelligence/persona-stats').catch(() => ({ success: false }))
+                ]);
+
+                if (personasResp?.success) {
+                    renderPersonasGrid(personasResp.personas);
+                    document.getElementById('personas-section').style.display = 'block';
+                }
+
+                if (statsResp?.success && statsResp.stats) {
+                    renderPersonasStats(statsResp.stats);
+                }
+            } catch (error) {
+                console.warn('Personas não disponíveis:', error);
+                // Não bloqueia se tabela não existir ainda
+            }
+        }
+
+        function renderPersonasStats(stats) {
+            const container = document.getElementById('personas-stats');
+            if (!container || !stats.total_personas) return;
+
+            container.innerHTML = `
+                <div style="background: white; border-radius: 12px; padding: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 2em; font-weight: bold; color: #ec4899;">🎭 ${stats.total_personas}</div>
+                        <div style="color: #666; font-size: 0.85em;">Personas Ativas</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 2em; font-weight: bold; color: #667eea;">👥 ${stats.total_leads_assigned || 0}</div>
+                        <div style="color: #666; font-size: 0.85em;">Leads Associados</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 2em; font-weight: bold; color: #10b981;">${(stats.avg_conversion || 0).toFixed(1)}%</div>
+                        <div style="color: #666; font-size: 0.85em;">Conversão Média</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 2em; font-weight: bold; color: #f59e0b;">${(stats.avg_monetization || 0).toFixed(0)}</div>
+                        <div style="color: #666; font-size: 0.85em;">Potencial Médio</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderPersonasGrid(personas) {
+            const container = document.getElementById('personas-grid');
+            if (!container) return;
+
+            if (!personas || personas.length === 0) {
+                container.innerHTML = `
+                    <div style="grid-column: 1/-1; background: white; border-radius: 12px; padding: 40px; text-align: center;">
+                        <div style="font-size: 3em; margin-bottom: 15px;">🎭</div>
+                        <h3 style="color: #333; margin-bottom: 10px;">Nenhuma Persona Gerada</h3>
+                        <p style="color: #666; margin-bottom: 20px;">
+                            Clique em "Gerar Personas (GPT)" para criar personas baseadas nos seus clusters dinâmicos.
+                        </p>
+                        <button class="btn" onclick="generatePersonas()" style="background: #ec4899;">
+                            🎭 Gerar Personas Agora
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = personas.map(p => `
+                <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.2s;"
+                     onmouseover="this.style.transform='translateY(-5px)'"
+                     onmouseout="this.style.transform='translateY(0)'">
+
+                    <!-- Header -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="font-size: 2.5em;">${p.persona_avatar_emoji || '👤'}</div>
+                            <div>
+                                <h3 style="margin: 0; color: #333; font-size: 1.2em;">${p.persona_name}</h3>
+                                <div style="color: #666; font-size: 0.85em;">${p.primary_occupation || 'Profissional'}</div>
+                            </div>
+                        </div>
+                        <div style="background: #ec4899; color: white; padding: 4px 10px; border-radius: 20px; font-size: 0.75em; font-weight: bold;">
+                            ${(p.monetization_potential || 0).toFixed(0)} pts
+                        </div>
+                    </div>
+
+                    <!-- Métricas -->
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
+                        <div style="text-align: center; background: #f3f4f6; padding: 8px; border-radius: 8px;">
+                            <div style="font-size: 1.3em; font-weight: bold; color: #667eea;">${p.total_leads || 0}</div>
+                            <div style="font-size: 0.7em; color: #666;">Leads</div>
+                        </div>
+                        <div style="text-align: center; background: #f3f4f6; padding: 8px; border-radius: 8px;">
+                            <div style="font-size: 1.3em; font-weight: bold; color: #10b981;">${(p.percentage_of_base || 0).toFixed(1)}%</div>
+                            <div style="font-size: 0.7em; color: #666;">da Base</div>
+                        </div>
+                        <div style="text-align: center; background: #f3f4f6; padding: 8px; border-radius: 8px;">
+                            <div style="font-size: 1.3em; font-weight: bold; color: #f59e0b;">${(p.avg_conversion_rate || 0).toFixed(1)}%</div>
+                            <div style="font-size: 0.7em; color: #666;">Conversão</div>
+                        </div>
+                    </div>
+
+                    <!-- Perfil -->
+                    <div style="margin-bottom: 15px;">
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.8em;">
+                            ${p.age_range ? `<span style="background: #e0e7ff; color: #4f46e5; padding: 3px 8px; border-radius: 12px;">📅 ${p.age_range}</span>` : ''}
+                            ${p.business_stage ? `<span style="background: #fef3c7; color: #d97706; padding: 3px 8px; border-radius: 12px;">🏢 ${p.business_stage}</span>` : ''}
+                            ${p.awareness_level ? `<span style="background: #d1fae5; color: #059669; padding: 3px 8px; border-radius: 12px;">🎯 ${p.awareness_level.replace(/_/g, ' ')}</span>` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Motivações -->
+                    ${p.primary_motivations && p.primary_motivations.length > 0 ? `
+                    <div style="margin-bottom: 12px;">
+                        <div style="font-weight: bold; color: #333; font-size: 0.85em; margin-bottom: 5px;">💡 Motivações</div>
+                        <div style="font-size: 0.8em; color: #555; line-height: 1.4;">
+                            ${p.primary_motivations.slice(0, 3).map(m => `• ${m.replace(/_/g, ' ')}`).join('<br>')}
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <!-- Pain Points -->
+                    ${p.core_pain_points && p.core_pain_points.length > 0 ? `
+                    <div style="margin-bottom: 12px;">
+                        <div style="font-weight: bold; color: #dc2626; font-size: 0.85em; margin-bottom: 5px;">🔥 Dores Principais</div>
+                        <div style="font-size: 0.8em; color: #555; line-height: 1.4;">
+                            ${p.core_pain_points.slice(0, 3).map(pp => `• ${pp.replace(/_/g, ' ')}`).join('<br>')}
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <!-- Abordagem Ideal -->
+                    ${p.ideal_first_contact ? `
+                    <div style="background: #fef3c7; padding: 10px; border-radius: 8px; margin-bottom: 12px;">
+                        <div style="font-weight: bold; color: #92400e; font-size: 0.85em; margin-bottom: 5px;">💬 Abordagem Ideal</div>
+                        <div style="font-size: 0.75em; color: #78350f; line-height: 1.4;">
+                            ${p.ideal_first_contact.substring(0, 200)}${p.ideal_first_contact.length > 200 ? '...' : ''}
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <!-- Cluster Associado -->
+                    ${p.primary_cluster_name ? `
+                    <div style="font-size: 0.75em; color: #999; border-top: 1px solid #eee; padding-top: 10px;">
+                        🤖 Cluster: ${p.primary_cluster_name}
+                    </div>
+                    ` : ''}
+
+                    <!-- Data de Geração -->
+                    <div style="font-size: 0.7em; color: #bbb; text-align: right; margin-top: 5px;">
+                        Gerado: ${p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : 'N/A'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function generatePersonas() {
+            if (!confirm('🎭 Isso vai gerar personas via GPT (custo ~$0.15).\n\nDeseja continuar?')) {
+                return;
+            }
+            const btn = document.getElementById('generatePersonasBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Gerando...';
+            try {
+                const response = await fetch(`${API_BASE}/dynamic-intelligence/generate-personas`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`✅ Personas Geradas!\n\nCriadas: ${data.personas_created}\nAtualizadas: ${data.personas_updated}\nLeads Associados: ${data.leads_assigned}\n\nRecarregando...`);
+                    await loadPersonas();
+                } else {
+                    alert('❌ Erro: ' + (data.errors?.join(', ') || data.error));
+                }
+            } catch (error) {
+                alert('❌ Erro: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>🎭</span> Gerar Personas (GPT)';
+            }
+        }
+
+        async function recalculatePersonaMetrics() {
+            const btn = document.getElementById('recalcPersonaMetricsBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Calculando...';
+            try {
+                const response = await fetch(`${API_BASE}/dynamic-intelligence/recalculate-persona-metrics`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    alert(`✅ Métricas Atualizadas!\n\nPersonas: ${data.personas_updated}\n\nRecarregando...`);
+                    await loadPersonas();
+                } else {
+                    alert('❌ Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Erro: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>📊</span> Atualizar Métricas';
+            }
+        }
+
+        window.addEventListener('load', loadAllData);
+        setInterval(loadAllData, 300000); // Auto-refresh 5 min
+    </script>
+</body>
+</html>

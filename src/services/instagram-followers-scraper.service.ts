@@ -13,7 +13,7 @@
  */
 
 import { Page } from 'puppeteer';
-import { getSessionPage } from './instagram-session.service';
+import { createAuthenticatedPage } from './instagram-session.service';
 
 export interface FollowerBasicData {
   username: string;
@@ -42,21 +42,86 @@ async function humanDelay(min: number = 2000, max: number = 5000): Promise<void>
 
 /**
  * Scrolla modal de seguidores para carregar mais perfis
+ * Usa detecção dinâmica do elemento scrollável
  */
-async function scrollFollowersModal(page: Page, maxScrolls: number = 10): Promise<void> {
-  console.log(`   📜 Scrollando modal de seguidores (max ${maxScrolls} scrolls)...`);
+async function scrollFollowersModal(page: Page, targetCount: number = 50): Promise<void> {
+  console.log(`   📜 Scrollando modal para carregar ${targetCount} seguidores...`);
 
-  for (let i = 0; i < maxScrolls; i++) {
-    await page.evaluate(() => {
-      // Encontra o modal de seguidores e scrolla até o final
-      const modalDiv = document.querySelector('div[role="dialog"] div[style*="overflow"]');
-      if (modalDiv) {
-        modalDiv.scrollTop = modalDiv.scrollHeight;
+  const maxScrollAttempts = 20;
+  let stableScrolls = 0;
+  let previousCount = 0;
+
+  for (let i = 0; i < maxScrollAttempts; i++) {
+    // Scroll dinâmico - busca elemento scrollável automaticamente
+    const scrollResult = await page.evaluate(() => {
+      const modal = document.querySelector('div[role="dialog"]');
+      if (!modal) return { found: false, reason: 'Modal não encontrado' };
+
+      // Buscar QUALQUER div dentro do modal que seja scrollável
+      const allDivs = modal.querySelectorAll('div');
+      let scrollableDiv = null;
+
+      for (const div of allDivs) {
+        if (div.scrollHeight > div.clientHeight) {
+          scrollableDiv = div;
+          break;
+        }
       }
+
+      if (!scrollableDiv) {
+        return { found: false, reason: 'Div scrollável não encontrada' };
+      }
+
+      const beforeScroll = scrollableDiv.scrollTop;
+      scrollableDiv.scrollTop = scrollableDiv.scrollHeight;
+      const afterScroll = scrollableDiv.scrollTop;
+
+      return {
+        found: true,
+        scrolled: afterScroll > beforeScroll,
+        before: beforeScroll,
+        after: afterScroll
+      };
     });
 
-    console.log(`      Scroll ${i + 1}/${maxScrolls}...`);
-    await humanDelay(1500, 3000); // Aguardar carregar mais perfis
+    await humanDelay(2000, 1000);
+
+    // Contar seguidores atuais
+    const currentCount = await page.evaluate(() => {
+      const seen = new Set<string>();
+      const followerItems = document.querySelectorAll('div[role="dialog"] a[href^="/"][href$="/"]');
+
+      followerItems.forEach((item) => {
+        const href = item.getAttribute('href');
+        if (href) {
+          const username = href.replace(/\//g, '');
+          if (username) seen.add(username);
+        }
+      });
+
+      return seen.size;
+    });
+
+    console.log(`      Scroll ${i + 1}: ${currentCount} seguidores`);
+
+    // Verificar se carregou novos itens
+    if (currentCount === previousCount) {
+      stableScrolls++;
+      if (stableScrolls >= 3) {
+        console.log(`      ⚠️  Fim da lista (3 scrolls sem novos itens)`);
+        break;
+      }
+    } else {
+      stableScrolls = 0;
+    }
+
+    previousCount = currentCount;
+
+    // Atingiu meta
+    if (currentCount >= targetCount) {
+      console.log(`      ✅ Meta de ${targetCount} atingida!`);
+      break;
+    }
   }
 
   console.log(`   ✅ Scroll concluído`);
@@ -70,6 +135,7 @@ async function extractFollowersFromModal(page: Page): Promise<FollowerBasicData[
 
   const followers = await page.evaluate(() => {
     const results: FollowerBasicData[] = [];
+    const seen = new Set<string>(); // Para evitar duplicatas
 
     // Selecionar todos os itens de seguidor no modal
     const followerItems = document.querySelectorAll('div[role="dialog"] a[href^="/"][href$="/"]');
@@ -81,7 +147,9 @@ async function extractFollowersFromModal(page: Page): Promise<FollowerBasicData[
         if (!href) return;
 
         const username = href.replace(/\//g, '');
-        if (!username) return;
+        if (!username || seen.has(username)) return; // Ignorar duplicatas
+
+        seen.add(username);
 
         // Full name geralmente está em um span dentro do link
         const nameSpan = item.querySelector('span');
@@ -112,7 +180,7 @@ async function extractFollowersFromModal(page: Page): Promise<FollowerBasicData[
     return results;
   });
 
-  console.log(`   ✅ ${followers.length} seguidores extraídos`);
+  console.log(`   ✅ ${followers.length} seguidores extraídos (sem duplicatas)`);
   return followers;
 }
 
@@ -121,32 +189,45 @@ async function extractFollowersFromModal(page: Page): Promise<FollowerBasicData[
  *
  * @param competitorUsername - Username do concorrente (sem @)
  * @param maxFollowers - Número máximo de seguidores para scrapear (padrão: 50)
+ * @param currentPage - Página Puppeteer atual (OPCIONAL - se não fornecida, cria nova página)
  * @returns Lista de seguidores com dados básicos
  */
 export async function scrapeInstagramFollowers(
   competitorUsername: string,
-  maxFollowers: number = 50
+  maxFollowers: number = 50,
+  currentPage?: Page
 ): Promise<FollowersScraperResult> {
   console.log(`\n👥 Iniciando scraping de seguidores de @${competitorUsername}...`);
   console.log(`   🎯 Alvo: ${maxFollowers} seguidores`);
 
   let page: Page | null = null;
+  let shouldClosePage = false;
 
   try {
-    // 1. Obter página de sessão autenticada
-    page = await getSessionPage();
-    console.log(`   ✅ Sessão autenticada obtida`);
+    // 1. Usar página atual OU criar nova página
+    if (currentPage) {
+      page = currentPage;
+      console.log(`   ✅ Usando página atual (já autenticada)`);
+    } else {
+      page = await createAuthenticatedPage();
+      shouldClosePage = true; // Marcar para fechar no final
+      console.log(`   ✅ Nova página autenticada criada`);
+    }
 
-    // 2. Navegar para o perfil do concorrente
-    const profileUrl = `https://www.instagram.com/${competitorUsername}/`;
-    console.log(`   🔗 Navegando para: ${profileUrl}`);
+    // 2. Verificar se já estamos no perfil correto
+    const currentUrl = page.url();
+    const expectedProfileUrl = `https://www.instagram.com/${competitorUsername}/`;
 
-    await page.goto(profileUrl, {
-      waitUntil: 'networkidle2',
-      timeout: 30000
-    });
-
-    await humanDelay(2000, 4000);
+    if (!currentUrl.includes(`/${competitorUsername}`)) {
+      console.log(`   🔗 Navegando para: ${expectedProfileUrl}`);
+      await page.goto(expectedProfileUrl, {
+        waitUntil: 'networkidle2',
+        timeout: 30000
+      });
+      await humanDelay(2000, 4000);
+    } else {
+      console.log(`   ✅ Já estamos no perfil correto`);
+    }
 
     // 3. Verificar se perfil existe
     const profileExists = await page.evaluate(() => {
@@ -183,11 +264,8 @@ export async function scrapeInstagramFollowers(
     console.log(`   ✅ Modal de seguidores aberto`);
     await humanDelay(2000, 3000);
 
-    // 5. Calcular quantos scrolls precisamos
-    const scrollsNeeded = Math.ceil(maxFollowers / 12); // ~12 seguidores por scroll
-
-    // 6. Scrollar modal para carregar seguidores
-    await scrollFollowersModal(page, scrollsNeeded);
+    // 5. Scrollar modal para carregar seguidores até atingir meta
+    await scrollFollowersModal(page, maxFollowers);
 
     // 7. Extrair dados dos seguidores
     const followers = await extractFollowersFromModal(page);
@@ -219,5 +297,11 @@ export async function scrapeInstagramFollowers(
       followers: [],
       error_message: error.message
     };
+  } finally {
+    // 🧹 Cleanup: Fechar página apenas se foi criada internamente
+    if (shouldClosePage && page) {
+      console.log(`   🧹 Fechando página criada internamente...`);
+      await page.close().catch(() => {});
+    }
   }
 }

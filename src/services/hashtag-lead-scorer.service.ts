@@ -5,9 +5,23 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
+ * Tipos para clusters de negócio
+ */
+interface ClusterData {
+  name: string;
+  hashtags: string[];
+  priority_score: number;
+  avg_contact_rate: number;
+}
+
+type BusinessClusters = {
+  [key: string]: ClusterData;
+};
+
+/**
  * Definição de clusters de negócio baseados em hashtags
  */
-export const BUSINESS_CLUSTERS = {
+export const BUSINESS_CLUSTERS: BusinessClusters = {
   'empreendedorismo_negocios': {
     name: 'Empreendedorismo & Negócios',
     hashtags: [
@@ -125,7 +139,7 @@ export class HashtagLeadScorer {
     const hashtagMatchScore = (matchedHashtags.length / allHashtags.length) * 100;
 
     // Score total (média ponderada)
-    const clusterPriorityScore = cluster ? BUSINESS_CLUSTERS[cluster].priority_score : 50;
+    const clusterPriorityScore = cluster && BUSINESS_CLUSTERS[cluster] ? BUSINESS_CLUSTERS[cluster].priority_score : 50;
     const totalScore = Math.round(
       clusterPriorityScore * 0.3 +
       contactQualityScore * 0.3 +
@@ -151,7 +165,7 @@ export class HashtagLeadScorer {
       lead_id: leadId,
       username: lead.username,
       total_score: totalScore,
-      cluster: cluster ? BUSINESS_CLUSTERS[cluster].name : 'Outros',
+      cluster: cluster && BUSINESS_CLUSTERS[cluster] ? BUSINESS_CLUSTERS[cluster].name : 'Outros',
       cluster_confidence: confidence,
       contact_quality_score: contactQualityScore,
       audience_quality_score: audienceQualityScore,
@@ -293,7 +307,7 @@ export class HashtagLeadScorer {
     }
 
     // Recomendações baseadas em cluster
-    if (cluster) {
+    if (cluster && BUSINESS_CLUSTERS[cluster]) {
       const clusterData = BUSINESS_CLUSTERS[cluster];
       recommendations.push(`🎯 Cluster: ${clusterData.name} (${Math.round(clusterData.avg_contact_rate * 100)}% taxa de contato média)`);
 
@@ -344,7 +358,7 @@ export class HashtagLeadScorer {
 
     const analyses: ClusterAnalysis[] = [];
 
-    for (const [clusterId, clusterData] of Object.entries(BUSINESS_CLUSTERS)) {
+    for (const [_clusterId, clusterData] of Object.entries(BUSINESS_CLUSTERS)) {
       console.log(`\n   📁 Cluster: ${clusterData.name}`);
 
       // Buscar leads que contém hashtags deste cluster

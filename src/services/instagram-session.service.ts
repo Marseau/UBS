@@ -48,7 +48,7 @@ async function ensureBrowserInstance(): Promise<void> {
     headless: headlessOption,
     defaultViewport: null,
     args
-  });
+  }, puppeteer);
 }
 
 async function loadCookies(page: Page): Promise<boolean> {

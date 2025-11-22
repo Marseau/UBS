@@ -1,0 +1,294 @@
+{
+  "name": "Canva to Instagram Publisher",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "canva-to-instagram",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "canva-to-instagram-publisher"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.canva_design_url }}",
+        "authentication": "headerAuth",
+        "headerAuth": "canvaAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "download-canva-video",
+      "name": "Download Canva Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [470, 300],
+      "notes": "Baixa o vídeo exportado do Canva (compartilhar > baixar > copiar link)",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "canvaAuth",
+          "name": "Canva Authorization"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/canva-to-instagram/publish",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "video",
+              "value": "={{ $binary.data }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $json.caption }}"
+            },
+            {
+              "name": "hashtags",
+              "value": "={{ JSON.stringify($json.hashtags) }}"
+            },
+            {
+              "name": "shareToFeed",
+              "value": "={{ $json.shareToFeed !== false }}"
+            },
+            {
+              "name": "thumbOffset",
+              "value": "={{ $json.thumbOffset || 0 }}"
+            },
+            {
+              "name": "contentId",
+              "value": "={{ $json.contentId }}"
+            }
+          ]
+        },
+        "options": {
+          "bodyContentType": "multipart-form-data",
+          "timeout": 300000
+        }
+      },
+      "id": "publish-to-instagram",
+      "name": "Publish to Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [690, 300],
+      "notes": "Envia o vídeo para nossa API que faz upload Supabase + publicação Instagram"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.success }}",
+              "operation": "equals",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "check-success",
+      "name": "Check Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [910, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": "editorial_content",
+        "updateKey": "id",
+        "columnToMatchOn": "id",
+        "valueToMatchOn": "={{ $json.data.metadata.contentId }}",
+        "fieldsToUpdate": {
+          "values": [
+            {
+              "column": "instagram_reel_url",
+              "value": "={{ $json.data.instagramUrl }}"
+            },
+            {
+              "column": "instagram_media_id",
+              "value": "={{ $json.data.mediaId }}"
+            },
+            {
+              "column": "video_url",
+              "value": "={{ $json.data.videoUrl }}"
+            },
+            {
+              "column": "published_at",
+              "value": "={{ new Date().toISOString() }}"
+            },
+            {
+              "column": "status",
+              "value": "published"
+            }
+          ]
+        }
+      },
+      "id": "update-supabase-success",
+      "name": "Update Supabase (Success)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1130, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabaseCredentials",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": "editorial_content",
+        "updateKey": "id",
+        "columnToMatchOn": "id",
+        "valueToMatchOn": "={{ $json.contentId }}",
+        "fieldsToUpdate": {
+          "values": [
+            {
+              "column": "status",
+              "value": "failed"
+            },
+            {
+              "column": "error_message",
+              "value": "={{ $json.error || 'Unknown error' }}"
+            },
+            {
+              "column": "failed_at",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "update-supabase-error",
+      "name": "Update Supabase (Error)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1130, 400],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabaseCredentials",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Reel publicado com sucesso!', instagramUrl: $json.data.instagramUrl, mediaId: $json.data.mediaId }) }}"
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1350, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 500,
+        "responseBody": "={{ JSON.stringify({ success: false, error: $json.error || 'Failed to publish reel' }) }}"
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1350, 400]
+    }
+  ],
+  "connections": {
+    "Webhook - Trigger": {
+      "main": [
+        [
+          {
+            "node": "Download Canva Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Canva Video": {
+      "main": [
+        [
+          {
+            "node": "Publish to Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish to Instagram": {
+      "main": [
+        [
+          {
+            "node": "Check Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Success": {
+      "main": [
+        [
+          {
+            "node": "Update Supabase (Success)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Supabase (Error)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Supabase (Success)": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Supabase (Error)": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-11-19T00:00:00.000Z",
+  "versionId": "1"
+}

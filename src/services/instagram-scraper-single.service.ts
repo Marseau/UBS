@@ -31,6 +31,14 @@ let loggedUsername: string | null = null;
 // Arquivo para salvar cookies da sessão
 const COOKIES_FILE = path.join(process.cwd(), 'instagram-cookies.json');
 
+// ========== ERRO CUSTOMIZADO PARA RATE LIMITING ==========
+class RateLimitError extends Error {
+  constructor(message: string = 'Instagram bloqueou por rate limiting (429)') {
+    super(message);
+    this.name = 'RateLimitError';
+  }
+}
+
 // ========== CONFIGURAÇÕES ANTI-DETECÇÃO ==========
 const USER_AGENTS = [
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -54,6 +62,106 @@ function getRandomUserAgent(): string {
 
 function getRandomViewport(): { width: number; height: number } {
   return VIEWPORT_SIZES[Math.floor(Math.random() * VIEWPORT_SIZES.length)];
+}
+
+// ========== NAVEGAÇÃO COM DETECÇÃO DE RATE LIMITING ==========
+/**
+ * Navega para URL detectando erro 429 e páginas de erro do Chrome
+ * @throws RateLimitError se Instagram bloqueou (429)
+ */
+async function navigateWithRateLimitDetection(
+  page: Page,
+  url: string,
+  options: { waitUntil?: 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2'; timeout?: number } = {}
+): Promise<void> {
+
+  const { waitUntil = 'domcontentloaded', timeout = 30000 } = options;
+
+  console.log(`   🔍 Navegando para: ${url.substring(0, 80)}...`);
+
+  const response = await page.goto(url, { waitUntil, timeout });
+
+  // 🚨 DETECÇÃO 1: Erro 429 (Too Many Requests)
+  if (response && response.status() === 429) {
+    console.log(`\n🚨 ========================================`);
+    console.log(`🚨 ERRO 429: Instagram bloqueou por rate limiting!`);
+    console.log(`🚨 ========================================`);
+    console.log(`⏸️  Conta atual será pausada`);
+    console.log(`🔄 Sistema irá rotacionar para próxima conta\n`);
+    throw new RateLimitError();
+  }
+
+  // 🚨 DETECÇÃO 2: Página de erro do Chrome
+  const currentUrl = page.url();
+  if (currentUrl.includes('chrome-error://')) {
+    console.log(`\n⚠️  ========================================`);
+    console.log(`⚠️  PÁGINA DE ERRO: ${currentUrl}`);
+    console.log(`⚠️  Possível bloqueio ou erro de rede`);
+    console.log(`⚠️  ========================================\n`);
+    throw new RateLimitError('Navegação resultou em página de erro (possível bloqueio)');
+  }
+
+  // 🚨 DETECÇÃO 3: Response status 5xx (erro do servidor)
+  if (response && response.status() >= 500) {
+    console.log(`\n⚠️  Erro ${response.status()}: Problema no servidor do Instagram`);
+    throw new Error(`Instagram retornou erro ${response.status()}`);
+  }
+
+  console.log(`   ✅ Navegação bem-sucedida (${response?.status() || 'unknown'})`);
+}
+
+/**
+ * Faz logout do Instagram e limpa sessão/cookies
+ */
+async function logoutAndClearSession(page: Page): Promise<void> {
+  console.log(`\n🚪 ========== LOGOUT E LIMPEZA ==========`);
+
+  try {
+    // 1. Navegar para Instagram
+    console.log(`   📍 Navegando para Instagram...`);
+    await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+
+    // 2. Tentar fazer logout via UI (se possível)
+    console.log(`   🔓 Tentando logout via interface...`);
+    try {
+      // Clicar no menu de perfil (canto superior direito)
+      await page.click('svg[aria-label="Settings"]').catch(() => {});
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Clicar em "Log out"
+      await page.click('button:has-text("Log out"), a:has-text("Log out")').catch(() => {});
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (logoutError) {
+      console.log(`   ⚠️  Logout via UI falhou (normal se sessão inválida)`);
+    }
+
+    // 3. Limpar cookies do navegador
+    console.log(`   🧹 Limpando cookies do navegador...`);
+    const client = await page.target().createCDPSession();
+    await client.send('Network.clearBrowserCookies');
+    await client.send('Network.clearBrowserCache');
+
+    // 4. Deletar arquivo de cookies local
+    console.log(`   🗑️  Deletando arquivo de cookies...`);
+    const accountRotation = getAccountRotation();
+    const currentAccount = accountRotation.getCurrentAccount();
+    if (fs.existsSync(currentAccount.cookiesFile)) {
+      fs.unlinkSync(currentAccount.cookiesFile);
+      console.log(`   ✅ Arquivo deletado: ${path.basename(currentAccount.cookiesFile)}`);
+    }
+
+    // 5. Resetar variáveis de sessão
+    loggedUsername = null;
+    sessionPage = null;
+
+    console.log(`   ✅ Logout e limpeza concluídos`);
+
+  } catch (error: any) {
+    console.log(`   ⚠️  Erro durante logout: ${error.message}`);
+    console.log(`   ℹ️  Continuando com rotação de conta...`);
+  }
+
+  console.log(`========================================\n`);
 }
 
 // ========== SISTEMA DE RESILIÊNCIA AUTOMÁTICA ==========
@@ -139,12 +247,17 @@ const INSTAGRAM_SCROLL_CONFIG: ScrollDelayConfig = {
 /**
  * Calcula scroll multiplier baseado em duplicatas consecutivas
  * Quanto mais duplicatas, mais agressivo o scroll para buscar conteúdo novo
+ *
+ * VALORES OTIMIZADOS para evitar virtual scrolling:
+ * - 0-2 dups: 1.5x (~1443px, 5 scrolls) - scroll normal
+ * - 3-5 dups: 3.0x (~2886px, 10 scrolls) - scroll moderado
+ * - 6+ dups: 4.0x (~3848px, 13 scrolls) - scroll agressivo (evita Y negativo)
  */
 function calculateScrollMultiplier(consecutiveDuplicates: number): number {
   if (consecutiveDuplicates >= 6) {
-    return 8.0; // Extremamente agressivo - pular muito conteúdo
+    return 4.0; // Agressivo mas controlado - evita virtual scrolling
   } else if (consecutiveDuplicates >= 3) {
-    return 5.0; // Muito agressivo - tentar sair da zona de duplicatas
+    return 3.0; // Moderado - sair da zona de duplicatas gradualmente
   } else {
     return 1.5; // Normal - scroll suave
   }
@@ -1163,11 +1276,19 @@ export async function scrapeInstagramTag(
         throw new Error(`Page invalidated: ${checkError.message}`);
       }
 
-      // Navegar para hashtag
+      // Navegar para hashtag COM DETECÇÃO DE 429
       try {
-        await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
+        await navigateWithRateLimitDetection(page, hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
         console.log(`   ✅ Navegação concluída`);
       } catch (navError: any) {
+        // Se for RateLimitError, propagar imediatamente (não fazer retry!)
+        if (navError instanceof RateLimitError) {
+          console.log(`\n🚨 ========================================`);
+          console.log(`🚨 BLOQUEIO DETECTADO NA NAVEGAÇÃO INICIAL!`);
+          console.log(`🚨 Interrompendo scraping IMEDIATAMENTE`);
+          console.log(`🚨 ========================================\n`);
+          throw navError; // Vai para catch principal que faz logout/rotação
+        }
         console.log(`   ❌ Erro durante navegação: ${navError.message}`);
         throw navError;
       }
@@ -1706,12 +1827,12 @@ export async function scrapeInstagramTag(
           const y = Math.round(box.y / 50) * 50;
           const gridKey = `${x}-${y}`;
 
-          // 🎯 FILTRO CRÍTICO: Skip posts fora da viewport (virtual scrolling do Instagram)
-          // Posts com Y negativo estão ACIMA (Instagram removeu do DOM)
-          // Posts com Y > viewport estão ABAIXO (ainda não renderizados)
-          // Margem de 200px para permitir posts parcialmente visíveis
-          if (y < -200 || y > viewportHeight + 200) {
-            console.log(`   ⏭️  Post fora da viewport: Y=${y} (viewport: 0 a ${viewportHeight}) - SKIP`);
+          // 🎯 FILTRO CRÍTICO: Skip APENAS posts com Y negativo (virtual scrolling do Instagram)
+          // Posts com Y < -200 estão ACIMA da viewport → Instagram REMOVEU do DOM após scroll grande
+          // Posts com Y > viewport estão ABAIXO → estão NO DOM, apenas precisam scroll para ficarem visíveis
+          // Margem de -200px para permitir posts ligeiramente acima sem erro
+          if (y < -200) {
+            console.log(`   ⏭️  Post removido por virtual scrolling: Y=${y} - SKIP`);
             await handle.dispose();
             continue;
           }
@@ -1917,10 +2038,14 @@ export async function scrapeInstagramTag(
             // ⏭️  LÓGICA SEQUENCIAL: Apenas volta ao mural e pega PRÓXIMO post (sem scroll!)
             console.log(`   ⬅️  Voltando ao mural para clicar no PRÓXIMO post sequencial...`);
             try {
-              await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await navigateWithRateLimitDetection(page, hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
               await restoreScrollPosition(); // 🔄 Restaurar scroll
               console.log(`   ✅ Voltou ao mural da hashtag`);
             } catch (navError: any) {
+              // Se for RateLimitError, propagar para catch principal
+              if (navError instanceof RateLimitError) {
+                throw navError;
+              }
               console.log(`   ⚠️  Erro ao retornar ao mural: ${navError.message}`);
             }
             console.log(`   ⏳ Aguardando 10s para mural carregar...`);
@@ -2876,6 +3001,21 @@ export async function scrapeInstagramTag(
             : 'UNKNOWN';
           updateResilienceOnError(errorType);
 
+          // 🚨 RATE LIMIT (429): PARAR TUDO IMEDIATAMENTE, NÃO FAZER RETRY!
+          if (hashtagError instanceof RateLimitError) {
+            console.log(`\n🚨 ============================================`);
+            console.log(`🚨 ERRO 429 (RATE LIMIT) - NÃO FAZER RETRY!`);
+            console.log(`🚨 ============================================`);
+            console.log(`   💾 Perfis já salvos: ${foundProfiles.length}`);
+            console.log(`   🛑 ENCERRANDO IMEDIATAMENTE (vai fazer logout/rotação)`);
+
+            // Acumular perfis desta hashtag
+            allFoundProfiles.push(...foundProfiles);
+
+            // PROPAGAR ERRO PARA CATCH PRINCIPAL (faz logout e rotação)
+            throw hashtagError;
+          }
+
           // 🆕 CIRCUIT BREAKER: Se muitos erros consecutivos, pular hashtag e continuar
           if (shouldSkipHashtag()) {
             console.log(`\n⚡ [CIRCUIT BREAKER] ${resilienceMetrics.consecutiveErrors} erros consecutivos detectados`);
@@ -3034,6 +3174,46 @@ export async function scrapeInstagramTag(
 
   } catch (error: any) {
     console.error(`❌ Erro ao scrape tag "${searchTerm}":`, error.message);
+
+    // 🚨 TRATAMENTO ESPECÍFICO: RATE LIMIT (429)
+    if (error instanceof RateLimitError) {
+      console.log(`\n🚨 ========================================`);
+      console.log(`🚨 ERRO 429 (RATE LIMIT) DETECTADO!`);
+      console.log(`🚨 ========================================\n`);
+
+      const accountRotation = getAccountRotation();
+
+      // 🎯 FORÇAR failureCount = 3 para rotação IMEDIATA (429 = bloqueio confirmado)
+      accountRotation.recordFailure();
+      const currentAccount = accountRotation.getCurrentAccount();
+      currentAccount.failureCount = 3;
+      console.log(`   🚨 Failure count forçado para 3 (bloqueio confirmado por HTTP 429)`);
+
+      // 🔄 Usar lógica EXISTENTE de handleSessionError para:
+      // - Fechar browser/sessão
+      // - Rotacionar para próxima conta
+      // - Aguardar cooldown (com cálculo de tempo RESTANTE via timestamp)
+      // - Fazer login na nova conta
+      // - Retornar true se conseguiu recuperar
+      const recovered = await handleSessionError(page, 'RATE_LIMIT_429');
+
+      if (!recovered) {
+        console.log(`\n❌ ========================================`);
+        console.log(`❌ NÃO FOI POSSÍVEL RECUPERAR SESSÃO`);
+        console.log(`❌ Cooldown muito longo ou sem contas disponíveis`);
+        console.log(`❌ ========================================\n`);
+        throw new Error('RATE_LIMIT: Não foi possível rotacionar para outra conta');
+      }
+
+      console.log(`\n✅ ========================================`);
+      console.log(`✅ SESSÃO RECUPERADA COM NOVA CONTA`);
+      console.log(`✅ Continuando scraping normalmente...`);
+      console.log(`✅ ========================================\n`);
+
+      // ⚠️ IMPORTANTE: handleSessionError() já fez login na nova conta
+      // A sessão está pronta, mas precisamos continuar o loop de scraping
+      // Como estamos num catch, a função vai retornar. O caller (N8N) deve retry.
+    }
 
     // 🆕 NÃO PERDER OS PERFIS COLETADOS! Retornar mesmo com erro
     console.log(`⚠️  Retornando ${allFoundProfiles.length} perfis coletados antes do erro`);

@@ -18,7 +18,7 @@ dotenv.config();
 validateProductionModel();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 
 // Confiar no proxy (dev.ubs.app.br → localhost)
 app.set('trust proxy', 1);
@@ -547,6 +547,15 @@ try {
   console.error("❌ Failed to load canva audio sync routes:", error);
 }
 
+// Canva to Instagram Routes - Publish videos directly from Canva to Instagram Reels
+try {
+  const canvaToInstagramRoutes = require('./routes/canva-to-instagram.routes');
+  app.use('/api/canva-to-instagram', 'default' in canvaToInstagramRoutes ? canvaToInstagramRoutes.default : canvaToInstagramRoutes);
+  console.log('✅ Canva to Instagram routes loaded - DIRECT INSTAGRAM PUBLISHING READY');
+} catch (error) {
+  console.error("❌ Failed to load canva to instagram routes:", error);
+}
+
 // Instagram Scraper Routes - Execute Puppeteer scraping on Mac, save to Supabase
 try {
   console.log('🔍 [DEBUG] Attempting to load instagram-scraper.routes...');
@@ -600,6 +609,84 @@ try {
 } catch (error) {
   console.error("❌ Failed to load Lead Search Terms routes:", error);
 }
+
+// Hashtag Intelligence API - Backend endpoints for dashboard
+try {
+  const hashtagIntelligenceRoutes = require('./routes/hashtag-intelligence.routes');
+  const router = 'default' in hashtagIntelligenceRoutes ? hashtagIntelligenceRoutes.default : hashtagIntelligenceRoutes;
+  app.use('/api/hashtag-intelligence', router);
+  console.log('✅ Hashtag Intelligence API routes loaded - DASHBOARD BACKEND READY');
+} catch (error) {
+  console.error("❌ Failed to load Hashtag Intelligence API routes:", error);
+}
+
+// Dynamic Intelligence System 2.0 - AI-powered clustering, behavioral analysis, trend detection
+try {
+  const dynamicIntelligenceRoutes = require('./routes/dynamic-intelligence.routes');
+  const router = 'default' in dynamicIntelligenceRoutes ? dynamicIntelligenceRoutes.default : dynamicIntelligenceRoutes;
+  app.use('/api/dynamic-intelligence', router);
+  console.log('✅ Dynamic Intelligence System 2.0 routes loaded - GPT-4 CLUSTERING + BEHAVIORAL ANALYSIS + TREND DETECTION READY');
+} catch (error) {
+  console.error("❌ Failed to load Dynamic Intelligence routes:", error);
+}
+
+// Dynamic Intelligence Dashboard 2.0 - Auto-evolutivo com análise comportamental
+app.get('/dynamic-intelligence-dashboard', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'dynamic-intelligence-dashboard.html'));
+});
+console.log('✅ Dynamic Intelligence Dashboard 2.0 route loaded - AUTO-EVOLUTIVO + BEHAVIORAL ANALYSIS at /dynamic-intelligence-dashboard');
+
+// Redirect old dashboard to new dynamic one
+app.get('/hashtag-intelligence-dashboard', (_req, res) => {
+  res.redirect('/dynamic-intelligence-dashboard');
+});
+console.log('✅ Legacy route /hashtag-intelligence-dashboard redirects to Dynamic Intelligence 2.0');
+
+// Supabase Query Executor - Execute custom SQL queries (DEPRECATED - use specific endpoints)
+app.post('/api/supabase/execute', async (req, res) => {
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const supabaseUrl = process.env.SUPABASE_URL!;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { query } = req.body;
+
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        message: 'Query is required'
+      });
+    }
+
+    const { data, error } = await supabase.rpc('execute_sql', { query_text: query });
+
+    if (error) {
+      // Se a function não existir, executar query diretamente
+      console.warn('⚠️ execute_sql function not found, executing query directly');
+
+      // Para queries SELECT, podemos usar .from() com raw SQL
+      // Mas isso é mais complexo, então vamos retornar um erro informativo
+      return res.status(500).json({
+        success: false,
+        message: 'Direct SQL execution not supported. Please create execute_sql function in Supabase.',
+        error: error.message
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: data || []
+    });
+  } catch (error: any) {
+    console.error('❌ Error executing Supabase query:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+console.log('✅ Supabase Query Executor loaded - SQL EXECUTION READY');
 
 // Instagram Webhook Routes - Capture interactions (comments, DMs, mentions) for auto-follow
 try {
@@ -1080,6 +1167,18 @@ async function initializeServices() {
       console.error('❌ Failed to initialize Calendar Sync Cron:', error);
     }
 
+    // Dynamic Intelligence Cron Service - Auto-evolução semanal
+    try {
+      console.log('🧠 Inicializando Dynamic Intelligence Cron Service...');
+      const { dynamicIntelligenceCron } = await import('./services/dynamic-intelligence-cron.service');
+      dynamicIntelligenceCron.initialize();
+      console.log('✅ Dynamic Intelligence Cron Service initialized successfully');
+      console.log('🔄 Sistema auto-evolutivo: ATIVO');
+      console.log('📅 Próxima execução: Domingo às 2h (America/Sao_Paulo)\n');
+    } catch (error) {
+      console.error('❌ Failed to initialize Dynamic Intelligence Cron:', error);
+    }
+
     console.log('🎉 All services initialized successfully');
     
   } catch (error) {
@@ -1087,8 +1186,9 @@ async function initializeServices() {
   }
 }
 
-const server = app.listen(PORT, async () => {
+const server = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🌐 Server running on http://localhost:${PORT}`);
+  console.log(`🌐 Network access: http://192.168.15.5:${PORT}`);
 
 // Configurar timeout para 60 minutos (scraping do Instagram com lock pode demorar + N8N timeout é 50min)
 server.setTimeout(3600000); // 60 minutos

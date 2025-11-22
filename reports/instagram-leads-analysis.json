@@ -1,0 +1,489 @@
+{
+  "timestamp": "2025-11-19T20:36:08.167Z",
+  "totalLeads": 8164,
+  "totalTerms": 973,
+  "top20LeadTerms": [
+    {
+      "term": "treinoabc",
+      "leads": 118
+    },
+    {
+      "term": "bikeindoor",
+      "leads": 108
+    },
+    {
+      "term": "empreendedorismo",
+      "leads": 76
+    },
+    {
+      "term": "advocacia",
+      "leads": 64
+    },
+    {
+      "term": "treinodebracos",
+      "leads": 52
+    },
+    {
+      "term": "gestaoempresarial",
+      "leads": 43
+    },
+    {
+      "term": "microempreendedor",
+      "leads": 40
+    },
+    {
+      "term": "foco",
+      "leads": 38
+    },
+    {
+      "term": "autoconhecimento",
+      "leads": 38
+    },
+    {
+      "term": "marketingdigital",
+      "leads": 36
+    },
+    {
+      "term": "contabilidade",
+      "leads": 35
+    },
+    {
+      "term": "consultoriafinanceira",
+      "leads": 35
+    },
+    {
+      "term": "consultoriaempresarial",
+      "leads": 35
+    },
+    {
+      "term": "trafegopago",
+      "leads": 32
+    },
+    {
+      "term": "saudementalimporta",
+      "leads": 31
+    },
+    {
+      "term": "gestaofinanceira",
+      "leads": 28
+    },
+    {
+      "term": "vendas",
+      "leads": 27
+    },
+    {
+      "term": "contador",
+      "leads": 27
+    },
+    {
+      "term": "direitoprevidenciário",
+      "leads": 27
+    },
+    {
+      "term": "saude",
+      "leads": 26
+    }
+  ],
+  "top100PostTerms": [
+    {
+      "term": "treinoabc",
+      "postCount": 118
+    },
+    {
+      "term": "bikeindoor",
+      "postCount": 108
+    },
+    {
+      "term": "empreendedorismo",
+      "postCount": 76
+    },
+    {
+      "term": "advocacia",
+      "postCount": 64
+    },
+    {
+      "term": "treinodebracos",
+      "postCount": 52
+    },
+    {
+      "term": "gestaoempresarial",
+      "postCount": 43
+    },
+    {
+      "term": "microempreendedor",
+      "postCount": 40
+    },
+    {
+      "term": "foco",
+      "postCount": 38
+    },
+    {
+      "term": "autoconhecimento",
+      "postCount": 38
+    },
+    {
+      "term": "marketingdigital",
+      "postCount": 36
+    },
+    {
+      "term": "contabilidade",
+      "postCount": 35
+    },
+    {
+      "term": "consultoriafinanceira",
+      "postCount": 35
+    },
+    {
+      "term": "consultoriaempresarial",
+      "postCount": 35
+    },
+    {
+      "term": "trafegopago",
+      "postCount": 32
+    },
+    {
+      "term": "saudementalimporta",
+      "postCount": 31
+    },
+    {
+      "term": "gestaofinanceira",
+      "postCount": 28
+    },
+    {
+      "term": "vendas",
+      "postCount": 27
+    },
+    {
+      "term": "contador",
+      "postCount": 27
+    },
+    {
+      "term": "direitoprevidenciário",
+      "postCount": 27
+    },
+    {
+      "term": "saude",
+      "postCount": 26
+    },
+    {
+      "term": "saudeemocional",
+      "postCount": 26
+    },
+    {
+      "term": "ecommerce",
+      "postCount": 26
+    },
+    {
+      "term": "mentalidade positiva",
+      "postCount": 25
+    },
+    {
+      "term": "finanças",
+      "postCount": 25
+    },
+    {
+      "term": "crescimentoempresarial",
+      "postCount": 25
+    },
+    {
+      "term": "tráfego pago",
+      "postCount": 24
+    },
+    {
+      "term": "saudemental",
+      "postCount": 24
+    },
+    {
+      "term": "qualidadedevida",
+      "postCount": 24
+    },
+    {
+      "term": "afiliados",
+      "postCount": 24
+    },
+    {
+      "term": "automação de processos",
+      "postCount": 23
+    },
+    {
+      "term": "resultadosreais",
+      "postCount": 23
+    },
+    {
+      "term": "gestão de tempo",
+      "postCount": 23
+    },
+    {
+      "term": "advogado",
+      "postCount": 22
+    },
+    {
+      "term": "advogadotrabalhista",
+      "postCount": 22
+    },
+    {
+      "term": "empreendedorismodigital",
+      "postCount": 22
+    },
+    {
+      "term": "lideranca",
+      "postCount": 21
+    },
+    {
+      "term": "análise de dados",
+      "postCount": 21
+    },
+    {
+      "term": "dropshipping",
+      "postCount": 21
+    },
+    {
+      "term": "gestor de marketing",
+      "postCount": 21
+    },
+    {
+      "term": "técnicas de meditação",
+      "postCount": 21
+    },
+    {
+      "term": "acolhimento espiritual",
+      "postCount": 21
+    },
+    {
+      "term": "planejamentotributario",
+      "postCount": 21
+    },
+    {
+      "term": "treinamentos",
+      "postCount": 21
+    },
+    {
+      "term": "marketing",
+      "postCount": 20
+    },
+    {
+      "term": "segurançadotrabalho",
+      "postCount": 20
+    },
+    {
+      "term": "gestaodenegocios",
+      "postCount": 20
+    },
+    {
+      "term": "trabalhoemcasa",
+      "postCount": 20
+    },
+    {
+      "term": "advogadotributario",
+      "postCount": 20
+    },
+    {
+      "term": "advogadoimobiliario",
+      "postCount": 20
+    },
+    {
+      "term": "nutriesportiva",
+      "postCount": 20
+    },
+    {
+      "term": "estética espiritual",
+      "postCount": 20
+    },
+    {
+      "term": "direitocivil",
+      "postCount": 20
+    },
+    {
+      "term": "mentoria de vida",
+      "postCount": 19
+    },
+    {
+      "term": "marketing digital",
+      "postCount": 19
+    },
+    {
+      "term": "desenvolvimento pessoal",
+      "postCount": 19
+    },
+    {
+      "term": "perderpeso",
+      "postCount": 19
+    },
+    {
+      "term": "clientedeestetica",
+      "postCount": 19
+    },
+    {
+      "term": "esteticaderesultados",
+      "postCount": 19
+    },
+    {
+      "term": "gestão de clientes",
+      "postCount": 19
+    },
+    {
+      "term": "harmonia espiritual",
+      "postCount": 19
+    },
+    {
+      "term": "encontro espiritual",
+      "postCount": 19
+    },
+    {
+      "term": "gestaodepessoas",
+      "postCount": 18
+    },
+    {
+      "term": "tecnologia",
+      "postCount": 18
+    },
+    {
+      "term": "altaperformance",
+      "postCount": 18
+    },
+    {
+      "term": "mentoria",
+      "postCount": 18
+    },
+    {
+      "term": "apoio emocional",
+      "postCount": 18
+    },
+    {
+      "term": "crescimentosustentavel",
+      "postCount": 18
+    },
+    {
+      "term": "empreenderonline",
+      "postCount": 17
+    },
+    {
+      "term": "rotinasaudavel",
+      "postCount": 17
+    },
+    {
+      "term": "implementação de sistemas",
+      "postCount": 17
+    },
+    {
+      "term": "jornada de transformação",
+      "postCount": 17
+    },
+    {
+      "term": "soluções tecnológicas",
+      "postCount": 17
+    },
+    {
+      "term": "empreendedorfeminino",
+      "postCount": 17
+    },
+    {
+      "term": "equilibriosaudavel",
+      "postCount": 17
+    },
+    {
+      "term": "inss",
+      "postCount": 16
+    },
+    {
+      "term": "advogadainternacional",
+      "postCount": 16
+    },
+    {
+      "term": "odontologiaporamor",
+      "postCount": 16
+    },
+    {
+      "term": "inovacao",
+      "postCount": 16
+    },
+    {
+      "term": "arquitetoresidencial",
+      "postCount": 16
+    },
+    {
+      "term": "ajuda espiritual",
+      "postCount": 16
+    },
+    {
+      "term": "sabedoria espiritual",
+      "postCount": 16
+    },
+    {
+      "term": "cuidado espiritual",
+      "postCount": 16
+    },
+    {
+      "term": "inovar",
+      "postCount": 16
+    },
+    {
+      "term": "empreendedorismofeminino",
+      "postCount": 16
+    },
+    {
+      "term": "anunciosonline",
+      "postCount": 16
+    },
+    {
+      "term": "googleads",
+      "postCount": 16
+    },
+    {
+      "term": "treinamento",
+      "postCount": 16
+    },
+    {
+      "term": "sucessoempresarial",
+      "postCount": 16
+    },
+    {
+      "term": "advogadocivil",
+      "postCount": 15
+    },
+    {
+      "term": "sucesso",
+      "postCount": 15
+    },
+    {
+      "term": "clientevip",
+      "postCount": 15
+    },
+    {
+      "term": "vidaprofissional",
+      "postCount": 15
+    },
+    {
+      "term": "fisioterapiapelvica",
+      "postCount": 15
+    },
+    {
+      "term": "mulheresreais",
+      "postCount": 15
+    },
+    {
+      "term": "gestão de aulas",
+      "postCount": 15
+    },
+    {
+      "term": "cursos empresariais",
+      "postCount": 15
+    },
+    {
+      "term": "performance de vendas",
+      "postCount": 15
+    },
+    {
+      "term": "sinais espirituais",
+      "postCount": 15
+    },
+    {
+      "term": "esteticaebemestar",
+      "postCount": 15
+    },
+    {
+      "term": "automação de marketing",
+      "postCount": 15
+    }
+  ]
+}

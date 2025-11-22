@@ -1,0 +1,94 @@
+# Instagram Orphan Page Cleaner - CRON Configuration
+# Este arquivo contém configurações de CRON para limpeza automática de páginas órfãs
+#
+# INSTALAÇÃO:
+# 1. Editar crontab: crontab -e
+# 2. Copiar a linha desejada abaixo
+# 3. Substituir /Users/marseau/Developer/WhatsAppSalon-N8N pelo caminho real do projeto
+# 4. Salvar e sair
+#
+# VERIFICAR CRON:
+# - Listar crons ativos: crontab -l
+# - Ver logs do cron: tail -f logs/orphan-cleaner.log
+#
+# FORMATO CRON:
+# * * * * * comando
+# │ │ │ │ │
+# │ │ │ │ └─── Dia da semana (0-7, 0 e 7 = Domingo)
+# │ │ │ └───── Mês (1-12)
+# │ │ └─────── Dia do mês (1-31)
+# │ └───────── Hora (0-23)
+# └─────────── Minuto (0-59)
+
+# ============================================
+# OPÇÃO 1: A cada 30 minutos (RECOMENDADO PRODUÇÃO)
+# Use para ambientes com scraping intenso 24/7
+# ============================================
+*/30 * * * * cd /Users/marseau/Developer/WhatsAppSalon-N8N && npm run clean:orphan-pages >> logs/orphan-cleaner.log 2>&1
+
+# ============================================
+# OPÇÃO 2: A cada hora (RECOMENDADO DESENVOLVIMENTO)
+# Use para ambientes de desenvolvimento/teste
+# ============================================
+# 0 * * * * cd /Users/marseau/Developer/WhatsAppSalon-N8N && npm run clean:orphan-pages >> logs/orphan-cleaner.log 2>&1
+
+# ============================================
+# OPÇÃO 3: A cada 2 horas (SCRAPING MODERADO)
+# Use quando scraping não é 24/7
+# ============================================
+# 0 */2 * * * cd /Users/marseau/Developer/WhatsAppSalon-N8N && npm run clean:orphan-pages >> logs/orphan-cleaner.log 2>&1
+
+# ============================================
+# OPÇÃO 4: A cada 15 minutos (SCRAPING MUITO INTENSO)
+# Use apenas se acúmulo de páginas for muito rápido
+# ============================================
+# */15 * * * * cd /Users/marseau/Developer/WhatsAppSalon-N8N && npm run clean:orphan-pages >> logs/orphan-cleaner.log 2>&1
+
+# ============================================
+# OPÇÃO 5: Horários específicos (3 vezes ao dia)
+# Use para scraping em horários específicos
+# ============================================
+# 0 8,14,20 * * * cd /Users/marseau/Developer/WhatsAppSalon-N8N && npm run clean:orphan-pages >> logs/orphan-cleaner.log 2>&1
+
+# ============================================
+# OPÇÃO 6: Diariamente à noite (LIMPEZA PREVENTIVA)
+# Use como backup em conjunto com outras opções
+# ============================================
+# 0 2 * * * cd /Users/marseau/Developer/WhatsAppSalon-N8N && npm run clean:orphan-pages >> logs/orphan-cleaner.log 2>&1
+
+# ============================================
+# MONITORAMENTO ADICIONAL
+# ============================================
+
+# Monitorar páginas a cada 10 minutos e logar
+# */10 * * * * curl -s http://localhost:3000/api/instagram-scraper/monitor-pages >> logs/page-monitor.log 2>&1
+
+# Alerta quando páginas órfãs > 10 (requer jq instalado)
+# */10 * * * * ORPHANS=$(curl -s http://localhost:3000/api/instagram-scraper/monitor-pages | jq '.stats.unmanaged'); if [ "$ORPHANS" -gt 10 ]; then echo "⚠️ ALERTA: $ORPHANS páginas órfãs detectadas!" | mail -s "Instagram Scraper - Páginas Órfãs" admin@example.com; fi
+
+# ============================================
+# LIMPEZA DE LOGS ANTIGA
+# ============================================
+
+# Limpar logs antigos (manter últimos 30 dias)
+# 0 3 * * * find /Users/marseau/Developer/WhatsAppSalon-N8N/logs -name "orphan-cleaner.log.*" -mtime +30 -delete
+
+# Rotacionar log atual semanalmente
+# 0 0 * * 0 mv /Users/marseau/Developer/WhatsAppSalon-N8N/logs/orphan-cleaner.log /Users/marseau/Developer/WhatsAppSalon-N8N/logs/orphan-cleaner.log.$(date +\%Y\%m\%d) && touch /Users/marseau/Developer/WhatsAppSalon-N8N/logs/orphan-cleaner.log
+
+# ============================================
+# EXEMPLO COMPLETO (CONFIGURAÇÃO RECOMENDADA)
+# ============================================
+# Descomente as linhas abaixo para configuração completa:
+#
+# # Limpeza a cada 30 minutos
+# */30 * * * * cd /Users/marseau/Developer/WhatsAppSalon-N8N && npm run clean:orphan-pages >> logs/orphan-cleaner.log 2>&1
+#
+# # Monitoramento a cada 10 minutos
+# */10 * * * * curl -s http://localhost:3000/api/instagram-scraper/monitor-pages >> logs/page-monitor.log 2>&1
+#
+# # Limpeza profunda diária às 2h
+# 0 2 * * * cd /Users/marseau/Developer/WhatsAppSalon-N8N && npm run clean:orphan-pages >> logs/orphan-cleaner-daily.log 2>&1
+#
+# # Rotação de logs semanal
+# 0 0 * * 0 mv /Users/marseau/Developer/WhatsAppSalon-N8N/logs/orphan-cleaner.log /Users/marseau/Developer/WhatsAppSalon-N8N/logs/orphan-cleaner.log.$(date +\%Y\%m\%d)

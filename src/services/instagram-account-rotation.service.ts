@@ -23,20 +23,27 @@ interface AccountConfig {
   isBlocked: boolean;
 }
 
+interface AccountState {
+  username: string;
+  failureCount: number;
+  lastFailureTime: number;
+  isBlocked: boolean;
+}
+
 interface RotationState {
   currentAccountIndex: number;
   cyclesCompleted: number;
   lastRotationTime: number;
   globalCooldownUntil: number;
+  accounts: AccountState[]; // 🎯 NOVO: Persistir estado das contas
 }
 
 const COOKIES_DIR = path.join(process.cwd(), 'cookies');
 const STATE_FILE = path.join(COOKIES_DIR, 'rotation-state.json');
 
 // Configurações
-const ACCOUNT_SWITCH_DELAY_MS = 2 * 60 * 1000; // 2 minutos (trocar para conta diferente)
-const ACCOUNT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutos (voltar para conta que falhou)
-const GLOBAL_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 horas (ambas falharam)
+const ACCOUNT_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 horas (conta com falhas recentes)
+const GLOBAL_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 horas (ambas falharam)
 const MAX_ROTATION_CYCLES = 2;
 
 class InstagramAccountRotation {
@@ -96,7 +103,23 @@ class InstagramAccountRotation {
     try {
       if (fs.existsSync(STATE_FILE)) {
         const data = fs.readFileSync(STATE_FILE, 'utf8');
-        return JSON.parse(data);
+        const loadedState = JSON.parse(data);
+
+        // 🔄 RESTAURAR estado das contas (failureCount, lastFailureTime) se existir
+        if (loadedState.accounts && Array.isArray(loadedState.accounts)) {
+          // Mesclar dados persistidos com contas configuradas
+          loadedState.accounts.forEach((savedAccount: AccountState) => {
+            const account = this.accounts.find(acc => acc.username === savedAccount.username);
+            if (account) {
+              account.failureCount = savedAccount.failureCount;
+              account.lastFailureTime = savedAccount.lastFailureTime;
+              account.isBlocked = savedAccount.isBlocked;
+              console.log(`   ♻️  Restaurado: ${account.username} (${account.failureCount} falhas, última: ${new Date(account.lastFailureTime).toLocaleString('pt-BR')})`);
+            }
+          });
+        }
+
+        return loadedState;
       }
     } catch (error: any) {
       console.warn(`⚠️ Erro ao carregar estado de rotação: ${error.message}`);
@@ -107,12 +130,21 @@ class InstagramAccountRotation {
       currentAccountIndex: 0,
       cyclesCompleted: 0,
       lastRotationTime: 0,
-      globalCooldownUntil: 0
+      globalCooldownUntil: 0,
+      accounts: []
     };
   }
 
   private saveState(): void {
     try {
+      // 💾 SALVAR estado das contas (failureCount, lastFailureTime) para persistir entre restarts
+      this.state.accounts = this.accounts.map(acc => ({
+        username: acc.username,
+        failureCount: acc.failureCount,
+        lastFailureTime: acc.lastFailureTime,
+        isBlocked: acc.isBlocked
+      }));
+
       fs.writeFileSync(STATE_FILE, JSON.stringify(this.state, null, 2));
     } catch (error: any) {
       console.error(`❌ Erro ao salvar estado de rotação: ${error.message}`);
@@ -263,16 +295,39 @@ class InstagramAccountRotation {
 
     const nextAccount = this.getCurrentAccount();
 
-    // 🎯 DELAY INTELIGENTE:
-    // - Conta fresca (sem falhas) → 2 min (só limpar sessão)
-    // - Conta que já falhou → 30 min (dar tempo de "esfriar")
+    // 🎯 DELAY INTELIGENTE com cálculo de tempo RESTANTE de cooldown
     const isFreshAccount = nextAccount.failureCount === 0;
-    const delayMs = isFreshAccount ? ACCOUNT_SWITCH_DELAY_MS : ACCOUNT_COOLDOWN_MS;
+    let delayMs: number;
+    let delayReason: string;
+
+    if (isFreshAccount) {
+      // Conta fresca (sem falhas) → apenas tempo de login
+      delayMs = 60000; // 1 minuto
+      delayReason = 'conta fresca - apenas login';
+    } else {
+      // Conta com falhas → calcular tempo RESTANTE de cooldown
+      const elapsedMs = Date.now() - nextAccount.lastFailureTime;
+      const remainingCooldownMs = ACCOUNT_COOLDOWN_MS - elapsedMs;
+
+      if (remainingCooldownMs <= 0) {
+        // Conta já esfriou completamente → apenas tempo de login
+        delayMs = 60000; // 1 minuto
+        const cooledMinutes = Math.floor(elapsedMs / 60000);
+        delayReason = `já esfriou (${cooledMinutes}min desde última falha)`;
+      } else {
+        // Ainda precisa esfriar → aguardar tempo RESTANTE
+        delayMs = remainingCooldownMs;
+        const elapsedMinutes = Math.floor(elapsedMs / 60000);
+        const remainingMinutes = Math.ceil(remainingCooldownMs / 60000);
+        delayReason = `já esfriou ${elapsedMinutes}min, faltam ${remainingMinutes}min`;
+      }
+    }
+
     const delayMinutes = Math.ceil(delayMs / 60000);
 
     console.log(`   ✅ Próxima conta: ${nextAccount.username}`);
     console.log(`   📊 Status conta: ${isFreshAccount ? 'FRESCA (sem falhas)' : `${nextAccount.failureCount} falhas anteriores`}`);
-    console.log(`   ⏰ Delay: ${delayMinutes} min (${isFreshAccount ? 'troca rápida' : 'cooldown'})`);
+    console.log(`   ⏰ Delay: ${delayMinutes}min (${delayReason})`);
     console.log(`=========================================\n`);
 
     return {
@@ -302,7 +357,8 @@ class InstagramAccountRotation {
       currentAccountIndex: 0,
       cyclesCompleted: 0,
       lastRotationTime: 0,
-      globalCooldownUntil: 0
+      globalCooldownUntil: 0,
+      accounts: []
     };
 
     this.saveState();

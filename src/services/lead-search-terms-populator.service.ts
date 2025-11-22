@@ -75,7 +75,7 @@ export class LeadSearchTermsPopulator {
         terms_count: searchTerms.length,
         generated_by_model: 'hashtag-intelligence-system-v1',
         generation_prompt: `Cluster "${clusterData.name}" identificado automaticamente via análise de 26.210 hashtags únicas de 5.794 leads. Priority score: ${clusterData.priority_score}`,
-        quality_score: clusterData.priority_score
+        quality_score: clusterData.priority_score / 20  // Converter de 0-100 para 0-5
       };
 
       entries.push(entry);
@@ -92,12 +92,11 @@ export class LeadSearchTermsPopulator {
           .single();
 
         if (existing) {
-          // Atualizar existente
+          // Atualizar existente (terms_count é GENERATED, não pode ser atualizado)
           const { error } = await supabase
             .from('lead_search_terms')
             .update({
               search_terms: entry.search_terms,
-              terms_count: entry.terms_count,
               area_especifica: entry.area_especifica,
               quality_score: entry.quality_score,
               generated_at: new Date().toISOString()
@@ -115,10 +114,11 @@ export class LeadSearchTermsPopulator {
             terms_count: entry.terms_count
           });
         } else {
-          // Criar novo
+          // Criar novo - remover terms_count (coluna GENERATED)
+          const { terms_count, ...entryWithoutTermsCount } = entry;
           const { data: created, error } = await supabase
             .from('lead_search_terms')
-            .insert(entry)
+            .insert(entryWithoutTermsCount)
             .select('id')
             .single();
 
@@ -172,8 +172,8 @@ export class LeadSearchTermsPopulator {
       console.log(`📈 Tier: ${tier.min}-${tier.max} ocorrências (top ${tier.limit})...`);
 
       // Query para buscar hashtags nessa faixa
-      const { data: hashtags } = await supabase.rpc('exec_sql', {
-        sql: `
+      const { data: hashtags } = await supabase.rpc('execute_sql', {
+        query_text: `
           WITH post_hashtags AS (
             SELECT
               LOWER(REPLACE(jsonb_array_elements_text(hashtags_posts)::text, '"', '')) as hashtag,
@@ -222,12 +222,11 @@ export class LeadSearchTermsPopulator {
           .single();
 
         if (existing) {
-          // Atualizar
+          // Atualizar (terms_count é GENERATED, não pode ser atualizado)
           await supabase
             .from('lead_search_terms')
             .update({
               search_terms: entry.search_terms,
-              terms_count: entry.terms_count,
               generated_at: new Date().toISOString()
             })
             .eq('id', existing.id);
@@ -241,10 +240,11 @@ export class LeadSearchTermsPopulator {
             terms_count: entry.terms_count
           });
         } else {
-          // Criar
+          // Criar (remover terms_count - coluna GENERATED)
+          const { terms_count, ...entryWithoutTermsCount } = entry;
           const { data: created } = await supabase
             .from('lead_search_terms')
-            .insert(entry)
+            .insert(entryWithoutTermsCount)
             .select('id')
             .single();
 
@@ -288,8 +288,8 @@ export class LeadSearchTermsPopulator {
     };
 
     // Query para buscar hashtags premium
-    const { data: premiumHashtags } = await supabase.rpc('exec_sql', {
-      sql: `
+    const { data: premiumHashtags } = await supabase.rpc('execute_sql', {
+      query_text: `
         WITH post_hashtags AS (
           SELECT
             il.id,
@@ -347,12 +347,11 @@ export class LeadSearchTermsPopulator {
         .single();
 
       if (existing) {
-        // Atualizar
+        // Atualizar (terms_count é GENERATED, não pode ser atualizado)
         await supabase
           .from('lead_search_terms')
           .update({
             search_terms: entry.search_terms,
-            terms_count: entry.terms_count,
             generated_at: new Date().toISOString()
           })
           .eq('id', existing.id);
@@ -366,10 +365,11 @@ export class LeadSearchTermsPopulator {
           terms_count: entry.terms_count
         });
       } else {
-        // Criar
+        // Criar (remover terms_count - coluna GENERATED)
+        const { terms_count, ...entryWithoutTermsCount } = entry;
         const { data: created } = await supabase
           .from('lead_search_terms')
-          .insert(entry)
+          .insert(entryWithoutTermsCount)
           .select('id')
           .single();
 
@@ -442,12 +442,11 @@ export class LeadSearchTermsPopulator {
         .single();
 
       if (existing) {
-        // Atualizar
+        // Atualizar (terms_count é GENERATED, não pode ser atualizado)
         await supabase
           .from('lead_search_terms')
           .update({
             search_terms: entry.search_terms,
-            terms_count: entry.terms_count,
             generated_at: new Date().toISOString()
           })
           .eq('id', existing.id);
@@ -461,10 +460,11 @@ export class LeadSearchTermsPopulator {
           terms_count: entry.terms_count
         });
       } else {
-        // Criar
+        // Criar (remover terms_count - coluna GENERATED)
+        const { terms_count, ...entryWithoutTermsCount } = entry;
         const { data: created } = await supabase
           .from('lead_search_terms')
-          .insert(entry)
+          .insert(entryWithoutTermsCount)
           .select('id')
           .single();
 
@@ -543,7 +543,126 @@ export class LeadSearchTermsPopulator {
       results
     };
   }
+
+  /**
+   * Popula tabela com dados dos CLUSTERS DINÂMICOS (gerados pelo GPT-4)
+   * Usa dados da tabela hashtag_clusters_dynamic
+   */
+  async populateFromDynamicClusters(): Promise<PopulationResult> {
+    console.log('\n🧠 Populando lead_search_terms com CLUSTERS DINÂMICOS (GPT-4)...\n');
+
+    const result: PopulationResult = {
+      success: true,
+      entries_created: 0,
+      entries_updated: 0,
+      entries_skipped: 0,
+      total_terms_added: 0,
+      entries: []
+    };
+
+    // Buscar clusters dinâmicos ativos do banco
+    const { data: dynamicClusters, error: fetchError } = await supabase
+      .from('hashtag_clusters_dynamic')
+      .select('*')
+      .eq('is_active', true)
+      .order('priority_score', { ascending: false });
+
+    if (fetchError || !dynamicClusters) {
+      console.error('❌ Erro ao buscar clusters dinâmicos:', fetchError);
+      result.success = false;
+      return result;
+    }
+
+    console.log(`   📊 ${dynamicClusters.length} clusters dinâmicos encontrados\n`);
+
+    // Iterar sobre cada cluster dinâmico
+    for (const cluster of dynamicClusters) {
+      console.log(`   🤖 Processando: ${cluster.cluster_name}...`);
+
+      // Criar array de termos no formato da tabela
+      const searchTerms = (cluster.hashtags || []).map((hashtag: string) => ({
+        termo: hashtag.replace(/#/g, ''),
+        hashtag: hashtag.replace(/#/g, '')
+      }));
+
+      const entry: LeadSearchTermsEntry = {
+        target_segment: `dynamic_cluster_${cluster.cluster_key}`,
+        categoria_geral: 'Dynamic Intelligence GPT-4 - Clusters Semânticos',
+        area_especifica: `${cluster.cluster_name} | ${cluster.total_leads || 0} leads | ${((cluster.conversion_rate || 0)).toFixed(1)}% conversão`,
+        search_terms: searchTerms,
+        terms_count: searchTerms.length,
+        generated_by_model: 'gpt-4-dynamic-clustering-v2',
+        generation_prompt: `Cluster semântico "${cluster.cluster_name}" gerado automaticamente pelo GPT-4. Descrição: ${cluster.cluster_description || 'N/A'}. Priority Score: ${cluster.priority_score}. Pain Points: ${(cluster.pain_points || []).join(', ')}`,
+        quality_score: (cluster.priority_score || 0) / 20 // Converter de 0-100 para 0-5
+      };
+
+      try {
+        // Verificar se já existe
+        const { data: existing } = await supabase
+          .from('lead_search_terms')
+          .select('id')
+          .eq('target_segment', entry.target_segment)
+          .single();
+
+        if (existing) {
+          // Atualizar existente
+          const { error: updateError } = await supabase
+            .from('lead_search_terms')
+            .update({
+              search_terms: entry.search_terms,
+              area_especifica: entry.area_especifica,
+              quality_score: entry.quality_score,
+              generation_prompt: entry.generation_prompt,
+              generated_at: new Date().toISOString()
+            })
+            .eq('id', existing.id);
+
+          if (updateError) throw updateError;
+
+          console.log(`      ✅ Atualizado: ${entry.target_segment} (${entry.terms_count} termos)`);
+          result.entries_updated++;
+          result.total_terms_added += entry.terms_count;
+          result.entries.push({
+            id: existing.id,
+            target_segment: entry.target_segment,
+            terms_count: entry.terms_count
+          });
+        } else {
+          // Criar novo - remover terms_count (coluna GENERATED)
+          const { terms_count, ...entryWithoutTermsCount } = entry;
+          const { data: created, error: createError } = await supabase
+            .from('lead_search_terms')
+            .insert(entryWithoutTermsCount)
+            .select('id')
+            .single();
+
+          if (createError) throw createError;
+
+          console.log(`      ✅ Criado: ${entry.target_segment} (${entry.terms_count} termos)`);
+          result.entries_created++;
+          result.total_terms_added += entry.terms_count;
+          result.entries.push({
+            id: created!.id,
+            target_segment: entry.target_segment,
+            terms_count: entry.terms_count
+          });
+        }
+      } catch (error: any) {
+        console.error(`      ❌ Erro em ${entry.target_segment}:`, error.message);
+        result.entries_skipped++;
+      }
+    }
+
+    console.log(`\n   ✅ Conclusão Dynamic Clusters:`);
+    console.log(`      Criados: ${result.entries_created}`);
+    console.log(`      Atualizados: ${result.entries_updated}`);
+    console.log(`      Pulados: ${result.entries_skipped}`);
+    console.log(`      Total de termos: ${result.total_terms_added}\n`);
+
+    return result;
+  }
 }
+
 
 // Exportar instância singleton
 export const leadSearchTermsPopulator = new LeadSearchTermsPopulator();
