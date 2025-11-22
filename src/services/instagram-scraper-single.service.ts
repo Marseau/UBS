@@ -1684,6 +1684,9 @@ export async function scrapeInstagramTag(
           gridKey: string; // Chave única "x-y"
         }> = [];
 
+        // Pegar altura da viewport para filtrar apenas posts visíveis
+        const viewportHeight = await page.evaluate(() => window.innerHeight);
+
         for (const handle of anchorHandles) {
           const href = await handle.evaluate((node: Element) => (node as HTMLAnchorElement).href || '');
           if (!href) {
@@ -1702,6 +1705,16 @@ export async function scrapeInstagramTag(
           const x = Math.round(box.x / 50) * 50;
           const y = Math.round(box.y / 50) * 50;
           const gridKey = `${x}-${y}`;
+
+          // 🎯 FILTRO CRÍTICO: Skip posts fora da viewport (virtual scrolling do Instagram)
+          // Posts com Y negativo estão ACIMA (Instagram removeu do DOM)
+          // Posts com Y > viewport estão ABAIXO (ainda não renderizados)
+          // Margem de 200px para permitir posts parcialmente visíveis
+          if (y < -200 || y > viewportHeight + 200) {
+            console.log(`   ⏭️  Post fora da viewport: Y=${y} (viewport: 0 a ${viewportHeight}) - SKIP`);
+            await handle.dispose();
+            continue;
+          }
 
           postsWithPosition.push({ handle, href, x, y, gridKey });
         }
@@ -1773,7 +1786,7 @@ export async function scrapeInstagramTag(
           continue;
         }
 
-        console.log(`\n   🖼️  Abrindo post: ${selectedUrl}`);
+        console.log(`\n   🖼️  Abrindo post: ${selectedUrl} (Y=${selectedPosition?.y})`);
 
         // CORREÇÃO: SEMPRE fechar painel lateral de pesquisa antes de clicar (interfere nos cliques)
         try {

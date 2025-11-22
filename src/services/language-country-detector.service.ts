@@ -60,60 +60,77 @@ function hasCJKCharacters(text: string): boolean {
 
 /**
  * Cidades e estados brasileiros (indicadores FORTES de PT-BR)
+ * APENAS palavras completas e inequívocas para evitar falsos positivos
  */
 const BRAZILIAN_LOCATIONS = [
-  // Capitais principais
+  // Cidades principais (nomes completos)
   'brasília', 'são paulo', 'rio de janeiro', 'belo horizonte', 'salvador',
   'fortaleza', 'recife', 'curitiba', 'porto alegre', 'manaus',
   'belém', 'goiânia', 'campinas', 'vitória', 'florianópolis',
 
-  // Estados (siglas e nomes)
-  'sp', 'rj', 'mg', 'rs', 'pr', 'sc', 'ba', 'pe', 'ce', 'pa', 'am', 'df', 'go',
-  'brasil', 'brazilian', 'brasileira', 'brasileiro'
+  // Palavras inequívocas de Brasil
+  'brasil', 'brazil', 'brazilian', 'brasileira', 'brasileiro', 'brasileiros'
 ];
 
 /**
  * Palavras-chave distintivas do português brasileiro
- * Estas palavras NÃO aparecem em espanhol
+ * Estas palavras NÃO aparecem em espanhol (ou são muito diferentes)
  */
 const PORTUGUESE_KEYWORDS = [
-  // Pronomes e artigos PT-BR (peso alto)
+  // Pronomes e artigos PT-BR (peso alto - MUITO DISTINTOS)
   'meus', 'minhas', 'você', 'vocês', 'comigo', 'contigo', 'conosco',
 
   // Verbos conjugados PT-BR (diferentes de ES) (peso alto)
   'tenho', 'tem', 'temos', 'têm', 'são', 'está', 'estão', 'estamos',
   'faço', 'faz', 'fazem', 'vou', 'vai', 'vão', 'vamos',
+  'posso', 'pode', 'podem', 'podemos', 'quer', 'quero', 'querem',
 
-  // Palavras comuns PT-BR (peso médio)
-  'não', 'sim', 'muito', 'mais', 'tudo', 'todo', 'toda', 'todos', 'todas',
-  'deus', 'livre', 'vida', 'mãe', 'pai', 'família',
-  'também', 'aqui', 'agora', 'sempre', 'nunca', 'nada',
+  // Palavras EXCLUSIVAS PT-BR (não existem ou são bem diferentes em ES)
+  'não', 'sim', 'tudo', 'mãe', 'pai', 'irmão', 'irmã',
+  'também', 'agora', 'sempre', 'nunca',
   'obrigado', 'obrigada', 'bem', 'bom', 'boa', 'melhor',
+  'saúde', 'educação', 'informação', 'solução',
+  'coração', 'paixão', 'atenção', 'ração',
+
+  // Preposições PT-BR
+  'para', 'pela', 'pelo', 'pelas', 'pelos', 'com', 'sem',
 
   // Expressões PT-BR (peso alto)
-  'que deus', 'deus abençoe', 'graças a deus', 'se deus quiser'
+  'que deus', 'deus abençoe', 'graças a deus', 'se deus quiser',
+  'tá bom', 'tudo bem', 'de boa'
 ];
 
 /**
  * Palavras-chave distintivas do espanhol
- * Estas palavras NÃO aparecem em português
+ * Estas palavras NÃO aparecem em português (ou são muito diferentes)
  */
 const SPANISH_KEYWORDS = [
-  // Pronomes e artigos ES (peso alto)
+  // Pronomes e artigos ES (peso alto - MUITO DISTINTOS)
   'mis', 'tus', 'sus', 'nuestro', 'nuestra', 'nuestros', 'nuestras',
   'tú', 'usted', 'ustedes', 'vosotros', 'conmigo', 'contigo',
 
   // Verbos conjugados ES (diferentes de PT) (peso alto)
   'tengo', 'tienes', 'tiene', 'tienen', 'somos', 'soy', 'eres', 'son',
   'hago', 'hace', 'hacen', 'haces', 'voy', 'vas', 'van',
+  'estoy', 'estás', 'están', 'hemos', 'habéis', 'han',
+  'puedo', 'puedes', 'pueden', 'quiero', 'quieres', 'quieren',
 
-  // Palavras comuns ES (peso médio)
-  'no', 'sí', 'mucho', 'mucha', 'más', 'todo', 'toda', 'todos', 'todas',
-  'dios', 'vida', 'amor', 'madre', 'padre', 'familia',
-  'también', 'aquí', 'ahora', 'siempre', 'nunca', 'nada',
+  // Palavras EXCLUSIVAS ES (não existem ou são bem diferentes em PT)
+  'no', 'sí', 'mucho', 'mucha', 'año', 'años', 'español', 'española',
+  'cómo', 'qué', 'cuál', 'dónde', 'donde', 'cuándo', 'cuando', 'cuánto',
+  'hermano', 'hermana', 'hijo', 'hija', 'abuelo', 'abuela',
+  'salud', 'educación', 'información', 'solución',
+  'bueno', 'buena', 'mejor', 'peor', 'feliz',
+  'las', 'los', 'una', 'unas', 'unos',  // Artigos ES (PT usa "as", "os")
+  'convierten', 'convierte', 'éxito', 'exito',  // Verbos/palavras ES exclusivas
+  'grande', 'grandes', 'idea', 'ideas',
+
+  // Preposições ES
+  'hacia', 'desde', 'hasta', 'según', 'entre', 'contra',
 
   // Expressões ES (peso alto)
-  'que dios', 'dios bendiga', 'gracias a dios', 'si dios quiere'
+  'que dios', 'dios bendiga', 'gracias a dios', 'si dios quiere',
+  'qué tal', 'cómo estás', 'muy bien', 'de nada'
 ];
 
 /**
@@ -205,72 +222,71 @@ export async function detectLanguage(
   }
 
   // ========================================
-  // SCORE PT vs ES (palavras-chave)
+  // PASSO 1: Verificar características EXCLUSIVAS de português
   // ========================================
-  const langScore = calculateLanguageScore(bio);
-  console.log(`   📊 Language Score: PT=${langScore.pt}, ES=${langScore.es}${langScore.hasBrazilianLocation ? ' 🇧🇷 (localização BR detectada)' : ''}`);
+  // Ç, Ã, Õ, LH, NH são exclusivos de português (não existem em espanhol)
+  const hasPortugueseChars = /[çãõ]|lh|nh/i.test(bio);
 
-  // REGRA 0: Se detectou localização brasileira → FORÇA 'pt'
-  if (langScore.hasBrazilianLocation) {
-    console.log(`🎯 Language: pt (FORCED by Brazilian location: PT=${langScore.pt})`);
-    return {
-      language: 'pt',
-      confidence: 'high',
-      method: 'franc'
-    };
-  }
+  let detectedLang: string;
+  let detectedISO3: string;
 
-  // REGRA 1: Se PT >= 2 E PT > ES → FORÇA 'pt'
-  if (langScore.pt >= 2 && langScore.pt > langScore.es) {
-    console.log(`🎯 Language: pt (FORCED by keyword score: PT=${langScore.pt} > ES=${langScore.es})`);
-    return {
-      language: 'pt',
-      confidence: 'high',
-      method: 'franc'
-    };
-  }
-
-  // REGRA 2: Se ES >= 2 E ES > PT → FORÇA 'es'
-  if (langScore.es >= 2 && langScore.es > langScore.pt) {
-    console.log(`🎯 Language: es (FORCED by keyword score: ES=${langScore.es} > PT=${langScore.pt})`);
-    return {
-      language: 'es',
-      confidence: 'high',
-      method: 'franc'
-    };
-  }
-
-  // ========================================
-  // FALLBACK: Usar franc
-  // ========================================
-  const detectedISO3 = franc(normalizedBio, { minLength: 5 });
-
-  // Se franc retornou 'und' (indefinido) ou idioma não mapeado, retorna null
-  if (detectedISO3 === 'und' || !ISO_639_3_TO_639_1[detectedISO3]) {
-    console.log(`❓ Unknown: null (franc não conseguiu detectar - ISO3: ${detectedISO3})`);
-    return {
-      language: null,
-      confidence: 'low',
-      method: 'unknown'
-    };
-  }
-
-  // Mapeia ISO 639-3 para ISO 639-1
-  let detectedLang = ISO_639_3_TO_639_1[detectedISO3];
-
-  // ========================================
-  // CORREÇÃO: Score contradiz franc
-  // ========================================
-  // Se franc detectou 'es' MAS score PT > ES → corrige para 'pt'
-  if (detectedLang === 'es' && langScore.pt > langScore.es) {
-    console.log(`🎯 Language: pt (CORRECTED from franc='es' by keyword score: PT=${langScore.pt} > ES=${langScore.es})`);
+  if (hasPortugueseChars) {
+    console.log(`   🇧🇷 Características PT detectadas (ç/ã/õ/lh/nh) - forçando português`);
     detectedLang = 'pt';
+    detectedISO3 = 'por';
+  } else {
+    // ========================================
+    // PASSO 2: Usar FRANC (mais preciso, baseado em n-gramas)
+    // ========================================
+    detectedISO3 = franc(normalizedBio, { minLength: 5 });
+
+    // Se franc retornou 'und' (indefinido) ou idioma não mapeado, retorna null
+    if (detectedISO3 === 'und' || !ISO_639_3_TO_639_1[detectedISO3]) {
+      console.log(`❓ Unknown: null (franc não conseguiu detectar - ISO3: ${detectedISO3})`);
+      return {
+        language: null,
+        confidence: 'low',
+        method: 'unknown'
+      };
+    }
+
+    // Mapeia ISO 639-3 para ISO 639-1
+    detectedLang = ISO_639_3_TO_639_1[detectedISO3]!; // Non-null assertion - já verificado acima
+    console.log(`   🤖 Franc detectou: ${detectedLang} (ISO3: ${detectedISO3})`);
   }
 
-  // Se franc detectou 'pt' MAS score ES > PT → corrige para 'es'
-  if (detectedLang === 'pt' && langScore.es > langScore.pt) {
-    console.log(`🎯 Language: es (CORRECTED from franc='pt' by keyword score: ES=${langScore.es} > PT=${langScore.pt})`);
-    detectedLang = 'es';
+  // ========================================
+  // PASSO 2: CORREÇÃO apenas para PT/ES (idiomas muito similares)
+  // ========================================
+  // Só calcula keywords se franc detectou PT ou ES (para corrigir confusões)
+  if (detectedLang === 'pt' || detectedLang === 'es') {
+    const langScore = calculateLanguageScore(bio);
+    console.log(`   📊 Keyword Score: PT=${langScore.pt}, ES=${langScore.es}${langScore.hasBrazilianLocation ? ' 🇧🇷' : ''}`);
+
+    // CORREÇÃO 1: Localização BR + baixo score ES → força PT
+    if (langScore.hasBrazilianLocation && langScore.es < 3) {
+      console.log(`🎯 Language: pt (CORRECTED: Brazilian location detected, ES score low)`);
+      detectedLang = 'pt';
+    }
+    // CORREÇÃO 2: Score PT forte → força PT
+    else if (langScore.pt >= 4 && langScore.pt > langScore.es * 1.5) {
+      console.log(`🎯 Language: pt (CORRECTED: Strong PT keywords: ${langScore.pt} >> ${langScore.es})`);
+      detectedLang = 'pt';
+    }
+    // CORREÇÃO 3: Score ES forte → força ES
+    else if (langScore.es >= 4 && langScore.es > langScore.pt * 1.5) {
+      console.log(`🎯 Language: es (CORRECTED: Strong ES keywords: ${langScore.es} >> ${langScore.pt})`);
+      detectedLang = 'es';
+    }
+    // CORREÇÃO 4: EMPATE → prevalece PT
+    else if (langScore.pt > 0 && langScore.pt >= langScore.es && detectedLang === 'es') {
+      console.log(`🎯 Language: pt (CORRECTED: Empate PT/ES - prevalece português: ${langScore.pt} >= ${langScore.es})`);
+      detectedLang = 'pt';
+    }
+    // Caso contrário: mantém detecção do franc
+    else {
+      console.log(`✅ Language: ${detectedLang} (franc detection confirmed by keywords)`);
+    }
   }
 
   // Define confiança baseada no comprimento do texto
