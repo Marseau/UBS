@@ -1,6 +1,7 @@
 // @ts-nocheck - puppeteer contexts usam DOM APIs sem typings fortes
 import { Browser, Page } from 'puppeteer';
 import { getBrowserInstance, ensureLoggedSession } from './instagram-session.service';
+import { applyFullStealth } from './instagram-stealth.service';
 import fs from 'fs';
 import path from 'path';
 
@@ -67,6 +68,9 @@ export async function createIsolatedContext(): Promise<{
   const page = await browser.newPage();
 
   console.log(`📄 Página criada: ${requestId}`);
+
+  // 🕵️ APLICAR STEALTH COMPLETO (fingerprint evasion + challenge detection)
+  await applyFullStealth(page);
 
   // Carregar cookies do arquivo (sessionPage foi fechada após login)
   if (fs.existsSync(COOKIES_FILE)) {

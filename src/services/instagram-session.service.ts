@@ -5,6 +5,13 @@ import { Browser, Page } from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 import { getAccountRotation } from './instagram-account-rotation.service';
+import {
+  STEALTH_BROWSER_ARGS,
+  getUserDataDir,
+  applyFullStealth,
+  waitHuman,
+  typeHuman
+} from './instagram-stealth.service';
 
 // 🥷 STEALTH MODE: Esconde que é Puppeteer do Instagram
 puppeteer.use(StealthPlugin());
@@ -19,7 +26,8 @@ const LOGIN_TIMEOUT_MS = Number(process.env.INSTAGRAM_LOGIN_TIMEOUT_MS ?? 90000)
 const LOGIN_POLL_INTERVAL_MS = Number(process.env.INSTAGRAM_LOGIN_POLL_INTERVAL_MS ?? 5000);
 const HEADLESS_ENABLED = process.env.INSTAGRAM_SCRAPER_HEADLESS === 'true';
 
-const DEFAULT_BROWSER_ARGS = ['--start-maximized'];
+// 🕵️ STEALTH ARGS: Args seguros importados de instagram-stealth.service.ts
+// Removido DEFAULT_BROWSER_ARGS - agora usa STEALTH_BROWSER_ARGS sempre
 const ENV_BROWSER_ARGS = (process.env.INSTAGRAM_BROWSER_ARGS || '')
   .split(',')
   .map(arg => arg.trim())
@@ -30,10 +38,8 @@ let sessionPage: Page | null = null;
 let sessionInitialization: Promise<void> | null = null;
 let loggedUsername: string | null = null;
 
-async function humanDelay(base = 1000, variance = 1000): Promise<void> {
-  const delay = base + Math.random() * variance;
-  await new Promise(resolve => setTimeout(resolve, delay));
-}
+// 🕵️ REMOVIDO: humanDelay() local - agora usa waitHuman() do stealth service
+// A função waitHuman() é mais sofisticada com distribuição não-linear
 
 async function ensureBrowserInstance(): Promise<void> {
   if (browserInstance && browserInstance.isConnected()) {
@@ -41,13 +47,24 @@ async function ensureBrowserInstance(): Promise<void> {
   }
 
   const headlessOption: boolean | 'new' = HEADLESS_ENABLED ? 'new' : false;
-  const args = ENV_BROWSER_ARGS.length > 0 ? ENV_BROWSER_ARGS : DEFAULT_BROWSER_ARGS;
+
+  // 🕵️ STEALTH ARGS: Usa args seguros SEMPRE, ou permite override via ENV
+  const args = ENV_BROWSER_ARGS.length > 0 ? ENV_BROWSER_ARGS : STEALTH_BROWSER_ARGS;
+
+  // 🎭 USER DATA DIR: Sessão persistente por conta para fingerprint consistente
+  const rotation = getAccountRotation();
+  const currentAccount = rotation.getCurrentAccount();
+  const userDataDir = getUserDataDir(currentAccount.username);
 
   console.log(`🌐 Iniciando browser Puppeteer (headless=${HEADLESS_ENABLED})...`);
+  console.log(`   🎭 UserDataDir: ${userDataDir}`);
+  console.log(`   🕵️  Args de stealth: ${args.length} configurados`);
+
   browserInstance = await puppeteer.launch({
     headless: headlessOption,
     defaultViewport: null,
-    args
+    args,
+    userDataDir // Sessão persistente para evitar detecção
   }, puppeteer);
 }
 
@@ -92,7 +109,7 @@ async function isLoggedIn(page: Page): Promise<boolean> {
     const currentUrl = page.url();
     if (!currentUrl.includes('instagram.com')) {
       await page.goto('https://www.instagram.com/', { waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {});
-      await humanDelay(800, 400);
+      await waitHuman(800, 1200);
     }
 
     const cookies = await page.cookies();
@@ -122,7 +139,7 @@ async function detectLoggedInUsername(page: Page): Promise<string | null> {
     if (!currentUrl.includes('instagram.com')) {
       console.log('   🌐 Navegando para Instagram para detectar username...');
       await page.goto('https://www.instagram.com/', { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {});
-      await humanDelay(1500, 800);
+      await waitHuman(1500, 2300);
     }
 
     const usernameFromDOM = await page.evaluate(() => {
@@ -206,16 +223,17 @@ async function performAutoLogin(page: Page): Promise<boolean> {
       if (passInput) passInput.value = '';
     });
 
-    await humanDelay(400, 200);
-    await page.type('input[name="username"]', username, { delay: 80 });
-    await page.type('input[name="password"]', password, { delay: 80 });
+    // 🕵️ STEALTH: Usa waitHuman() e typeHuman() para parecer humano
+    await waitHuman(400, 600);
+    await typeHuman(page, 'input[name="username"]', username);
+    await typeHuman(page, 'input[name="password"]', password);
 
     const submitSelector = 'button[type="submit"]';
     await page.click(submitSelector).catch(() => {});
 
     const deadline = Date.now() + 60000;
     while (Date.now() < deadline) {
-      await humanDelay(1500, 1200);
+      await waitHuman(1500, 2700);
       if (await isLoggedIn(page)) {
         console.log('✅ Login automático concluído');
         return true;
@@ -292,6 +310,9 @@ export async function ensureLoggedSession(): Promise<void> {
       const pages = await browserInstance.pages();
       sessionPage = pages[0] || await browserInstance.newPage();
       console.log('📄 Instância principal da sessão pronta');
+
+      // 🕵️ APLICAR STEALTH na página de sessão principal
+      await applyFullStealth(sessionPage);
     }
 
     let loggedIn = false;

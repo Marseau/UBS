@@ -14,6 +14,12 @@ import {
 import { createIsolatedContext } from './instagram-context-manager.service';
 import { discoverHashtagVariations, HashtagVariation } from './instagram-hashtag-discovery.service';
 import { getAccountRotation } from './instagram-account-rotation.service';
+import {
+  detectInstagramChallenge,
+  waitHuman,
+  scrollHuman,
+  moveMouseHuman
+} from './instagram-stealth.service';
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase client para verificações de duplicatas
@@ -107,6 +113,18 @@ async function navigateWithRateLimitDetection(
     throw new Error(`Instagram retornou erro ${response.status()}`);
   }
 
+  // 🕵️ DETECÇÃO 4: Challenges de segurança do Instagram
+  const challenge = await detectInstagramChallenge(page);
+  if (challenge.hasChallenge) {
+    console.log(`\n🚨 ========================================`);
+    console.log(`🚨 CHALLENGE DETECTADO: ${challenge.type}`);
+    console.log(`🚨 Mensagem: ${challenge.message}`);
+    console.log(`🚨 ========================================`);
+    console.log(`⚠️  Instagram solicitou verificação de segurança`);
+    console.log(`🔄 Tratando como rate limit para rotação de conta\n`);
+    throw new RateLimitError(`Challenge de segurança detectado: ${challenge.type}`);
+  }
+
   console.log(`   ✅ Navegação bem-sucedida (${response?.status() || 'unknown'})`);
 }
 
@@ -126,11 +144,11 @@ async function logoutAndClearSession(page: Page): Promise<void> {
     try {
       // Clicar no menu de perfil (canto superior direito)
       await page.click('svg[aria-label="Settings"]').catch(() => {});
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await waitHuman(1000, 2000); // 1-2s humanizado
 
       // Clicar em "Log out"
       await page.click('button:has-text("Log out"), a:has-text("Log out")').catch(() => {});
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await waitHuman(2000, 3000); // 2-3s humanizado
     } catch (logoutError) {
       console.log(`   ⚠️  Logout via UI falhou (normal se sessão inválida)`);
     }
@@ -315,16 +333,15 @@ async function scrollAndWaitIntelligently(
   console.log(`   📜 Scroll gradual: ${numIncrements} incrementos de ${incrementSize}px (total: ${totalScrollDistance.toFixed(0)}px)`);
 
   for (let i = 0; i < numIncrements; i++) {
-    await page.evaluate((scrollAmount) => {
-      window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-    }, incrementSize);
+    // 🕵️ STEALTH: Usa scrollHuman() com curva Bezier natural
+    await scrollHuman(page, incrementSize);
 
-    // Pausa entre scrolls para Instagram carregar (simula humano)
-    await new Promise(resolve => setTimeout(resolve, 400 + Math.random() * 200)); // 400-600ms
+    // Pausa entre scrolls para Instagram carregar (humanizado)
+    await waitHuman(400, 600); // 400-600ms com distribuição não-linear
   }
 
   // 1.5. AGUARDAR scroll final ser processado pelo navegador
-  await new Promise(resolve => setTimeout(resolve, 800));
+  await waitHuman(800, 1200); // 800-1200ms humanizado
 
   // 2. Calcular delay inteligente
   const delay = await calculateIntelligentDelay(page, consecutiveDuplicates);
@@ -444,24 +461,8 @@ process.on('unhandledRejection', async (reason) => {
   // Não fecha o browser aqui para não interromper operações normais
 });
 
-/**
- * Delay aleatório para simular comportamento humano (2-5 segundos)
- */
-async function humanDelay(): Promise<void> {
-  const delay = 2000 + Math.random() * 3000; // 2-5 segundos
-  console.log(`   ⏳ Aguardando ${(delay / 1000).toFixed(1)}s (delay humano)...`);
-  await new Promise(resolve => setTimeout(resolve, delay));
-}
-
-/**
- * Delay maior entre ações críticas para evitar detecção de bot (5-8 segundos)
- * AUMENTADO para evitar 429 Too Many Requests
- */
-async function antiDetectionDelay(): Promise<void> {
-  const delay = 5000 + Math.random() * 3000; // 5-8 segundos (mais conservador)
-  console.log(`   🛡️  Delay anti-detecção: ${(delay / 1000).toFixed(1)}s...`);
-  await new Promise(resolve => setTimeout(resolve, delay));
-}
+// 🕵️ REMOVIDO: humanDelay() e antiDetectionDelay() locais
+// Agora usa waitHuman() do instagram-stealth.service.ts (mais sofisticado com distribuição não-linear)
 
 /**
  * Converte nome completo do estado brasileiro para sigla (2 caracteres)
@@ -1631,23 +1632,11 @@ export async function scrapeInstagramTag(
 
           console.log(`   👆 Movendo mouse para (${Math.round(x)}, ${Math.round(y)})...`);
 
-          // Movimento otimizado em etapas (mais humano) - com proteção anti-detached
-          let currentPos = { x: 0, y: 0 };
-          try {
-            currentPos = await page.evaluate(() => ({ x: 0, y: 0 }));
-          } catch (evalError) {
-            // Ignora erro e usa posição padrão
-          }
-          const steps = 5; // Reduzido de 10 para 5 etapas
-          for (let i = 1; i <= steps; i++) {
-            const stepX = currentPos.x + ((x - currentPos.x) * i) / steps;
-            const stepY = currentPos.y + ((y - currentPos.y) * i) / steps;
-            await page.mouse.move(stepX, stepY);
-            await new Promise(resolve => setTimeout(resolve, 15)); // Reduzido de 20ms
-          }
+          // 🕵️ STEALTH: Movimento de mouse com curva Bezier (mais humano que linear)
+          await moveMouseHuman(page, x, y);
 
-          // 5. Pequena pausa antes do clique (comportamento humano)
-          await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 200));
+          // 🕵️ Pequena pausa antes do clique (comportamento humano)
+          await waitHuman(300, 500);
 
           // 6. Clicar com mouse real
           console.log(`   💥 Executando clique...`);
@@ -1655,7 +1644,7 @@ export async function scrapeInstagramTag(
 
           // 7. Aguardar navegação E validar que post abriu
           console.log(`   ⏳ Aguardando post abrir...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await waitHuman(2000, 3000); // 🕵️ Delay humanizado
 
           // VALIDAR que a URL mudou para o post
           const currentUrl = page.url();
@@ -1667,7 +1656,7 @@ export async function scrapeInstagramTag(
 
             // TENTATIVA 2: Clicar usando JavaScript (mais confiável que mouse)
             try {
-              await antiDetectionDelay(); // Delay maior antes de tentar novamente
+              await waitHuman(5000, 8000); // 🕵️ Delay anti-detecção humanizado
 
               // Forçar clique via JavaScript no elemento
               await anchorHandle.evaluate((el: Element) => {
@@ -1681,7 +1670,7 @@ export async function scrapeInstagramTag(
 
               if (isPostNow) {
                 console.log(`   ✅ Post abriu via clique JavaScript: ${urlAfterJsClick}`);
-                await antiDetectionDelay();
+                await waitHuman(5000, 8000); // 🕵️ Delay anti-detecção humanizado
                 return true;
               } else {
                 console.log(`   ❌ Clique JavaScript também não abriu o post`);
@@ -1695,8 +1684,8 @@ export async function scrapeInstagramTag(
 
           console.log(`   ✅ Post abriu confirmado: ${currentUrl}`);
 
-          // ANTI-DETECÇÃO: Delay após abrir post (3-5s)
-          await antiDetectionDelay();
+          // 🕵️ ANTI-DETECÇÃO: Delay humanizado após abrir post (5-8s)
+          await waitHuman(5000, 8000);
 
           return true;
 
@@ -3183,18 +3172,66 @@ export async function scrapeInstagramTag(
 
       const accountRotation = getAccountRotation();
 
-      // 🎯 FORÇAR failureCount = 3 para rotação IMEDIATA (429 = bloqueio confirmado)
+      // 🔍 PASSO 1: Detectar qual conta está REALMENTE logada
+      let actualLoggedUsername: string | null = null;
+      try {
+        const html = await page.content();
+        const usernameMatch = html.match(/"username":"([^"]+)"/);
+        if (usernameMatch && usernameMatch[1]) {
+          actualLoggedUsername = usernameMatch[1];
+          console.log(`   🔍 Conta detectada na sessão real: ${actualLoggedUsername}`);
+        }
+      } catch (detectError: any) {
+        console.log(`   ⚠️  Não foi possível detectar username da sessão: ${detectError.message}`);
+      }
+
+      // 🔄 PASSO 2: Sincronizar rotation state com conta REAL
+      if (actualLoggedUsername) {
+        const actualAccountIndex = accountRotation.accounts.findIndex(
+          acc => acc.username.includes(actualLoggedUsername!)
+        );
+
+        if (actualAccountIndex !== -1 && actualAccountIndex !== accountRotation.state.currentAccountIndex) {
+          console.log(`   🔄 CORREÇÃO: Rotation state dessincronizado!`);
+          console.log(`      State dizia: index ${accountRotation.state.currentAccountIndex} (${accountRotation.accounts[accountRotation.state.currentAccountIndex]?.username})`);
+          console.log(`      Sessão real: index ${actualAccountIndex} (${accountRotation.accounts[actualAccountIndex].username})`);
+          accountRotation.state.currentAccountIndex = actualAccountIndex;
+          console.log(`   ✅ currentAccountIndex corrigido para ${actualAccountIndex}`);
+        }
+      }
+
+      // 🎯 PASSO 3: Registrar falha na conta CORRETA
       accountRotation.recordFailure();
       const currentAccount = accountRotation.getCurrentAccount();
-      currentAccount.failureCount = 3;
-      console.log(`   🚨 Failure count forçado para 3 (bloqueio confirmado por HTTP 429)`);
+      currentAccount.failureCount = 3; // Forçar rotação imediata
+      console.log(`   🚨 Failure count forçado para 3 em ${currentAccount.username} (bloqueio confirmado por HTTP 429)`);
 
-      // 🔄 Usar lógica EXISTENTE de handleSessionError para:
-      // - Fechar browser/sessão
-      // - Rotacionar para próxima conta
-      // - Aguardar cooldown (com cálculo de tempo RESTANTE via timestamp)
-      // - Fazer login na nova conta
-      // - Retornar true se conseguiu recuperar
+      // 🧹 PASSO 4: Fechar CONTEXTO LOCAL (não global!)
+      console.log(`\n🧹 ========== FECHANDO CONTEXTO LOCAL ==========`);
+      try {
+        if (cleanup) {
+          await cleanup();
+          console.log(`   ✅ Contexto local (page/browser) fechado`);
+        }
+      } catch (cleanupError: any) {
+        console.log(`   ⚠️  Erro ao fechar contexto: ${cleanupError.message}`);
+      }
+
+      // 🗑️ PASSO 5: Deletar cookies da conta bloqueada
+      const blockedAccount = accountRotation.getCurrentAccount();
+      if (fs.existsSync(blockedAccount.cookiesFile)) {
+        fs.unlinkSync(blockedAccount.cookiesFile);
+        console.log(`   🗑️  Cookies deletados: ${path.basename(blockedAccount.cookiesFile)}`);
+      }
+
+      // Resetar variáveis de sessão globais
+      loggedUsername = null;
+      sessionPage = null;
+      browserInstance = null;
+      console.log(`   ✅ Variáveis de sessão resetadas`);
+      console.log(`========================================\n`);
+
+      // 🔄 PASSO 6: Rotacionar e fazer login na nova conta
       const recovered = await handleSessionError(page, 'RATE_LIMIT_429');
 
       if (!recovered) {
@@ -3209,10 +3246,6 @@ export async function scrapeInstagramTag(
       console.log(`✅ SESSÃO RECUPERADA COM NOVA CONTA`);
       console.log(`✅ Continuando scraping normalmente...`);
       console.log(`✅ ========================================\n`);
-
-      // ⚠️ IMPORTANTE: handleSessionError() já fez login na nova conta
-      // A sessão está pronta, mas precisamos continuar o loop de scraping
-      // Como estamos num catch, a função vai retornar. O caller (N8N) deve retry.
     }
 
     // 🆕 NÃO PERDER OS PERFIS COLETADOS! Retornar mesmo com erro
