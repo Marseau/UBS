@@ -1830,7 +1830,7 @@ export async function scrapeInstagramTag(
         } catch (clickError: any) {
           console.log(`   ⚠️  Clique no post falhou (${clickError.message}). Não usando goto para evitar 429.`);
           // NÃO fazer goto direto - causa 429 (Too Many Requests)
-          await antiDetectionDelay();
+          await waitHuman(3000, 5000); // Anti-detecção: 3-5s
           return false;
         }
       };
@@ -2806,7 +2806,30 @@ export async function scrapeInstagramTag(
               console.log(`   💡 Razões: ${activityScore.reasons.join(', ')}`);
             }
 
-            if (!activityScore.isActive) {
+            // ========================================
+            // 🆕 VALIDAÇÃO RÁPIDA: WEBSITE E/OU BIO >= 100 → APROVAÇÃO AUTOMÁTICA
+            // ========================================
+            const bioLength = completeProfile.bio?.length || 0;
+            const hasWebsite = !!completeProfile.website;
+            const autoApprove = hasWebsite || bioLength >= 100;
+
+            if (autoApprove) {
+              const reasons = [];
+              if (hasWebsite) reasons.push('tem website');
+              if (bioLength >= 100) reasons.push(`bio >= 100 (${bioLength} chars)`);
+
+              console.log(`   ✅ APROVAÇÃO AUTOMÁTICA: ${reasons.join(' e ')}`);
+              console.log(`   ⏭️  Pulando validações de activity score e idioma...`);
+
+              // Forçar language = 'pt' para aprovação automática
+              completeProfile.language = 'pt';
+
+              // Pular para extração de hashtags (linhas abaixo após o bloco de validações)
+            }
+            // ========================================
+            // VALIDAÇÕES NORMAIS (apenas se NÃO aprovado automaticamente)
+            // ========================================
+            else if (!activityScore.isActive) {
               console.log(`   ❌ Perfil REJEITADO por baixo activity score - não será contabilizado`);
               processedUsernames.add(username); // Marcar como processado para não tentar novamente
 
@@ -2877,13 +2900,14 @@ export async function scrapeInstagramTag(
               continue; // PULA para o próximo perfil
             }
 
-            // VALIDAÇÃO 2: IDIOMA = PORTUGUÊS
-            console.log(`   🌍 Detectando idioma da bio...`);
-            const languageDetection = await detectLanguage(completeProfile.bio, completeProfile.username);
-            completeProfile.language = languageDetection.language;
-            console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
+            // VALIDAÇÃO 2: IDIOMA = PORTUGUÊS (apenas se não aprovado automaticamente)
+            if (!autoApprove) {
+              console.log(`   🌍 Detectando idioma da bio...`);
+              const languageDetection = await detectLanguage(completeProfile.bio, completeProfile.username);
+              completeProfile.language = languageDetection.language;
+              console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
 
-            if (languageDetection.language !== 'pt') {
+              if (languageDetection.language !== 'pt') {
               console.log(`   ❌ Perfil REJEITADO por idioma não-português (${languageDetection.language}) - não será contabilizado`);
               processedUsernames.add(username); // Marcar como processado para não tentar novamente
 
@@ -2952,7 +2976,8 @@ export async function scrapeInstagramTag(
               }
 
               continue; // PULA para o próximo perfil
-            }
+              }
+            } // Fim do bloco if (!autoApprove) - validações normais
 
             // ========================================
             // EXTRAÇÃO DE HASHTAGS DOS POSTS (4 posts)
@@ -3054,7 +3079,7 @@ export async function scrapeInstagramTag(
 
             // ANTI-DETECÇÃO: Delay antes de retornar ao feed (3-5s)
             console.log(`   🛡️  Aguardando antes de retornar ao feed...`);
-            await antiDetectionDelay();
+            await waitHuman(3000, 5000); // Anti-detecção: 3-5s
 
           } catch (profileError: any) {
             console.log(`   ⚠️  Erro ao extrair dados de @${username}: ${profileError.message}`);
