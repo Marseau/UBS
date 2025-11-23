@@ -203,22 +203,51 @@ class InstagramAccountRotation {
    * Verifica se deve rotacionar para próxima conta
    */
   shouldRotate(): boolean {
+    console.log(`\n🔍 ========== DEBUG shouldRotate() ==========`);
+
     // Não rotacionar se tem apenas 1 conta
-    if (this.accounts.length <= 1) return false;
+    if (this.accounts.length <= 1) {
+      console.log(`   ❌ shouldRotate = FALSE: Só tem ${this.accounts.length} conta(s)`);
+      console.log(`==========================================\n`);
+      return false;
+    }
+    console.log(`   ✅ Check 1 PASSOU: ${this.accounts.length} contas configuradas`);
 
     // Não rotacionar se está em cooldown global
-    if (this.isInGlobalCooldown()) return false;
+    if (this.isInGlobalCooldown()) {
+      const minutesLeft = this.getGlobalCooldownMinutes();
+      const cooldownUntil = new Date(this.state.globalCooldownUntil).toLocaleString('pt-BR');
+      console.log(`   ❌ shouldRotate = FALSE: Em COOLDOWN GLOBAL`);
+      console.log(`      Cooldown até: ${cooldownUntil}`);
+      console.log(`      Tempo restante: ${minutesLeft} minutos`);
+      console.log(`      Ciclos completados: ${this.state.cyclesCompleted}/${MAX_ROTATION_CYCLES}`);
+      console.log(`==========================================\n`);
+      return false;
+    }
+    console.log(`   ✅ Check 2 PASSOU: Não está em cooldown global`);
 
     const account = this.getCurrentAccount();
+    console.log(`   🔍 Conta atual: ${account.username}`);
+    console.log(`   🔍 Failure count: ${account.failureCount}`);
+    console.log(`   🔍 Última falha: ${account.lastFailureTime ? new Date(account.lastFailureTime).toLocaleString('pt-BR') : 'nunca'}`);
 
     // Rotacionar se a conta atual atingiu limite de falhas
-    return account.failureCount >= 3;
+    const should = account.failureCount >= 3;
+    if (should) {
+      console.log(`   ✅ shouldRotate = TRUE: failureCount (${account.failureCount}) >= 3`);
+    } else {
+      console.log(`   ❌ shouldRotate = FALSE: failureCount (${account.failureCount}) < 3`);
+    }
+    console.log(`==========================================\n`);
+
+    return should;
   }
 
   /**
    * Rotaciona para próxima conta
+   * @param forceRotation - Se TRUE, ignora cooldown global (usar para SESSION_INVALID)
    */
-  async rotateToNextAccount(): Promise<{
+  async rotateToNextAccount(forceRotation: boolean = false): Promise<{
     success: boolean;
     message: string;
     newAccount: string;
@@ -235,8 +264,8 @@ class InstagramAccountRotation {
       };
     }
 
-    // Verificar cooldown global
-    if (this.isInGlobalCooldown()) {
+    // Verificar cooldown global (SKIP se forceRotation = true)
+    if (!forceRotation && this.isInGlobalCooldown()) {
       const minutesLeft = this.getGlobalCooldownMinutes();
       return {
         success: false,
@@ -245,6 +274,13 @@ class InstagramAccountRotation {
         requiresWait: true,
         waitMinutes: minutesLeft
       };
+    }
+
+    // Se forçando rotação apesar de cooldown global, avisar
+    if (forceRotation && this.isInGlobalCooldown()) {
+      const minutesLeft = this.getGlobalCooldownMinutes();
+      console.log(`\n⚠️  ROTAÇÃO FORÇADA apesar de cooldown global (${minutesLeft}min restantes)`);
+      console.log(`   Razão: SESSION_INVALID detectado - precisa trocar conta agora`);
     }
 
     const currentAccount = this.getCurrentAccount();
@@ -264,8 +300,8 @@ class InstagramAccountRotation {
       console.log(`   🔄 Ciclo completo: ${this.state.cyclesCompleted}/${MAX_ROTATION_CYCLES}`);
     }
 
-    // Verificar se atingiu limite de ciclos
-    if (this.state.cyclesCompleted >= MAX_ROTATION_CYCLES) {
+    // Verificar se atingiu limite de ciclos (SKIP se forceRotation = true)
+    if (!forceRotation && this.state.cyclesCompleted >= MAX_ROTATION_CYCLES) {
       console.log(`\n❌ ============================================`);
       console.log(`❌ LIMITE DE CICLOS ATINGIDO (${MAX_ROTATION_CYCLES})`);
       console.log(`❌ Todas as contas falharam múltiplas vezes`);
@@ -287,6 +323,13 @@ class InstagramAccountRotation {
         requiresWait: true,
         waitMinutes: 120
       };
+    }
+
+    // Se forçando rotação apesar de limite de ciclos, avisar e resetar ciclos
+    if (forceRotation && this.state.cyclesCompleted >= MAX_ROTATION_CYCLES) {
+      console.log(`\n⚠️  LIMITE DE CICLOS ATINGIDO (${this.state.cyclesCompleted}/${MAX_ROTATION_CYCLES})`);
+      console.log(`   ✅ MAS rotação forçada por SESSION_INVALID - resetando contador de ciclos`);
+      this.state.cyclesCompleted = 0; // Reset para permitir nova tentativa
     }
 
     this.state.currentAccountIndex = nextIndex;
@@ -363,6 +406,43 @@ class InstagramAccountRotation {
 
     this.saveState();
     console.log(`✅ Sistema de rotação resetado`);
+  }
+
+  /**
+   * Define manualmente qual conta usar (útil para testes/operação manual)
+   * @param accountIdentifier - Username ou índice da conta (0, 1, etc)
+   * @returns true se conseguiu setar, false se conta não encontrada
+   */
+  setAccount(accountIdentifier: string | number): boolean {
+    let targetIndex: number;
+
+    if (typeof accountIdentifier === 'number') {
+      // Índice direto
+      targetIndex = accountIdentifier;
+    } else {
+      // Buscar por username
+      targetIndex = this.accounts.findIndex(acc => {
+        const accLower = acc.username.toLowerCase();
+        const identLower = accountIdentifier.toLowerCase();
+        const accBase = accLower.split('@')[0] || accLower;
+        return accLower.includes(identLower) || identLower.includes(accBase);
+      });
+    }
+
+    if (targetIndex >= 0 && targetIndex < this.accounts.length) {
+      const account = this.accounts[targetIndex];
+      if (!account) {
+        console.log(`❌ Erro interno: índice ${targetIndex} inválido`);
+        return false;
+      }
+      console.log(`🎯 Conta setada manualmente: ${account.username} (index ${targetIndex})`);
+      this.state.currentAccountIndex = targetIndex;
+      this.saveState();
+      return true;
+    }
+
+    console.log(`❌ Conta não encontrada: ${accountIdentifier}`);
+    return false;
   }
 
   /**

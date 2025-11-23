@@ -54,6 +54,9 @@ router.post('/scrape-tag', async (req: Request, res: Response) => {
 
     console.log(`\n🔎 [${reqId}] ========== SCRAPE-TAG INICIADO ==========`);
     console.log(`🔎 [${reqId}] Termo: #${search_term} (max: ${max_profiles} perfis)`);
+    if (account_profile && account_profile !== 'default') {
+      console.log(`🎯 [${reqId}] Conta manual: ${account_profile}`);
+    }
 
     // DEBUG: Contar páginas ANTES
     const { getBrowserInstance } = await import('../services/instagram-session.service');
@@ -63,7 +66,7 @@ router.post('/scrape-tag', async (req: Request, res: Response) => {
       console.log(`📊 [${reqId}] ANTES: ${pagesBefore.length} páginas abertas no browser`);
     }
 
-    const result = await scrapeInstagramTag(search_term, max_profiles);
+    const result = await scrapeInstagramTag(search_term, max_profiles, account_profile);
 
     // DEBUG: Contar páginas DEPOIS
     if (browser) {
