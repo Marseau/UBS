@@ -1837,8 +1837,8 @@ export async function scrapeInstagramTag(
 
         // LOOP INTERNO: SCRAPAR ATÉ maxProfiles PARA ESTA HASHTAG
         // Duplicata = mesmo username 2x na MESMA sessão (raro com lógica sequencial)
-        while (foundProfiles.length < maxProfiles && attemptsWithoutNewPost < 8 && consecutiveDuplicates < 8) {
-          console.log(`\n📊 Status (#${hashtagToScrape}): ${foundProfiles.length}/${maxProfiles} perfis, tentativa ${attemptsWithoutNewPost}/8, duplicatas REAIS: ${consecutiveDuplicates}`);
+        while (foundProfiles.length < maxProfiles && attemptsWithoutNewPost < 8 && consecutiveDuplicates < 8 && totalHashtagFeedClicks < 50) {
+          console.log(`\n📊 Status (#${hashtagToScrape}): ${foundProfiles.length}/${maxProfiles} perfis, tentativa ${attemptsWithoutNewPost}/8, duplicatas: ${consecutiveDuplicates}, clicks: ${totalHashtagFeedClicks}/50`);
           console.log(`   🔒 Posições já clicadas (${clickedGridPositions.size}): ${Array.from(clickedGridPositions).join(', ')}`);
 
           // 💾 SALVAR SCROLL POSITION NO INÍCIO DE CADA ITERAÇÃO (reflete scroll atual após scroll down)
@@ -1975,9 +1975,9 @@ export async function scrapeInstagramTag(
 
         // 🎯 SEQUENCIAL: Clicar no PRIMEIRO post não-clicado (ordem natural)
         for (const post of postsWithPosition) {
-          // Pular posições já clicadas
-          if (clickedGridPositions.has(post.gridKey)) {
-            console.log(`   ⏭️  Posição já clicada: (${post.x}, ${post.y}) [${post.gridKey}]`);
+          // ✅ CORREÇÃO: Verificar por URL do post (não muda após scroll), não por posição (muda após scroll)
+          if (processedPostLinks.has(post.href)) {
+            console.log(`   ⏭️  Post já processado: ${post.href}`);
             await post.handle.dispose();
             continue;
           }
@@ -2001,37 +2001,42 @@ export async function scrapeInstagramTag(
 
         if (!selectedHandle || !selectedUrl) {
           attemptsWithoutNewPost++;
-          console.log(`   🔄 Nenhum novo post visível (tentativa ${attemptsWithoutNewPost}/8). Fazendo scroll...`);
+          console.log(`   🔄 Nenhum novo post visível (tentativa ${attemptsWithoutNewPost}/8)`);
 
-          // 🆕 LIMPAR lista de tentativas antes do scroll (novos posts podem aparecer nas mesmas posições)
-          attemptedPositionsInCycle.clear();
-          console.log(`   🔄 Lista de posições tentadas limpa antes do scroll`);
+          // 🎯 SCROLL INTELIGENTE: Só faz scroll se tiver 2+ duplicatas OU 8+ clicks
+          if (consecutiveDuplicates >= 2 || totalHashtagFeedClicks >= 8) {
+            console.log(`   📜 Scroll necessário (dups: ${consecutiveDuplicates}, clicks: ${totalHashtagFeedClicks})...`);
 
-          // 🔧 CRITICAL FIX: Resetar controle de colunas após scroll
-          // Sem isso, sistema fica travado esperando completar 6 posts da coluna anterior
-          currentColumn = null;
-          postsTriedInCurrentColumn = 0;
-          console.log(`   🔄 Controle de colunas resetado (permitir nova seleção)`);
+            // 🆕 LIMPAR lista de tentativas antes do scroll (novos posts podem aparecer nas mesmas posições)
+            attemptedPositionsInCycle.clear();
+            console.log(`   🔄 Lista de posições tentadas limpa antes do scroll`);
 
-          // 🆕 SCROLL AGRESSIVO se muitas duplicatas + clicks acumulados (ampliar mais o mural)
-          const scrollMultiplier = calculateScrollMultiplier(consecutiveDuplicates, totalHashtagFeedClicks);
+            // 🔧 CRITICAL FIX: Resetar controle de colunas após scroll
+            // Sem isso, sistema fica travado esperando completar 6 posts da coluna anterior
+            currentColumn = null;
+            postsTriedInCurrentColumn = 0;
+            console.log(`   🔄 Controle de colunas resetado (permitir nova seleção)`);
 
-          // 🎯 USAR FUNÇÃO INTELIGENTE DE SCROLL (com delays adaptativos por profundidade)
-          const scrollResult = await scrollAndWaitIntelligently(page, consecutiveDuplicates, scrollMultiplier);
+            // 🆕 SCROLL AGRESSIVO se muitas duplicatas + clicks acumulados (ampliar mais o mural)
+            const scrollMultiplier = calculateScrollMultiplier(consecutiveDuplicates, totalHashtagFeedClicks);
 
-          // 💾 ATUALIZAR lastSavedScrollPosition após scroll
-          lastSavedScrollPosition = await page.evaluate(() => {
-            const bodyScroll = document.documentElement.scrollTop || document.body.scrollTop;
-            if (bodyScroll === 0) {
-              const mainContainer = document.querySelector('main') || document.querySelector('[role="main"]');
-              if (mainContainer && mainContainer.scrollTop > 0) {
-                return mainContainer.scrollTop;
+            // 🎯 USAR FUNÇÃO INTELIGENTE DE SCROLL (com delays adaptativos por profundidade)
+            const scrollResult = await scrollAndWaitIntelligently(page, consecutiveDuplicates, scrollMultiplier);
+
+            // 💾 ATUALIZAR lastSavedScrollPosition após scroll
+            lastSavedScrollPosition = await page.evaluate(() => {
+              const bodyScroll = document.documentElement.scrollTop || document.body.scrollTop;
+              if (bodyScroll === 0) {
+                const mainContainer = document.querySelector('main') || document.querySelector('[role="main"]');
+                if (mainContainer && mainContainer.scrollTop > 0) {
+                  return mainContainer.scrollTop;
+                }
               }
-            }
-            return bodyScroll;
-          });
-          console.log(`   💾 Nova posição salva após scroll: ${lastSavedScrollPosition}px`);
-          continue;
+              return bodyScroll;
+            });
+            console.log(`   💾 Nova posição salva após scroll: ${lastSavedScrollPosition}px`);
+            continue;
+          }
         }
 
         console.log(`\n   🖼️  Abrindo post: ${selectedUrl} (Y=${selectedPosition?.y})`);
@@ -2098,7 +2103,13 @@ export async function scrapeInstagramTag(
 
           // EXTRAIR DO JSON EMBARCADO NO HTML
           // IMPORTANTE: Pegar o "owner" do post, NÃO o "viewer" (usuário logado)!
-          const html = await page.content();
+          // 🔧 TIMEOUT DE SEGURANÇA: Se page.content() travar (detached frame), abortar após 10s
+          const html = await Promise.race([
+            page.content(),
+            new Promise<string>((_, reject) =>
+              setTimeout(() => reject(new Error('Timeout ao extrair HTML do post (10s)')), 10000)
+            )
+          ]);
 
           // Tentar extrair owner do post (padrão: "owner":{"username":"AUTOR"})
           let usernameMatch = html.match(/"owner":\s*\{\s*"username"\s*:\s*"([^"]+)"/);
@@ -2794,7 +2805,89 @@ export async function scrapeInstagramTag(
             // VALIDAÇÕES ANTES DE ADICIONAR AO RESULTADO
             // ========================================
 
-            // VALIDAÇÃO 1: CALCULAR ACTIVITY SCORE
+            // ========================================
+            // VALIDAÇÃO 1: IDIOMA PORTUGUÊS (PRIMEIRA - OBRIGATÓRIA)
+            // Se não for PT, rejeita imediatamente sem processar o resto
+            // ========================================
+            console.log(`   🌍 Detectando idioma da bio...`);
+            const languageDetection = await detectLanguage(completeProfile.bio, completeProfile.username);
+            completeProfile.language = languageDetection.language;
+            console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
+
+            if (languageDetection.language !== 'pt') {
+              console.log(`   ❌ Perfil REJEITADO por idioma não-português (${languageDetection.language}) - não será contabilizado`);
+              processedUsernames.add(username); // Marcar como processado para não tentar novamente
+
+              // 🔧 RESETAR controle de colunas após rejeição
+              currentColumn = null;
+              postsTriedInCurrentColumn = 0;
+              console.log(`   🔄 Controle de colunas resetado após rejeição`);
+
+              // 🔧 VOLTAR para o mural da hashtag ANTES de continuar
+              console.log(`   ⬅️  Retornando ao mural após rejeição de idioma (preservando scroll)...`);
+              try {
+                await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                await restoreScrollPosition(); // 🔄 Restaurar scroll
+                console.log(`   ✅ Voltou ao mural da hashtag`);
+              } catch (navError: any) {
+                console.log(`   ⚠️  Erro ao retornar ao mural: ${navError.message}`);
+              }
+
+              // ⏱️ DELAY ADAPTATIVO baseado na profundidade do scroll
+              let loadWaitTime = 5000; // Base: 5s
+              if (lastSavedScrollPosition > 10000) {
+                loadWaitTime = 25000; // 25s para posições muito avançadas
+              } else if (lastSavedScrollPosition > 5000) {
+                loadWaitTime = 18000; // 18s para posições avançadas
+              } else if (lastSavedScrollPosition > 2000) {
+                loadWaitTime = 12000; // 12s para posições médias
+              } else if (lastSavedScrollPosition > 0) {
+                loadWaitTime = 8000; // 8s para posições iniciais
+              }
+
+              console.log(`   ⏳ Aguardando ${loadWaitTime/1000}s para mural carregar (scroll: ${lastSavedScrollPosition}px)...`);
+              await waitHuman(loadWaitTime * 0.9, loadWaitTime * 1.1); // Randomizar ±10%
+
+              // 🔄 RE-APLICAR scroll (Instagram reseta durante os 10s)
+              if (lastSavedScrollPosition > 0) {
+                console.log(`   🔄 Re-aplicando scroll para ${lastSavedScrollPosition}px (Instagram resetou durante espera)...`);
+                try {
+                  await page.evaluate((scrollY) => {
+                    window.scrollTo(0, scrollY);
+                  }, lastSavedScrollPosition);
+                  await waitHuman(1800, 2500);
+                  console.log(`   ✅ Scroll re-aplicado`);
+                } catch (err: any) {
+                  console.log(`   ⚠️  Erro ao re-aplicar scroll: ${err.message}`);
+                }
+              }
+
+              // 🎯 SCROLL INTELIGENTE: Só faz scroll se tiver 2+ duplicatas OU 8+ clicks
+              if (consecutiveDuplicates >= 2 || totalHashtagFeedClicks >= 8) {
+                console.log(`   📜 Scroll necessário (dups: ${consecutiveDuplicates}, clicks: ${totalHashtagFeedClicks})...`);
+                const scrollMultiplier = calculateScrollMultiplier(consecutiveDuplicates, totalHashtagFeedClicks);
+                await scrollAndWaitIntelligently(page, consecutiveDuplicates, scrollMultiplier);
+                lastSavedScrollPosition = await page.evaluate(() => {
+                  const bodyScroll = document.documentElement.scrollTop || document.body.scrollTop;
+                  if (bodyScroll === 0) {
+                    const mainContainer = document.querySelector('main') || document.querySelector('[role="main"]');
+                    if (mainContainer && mainContainer.scrollTop > 0) return mainContainer.scrollTop;
+                  }
+                  return bodyScroll;
+                });
+              }
+
+              const feedReady = await waitForHashtagMural('Retorno após rejeição de idioma');
+              if (!feedReady) {
+                attemptsWithoutNewPost++;
+              }
+
+              continue; // PULA para o próximo perfil
+            }
+
+            // ========================================
+            // CÁLCULO DO ACTIVITY SCORE (após validação de idioma passar)
+            // ========================================
             console.log(`   🔍 [DEBUG] recent_post_dates no perfil: ${completeProfile.recent_post_dates?.length || 0} datas`);
             const activityScore = calculateActivityScore(completeProfile);
             completeProfile.activity_score = activityScore.score;
@@ -2807,7 +2900,7 @@ export async function scrapeInstagramTag(
             }
 
             // ========================================
-            // 🆕 VALIDAÇÃO RÁPIDA: WEBSITE E/OU BIO >= 100 → APROVAÇÃO AUTOMÁTICA
+            // VALIDAÇÃO 2: WEBSITE/BIO >= 100 → PULA ACTIVITY SCORE
             // ========================================
             const bioLength = completeProfile.bio?.length || 0;
             const hasWebsite = !!completeProfile.website;
@@ -2819,12 +2912,9 @@ export async function scrapeInstagramTag(
               if (bioLength >= 100) reasons.push(`bio >= 100 (${bioLength} chars)`);
 
               console.log(`   ✅ APROVAÇÃO AUTOMÁTICA: ${reasons.join(' e ')}`);
-              console.log(`   ⏭️  Pulando validações de activity score e idioma...`);
+              console.log(`   ⏭️  Pulando validação de activity score...`);
 
-              // Forçar language = 'pt' para aprovação automática
-              completeProfile.language = 'pt';
-
-              // Pular para extração de hashtags (linhas abaixo após o bloco de validações)
+              // Pular para extração de hashtags (activity score não será validado)
             }
             // ========================================
             // VALIDAÇÕES NORMAIS (apenas se NÃO aprovado automaticamente)
@@ -2899,85 +2989,6 @@ export async function scrapeInstagramTag(
 
               continue; // PULA para o próximo perfil
             }
-
-            // VALIDAÇÃO 2: IDIOMA = PORTUGUÊS (apenas se não aprovado automaticamente)
-            if (!autoApprove) {
-              console.log(`   🌍 Detectando idioma da bio...`);
-              const languageDetection = await detectLanguage(completeProfile.bio, completeProfile.username);
-              completeProfile.language = languageDetection.language;
-              console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
-
-              if (languageDetection.language !== 'pt') {
-              console.log(`   ❌ Perfil REJEITADO por idioma não-português (${languageDetection.language}) - não será contabilizado`);
-              processedUsernames.add(username); // Marcar como processado para não tentar novamente
-
-              // 🔧 RESETAR controle de colunas após rejeição
-              currentColumn = null;
-              postsTriedInCurrentColumn = 0;
-              console.log(`   🔄 Controle de colunas resetado após rejeição`);
-
-              // 🔧 VOLTAR para o mural da hashtag ANTES de continuar
-              console.log(`   ⬅️  Retornando ao mural após rejeição de idioma (preservando scroll)...`);
-              try {
-                await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                await restoreScrollPosition(); // 🔄 Restaurar scroll
-                console.log(`   ✅ Voltou ao mural da hashtag`);
-              } catch (navError: any) {
-                console.log(`   ⚠️  Erro ao retornar ao mural: ${navError.message}`);
-              }
-
-              // ⏱️ DELAY ADAPTATIVO baseado na profundidade do scroll
-              let loadWaitTime = 5000; // Base: 5s
-              if (lastSavedScrollPosition > 10000) {
-                loadWaitTime = 25000; // 25s para posições muito avançadas
-              } else if (lastSavedScrollPosition > 5000) {
-                loadWaitTime = 18000; // 18s para posições avançadas
-              } else if (lastSavedScrollPosition > 2000) {
-                loadWaitTime = 12000; // 12s para posições médias
-              } else if (lastSavedScrollPosition > 0) {
-                loadWaitTime = 8000; // 8s para posições iniciais
-              }
-
-              console.log(`   ⏳ Aguardando ${loadWaitTime/1000}s para mural carregar (scroll: ${lastSavedScrollPosition}px)...`);
-              await waitHuman(loadWaitTime * 0.9, loadWaitTime * 1.1); // Randomizar ±10%
-
-              // 🔄 RE-APLICAR scroll (Instagram reseta durante os 10s)
-              if (lastSavedScrollPosition > 0) {
-                console.log(`   🔄 Re-aplicando scroll para ${lastSavedScrollPosition}px (Instagram resetou durante espera)...`);
-                try {
-                  await page.evaluate((scrollY) => {
-                    window.scrollTo(0, scrollY);
-                  }, lastSavedScrollPosition);
-                  await waitHuman(1800, 2500);
-                  console.log(`   ✅ Scroll re-aplicado`);
-                } catch (err: any) {
-                  console.log(`   ⚠️  Erro ao re-aplicar scroll: ${err.message}`);
-                }
-              }
-
-              // 🎯 SCROLL INTELIGENTE: Só faz scroll se tiver 2+ duplicatas OU 8+ clicks
-              if (consecutiveDuplicates >= 2 || totalHashtagFeedClicks >= 8) {
-                console.log(`   📜 Scroll necessário (dups: ${consecutiveDuplicates}, clicks: ${totalHashtagFeedClicks})...`);
-                const scrollMultiplier = calculateScrollMultiplier(consecutiveDuplicates, totalHashtagFeedClicks);
-                await scrollAndWaitIntelligently(page, consecutiveDuplicates, scrollMultiplier);
-                lastSavedScrollPosition = await page.evaluate(() => {
-                  const bodyScroll = document.documentElement.scrollTop || document.body.scrollTop;
-                  if (bodyScroll === 0) {
-                    const mainContainer = document.querySelector('main') || document.querySelector('[role="main"]');
-                    if (mainContainer && mainContainer.scrollTop > 0) return mainContainer.scrollTop;
-                  }
-                  return bodyScroll;
-                });
-              }
-
-              const feedReady = await waitForHashtagMural('Retorno após rejeição de idioma');
-              if (!feedReady) {
-                attemptsWithoutNewPost++;
-              }
-
-              continue; // PULA para o próximo perfil
-              }
-            } // Fim do bloco if (!autoApprove) - validações normais
 
             // ========================================
             // EXTRAÇÃO DE HASHTAGS DOS POSTS (4 posts)
@@ -3212,6 +3223,10 @@ export async function scrapeInstagramTag(
       // 🆕 EXPLICAR POR QUE O LOOP DESTA HASHTAG PAROU
       if (foundProfiles.length >= maxProfiles) {
         console.log(`\n🎯 Meta desta hashtag atingida: ${foundProfiles.length}/${maxProfiles} perfis coletados`);
+      } else if (totalHashtagFeedClicks >= 50) {
+        console.log(`\n⏹️  Scraping interrompido: Limite de 50 clicks no mural atingido`);
+        console.log(`   🛡️  Proteção contra loops infinitos em hashtags com muitos posts não-PT`);
+        console.log(`   📊 Total de clicks executados: ${totalHashtagFeedClicks}`);
       } else if (consecutiveDuplicates >= 5) {
         console.log(`\n⏹️  Scraping interrompido: 5 duplicatas consecutivas (mesmo aguardando auto-scroll)`);
         console.log(`   💡 Esta hashtag parece esgotada - todos os perfis já foram coletados anteriormente`);

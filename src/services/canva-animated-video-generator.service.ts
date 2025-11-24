@@ -365,9 +365,9 @@ export class CanvaAnimatedVideoGeneratorService {
         if (i === 0 && wrappedThreadTitle) {
           const titleFilePath = path.join(tempDir, 'overlay-thread-title.txt');
           fs.writeFileSync(titleFilePath, wrappedThreadTitle, 'utf8');
-          // 🎨 TÍTULO COM CAIXA GRADIENTE (simulada com box semi-transparente)
-          videoFilter += `,drawtext=fontfile='${interBoldPath}':textfile='${titleFilePath}':fontcolor=white:fontsize=58:line_spacing=0:text_align=center:x=(w-text_w)/2:y=320:box=1:boxcolor=#303643@0.85:boxborderw=25:enable='${enableCondition}'`;
-          console.log(`  📋 Título da thread: "${sanitizedThreadTitle}" [COM CAIXA]`);
+          // 🎨 TÍTULO SEM FUNDO (transparente)
+          videoFilter += `,drawtext=fontfile='${interBoldPath}':textfile='${titleFilePath}':fontcolor=white:fontsize=58:line_spacing=0:text_align=center:x=(w-text_w)/2:y=320:enable='${enableCondition}'`;
+          console.log(`  📋 Título da thread: "${sanitizedThreadTitle}" [TRANSPARENTE]`);
         }
 
         // Conteúdo principal
@@ -379,10 +379,10 @@ export class CanvaAnimatedVideoGeneratorService {
             const textFilePath = path.join(tempDir, `overlay-page-${i + 1}-content.txt`);
             fs.writeFileSync(textFilePath, wrappedContent, 'utf8');
 
-            // 🎨 CONTEÚDO COM CAIXA GRADIENTE (simulada com box semi-transparente)
-            videoFilter += `,drawtext=fontfile='${interRegularPath}':textfile='${textFilePath}':fontcolor=white:fontsize=37:line_spacing=13:text_align=center:x=(w-text_w)/2:y=645:box=1:boxcolor=#303643@0.85:boxborderw=20:enable='${enableCondition}'`;
+            // 🎨 CONTEÚDO SEM FUNDO (transparente)
+            videoFilter += `,drawtext=fontfile='${interRegularPath}':textfile='${textFilePath}':fontcolor=white:fontsize=37:line_spacing=13:text_align=center:x=(w-text_w)/2:y=645:enable='${enableCondition}'`;
 
-            console.log(`  📝 Página ${i + 1}: "${content.substring(0, 40)}..." [COM CAIXA]`);
+            console.log(`  📝 Página ${i + 1}: "${content.substring(0, 40)}..." [TRANSPARENTE]`);
           }
         }
 
@@ -399,9 +399,9 @@ export class CanvaAnimatedVideoGeneratorService {
         const ctaFilePath = path.join(tempDir, `overlay-cta.txt`);
         fs.writeFileSync(ctaFilePath, wrappedCta, 'utf8');
 
-        // 🎨 CTA COM MESMO TAMANHO DO TÍTULO (fontsize=58) E CAIXA
-        videoFilter += `,drawtext=fontfile='${interBoldPath}':textfile='${ctaFilePath}':fontcolor=white:fontsize=58:line_spacing=0:text_align=center:x=(w-text_w)/2:y=800:box=1:boxcolor=#303643@0.85:boxborderw=25:enable='${enableCondition}'`;
-        console.log(`  🎯 CTA: "${text}" [COM CAIXA, TAMANHO TÍTULO]`);
+        // 🎨 CTA SEM FUNDO (transparente) - Mesmo tamanho do título (fontsize=58)
+        videoFilter += `,drawtext=fontfile='${interBoldPath}':textfile='${ctaFilePath}':fontcolor=white:fontsize=58:line_spacing=0:text_align=center:x=(w-text_w)/2:y=800:enable='${enableCondition}'`;
+        console.log(`  🎯 CTA: "${text}" [TRANSPARENTE, TAMANHO TÍTULO]`);
       }
     }
 

@@ -998,7 +998,15 @@
             btn.disabled = true;
             btn.innerHTML = '<span>⏳</span> Executando GPT-4...';
             try {
-                const response = await fetch(`${API_BASE}/dynamic-intelligence/execute-full-pipeline`, { method: 'POST' });
+                // Timeout de 5 minutos (300000ms)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 300000);
+
+                const response = await fetch(`${API_BASE}/dynamic-intelligence/execute-full-pipeline`, {
+                    method: 'POST',
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
                 const data = await response.json();
                 if (data.success) {
                     alert(`✅ Pipeline executado!\n\nClusters: ${data.clusters_updated}\n\nRecarregando...`);
@@ -1008,7 +1016,11 @@
                     alert('❌ Erro: ' + data.error);
                 }
             } catch (error) {
-                alert('❌ Erro: ' + error.message);
+                if (error.name === 'AbortError') {
+                    alert('⏱️ Timeout: Pipeline demorou mais de 5 minutos.\n\nVerifique os logs do servidor ou execute novamente.');
+                } else {
+                    alert('❌ Erro: ' + error.message);
+                }
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<span>🚀</span> Pipeline Completo (GPT-4)';

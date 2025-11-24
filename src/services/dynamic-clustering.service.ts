@@ -279,15 +279,25 @@ REGRAS:
   }
 
   /**
-   * Normaliza texto para comparação (remove acentos, lowercase, remove espaços extras)
+   * Normaliza texto para comparação (remove acentos, lowercase, ordena palavras)
    */
   private normalizeText(text: string): string {
-    return text
+    // 1. Normalizar: lowercase, remover acentos
+    const normalized = text
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-      .replace(/[^a-z0-9]/g, '') // Remove caracteres especiais
       .trim();
+
+    // 2. Separar por "e" ou espaços, ordenar palavras alfabeticamente
+    const words = normalized
+      .split(/\s+e\s+|\s+/) // Separa por " e " ou espaços
+      .map(w => w.replace(/[^a-z0-9]/g, '')) // Remove caracteres especiais
+      .filter(w => w.length > 0) // Remove vazios
+      .sort(); // ✅ ORDENA alfabeticamente
+
+    // 3. Retorna palavras ordenadas concatenadas
+    return words.join('');
   }
 
   /**
