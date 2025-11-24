@@ -72,6 +72,19 @@ class ProxyRotationService {
       });
     }
 
+    // Webshare (Rotating Residential com Sticky Session)
+    if (process.env.WEBSHARE_ENABLED === 'true') {
+      const webshareProxies = this.parseWebshareProxies();
+      if (webshareProxies.length > 0) {
+        this.addProvider({
+          name: 'Webshare',
+          type: 'residential',
+          enabled: true,
+          proxies: webshareProxies,
+        });
+      }
+    }
+
     // Decodo/SmartProxy (Residential com Sticky Session)
     if (process.env.DECODO_ENABLED === 'true') {
       const decodoproxies = this.parseDecodoproxies();
@@ -128,10 +141,13 @@ class ProxyRotationService {
         // Formato URL completo: http://user:pass@host:port
         if (proxyStr.includes('://')) {
           const url = new URL(proxyStr);
+          const protocol = url.protocol.replace(':', '') as 'http' | 'https' | 'socks5';
+          // Se port não especificado, usar porta padrão do protocolo
+          const defaultPort = protocol === 'https' ? 443 : (protocol === 'socks5' ? 1080 : 80);
           config = {
-            protocol: url.protocol.replace(':', '') as 'http' | 'https' | 'socks5',
+            protocol,
             host: url.hostname,
-            port: parseInt(url.port) || 8080,
+            port: parseInt(url.port) || defaultPort,
             username: url.username || undefined,
             password: url.password || undefined,
           };
@@ -169,6 +185,49 @@ class ProxyRotationService {
   }
 
   /**
+   * Parse configuração de proxies Webshare com sticky session
+   * Formato: username-1, username-2, etc para rotating
+   */
+  private parseWebshareProxies(): ProxyConfig[] {
+    const proxies: ProxyConfig[] = [];
+
+    // Configurações do Webshare
+    const host = process.env.WEBSHARE_HOST || 'p.webshare.io';
+    const port = parseInt(process.env.WEBSHARE_PORT || '80');
+    const username = process.env.WEBSHARE_USERNAME;
+    const password = process.env.WEBSHARE_PASSWORD;
+    const country = process.env.WEBSHARE_COUNTRY || 'br';
+    const sessionDuration = parseInt(process.env.WEBSHARE_SESSION_DURATION || '480'); // 8h padrão
+
+    if (!username || !password) {
+      console.warn('⚠️  Webshare: USERNAME ou PASSWORD não configurados');
+      return proxies;
+    }
+
+    // Gerar múltiplas sessões com sufixo -1, -2, -3
+    const numSessions = parseInt(process.env.WEBSHARE_NUM_SESSIONS || '3');
+
+    for (let i = 1; i <= numSessions; i++) {
+      const sessionUsername = `${username}-${i}`;
+
+      proxies.push({
+        protocol: 'http',
+        host,
+        port,
+        username: sessionUsername,
+        password,
+        country,
+        sessionDuration,
+        stickySession: false, // Webshare já rotaciona automaticamente com sufixo
+        sessionId: undefined, // Não precisa de session ID separado
+      });
+    }
+
+    console.log(`🔄 Webshare: ${proxies.length} sessões configuradas (8h sticky, país: ${country})`);
+    return proxies;
+  }
+
+  /**
    * Parse configuração de proxies Decodo com sticky session
    * Formato: host:port ou usa variáveis específicas
    */
@@ -194,10 +253,10 @@ class ProxyRotationService {
     const numSessions = parseInt(process.env.DECODO_NUM_SESSIONS || '3');
 
     for (let i = 0; i < numSessions; i++) {
-      const sessionId = `instagram-scraper-session-${i + 1}`;
+      const sessionId = `instagram-scraper-${i + 1}`;
 
       proxies.push({
-        protocol: 'http',
+        protocol: 'http', // Puppeteer não suporta https:// para proxy
         host,
         port,
         username,

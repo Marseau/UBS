@@ -159,10 +159,18 @@ export function extractHashtags(text: string | null, maxHashtags: number = 10): 
 export function calculateActivityScore(profile: ProfileForScoring): ActivityScore {
   const reasons: string[] = [];
 
-  // REGRA 1: TEM WEBSITE → APROVADO
+  // REGRA 1: TEM WEBSITE OU BIO >= 100 → APROVAÇÃO AUTOMÁTICA
   const hasWebsite = profile.website && profile.website.length > 0;
-  if (hasWebsite) {
-    reasons.push('✅ TEM WEBSITE → APROVADO');
+  const hasLongBio = profile.bio && profile.bio.length >= 100;
+
+  if (hasWebsite || hasLongBio) {
+    if (hasWebsite && hasLongBio) {
+      reasons.push('✅ WEBSITE + BIO >= 100 → APROVAÇÃO AUTOMÁTICA');
+    } else if (hasWebsite) {
+      reasons.push('✅ TEM WEBSITE → APROVAÇÃO AUTOMÁTICA');
+    } else {
+      reasons.push(`✅ BIO >= 100 (${profile.bio?.length} chars) → APROVAÇÃO AUTOMÁTICA`);
+    }
     return {
       isActive: true,
       score: 100,
@@ -171,11 +179,12 @@ export function calculateActivityScore(profile: ProfileForScoring): ActivityScor
     };
   }
 
-  // REGRA 2: SEM WEBSITE → Verifica Bio + Followers (Following eliminado!)
+  // REGRA 2: SEM WEBSITE E BIO < 100 → Verifica Bio + Followers
   const hasBio = profile.bio && profile.bio.length > 25;
   const hasFollowers = profile.followers_count > 100;
 
   reasons.push(`Website: ❌`);
+  reasons.push(`Bio >= 100: ❌ (${profile.bio?.length || 0} chars)`);
   reasons.push(`Bio > 25 chars: ${hasBio ? '✅' : '❌'} (${profile.bio?.length || 0} chars)`);
   reasons.push(`Followers > 100: ${hasFollowers ? '✅' : '❌'} (${profile.followers_count})`);
 

@@ -49,7 +49,7 @@ async function ensureBrowserInstance(): Promise<void> {
   const headlessOption: boolean | 'new' = HEADLESS_ENABLED ? 'new' : false;
 
   // 🕵️ STEALTH ARGS: Usa args seguros SEMPRE, ou permite override via ENV
-  const args = ENV_BROWSER_ARGS.length > 0 ? ENV_BROWSER_ARGS : STEALTH_BROWSER_ARGS;
+  let args = ENV_BROWSER_ARGS.length > 0 ? ENV_BROWSER_ARGS : [...STEALTH_BROWSER_ARGS];
 
   // 🎭 USER DATA DIR: Sessão persistente por conta para fingerprint consistente
   const rotation = getAccountRotation();
@@ -60,12 +60,54 @@ async function ensureBrowserInstance(): Promise<void> {
   console.log(`   🎭 UserDataDir: ${userDataDir}`);
   console.log(`   🕵️  Args de stealth: ${args.length} configurados`);
 
+  // 🌐 CONFIGURAR PROXY (se habilitado)
+  const { proxyRotationService } = await import('./proxy-rotation.service');
+
+  const proxyEnabled = proxyRotationService.isEnabled();
+  const totalProxies = proxyRotationService.getTotalProxies();
+  console.log(`   🔍 DEBUG - Proxy enabled: ${proxyEnabled}, Total proxies: ${totalProxies}`);
+  console.log(`   🔍 DEBUG - ENABLE_PROXY_ROTATION env: ${process.env.ENABLE_PROXY_ROTATION}`);
+
+  let proxyServer: string | undefined;
+  let currentProxyConfig: any = null;
+
+  if (proxyRotationService.isEnabled()) {
+    const proxyConfig = proxyRotationService.getNextProxy();
+    if (proxyConfig) {
+      // 🔧 FORMATO CORRETO CHROMIUM: --proxy-server=http://host:port (SEM credenciais)
+      // Credenciais passadas depois via page.authenticate()
+      proxyServer = `${proxyConfig.protocol}://${proxyConfig.host}:${proxyConfig.port}`;
+
+      currentProxyConfig = {
+        host: proxyConfig.host,
+        port: proxyConfig.port,
+        username: proxyConfig.username,
+        password: proxyConfig.password
+      };
+      console.log(`   🌐 Proxy: ${proxyConfig.protocol}://${proxyConfig.host}:${proxyConfig.port}`);
+      console.log(`   🔐 Auth: ${proxyConfig.username}@${proxyConfig.host}`);
+      console.log(`   🔍 DEBUG - Proxy server arg: --proxy-server=${proxyServer}`);
+
+      // Adicionar proxy aos args (SEM credenciais)
+      args.push(`--proxy-server=${proxyServer}`);
+    } else {
+      console.warn(`   ⚠️  Proxy habilitado mas nenhum proxy disponível - usando IP direto`);
+    }
+  } else {
+    console.log(`   🚫 Proxy desabilitado - usando IP direto`);
+  }
+
   browserInstance = await puppeteer.launch({
     headless: headlessOption,
     defaultViewport: null,
     args,
     userDataDir // Sessão persistente para evitar detecção
   }, puppeteer);
+
+  console.log('   ✅ Browser lançado com proteções anti-detecção');
+
+  // Armazenar config do proxy para uso posterior na autenticação
+  (browserInstance as any)._currentProxyConfig = currentProxyConfig;
 }
 
 async function loadCookies(page: Page): Promise<boolean> {
@@ -290,7 +332,18 @@ async function cleanupOnFailure(): Promise<void> {
     await browserInstance.close().catch(() => {});
   }
   browserInstance = null;
+  sessionInitialization = null; // ← ADICIONAR RESET DO PROMISE
   loggedUsername = null;
+}
+
+/**
+ * Força reset completo da sessão (usado durante rotação de contas)
+ * IMPORTANTE: Chame isso ANTES de ensureLoggedSession() após rotação!
+ */
+export async function resetSessionForRotation(): Promise<void> {
+  console.log('🔄 Resetando sessão do Instagram para rotação de conta...');
+  await cleanupOnFailure();
+  console.log('✅ Sessão resetada - pronta para nova conta');
 }
 
 export async function ensureLoggedSession(): Promise<void> {
@@ -313,6 +366,16 @@ export async function ensureLoggedSession(): Promise<void> {
 
       // 🕵️ APLICAR STEALTH na página de sessão principal
       await applyFullStealth(sessionPage);
+
+      // 🔐 AUTENTICAR PROXY (se configurado)
+      const proxyConfig = (browserInstance as any)._currentProxyConfig;
+      if (proxyConfig?.username && proxyConfig?.password) {
+        await sessionPage.authenticate({
+          username: proxyConfig.username,
+          password: proxyConfig.password
+        });
+        console.log(`   🔐 Proxy autenticado: ${proxyConfig.username}@${proxyConfig.host}`);
+      }
     }
 
     let loggedIn = false;
@@ -341,6 +404,47 @@ export async function ensureLoggedSession(): Promise<void> {
 
     if (loggedUsername) {
       console.log(`👤 Usuário autenticado: @${loggedUsername}`);
+
+      // 🔄 SINCRONIZAR: Verificar se o username logado corresponde à conta esperada
+      const rotation = getAccountRotation();
+      const expectedAccount = rotation.getCurrentAccount();
+      const expectedUsername = expectedAccount.username.split('@')[0]; // Remover @gmail.com se tiver
+
+      // Normalizar usernames para comparação (remover @, lowercase)
+      const loggedNormalized = loggedUsername.toLowerCase().replace('@', '');
+      const expectedNormalized = expectedUsername.toLowerCase().replace('@', '');
+
+      if (loggedNormalized !== expectedNormalized) {
+        console.warn(`⚠️  Username divergente detectado`);
+        console.warn(`   Email da conta: ${expectedUsername}`);
+        console.warn(`   Username Instagram: ${loggedUsername}`);
+
+        // Tentar encontrar a conta correta no array de contas
+        const accounts = rotation['accounts'];
+        const correctIndex = accounts.findIndex((acc: any) => {
+          const accUsername = acc.username.split('@')[0].toLowerCase();
+          // Aceitar se username do Instagram inclui parte do email, ou vice-versa
+          return accUsername === loggedNormalized ||
+                 loggedNormalized.includes(accUsername) ||
+                 accUsername.includes(loggedNormalized);
+        });
+
+        if (correctIndex !== -1) {
+          if (correctIndex !== rotation['state'].currentAccountIndex) {
+            console.log(`   🔄 Atualizando rotação: index ${rotation['state'].currentAccountIndex} → ${correctIndex}`);
+            rotation['state'].currentAccountIndex = correctIndex;
+            rotation['saveState']();
+          }
+          console.log(`   ✅ Sessão válida - username Instagram difere do email (normal)`);
+        } else {
+          // Username Instagram não corresponde a nenhuma conta conhecida
+          console.warn(`   ⚠️  Username ${loggedUsername} não corresponde a nenhuma conta configurada`);
+          console.warn(`   ⚠️  Continuando pois sessão está válida (cookies OK)`);
+          // NÃO fazer logout - se a sessão está válida, usar ela
+        }
+      } else {
+        console.log(`   ✅ Conta logada corresponde à esperada`);
+      }
     } else {
       // ⚠️ TEMPORÁRIO: Permitir continuar mesmo sem detectar username
       // Usar username da conta ativa do sistema de rotação

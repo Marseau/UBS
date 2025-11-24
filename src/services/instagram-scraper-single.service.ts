@@ -29,12 +29,31 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
+// 🚨 Erro customizado para cooldown global
+class GlobalCooldownError extends Error {
+  constructor(message: string, public waitMinutes: number) {
+    super(message);
+    this.name = 'GlobalCooldownError';
+  }
+}
+
 // Controla instância única de browser e página de sessão
 let browserInstance: Browser | null = null;
 let sessionPage: Page | null = null;
 let sessionInitialization: Promise<void> | null = null;
 let loggedUsername: string | null = null;
 let currentProxyConfig: { host: string; port: number; username?: string; password?: string } | null = null;
+let proxyFallbackActive = false; // Quando proxy falha, usa IP direto temporariamente
+
+// Métricas de performance para comparação
+interface PerformanceMetrics {
+  withProxy: { success: number; blocked: number; avgTime: number };
+  withoutProxy: { success: number; blocked: number; avgTime: number };
+}
+const performanceMetrics: PerformanceMetrics = {
+  withProxy: { success: 0, blocked: 0, avgTime: 0 },
+  withoutProxy: { success: 0, blocked: 0, avgTime: 0 }
+};
 
 // Arquivo para salvar cookies da sessão
 const COOKIES_FILE = path.join(process.cwd(), 'instagram-cookies.json');
@@ -742,10 +761,19 @@ async function ensureLoggedSession(): Promise<void> {
       console.log(`   🎭 User-Agent: ${userAgent.substring(0, 50)}...`);
       console.log(`   📐 Viewport: ${viewport.width}x${viewport.height}`);
 
-      // 🌐 CONFIGURAR PROXY (se habilitado)
+      // 🌐 CONFIGURAR PROXY (se habilitado e não em fallback)
       let proxyServer: string | undefined;
       currentProxyConfig = null; // Reset proxy config
-      if (proxyRotationService.isEnabled()) {
+
+      // 🔍 DEBUG - Verificar estado do proxy
+      const proxyEnabled = proxyRotationService.isEnabled();
+      const totalProxies = proxyRotationService.getTotalProxies();
+      console.log(`   🔍 DEBUG - Proxy enabled: ${proxyEnabled}, Total proxies: ${totalProxies}, Fallback: ${proxyFallbackActive}`);
+      console.log(`   🔍 DEBUG - ENABLE_PROXY_ROTATION env: ${process.env.ENABLE_PROXY_ROTATION}`);
+
+      const shouldUseProxy = proxyRotationService.isEnabled() && !proxyFallbackActive;
+
+      if (shouldUseProxy) {
         const proxyConfig = proxyRotationService.getNextProxy();
         if (proxyConfig) {
           proxyServer = proxyRotationService.formatProxyForPuppeteer(proxyConfig);
@@ -756,9 +784,12 @@ async function ensureLoggedSession(): Promise<void> {
             password: proxyConfig.password
           };
           console.log(`   🌐 Proxy: ${proxyConfig.host}:${proxyConfig.port} (${proxyConfig.protocol})`);
+          console.log(`   🔍 DEBUG - Proxy URL formatada: ${proxyServer}`);
         } else {
           console.warn(`   ⚠️  Proxy habilitado mas nenhum proxy disponível - usando IP direto`);
         }
+      } else if (proxyFallbackActive) {
+        console.log(`   🔄 FALLBACK ATIVO - usando IP direto (proxy falhou)`);
       } else {
         console.log(`   🚫 Proxy desabilitado - usando IP direto`);
       }
@@ -894,7 +925,41 @@ async function ensureLoggedSession(): Promise<void> {
         console.log('🤖 ============================================');
         console.log('');
 
-        await sessionPage.goto('https://www.instagram.com/', { waitUntil: 'networkidle2', timeout: 120000 });
+        try {
+          await sessionPage.goto('https://www.instagram.com/', { waitUntil: 'networkidle2', timeout: 120000 });
+        } catch (proxyErr: any) {
+          // Se erro de proxy (407/403/timeout), ativar fallback para IP direto
+          const isProxyError = proxyErr?.message?.includes('ERR_NO_SUPPORTED_PROXIES') ||
+                              proxyErr?.message?.includes('ERR_PROXY_CONNECTION_FAILED') ||
+                              proxyErr?.message?.includes('407') ||
+                              proxyErr?.message?.includes('403');
+
+          if (isProxyError && !proxyFallbackActive) {
+            console.log(`\n⚠️  ========================================`);
+            console.log(`⚠️  PROXY FALHOU: ${proxyErr.message}`);
+            console.log(`⚠️  Ativando FALLBACK para IP direto`);
+            console.log(`⚠️  ========================================\n`);
+
+            // Registrar falha do proxy
+            if (currentProxyConfig) {
+              proxyRotationService.recordProxyFailure(currentProxyConfig);
+            }
+
+            // Fechar browser e resetar
+            try {
+              await browserInstance?.close().catch(() => {});
+            } catch {}
+            browserInstance = null;
+            sessionPage = null;
+            sessionInitialization = null;
+
+            // Ativar fallback e tentar novamente
+            proxyFallbackActive = true;
+            return await ensureLoggedSession();
+          }
+
+          throw proxyErr;
+        }
         await waitHuman(2700, 3500); // Esperar página carregar completamente (randomizado)
 
         // Verificar se já está na página de login
@@ -1102,6 +1167,17 @@ async function handleSessionError(page: Page, errorType: string): Promise<boolea
 
   console.log(`🔄 ${forceRotation ? 'FORÇANDO' : 'Iniciando'} rotação de conta...`);
 
+  // 🚪 Logout explícito antes de limpar e rotacionar
+  try {
+    if (sessionPage && !sessionPage.isClosed()) {
+      await logoutAndClearSession(sessionPage);
+    } else {
+      await logoutAndClearSession(page);
+    }
+  } catch (logoutErr: any) {
+    console.log(`⚠️  Erro ao tentar logout antes da rotação: ${logoutErr.message}`);
+  }
+
   // 📤 Fechar browser e sessão atual
   try {
     console.log(`🔒 Fechando browser e sessão atual...`);
@@ -1119,11 +1195,15 @@ async function handleSessionError(page: Page, errorType: string): Promise<boolea
 
     console.log(`✅ Browser fechado`);
 
-    // 🗑️ LIMPAR COOKIES DA CONTA BLOQUEADA
-    const cookiesFile = path.join(process.cwd(), 'instagram-cookies.json');
-    if (fs.existsSync(cookiesFile)) {
-      fs.unlinkSync(cookiesFile);
-      console.log(`🗑️  Cookies da conta bloqueada deletados`);
+    // 🗑️ LIMPAR COOKIES DA CONTA BLOQUEADA (arquivo específico da conta)
+    const currentAccount = rotation.getCurrentAccount();
+    const cookieFilesToDelete = [COOKIES_FILE, currentAccount.cookiesFile];
+
+    for (const cookieFile of cookieFilesToDelete) {
+      if (fs.existsSync(cookieFile)) {
+        fs.unlinkSync(cookieFile);
+        console.log(`🗑️  Cookies deletados: ${path.basename(cookieFile)}`);
+      }
     }
   } catch (closeError: any) {
     console.log(`⚠️  Erro ao fechar browser: ${closeError.message}`);
@@ -1150,8 +1230,42 @@ async function handleSessionError(page: Page, errorType: string): Promise<boolea
   console.log(`✅ Nova conta: ${rotationResult.newAccount}`);
   console.log(`✅ ========================================\n`);
 
+  // 🔄 ESTRATÉGIA DE COOLDOWN:
+  // - Cooldown individual (≤2h): ESPERA dentro da request (timeout HTTP = 1h)
+  // - Cooldown GLOBAL (4h): RETORNA ERRO → N8N para workflow
   if (rotationResult.requiresWait && rotationResult.waitMinutes && rotationResult.waitMinutes > 0) {
-    console.log(`⏰ Aguardando ${rotationResult.waitMinutes} minutos para NOVA conta "${rotationResult.newAccount}" esfriar...`);
+    const rotation = getAccountRotation();
+    const isGlobalCooldown = rotation.isInGlobalCooldown();
+
+    if (isGlobalCooldown) {
+      // 🛑 COOLDOWN GLOBAL (4h) - LANÇAR ERRO PARA PARAR WORKFLOW
+      console.log(`\n🛑 ========================================`);
+      console.log(`🛑 COOLDOWN GLOBAL ATIVADO (4 HORAS)`);
+      console.log(`🛑 Ambas as contas falharam recentemente`);
+      console.log(`🛑 Tempo de espera: ${rotationResult.waitMinutes} minutos`);
+      console.log(`🛑 ========================================`);
+      console.log(`\n💡 AÇÃO NECESSÁRIA:`);
+      console.log(`   - N8N deve PARAR o workflow`);
+      console.log(`   - Aguardar 4h antes de tentar novamente`);
+      console.log(`   - Verificar contas manualmente no Instagram\n`);
+
+      // ❌ LANÇAR ERRO PARA PARAR WORKFLOW N8N
+      throw new GlobalCooldownError(
+        `GLOBAL_COOLDOWN: Ambas as contas em cooldown. Aguarde ${rotationResult.waitMinutes} minutos (4h).`,
+        rotationResult.waitMinutes
+      );
+    }
+
+    // ⏰ COOLDOWN INDIVIDUAL - ESPERAR dentro da request
+    console.log(`\n⏰ ========================================`);
+    console.log(`⏰ COOLDOWN INDIVIDUAL DA CONTA`);
+    console.log(`⏰ Conta: ${rotationResult.newAccount}`);
+    console.log(`⏰ Tempo de espera: ${rotationResult.waitMinutes} minutos`);
+    console.log(`⏰ ========================================`);
+    console.log(`\n💡 AGUARDANDO dentro da request HTTP:`);
+    console.log(`   - Timeout HTTP ajustado no N8N para suportar cooldowns longos`);
+    console.log(`   - Sistema aguardará e continuará automaticamente\n`);
+
     const waitMs = rotationResult.waitMinutes * 60 * 1000;
     await new Promise(resolve => setTimeout(resolve, waitMs));
     console.log(`✅ Período de espera concluído - conta ${rotationResult.newAccount} pronta!`);
@@ -1160,6 +1274,11 @@ async function handleSessionError(page: Page, errorType: string): Promise<boolea
   // 🔐 Inicializar nova sessão com nova conta
   try {
     console.log(`🔐 Iniciando nova sessão com conta ${rotationResult.newAccount}...`);
+
+    // ✅ RESET COMPLETO da sessão antes de logar com nova conta
+    const { resetSessionForRotation } = await import('./instagram-session.service');
+    await resetSessionForRotation();
+
     await ensureLoggedSession();
     console.log(`✅ Nova sessão iniciada com sucesso!`);
     return true;
@@ -1432,17 +1551,65 @@ export async function scrapeInstagramTag(
 
       if (isLoginPage) {
         console.log('❌ [REDIRECT] Instagram redirecionou para página de LOGIN - sessão inválida');
-        throw new Error('SESSION_INVALID: Redirected to login page');
+        // 🔄 Usar sistema de rotação
+        try {
+          const recovered = await handleSessionError(page, 'SESSION_INVALID: Redirected to login page');
+          if (recovered) {
+            const newContext = await createIsolatedContext();
+            page = newContext.page;
+            cleanup = newContext.cleanup;
+            continue; // Retry com nova conta
+          }
+          // Não conseguiu rotacionar - sair do loop
+          throw new Error('SESSION_INVALID: Could not recover from login redirect');
+        } catch (err: any) {
+          // GlobalCooldownError sempre propaga
+          if (err.name === 'GlobalCooldownError') throw err;
+          // Outros erros também propagam
+          throw err;
+        }
       }
 
       if (isChallengePage) {
         console.log('❌ [REDIRECT] Instagram redirecionou para CHALLENGE/CAPTCHA - verificação necessária');
-        throw new Error('CHALLENGE_REQUIRED: Instagram requires verification');
+        // 🔄 Usar sistema de rotação
+        try {
+          const recovered = await handleSessionError(page, 'CHALLENGE_REQUIRED: Instagram requires verification');
+          if (recovered) {
+            const newContext = await createIsolatedContext();
+            page = newContext.page;
+            cleanup = newContext.cleanup;
+            continue; // Retry com nova conta
+          }
+          // Não conseguiu rotacionar - sair do loop
+          throw new Error('CHALLENGE_REQUIRED: Could not recover from challenge');
+        } catch (err: any) {
+          // GlobalCooldownError sempre propaga
+          if (err.name === 'GlobalCooldownError') throw err;
+          // Outros erros também propagam
+          throw err;
+        }
       }
 
       if (isSuspiciousPage) {
         console.log('❌ [REDIRECT] Instagram redirecionou para página SUSPENSA/BLOQUEADA');
-        throw new Error('ACCOUNT_RESTRICTED: Account may be temporarily restricted');
+        // 🔄 Usar sistema de rotação
+        try {
+          const recovered = await handleSessionError(page, 'ACCOUNT_RESTRICTED: Account may be temporarily restricted');
+          if (recovered) {
+            const newContext = await createIsolatedContext();
+            page = newContext.page;
+            cleanup = newContext.cleanup;
+            continue; // Retry com nova conta
+          }
+          // Não conseguiu rotacionar - sair do loop
+          throw new Error('ACCOUNT_RESTRICTED: Could not recover from restriction');
+        } catch (err: any) {
+          // GlobalCooldownError sempre propaga
+          if (err.name === 'GlobalCooldownError') throw err;
+          // Outros erros também propagam
+          throw err;
+        }
       }
 
       // 🆕 RECUPERAÇÃO: Se não está na página esperada, tentar voltar
@@ -1459,6 +1626,29 @@ export async function scrapeInstagramTag(
         // Verificar novamente
         currentUrl = page.url();
         isExpectedPage = currentUrl.includes('/explore/tags/') || currentUrl.includes('/explore/search/');
+
+        // 🚨 CRÍTICO: Se caiu em login page durante recuperação, chamar handleSessionError
+        if (currentUrl.includes('/accounts/login')) {
+          console.log(`❌ [REDIRECT] Recuperação falhou - caiu em LOGIN page`);
+          console.log(`   🔄 Chamando handleSessionError para limpar sessão e rotacionar...`);
+
+          try {
+            const recovered = await handleSessionError(page, 'SESSION_INVALID: Login page after recovery attempt');
+            if (recovered) {
+              const newContext = await createIsolatedContext();
+              page = newContext.page;
+              cleanup = newContext.cleanup;
+              continue; // Retry com nova conta
+            }
+            // Não conseguiu rotacionar - sair do loop
+            throw new Error('SESSION_INVALID: Could not recover from login redirect after recovery');
+          } catch (err: any) {
+            // GlobalCooldownError sempre propaga
+            if (err.name === 'GlobalCooldownError') throw err;
+            // Outros erros também propagam
+            throw err;
+          }
+        }
 
         if (!isExpectedPage) {
           console.log(`❌ [REDIRECT] Não conseguiu voltar para a hashtag. URL final: ${currentUrl}`);
@@ -1487,70 +1677,23 @@ export async function scrapeInstagramTag(
       if (pageHasError) {
         console.log('❌ [SESSION INVALID] Instagram retornou página de erro');
 
-        // 🎯 SALVAR loggedUsername IMEDIATAMENTE (antes de QUALQUER cleanup)
-        const actualLoggedUser = loggedUsername;
-        console.log(`🔍 Usuário REAL logado: ${actualLoggedUser || 'DESCONHECIDO'}`);
+        // 🔄 USAR SISTEMA DE ROTAÇÃO EXISTENTE (handleSessionError)
+        // Esta função JÁ FAZ: logout, cleanup, cooldown, rotação, e login na nova conta
+        const recovered = await handleSessionError(page, 'SESSION_INVALID');
 
-        // 🔄 ROTAÇÃO: Limpar cookies
-        const rotation = getAccountRotation();
-        const currentAccount = rotation.getCurrentAccount();
-
-        if (fs.existsSync(currentAccount.cookiesFile)) {
-          fs.unlinkSync(currentAccount.cookiesFile);
-          console.log(`🗑️  Cookies da conta ${currentAccount.username} removidos`);
+        if (recovered) {
+          console.log('✅ [RECOVERY] Rotação bem-sucedida! Continuando com nova conta...');
+          // Recriar contexto com nova conta
+          const newContext = await createIsolatedContext();
+          page = newContext.page;
+          cleanup = newContext.cleanup;
+          // Tentar novamente esta hashtag (continue vai para próximo retry)
+          continue;
+        } else {
+          // Não conseguiu rotacionar (ambas as contas falharam ou em cooldown)
+          console.log('❌ [RECOVERY] Não foi possível rotacionar para nova conta');
+          throw new Error('SESSION_INVALID: Could not recover - no available accounts');
         }
-
-        // Também remover arquivo antigo (legacy)
-        if (fs.existsSync(COOKIES_FILE)) {
-          fs.unlinkSync(COOKIES_FILE);
-        }
-
-        // 🚪 LOGOUT EXPLÍCITO antes de limpar (dar tempo do Instagram registrar)
-        if (sessionPage && browserInstance) {
-          try {
-            console.log('🚪 Fazendo logout da conta bloqueada...');
-            await sessionPage.goto('https://www.instagram.com/accounts/logout/', {
-              waitUntil: 'domcontentloaded',
-              timeout: 10000
-            }).catch(() => {});
-            await waitHuman(1800, 2500); // Aguardar logout processar (randomizado)
-            console.log('✅ Logout concluído');
-          } catch (logoutError) {
-            console.log('⚠️  Erro ao fazer logout (ignorando):', logoutError);
-          }
-        }
-
-        // 🧹 Fechar browser e limpar TODAS as páginas/contextos
-        if (browserInstance) {
-          try {
-            const contexts = browserInstance.browserContexts();
-            console.log(`🧹 Limpando ${contexts.length} contextos do browser...`);
-
-            for (const context of contexts) {
-              const pages = await context.pages();
-              for (const page of pages) {
-                await page.close().catch(() => {});
-              }
-              await context.close().catch(() => {});
-            }
-
-            await browserInstance.close().catch(() => {});
-            console.log('✅ Browser completamente limpo');
-          } catch (cleanupError) {
-            console.log('⚠️  Erro ao limpar browser:', cleanupError);
-            // Force close
-            await browserInstance.close().catch(() => {});
-          }
-
-          browserInstance = null;
-          sessionPage = null;
-          sessionInitialization = null;
-          loggedUsername = null;
-        }
-
-        // 🎯 Incluir loggedUsername no erro para preservar informação
-        const errorMsg = `SESSION_INVALID: Instagram session expired. Cookies cleared. Please retry.${actualLoggedUser ? ` [LoggedUser: ${actualLoggedUser}]` : ''}`;
-        throw new Error(errorMsg);
       }
 
       // 6. AGUARDAR MURAL CARREGAR
@@ -3312,18 +3455,45 @@ export async function scrapeInstagramTag(
             break; // Sai do while de retry, vai para próxima hashtag
           }
 
-          // Se for detached frame, Instagram detectou scraping → ENCERRAR TUDO IMEDIATAMENTE
+          // Se for detached frame, Instagram detectou scraping → ROTACIONAR CONTA
           if (hashtagError.message.includes('detached Frame')) {
             console.log(`\n🚨 DETACHED FRAME DETECTADO - Instagram detectou scraping`);
-            console.log(`   💾 Perfis já salvos no banco: ${foundProfiles.length}`);
-            console.log(`   🛑 ENCERRANDO SESSÃO IMEDIATAMENTE (sem retry)`);
+            console.log(`   💾 Perfis já coletados: ${foundProfiles.length}`);
+            console.log(`   🔄 Chamando handleSessionError() para rotação de conta...`);
 
             // Acumular perfis desta hashtag
             allFoundProfiles.push(...foundProfiles);
 
-            // ENCERRAR LOOP DE HASHTAGS (não processar mais nenhuma)
-            hashtagIndex = hashtagsToScrape.length; // força saída do for loop
-            break; // Sai do while de retry
+            // 🔄 ROTACIONAR CONTA (limpa cookies, registra falha, troca conta)
+            try {
+              const recovered = await handleSessionError(page, 'DETACHED_FRAME: Instagram detected automation');
+
+              if (recovered) {
+                console.log(`✅ Rotação bem-sucedida! Nova conta logada.`);
+                // Recriar contexto com nova conta
+                const newContext = await createIsolatedContext();
+                page = newContext.page;
+                cleanup = newContext.cleanup;
+                // Resetar contadores e tentar novamente a MESMA hashtag com a nova conta
+                resilienceMetrics.consecutiveErrors = 0;
+                retryCount = 0;
+                continue;
+              } else {
+                // Rotação falhou - encerrar loop
+                console.log(`❌ Não foi possível rotacionar - encerrando`);
+                hashtagIndex = hashtagsToScrape.length;
+                break;
+              }
+            } catch (rotationError: any) {
+              // Se for GlobalCooldownError, propagar imediatamente
+              if (rotationError.name === 'GlobalCooldownError') {
+                throw rotationError;
+              }
+              // Outros erros de rotação - encerrar
+              console.log(`❌ Erro durante rotação: ${rotationError.message}`);
+              hashtagIndex = hashtagsToScrape.length;
+              break;
+            }
           }
 
           // 🆕 SESSION_INVALID: Chamar handleSessionError() que faz logout + cleanup + rotação + login

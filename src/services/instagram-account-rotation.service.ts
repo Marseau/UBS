@@ -288,11 +288,63 @@ class InstagramAccountRotation {
     console.log(`   Conta atual: ${currentAccount.username}`);
     console.log(`   Falhas: ${currentAccount.failureCount}`);
 
-    // Marcar conta atual como bloqueada
+    // Marcar conta atual como bloqueada temporariamente
     currentAccount.isBlocked = true;
 
-    // Ir para próxima conta
+    // Calcular próxima conta
     const nextIndex = (this.state.currentAccountIndex + 1) % this.accounts.length;
+    const nextAccount = this.accounts[nextIndex];
+
+    if (!nextAccount) {
+      throw new Error(`Nenhuma conta encontrada no índice ${nextIndex}`);
+    }
+
+    // ✅ VERIFICAR SE PRÓXIMA CONTA ESFRIOU (ANTES de incrementar ciclos)
+    const elapsedMs = Date.now() - nextAccount.lastFailureTime;
+    const hasCooledDown = elapsedMs >= ACCOUNT_COOLDOWN_MS || nextAccount.failureCount === 0;
+    const cooledMinutes = Math.floor(elapsedMs / 60000);
+
+    console.log(`\n🔍 Verificando próxima conta: ${nextAccount.username}`);
+    console.log(`   Falhas anteriores: ${nextAccount.failureCount}`);
+    if (nextAccount.failureCount > 0) {
+      console.log(`   Tempo desde última falha: ${cooledMinutes} minutos`);
+      console.log(`   Cooldown necessário: ${ACCOUNT_COOLDOWN_MS / 60000} minutos (2h)`);
+      console.log(`   Status: ${hasCooledDown ? '✅ ESFRIOU - Pode usar' : '⏳ Ainda aquecida'}`);
+    }
+
+    // ✅ SE CONTA ESFRIOU: Permite rotação SEM incrementar ciclos
+    if (hasCooledDown && !forceRotation) {
+      console.log(`\n✅ ========== ROTAÇÃO COM CONTA ESFRIADA ==========`);
+      console.log(`   Próxima conta esfriou completamente!`);
+      console.log(`   Resetando status de bloqueio e contadores`);
+      console.log(`   NÃO incrementando ciclos (recuperação natural)`);
+      console.log(`===================================================\n`);
+
+      // Resetar status da próxima conta (ela esfriou)
+      nextAccount.isBlocked = false;
+      nextAccount.failureCount = 0;
+      nextAccount.lastFailureTime = 0;
+
+      // NÃO incrementar cyclesCompleted - recuperação natural
+      this.state.currentAccountIndex = nextIndex;
+      this.state.lastRotationTime = Date.now();
+      this.saveState();
+
+      console.log(`   ✅ Rotacionado para: ${nextAccount.username} (conta recuperada)`);
+      console.log(`   ⏰ Delay: 1min (apenas login)`);
+      console.log(`=========================================\n`);
+
+      return {
+        success: true,
+        message: `Rotacionado para ${nextAccount.username} (conta esfriou após ${cooledMinutes}min)`,
+        newAccount: nextAccount.username,
+        requiresWait: true,
+        waitMinutes: 1
+      };
+    }
+
+    // ❌ PRÓXIMA CONTA AINDA ESTÁ QUENTE: Incrementar ciclos
+    console.log(`\n⚠️  Próxima conta ainda não esfriou completamente`);
 
     // Se voltou para primeira conta, incrementa ciclo
     if (nextIndex === 0) {
@@ -304,24 +356,23 @@ class InstagramAccountRotation {
     if (!forceRotation && this.state.cyclesCompleted >= MAX_ROTATION_CYCLES) {
       console.log(`\n❌ ============================================`);
       console.log(`❌ LIMITE DE CICLOS ATINGIDO (${MAX_ROTATION_CYCLES})`);
-      console.log(`❌ Todas as contas falharam múltiplas vezes`);
+      console.log(`❌ Ambas as contas estão quentes simultaneamente`);
       console.log(`❌ ============================================`);
       console.log(`\n💡 Ações recomendadas:`);
-      console.log(`   1. Aguardar 2-4 horas antes de tentar novamente`);
+      console.log(`   1. Aguardar 4 horas para cooldown global expirar`);
       console.log(`   2. Verificar ambas as contas no Instagram`);
-      console.log(`   3. Considerar adicionar mais contas`);
-      console.log(`   4. Reduzir frequência de scraping\n`);
+      console.log(`   3. Sistema rotacionará automaticamente após cooldown\n`);
 
-      // Ativar cooldown global de 2 horas
+      // Ativar cooldown global de 4 horas
       this.state.globalCooldownUntil = Date.now() + GLOBAL_COOLDOWN_MS;
       this.saveState();
 
       return {
         success: false,
-        message: 'Limite de ciclos atingido - cooldown global de 2h ativado',
+        message: 'Ambas as contas quentes - cooldown global de 4h ativado',
         newAccount: currentAccount.username,
         requiresWait: true,
-        waitMinutes: 120
+        waitMinutes: 240
       };
     }
 
@@ -332,13 +383,13 @@ class InstagramAccountRotation {
       this.state.cyclesCompleted = 0; // Reset para permitir nova tentativa
     }
 
+    // Rotacionar mesmo com conta quente (aguardará cooldown restante)
     this.state.currentAccountIndex = nextIndex;
     this.state.lastRotationTime = Date.now();
     this.saveState();
 
-    const nextAccount = this.getCurrentAccount();
-
     // 🎯 DELAY INTELIGENTE com cálculo de tempo RESTANTE de cooldown
+    // (usa elapsedMs já calculado anteriormente)
     const isFreshAccount = nextAccount.failureCount === 0;
     let delayMs: number;
     let delayReason: string;
@@ -349,13 +400,11 @@ class InstagramAccountRotation {
       delayReason = 'conta fresca - apenas login';
     } else {
       // Conta com falhas → calcular tempo RESTANTE de cooldown
-      const elapsedMs = Date.now() - nextAccount.lastFailureTime;
       const remainingCooldownMs = ACCOUNT_COOLDOWN_MS - elapsedMs;
 
       if (remainingCooldownMs <= 0) {
         // Conta já esfriou completamente → apenas tempo de login
         delayMs = 60000; // 1 minuto
-        const cooledMinutes = Math.floor(elapsedMs / 60000);
         delayReason = `já esfriou (${cooledMinutes}min desde última falha)`;
       } else {
         // Ainda precisa esfriar → aguardar tempo RESTANTE

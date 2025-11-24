@@ -69,8 +69,24 @@ export async function createIsolatedContext(): Promise<{
 
   console.log(`📄 Página criada: ${requestId}`);
 
+  // 🔐 AUTENTICAR PROXY (se configurado) - ANTES de qualquer navegação
+  const proxyConfig = (browser as any)._currentProxyConfig;
+  if (proxyConfig?.username && proxyConfig?.password) {
+    await page.authenticate({
+      username: proxyConfig.username,
+      password: proxyConfig.password
+    });
+    console.log(`   🔐 Proxy autenticado: ${proxyConfig.username}@${proxyConfig.host}`);
+  }
+
   // 🕵️ APLICAR STEALTH COMPLETO (fingerprint evasion + challenge detection)
   await applyFullStealth(page);
+
+  // ✅ NAVEGAR PRIMEIRO para instagram.com para aceitar cookies do domínio
+  await page.goto('https://www.instagram.com/', {
+    waitUntil: 'domcontentloaded',
+    timeout: 30000
+  }).catch(() => {});
 
   // Carregar cookies do arquivo (sessionPage foi fechada após login)
   if (fs.existsSync(COOKIES_FILE)) {
