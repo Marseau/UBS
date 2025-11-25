@@ -748,6 +748,16 @@ try {
   console.error("❌ Failed to load Facebook Webhook Verification routes:", error);
 }
 
+// Outreach Routes - Sistema unificado de DM/WhatsApp multi-canal
+try {
+  const outreachRoutes = require('./routes/outreach.routes');
+  const router = 'default' in outreachRoutes ? outreachRoutes.default : outreachRoutes;
+  app.use('/api/outreach', router);
+  console.log('✅ Outreach routes loaded - UNIFIED DM/WHATSAPP SYSTEM READY');
+} catch (error) {
+  console.error("❌ Failed to load Outreach routes:", error);
+}
+
 // Define o caminho para a pasta frontend de forma explícita e segura
 const candidatePaths: string[] = [
   path.join(process.cwd(), 'src', 'frontend'),
