@@ -380,4 +380,161 @@ router.get('/quality-distribution', async (_req, res) => {
   }
 });
 
+/**
+ * POST /api/hashtag-intelligence/cluster-analysis
+ * Analisa força de cluster baseado em intenção do cliente (nicho)
+ *
+ * Body: {
+ *   nicho: string (ex: "social_media", "trafego_pago", "advocacia"),
+ *   keywords: string[] (palavras-chave raiz do nicho),
+ *   min_frequency?: number (frequência mínima para considerar relevante, padrão: 50)
+ * }
+ */
+router.post('/cluster-analysis', async (req, res) => {
+  try {
+    const { nicho, keywords, min_frequency = 50 } = req.body;
+
+    if (!nicho || !keywords || !Array.isArray(keywords) || keywords.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parâmetros inválidos. Forneça: nicho (string) e keywords (array de strings)'
+      });
+    }
+
+    console.log(`\n🎯 [API] Analisando cluster para nicho: ${nicho}`);
+    console.log(`📋 Keywords: ${keywords.join(', ')}`);
+
+    // Buscar todas as hashtags com suas frequências
+    const { data: hashtagsData, error: hashtagError } = await supabase.rpc('execute_sql', {
+      query_text: `
+        WITH hashtag_frequency AS (
+            SELECT
+                hashtag,
+                COUNT(*) as frequency,
+                COUNT(DISTINCT lead_id) as unique_leads,
+                COUNT(*) FILTER (WHERE has_contact) as leads_with_contact
+            FROM (
+                SELECT
+                    hashtag,
+                    id as lead_id,
+                    (email IS NOT NULL OR phone IS NOT NULL) as has_contact
+                FROM instagram_leads, jsonb_array_elements_text(hashtags_bio) as hashtag
+                WHERE hashtags_bio IS NOT NULL
+                UNION ALL
+                SELECT
+                    hashtag,
+                    id as lead_id,
+                    (email IS NOT NULL OR phone IS NOT NULL) as has_contact
+                FROM instagram_leads, jsonb_array_elements_text(hashtags_posts) as hashtag
+                WHERE hashtags_posts IS NOT NULL
+            ) combined
+            WHERE hashtag IS NOT NULL AND hashtag != ''
+            GROUP BY hashtag
+        )
+        SELECT
+            hashtag,
+            frequency,
+            unique_leads,
+            leads_with_contact,
+            ROUND(leads_with_contact::numeric / NULLIF(unique_leads, 0)::numeric * 100, 1) as contact_rate
+        FROM hashtag_frequency
+        ORDER BY frequency DESC
+      `
+    });
+
+    if (hashtagError) throw hashtagError;
+
+    const allHashtags = hashtagsData || [];
+
+    // Filtrar hashtags relacionadas ao nicho (contém alguma keyword)
+    const relatedHashtags = allHashtags.filter((h: any) => {
+      const tag = h.hashtag.toLowerCase();
+      return keywords.some(kw => tag.includes(kw.toLowerCase()));
+    });
+
+    // Classificar hashtags por relevância (frequência)
+    const hashtagsRaiz = relatedHashtags.filter((h: any) => h.frequency >= 70);
+    const hashtagsRelevantes = relatedHashtags.filter((h: any) => h.frequency >= min_frequency);
+    const hashtagsTotal = relatedHashtags.length;
+
+    // Estimar total de perfis potenciais
+    const estimatedProfiles = relatedHashtags.reduce((sum: number, h: any) => sum + (h.unique_leads || 0), 0);
+
+    // Regras de Classificação AIC
+    let clusterStatus: 'forte' | 'medio' | 'fraco' | 'inexistente';
+    let necessidadeScrap = false;
+    let recomendacao = '';
+    let hashtagsNecessarias = 0;
+
+    if (hashtagsRaiz.length >= 10 && hashtagsTotal >= 100) {
+      clusterStatus = 'forte';
+      recomendacao = 'Cluster pronto para montar persona, DM e copy.';
+    } else if (hashtagsRaiz.length >= 5 && hashtagsRaiz.length <= 9 && hashtagsTotal >= 50) {
+      clusterStatus = 'medio';
+      necessidadeScrap = true;
+      hashtagsNecessarias = 100 - hashtagsTotal;
+      recomendacao = `Aprovado, mas recomenda scrap adicional de ${hashtagsNecessarias} hashtags para fortalecer cluster.`;
+    } else if (hashtagsRaiz.length >= 2 && hashtagsRaiz.length <= 4 && hashtagsTotal < 50) {
+      clusterStatus = 'fraco';
+      necessidadeScrap = true;
+      hashtagsNecessarias = 50 - hashtagsTotal;
+      recomendacao = `Necessário scrap de + ${hashtagsNecessarias} hashtags para viabilizar campanha.`;
+    } else {
+      clusterStatus = 'inexistente';
+      necessidadeScrap = true;
+      // Sugerir hashtags similares para scrap
+      const suggestedHashtags = keywords.flatMap(kw => [`#${kw}`, `#${kw}brasil`, `#${kw}digital`]).slice(0, 5);
+      recomendacao = `Impossível gerar cluster. Necessário scrap direcionado: ${suggestedHashtags.join(', ')}`;
+    }
+
+    // Verificar suficiência para campanha (2.000 DMs)
+    const suficienteParaCampanha =
+      hashtagsRelevantes.length >= 300 &&
+      hashtagsRaiz.length >= 3 &&
+      estimatedProfiles >= 1000;
+
+    // Preparar resposta
+    const response = {
+      cluster: nicho,
+      status: clusterStatus,
+      hashtags_encontradas: hashtagsTotal,
+      hashtags_raiz: hashtagsRaiz.slice(0, 10).map((h: any) => ({
+        hashtag: h.hashtag,
+        freq: h.frequency,
+        unique_leads: h.unique_leads,
+        contact_rate: h.contact_rate || 0
+      })),
+      hashtags_relevantes: hashtagsRelevantes.length,
+      perfis_estimados: estimatedProfiles,
+      necessidade_scrap: necessidadeScrap,
+      hashtags_necessarias: hashtagsNecessarias,
+      recomendacao,
+      suficiente_para_campanha: suficienteParaCampanha,
+      metricas: {
+        total_hashtags_nicho: hashtagsTotal,
+        hashtags_freq_70_plus: hashtagsRaiz.length,
+        hashtags_freq_50_plus: hashtagsRelevantes.length,
+        perfis_unicos: estimatedProfiles,
+        taxa_contato_media: hashtagsRelevantes.length > 0
+          ? Math.round(hashtagsRelevantes.reduce((sum: number, h: any) => sum + (h.contact_rate || 0), 0) / hashtagsRelevantes.length)
+          : 0
+      },
+      pode_gerar_persona: clusterStatus === 'forte' || clusterStatus === 'medio',
+      pode_gerar_dm: clusterStatus === 'forte',
+      pode_gerar_copy: clusterStatus === 'forte'
+    };
+
+    return res.json({
+      success: true,
+      data: response
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /cluster-analysis:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 export default router;

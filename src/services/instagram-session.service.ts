@@ -255,23 +255,53 @@ async function performAutoLogin(page: Page): Promise<boolean> {
       timeout: 120000
     }).catch(() => {});
 
-    await page.waitForSelector('input[name="username"]', { timeout: 20000 });
-    await page.waitForSelector('input[name="password"]', { timeout: 20000 });
+    // ⚠️ Instagram agora usa seletores dinâmicos - usar múltiplas estratégias
+    const usernameSelector = 'input[type="text"], input[name="username"], input[autocomplete="username"]';
+    const passwordSelector = 'input[type="password"], input[name="password"], input[autocomplete="current-password"]';
 
-    await page.evaluate(() => {
-      const userInput = document.querySelector<HTMLInputElement>('input[name="username"]');
-      const passInput = document.querySelector<HTMLInputElement>('input[name="password"]');
+    await page.waitForSelector(usernameSelector, { timeout: 20000 });
+    await page.waitForSelector(passwordSelector, { timeout: 20000 });
+
+    await page.evaluate((userSel: string, passSel: string) => {
+      const userInput = document.querySelector<HTMLInputElement>(userSel);
+      const passInput = document.querySelector<HTMLInputElement>(passSel);
       if (userInput) userInput.value = '';
       if (passInput) passInput.value = '';
-    });
+    }, usernameSelector, passwordSelector);
 
     // 🕵️ STEALTH: Usa waitHuman() e typeHuman() para parecer humano
     await waitHuman(400, 600);
-    await typeHuman(page, 'input[name="username"]', username);
-    await typeHuman(page, 'input[name="password"]', password);
+    await typeHuman(page, usernameSelector, username);
+    await typeHuman(page, passwordSelector, password);
 
-    const submitSelector = 'button[type="submit"]';
-    await page.click(submitSelector).catch(() => {});
+    // ⚠️ Botão agora é div com texto "Log in" - usar múltiplas estratégias
+    await waitHuman(500, 800);
+    const clicked = await page.evaluate(() => {
+      // Tentar encontrar botão por texto "Log in"
+      const buttons = Array.from(document.querySelectorAll('button, div[role="button"]'));
+      const loginBtn = buttons.find(btn =>
+        btn.textContent?.trim().toLowerCase() === 'log in'
+      ) as HTMLElement;
+
+      if (loginBtn) {
+        loginBtn.click();
+        return true;
+      }
+
+      // Fallback: tentar button[type="submit"]
+      const submitBtn = document.querySelector('button[type="submit"]') as HTMLElement;
+      if (submitBtn) {
+        submitBtn.click();
+        return true;
+      }
+
+      return false;
+    });
+
+    if (!clicked) {
+      console.log('⚠️  Botão de login não encontrado - tentando Enter');
+      await page.keyboard.press('Enter');
+    }
 
     const deadline = Date.now() + 60000;
     while (Date.now() < deadline) {
@@ -419,17 +449,13 @@ export async function ensureLoggedSession(): Promise<void> {
         console.warn(`   Email da conta: ${expectedUsername}`);
         console.warn(`   Username Instagram: ${loggedUsername}`);
 
-        // Tentar encontrar a conta correta no array de contas
-        const accounts = rotation['accounts'];
-        const correctIndex = accounts.findIndex((acc: any) => {
-          const accUsername = acc.username.split('@')[0].toLowerCase();
-          // Aceitar se username do Instagram inclui parte do email, ou vice-versa
-          return accUsername === loggedNormalized ||
-                 loggedNormalized.includes(accUsername) ||
-                 accUsername.includes(loggedNormalized);
-        });
+        // 🎯 FIX: Usar método correto para buscar por Instagram username
+        const correctIndex = rotation.findAccountByInstagramUsername(loggedUsername);
 
         if (correctIndex !== -1) {
+          const foundAccount = rotation['accounts'][correctIndex];
+          console.log(`   ✅ Conta identificada: ${foundAccount.username} (@${foundAccount.instagramUsername || 'N/A'})`);
+
           if (correctIndex !== rotation['state'].currentAccountIndex) {
             console.log(`   🔄 Atualizando rotação: index ${rotation['state'].currentAccountIndex} → ${correctIndex}`);
             rotation['state'].currentAccountIndex = correctIndex;
@@ -438,7 +464,8 @@ export async function ensureLoggedSession(): Promise<void> {
           console.log(`   ✅ Sessão válida - username Instagram difere do email (normal)`);
         } else {
           // Username Instagram não corresponde a nenhuma conta conhecida
-          console.warn(`   ⚠️  Username ${loggedUsername} não corresponde a nenhuma conta configurada`);
+          console.warn(`   ⚠️  Username Instagram "${loggedUsername}" não mapeado em nenhuma conta`);
+          console.warn(`   ℹ️  Configure INSTAGRAM_UNOFFICIAL_USERNAME_HANDLE ou INSTAGRAM_UNOFFICIAL2_USERNAME_HANDLE no .env`);
           console.warn(`   ⚠️  Continuando pois sessão está válida (cookies OK)`);
           // NÃO fazer logout - se a sessão está válida, usar ela
         }
@@ -446,15 +473,17 @@ export async function ensureLoggedSession(): Promise<void> {
         console.log(`   ✅ Conta logada corresponde à esperada`);
       }
     } else {
-      // ⚠️ TEMPORÁRIO: Permitir continuar mesmo sem detectar username
-      // Usar username da conta ativa do sistema de rotação
+      // ⚠️ NÃO foi possível detectar username
       const rotation = getAccountRotation();
       const currentAccount = rotation.getCurrentAccount();
-      loggedUsername = currentAccount.username;
 
       console.warn('⚠️  Não foi possível detectar username do DOM/cookies');
-      console.warn(`   Usando username da rotação: ${loggedUsername}`);
-      console.warn('   O scraping continuará normalmente');
+      console.warn(`   Conta esperada: ${currentAccount.username} (@${currentAccount.instagramUsername || 'N/A'})`);
+      console.warn(`   ⚠️  IMPORTANTE: Sem detecção, não podemos garantir qual conta está logada!`);
+      console.warn('   O scraping continuará assumindo conta do estado, mas pode estar incorreto');
+
+      // NÃO atribuir email ao loggedUsername - deixar null para indicar falha de detecção
+      loggedUsername = null;
     }
 
     // ⚠️ IMPORTANTE: Fechar sessionPage após login para reduzir abas abertas

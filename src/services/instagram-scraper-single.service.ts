@@ -1121,20 +1121,24 @@ async function handleSessionError(page: Page, errorType: string): Promise<boolea
 
   // Se temos actualLoggedUser, sincronizar o índice
   if (actualLoggedUser) {
-    const actualAccountIndex = rotation['accounts'].findIndex((acc: any) =>
-      acc.username.toLowerCase().includes(actualLoggedUser!.toLowerCase()) ||
-      actualLoggedUser!.toLowerCase().includes(acc.username.toLowerCase().split('@')[0])
-    );
+    // 🎯 FIX: Usar método correto para buscar por Instagram username
+    const actualAccountIndex = rotation.findAccountByInstagramUsername(actualLoggedUser);
 
-    if (actualAccountIndex !== -1 && actualAccountIndex !== rotation.state.currentAccountIndex) {
-      console.log(`   ⚠️  DESSINCRONIA DETECTADA!`);
-      console.log(`   🔄 Corrigindo: index ${rotation.state.currentAccountIndex} → ${actualAccountIndex}`);
-      rotation.state.currentAccountIndex = actualAccountIndex;
-      console.log(`   ✅ Sincronização completa - conta correta identificada!`);
-    } else if (actualAccountIndex !== -1) {
-      console.log(`   ✅ Estado sincronizado corretamente`);
+    if (actualAccountIndex !== -1) {
+      const foundAccount = rotation['accounts'][actualAccountIndex];
+      console.log(`   ✅ Conta identificada: ${foundAccount.username} (@${foundAccount.instagramUsername || 'N/A'})`);
+
+      if (actualAccountIndex !== rotation.state.currentAccountIndex) {
+        console.log(`   ⚠️  DESSINCRONIA DETECTADA!`);
+        console.log(`   🔄 Corrigindo: index ${rotation.state.currentAccountIndex} → ${actualAccountIndex}`);
+        rotation.state.currentAccountIndex = actualAccountIndex;
+        console.log(`   ✅ Sincronização completa - conta correta identificada!`);
+      } else {
+        console.log(`   ✅ Estado sincronizado corretamente`);
+      }
     } else {
-      console.log(`   ⚠️  Não foi possível identificar conta no array`);
+      console.log(`   ⚠️  Username Instagram "${actualLoggedUser}" não mapeado em nenhuma conta`);
+      console.log(`   ℹ️  Configure INSTAGRAM_UNOFFICIAL_USERNAME_HANDLE ou INSTAGRAM_UNOFFICIAL2_USERNAME_HANDLE no .env`);
     }
   } else {
     console.log(`   ⚠️  Não foi possível determinar usuário logado - usando conta do estado`);

@@ -13,9 +13,11 @@
 
 import fs from 'fs';
 import path from 'path';
+import { createClient } from '@supabase/supabase-js';
 
 interface AccountConfig {
-  username: string;
+  username: string;                  // Email para login
+  instagramUsername?: string;        // Username público do Instagram (@marciofranco2)
   password: string;
   cookiesFile: string;
   failureCount: number;
@@ -25,6 +27,7 @@ interface AccountConfig {
 
 interface AccountState {
   username: string;
+  instagramUsername?: string;        // Username público do Instagram
   failureCount: number;
   lastFailureTime: number;
   isBlocked: boolean;
@@ -46,6 +49,12 @@ const ACCOUNT_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 horas (conta com falhas rec
 const GLOBAL_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 horas (ambas falharam)
 const MAX_ROTATION_CYCLES = 2;
 
+// Supabase client para audit logging
+const supabase = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
+
 class InstagramAccountRotation {
   private accounts: AccountConfig[] = [];
   private state: RotationState;
@@ -65,7 +74,9 @@ class InstagramAccountRotation {
 
   private initializeAccounts(): void {
     const account1Username = process.env.INSTAGRAM_UNOFFICIAL_USERNAME || process.env.INSTAGRAM_USERNAME;
+    const account1InstagramHandle = process.env.INSTAGRAM_UNOFFICIAL_USERNAME_HANDLE;
     const account2Username = process.env.INSTAGRAM_UNOFFICIAL2_USERNAME;
+    const account2InstagramHandle = process.env.INSTAGRAM_UNOFFICIAL2_USERNAME_HANDLE;
     const password = process.env.INSTAGRAM_UNOFFICIAL_PASSWORD || process.env.INSTAGRAM_PASSWORD;
 
     if (!account1Username || !password) {
@@ -75,6 +86,7 @@ class InstagramAccountRotation {
     // Conta 1
     this.accounts.push({
       username: account1Username,
+      instagramUsername: account1InstagramHandle,
       password: password,
       cookiesFile: path.join(COOKIES_DIR, 'instagram-cookies-account1.json'),
       failureCount: 0,
@@ -82,10 +94,13 @@ class InstagramAccountRotation {
       isBlocked: false
     });
 
+    console.log(`📧 Conta 1: ${account1Username} → Instagram: @${account1InstagramHandle || 'não configurado'}`);
+
     // Conta 2 (se configurada)
     if (account2Username) {
       this.accounts.push({
         username: account2Username,
+        instagramUsername: account2InstagramHandle,
         password: password,
         cookiesFile: path.join(COOKIES_DIR, 'instagram-cookies-account2.json'),
         failureCount: 0,
@@ -93,9 +108,10 @@ class InstagramAccountRotation {
         isBlocked: false
       });
 
+      console.log(`📧 Conta 2: ${account2Username} → Instagram: @${account2InstagramHandle || 'não configurado'}`);
       console.log(`🔄 Sistema de rotação ativado: ${this.accounts.length} contas`);
     } else {
-      console.log(`⚠️ Apenas 1 conta configurada - rotação desabilitada`);
+      console.log(`⚠️  Apenas 1 conta configurada - rotação desabilitada`);
     }
   }
 
@@ -140,6 +156,7 @@ class InstagramAccountRotation {
       // 💾 SALVAR estado das contas (failureCount, lastFailureTime) para persistir entre restarts
       this.state.accounts = this.accounts.map(acc => ({
         username: acc.username,
+        instagramUsername: acc.instagramUsername,
         failureCount: acc.failureCount,
         lastFailureTime: acc.lastFailureTime,
         isBlocked: acc.isBlocked
@@ -163,6 +180,53 @@ class InstagramAccountRotation {
   }
 
   /**
+   * Encontra conta pelo Instagram username
+   * @param instagramUsername - Username do Instagram (ex: "marciofranco2")
+   * @returns Índice da conta ou -1 se não encontrado
+   */
+  findAccountByInstagramUsername(instagramUsername: string): number {
+    if (!instagramUsername) return -1;
+
+    const normalized = instagramUsername.toLowerCase().replace('@', '');
+
+    return this.accounts.findIndex(acc => {
+      if (!acc.instagramUsername) return false;
+      const accNormalized = acc.instagramUsername.toLowerCase().replace('@', '');
+      return accNormalized === normalized;
+    });
+  }
+
+  /**
+   * Registra evento de rotação no banco de dados
+   * @private
+   */
+  private async logRotationEvent(
+    account: AccountConfig,
+    eventType: string,
+    errorType?: string,
+    errorMessage?: string
+  ): Promise<void> {
+    try {
+      const cooldownUntil = account.lastFailureTime
+        ? new Date(account.lastFailureTime + ACCOUNT_COOLDOWN_MS).toISOString()
+        : null;
+
+      await supabase.rpc('log_account_rotation_event', {
+        p_account_email: account.username,
+        p_account_username: account.instagramUsername || '',
+        p_event_type: eventType,
+        p_failure_count: account.failureCount,
+        p_error_type: errorType || null,
+        p_error_message: errorMessage || null,
+        p_cooldown_until: cooldownUntil
+      });
+    } catch (error: any) {
+      // Não falhar se logging falhar - apenas avisar
+      console.warn(`⚠️  Erro ao registrar evento no audit: ${error.message}`);
+    }
+  }
+
+  /**
    * Verifica se está em cooldown global
    */
   isInGlobalCooldown(): boolean {
@@ -180,23 +244,41 @@ class InstagramAccountRotation {
   /**
    * Registra falha na conta atual
    */
-  recordFailure(): void {
+  async recordFailure(errorType?: string, errorMessage?: string): Promise<void> {
     const account = this.getCurrentAccount();
     account.failureCount++;
     account.lastFailureTime = Date.now();
 
     console.log(`❌ Falha registrada para ${account.username} (${account.failureCount} falhas)`);
+
+    // Registrar no banco de dados
+    await this.logRotationEvent(account, 'failure_registered', errorType, errorMessage);
+
+    // Se atingiu 3 falhas, registrar início de cooldown
+    if (account.failureCount >= 3) {
+      await this.logRotationEvent(account, 'cooldown_started', errorType, 'Conta atingiu 3 falhas');
+    }
   }
 
   /**
    * Registra sucesso na conta atual (reseta contadores)
    */
-  recordSuccess(): void {
+  async recordSuccess(): Promise<void> {
     const account = this.getCurrentAccount();
+    const wasInCooldown = account.failureCount >= 3;
+
     account.failureCount = 0;
     account.isBlocked = false;
 
     console.log(`✅ Sucesso registrado para ${account.username} (contadores resetados)`);
+
+    // Registrar fim de cooldown se estava em cooldown
+    if (wasInCooldown) {
+      await this.logRotationEvent(account, 'cooldown_ended', undefined, 'Conta recuperada com sucesso');
+    }
+
+    // Registrar sessão recuperada
+    await this.logRotationEvent(account, 'session_recovered');
   }
 
   /**
@@ -387,6 +469,10 @@ class InstagramAccountRotation {
     this.state.currentAccountIndex = nextIndex;
     this.state.lastRotationTime = Date.now();
     this.saveState();
+
+    // Registrar rotação no banco de dados
+    await this.logRotationEvent(currentAccount, 'rotation_completed', undefined, `Rotacionado de ${currentAccount.username} para ${nextAccount.username}`);
+    await this.logRotationEvent(nextAccount, 'rotation_started');
 
     // 🎯 DELAY INTELIGENTE com cálculo de tempo RESTANTE de cooldown
     // (usa elapsedMs já calculado anteriormente)

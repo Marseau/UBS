@@ -271,8 +271,10 @@ export async function detectInstagramChallenge(page: Page): Promise<{
     }
 
     // Challenge 5: Página em branco (anti-bot)
+    // ⚠️ IMPORTANTE: Só considerar BLANK_PAGE se já navegou para o Instagram
     const bodyText = await page.evaluate(() => document.body.textContent?.trim());
-    if (!bodyText || bodyText.length < 100) {
+    const isInstagramUrl = url.includes('instagram.com');
+    if (isInstagramUrl && (!bodyText || bodyText.length < 100)) {
       return {
         hasChallenge: true,
         type: 'BLANK_PAGE',
