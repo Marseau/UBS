@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 Cluster Intention Dashboard - AIC</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+            margin-bottom: 20px;
+        }
+
+        .input-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            margin-top: 20px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 1em;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.2s;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .keywords-input {
+            min-height: 80px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .input-hint {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .suggestions {
+            margin-top: 15px;
+        }
+
+        .suggestions-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .suggestion-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .suggestion-pill {
+            background: white;
+            border: 2px solid #667eea;
+            color: #667eea;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .suggestion-pill:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 30px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 20px;
+            width: 100%;
+            font-weight: 600;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: white;
+            font-size: 1.2em;
+        }
+
+        .results {
+            display: none;
+        }
+
+        .results.show {
+            display: block;
+        }
+
+        .status-card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 1.5em;
+            font-weight: bold;
+            margin: 20px 0;
+            text-transform: uppercase;
+        }
+
+        .status-forte {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+
+        .status-medio {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+        }
+
+        .status-fraco {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+        }
+
+        .status-inexistente {
+            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+            color: white;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+        }
+
+        .metric-label {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-value {
+            color: #667eea;
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .metric-sub {
+            color: #999;
+            font-size: 0.85em;
+        }
+
+        .hashtags-section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .hashtags-section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .hashtags-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .hashtag-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .hashtag-item:hover {
+            background: #e0e7ff;
+            transform: translateX(5px);
+        }
+
+        .hashtag-name {
+            font-weight: 600;
+            color: #667eea;
+            font-size: 1.1em;
+        }
+
+        .hashtag-stats {
+            text-align: right;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .recommendation-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin: 30px 0;
+            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+        }
+
+        .recommendation-box h2 {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .recommendation-box p {
+            font-size: 1.2em;
+            line-height: 1.6;
+        }
+
+        .flags-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .flag-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+        }
+
+        .flag-icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .flag-label {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .flag-yes {
+            border: 3px solid #10b981;
+        }
+
+        .flag-no {
+            border: 3px solid #ef4444;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 768px) {
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .flags-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hashtags-list {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Análise de Clusters AIC</h1>
+            <p>Análise de Intenção do Cliente - Sistema de Decisão para Campanhas</p>
+
+            <div class="input-section">
+                <!-- Informações do Cliente/Projeto -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div class="input-group">
+                        <label class="input-label" for="clientNameInput">👤 Nome do Cliente</label>
+                        <input
+                            type="text"
+                            id="clientNameInput"
+                            class="input-field"
+                            placeholder="Ex: Dr. João Silva"
+                        >
+                    </div>
+
+                    <div class="input-group">
+                        <label class="input-label" for="projectNameInput">📁 Nome do Projeto</label>
+                        <input
+                            type="text"
+                            id="projectNameInput"
+                            class="input-field"
+                            placeholder="Ex: Campanha Q1 2025"
+                        >
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label class="input-label" for="campaignNameInput">🎯 Nome da Campanha</label>
+                    <input
+                        type="text"
+                        id="campaignNameInput"
+                        class="input-field"
+                        placeholder="Ex: Clareamento Dental - Verão 2025"
+                    >
+                </div>
+
+                <!-- Nichos -->
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px;">
+                    <div class="input-group">
+                        <label class="input-label" for="nichoInput">🎯 Nicho Alvo Principal *</label>
+                        <input
+                            type="text"
+                            id="nichoInput"
+                            class="input-field"
+                            placeholder="Ex: Dentista, Arquiteto, Coach, Personal Trainer..."
+                        >
+                    </div>
+
+                    <div class="input-group">
+                        <label class="input-label" for="nichoSecundarioInput">📌 Nicho Secundário</label>
+                        <input
+                            type="text"
+                            id="nichoSecundarioInput"
+                            class="input-field"
+                            placeholder="Ex: Estética"
+                        >
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label class="input-label" for="keywordsInput">🔑 Keywords (separadas por vírgula) *</label>
+                    <textarea
+                        id="keywordsInput"
+                        class="input-field keywords-input"
+                        placeholder="Ex: dentista, odontologia, implante, clareamento, ortodontia"
+                    ></textarea>
+                </div>
+
+                <div class="input-group">
+                    <label class="input-label" for="serviceInput">💼 Descrição do Serviço/Produto</label>
+                    <textarea
+                        id="serviceInput"
+                        class="input-field keywords-input"
+                        placeholder="Ex: Clareamento dental a laser com tecnologia de última geração, resultados em 1 sessão..."
+                    ></textarea>
+                </div>
+
+                <div class="input-group">
+                    <label class="input-label" for="audienceInput">👥 Público Desejado</label>
+                    <textarea
+                        id="audienceInput"
+                        class="input-field keywords-input"
+                        placeholder="Ex: Mulheres 25-40 anos, classe A/B, interessadas em estética e bem-estar..."
+                    ></textarea>
+                </div>
+
+                <div class="suggestions">
+                    <div class="suggestions-label">💡 Ou selecione um nicho pré-definido:</div>
+                    <div class="suggestion-pills" id="suggestionPills">
+                        <!-- Sugestões serão inseridas via JavaScript -->
+                    </div>
+                </div>
+
+                <button class="btn" id="analyzeBtn" onclick="analyzeCluster()">
+                    🔍 Analisar Cluster
+                </button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <p>⏳ Analisando cluster...</p>
+        </div>
+
+        <div id="results" class="results">
+            <!-- Status Card -->
+            <div class="status-card">
+                <h2>Status do Cluster</h2>
+                <div id="statusBadge" class="status-badge"></div>
+                <h3 id="clusterName" style="color: #667eea; margin: 20px 0;"></h3>
+            </div>
+
+            <!-- Recommendation Box -->
+            <div class="recommendation-box">
+                <h2>💡 Recomendação</h2>
+                <p id="recommendation"></p>
+            </div>
+
+            <!-- Metrics Grid -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Hashtags Encontradas</div>
+                    <div class="metric-value" id="hashtagsEncontradas">0</div>
+                    <div class="metric-sub">Total no nicho</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Hashtags Raiz</div>
+                    <div class="metric-value" id="hashtagsRaiz">0</div>
+                    <div class="metric-sub">Freq ≥ 70</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Perfis Estimados</div>
+                    <div class="metric-value" id="perfisEstimados">0</div>
+                    <div class="metric-sub">Alcance potencial</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Taxa de Contato</div>
+                    <div class="metric-value" id="taxaContato">0%</div>
+                    <div class="metric-sub">Média do cluster</div>
+                </div>
+            </div>
+
+            <!-- Flags -->
+            <div class="flags-grid">
+                <div class="flag-card" id="flagPersona">
+                    <div class="flag-icon">👤</div>
+                    <div class="flag-label">Gerar Persona</div>
+                </div>
+                <div class="flag-card" id="flagDM">
+                    <div class="flag-icon">✉️</div>
+                    <div class="flag-label">Gerar DM</div>
+                </div>
+                <div class="flag-card" id="flagCopy">
+                    <div class="flag-icon">📝</div>
+                    <div class="flag-label">Gerar Copy</div>
+                </div>
+            </div>
+
+            <!-- Hashtags Raiz -->
+            <div class="hashtags-section">
+                <h2>🏆 Top 10 Hashtags Raiz</h2>
+                <div class="hashtags-list" id="hashtagsRaizList">
+                    <!-- Será preenchido via JavaScript -->
+                </div>
+            </div>
+
+            <!-- Scrap Recommendation -->
+            <div id="scrapSection" style="display: none;">
+                <div class="hashtags-section">
+                    <h2>🔍 Necessidade de Scrap</h2>
+                    <p style="font-size: 1.2em; margin: 20px 0;">
+                        <strong id="scrapQuantity"></strong> hashtags adicionais necessárias
+                    </p>
+                    <p style="color: #666;">
+                        Recomenda-se realizar scraping direcionado para fortalecer o cluster.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin + '/api/hashtag-intelligence';
+
+        // Definição de nichos disponíveis
+        const NICHOS = {
+            social_media: {
+                name: 'Social Media',
+                icon: '📱',
+                keywords: ['marketingdigital', 'socialmedia', 'conteudo', 'branding', 'estrategia', 'copywriting']
+            },
+            trafego_pago: {
+                name: 'Tráfego Pago',
+                icon: '🎯',
+                keywords: ['trafego', 'tráfego', 'ads', 'metaads', 'facebookads', 'googleads', 'leads', 'conversao']
+            },
+            advocacia: {
+                name: 'Advocacia',
+                icon: '⚖️',
+                keywords: ['advocacia', 'advogado', 'direito', 'juridico', 'lei', 'justica']
+            },
+            contabilidade: {
+                name: 'Contabilidade',
+                icon: '💼',
+                keywords: ['contabilidade', 'contador', 'contabil', 'tributario', 'fiscal', 'impostos']
+            },
+            psicologia: {
+                name: 'Psicologia',
+                icon: '🧠',
+                keywords: ['psicologia', 'psicologo', 'terapia', 'mental', 'emocional', 'autoconhecimento']
+            },
+            fitness: {
+                name: 'Fitness',
+                icon: '💪',
+                keywords: ['fitness', 'academia', 'treino', 'musculacao', 'emagrecimento', 'saude']
+            },
+            estetica: {
+                name: 'Estética',
+                icon: '💅',
+                keywords: ['estetica', 'beleza', 'skincare', 'manicure', 'micropigmentacao', 'sobrancelhas']
+            },
+            nutricao: {
+                name: 'Nutrição',
+                icon: '🥗',
+                keywords: ['nutricao', 'nutricionista', 'dieta', 'alimentacao', 'emagrecimento', 'saude']
+            }
+        };
+
+        // Renderizar sugestões de nichos
+        function renderSuggestions() {
+            const pills = document.getElementById('suggestionPills');
+            pills.innerHTML = Object.keys(NICHOS).map(key => {
+                const nicho = NICHOS[key];
+                return `
+                    <div class="suggestion-pill" onclick="loadSuggestion('${key}')">
+                        ${nicho.icon} ${nicho.name}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function loadSuggestion(nichoKey) {
+            const nicho = NICHOS[nichoKey];
+            document.getElementById('nichoInput').value = nicho.name;
+            document.getElementById('keywordsInput').value = nicho.keywords.join(', ');
+        }
+
+        async function analyzeCluster() {
+            // Coletar todos os inputs
+            const clientName = document.getElementById('clientNameInput').value.trim();
+            const projectName = document.getElementById('projectNameInput').value.trim();
+            const campaignName = document.getElementById('campaignNameInput').value.trim();
+            const nichoInput = document.getElementById('nichoInput').value.trim();
+            const nichoSecundarioInput = document.getElementById('nichoSecundarioInput').value.trim();
+            const keywordsInput = document.getElementById('keywordsInput').value.trim();
+            const serviceInput = document.getElementById('serviceInput').value.trim();
+            const audienceInput = document.getElementById('audienceInput').value.trim();
+
+            // Validações obrigatórias
+            if (!nichoInput) {
+                alert('Por favor, digite o nicho alvo principal');
+                return;
+            }
+
+            if (!keywordsInput) {
+                alert('Por favor, digite as keywords relacionadas ao nicho');
+                return;
+            }
+
+            // Processar keywords
+            const keywords = keywordsInput.split(',').map(k => k.trim()).filter(k => k.length > 0);
+
+            if (keywords.length === 0) {
+                alert('Por favor, digite pelo menos uma keyword válida');
+                return;
+            }
+
+            // Mostrar loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').classList.remove('show');
+
+            try {
+                // Payload completo
+                const payload = {
+                    nicho: nichoInput,
+                    nicho_secundario: nichoSecundarioInput || null,
+                    keywords: keywords,
+                    service_description: serviceInput || null,
+                    target_audience: audienceInput || null
+                };
+
+                // Se forneceu dados de cliente/projeto, criar campanha no banco primeiro
+                let campaign_id = null;
+                if (clientName && projectName && campaignName) {
+                    console.log('📝 Criando campanha no banco...');
+                    // TODO: Implementar criação de campanha via API
+                    // Por enquanto apenas analisar sem salvar
+                }
+
+                const response = await fetch(`${API_BASE}/cluster-analysis`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                    renderResults(result.data);
+                } else {
+                    throw new Error(result.message || 'Erro desconhecido');
+                }
+            } catch (error) {
+                console.error('Erro ao analisar cluster:', error);
+                alert(`Erro: ${error.message}`);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function renderResults(data) {
+            // Status Badge
+            const statusBadge = document.getElementById('statusBadge');
+            statusBadge.textContent = data.status.toUpperCase();
+            statusBadge.className = `status-badge status-${data.status}`;
+
+            // Cluster Name
+            const nichoIcon = NICHOS[data.cluster]?.icon || '🎯';
+            document.getElementById('clusterName').textContent =
+                `${nichoIcon} ${data.cluster}`;
+
+            // Recommendation
+            document.getElementById('recommendation').textContent = data.recomendacao;
+
+            // Metrics
+            document.getElementById('hashtagsEncontradas').textContent = data.hashtags_encontradas;
+            document.getElementById('hashtagsRaiz').textContent = data.metricas.hashtags_freq_70_plus;
+            document.getElementById('perfisEstimados').textContent = data.perfis_estimados.toLocaleString('pt-BR');
+            document.getElementById('taxaContato').textContent = `${data.metricas.taxa_contato_media}%`;
+
+            // Flags
+            document.getElementById('flagPersona').className =
+                `flag-card ${data.pode_gerar_persona ? 'flag-yes' : 'flag-no'}`;
+            document.getElementById('flagDM').className =
+                `flag-card ${data.pode_gerar_dm ? 'flag-yes' : 'flag-no'}`;
+            document.getElementById('flagCopy').className =
+                `flag-card ${data.pode_gerar_copy ? 'flag-yes' : 'flag-no'}`;
+
+            // Hashtags Raiz
+            const raizList = document.getElementById('hashtagsRaizList');
+            raizList.innerHTML = data.hashtags_raiz.map(h => `
+                <div class="hashtag-item">
+                    <div class="hashtag-name">#${h.hashtag}</div>
+                    <div class="hashtag-stats">
+                        <div>Freq: <strong>${h.freq}</strong></div>
+                        <div>Leads: ${h.unique_leads}</div>
+                        <div>Contato: ${h.contact_rate}%</div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Scrap Section
+            if (data.necessidade_scrap && data.hashtags_necessarias > 0) {
+                document.getElementById('scrapSection').style.display = 'block';
+                document.getElementById('scrapQuantity').textContent =
+                    data.hashtags_necessarias;
+            } else {
+                document.getElementById('scrapSection').style.display = 'none';
+            }
+
+            // Mostrar resultados
+            document.getElementById('results').classList.add('show');
+
+            // Scroll suave para resultados
+            document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Inicializar
+        renderSuggestions();
+    </script>
+</body>
+</html>

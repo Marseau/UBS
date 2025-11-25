@@ -431,7 +431,27 @@
                 <button class="btn" id="populateSearchTermsBtn" onclick="populateSearchTerms()" title="Cria termos de busca a partir dos clusters GPT-4" style="background: #8b5cf6;">
                     <span>🔍</span> Gerar Search Terms
                 </button>
+                <button class="btn" id="syncParquetBtn" onclick="syncVectorStore()" title="Sincroniza PostgreSQL → Parquet → Vector Store" style="background: #06b6d4;">
+                    <span>🔷</span> Sync Vector Store
+                </button>
             </div>
+
+            <!-- Vector Store Status Badge -->
+            <div id="vectorStoreStatus" style="margin-top: 15px; padding: 12px; background: rgba(6, 182, 212, 0.1); border-left: 4px solid #06b6d4; border-radius: 8px; display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.2em;">🔷</span>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; color: #06b6d4; margin-bottom: 4px;">
+                        Vector Store + Busca Semântica AI
+                    </div>
+                    <div id="vectorStoreDetails" style="font-size: 0.85em; color: #666;">
+                        Carregando status...
+                    </div>
+                </div>
+                <div id="vectorStoreBadge" style="padding: 6px 12px; background: #10b981; color: white; border-radius: 6px; font-size: 0.85em; font-weight: 600;">
+                    ATIVO
+                </div>
+            </div>
+
             <div id="lastExecutionInfo" style="margin-top: 10px; font-size: 0.85em; color: rgba(255,255,255,0.8);">
                 Carregando última execução...
             </div>
@@ -998,9 +1018,9 @@
             btn.disabled = true;
             btn.innerHTML = '<span>⏳</span> Executando GPT-4...';
             try {
-                // Timeout de 5 minutos (300000ms)
+                // Timeout de 10 minutos (600000ms) - GPT-4 pode demorar com 5k+ hashtags
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 300000);
+                const timeoutId = setTimeout(() => controller.abort(), 600000);
 
                 const response = await fetch(`${API_BASE}/dynamic-intelligence/execute-full-pipeline`, {
                     method: 'POST',
@@ -1017,7 +1037,7 @@
                 }
             } catch (error) {
                 if (error.name === 'AbortError') {
-                    alert('⏱️ Timeout: Pipeline demorou mais de 5 minutos.\n\nVerifique os logs do servidor ou execute novamente.');
+                    alert('⏱️ Timeout: Pipeline demorou mais de 10 minutos.\n\nVerifique os logs do servidor ou execute novamente.');
                 } else {
                     alert('❌ Erro: ' + error.message);
                 }
@@ -1401,8 +1421,97 @@
             }
         }
 
-        window.addEventListener('load', loadAllData);
+        // ============================================================================
+        // VECTOR STORE FUNCTIONS
+        // ============================================================================
+
+        async function loadVectorStoreStatus() {
+            try {
+                const response = await fetch('/api/hashtag-intelligence/sync/status');
+                const data = await response.json();
+
+                if (data.success) {
+                    const { parquet, vectorStore } = data.data;
+
+                    // Update details
+                    const detailsDiv = document.getElementById('vectorStoreDetails');
+                    const badgeDiv = document.getElementById('vectorStoreBadge');
+
+                    if (parquet.exists && vectorStore.exists) {
+                        const ageText = parquet.ageHours < 1 ? 'Atualizado há minutos' :
+                                       parquet.ageHours < 24 ? `Atualizado há ${parquet.ageHours}h` :
+                                       `Atualizado há ${Math.floor(parquet.ageHours / 24)}d`;
+
+                        detailsDiv.innerHTML = `
+                            📊 ${parquet.rowCount.toLocaleString()} hashtags |
+                            💾 ${(parquet.sizeKB / 1024).toFixed(1)}MB |
+                            🕐 ${ageText}
+                        `;
+
+                        if (parquet.needsUpdate) {
+                            badgeDiv.style.background = '#f59e0b';
+                            badgeDiv.textContent = 'DESATUALIZADO';
+                        } else {
+                            badgeDiv.style.background = '#10b981';
+                            badgeDiv.textContent = 'ATIVO';
+                        }
+                    } else {
+                        detailsDiv.innerHTML = '⚠️ Vector Store não inicializado - Execute Sync';
+                        badgeDiv.style.background = '#ef4444';
+                        badgeDiv.textContent = 'INATIVO';
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao carregar status Vector Store:', error);
+                document.getElementById('vectorStoreDetails').innerHTML = '❌ Erro ao carregar status';
+            }
+        }
+
+        async function syncVectorStore() {
+            if (!confirm('🔷 Sincronização Vector Store\n\nIsso vai:\n1. Exportar todas as hashtags do PostgreSQL para Parquet\n2. Fazer upload para OpenAI Vector Store\n3. Processar embeddings para busca semântica\n\nTempo estimado: 2-5 minutos\n\nDeseja continuar?')) {
+                return;
+            }
+
+            const btn = document.getElementById('syncParquetBtn');
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Sincronizando...';
+
+            try {
+                const response = await fetch('/api/hashtag-intelligence/sync', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    const { parquet, vectorStore } = data.data;
+                    alert(`✅ Sincronização Concluída!\n\n` +
+                          `📊 Hashtags exportadas: ${parquet.totalRecords.toLocaleString()}\n` +
+                          `💾 Tamanho arquivo: ${(parquet.fileSizeKB / 1024).toFixed(1)}MB\n` +
+                          `🔷 Vector Store: ${vectorStore.vectorStoreId}\n` +
+                          `📈 Status: ${vectorStore.status}\n\n` +
+                          `Sistema pronto para análise com busca semântica!`);
+
+                    // Reload status
+                    await loadVectorStoreStatus();
+                } else {
+                    alert('❌ Erro na sincronização:\n\n' + (data.error || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                alert('❌ Erro ao sincronizar:\n\n' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+            }
+        }
+
+        window.addEventListener('load', () => {
+            loadAllData();
+            loadVectorStoreStatus(); // Load Vector Store status on page load
+        });
+
         setInterval(loadAllData, 300000); // Auto-refresh 5 min
+        setInterval(loadVectorStoreStatus, 60000); // Auto-refresh Vector Store status every 1 min
     </script>
 </body>
 </html>

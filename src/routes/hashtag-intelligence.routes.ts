@@ -1,5 +1,6 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
+import { aicEngineService } from '../services/aic-engine.service';
 
 const router = express.Router();
 
@@ -385,24 +386,102 @@ router.get('/quality-distribution', async (_req, res) => {
  * Analisa força de cluster baseado em intenção do cliente (nicho)
  *
  * Body: {
- *   nicho: string (ex: "social_media", "trafego_pago", "advocacia"),
- *   keywords: string[] (palavras-chave raiz do nicho),
- *   min_frequency?: number (frequência mínima para considerar relevante, padrão: 50)
+ *   campaign_id?: UUID (ID da campanha no banco - usa regras customizadas),
+ *   nicho?: string (nicho principal - obrigatório se não houver campaign_id),
+ *   nicho_secundario?: string (nicho secundário opcional),
+ *   keywords?: string[] (palavras-chave raiz do nicho - obrigatório se não houver campaign_id),
+ *   service_description?: string (descrição do serviço/produto),
+ *   target_audience?: string (público desejado),
+ *
+ *   // Regras AIC Customizadas (opcional - override dos defaults)
+ *   rules?: {
+ *     min_freq_raiz?: number (padrão: 70),
+ *     min_hashtags_forte?: number (padrão: 10),
+ *     min_total_forte?: number (padrão: 100),
+ *     min_hashtags_medio_min?: number (padrão: 5),
+ *     min_hashtags_medio_max?: number (padrão: 9),
+ *     min_total_medio?: number (padrão: 50),
+ *     min_hashtags_fraco?: number (padrão: 2),
+ *     max_hashtags_fraco?: number (padrão: 4),
+ *     min_perfis_campanha?: number (padrão: 1000),
+ *     min_hashtags_campanha?: number (padrão: 300),
+ *     min_hashtags_raiz_campanha?: number (padrão: 3)
+ *   }
  * }
  */
 router.post('/cluster-analysis', async (req, res) => {
   try {
-    const { nicho, keywords, min_frequency = 50 } = req.body;
+    const { campaign_id, nicho, nicho_secundario, keywords, service_description, target_audience, rules } = req.body;
 
-    if (!nicho || !keywords || !Array.isArray(keywords) || keywords.length === 0) {
+    let campaignData: any = null;
+    let finalNicho = nicho;
+    let finalNichoSecundario = nicho_secundario;
+    let finalKeywords = keywords;
+    let finalRules: any = {};
+
+    // Se campaign_id foi fornecido, buscar dados da campanha
+    if (campaign_id) {
+      const { data: campaign, error: campaignError } = await supabase
+        .from('cluster_campaigns')
+        .select('*')
+        .eq('id', campaign_id)
+        .single();
+
+      if (campaignError || !campaign) {
+        return res.status(404).json({
+          success: false,
+          message: 'Campanha não encontrada'
+        });
+      }
+
+      campaignData = campaign;
+      finalNicho = campaign.nicho_principal;
+      finalNichoSecundario = campaign.nicho_secundario;
+      finalKeywords = campaign.keywords;
+
+      // Usar regras da campanha
+      finalRules = {
+        min_freq_raiz: campaign.rules_min_freq_raiz,
+        min_hashtags_forte: campaign.rules_min_hashtags_forte,
+        min_total_forte: campaign.rules_min_total_forte,
+        min_hashtags_medio_min: campaign.rules_min_hashtags_medio_min,
+        min_hashtags_medio_max: campaign.rules_min_hashtags_medio_max,
+        min_total_medio: campaign.rules_min_total_medio,
+        min_hashtags_fraco: campaign.rules_min_hashtags_fraco,
+        max_hashtags_fraco: campaign.rules_max_hashtags_fraco,
+        min_perfis_campanha: campaign.rules_min_perfis_campanha,
+        min_hashtags_campanha: campaign.rules_min_hashtags_campanha,
+        min_hashtags_raiz_campanha: campaign.rules_min_hashtags_raiz_campanha
+      };
+    } else {
+      // Usar regras fornecidas ou defaults
+      finalRules = {
+        min_freq_raiz: rules?.min_freq_raiz || 70,
+        min_hashtags_forte: rules?.min_hashtags_forte || 10,
+        min_total_forte: rules?.min_total_forte || 100,
+        min_hashtags_medio_min: rules?.min_hashtags_medio_min || 5,
+        min_hashtags_medio_max: rules?.min_hashtags_medio_max || 9,
+        min_total_medio: rules?.min_total_medio || 50,
+        min_hashtags_fraco: rules?.min_hashtags_fraco || 2,
+        max_hashtags_fraco: rules?.max_hashtags_fraco || 4,
+        min_perfis_campanha: rules?.min_perfis_campanha || 1000,
+        min_hashtags_campanha: rules?.min_hashtags_campanha || 300,
+        min_hashtags_raiz_campanha: rules?.min_hashtags_raiz_campanha || 3
+      };
+    }
+
+    // Validação
+    if (!finalNicho || !finalKeywords || !Array.isArray(finalKeywords) || finalKeywords.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Parâmetros inválidos. Forneça: nicho (string) e keywords (array de strings)'
+        message: 'Parâmetros inválidos. Forneça: campaign_id OU (nicho + keywords)'
       });
     }
 
-    console.log(`\n🎯 [API] Analisando cluster para nicho: ${nicho}`);
-    console.log(`📋 Keywords: ${keywords.join(', ')}`);
+    console.log(`\n🎯 [API] Analisando cluster para nicho: ${finalNicho}`);
+    if (finalNichoSecundario) console.log(`📌 Nicho secundário: ${finalNichoSecundario}`);
+    console.log(`📋 Keywords: ${finalKeywords.join(', ')}`);
+    console.log(`⚙️  Regras AIC:`, finalRules);
 
     // Buscar todas as hashtags com suas frequências
     const { data: hashtagsData, error: hashtagError } = await supabase.rpc('execute_sql', {
@@ -446,56 +525,158 @@ router.post('/cluster-analysis', async (req, res) => {
 
     const allHashtags = hashtagsData || [];
 
+    console.log(`📊 Total de hashtags na base: ${allHashtags.length.toLocaleString()}`);
+
+    // ======================================
+    // DECISÃO: Usar IA (AIC Engine) ou Regras Simples
+    // ======================================
+    const useAI = req.body.use_ai !== false; // Default: usar IA
+
+    if (useAI && allHashtags.length > 0) {
+      console.log('🧠 Usando AIC ENGINE (IA) para análise inteligente...');
+
+      try {
+        // Usar AIC Engine com IA
+        const aicResult = await aicEngineService.analyzeCluster({
+          niche: finalNicho,
+          keywords: finalKeywords,
+          hashtags: allHashtags.map((h: any) => ({
+            hashtag: h.hashtag,
+            freq_total: h.frequency,
+            unique_leads: h.unique_leads,
+            contact_rate: h.contact_rate
+          })),
+          nicho_secundario: finalNichoSecundario,
+          service_description: service_description,
+          target_audience: target_audience
+        });
+
+        // Converter resultado IA para formato de resposta
+        const response = {
+          cluster: finalNicho,
+          nicho_secundario: finalNichoSecundario,
+          status: aicResult.forca_cluster,
+          hashtags_encontradas: aicResult.total_hashtags_relacionadas,
+          hashtags_raiz: aicResult.hashtags_raiz_encontradas.map(h => ({
+            hashtag: h.hashtag,
+            freq: h.freq,
+            unique_leads: 0,
+            contact_rate: 0
+          })),
+          hashtags_relevantes: aicResult.total_hashtags_relacionadas,
+          perfis_estimados: aicResult.total_hashtags_relacionadas * 10, // Estimativa
+          necessidade_scrap: aicResult.precisa_scrap,
+          hashtags_necessarias: aicResult.quantidade_scrap_recomendada,
+          recomendacao: aicResult.diagnostico_resumido,
+          suficiente_para_campanha: aicResult.possivel_gerar_persona_dm,
+          metricas: {
+            total_hashtags_nicho: aicResult.total_hashtags_relacionadas,
+            hashtags_freq_70_plus: aicResult.hashtags_raiz_encontradas.length,
+            hashtags_freq_50_plus: aicResult.hashtags_raiz_encontradas.length,
+            perfis_unicos: aicResult.total_hashtags_relacionadas * 10,
+            taxa_contato_media: 60
+          },
+          pode_gerar_persona: aicResult.possivel_gerar_persona_dm,
+          pode_gerar_dm: aicResult.possivel_gerar_persona_dm,
+          pode_gerar_copy: aicResult.possivel_gerar_persona_dm,
+          regras_utilizadas: finalRules,
+          aic_engine: {
+            relacao_com_nicho: aicResult.relacao_com_nicho,
+            direcao_scrap: aicResult.direcao_scrap_recomendada,
+            diagnostico: aicResult.diagnostico_resumido
+          }
+        };
+
+        // Se campaign_id fornecido, atualizar resultado na campanha
+        if (campaign_id) {
+          await supabase
+            .from('cluster_campaigns')
+            .update({
+              analysis_result: response,
+              cluster_status: aicResult.forca_cluster,
+              last_analysis_at: new Date().toISOString(),
+              status: aicResult.possivel_gerar_persona_dm ? 'approved' : 'analyzing'
+            })
+            .eq('id', campaign_id);
+
+          console.log(`💾 Resultado IA salvo na campanha ${campaign_id}`);
+        }
+
+        return res.json({
+          success: true,
+          data: response,
+          ai_powered: true
+        });
+      } catch (aiError: any) {
+        console.error('❌ Erro no AIC Engine, fallback para regras simples:', aiError.message);
+        // Continuar com lógica de regras simples abaixo
+      }
+    }
+
+    // ======================================
+    // FALLBACK: Análise por Regras Simples (sem IA)
+    // ======================================
+    console.log('⚙️  Usando análise por regras simples (sem IA)...');
+
     // Filtrar hashtags relacionadas ao nicho (contém alguma keyword)
     const relatedHashtags = allHashtags.filter((h: any) => {
       const tag = h.hashtag.toLowerCase();
-      return keywords.some(kw => tag.includes(kw.toLowerCase()));
+      return finalKeywords.some(kw => tag.includes(kw.toLowerCase()));
     });
 
-    // Classificar hashtags por relevância (frequência)
-    const hashtagsRaiz = relatedHashtags.filter((h: any) => h.frequency >= 70);
-    const hashtagsRelevantes = relatedHashtags.filter((h: any) => h.frequency >= min_frequency);
+    // Classificar hashtags por relevância (frequência) - USANDO REGRAS CUSTOMIZADAS
+    const hashtagsRaiz = relatedHashtags.filter((h: any) => h.frequency >= finalRules.min_freq_raiz);
+    const hashtagsRelevantes = relatedHashtags.filter((h: any) => h.frequency >= 50); // relevantes >= 50
     const hashtagsTotal = relatedHashtags.length;
 
     // Estimar total de perfis potenciais
     const estimatedProfiles = relatedHashtags.reduce((sum: number, h: any) => sum + (h.unique_leads || 0), 0);
 
-    // Regras de Classificação AIC
+    // Regras de Classificação AIC - USANDO REGRAS CUSTOMIZADAS
     let clusterStatus: 'forte' | 'medio' | 'fraco' | 'inexistente';
     let necessidadeScrap = false;
     let recomendacao = '';
     let hashtagsNecessarias = 0;
 
-    if (hashtagsRaiz.length >= 10 && hashtagsTotal >= 100) {
+    if (hashtagsRaiz.length >= finalRules.min_hashtags_forte && hashtagsTotal >= finalRules.min_total_forte) {
       clusterStatus = 'forte';
       recomendacao = 'Cluster pronto para montar persona, DM e copy.';
-    } else if (hashtagsRaiz.length >= 5 && hashtagsRaiz.length <= 9 && hashtagsTotal >= 50) {
+    } else if (
+      hashtagsRaiz.length >= finalRules.min_hashtags_medio_min &&
+      hashtagsRaiz.length <= finalRules.min_hashtags_medio_max &&
+      hashtagsTotal >= finalRules.min_total_medio
+    ) {
       clusterStatus = 'medio';
       necessidadeScrap = true;
-      hashtagsNecessarias = 100 - hashtagsTotal;
+      hashtagsNecessarias = finalRules.min_total_forte - hashtagsTotal;
       recomendacao = `Aprovado, mas recomenda scrap adicional de ${hashtagsNecessarias} hashtags para fortalecer cluster.`;
-    } else if (hashtagsRaiz.length >= 2 && hashtagsRaiz.length <= 4 && hashtagsTotal < 50) {
+    } else if (
+      hashtagsRaiz.length >= finalRules.min_hashtags_fraco &&
+      hashtagsRaiz.length <= finalRules.max_hashtags_fraco &&
+      hashtagsTotal < finalRules.min_total_medio
+    ) {
       clusterStatus = 'fraco';
       necessidadeScrap = true;
-      hashtagsNecessarias = 50 - hashtagsTotal;
+      hashtagsNecessarias = finalRules.min_total_medio - hashtagsTotal;
       recomendacao = `Necessário scrap de + ${hashtagsNecessarias} hashtags para viabilizar campanha.`;
     } else {
       clusterStatus = 'inexistente';
       necessidadeScrap = true;
       // Sugerir hashtags similares para scrap
-      const suggestedHashtags = keywords.flatMap(kw => [`#${kw}`, `#${kw}brasil`, `#${kw}digital`]).slice(0, 5);
+      const suggestedHashtags = finalKeywords.flatMap(kw => [`#${kw}`, `#${kw}brasil`, `#${kw}digital`]).slice(0, 5);
       recomendacao = `Impossível gerar cluster. Necessário scrap direcionado: ${suggestedHashtags.join(', ')}`;
     }
 
-    // Verificar suficiência para campanha (2.000 DMs)
+    // Verificar suficiência para campanha - USANDO REGRAS CUSTOMIZADAS
     const suficienteParaCampanha =
-      hashtagsRelevantes.length >= 300 &&
-      hashtagsRaiz.length >= 3 &&
-      estimatedProfiles >= 1000;
+      hashtagsRelevantes.length >= finalRules.min_hashtags_campanha &&
+      hashtagsRaiz.length >= finalRules.min_hashtags_raiz_campanha &&
+      estimatedProfiles >= finalRules.min_perfis_campanha;
 
     // Preparar resposta
     const response = {
-      cluster: nicho,
+      cluster: finalNicho,
+      nicho_secundario: finalNichoSecundario,
       status: clusterStatus,
       hashtags_encontradas: hashtagsTotal,
       hashtags_raiz: hashtagsRaiz.slice(0, 10).map((h: any) => ({
@@ -521,8 +702,24 @@ router.post('/cluster-analysis', async (req, res) => {
       },
       pode_gerar_persona: clusterStatus === 'forte' || clusterStatus === 'medio',
       pode_gerar_dm: clusterStatus === 'forte',
-      pode_gerar_copy: clusterStatus === 'forte'
+      pode_gerar_copy: clusterStatus === 'forte',
+      regras_utilizadas: finalRules
     };
+
+    // Se campaign_id fornecido, atualizar resultado na campanha
+    if (campaign_id) {
+      await supabase
+        .from('cluster_campaigns')
+        .update({
+          analysis_result: response,
+          cluster_status: clusterStatus,
+          last_analysis_at: new Date().toISOString(),
+          status: suficienteParaCampanha ? 'approved' : 'analyzing'
+        })
+        .eq('id', campaign_id);
+
+      console.log(`💾 Resultado salvo na campanha ${campaign_id}`);
+    }
 
     return res.json({
       success: true,
@@ -530,6 +727,90 @@ router.post('/cluster-analysis', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Erro em /cluster-analysis:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/hashtag-intelligence/sync
+ * Executa sincronização manual completa: PostgreSQL → Parquet → Vector Store
+ */
+router.post('/sync', async (_req, res) => {
+  try {
+    console.log('\n🔄 [API] Iniciando sincronização manual...');
+
+    const { hashtagSyncService } = await import('../services/hashtag-sync.service');
+    const result = await hashtagSyncService.syncComplete();
+
+    if (result.success) {
+      return res.json({
+        success: true,
+        message: 'Sincronização concluída com sucesso',
+        data: {
+          parquet: result.parquetExport,
+          vectorStore: result.vectorStoreUpload
+        }
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        message: 'Falha na sincronização',
+        error: result.error
+      });
+    }
+  } catch (error: any) {
+    console.error('❌ Erro em /sync:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/hashtag-intelligence/sync/status
+ * Retorna status da sincronização (idade dos dados, necessidade de atualização)
+ */
+router.get('/sync/status', async (_req, res) => {
+  try {
+    console.log('\n📊 [API] Verificando status da sincronização...');
+
+    const { hashtagSyncService } = await import('../services/hashtag-sync.service');
+    const status = await hashtagSyncService.getStatus();
+
+    return res.json({
+      success: true,
+      data: status
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /sync/status:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/hashtag-intelligence/sync-if-needed
+ * Sincronização inteligente: só executa se dados estiverem desatualizados (>24h)
+ */
+router.post('/sync-if-needed', async (_req, res) => {
+  try {
+    console.log('\n🔍 [API] Verificando necessidade de sincronização...');
+
+    const { hashtagSyncService } = await import('../services/hashtag-sync.service');
+    const result = await hashtagSyncService.syncIfNeeded();
+
+    return res.json({
+      success: true,
+      data: result
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /sync-if-needed:', error);
     return res.status(500).json({
       success: false,
       message: error.message

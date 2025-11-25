@@ -1179,6 +1179,20 @@ async function initializeServices() {
       console.error('❌ Failed to initialize Dynamic Intelligence Cron:', error);
     }
 
+    // Hashtag Sync Cron Service - Sincronização diária PostgreSQL → Parquet → Vector Store
+    if (process.env.ENABLE_HASHTAG_SYNC !== 'false') {
+      try {
+        console.log('🔷 Inicializando Hashtag Sync Cron Service...');
+        const { startHashtagSyncCron } = await import('./cron/hashtag-sync.cron');
+        startHashtagSyncCron();
+        console.log('✅ Hashtag Sync Cron Service initialized successfully');
+        console.log('📅 Sincronização automática: 3AM diariamente');
+        console.log('🔄 Pipeline: PostgreSQL → Parquet → OpenAI Vector Store\n');
+      } catch (error) {
+        console.error('❌ Failed to initialize Hashtag Sync Cron:', error);
+      }
+    }
+
     console.log('🎉 All services initialized successfully');
     
   } catch (error) {

@@ -125,18 +125,38 @@ REGRAS:
           { role: 'user', content: prompt }
         ],
         temperature: 0.3,
-        max_tokens: 2000
+        max_tokens: 4000 // Aumentado de 2000 para 4000 (suporta JSON maior)
       });
 
       const responseText = completion.choices[0]?.message.content || '{}';
+
+      // Tentar extrair JSON mesmo se incompleto
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      let jsonText = jsonMatch ? jsonMatch[0] : '{}';
+
+      // 🔧 FIX: Se JSON está incompleto, tentar fechar estruturas abertas
+      if (jsonText && !jsonText.endsWith('}')) {
+        console.warn('⚠️  JSON incompleto detectado - tentando corrigir...');
+        // Contar [ e ] para saber quantos arrays estão abertos
+        const openBrackets = (jsonText.match(/\[/g) || []).length;
+        const closeBrackets = (jsonText.match(/\]/g) || []).length;
+        const openBraces = (jsonText.match(/\{/g) || []).length;
+        const closeBraces = (jsonText.match(/\}/g) || []).length;
+
+        // Adicionar fechamentos faltantes
+        for (let i = 0; i < (openBrackets - closeBrackets); i++) jsonText += ']';
+        for (let i = 0; i < (openBraces - closeBraces); i++) jsonText += '}';
+
+        console.log(`   🔧 Adicionados ${openBrackets - closeBrackets} ']' e ${openBraces - closeBraces} '}'`);
+      }
 
       let parsed: any;
       try {
-        parsed = JSON.parse(jsonMatch ? jsonMatch[0] : '{}');
+        parsed = JSON.parse(jsonText);
       } catch (parseError) {
         console.error('❌ Erro ao parsear resposta GPT-4:', parseError);
-        console.error('   Resposta recebida:', responseText);
+        console.error('   Resposta recebida (primeiros 500 chars):', responseText.substring(0, 500));
+        console.error('   JSON text (primeiros 500 chars):', jsonText.substring(0, 500));
         throw new Error('Falha ao processar resposta do GPT-4: JSON inválido');
       }
 
