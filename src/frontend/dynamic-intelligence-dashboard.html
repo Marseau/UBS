@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🧠 Dynamic Intelligence Dashboard 2.0</title>
+    <title>🧠 Dynamic Intelligence Dashboard 3.0 - KMeans</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <style>
@@ -416,8 +416,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧠 Dynamic Intelligence Dashboard 2.0</h1>
-            <p>Sistema inteligente, dinâmico e retroalimentado com GPT-4 | Clustering Semântico + Análise Comportamental + Detecção de Tendências</p>
+            <h1>🧠 Dynamic Intelligence Dashboard 3.0</h1>
+            <p>Sistema inteligente com KMeans local (GRATUITO) | Clustering Automático + Análise Comportamental + Detecção de Tendências</p>
             <div class="header-actions">
                 <button class="btn" onclick="loadAllData()">
                     <span>🔄</span> Atualizar Dados
@@ -425,8 +425,8 @@
                 <button class="btn btn-success" id="recalculateBtn" onclick="recalculateMetrics()" title="Recalcula métricas SEM chamar GPT-4 (GRATUITO)">
                     <span>📊</span> Recalcular Métricas
                 </button>
-                <button class="btn btn-secondary" id="pipelineBtn" onclick="executePipeline()" title="Executa clustering completo via GPT-4 (PAGO ~$0.10)">
-                    <span>🚀</span> Pipeline Completo (GPT-4)
+                <button class="btn btn-secondary" id="pipelineBtn" onclick="executePipeline()" title="LEGADO: Executa clustering GPT-4 (PAGO ~$0.10) - Prefira usar KMeans no Cluster-Intention-Dashboard" style="opacity: 0.6;">
+                    <span>🚀</span> Pipeline GPT-4 (Legado)
                 </button>
                 <button class="btn" id="populateSearchTermsBtn" onclick="populateSearchTerms()" title="Cria termos de busca a partir dos clusters GPT-4" style="background: #8b5cf6;">
                     <span>🔍</span> Gerar Search Terms
@@ -542,7 +542,7 @@
         <!-- All Behavioral Insights -->
         <div id="all-behavioral-section" style="display: none;">
             <div class="section-title">
-                <h2>🧠 Análise Comportamental GPT-4 - Todos os Clusters</h2>
+                <h2>🧠 Análise Comportamental - Todos os Clusters (KMeans)</h2>
             </div>
             <div id="all-behavioral-insights" class="behavioral-grid"></div>
         </div>
@@ -550,7 +550,7 @@
         <!-- Clusters Section -->
         <div id="clusters-section" style="display: none;">
             <div class="section-title">
-                <h2>🤖 Clusters Dinâmicos GPT-4</h2>
+                <h2>🤖 Clusters KMeans (Local & Gratuito)</h2>
             </div>
             <div id="clusters-list" class="clusters-list"></div>
         </div>
@@ -747,7 +747,8 @@
 
         async function loadClusterDistribution() {
             console.log('[DEBUG] loadClusterDistribution iniciando...');
-            const response = await fetchData('/dynamic-intelligence/clusters');
+            // Usar unified-intelligence (KMeans local, gratuito) em vez de dynamic-intelligence (GPT-4, pago)
+            const response = await fetchData('/unified-intelligence/clusters');
             console.log('[DEBUG] response:', response);
             if (response?.success && response.clusters) {
                 console.log('[DEBUG] Clusters encontrados:', response.clusters.length);
@@ -781,7 +782,8 @@
         }
 
         async function loadContactRateByCluster() {
-            const response = await fetchData('/dynamic-intelligence/clusters');
+            // Usar unified-intelligence (KMeans local, gratuito)
+            const response = await fetchData('/unified-intelligence/clusters');
             if (response?.success && response.clusters) {
                 const ctx = document.getElementById('contactRateChart').getContext('2d');
                 if (charts.contactRate) charts.contactRate.destroy();
@@ -925,7 +927,8 @@
         }
 
         async function loadClusters() {
-            const response = await fetchData('/dynamic-intelligence/clusters');
+            // Usar unified-intelligence (KMeans local, gratuito)
+            const response = await fetchData('/unified-intelligence/clusters');
             if (response?.success && response.clusters) {
                 allClusters = response.clusters;
                 const container = document.getElementById('clusters-list');
@@ -939,7 +942,7 @@
                             <div class="stat"><strong>${((c.conversion_rate || 0) * 100).toFixed(1)}%</strong> conversão</div>
                             <div class="stat">Score: <strong>${c.priority_score || 0}</strong></div>
                         </div>
-                        <div style="margin-top: 8px; font-size: 0.75em; color: #999;">GPT-4: ${c.generated_at ? c.generated_at.substring(0, 19).replace('T', ' ') : 'N/A'}</div>
+                        <div style="margin-top: 8px; font-size: 0.75em; color: #999;">KMeans: ${c.generated_at ? c.generated_at.substring(0, 19).replace('T', ' ') : 'N/A'}</div>
                     </div>
                 `).join('');
             }
@@ -949,7 +952,8 @@
             document.querySelectorAll('.cluster-card').forEach(card => card.classList.remove('active'));
             event.currentTarget.classList.add('active');
 
-            const response = await fetchData(`/dynamic-intelligence/cluster/${clusterId}`);
+            // Usar unified-intelligence (KMeans local, gratuito)
+            const response = await fetchData(`/unified-intelligence/cluster/${clusterId}`);
             if (response?.success && response.insights) {
                 const insights = response.insights;
                 const cluster = response.cluster;
@@ -997,7 +1001,8 @@
         }
 
         async function loadTrends() {
-            const response = await fetchData('/dynamic-intelligence/trends?limit=20');
+            // Usar unified-intelligence (KMeans local, gratuito)
+            const response = await fetchData('/unified-intelligence/trends?limit=20');
             if (response?.success && response.trends) {
                 const container = document.getElementById('trends-grid');
                 container.innerHTML = response.trends.map(t => `
@@ -1052,7 +1057,8 @@
             btn.disabled = true;
             btn.innerHTML = '<span>⏳</span> Recalculando...';
             try {
-                const response = await fetch(`${API_BASE}/dynamic-intelligence/recalculate-metrics`, { method: 'POST' });
+                // Usar unified-intelligence (KMeans local, gratuito)
+                const response = await fetch(`${API_BASE}/unified-intelligence/recalculate-metrics`, { method: 'POST' });
                 const data = await response.json();
                 if (data.success) {
                     alert(`✅ Métricas recalculadas (SEM GPT-4)!\n\nClusters atualizados: ${data.clusters_updated}\nErros: ${data.errors}\n\nRecarregando...`);
@@ -1096,7 +1102,8 @@
 
         async function loadLastExecution() {
             try {
-                const response = await fetch(`${API_BASE}/dynamic-intelligence/last-execution`);
+                // Usar unified-intelligence (KMeans local, gratuito)
+                const response = await fetch(`${API_BASE}/unified-intelligence/last-execution`);
                 if (!response.ok) {
                     console.warn('Endpoint last-execution não disponível (servidor precisa reiniciar)');
                     const container = document.getElementById('lastExecutionInfo');
@@ -1136,14 +1143,15 @@
         
         async function loadAllBehavioralInsights() {
             try {
-                const response = await fetchData('/dynamic-intelligence/clusters');
+                // Usar unified-intelligence (KMeans local, gratuito)
+                const response = await fetchData('/unified-intelligence/clusters');
                 if (response?.success && response.clusters) {
                     const container = document.getElementById('all-behavioral-insights');
                     if (!container) return;
-                    
+
                     let html = '';
                     for (const cluster of response.clusters) {
-                        const insightsResp = await fetchData(`/dynamic-intelligence/cluster/${cluster.id}`);
+                        const insightsResp = await fetchData(`/unified-intelligence/cluster/${cluster.id}`);
                         if (insightsResp?.success && insightsResp.insights) {
                             const insights = insightsResp.insights;
                             const painBadge = insights.pain_intensity === 'crítica' ? 'critical' :
@@ -1431,24 +1439,24 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    const { parquet, vectorStore } = data.data;
+                    const { csv, vectorStore } = data.data;
 
                     // Update details
                     const detailsDiv = document.getElementById('vectorStoreDetails');
                     const badgeDiv = document.getElementById('vectorStoreBadge');
 
-                    if (parquet.exists && vectorStore.exists) {
-                        const ageText = parquet.ageHours < 1 ? 'Atualizado há minutos' :
-                                       parquet.ageHours < 24 ? `Atualizado há ${parquet.ageHours}h` :
-                                       `Atualizado há ${Math.floor(parquet.ageHours / 24)}d`;
+                    if (csv.exists && vectorStore.exists) {
+                        const ageText = csv.ageHours < 1 ? 'Atualizado há minutos' :
+                                       csv.ageHours < 24 ? `Atualizado há ${csv.ageHours}h` :
+                                       `Atualizado há ${Math.floor(csv.ageHours / 24)}d`;
 
                         detailsDiv.innerHTML = `
-                            📊 ${parquet.rowCount.toLocaleString()} hashtags |
-                            💾 ${(parquet.sizeKB / 1024).toFixed(1)}MB |
+                            📊 ${csv.rowCount.toLocaleString()} hashtags |
+                            💾 ${(csv.sizeKB / 1024).toFixed(1)}MB |
                             🕐 ${ageText}
                         `;
 
-                        if (parquet.needsUpdate) {
+                        if (csv.needsUpdate) {
                             badgeDiv.style.background = '#f59e0b';
                             badgeDiv.textContent = 'DESATUALIZADO';
                         } else {
@@ -1468,7 +1476,7 @@
         }
 
         async function syncVectorStore() {
-            if (!confirm('🔷 Sincronização Vector Store\n\nIsso vai:\n1. Exportar todas as hashtags do PostgreSQL para Parquet\n2. Fazer upload para OpenAI Vector Store\n3. Processar embeddings para busca semântica\n\nTempo estimado: 2-5 minutos\n\nDeseja continuar?')) {
+            if (!confirm('🔷 Sincronização Vector Store\n\nIsso vai:\n1. Exportar todas as hashtags do PostgreSQL para CSV\n2. Fazer upload para OpenAI Vector Store\n3. Processar embeddings para busca semântica\n\nTempo estimado: 2-5 minutos\n\nDeseja continuar?')) {
                 return;
             }
 
@@ -1484,10 +1492,10 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    const { parquet, vectorStore } = data.data;
+                    const { csv, vectorStore } = data.data;
                     alert(`✅ Sincronização Concluída!\n\n` +
-                          `📊 Hashtags exportadas: ${parquet.totalRecords.toLocaleString()}\n` +
-                          `💾 Tamanho arquivo: ${(parquet.fileSizeKB / 1024).toFixed(1)}MB\n` +
+                          `📊 Hashtags exportadas: ${csv.totalRecords.toLocaleString()}\n` +
+                          `💾 Tamanho arquivo: ${(csv.fileSizeKB / 1024).toFixed(1)}MB\n` +
                           `🔷 Vector Store: ${vectorStore.vectorStoreId}\n` +
                           `📈 Status: ${vectorStore.status}\n\n` +
                           `Sistema pronto para análise com busca semântica!`);

@@ -1,6 +1,47 @@
 // @ts-nocheck - utilidades compartilhadas para análise de perfis Instagram
 
 /**
+ * Normaliza uma hashtag removendo acentos e convertendo para minúsculas
+ * Garante consistência no banco de dados e Parquet
+ *
+ * @param hashtag - Hashtag com ou sem # no início
+ * @returns Hashtag normalizada (sem acentos, lowercase, sem #)
+ */
+export function normalizeHashtag(hashtag: string): string {
+  if (!hashtag) return '';
+
+  // Remover # se presente
+  let normalized = hashtag.startsWith('#') ? hashtag.substring(1) : hashtag;
+
+  // Mapa de acentos para caracteres ASCII
+  const accentMap: Record<string, string> = {
+    'á': 'a', 'à': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a', 'å': 'a',
+    'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+    'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
+    'ó': 'o', 'ò': 'o', 'ô': 'o', 'õ': 'o', 'ö': 'o',
+    'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
+    'ç': 'c', 'ñ': 'n',
+    'Á': 'a', 'À': 'a', 'Â': 'a', 'Ã': 'a', 'Ä': 'a', 'Å': 'a',
+    'É': 'e', 'È': 'e', 'Ê': 'e', 'Ë': 'e',
+    'Í': 'i', 'Ì': 'i', 'Î': 'i', 'Ï': 'i',
+    'Ó': 'o', 'Ò': 'o', 'Ô': 'o', 'Õ': 'o', 'Ö': 'o',
+    'Ú': 'u', 'Ù': 'u', 'Û': 'u', 'Ü': 'u',
+    'Ç': 'c', 'Ñ': 'n'
+  };
+
+  // Substituir acentos
+  normalized = normalized.split('').map(char => accentMap[char] || char).join('');
+
+  // Converter para minúsculas
+  normalized = normalized.toLowerCase();
+
+  // Remover caracteres inválidos (manter apenas a-z, 0-9, _)
+  normalized = normalized.replace(/[^a-z0-9_]/g, '');
+
+  return normalized;
+}
+
+/**
  * Retry mechanism com backoff exponencial para operações propensas a timeout
  * @param fn - Função assíncrona para executar
  * @param maxRetries - Número máximo de tentativas (padrão: 3)
@@ -129,18 +170,21 @@ export function extractEmailFromBio(bio: string | null): string | null {
 
 /**
  * Extrai hashtags de um texto (bio ou posts)
+ * Aplica normalização automática (remove acentos, lowercase)
  */
 export function extractHashtags(text: string | null, maxHashtags: number = 10): string[] {
   if (!text) return [];
 
-  const hashtagPattern = /#([a-zA-Z0-9_]+)/g;
+  // Regex expandido para capturar hashtags com acentos
+  const hashtagPattern = /#([a-zA-Z0-9_áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÇÑ]+)/g;
   const matches = text.match(hashtagPattern);
 
   if (!matches || matches.length === 0) return [];
 
   return matches
-    .map(tag => tag.substring(1).toLowerCase())
-    .filter((tag, index, self) => self.indexOf(tag) === index)
+    .map(tag => normalizeHashtag(tag)) // Aplica normalização completa
+    .filter(tag => tag.length > 0) // Remove vazios
+    .filter((tag, index, self) => self.indexOf(tag) === index) // Remove duplicados
     .slice(0, maxHashtags);
 }
 
@@ -295,7 +339,7 @@ export async function extractHashtagsFromPosts(page: any, maxPosts: number = 4):
         }
 
         // Extrair hashtags da legenda do post (no modal aberto) com timeout
-        const postHashtags = await Promise.race([
+        const rawPostHashtags = await Promise.race([
           page.evaluate(() => {
             const captionSelectors = [
               'article h1',
@@ -322,8 +366,8 @@ export async function extractHashtagsFromPosts(page: any, maxPosts: number = 4):
               return [];
             }
 
-            const uniqueHashtags = [...new Set(matches.map(tag => tag.substring(1).toLowerCase()))];
-            return uniqueHashtags;
+            // Retorna hashtags brutas (com acentos) - normalização será feita no Node.js
+            return [...new Set(matches.map(tag => tag.substring(1)))];
           }),
           new Promise<string[]>((_, reject) =>
             setTimeout(() => reject(new Error('Hashtag extraction timeout')), 10000)
@@ -332,6 +376,11 @@ export async function extractHashtagsFromPosts(page: any, maxPosts: number = 4):
           console.log(`   ⚠️  Erro ao extrair hashtags do post ${i + 1}: ${err.message}`);
           return [];
         });
+
+        // Normalizar hashtags no Node.js (remove acentos, lowercase)
+        const postHashtags = rawPostHashtags
+          .map(tag => normalizeHashtag(tag))
+          .filter(tag => tag.length > 0);
 
         if (postHashtags.length > 0) {
           const beforeCount = allHashtags.size;

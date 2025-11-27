@@ -630,6 +630,16 @@ try {
   console.error("❌ Failed to load Dynamic Intelligence routes:", error);
 }
 
+// Unified Intelligence System - KMeans clustering (substitui GPT-4, gratuito e local)
+try {
+  const unifiedIntelligenceRoutes = require('./routes/unified-intelligence.routes');
+  const router = 'default' in unifiedIntelligenceRoutes ? unifiedIntelligenceRoutes.default : unifiedIntelligenceRoutes;
+  app.use('/api/unified-intelligence', router);
+  console.log('✅ Unified Intelligence System routes loaded - KMEANS CLUSTERING (FREE, LOCAL) READY');
+} catch (error) {
+  console.error("❌ Failed to load Unified Intelligence routes:", error);
+}
+
 // Dynamic Intelligence Dashboard 2.0 - Auto-evolutivo com análise comportamental
 app.get('/dynamic-intelligence-dashboard', (_req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'dynamic-intelligence-dashboard.html'));

@@ -583,35 +583,31 @@ router.get("/status", async (req, res) => {
 /**
  * POST /api/dashboard/trigger-calculation
  * Manual trigger for metric calculations (admin only)
+ * MIGRATED: Uses optimized tenant metrics cron service (25x faster)
  */
 router.post("/trigger-calculation", async (req, res): Promise<any> => {
   try {
     const { metric_type } = req.body;
 
-    // Import and use the enhanced cron service
-    const { MetricsCronEnhancedService } = await import(
-      "../services/metrics-cron-enhanced.service"
-    );
-    const cronService = new MetricsCronEnhancedService();
+    // Use optimized cron service from global scope
+    const cronService = (global as any).tenantMetricsCronService;
+
+    if (!cronService) {
+      return res.status(503).json({
+        error: "Metrics service not initialized",
+        message: "Please wait for the service to initialize or restart the server"
+      });
+    }
 
     switch (metric_type) {
       case "saas":
-        await cronService.triggerSaasMetrics();
-        break;
       case "tenants":
-        await cronService.triggerTopTenants();
-        break;
       case "growth":
-        await cronService.triggerGrowthMetrics();
-        break;
       case "risk":
-        await cronService.triggerRiskScores();
-        break;
       case "distribution":
-        await cronService.triggerDomainDistribution();
-        break;
       case "all":
-        await cronService.runAllCalculations();
+        // Trigger comprehensive metrics calculation
+        await cronService.triggerComprehensiveMetrics();
         break;
       default:
         return res.status(400).json({ error: "Invalid metric type" });
@@ -619,7 +615,7 @@ router.post("/trigger-calculation", async (req, res): Promise<any> => {
 
     res.json({
       success: true,
-      message: `${metric_type} calculation triggered successfully`,
+      message: `${metric_type} calculation triggered successfully via optimized service`,
     });
   } catch (error) {
     console.error("Trigger calculation error:", error);

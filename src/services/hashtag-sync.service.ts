@@ -2,22 +2,22 @@
  * HASHTAG SYNC SERVICE
  *
  * Orquestra sincronização completa:
- * PostgreSQL → Parquet → OpenAI Vector Store
+ * PostgreSQL → CSV → OpenAI Vector Store
  *
  * Executado via Cron (1x/dia às 3AM)
  */
 
-import { hashtagParquetExportService } from './hashtag-parquet-export.service';
+import { hashtagCsvExportService } from './hashtag-csv-export.service';
 import { hashtagVectorStoreService } from './hashtag-vector-store.service';
 
 export class HashtagSyncService {
   /**
    * Sincronização completa
-   * PostgreSQL → Parquet → Vector Store
+   * PostgreSQL → CSV → Vector Store
    */
   async syncComplete(): Promise<{
     success: boolean;
-    parquetExport?: {
+    csvExport?: {
       filePath: string;
       totalRecords: number;
       fileSizeKB: number;
@@ -30,22 +30,22 @@ export class HashtagSyncService {
   }> {
     console.log('\n🔄 ========================================');
     console.log('🔄 INICIANDO SINCRONIZAÇÃO COMPLETA');
-    console.log('🔄 PostgreSQL → Parquet → Vector Store');
+    console.log('🔄 PostgreSQL → CSV → Vector Store');
     console.log('🔄 ========================================\n');
 
     const startTime = Date.now();
 
     try {
       // ============================================
-      // ETAPA 1: Export PostgreSQL → Parquet
+      // ETAPA 1: Export PostgreSQL → CSV
       // ============================================
-      console.log('📊 ETAPA 1/3: Export PostgreSQL → Parquet');
+      console.log('📊 ETAPA 1/3: Export PostgreSQL → CSV');
 
-      const parquetResult = await hashtagParquetExportService.exportAllHashtags();
+      const csvResult = await hashtagCsvExportService.exportAllHashtags();
 
       console.log(`\n✅ Etapa 1 concluída!`);
-      console.log(`   - ${parquetResult.totalRecords.toLocaleString()} hashtags exportadas`);
-      console.log(`   - ${parquetResult.fileSizeKB.toLocaleString()} KB em disco\n`);
+      console.log(`   - ${csvResult.totalRecords.toLocaleString()} hashtags exportadas`);
+      console.log(`   - ${csvResult.fileSizeKB.toLocaleString()} KB em disco\n`);
 
       // ============================================
       // ETAPA 2: Inicializar Vector Store
@@ -58,15 +58,15 @@ export class HashtagSyncService {
       console.log(`   - Vector Store ID: ${vectorStoreId}\n`);
 
       // ============================================
-      // ETAPA 3: Upload Parquet → Vector Store
+      // ETAPA 3: Upload CSV → Vector Store
       // ============================================
-      console.log('📤 ETAPA 3/3: Upload Parquet → Vector Store');
+      console.log('📤 ETAPA 3/3: Upload CSV → Vector Store');
 
       // Cleanup arquivos antigos primeiro
       await hashtagVectorStoreService.cleanupOldFiles();
 
       // Upload novo arquivo
-      await hashtagVectorStoreService.uploadParquetFile(parquetResult.filePath);
+      await hashtagVectorStoreService.uploadCsvFile(csvResult.filePath);
 
       const vectorInfo = await hashtagVectorStoreService.getInfo();
 
@@ -87,7 +87,7 @@ export class HashtagSyncService {
 
       return {
         success: true,
-        parquetExport: parquetResult,
+        csvExport: csvResult,
         vectorStoreUpload: {
           vectorStoreId,
           status: vectorInfo?.status || 'unknown'
@@ -110,7 +110,7 @@ export class HashtagSyncService {
    * Verifica status da sincronização
    */
   async getStatus(): Promise<{
-    parquet: {
+    csv: {
       exists: boolean;
       sizeKB: number;
       rowCount: number;
@@ -125,19 +125,19 @@ export class HashtagSyncService {
       status?: string;
     };
   }> {
-    // Status do Parquet
-    const parquetStats = await hashtagParquetExportService.getStats();
+    // Status do CSV
+    const csvStats = await hashtagCsvExportService.getStats();
 
     // Status do Vector Store
     const vectorInfo = await hashtagVectorStoreService.getInfo();
 
     return {
-      parquet: {
-        exists: parquetStats.exists,
-        sizeKB: parquetStats.sizeKB,
-        rowCount: parquetStats.rowCount,
-        ageHours: parquetStats.ageHours,
-        needsUpdate: parquetStats.ageHours > 24 || !parquetStats.exists
+      csv: {
+        exists: csvStats.exists,
+        sizeKB: csvStats.sizeKB,
+        rowCount: csvStats.rowCount,
+        ageHours: csvStats.ageHours,
+        needsUpdate: csvStats.ageHours > 24 || !csvStats.exists
       },
       vectorStore: {
         exists: vectorInfo !== null,
@@ -156,7 +156,7 @@ export class HashtagSyncService {
     const status = await this.getStatus();
 
     // Verificar se precisa atualizar
-    if (!status.parquet.needsUpdate && status.vectorStore.exists) {
+    if (!status.csv.needsUpdate && status.vectorStore.exists) {
       console.log('ℹ️  Sincronização não necessária (dados atualizados)');
       return {
         synced: false,
@@ -166,10 +166,10 @@ export class HashtagSyncService {
 
     console.log('⚠️  Sincronização necessária!');
 
-    if (!status.parquet.exists) {
-      console.log('   - Arquivo Parquet não existe');
-    } else if (status.parquet.ageHours > 24) {
-      console.log(`   - Arquivo Parquet desatualizado (${status.parquet.ageHours}h)`);
+    if (!status.csv.exists) {
+      console.log('   - Arquivo CSV não existe');
+    } else if (status.csv.ageHours > 24) {
+      console.log(`   - Arquivo CSV desatualizado (${status.csv.ageHours}h)`);
     }
 
     if (!status.vectorStore.exists) {

@@ -2,7 +2,7 @@
  * HASHTAG SYNC CRON JOB
  *
  * Executa sincronização diária automática:
- * PostgreSQL → Parquet → OpenAI Vector Store
+ * PostgreSQL → CSV → OpenAI Vector Store
  *
  * Agendamento: 3AM todos os dias
  */
@@ -36,8 +36,8 @@ export const startHashtagSyncCron = () => {
         console.log('✅ ========================================');
         console.log('✅ CRON JOB CONCLUÍDO COM SUCESSO');
         console.log('✅ ========================================');
-        console.log(`📊 Hashtags exportadas: ${result.parquetExport?.totalRecords.toLocaleString()}`);
-        console.log(`💾 Tamanho arquivo: ${result.parquetExport?.fileSizeKB.toLocaleString()} KB`);
+        console.log(`📊 Hashtags exportadas: ${result.csvExport?.totalRecords.toLocaleString()}`);
+        console.log(`💾 Tamanho arquivo: ${result.csvExport?.fileSizeKB.toLocaleString()} KB`);
         console.log(`🔷 Vector Store: ${result.vectorStoreUpload?.vectorStoreId}`);
         console.log(`📈 Status: ${result.vectorStoreUpload?.status}\n`);
       } else {

@@ -50,12 +50,14 @@ export interface CleanupResult {
 
 /**
  * Detecta páginas órfãs no browser
+ * Retorna array vazio se browser não estiver inicializado
  */
 export async function detectOrphanPages(): Promise<OrphanPage[]> {
   const browser = getBrowserInstance();
 
   if (!browser) {
-    throw new Error('Browser não está inicializado');
+    console.log('✅ [PAGE CLEANER] Browser não está ativo - nenhuma página órfã existe');
+    return [];
   }
 
   const allPages = await browser.pages();
@@ -133,7 +135,10 @@ export async function cleanOrphanPages(options: {
     const browser = getBrowserInstance();
 
     if (!browser) {
-      throw new Error('Browser não está inicializado');
+      console.log('✅ Browser não está ativo - nenhuma página órfã existe');
+      console.log('='.repeat(50) + '\n');
+      result.success = true;
+      return result;
     }
 
     // 1. Detectar todas as páginas
@@ -296,11 +301,20 @@ export async function monitorOrphanPages(): Promise<{
   blankPages: number;
   instagramPages: number;
   otherPages: number;
+  browserActive: boolean;
 }> {
   const browser = getBrowserInstance();
 
   if (!browser) {
-    throw new Error('Browser não está inicializado');
+    return {
+      totalPages: 0,
+      managedPages: 0,
+      unmanaged: 0,
+      blankPages: 0,
+      instagramPages: 0,
+      otherPages: 0,
+      browserActive: false
+    };
   }
 
   const allPages = await browser.pages();
@@ -332,6 +346,7 @@ export async function monitorOrphanPages(): Promise<{
     unmanaged: allPages.length - contextStats.activeCount,
     blankPages,
     instagramPages,
-    otherPages
+    otherPages,
+    browserActive: true
   };
 }

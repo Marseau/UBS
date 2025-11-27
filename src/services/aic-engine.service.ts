@@ -131,8 +131,17 @@ export class AICEngineService {
       await openai.beta.assistants.delete(assistant.id);
       await openai.beta.threads.delete(thread.id);
 
+      // Limpar markdown code blocks se presentes (```json ... ```)
+      let cleanedResponse = responseText.trim();
+      if (cleanedResponse.startsWith('```')) {
+        // Remove ```json ou ``` do início
+        cleanedResponse = cleanedResponse.replace(/^```(?:json)?\s*\n?/, '');
+        // Remove ``` do final
+        cleanedResponse = cleanedResponse.replace(/\n?```\s*$/, '');
+      }
+
       // Parse da resposta JSON
-      const result: AICEngineOutput = JSON.parse(responseText);
+      const result: AICEngineOutput = JSON.parse(cleanedResponse);
 
       // Validar estrutura da resposta
       this.validateAICOutput(result);

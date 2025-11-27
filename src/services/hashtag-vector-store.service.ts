@@ -39,7 +39,7 @@ export class HashtagVectorStoreService {
 
       // Verificar se ainda existe
       try {
-        const vectorStore = await (openai.beta as any).vectorStores.retrieve(storedId);
+        const vectorStore = await openai.vectorStores.retrieve(storedId);
         this.vectorStoreId = vectorStore.id;
         console.log(`   ✅ Vector Store validado: ${vectorStore.name}`);
         return this.vectorStoreId;
@@ -58,7 +58,7 @@ export class HashtagVectorStoreService {
   private async createVectorStore(): Promise<string> {
     console.log('   📦 Criando novo Vector Store...');
 
-    const vectorStore = await (openai.beta as any).vectorStores.create({
+    const vectorStore = await openai.vectorStores.create({
       name: this.vectorStoreName,
       expires_after: {
         anchor: 'last_active_at',
@@ -75,34 +75,34 @@ export class HashtagVectorStoreService {
   }
 
   /**
-   * Upload arquivo Parquet para Vector Store
+   * Upload arquivo CSV para Vector Store
    */
-  async uploadParquetFile(parquetFilePath: string): Promise<void> {
+  async uploadCsvFile(csvFilePath: string): Promise<void> {
     if (!this.vectorStoreId) {
       await this.initialize();
     }
 
-    console.log(`\n📤 [VECTOR STORE] Upload do arquivo Parquet...`);
-    console.log(`   📁 Arquivo: ${parquetFilePath}`);
+    console.log(`\n📤 [VECTOR STORE] Upload do arquivo CSV...`);
+    console.log(`   📁 Arquivo: ${csvFilePath}`);
 
-    if (!fs.existsSync(parquetFilePath)) {
-      throw new Error(`Arquivo não encontrado: ${parquetFilePath}`);
+    if (!fs.existsSync(csvFilePath)) {
+      throw new Error(`Arquivo não encontrado: ${csvFilePath}`);
     }
 
-    const stats = fs.statSync(parquetFilePath);
+    const stats = fs.statSync(csvFilePath);
     const sizeMB = (stats.size / (1024 * 1024)).toFixed(2);
     console.log(`   💾 Tamanho: ${sizeMB} MB`);
 
     // Upload do arquivo
     const file = await openai.files.create({
-      file: fs.createReadStream(parquetFilePath),
+      file: fs.createReadStream(csvFilePath),
       purpose: 'assistants'
     });
 
     console.log(`   ✅ Arquivo enviado: ${file.id}`);
 
     // Adicionar ao Vector Store
-    await (openai.beta as any).vectorStores.files.create(this.vectorStoreId!, {
+    await openai.vectorStores.files.create(this.vectorStoreId!, {
       file_id: file.id
     });
 
@@ -122,9 +122,9 @@ export class HashtagVectorStoreService {
     const startTime = Date.now();
 
     while (true) {
-      const vectorStoreFile = await (openai.beta as any).vectorStores.files.retrieve(
-        this.vectorStoreId!,
-        fileId
+      const vectorStoreFile = await openai.vectorStores.files.retrieve(
+        fileId,
+        { vector_store_id: this.vectorStoreId! }
       );
 
       if (vectorStoreFile.status === 'completed') {
@@ -207,13 +207,19 @@ export class HashtagVectorStoreService {
     }
 
     try {
-      const vectorStore = await (openai.beta as any).vectorStores.retrieve(this.vectorStoreId!);
-      const files = await (openai.beta as any).vectorStores.files.list(this.vectorStoreId!);
+      const vectorStore = await openai.vectorStores.retrieve(this.vectorStoreId!);
+
+      // Contar arquivos iterando sobre o cursor
+      let fileCount = 0;
+      const files = await openai.vectorStores.files.list(this.vectorStoreId!);
+      for await (const _file of files) {
+        fileCount++;
+      }
 
       return {
         id: vectorStore.id,
         name: vectorStore.name,
-        fileCount: files.data.length,
+        fileCount,
         status: vectorStore.status,
         createdAt: new Date(vectorStore.created_at * 1000)
       };
@@ -230,11 +236,11 @@ export class HashtagVectorStoreService {
 
     console.log('\n🧹 [VECTOR STORE] Limpando arquivos antigos...');
 
-    const files = await (openai.beta as any).vectorStores.files.list(this.vectorStoreId!);
+    const files = await openai.vectorStores.files.list(this.vectorStoreId!);
 
-    for (const file of files.data) {
+    for await (const file of files) {
       console.log(`   🗑️  Removendo arquivo: ${file.id}`);
-      await (openai.beta as any).vectorStores.files.delete(this.vectorStoreId!, file.id);
+      await openai.vectorStores.files.delete(file.id, { vector_store_id: this.vectorStoreId! });
     }
 
     console.log('   ✅ Cleanup concluído');

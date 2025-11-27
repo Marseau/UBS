@@ -46,14 +46,52 @@ async function ensureBrowserInstance(): Promise<void> {
     return;
   }
 
+  // 🆕 VERIFICAR COOLDOWNS ANTES DE INICIAR BROWSER
+  const rotation = getAccountRotation();
+  let currentAccount = rotation.getCurrentAccount();
+
+  console.log(`\n🔍 ========== VERIFICAÇÃO PRÉ-INICIALIZAÇÃO ==========`);
+  console.log(`   Conta configurada: @${currentAccount.instagramUsername}`);
+  console.log(`   Bloqueada: ${currentAccount.isBlocked ? '❌ SIM' : '✅ NÃO'}`);
+
+  if (currentAccount.isBlocked) {
+    console.log(`\n⚠️  Conta atual está bloqueada - verificando melhor opção...`);
+
+    // Tentar rotacionar para conta mais fria
+    let rotationResult = await rotation.rotateToNextAccount();
+
+    // Se precisa aguardar, aguarda UMA VEZ o tempo máximo
+    if (rotationResult.requiresWait && rotationResult.waitMinutes) {
+      console.log(`\n⏰ ========================================`);
+      console.log(`⏰ 🚨 AGUARDANDO ${rotationResult.waitMinutes}min ANTES DE INICIAR`);
+      console.log(`⏰ Motivo: ${rotationResult.message}`);
+      console.log(`⏰ ========================================\n`);
+
+      const waitMs = rotationResult.waitMinutes * 60 * 1000;
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+
+      console.log(`✅ Período de espera concluído - executando rotação...`);
+      rotationResult = await rotation.rotateToNextAccount();
+    }
+
+    if (rotationResult.success && !rotationResult.requiresWait) {
+      console.log(`✅ Rotacionado para: @${rotationResult.newAccount}`);
+      // Atualizar referência da conta atual após rotação
+      currentAccount = rotation.getCurrentAccount();
+    } else {
+      console.log(`⚠️  Não foi possível rotacionar, tentando com conta atual mesmo assim...`);
+    }
+  } else {
+    console.log(`   ✅ Conta disponível - iniciando normalmente`);
+  }
+  console.log(`====================================================\n`);
+
   const headlessOption: boolean | 'new' = HEADLESS_ENABLED ? 'new' : false;
 
   // 🕵️ STEALTH ARGS: Usa args seguros SEMPRE, ou permite override via ENV
   let args = ENV_BROWSER_ARGS.length > 0 ? ENV_BROWSER_ARGS : [...STEALTH_BROWSER_ARGS];
 
   // 🎭 USER DATA DIR: Sessão persistente por conta para fingerprint consistente
-  const rotation = getAccountRotation();
-  const currentAccount = rotation.getCurrentAccount();
   const userDataDir = getUserDataDir(currentAccount.username);
 
   console.log(`🌐 Iniciando browser Puppeteer (headless=${HEADLESS_ENABLED})...`);
@@ -409,11 +447,21 @@ export async function ensureLoggedSession(): Promise<void> {
     }
 
     let loggedIn = false;
-    const cookiesLoaded = await loadCookies(sessionPage);
 
-    if (cookiesLoaded) {
-      console.log('🔍 Verificando sessão recuperada de cookies...');
-      loggedIn = await isLoggedIn(sessionPage);
+    // 🎯 FIX: Verificar PRIMEIRO se já existe sessão no userDataDir (browser persistente)
+    console.log('🔍 Verificando sessão existente no userDataDir...');
+    loggedIn = await isLoggedIn(sessionPage);
+
+    if (loggedIn) {
+      console.log('✅ Sessão válida encontrada no browser (userDataDir)');
+    } else {
+      // Tentar carregar cookies do arquivo JSON como fallback
+      const cookiesLoaded = await loadCookies(sessionPage);
+
+      if (cookiesLoaded) {
+        console.log('🔍 Verificando sessão recuperada de cookies...');
+        loggedIn = await isLoggedIn(sessionPage);
+      }
     }
 
     if (!loggedIn) {
@@ -435,42 +483,93 @@ export async function ensureLoggedSession(): Promise<void> {
     if (loggedUsername) {
       console.log(`👤 Usuário autenticado: @${loggedUsername}`);
 
-      // 🔄 SINCRONIZAR: Verificar se o username logado corresponde à conta esperada
+      // 🔄 VERIFICAR: O usuário logado é o que QUEREMOS usar?
       const rotation = getAccountRotation();
       const expectedAccount = rotation.getCurrentAccount();
-      const expectedUsername = expectedAccount.username.split('@')[0]; // Remover @gmail.com se tiver
+      const expectedInstagramUsername = expectedAccount.instagramUsername?.toLowerCase().replace('@', '') || '';
 
-      // Normalizar usernames para comparação (remover @, lowercase)
+      // Normalizar para comparação
       const loggedNormalized = loggedUsername.toLowerCase().replace('@', '');
-      const expectedNormalized = expectedUsername.toLowerCase().replace('@', '');
 
-      if (loggedNormalized !== expectedNormalized) {
-        console.warn(`⚠️  Username divergente detectado`);
-        console.warn(`   Email da conta: ${expectedUsername}`);
-        console.warn(`   Username Instagram: ${loggedUsername}`);
+      // 🎯 CRÍTICO: Comparar com o Instagram username ESPERADO (não o email)
+      if (loggedNormalized !== expectedInstagramUsername) {
+        console.warn(`\n🚨 ========== CONTA ERRADA DETECTADA ==========`);
+        console.warn(`   Conta LOGADA: @${loggedUsername}`);
+        console.warn(`   Conta ESPERADA: @${expectedInstagramUsername} (${expectedAccount.username})`);
+        console.warn(`   ❌ Sessão contaminada - FAZENDO LOGOUT + LIMPEZA COMPLETA`);
+        console.warn(`===============================================\n`);
 
-        // 🎯 FIX: Usar método correto para buscar por Instagram username
-        const correctIndex = rotation.findAccountByInstagramUsername(loggedUsername);
+        // 🔥 PASSO 1: Fazer LOGOUT da conta errada para não contaminar mais
+        try {
+          if (sessionPage && !sessionPage.isClosed()) {
+            console.log(`🚪 Fazendo logout da conta errada (@${loggedUsername})...`);
 
-        if (correctIndex !== -1) {
-          const foundAccount = rotation['accounts'][correctIndex];
-          console.log(`   ✅ Conta identificada: ${foundAccount.username} (@${foundAccount.instagramUsername || 'N/A'})`);
+            // Navegar para página de configurações e fazer logout
+            await sessionPage.goto('https://www.instagram.com/accounts/logout/', {
+              waitUntil: 'networkidle2',
+              timeout: 15000
+            }).catch(() => {
+              console.log(`   ⚠️  Não conseguiu navegar para logout, tentando via URL direta...`);
+            });
 
-          if (correctIndex !== rotation['state'].currentAccountIndex) {
-            console.log(`   🔄 Atualizando rotação: index ${rotation['state'].currentAccountIndex} → ${correctIndex}`);
-            rotation['state'].currentAccountIndex = correctIndex;
-            rotation['saveState']();
+            // Aguardar um pouco para o logout processar
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            console.log(`   ✅ Logout solicitado`);
           }
-          console.log(`   ✅ Sessão válida - username Instagram difere do email (normal)`);
-        } else {
-          // Username Instagram não corresponde a nenhuma conta conhecida
-          console.warn(`   ⚠️  Username Instagram "${loggedUsername}" não mapeado em nenhuma conta`);
-          console.warn(`   ℹ️  Configure INSTAGRAM_UNOFFICIAL_USERNAME_HANDLE ou INSTAGRAM_UNOFFICIAL2_USERNAME_HANDLE no .env`);
-          console.warn(`   ⚠️  Continuando pois sessão está válida (cookies OK)`);
-          // NÃO fazer logout - se a sessão está válida, usar ela
+        } catch (logoutError: any) {
+          console.warn(`   ⚠️  Erro no logout (continuando limpeza): ${logoutError.message}`);
         }
+
+        // 🔥 PASSO 2: Fechar browser
+        if (sessionPage && !sessionPage.isClosed()) {
+          await sessionPage.close().catch(() => {});
+        }
+        sessionPage = null;
+
+        if (browserInstance) {
+          await browserInstance.close().catch(() => {});
+        }
+        browserInstance = null;
+        loggedUsername = null;
+
+        // 🔥 PASSO 3: LIMPAR TODO O USERDATA DIR (não só cookies)
+        const userDataDir = getUserDataDir(expectedAccount.username);
+        console.log(`🗑️  Limpando userDataDir COMPLETO: ${userDataDir}`);
+
+        if (fs.existsSync(userDataDir)) {
+          try {
+            // Deletar diretório inteiro recursivamente
+            fs.rmSync(userDataDir, { recursive: true, force: true });
+            console.log(`   ✅ UserDataDir deletado completamente`);
+          } catch (e: any) {
+            console.warn(`   ⚠️  Erro ao deletar userDataDir: ${e.message}`);
+
+            // Fallback: tentar deletar só os cookies
+            const cookiesInDir = path.join(userDataDir, 'Default', 'Cookies');
+            if (fs.existsSync(cookiesInDir)) {
+              try {
+                fs.unlinkSync(cookiesInDir);
+                console.log(`   ✅ Arquivo Cookies deletado (fallback)`);
+              } catch (e2) {
+                console.warn(`   ⚠️  Não foi possível limpar cookies: ${e2}`);
+              }
+            }
+          }
+        }
+
+        // 🔥 PASSO 4: Limpar arquivo de cookies JSON também
+        const cookiesFile = getCookiesFile();
+        if (fs.existsSync(cookiesFile)) {
+          fs.unlinkSync(cookiesFile);
+          console.log(`🗑️  Arquivo de cookies JSON deletado: ${cookiesFile}`);
+        }
+
+        console.log(`\n✅ Limpeza completa finalizada - próxima tentativa fará login fresh\n`);
+
+        // Lançar erro para forçar novo login
+        throw new Error(`WRONG_ACCOUNT: Logado como @${loggedUsername} mas esperava @${expectedInstagramUsername}. Sessão limpa - reinicie para fazer login correto.`);
       } else {
-        console.log(`   ✅ Conta logada corresponde à esperada`);
+        console.log(`   ✅ Conta logada (@${loggedUsername}) corresponde à esperada (@${expectedInstagramUsername})`);
       }
     } else {
       // ⚠️ NÃO foi possível detectar username

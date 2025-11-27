@@ -670,10 +670,12 @@ async function resolveLoggedUsername(): Promise<void> {
   const currentUrl = sessionPage.url();
   console.log(`🔍 Tentando detectar usuário logado (página atual: ${currentUrl})...`);
 
-  // HARDCODE SOLUTION: We know the logged user from manual testing
-  // This is a temporary workaround since Instagram's HTML structure has changed
-  console.log(`💡 Usando username conhecido do proprietário da conta: marciofranco2`);
-  loggedUsername = 'marciofranco2';
+  // 🔄 ROTAÇÃO DE CONTAS: Usar Instagram username da conta ativa
+  const rotation = getAccountRotation();
+  const currentAccount = rotation.getCurrentAccount();
+  const expectedInstagramUsername = currentAccount.instagramUsername || currentAccount.username.split('@')[0];
+  console.log(`💡 Usando username da conta ativa: ${expectedInstagramUsername}`);
+  loggedUsername = expectedInstagramUsername;
   console.log(`🔐 Usuário logado definido: @${loggedUsername}`);
   return;
 
@@ -743,6 +745,7 @@ async function resolveLoggedUsername(): Promise<void> {
 
 /**
  * Garante que existe browser ativo e sessão logada.
+ * 🆕 VERIFICA COOLDOWNS ANTES DE INICIAR - aguarda se necessário
  */
 async function ensureLoggedSession(): Promise<void> {
   if (sessionInitialization) {
@@ -751,6 +754,45 @@ async function ensureLoggedSession(): Promise<void> {
   }
 
   sessionInitialization = (async () => {
+    // 🆕 VERIFICAR COOLDOWNS ANTES DE INICIAR BROWSER
+    // Se a conta atual estiver bloqueada, encontrar a melhor e aguardar se necessário
+    const rotation = InstagramAccountRotationService.getInstance();
+    const currentAccount = rotation.getCurrentAccount();
+
+    console.log(`\n🔍 ========== VERIFICAÇÃO PRÉ-INICIALIZAÇÃO ==========`);
+    console.log(`   Conta configurada: @${currentAccount.instagramUsername}`);
+    console.log(`   Bloqueada: ${currentAccount.isBlocked ? '❌ SIM' : '✅ NÃO'}`);
+
+    if (currentAccount.isBlocked) {
+      console.log(`\n⚠️  Conta atual está bloqueada - verificando melhor opção...`);
+
+      // Tentar rotacionar para conta mais fria
+      let rotationResult = await rotation.rotateToNextAccount();
+
+      // Se precisa aguardar, aguarda UMA VEZ o tempo máximo
+      if (rotationResult.requiresWait && rotationResult.waitMinutes) {
+        console.log(`\n⏰ ========================================`);
+        console.log(`⏰ 🚨 AGUARDANDO ${rotationResult.waitMinutes}min ANTES DE INICIAR`);
+        console.log(`⏰ Motivo: ${rotationResult.message}`);
+        console.log(`⏰ ========================================\n`);
+
+        const waitMs = rotationResult.waitMinutes * 60 * 1000;
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+
+        console.log(`✅ Período de espera concluído - executando rotação...`);
+        rotationResult = await rotation.rotateToNextAccount();
+      }
+
+      if (rotationResult.success && !rotationResult.requiresWait) {
+        console.log(`✅ Rotacionado para: @${rotationResult.newAccount}`);
+      } else {
+        console.log(`⚠️  Não foi possível rotacionar, tentando com conta atual mesmo assim...`);
+      }
+    } else {
+      console.log(`   ✅ Conta disponível - iniciando normalmente`);
+    }
+    console.log(`====================================================\n`);
+
     if (!browserInstance || !browserInstance.isConnected()) {
       console.log('🌐 Iniciando novo browser Puppeteer...');
 
@@ -887,8 +929,11 @@ async function ensureLoggedSession(): Promise<void> {
     }
 
     if (!loggedIn) {
-      const scraperUsername = process.env.INSTAGRAM_UNOFFICIAL_USERNAME;
-      const scraperPassword = process.env.INSTAGRAM_OFFICIAL_PASSWORD || process.env.INSTAGRAM_ALT_PASSWORD;
+      // 🔄 ROTAÇÃO DE CONTAS: Usar credenciais da conta ativa (NÃO do .env direto!)
+      const rotation = getAccountRotation();
+      const currentAccount = rotation.getCurrentAccount();
+      const scraperUsername = currentAccount.username;
+      const scraperPassword = currentAccount.password;
 
       if (!scraperUsername || !scraperPassword) {
         console.log('');
@@ -1128,11 +1173,12 @@ async function handleSessionError(page: Page, errorType: string): Promise<boolea
       const foundAccount = rotation['accounts'][actualAccountIndex];
       console.log(`   ✅ Conta identificada: ${foundAccount.username} (@${foundAccount.instagramUsername || 'N/A'})`);
 
-      if (actualAccountIndex !== rotation.state.currentAccountIndex) {
+      if (actualAccountIndex !== rotation['state'].currentAccountIndex) {
         console.log(`   ⚠️  DESSINCRONIA DETECTADA!`);
-        console.log(`   🔄 Corrigindo: index ${rotation.state.currentAccountIndex} → ${actualAccountIndex}`);
-        rotation.state.currentAccountIndex = actualAccountIndex;
-        console.log(`   ✅ Sincronização completa - conta correta identificada!`);
+        console.log(`   🔄 Corrigindo: index ${rotation['state'].currentAccountIndex} → ${actualAccountIndex}`);
+        // 🎯 FIX: Usar setAccount para garantir persistência do estado
+        rotation.setAccount(actualAccountIndex);
+        console.log(`   ✅ Sincronização completa - conta correta identificada e SALVA!`);
       } else {
         console.log(`   ✅ Estado sincronizado corretamente`);
       }
@@ -1151,13 +1197,13 @@ async function handleSessionError(page: Page, errorType: string): Promise<boolea
 
   if (isCriticalError) {
     console.log(`🚨 ERRO CRÍTICO (${errorType}) - Forçando rotação imediata...`);
+    // Usar o novo parâmetro forceFailureCount para evitar eventos duplicados
+    await rotation.recordFailure(errorType, 'Erro crítico - rotação forçada', 3);
     const currentAccount = rotation.getCurrentAccount();
-    currentAccount.failureCount = 3; // Forçar rotação imediata
-    currentAccount.lastFailureTime = Date.now(); // 🎯 Atualizar timestamp para AGORA
     console.log(`   🚨 Failure count forçado para 3 em ${currentAccount.username}`);
     console.log(`   🕐 lastFailureTime atualizado para: ${new Date().toLocaleString('pt-BR')}`);
   } else {
-    rotation.recordFailure();
+    await rotation.recordFailure(errorType);
   }
 
   // 🔍 Verificar se deve rotacionar (apenas para debug)
@@ -1213,19 +1259,42 @@ async function handleSessionError(page: Page, errorType: string): Promise<boolea
     console.log(`⚠️  Erro ao fechar browser: ${closeError.message}`);
   }
 
-  // 🔄 Rotacionar para próxima conta (forçar se SESSION_INVALID)
-  const rotationResult = await rotation.rotateToNextAccount(forceRotation);
+  // 🔄 Verificar se precisa aguardar antes de rotacionar
+  let rotationResult = await rotation.rotateToNextAccount();
+
+  // 🚨 Se precisa aguardar (IP cooling ou conta quente), aguarda UMA VEZ o tempo máximo
+  if (rotationResult.requiresWait && rotationResult.waitMinutes) {
+    console.log(`\n⏰ ========================================`);
+    console.log(`⏰ 🚨 AGUARDANDO ${rotationResult.waitMinutes}min ANTES DE ROTACIONAR`);
+    console.log(`⏰ Motivo: ${rotationResult.message}`);
+    console.log(`⏰ ========================================`);
+    console.log(`\n💡 AGUARDANDO dentro da request HTTP:`);
+    console.log(`   - Timeout HTTP ajustado no N8N para suportar cooldowns longos`);
+    console.log(`   - Após o wait, rotação será executada automaticamente\n`);
+
+    const waitMs = rotationResult.waitMinutes * 60 * 1000;
+    await new Promise(resolve => setTimeout(resolve, waitMs));
+
+    console.log(`✅ Período de espera concluído - executando rotação...`);
+
+    // Agora rotacionar (deve funcionar pois aguardamos o tempo máximo)
+    rotationResult = await rotation.rotateToNextAccount();
+  }
 
   if (!rotationResult.success) {
     console.log(`\n❌ ========================================`);
     console.log(`❌ NÃO FOI POSSÍVEL ROTACIONAR CONTA`);
     console.log(`❌ ${rotationResult.message}`);
     console.log(`❌ ========================================\n`);
+    return false;
+  }
 
-    if (rotationResult.requiresWait) {
-      console.log(`⏰ Sistema requer aguardar ${rotationResult.waitMinutes} minutos antes de continuar`);
-    }
-
+  // Verificação de segurança (não deveria acontecer após aguardar tempo máximo)
+  if (rotationResult.requiresWait) {
+    console.log(`\n❌ ========================================`);
+    console.log(`❌ ERRO INESPERADO: ainda requer wait após aguardar tempo máximo`);
+    console.log(`❌ ${rotationResult.message}`);
+    console.log(`❌ ========================================\n`);
     return false;
   }
 
@@ -1233,47 +1302,6 @@ async function handleSessionError(page: Page, errorType: string): Promise<boolea
   console.log(`✅ ROTAÇÃO BEM-SUCEDIDA`);
   console.log(`✅ Nova conta: ${rotationResult.newAccount}`);
   console.log(`✅ ========================================\n`);
-
-  // 🔄 ESTRATÉGIA DE COOLDOWN:
-  // - Cooldown individual (≤2h): ESPERA dentro da request (timeout HTTP = 1h)
-  // - Cooldown GLOBAL (4h): RETORNA ERRO → N8N para workflow
-  if (rotationResult.requiresWait && rotationResult.waitMinutes && rotationResult.waitMinutes > 0) {
-    const rotation = getAccountRotation();
-    const isGlobalCooldown = rotation.isInGlobalCooldown();
-
-    if (isGlobalCooldown) {
-      // 🛑 COOLDOWN GLOBAL (4h) - LANÇAR ERRO PARA PARAR WORKFLOW
-      console.log(`\n🛑 ========================================`);
-      console.log(`🛑 COOLDOWN GLOBAL ATIVADO (4 HORAS)`);
-      console.log(`🛑 Ambas as contas falharam recentemente`);
-      console.log(`🛑 Tempo de espera: ${rotationResult.waitMinutes} minutos`);
-      console.log(`🛑 ========================================`);
-      console.log(`\n💡 AÇÃO NECESSÁRIA:`);
-      console.log(`   - N8N deve PARAR o workflow`);
-      console.log(`   - Aguardar 4h antes de tentar novamente`);
-      console.log(`   - Verificar contas manualmente no Instagram\n`);
-
-      // ❌ LANÇAR ERRO PARA PARAR WORKFLOW N8N
-      throw new GlobalCooldownError(
-        `GLOBAL_COOLDOWN: Ambas as contas em cooldown. Aguarde ${rotationResult.waitMinutes} minutos (4h).`,
-        rotationResult.waitMinutes
-      );
-    }
-
-    // ⏰ COOLDOWN INDIVIDUAL - ESPERAR dentro da request
-    console.log(`\n⏰ ========================================`);
-    console.log(`⏰ COOLDOWN INDIVIDUAL DA CONTA`);
-    console.log(`⏰ Conta: ${rotationResult.newAccount}`);
-    console.log(`⏰ Tempo de espera: ${rotationResult.waitMinutes} minutos`);
-    console.log(`⏰ ========================================`);
-    console.log(`\n💡 AGUARDANDO dentro da request HTTP:`);
-    console.log(`   - Timeout HTTP ajustado no N8N para suportar cooldowns longos`);
-    console.log(`   - Sistema aguardará e continuará automaticamente\n`);
-
-    const waitMs = rotationResult.waitMinutes * 60 * 1000;
-    await new Promise(resolve => setTimeout(resolve, waitMs));
-    console.log(`✅ Período de espera concluído - conta ${rotationResult.newAccount} pronta!`);
-  }
 
   // 🔐 Inicializar nova sessão com nova conta
   try {
@@ -3661,10 +3689,9 @@ export async function scrapeInstagramTag(
         }
       }
 
-      // 🎯 PASSO 3: Registrar falha na conta CORRETA
-      accountRotation.recordFailure();
+      // 🎯 PASSO 3: Registrar falha na conta CORRETA (forçar count=3 para rotação imediata)
+      await accountRotation.recordFailure('SESSION_INVALID', 'Sessão inválida detectada', 3);
       const currentAccount = accountRotation.getCurrentAccount();
-      currentAccount.failureCount = 3; // Forçar rotação imediata
       console.log(`   🚨 Failure count forçado para 3 em ${currentAccount.username} (sessão inválida detectada)`);
 
       // 🧹 PASSO 4: Fechar CONTEXTO LOCAL (não global!)
@@ -3754,10 +3781,9 @@ export async function scrapeInstagramTag(
         }
       }
 
-      // 🎯 PASSO 3: Registrar falha na conta CORRETA
-      accountRotation.recordFailure();
+      // 🎯 PASSO 3: Registrar falha na conta CORRETA (forçar count=3 para rotação imediata)
+      await accountRotation.recordFailure('RATE_LIMIT_429', 'Bloqueio HTTP 429 detectado', 3);
       const currentAccount = accountRotation.getCurrentAccount();
-      currentAccount.failureCount = 3; // Forçar rotação imediata
       console.log(`   🚨 Failure count forçado para 3 em ${currentAccount.username} (bloqueio confirmado por HTTP 429)`);
 
       // 🧹 PASSO 4: Fechar CONTEXTO LOCAL (não global!)

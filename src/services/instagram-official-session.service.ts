@@ -37,10 +37,12 @@ export function getExpectedUsername(operationType: OperationType): string {
     // Operações de engajamento usam conta oficial
     return process.env.INSTAGRAM_OFFICIAL_USERNAME || 'ubs.sistemas';
   } else {
-    // Operações de scraping usam conta não-oficial
-    const unofficialUsername = process.env.INSTAGRAM_UNOFFICIAL_USERNAME || 'francomarcio887@gmail.com';
-    // Se for email, extrair username
-    return unofficialUsername.includes('@') ? unofficialUsername.split('@')[0] : unofficialUsername;
+    // 🔄 ROTAÇÃO DE CONTAS: Usar conta ativa do sistema de rotação
+    const { getAccountRotation } = require('./instagram-account-rotation.service');
+    const rotation = getAccountRotation();
+    const currentAccount = rotation.getCurrentAccount();
+    // Preferir instagramUsername se definido, senão extrair do email
+    return currentAccount.instagramUsername || currentAccount.username.split('@')[0];
   }
 }
 
@@ -803,15 +805,18 @@ export async function switchToAlternativeAccount(): Promise<string> {
         await humanDelay(500, 200);
 
         if (detectedUsername) {
-          // Verificar se é a conta correta (extrair username do email alternativo)
-          const expectedUsername = altEmail.split('@')[0]; // "francomarcio887"
+          // 🔄 ROTAÇÃO DE CONTAS: Verificar se é a conta ativa do sistema de rotação
+          const { getAccountRotation } = require('./instagram-account-rotation.service');
+          const rotation = getAccountRotation();
+          const currentAccount = rotation.getCurrentAccount();
+          const expectedUsername = currentAccount.instagramUsername || currentAccount.username.split('@')[0];
 
-          if (detectedUsername === expectedUsername || detectedUsername.includes('marcio')) {
+          if (detectedUsername === expectedUsername || detectedUsername === currentAccount.instagramUsername) {
             loggedUsername = detectedUsername;
             console.log(`✅ [OFICIAL] Já estava logado com conta correta: @${detectedUsername}\n`);
             return detectedUsername;
           } else {
-            console.log(`⚠️  [OFICIAL] Logado com conta errada (@${detectedUsername}), forçando novo login...`);
+            console.log(`⚠️  [OFICIAL] Logado com conta errada (@${detectedUsername}), esperado: @${expectedUsername}, forçando novo login...`);
           }
         }
       }

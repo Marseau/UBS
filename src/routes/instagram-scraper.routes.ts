@@ -1812,6 +1812,119 @@ router.post('/clean-orphan-pages', async (req: Request, res: Response) => {
   }
 });
 
+// ========== ENDPOINTS DE ROTAÇÃO DE CONTAS ==========
+
+/**
+ * GET /api/instagram-scraper/rotation-status
+ * Retorna status completo do sistema de rotação de contas
+ */
+router.get('/rotation-status', async (_req: Request, res: Response) => {
+  try {
+    const { getAccountRotation } = await import('../services/instagram-account-rotation.service');
+    const rotation = getAccountRotation();
+
+    // Forçar sincronização com BD antes de retornar status
+    await rotation.forceSync();
+
+    const stats = rotation.getStats();
+
+    return res.status(200).json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      ...stats
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao obter status de rotação',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/rotation-cooldown
+ * Define cooldown manual para uma conta
+ *
+ * Body:
+ * {
+ *   "account": "gourmetsousvide",  // username ou instagram handle
+ *   "cooldown_until": "2025-11-26T21:00:00-03:00",  // ISO datetime
+ *   "reason": "Conta muito queimada"  // opcional
+ * }
+ */
+router.post('/rotation-cooldown', async (req: Request, res: Response) => {
+  try {
+    const { account, cooldown_until, reason } = req.body;
+
+    if (!account || !cooldown_until) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campos "account" e "cooldown_until" são obrigatórios'
+      });
+    }
+
+    const { getAccountRotation } = await import('../services/instagram-account-rotation.service');
+    const rotation = getAccountRotation();
+
+    const cooldownDate = new Date(cooldown_until);
+    if (isNaN(cooldownDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo "cooldown_until" deve ser uma data válida (ISO format)'
+      });
+    }
+
+    const success = await rotation.setManualCooldown(account, cooldownDate, reason);
+
+    if (!success) {
+      return res.status(404).json({
+        success: false,
+        message: `Conta não encontrada: ${account}`
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Cooldown manual definido para ${account} até ${cooldownDate.toLocaleString('pt-BR')}`,
+      cooldown_until: cooldownDate.toISOString()
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao definir cooldown manual',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/rotation-sync
+ * Força sincronização do estado de rotação com BD
+ */
+router.post('/rotation-sync', async (_req: Request, res: Response) => {
+  try {
+    const { getAccountRotation } = await import('../services/instagram-account-rotation.service');
+    const rotation = getAccountRotation();
+
+    await rotation.forceSync();
+    const stats = rotation.getStats();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Sincronização forçada com BD concluída',
+      timestamp: new Date().toISOString(),
+      ...stats
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao sincronizar com BD',
+      error: error.message
+    });
+  }
+});
+
 console.log('🔍 [DEBUG] Instagram Scraper Routes - All routes registered, exporting router');
 
 export default router;

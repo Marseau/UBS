@@ -4,11 +4,11 @@
  * Gerencia rotação inteligente entre múltiplas contas Instagram
  * para evitar bloqueios e shadowbans
  *
- * LÓGICA:
- * - Conta 1 → Falha 3x → Cooldown 30min → Troca para Conta 2
- * - Conta 2 → Falha 3x → Cooldown 30min → Volta Conta 1
- * - Se ambas falharem no mesmo ciclo → Para por 2h
- * - Máximo 2 ciclos completos → Para completamente
+ * LÓGICA SIMPLIFICADA:
+ * - Conta atual falha → Verifica se outra conta esfriou (2h desde última falha)
+ * - Se esfriou → Rotaciona imediatamente
+ * - Se NÃO esfriou → Aguarda tempo restante para esfriar, depois rotaciona
+ * - Se AMBAS estão quentes E nenhuma vai esfriar em breve → Cooldown global
  */
 
 import fs from 'fs';
@@ -23,31 +23,30 @@ interface AccountConfig {
   failureCount: number;
   lastFailureTime: number;
   isBlocked: boolean;
+  cooldownUntil?: number;            // Timestamp explícito para cooldown manual
 }
 
 interface AccountState {
   username: string;
-  instagramUsername?: string;        // Username público do Instagram
+  instagramUsername?: string;
   failureCount: number;
   lastFailureTime: number;
   isBlocked: boolean;
+  cooldownUntil?: number;            // Timestamp explícito para cooldown manual
 }
 
 interface RotationState {
   currentAccountIndex: number;
-  cyclesCompleted: number;
   lastRotationTime: number;
-  globalCooldownUntil: number;
-  accounts: AccountState[]; // 🎯 NOVO: Persistir estado das contas
+  accounts: AccountState[];
 }
 
 const COOKIES_DIR = path.join(process.cwd(), 'cookies');
 const STATE_FILE = path.join(COOKIES_DIR, 'rotation-state.json');
 
 // Configurações
-const ACCOUNT_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 horas (conta com falhas recentes)
-const GLOBAL_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 horas (ambas falharam)
-const MAX_ROTATION_CYCLES = 2;
+const ACCOUNT_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 horas para conta esfriar
+const ROTATION_DELAY_MS = 30 * 60 * 1000; // 30 min de delay obrigatório entre rotações (IP cooling)
 
 // Supabase client para audit logging
 const supabase = createClient(
@@ -58,18 +57,20 @@ const supabase = createClient(
 class InstagramAccountRotation {
   private accounts: AccountConfig[] = [];
   private state: RotationState;
+  private syncInitialized: boolean = false;
 
   constructor() {
-    // Criar diretório de cookies se não existir
     if (!fs.existsSync(COOKIES_DIR)) {
       fs.mkdirSync(COOKIES_DIR, { recursive: true });
     }
 
-    // Inicializar contas do .env
     this.initializeAccounts();
-
-    // Carregar estado
     this.state = this.loadState();
+
+    // Sincronizar com BD de forma assíncrona após inicialização
+    this.syncFromDatabase().catch(err => {
+      console.warn(`⚠️  Erro na sincronização inicial com BD: ${err.message}`);
+    });
   }
 
   private initializeAccounts(): void {
@@ -121,9 +122,8 @@ class InstagramAccountRotation {
         const data = fs.readFileSync(STATE_FILE, 'utf8');
         const loadedState = JSON.parse(data);
 
-        // 🔄 RESTAURAR estado das contas (failureCount, lastFailureTime) se existir
+        // Restaurar estado das contas
         if (loadedState.accounts && Array.isArray(loadedState.accounts)) {
-          // Mesclar dados persistidos com contas configuradas
           loadedState.accounts.forEach((savedAccount: AccountState) => {
             const account = this.accounts.find(acc => acc.username === savedAccount.username);
             if (account) {
@@ -135,37 +135,214 @@ class InstagramAccountRotation {
           });
         }
 
-        return loadedState;
+        // Migrar estado antigo (remover campos obsoletos)
+        return {
+          currentAccountIndex: loadedState.currentAccountIndex || 0,
+          lastRotationTime: loadedState.lastRotationTime || 0,
+          accounts: loadedState.accounts || []
+        };
       }
     } catch (error: any) {
       console.warn(`⚠️ Erro ao carregar estado de rotação: ${error.message}`);
     }
 
-    // Estado padrão
     return {
       currentAccountIndex: 0,
-      cyclesCompleted: 0,
       lastRotationTime: 0,
-      globalCooldownUntil: 0,
       accounts: []
     };
   }
 
   private saveState(): void {
     try {
-      // 💾 SALVAR estado das contas (failureCount, lastFailureTime) para persistir entre restarts
       this.state.accounts = this.accounts.map(acc => ({
         username: acc.username,
         instagramUsername: acc.instagramUsername,
         failureCount: acc.failureCount,
         lastFailureTime: acc.lastFailureTime,
-        isBlocked: acc.isBlocked
+        isBlocked: acc.isBlocked,
+        cooldownUntil: acc.cooldownUntil
       }));
 
       fs.writeFileSync(STATE_FILE, JSON.stringify(this.state, null, 2));
+
+      // Sincronizar com BD de forma assíncrona
+      this.syncToDatabase().catch(err => {
+        console.warn(`⚠️  Erro ao sincronizar com BD: ${err.message}`);
+      });
     } catch (error: any) {
       console.error(`❌ Erro ao salvar estado de rotação: ${error.message}`);
     }
+  }
+
+  /**
+   * Sincroniza estado do BD para memória/JSON
+   * BD é fonte de verdade para cooldownUntil (cooldowns manuais)
+   */
+  async syncFromDatabase(): Promise<void> {
+    try {
+      const { data, error } = await supabase
+        .from('instagram_account_rotation_state')
+        .select('*');
+
+      if (error) {
+        console.warn(`⚠️  Erro ao buscar estado do BD: ${error.message}`);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        console.log(`📥 [SYNC] Nenhum estado no BD - usando JSON local`);
+        // Primeira vez: sincronizar JSON -> BD
+        await this.syncToDatabase();
+        return;
+      }
+
+      console.log(`📥 [SYNC] Sincronizando ${data.length} contas do BD...`);
+
+      let hasChanges = false;
+      let currentAccountFromDb: string | null = null;
+
+      for (const dbAccount of data) {
+        const account = this.accounts.find(acc => acc.username === dbAccount.account_email);
+        if (!account) continue;
+
+        // Verificar cooldown manual do BD (prioridade sobre JSON)
+        if (dbAccount.cooldown_until) {
+          const cooldownUntilTs = new Date(dbAccount.cooldown_until).getTime();
+          const now = Date.now();
+
+          if (cooldownUntilTs > now) {
+            // Cooldown ainda ativo no BD
+            if (!account.cooldownUntil || account.cooldownUntil !== cooldownUntilTs) {
+              console.log(`   🔄 @${account.instagramUsername}: cooldown manual do BD até ${new Date(cooldownUntilTs).toLocaleString('pt-BR')}`);
+              account.cooldownUntil = cooldownUntilTs;
+              account.isBlocked = true;
+              hasChanges = true;
+            }
+          } else {
+            // Cooldown expirou - limpar
+            if (account.cooldownUntil) {
+              console.log(`   ✅ @${account.instagramUsername}: cooldown manual expirou`);
+              account.cooldownUntil = undefined;
+              hasChanges = true;
+            }
+          }
+        }
+
+        // Verificar qual conta está ativa no BD
+        if (dbAccount.is_current_account) {
+          currentAccountFromDb = dbAccount.account_email;
+        }
+      }
+
+      // Sincronizar conta ativa do BD
+      if (currentAccountFromDb) {
+        const dbCurrentIndex = this.accounts.findIndex(acc => acc.username === currentAccountFromDb);
+        if (dbCurrentIndex >= 0 && dbCurrentIndex !== this.state.currentAccountIndex) {
+          console.log(`   🔄 Conta ativa no BD: ${currentAccountFromDb} (index ${dbCurrentIndex})`);
+          this.state.currentAccountIndex = dbCurrentIndex;
+          hasChanges = true;
+        }
+      }
+
+      if (hasChanges) {
+        // Salvar mudanças no JSON (sem re-sincronizar para BD)
+        this.state.accounts = this.accounts.map(acc => ({
+          username: acc.username,
+          instagramUsername: acc.instagramUsername,
+          failureCount: acc.failureCount,
+          lastFailureTime: acc.lastFailureTime,
+          isBlocked: acc.isBlocked,
+          cooldownUntil: acc.cooldownUntil
+        }));
+        fs.writeFileSync(STATE_FILE, JSON.stringify(this.state, null, 2));
+        console.log(`   ✅ JSON atualizado com dados do BD`);
+      }
+
+      this.syncInitialized = true;
+      console.log(`📥 [SYNC] Sincronização com BD concluída`);
+
+    } catch (error: any) {
+      console.error(`❌ Erro na sincronização com BD: ${error.message}`);
+    }
+  }
+
+  /**
+   * Sincroniza estado da memória/JSON para BD
+   */
+  async syncToDatabase(): Promise<void> {
+    try {
+      const currentAccount = this.accounts[this.state.currentAccountIndex];
+
+      for (const account of this.accounts) {
+        const isCurrent = account.username === currentAccount?.username;
+
+        // Calcular cooldown_until
+        let cooldownUntil: string | null = null;
+        if (account.cooldownUntil && account.cooldownUntil > Date.now()) {
+          cooldownUntil = new Date(account.cooldownUntil).toISOString();
+        } else if (account.lastFailureTime && account.isBlocked) {
+          cooldownUntil = new Date(account.lastFailureTime + ACCOUNT_COOLDOWN_MS).toISOString();
+        }
+
+        const { error } = await supabase
+          .from('instagram_account_rotation_state')
+          .upsert({
+            account_email: account.username,
+            account_instagram_username: account.instagramUsername || '',
+            failure_count: account.failureCount,
+            last_failure_time: account.lastFailureTime ? new Date(account.lastFailureTime).toISOString() : null,
+            is_blocked: account.isBlocked,
+            is_current_account: isCurrent,
+            cooldown_until: cooldownUntil,
+            last_rotation_time: this.state.lastRotationTime ? new Date(this.state.lastRotationTime).toISOString() : null,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'account_email'
+          });
+
+        if (error) {
+          console.warn(`⚠️  Erro ao sincronizar ${account.username} para BD: ${error.message}`);
+        }
+      }
+
+      console.log(`📤 [SYNC] Estado sincronizado para BD`);
+    } catch (error: any) {
+      console.error(`❌ Erro ao sincronizar para BD: ${error.message}`);
+    }
+  }
+
+  /**
+   * Define cooldown manual para uma conta (via BD)
+   */
+  async setManualCooldown(accountIdentifier: string, cooldownUntil: Date, reason?: string): Promise<boolean> {
+    const targetIndex = this.accounts.findIndex(acc => {
+      const accLower = acc.username.toLowerCase();
+      const identLower = accountIdentifier.toLowerCase();
+      const instagramLower = (acc.instagramUsername || '').toLowerCase().replace('@', '');
+      return accLower.includes(identLower) ||
+             identLower.includes(instagramLower) ||
+             instagramLower === identLower;
+    });
+
+    if (targetIndex < 0) {
+      console.log(`❌ Conta não encontrada: ${accountIdentifier}`);
+      return false;
+    }
+
+    const account = this.accounts[targetIndex];
+    if (!account) return false;
+
+    account.cooldownUntil = cooldownUntil.getTime();
+    account.isBlocked = true;
+
+    console.log(`⏸️  Cooldown manual definido para @${account.instagramUsername} até ${cooldownUntil.toLocaleString('pt-BR')}`);
+
+    // Registrar no audit
+    await this.logRotationEvent(account, 'cooldown_started', undefined, reason || 'Cooldown manual');
+
+    this.saveState();
+    return true;
   }
 
   /**
@@ -181,8 +358,6 @@ class InstagramAccountRotation {
 
   /**
    * Encontra conta pelo Instagram username
-   * @param instagramUsername - Username do Instagram (ex: "marciofranco2")
-   * @returns Índice da conta ou -1 se não encontrado
    */
   findAccountByInstagramUsername(instagramUsername: string): number {
     if (!instagramUsername) return -1;
@@ -198,7 +373,6 @@ class InstagramAccountRotation {
 
   /**
    * Registra evento de rotação no banco de dados
-   * @private
    */
   private async logRotationEvent(
     account: AccountConfig,
@@ -221,64 +395,106 @@ class InstagramAccountRotation {
         p_cooldown_until: cooldownUntil
       });
     } catch (error: any) {
-      // Não falhar se logging falhar - apenas avisar
       console.warn(`⚠️  Erro ao registrar evento no audit: ${error.message}`);
     }
   }
 
   /**
-   * Verifica se está em cooldown global
+   * Verifica se uma conta específica esfriou (passou 2h desde última falha OU cooldown manual)
    */
-  isInGlobalCooldown(): boolean {
-    return Date.now() < this.state.globalCooldownUntil;
+  private hasAccountCooledDown(account: AccountConfig): boolean {
+    const now = Date.now();
+
+    // Verificar cooldown manual explícito (prioridade)
+    if (account.cooldownUntil && account.cooldownUntil > now) {
+      return false; // Cooldown manual ainda ativo
+    }
+
+    // Limpar cooldown manual expirado
+    if (account.cooldownUntil && account.cooldownUntil <= now) {
+      account.cooldownUntil = undefined;
+      account.isBlocked = false;
+    }
+
+    if (account.failureCount === 0 || !account.lastFailureTime) {
+      return true; // Conta sem falhas está sempre disponível
+    }
+    const elapsed = now - account.lastFailureTime;
+    return elapsed >= ACCOUNT_COOLDOWN_MS;
   }
 
   /**
-   * Retorna tempo restante de cooldown global em minutos
+   * Retorna tempo restante para conta esfriar (em minutos)
    */
-  getGlobalCooldownMinutes(): number {
-    if (!this.isInGlobalCooldown()) return 0;
-    return Math.ceil((this.state.globalCooldownUntil - Date.now()) / 60000);
+  private getAccountCooldownRemaining(account: AccountConfig): number {
+    if (this.hasAccountCooledDown(account)) return 0;
+
+    const now = Date.now();
+
+    // Verificar cooldown manual explícito (prioridade)
+    if (account.cooldownUntil && account.cooldownUntil > now) {
+      return Math.ceil((account.cooldownUntil - now) / 60000);
+    }
+
+    // Cooldown baseado em lastFailureTime
+    const elapsed = now - account.lastFailureTime;
+    const remaining = ACCOUNT_COOLDOWN_MS - elapsed;
+    return Math.ceil(remaining / 60000);
   }
 
   /**
    * Registra falha na conta atual
+   * @param errorType Tipo do erro (opcional)
+   * @param errorMessage Mensagem do erro (opcional)
+   * @param forceFailureCount Se definido, usa este valor em vez de incrementar
    */
-  async recordFailure(errorType?: string, errorMessage?: string): Promise<void> {
+  async recordFailure(errorType?: string, errorMessage?: string, forceFailureCount?: number): Promise<void> {
     const account = this.getCurrentAccount();
-    account.failureCount++;
+
+    if (forceFailureCount !== undefined) {
+      // Usar valor forçado (para erros críticos que precisam de rotação imediata)
+      account.failureCount = forceFailureCount;
+    } else {
+      account.failureCount++;
+    }
+
     account.lastFailureTime = Date.now();
+    account.isBlocked = true;
 
     console.log(`❌ Falha registrada para ${account.username} (${account.failureCount} falhas)`);
 
-    // Registrar no banco de dados
     await this.logRotationEvent(account, 'failure_registered', errorType, errorMessage);
-
-    // Se atingiu 3 falhas, registrar início de cooldown
-    if (account.failureCount >= 3) {
-      await this.logRotationEvent(account, 'cooldown_started', errorType, 'Conta atingiu 3 falhas');
-    }
+    this.saveState();
   }
 
   /**
    * Registra sucesso na conta atual (reseta contadores)
+   * Só registra evento se a conta estava com falhas (evita spam de eventos)
    */
   async recordSuccess(): Promise<void> {
     const account = this.getCurrentAccount();
-    const wasInCooldown = account.failureCount >= 3;
+    const wasBlocked = account.isBlocked;
+    const hadFailures = account.failureCount > 0;
+
+    // Só faz algo se a conta tinha problemas anteriores
+    if (!wasBlocked && !hadFailures) {
+      // Conta já estava saudável, não precisa registrar nada
+      return;
+    }
 
     account.failureCount = 0;
     account.isBlocked = false;
 
     console.log(`✅ Sucesso registrado para ${account.username} (contadores resetados)`);
 
-    // Registrar fim de cooldown se estava em cooldown
-    if (wasInCooldown) {
+    // Registrar apenas UM evento de recuperação
+    if (wasBlocked) {
       await this.logRotationEvent(account, 'cooldown_ended', undefined, 'Conta recuperada com sucesso');
+    } else if (hadFailures) {
+      await this.logRotationEvent(account, 'session_recovered');
     }
 
-    // Registrar sessão recuperada
-    await this.logRotationEvent(account, 'session_recovered');
+    this.saveState();
   }
 
   /**
@@ -287,38 +503,23 @@ class InstagramAccountRotation {
   shouldRotate(): boolean {
     console.log(`\n🔍 ========== DEBUG shouldRotate() ==========`);
 
-    // Não rotacionar se tem apenas 1 conta
     if (this.accounts.length <= 1) {
       console.log(`   ❌ shouldRotate = FALSE: Só tem ${this.accounts.length} conta(s)`);
       console.log(`==========================================\n`);
       return false;
     }
-    console.log(`   ✅ Check 1 PASSOU: ${this.accounts.length} contas configuradas`);
-
-    // Não rotacionar se está em cooldown global
-    if (this.isInGlobalCooldown()) {
-      const minutesLeft = this.getGlobalCooldownMinutes();
-      const cooldownUntil = new Date(this.state.globalCooldownUntil).toLocaleString('pt-BR');
-      console.log(`   ❌ shouldRotate = FALSE: Em COOLDOWN GLOBAL`);
-      console.log(`      Cooldown até: ${cooldownUntil}`);
-      console.log(`      Tempo restante: ${minutesLeft} minutos`);
-      console.log(`      Ciclos completados: ${this.state.cyclesCompleted}/${MAX_ROTATION_CYCLES}`);
-      console.log(`==========================================\n`);
-      return false;
-    }
-    console.log(`   ✅ Check 2 PASSOU: Não está em cooldown global`);
 
     const account = this.getCurrentAccount();
     console.log(`   🔍 Conta atual: ${account.username}`);
+    console.log(`   🔍 isBlocked: ${account.isBlocked}`);
     console.log(`   🔍 Failure count: ${account.failureCount}`);
-    console.log(`   🔍 Última falha: ${account.lastFailureTime ? new Date(account.lastFailureTime).toLocaleString('pt-BR') : 'nunca'}`);
 
-    // Rotacionar se a conta atual atingiu limite de falhas
-    const should = account.failureCount >= 3;
+    // Rotacionar se a conta atual está bloqueada
+    const should = account.isBlocked;
     if (should) {
-      console.log(`   ✅ shouldRotate = TRUE: failureCount (${account.failureCount}) >= 3`);
+      console.log(`   ✅ shouldRotate = TRUE: conta está bloqueada`);
     } else {
-      console.log(`   ❌ shouldRotate = FALSE: failureCount (${account.failureCount}) < 3`);
+      console.log(`   ❌ shouldRotate = FALSE: conta não está bloqueada`);
     }
     console.log(`==========================================\n`);
 
@@ -327,16 +528,15 @@ class InstagramAccountRotation {
 
   /**
    * Rotaciona para próxima conta
-   * @param forceRotation - Se TRUE, ignora cooldown global (usar para SESSION_INVALID)
+   * Retorna informações sobre o que fazer (rotacionar imediato, aguardar, ou parar)
    */
-  async rotateToNextAccount(forceRotation: boolean = false): Promise<{
+  async rotateToNextAccount(): Promise<{
     success: boolean;
     message: string;
     newAccount: string;
     requiresWait: boolean;
     waitMinutes?: number;
   }> {
-    // Verificar se pode rotacionar
     if (this.accounts.length <= 1) {
       return {
         success: false,
@@ -346,174 +546,97 @@ class InstagramAccountRotation {
       };
     }
 
-    // Verificar cooldown global (SKIP se forceRotation = true)
-    if (!forceRotation && this.isInGlobalCooldown()) {
-      const minutesLeft = this.getGlobalCooldownMinutes();
+    const currentAccount = this.getCurrentAccount();
+
+    // 🆕 Encontrar a conta MAIS FRIA (menor cooldown restante) excluindo a atual
+    const otherAccounts = this.accounts
+      .map((acc, idx) => ({ account: acc, index: idx, cooldownRemaining: this.getAccountCooldownRemaining(acc) }))
+      .filter(item => item.account.username !== currentAccount.username)
+      .sort((a, b) => a.cooldownRemaining - b.cooldownRemaining);
+
+    if (otherAccounts.length === 0) {
       return {
         success: false,
-        message: `Sistema em cooldown global - aguarde ${minutesLeft} minutos`,
-        newAccount: this.getCurrentAccount().username,
-        requiresWait: true,
-        waitMinutes: minutesLeft
+        message: 'Erro: nenhuma outra conta disponível para rotação',
+        newAccount: currentAccount.username,
+        requiresWait: false
       };
     }
 
-    // Se forçando rotação apesar de cooldown global, avisar
-    if (forceRotation && this.isInGlobalCooldown()) {
-      const minutesLeft = this.getGlobalCooldownMinutes();
-      console.log(`\n⚠️  ROTAÇÃO FORÇADA apesar de cooldown global (${minutesLeft}min restantes)`);
-      console.log(`   Razão: SESSION_INVALID detectado - precisa trocar conta agora`);
-    }
+    // Pegar a conta com menor cooldown (mais fria)
+    const bestOption = otherAccounts[0]!;
+    const nextAccount = bestOption.account;
+    const nextIndex = bestOption.index;
 
-    const currentAccount = this.getCurrentAccount();
     console.log(`\n🔄 ========== ROTAÇÃO DE CONTAS ==========`);
-    console.log(`   Conta atual: ${currentAccount.username}`);
-    console.log(`   Falhas: ${currentAccount.failureCount}`);
+    console.log(`   Conta atual: ${currentAccount.username} (bloqueada)`);
+    console.log(`   🎯 Conta MAIS FRIA: ${nextAccount.username} (${nextAccount.instagramUsername})`);
 
-    // Marcar conta atual como bloqueada temporariamente
-    currentAccount.isBlocked = true;
-
-    // Calcular próxima conta
-    const nextIndex = (this.state.currentAccountIndex + 1) % this.accounts.length;
-    const nextAccount = this.accounts[nextIndex];
-
-    if (!nextAccount) {
-      throw new Error(`Nenhuma conta encontrada no índice ${nextIndex}`);
+    // Listar todas as opções para debug
+    console.log(`   📊 Ranking de contas por cooldown:`);
+    for (const opt of otherAccounts) {
+      const status = opt.cooldownRemaining === 0 ? '✅ DISPONÍVEL' : `⏳ ${opt.cooldownRemaining}min`;
+      console.log(`      - @${opt.account.instagramUsername}: ${status}`);
     }
 
-    // ✅ VERIFICAR SE PRÓXIMA CONTA ESFRIOU (ANTES de incrementar ciclos)
-    const elapsedMs = Date.now() - nextAccount.lastFailureTime;
-    const hasCooledDown = elapsedMs >= ACCOUNT_COOLDOWN_MS || nextAccount.failureCount === 0;
-    const cooledMinutes = Math.floor(elapsedMs / 60000);
+    // Verificar se a conta mais fria já esfriou
+    const nextCooledDown = this.hasAccountCooledDown(nextAccount);
+    const nextCooldownRemaining = bestOption.cooldownRemaining;
 
-    console.log(`\n🔍 Verificando próxima conta: ${nextAccount.username}`);
-    console.log(`   Falhas anteriores: ${nextAccount.failureCount}`);
-    if (nextAccount.failureCount > 0) {
-      console.log(`   Tempo desde última falha: ${cooledMinutes} minutos`);
-      console.log(`   Cooldown necessário: ${ACCOUNT_COOLDOWN_MS / 60000} minutos (2h)`);
-      console.log(`   Status: ${hasCooledDown ? '✅ ESFRIOU - Pode usar' : '⏳ Ainda aquecida'}`);
-    }
+    // 🆕 Verificar delay obrigatório de rotação (IP cooling)
+    const timeSinceLastRotation = Date.now() - this.state.lastRotationTime;
+    const rotationDelayRemaining = Math.max(0, ROTATION_DELAY_MS - timeSinceLastRotation);
+    const rotationDelayMinutes = Math.ceil(rotationDelayRemaining / 60000);
 
-    // ✅ SE CONTA ESFRIOU: Permite rotação SEM incrementar ciclos
-    if (hasCooledDown && !forceRotation) {
-      console.log(`\n✅ ========== ROTAÇÃO COM CONTA ESFRIADA ==========`);
-      console.log(`   Próxima conta esfriou completamente!`);
-      console.log(`   Resetando status de bloqueio e contadores`);
-      console.log(`   NÃO incrementando ciclos (recuperação natural)`);
-      console.log(`===================================================\n`);
+    console.log(`   Próxima conta esfriou? ${nextCooledDown ? '✅ SIM' : `❌ NÃO (faltam ${nextCooldownRemaining}min)`}`);
+    console.log(`   ⏱️  Delay de rotação (IP cooling): ${rotationDelayRemaining > 0 ? `${rotationDelayMinutes}min restantes` : '✅ OK'}`);
 
-      // Resetar status da próxima conta (ela esfriou)
-      nextAccount.isBlocked = false;
-      nextAccount.failureCount = 0;
-      nextAccount.lastFailureTime = 0;
+    // 🚨 CRÍTICO: Calcular tempo MÁXIMO necessário para poder rotacionar
+    // = MAX(IP cooling restante, cooldown conta destino)
+    const waitForIpCooling = rotationDelayRemaining > 0 ? rotationDelayMinutes : 0;
+    const waitForAccountCooldown = !nextCooledDown ? nextCooldownRemaining : 0;
+    const maxWaitMinutes = Math.max(waitForIpCooling, waitForAccountCooldown);
 
-      // NÃO incrementar cyclesCompleted - recuperação natural
-      this.state.currentAccountIndex = nextIndex;
-      this.state.lastRotationTime = Date.now();
-      this.saveState();
+    // Se precisa aguardar qualquer um dos dois, retorna o MAIOR tempo
+    if (maxWaitMinutes > 0) {
+      const reasons: string[] = [];
+      if (waitForIpCooling > 0) reasons.push(`IP cooling: ${waitForIpCooling}min`);
+      if (waitForAccountCooldown > 0) reasons.push(`Conta ${nextAccount.instagramUsername}: ${waitForAccountCooldown}min`);
 
-      console.log(`   ✅ Rotacionado para: ${nextAccount.username} (conta recuperada)`);
-      console.log(`   ⏰ Delay: 1min (apenas login)`);
-      console.log(`=========================================\n`);
+      console.log(`\n⏳ 🚨 AGUARDANDO ${maxWaitMinutes}min ANTES DE ROTACIONAR`);
+      console.log(`   Motivos: ${reasons.join(' | ')}`);
+      console.log(`   ❌ NÃO rotacionando ainda - aguardar tempo máximo`);
 
       return {
         success: true,
-        message: `Rotacionado para ${nextAccount.username} (conta esfriou após ${cooledMinutes}min)`,
-        newAccount: nextAccount.username,
+        message: `Aguardando ${maxWaitMinutes}min (${reasons.join(', ')})`,
+        newAccount: currentAccount.username, // Mantém conta atual (NÃO rotaciona)
         requiresWait: true,
-        waitMinutes: 1
+        waitMinutes: maxWaitMinutes
       };
     }
 
-    // ❌ PRÓXIMA CONTA AINDA ESTÁ QUENTE: Incrementar ciclos
-    console.log(`\n⚠️  Próxima conta ainda não esfriou completamente`);
+    // ✅ Ambas condições satisfeitas: IP esfriou E próxima conta disponível
+    console.log(`\n✅ IP esfriou (30min+) E próxima conta disponível - rotacionando`);
 
-    // Se voltou para primeira conta, incrementa ciclo
-    if (nextIndex === 0) {
-      this.state.cyclesCompleted++;
-      console.log(`   🔄 Ciclo completo: ${this.state.cyclesCompleted}/${MAX_ROTATION_CYCLES}`);
-    }
+    nextAccount.failureCount = 0;
+    nextAccount.isBlocked = false;
+    nextAccount.lastFailureTime = 0;
 
-    // Verificar se atingiu limite de ciclos (SKIP se forceRotation = true)
-    if (!forceRotation && this.state.cyclesCompleted >= MAX_ROTATION_CYCLES) {
-      console.log(`\n❌ ============================================`);
-      console.log(`❌ LIMITE DE CICLOS ATINGIDO (${MAX_ROTATION_CYCLES})`);
-      console.log(`❌ Ambas as contas estão quentes simultaneamente`);
-      console.log(`❌ ============================================`);
-      console.log(`\n💡 Ações recomendadas:`);
-      console.log(`   1. Aguardar 4 horas para cooldown global expirar`);
-      console.log(`   2. Verificar ambas as contas no Instagram`);
-      console.log(`   3. Sistema rotacionará automaticamente após cooldown\n`);
-
-      // Ativar cooldown global de 4 horas
-      this.state.globalCooldownUntil = Date.now() + GLOBAL_COOLDOWN_MS;
-      this.saveState();
-
-      return {
-        success: false,
-        message: 'Ambas as contas quentes - cooldown global de 4h ativado',
-        newAccount: currentAccount.username,
-        requiresWait: true,
-        waitMinutes: 240
-      };
-    }
-
-    // Se forçando rotação apesar de limite de ciclos, avisar e resetar ciclos
-    if (forceRotation && this.state.cyclesCompleted >= MAX_ROTATION_CYCLES) {
-      console.log(`\n⚠️  LIMITE DE CICLOS ATINGIDO (${this.state.cyclesCompleted}/${MAX_ROTATION_CYCLES})`);
-      console.log(`   ✅ MAS rotação forçada por SESSION_INVALID - resetando contador de ciclos`);
-      this.state.cyclesCompleted = 0; // Reset para permitir nova tentativa
-    }
-
-    // Rotacionar mesmo com conta quente (aguardará cooldown restante)
     this.state.currentAccountIndex = nextIndex;
     this.state.lastRotationTime = Date.now();
     this.saveState();
 
-    // Registrar rotação no banco de dados
-    await this.logRotationEvent(currentAccount, 'rotation_completed', undefined, `Rotacionado de ${currentAccount.username} para ${nextAccount.username}`);
     await this.logRotationEvent(nextAccount, 'rotation_started');
 
-    // 🎯 DELAY INTELIGENTE com cálculo de tempo RESTANTE de cooldown
-    // (usa elapsedMs já calculado anteriormente)
-    const isFreshAccount = nextAccount.failureCount === 0;
-    let delayMs: number;
-    let delayReason: string;
-
-    if (isFreshAccount) {
-      // Conta fresca (sem falhas) → apenas tempo de login
-      delayMs = 60000; // 1 minuto
-      delayReason = 'conta fresca - apenas login';
-    } else {
-      // Conta com falhas → calcular tempo RESTANTE de cooldown
-      const remainingCooldownMs = ACCOUNT_COOLDOWN_MS - elapsedMs;
-
-      if (remainingCooldownMs <= 0) {
-        // Conta já esfriou completamente → apenas tempo de login
-        delayMs = 60000; // 1 minuto
-        delayReason = `já esfriou (${cooledMinutes}min desde última falha)`;
-      } else {
-        // Ainda precisa esfriar → aguardar tempo RESTANTE
-        delayMs = remainingCooldownMs;
-        const elapsedMinutes = Math.floor(elapsedMs / 60000);
-        const remainingMinutes = Math.ceil(remainingCooldownMs / 60000);
-        delayReason = `já esfriou ${elapsedMinutes}min, faltam ${remainingMinutes}min`;
-      }
-    }
-
-    const delayMinutes = Math.ceil(delayMs / 60000);
-
-    console.log(`   ✅ Próxima conta: ${nextAccount.username}`);
-    console.log(`   📊 Status conta: ${isFreshAccount ? 'FRESCA (sem falhas)' : `${nextAccount.failureCount} falhas anteriores`}`);
-    console.log(`   ⏰ Delay: ${delayMinutes}min (${delayReason})`);
+    console.log(`   ✅ Rotacionado para: ${nextAccount.username}`);
     console.log(`=========================================\n`);
 
     return {
       success: true,
       message: `Rotacionado para ${nextAccount.username}`,
       newAccount: nextAccount.username,
-      requiresWait: true,
-      waitMinutes: delayMinutes
+      requiresWait: false
     };
   }
 
@@ -523,19 +646,15 @@ class InstagramAccountRotation {
   reset(): void {
     console.log(`🔄 Resetando sistema de rotação...`);
 
-    // Resetar contadores de todas as contas
     this.accounts.forEach(account => {
       account.failureCount = 0;
       account.lastFailureTime = 0;
       account.isBlocked = false;
     });
 
-    // Resetar estado
     this.state = {
       currentAccountIndex: 0,
-      cyclesCompleted: 0,
       lastRotationTime: 0,
-      globalCooldownUntil: 0,
       accounts: []
     };
 
@@ -544,18 +663,14 @@ class InstagramAccountRotation {
   }
 
   /**
-   * Define manualmente qual conta usar (útil para testes/operação manual)
-   * @param accountIdentifier - Username ou índice da conta (0, 1, etc)
-   * @returns true se conseguiu setar, false se conta não encontrada
+   * Define manualmente qual conta usar
    */
   setAccount(accountIdentifier: string | number): boolean {
     let targetIndex: number;
 
     if (typeof accountIdentifier === 'number') {
-      // Índice direto
       targetIndex = accountIdentifier;
     } else {
-      // Buscar por username
       targetIndex = this.accounts.findIndex(acc => {
         const accLower = acc.username.toLowerCase();
         const identLower = accountIdentifier.toLowerCase();
@@ -586,29 +701,51 @@ class InstagramAccountRotation {
   getStats(): {
     totalAccounts: number;
     currentAccount: string;
-    cyclesCompleted: number;
-    maxCycles: number;
-    inGlobalCooldown: boolean;
-    globalCooldownMinutes: number;
+    currentAccountInstagram: string;
+    rotationDelayMinutes: number;
+    canRotateNow: boolean;
+    lastSyncWithDb: boolean;
     accounts: Array<{
       username: string;
+      instagramUsername: string;
       failureCount: number;
       isBlocked: boolean;
+      cooledDown: boolean;
+      cooldownRemaining: number;
+      cooldownUntil: string | null;
+      isCurrent: boolean;
     }>;
   } {
+    const timeSinceLastRotation = Date.now() - this.state.lastRotationTime;
+    const rotationDelayRemaining = Math.max(0, ROTATION_DELAY_MS - timeSinceLastRotation);
+    const currentAcc = this.getCurrentAccount();
+
     return {
       totalAccounts: this.accounts.length,
-      currentAccount: this.getCurrentAccount().username,
-      cyclesCompleted: this.state.cyclesCompleted,
-      maxCycles: MAX_ROTATION_CYCLES,
-      inGlobalCooldown: this.isInGlobalCooldown(),
-      globalCooldownMinutes: this.getGlobalCooldownMinutes(),
+      currentAccount: currentAcc.username,
+      currentAccountInstagram: currentAcc.instagramUsername || '',
+      rotationDelayMinutes: Math.ceil(rotationDelayRemaining / 60000),
+      canRotateNow: rotationDelayRemaining === 0,
+      lastSyncWithDb: this.syncInitialized,
       accounts: this.accounts.map(acc => ({
         username: acc.username,
+        instagramUsername: acc.instagramUsername || '',
         failureCount: acc.failureCount,
-        isBlocked: acc.isBlocked
+        isBlocked: acc.isBlocked,
+        cooledDown: this.hasAccountCooledDown(acc),
+        cooldownRemaining: this.getAccountCooldownRemaining(acc),
+        cooldownUntil: acc.cooldownUntil ? new Date(acc.cooldownUntil).toISOString() : null,
+        isCurrent: acc.username === currentAcc.username
       }))
     };
+  }
+
+  /**
+   * Força sincronização imediata com BD
+   */
+  async forceSync(): Promise<void> {
+    console.log(`🔄 [SYNC] Forçando sincronização com BD...`);
+    await this.syncFromDatabase();
   }
 }
 

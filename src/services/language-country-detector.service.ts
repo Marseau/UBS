@@ -75,29 +75,31 @@ const BRAZILIAN_LOCATIONS = [
 /**
  * Palavras-chave distintivas do português brasileiro
  * Estas palavras NÃO aparecem em espanhol (ou são muito diferentes)
+ * IMPORTANTE: Removidas palavras que existem em ambos idiomas (para, com, sem, etc.)
  */
 const PORTUGUESE_KEYWORDS = [
   // Pronomes e artigos PT-BR (peso alto - MUITO DISTINTOS)
-  'meus', 'minhas', 'você', 'vocês', 'comigo', 'contigo', 'conosco',
+  'meus', 'minhas', 'você', 'vocês', 'conosco', 'nosso', 'nossa', 'nossos', 'nossas',
 
   // Verbos conjugados PT-BR (diferentes de ES) (peso alto)
-  'tenho', 'tem', 'temos', 'têm', 'são', 'está', 'estão', 'estamos',
-  'faço', 'faz', 'fazem', 'vou', 'vai', 'vão', 'vamos',
+  'tenho', 'temos', 'têm', 'está', 'estão', 'estamos',
+  'faço', 'faz', 'fazem', 'fazemos', 'vou', 'vai', 'vão', 'vamos',
   'posso', 'pode', 'podem', 'podemos', 'quer', 'quero', 'querem',
 
   // Palavras EXCLUSIVAS PT-BR (não existem ou são bem diferentes em ES)
-  'não', 'sim', 'tudo', 'mãe', 'pai', 'irmão', 'irmã',
-  'também', 'agora', 'sempre', 'nunca',
-  'obrigado', 'obrigada', 'bem', 'bom', 'boa', 'melhor',
-  'saúde', 'educação', 'informação', 'solução',
-  'coração', 'paixão', 'atenção', 'ração',
+  'não', 'tudo', 'mãe', 'pai', 'irmão', 'irmã', 'filho', 'filha',
+  'também', 'agora', 'sempre', 'nunca', 'ainda', 'então', 'porque',
+  'obrigado', 'obrigada', 'muito', 'muita', 'muitos', 'muitas',
+  'bom', 'boa', 'bons', 'boas', 'melhor', 'pior',
+  'saúde', 'trabalho', 'negócio', 'negócios',
+  'coração', 'paixão', 'atenção',
 
-  // Preposições PT-BR
-  'para', 'pela', 'pelo', 'pelas', 'pelos', 'com', 'sem',
+  // Preposições/conjunções EXCLUSIVAS PT-BR (não existem em ES)
+  'pela', 'pelo', 'pelas', 'pelos', 'dessa', 'desse', 'nessa', 'nesse',
 
   // Expressões PT-BR (peso alto)
   'que deus', 'deus abençoe', 'graças a deus', 'se deus quiser',
-  'tá bom', 'tudo bem', 'de boa'
+  'tá bom', 'tudo bem', 'de boa', 'e aí', 'beleza'
 ];
 
 /**
@@ -105,32 +107,37 @@ const PORTUGUESE_KEYWORDS = [
  * Estas palavras NÃO aparecem em português (ou são muito diferentes)
  */
 const SPANISH_KEYWORDS = [
-  // Pronomes e artigos ES (peso alto - MUITO DISTINTOS)
-  'mis', 'tus', 'sus', 'nuestro', 'nuestra', 'nuestros', 'nuestras',
-  'tú', 'usted', 'ustedes', 'vosotros', 'conmigo', 'contigo',
+  // Pronomes ES (peso alto - MUITO DISTINTOS)
+  'yo', 'tú', 'tu', 'mis', 'tus', 'sus', 'nuestro', 'nuestra', 'nuestros', 'nuestras',
+  'usted', 'ustedes', 'vosotros', 'conmigo', 'contigo', 'lo', 'la', 'le', 'les',
 
   // Verbos conjugados ES (diferentes de PT) (peso alto)
   'tengo', 'tienes', 'tiene', 'tienen', 'somos', 'soy', 'eres', 'son',
-  'hago', 'hace', 'hacen', 'haces', 'voy', 'vas', 'van',
-  'estoy', 'estás', 'están', 'hemos', 'habéis', 'han',
+  'hago', 'hace', 'hacen', 'haces', 'hacemos', 'vas', 'vamos',
+  'estoy', 'estás', 'están', 'hemos', 'habéis', 'han', 'hay',
   'puedo', 'puedes', 'pueden', 'quiero', 'quieres', 'quieren',
+  'merece', 'mereces', 'merecen', 'brilla', 'brillar', 'brillan',
+  'potencio', 'potencia', 'potenciar', 'posible', 'posibles',
 
   // Palavras EXCLUSIVAS ES (não existem ou são bem diferentes em PT)
-  'no', 'sí', 'mucho', 'mucha', 'año', 'años', 'español', 'española',
+  'sí', 'mucho', 'mucha', 'muchos', 'muchas', 'muy', 'año', 'años',
+  'español', 'española', 'españoles', 'españolas',
   'cómo', 'qué', 'cuál', 'dónde', 'donde', 'cuándo', 'cuando', 'cuánto',
-  'hermano', 'hermana', 'hijo', 'hija', 'abuelo', 'abuela',
-  'salud', 'educación', 'información', 'solución',
-  'bueno', 'buena', 'mejor', 'peor', 'feliz',
-  'las', 'los', 'una', 'unas', 'unos',  // Artigos ES (PT usa "as", "os")
-  'convierten', 'convierte', 'éxito', 'exito',  // Verbos/palavras ES exclusivas
-  'grande', 'grandes', 'idea', 'ideas',
+  'hermano', 'hermana', 'abuelo', 'abuela', 'niño', 'niña',
+  'bueno', 'buena', 'buenos', 'buenas', 'mejor', 'peor', 'feliz',
+  'centro', 'esencia', 'negocio', 'negocios', 'trabajo', 'trabajos',
+  'éxito', 'exito', 'exitoso', 'exitosa',
+  'grande', 'grandes', 'pequeño', 'pequeña',
 
-  // Preposições ES
-  'hacia', 'desde', 'hasta', 'según', 'entre', 'contra',
+  // Artigos ES (diferentes de PT: "as/os" vs "las/los")
+  'las', 'los', 'una', 'unas', 'unos', 'el', 'del',
+
+  // Preposições/advérbios ES exclusivos
+  'hacia', 'desde', 'hasta', 'según', 'también', 'además', 'ahora', 'siempre', 'nunca',
 
   // Expressões ES (peso alto)
   'que dios', 'dios bendiga', 'gracias a dios', 'si dios quiere',
-  'qué tal', 'cómo estás', 'muy bien', 'de nada'
+  'qué tal', 'cómo estás', 'muy bien', 'de nada', 'por favor'
 ];
 
 /**
@@ -225,13 +232,22 @@ export async function detectLanguage(
   // PASSO 1: Verificar características EXCLUSIVAS de português
   // ========================================
   // Ç, Ã, Õ, LH, NH são exclusivos de português (não existem em espanhol)
+  // Também: palavras com acentos típicos PT-BR (é, á, í, ó, ú em contextos específicos)
   const hasPortugueseChars = /[çãõ]|lh|nh/i.test(bio);
+
+  // Palavras com acentos que são EXCLUSIVAS ou muito mais comuns em PT-BR
+  // Sem \b porque bios do Instagram frequentemente têm palavras grudadas
+  const portugueseAccentedWords = /(você|vocês|será|está|também|até|já|só|aí|país|países|negócio|negócios|saúde|atenção|coração|paixão|opinião|missão|visão|sessão|profissão|conexão|ação|direção|produção|educação|comunicação|gestão|menção|canção|posição|situação|solução|decisão|evolução|inovação|informação|organização|experiência|ciência|consciência|audiência|consultório|território|empresário|empresária|salário|horário|voluntário|aniversário|necessário|secretária|família|história|memória|vitória|glória|trajetória|carreira|maneira)/i.test(bio);
 
   let detectedLang: string;
   let detectedISO3: string;
 
   if (hasPortugueseChars) {
     console.log(`   🇧🇷 Características PT detectadas (ç/ã/õ/lh/nh) - forçando português`);
+    detectedLang = 'pt';
+    detectedISO3 = 'por';
+  } else if (portugueseAccentedWords) {
+    console.log(`   🇧🇷 Palavras acentuadas PT detectadas - forçando português`);
     detectedLang = 'pt';
     detectedISO3 = 'por';
   } else {
@@ -268,24 +284,19 @@ export async function detectLanguage(
       console.log(`🎯 Language: pt (CORRECTED: Brazilian location detected, ES score low)`);
       detectedLang = 'pt';
     }
-    // CORREÇÃO 2: Score PT forte → força PT
-    else if (langScore.pt >= 4 && langScore.pt > langScore.es * 1.5) {
+    // CORREÇÃO 2: Score PT MUITO forte (>= 3 e pelo menos 2x ES) → força PT
+    else if (langScore.pt >= 3 && langScore.pt >= langScore.es * 2) {
       console.log(`🎯 Language: pt (CORRECTED: Strong PT keywords: ${langScore.pt} >> ${langScore.es})`);
       detectedLang = 'pt';
     }
-    // CORREÇÃO 3: Score ES forte → força ES
-    else if (langScore.es >= 4 && langScore.es > langScore.pt * 1.5) {
+    // CORREÇÃO 3: Score ES MUITO forte (>= 3 e pelo menos 2x PT) → força ES
+    else if (langScore.es >= 3 && langScore.es >= langScore.pt * 2) {
       console.log(`🎯 Language: es (CORRECTED: Strong ES keywords: ${langScore.es} >> ${langScore.pt})`);
       detectedLang = 'es';
     }
-    // CORREÇÃO 4: EMPATE → prevalece PT
-    else if (langScore.pt > 0 && langScore.pt >= langScore.es && detectedLang === 'es') {
-      console.log(`🎯 Language: pt (CORRECTED: Empate PT/ES - prevalece português: ${langScore.pt} >= ${langScore.es})`);
-      detectedLang = 'pt';
-    }
-    // Caso contrário: mantém detecção do franc
+    // EMPATE ou diferença pequena: MANTÉM detecção do Franc (mais preciso para n-gramas)
     else {
-      console.log(`✅ Language: ${detectedLang} (franc detection confirmed by keywords)`);
+      console.log(`✅ Language: ${detectedLang} (franc detection - keywords PT=${langScore.pt} ES=${langScore.es})`);
     }
   }
 
