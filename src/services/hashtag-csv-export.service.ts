@@ -1,14 +1,12 @@
 /**
- * HASHTAG PARQUET EXPORT SERVICE
+ * HASHTAG CSV EXPORT SERVICE
  *
- * Exporta todas as hashtags do PostgreSQL para formato Parquet
- * para uso com OpenAI Vector Store e análise escalável.
+ * Exporta todas as hashtags do PostgreSQL para formato CSV
+ * para uso com OpenAI Vector Store (Parquet não é suportado).
  *
- * Suporta 1M+ hashtags com compressão eficiente.
+ * Suporta 1M+ hashtags.
  */
 
-// @ts-ignore - parquetjs-lite não tem tipos TypeScript
-import * as parquet from 'parquetjs-lite';
 import { createClient } from '@supabase/supabase-js';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -18,20 +16,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-interface HashtagRecord {
-  hashtag: string;
-  freq_bio: number;
-  freq_posts: number;
-  freq_total: number;
-  unique_leads: number;
-  leads_with_contact: number;
-  contact_rate: number;
-  last_updated: string;
-}
-
-export class HashtagParquetExportService {
-  private readonly exportDir = path.join(process.cwd(), 'data', 'parquet');
-  private readonly fileName = 'hashtags_complete.parquet';
+export class HashtagCsvExportService {
+  private readonly exportDir = path.join(process.cwd(), 'data', 'exports');
+  private readonly fileName = 'hashtags_complete.csv';
 
   constructor() {
     // Garantir que diretório existe
@@ -41,29 +28,18 @@ export class HashtagParquetExportService {
   }
 
   /**
-   * Exporta TODAS as hashtags do banco para Parquet
+   * Exporta TODAS as hashtags do banco para CSV
    * Processa em batches para não sobrecarregar memória
    */
   async exportAllHashtags(): Promise<{ filePath: string; totalRecords: number; fileSizeKB: number }> {
-    console.log('\n🚀 [PARQUET EXPORT] Iniciando export completo de hashtags...');
+    console.log('\n🚀 [CSV EXPORT] Iniciando export completo de hashtags...');
 
     const startTime = Date.now();
     const filePath = path.join(this.exportDir, this.fileName);
 
-    // Schema Parquet otimizado
-    const schema = new parquet.ParquetSchema({
-      hashtag: { type: 'UTF8', compression: 'SNAPPY' },
-      freq_bio: { type: 'INT32' },
-      freq_posts: { type: 'INT32' },
-      freq_total: { type: 'INT32' },
-      unique_leads: { type: 'INT32' },
-      leads_with_contact: { type: 'INT32' },
-      contact_rate: { type: 'FLOAT' },
-      last_updated: { type: 'TIMESTAMP_MILLIS' }
-    });
-
-    // Criar writer Parquet
-    const writer = await parquet.ParquetWriter.openFile(schema, filePath);
+    // Criar/limpar arquivo e escrever cabeçalho CSV
+    const header = 'hashtag,freq_bio,freq_posts,freq_total,unique_leads,leads_with_contact,contact_rate,last_updated\n';
+    fs.writeFileSync(filePath, header);
 
     let totalRecords = 0;
     const batchSize = 10000; // Processar 10k por vez
@@ -112,7 +88,7 @@ export class HashtagParquetExportService {
             leads_with_contact,
             ROUND((leads_with_contact::numeric / NULLIF(unique_leads, 0)::numeric * 100)::numeric, 1) as contact_rate
           FROM hashtag_frequency
-          ORDER BY freq_total DESC
+          ORDER BY freq_total DESC, hashtag ASC
           LIMIT ${batchSize} OFFSET ${offset}
         `
       });
@@ -127,19 +103,15 @@ export class HashtagParquetExportService {
         break;
       }
 
-      // Escrever batch no Parquet
-      for (const row of batch) {
-        await writer.appendRow({
-          hashtag: row.hashtag,
-          freq_bio: row.freq_bio || 0,
-          freq_posts: row.freq_posts || 0,
-          freq_total: row.freq_total || 0,
-          unique_leads: row.unique_leads || 0,
-          leads_with_contact: row.leads_with_contact || 0,
-          contact_rate: row.contact_rate || 0,
-          last_updated: new Date()
-        });
-      }
+      // Escrever batch no CSV
+      const csvLines = batch.map((row: any) => {
+        // Escapar hashtag para CSV (remover vírgulas e aspas)
+        const safeHashtag = (row.hashtag || '').replace(/[",\n\r]/g, '');
+        const now = new Date().toISOString();
+        return `${safeHashtag},${row.freq_bio || 0},${row.freq_posts || 0},${row.freq_total || 0},${row.unique_leads || 0},${row.leads_with_contact || 0},${row.contact_rate || 0},${now}`;
+      }).join('\n') + '\n';
+
+      fs.appendFileSync(filePath, csvLines);
 
       totalRecords += batch.length;
       offset += batchSize;
@@ -152,14 +124,11 @@ export class HashtagParquetExportService {
       }
     }
 
-    // Fechar writer
-    await writer.close();
-
     const stats = fs.statSync(filePath);
     const fileSizeKB = Math.round(stats.size / 1024);
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-    console.log('\n✅ Export Parquet concluído!');
+    console.log('\n✅ Export CSV concluído!');
     console.log(`   📁 Arquivo: ${filePath}`);
     console.log(`   📊 Total de registros: ${totalRecords.toLocaleString()}`);
     console.log(`   💾 Tamanho do arquivo: ${fileSizeKB.toLocaleString()} KB`);
@@ -173,9 +142,9 @@ export class HashtagParquetExportService {
   }
 
   /**
-   * Verifica se o arquivo Parquet existe e está atualizado
+   * Verifica se o arquivo CSV existe e está atualizado
    */
-  isParquetFileValid(): { valid: boolean; filePath: string; ageHours: number } {
+  isCsvFileValid(): { valid: boolean; filePath: string; ageHours: number } {
     const filePath = path.join(this.exportDir, this.fileName);
 
     if (!fs.existsSync(filePath)) {
@@ -193,34 +162,7 @@ export class HashtagParquetExportService {
   }
 
   /**
-   * Lê amostra do arquivo Parquet (para debug)
-   */
-  async readSample(limit = 10): Promise<HashtagRecord[]> {
-    const filePath = path.join(this.exportDir, this.fileName);
-
-    if (!fs.existsSync(filePath)) {
-      throw new Error('Arquivo Parquet não encontrado. Execute export primeiro.');
-    }
-
-    const reader = await parquet.ParquetReader.openFile(filePath);
-    const cursor = reader.getCursor();
-
-    const records: HashtagRecord[] = [];
-    let count = 0;
-
-    let record = null;
-    while ((record = await cursor.next()) && count < limit) {
-      records.push(record as HashtagRecord);
-      count++;
-    }
-
-    await reader.close();
-
-    return records;
-  }
-
-  /**
-   * Retorna estatísticas do arquivo Parquet
+   * Retorna estatísticas do arquivo CSV
    */
   async getStats(): Promise<{
     exists: boolean;
@@ -229,7 +171,7 @@ export class HashtagParquetExportService {
     rowCount: number;
     ageHours: number;
   }> {
-    const validation = this.isParquetFileValid();
+    const validation = this.isCsvFileValid();
 
     if (!validation.valid && validation.ageHours === -1) {
       return {
@@ -242,9 +184,10 @@ export class HashtagParquetExportService {
     }
 
     const stats = fs.statSync(validation.filePath);
-    const reader = await parquet.ParquetReader.openFile(validation.filePath);
-    const rowCount = reader.getRowCount();
-    await reader.close();
+
+    // Contar linhas do CSV (menos o header)
+    const content = fs.readFileSync(validation.filePath, 'utf-8');
+    const rowCount = content.split('\n').filter(line => line.trim()).length - 1; // -1 para o header
 
     return {
       exists: true,
@@ -256,4 +199,4 @@ export class HashtagParquetExportService {
   }
 }
 
-export const hashtagParquetExportService = new HashtagParquetExportService();
+export const hashtagCsvExportService = new HashtagCsvExportService();

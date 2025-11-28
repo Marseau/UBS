@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import {
   scrapeInstagramTag,
+  scrapeInstagramExplore,
   scrapeInstagramProfile,
   scrapeProfileWithExistingPage,
   closeBrowser,
@@ -209,6 +210,185 @@ router.post('/scrape-tag', async (req: Request, res: Response) => {
     });
   } finally {
     // 🔥 FORÇAR LIMPEZA DE TODAS AS PÁGINAS AO FINAL
+    const { cleanupAllContexts } = await import('../services/instagram-context-manager.service');
+    await cleanupAllContexts();
+    console.log(`🧹 [${reqId}] Todas as páginas foram limpas ao final da execução`);
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/scrape-explore
+ * Scrape a página Explorar do Instagram - retorna perfis com bio/contato válidos
+ * Diferente do scrape-tag, não precisa de termo de busca - vai direto para /explore/
+ *
+ * Body:
+ * {
+ *   "max_profiles": 10,
+ *   "account_profile": "conta1" (opcional, default: "default")
+ * }
+ */
+router.post('/scrape-explore', async (req: Request, res: Response) => {
+  const reqId = `EXPLORE_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  try {
+    const { max_profiles = 10, account_profile = 'default' } = req.body;
+
+    console.log(`\n🔭 [${reqId}] ========== SCRAPE-EXPLORE INICIADO ==========`);
+    console.log(`🔭 [${reqId}] Página: Instagram Explorar (max: ${max_profiles} perfis)`);
+    if (account_profile && account_profile !== 'default') {
+      console.log(`🎯 [${reqId}] Conta manual: ${account_profile}`);
+    }
+
+    // DEBUG: Contar páginas ANTES
+    const { getBrowserInstance } = await import('../services/instagram-session.service');
+    const browser = getBrowserInstance();
+    if (browser) {
+      const pagesBefore = await browser.pages();
+      console.log(`📊 [${reqId}] ANTES: ${pagesBefore.length} páginas abertas no browser`);
+    }
+
+    const result = await scrapeInstagramExplore(max_profiles, account_profile);
+
+    // DEBUG: Contar páginas DEPOIS
+    if (browser) {
+      const pagesAfter = await browser.pages();
+      console.log(`📊 [${reqId}] DEPOIS: ${pagesAfter.length} páginas abertas no browser`);
+    }
+
+    // LOG DE RESULTADO PARCIAL
+    if (result.is_partial) {
+      console.log(`⚠️  [${reqId}] RESULTADO PARCIAL: ${result.collected}/${result.requested} perfis (${result.completion_rate})`);
+      console.log(`   Possíveis causas: timeout, detached frame, ou falta de perfis no explorar`);
+    }
+
+    // Log consolidado dos perfis extraídos
+    console.log(`\n📊 [${reqId}] Resumo dos ${result.profiles.length} perfis extraídos:`);
+
+    const profilesWithEmail = result.profiles.filter(p => p.email).length;
+    const profilesWithPhone = result.profiles.filter(p => p.phone).length;
+    const profilesWithWebsite = result.profiles.filter(p => p.website).length;
+    const profilesWithLocation = result.profiles.filter(p => p.city || p.state || p.address).length;
+    const businessAccounts = result.profiles.filter(p => p.is_business_account).length;
+
+    console.log(`   📧 Emails encontrados: ${profilesWithEmail}/${result.profiles.length}`);
+    console.log(`   📱 Telefones encontrados: ${profilesWithPhone}/${result.profiles.length}`);
+    console.log(`   🔗 Websites encontrados: ${profilesWithWebsite}/${result.profiles.length}`);
+    console.log(`   📍 Localizações encontradas: ${profilesWithLocation}/${result.profiles.length}`);
+    console.log(`   💼 Contas business: ${businessAccounts}/${result.profiles.length}`);
+
+    if (profilesWithLocation > 0) {
+      console.log(`\n   📍 Perfis com localização:`);
+      result.profiles
+        .filter(p => p.city || p.state)
+        .slice(0, 5)
+        .forEach(p => {
+          const locationParts: string[] = [];
+          if (p.city) locationParts.push(p.city);
+          if (p.state) locationParts.push(p.state);
+          console.log(`      @${p.username}: ${locationParts.join(', ')}`);
+        });
+      if (profilesWithLocation > 5) {
+        console.log(`      ... e mais ${profilesWithLocation - 5} perfis`);
+      }
+    }
+
+    console.log(`✅ [${reqId}] ========== SCRAPE-EXPLORE FINALIZADO ==========\n`);
+
+    // VALIDAÇÃO: Resultado vazio pode indicar erro silencioso
+    if (result.collected === 0) {
+      console.warn(`⚠️  [${reqId}] ALERTA: Nenhum perfil encontrado na página Explorar`);
+      console.warn(`   Possíveis causas:`);
+      console.warn(`   1. Página Explorar não carregou corretamente`);
+      console.warn(`   2. Erro de 'detached frame' durante scraping`);
+      console.warn(`   3. Instagram bloqueou temporariamente`);
+
+      // Capturar screenshot para análise
+      let screenshotBase64: string | null = null;
+      try {
+        const { getBrowserInstance } = await import('../services/instagram-session.service');
+        const browser = getBrowserInstance();
+        if (browser) {
+          const allPages = await browser.pages();
+          const currentPage = allPages.find(p => !p.isClosed() && p.url().includes('instagram.com'));
+          if (currentPage) {
+            const screenshot = await currentPage.screenshot({ type: 'png', fullPage: true });
+            screenshotBase64 = Buffer.from(screenshot).toString('base64');
+          }
+        }
+      } catch {}
+
+      return res.status(200).json({
+        success: false,
+        message: 'Nenhum perfil encontrado - possível erro de scraping',
+        screenshot_base64: screenshotBase64,
+        partial_result: false,
+        data: {
+          search_term: 'explorar_instagram',
+          profiles: [],
+          total_found: 0,
+          expected: result.requested,
+          completion_rate: '0%'
+        }
+      });
+    }
+
+    return res.status(200).json({
+      success: result.collected > 0,
+      partial_result: result.is_partial,
+      data: {
+        search_term: 'explorar_instagram',
+        profiles: result.profiles,
+        total_found: result.collected,
+        expected: result.requested,
+        completion_rate: result.completion_rate
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro ao scrape explore:', error);
+
+    // CAPTURAR SCREENSHOT PARA N8N ENVIAR AO TELEGRAM
+    let screenshotBase64: string | null = null;
+    try {
+      const { getBrowserInstance } = await import('../services/instagram-session.service');
+      const browser = getBrowserInstance();
+
+      if (browser) {
+        const allPages = await browser.pages();
+        const currentPage = allPages.find(p => !p.isClosed() && p.url().includes('instagram.com'));
+
+        if (currentPage) {
+          console.log(`📸 [${reqId}] Capturando screenshot do erro...`);
+          const screenshot = await currentPage.screenshot({
+            type: 'png',
+            fullPage: true
+          });
+          screenshotBase64 = Buffer.from(screenshot).toString('base64');
+          const sizeKB = ((screenshotBase64?.length || 0) / 1024).toFixed(1);
+          console.log(`✅ [${reqId}] Screenshot capturado (${sizeKB} KB)`);
+        }
+      }
+    } catch (screenshotError: any) {
+      console.error('⚠️ Erro ao capturar screenshot:', screenshotError.message);
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao scrape página Explorar',
+      error: error.message,
+      screenshot_base64: screenshotBase64,
+      error_details: {
+        endpoint: 'scrape-explore',
+        request_id: reqId,
+        timestamp: new Date().toISOString()
+      },
+      data: {
+        search_term: 'explorar_instagram',
+        profiles: [],
+        total_found: 0
+      }
+    });
+  } finally {
+    // FORÇAR LIMPEZA DE TODAS AS PÁGINAS AO FINAL
     const { cleanupAllContexts } = await import('../services/instagram-context-manager.service');
     await cleanupAllContexts();
     console.log(`🧹 [${reqId}] Todas as páginas foram limpas ao final da execução`);
@@ -920,9 +1100,10 @@ router.get('/status', (req: Request, res: Response) => {
     message: 'Instagram Scraper Service está ativo',
     endpoints: {
       'POST /scrape-tag': 'Scrape hashtag específica - retorna perfis completos',
+      'POST /scrape-explore': 'Scrape página Explorar do Instagram - retorna perfis com bio/contato (NEW)',
       'POST /scrape-users': 'Busca usuários validados (PT + activity >= 50) - retorna perfis com hashtags',
       'POST /scrape-profile': 'Scrape perfil específico - retorna dados do perfil',
-      'POST /scrape-followers': 'Scrape seguidores de concorrente - gera leads B2C (NEW)',
+      'POST /scrape-followers': 'Scrape seguidores de concorrente - gera leads B2C',
       'POST /scrape-input-users': 'Scrape lista específica de usernames',
       'POST /scrape-url': 'Extrai emails/telefones de URLs',
       'POST /cleanup-pages': 'Limpa todas as páginas abertas SEM fechar o browser',

@@ -153,7 +153,7 @@ class InstagramAccountRotation {
     };
   }
 
-  private saveState(): void {
+  private async saveState(): Promise<void> {
     try {
       this.state.accounts = this.accounts.map(acc => ({
         username: acc.username,
@@ -166,10 +166,14 @@ class InstagramAccountRotation {
 
       fs.writeFileSync(STATE_FILE, JSON.stringify(this.state, null, 2));
 
-      // Sincronizar com BD de forma assíncrona
-      this.syncToDatabase().catch(err => {
+      // 🔧 FIX: Sincronizar com BD de forma SÍNCRONA (await obrigatório)
+      // Isso garante que o BD está atualizado antes de retornar
+      try {
+        await this.syncToDatabase();
+      } catch (err: any) {
         console.warn(`⚠️  Erro ao sincronizar com BD: ${err.message}`);
-      });
+        // Não propaga erro - JSON já foi salvo como fallback
+      }
     } catch (error: any) {
       console.error(`❌ Erro ao salvar estado de rotação: ${error.message}`);
     }
@@ -341,7 +345,7 @@ class InstagramAccountRotation {
     // Registrar no audit
     await this.logRotationEvent(account, 'cooldown_started', undefined, reason || 'Cooldown manual');
 
-    this.saveState();
+    await this.saveState();
     return true;
   }
 
@@ -450,6 +454,7 @@ class InstagramAccountRotation {
    */
   async recordFailure(errorType?: string, errorMessage?: string, forceFailureCount?: number): Promise<void> {
     const account = this.getCurrentAccount();
+    const FAILURE_THRESHOLD = 3; // 🔧 FIX: Só bloqueia após 3 falhas
 
     if (forceFailureCount !== undefined) {
       // Usar valor forçado (para erros críticos que precisam de rotação imediata)
@@ -459,12 +464,18 @@ class InstagramAccountRotation {
     }
 
     account.lastFailureTime = Date.now();
-    account.isBlocked = true;
 
-    console.log(`❌ Falha registrada para ${account.username} (${account.failureCount} falhas)`);
+    // 🔧 FIX: Só marca como bloqueada se atingiu o limite de falhas
+    // Isso evita rotação desnecessária após 1 falha isolada
+    if (account.failureCount >= FAILURE_THRESHOLD) {
+      account.isBlocked = true;
+      console.log(`❌ Falha registrada para ${account.username} (${account.failureCount} falhas) - 🚫 BLOQUEADA`);
+    } else {
+      console.log(`⚠️  Falha registrada para ${account.username} (${account.failureCount}/${FAILURE_THRESHOLD} falhas) - ainda funcional`);
+    }
 
     await this.logRotationEvent(account, 'failure_registered', errorType, errorMessage);
-    this.saveState();
+    await this.saveState();
   }
 
   /**
@@ -494,7 +505,7 @@ class InstagramAccountRotation {
       await this.logRotationEvent(account, 'session_recovered');
     }
 
-    this.saveState();
+    await this.saveState();
   }
 
   /**
@@ -625,7 +636,7 @@ class InstagramAccountRotation {
 
     this.state.currentAccountIndex = nextIndex;
     this.state.lastRotationTime = Date.now();
-    this.saveState();
+    await this.saveState();
 
     await this.logRotationEvent(nextAccount, 'rotation_started');
 
@@ -643,7 +654,7 @@ class InstagramAccountRotation {
   /**
    * Reseta estado de rotação (limpa falhas e cooldowns)
    */
-  reset(): void {
+  async reset(): Promise<void> {
     console.log(`🔄 Resetando sistema de rotação...`);
 
     this.accounts.forEach(account => {
@@ -658,14 +669,14 @@ class InstagramAccountRotation {
       accounts: []
     };
 
-    this.saveState();
+    await this.saveState();
     console.log(`✅ Sistema de rotação resetado`);
   }
 
   /**
    * Define manualmente qual conta usar
    */
-  setAccount(accountIdentifier: string | number): boolean {
+  async setAccount(accountIdentifier: string | number): Promise<boolean> {
     let targetIndex: number;
 
     if (typeof accountIdentifier === 'number') {
@@ -687,7 +698,7 @@ class InstagramAccountRotation {
       }
       console.log(`🎯 Conta setada manualmente: ${account.username} (index ${targetIndex})`);
       this.state.currentAccountIndex = targetIndex;
-      this.saveState();
+      await this.saveState();
       return true;
     }
 
@@ -759,8 +770,8 @@ export function getAccountRotation(): InstagramAccountRotation {
   return rotationInstance;
 }
 
-export function resetAccountRotation(): void {
+export async function resetAccountRotation(): Promise<void> {
   if (rotationInstance) {
-    rotationInstance.reset();
+    await rotationInstance.reset();
   }
 }

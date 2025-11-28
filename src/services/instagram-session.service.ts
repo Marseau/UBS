@@ -192,8 +192,61 @@ async function isLoggedIn(page: Page): Promise<boolean> {
       await waitHuman(800, 1200);
     }
 
+    // 🔧 FIX: Verificar se sessão está REALMENTE válida
     const cookies = await page.cookies();
-    return cookies.some(cookie => cookie.name === 'sessionid' && cookie.value);
+    const hasSessionId = cookies.some(cookie => cookie.name === 'sessionid' && cookie.value);
+    const hasDsUserId = cookies.some(cookie => cookie.name === 'ds_user_id' && cookie.value);
+    const hasCsrfToken = cookies.some(cookie => cookie.name === 'csrftoken' && cookie.value);
+
+    // Considerar logado se tem sessionid OU (ds_user_id + csrftoken)
+    const hasValidSession = hasSessionId || (hasDsUserId && hasCsrfToken);
+
+    if (!hasValidSession) {
+      console.log('   ❌ Cookies de sessão não encontrados (sessionid, ds_user_id, csrftoken)');
+      console.log(`      sessionid: ${hasSessionId}, ds_user_id: ${hasDsUserId}, csrftoken: ${hasCsrfToken}`);
+      return false;
+    }
+
+    // 🔧 FIX: Verificar se está na página de LOGIN (sessão expirada)
+    const finalUrl = page.url();
+    if (finalUrl.includes('/accounts/login') || finalUrl.includes('/accounts/signup')) {
+      console.log('   ❌ Redirecionado para página de login - sessão expirada');
+      return false;
+    }
+
+    // 🔧 FIX: Verificar se existe elemento de usuário logado no DOM
+    const isReallyLoggedIn = await page.evaluate(() => {
+      // Verificar se existe o ícone de perfil (só aparece logado) - múltiplos seletores
+      const profileIcon = document.querySelector('svg[aria-label="Profile"], svg[aria-label="Perfil"], a[href*="/direct/inbox"], span[aria-label="Profile"]');
+      // Verificar se existe a navbar de usuário logado
+      const navBar = document.querySelector('nav[role="navigation"], div[role="navigation"]');
+      // Verificar se existe link para criar post (só logado)
+      const createButton = document.querySelector('svg[aria-label="New post"], svg[aria-label="Nova publicação"], a[href="/create/style/"]');
+      // Verificar se existe o link de mensagens diretas
+      const directLink = document.querySelector('a[href="/direct/inbox/"], svg[aria-label="Messenger"], svg[aria-label="Direct"]');
+      // Verificar se NÃO existe form de login
+      const loginForm = document.querySelector('form[id="loginForm"], input[name="username"][type="text"]');
+
+      // Se tem qualquer elemento de logado E não tem form de login = logado
+      const hasLoggedInElements = !!(profileIcon || navBar || createButton || directLink);
+      const hasLoginElements = !!(loginForm);
+
+      return hasLoggedInElements && !hasLoginElements;
+    }).catch(() => false);
+
+    // Se não detectou pelo DOM mas tem cookies válidos, considera logado
+    if (!isReallyLoggedIn && hasValidSession) {
+      console.log('   ⚠️  DOM não confirmou login, mas cookies válidos encontrados - prosseguindo');
+      return true;
+    }
+
+    if (!isReallyLoggedIn) {
+      console.log('   ❌ Elementos de usuário logado não encontrados no DOM');
+      return false;
+    }
+
+    console.log('   ✅ Sessão válida confirmada (cookie + DOM)');
+    return true;
   } catch (error: any) {
     console.warn(`⚠️  Erro ao verificar sessão do Instagram: ${error.message}`);
     return false;

@@ -768,6 +768,16 @@ try {
   console.error("❌ Failed to load Outreach routes:", error);
 }
 
+// Campaign Pipeline Routes - Execute full campaign pipeline (clustering, personas, DMs, copies)
+try {
+  const campaignPipelineRoutes = require('./routes/campaign-pipeline.routes');
+  const router = 'default' in campaignPipelineRoutes ? campaignPipelineRoutes.default : campaignPipelineRoutes;
+  app.use('/api/campaign-pipeline', router);
+  console.log('✅ Campaign Pipeline routes loaded - FULL PIPELINE EXECUTION READY');
+} catch (error) {
+  console.error("❌ Failed to load Campaign Pipeline routes:", error);
+}
+
 // Define o caminho para a pasta frontend de forma explícita e segura
 const candidatePaths: string[] = [
   path.join(process.cwd(), 'src', 'frontend'),

@@ -636,8 +636,104 @@ async function loadCookies(page: Page): Promise<boolean> {
 }
 
 /**
+ * 🆕 Detecta e trata a tela "Continue as [username]" do Instagram
+ * Esta tela aparece quando o Instagram tem uma sessão parcial e pede confirmação
+ * @returns true se detectou e clicou no botão, false se tela não estava presente
+ */
+async function handleContinueAsScreen(page: Page): Promise<boolean> {
+  try {
+    console.log('🔍 Verificando tela "Continue as"...');
+
+    // Aguardar um pouco para a página carregar
+    await waitHuman(1500, 2500);
+
+    // Verificar se existe o botão "Continue as [username]"
+    // O seletor pode variar, então tentamos múltiplos
+    const continueButtonSelectors = [
+      'button[type="button"]:has-text("Continue as")',
+      'button:has-text("Continue as")',
+      'button:has-text("Continuar como")',
+      'div[role="button"]:has-text("Continue as")',
+      'div[role="button"]:has-text("Continuar como")'
+    ];
+
+    // Verificar via evaluate para maior compatibilidade
+    const buttonFound = await page.evaluate(() => {
+      // Procurar por botões com texto "Continue as" ou "Continuar como"
+      const buttons = Array.from(document.querySelectorAll('button, div[role="button"]'));
+      for (const btn of buttons) {
+        const text = btn.textContent?.toLowerCase() || '';
+        if (text.includes('continue as') || text.includes('continuar como')) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (!buttonFound) {
+      console.log('   ℹ️  Tela "Continue as" não detectada');
+      return false;
+    }
+
+    console.log('   🎯 Tela "Continue as" DETECTADA!');
+    console.log('   🖱️  Clicando para continuar com a sessão...');
+
+    // Clicar no botão via evaluate
+    const clicked = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button, div[role="button"]'));
+      for (const btn of buttons) {
+        const text = btn.textContent?.toLowerCase() || '';
+        if (text.includes('continue as') || text.includes('continuar como')) {
+          (btn as HTMLElement).click();
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (clicked) {
+      console.log('   ✅ Botão clicado! Aguardando navegação...');
+      await waitHuman(3000, 5000); // Esperar a transição
+
+      // Verificar se saiu da tela de "Continue as"
+      const stillOnContinueScreen = await page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button, div[role="button"]'));
+        for (const btn of buttons) {
+          const text = btn.textContent?.toLowerCase() || '';
+          if (text.includes('continue as') || text.includes('continuar como')) {
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (!stillOnContinueScreen) {
+        console.log('   ✅ Transição bem-sucedida! Sessão retomada.');
+        return true;
+      } else {
+        console.log('   ⚠️  Ainda na tela "Continue as", tentando novamente...');
+        // Tentar clicar novamente com selector direto
+        try {
+          await page.click('button');
+          await waitHuman(2000, 3000);
+        } catch (e) {
+          // Ignorar erro
+        }
+        return true;
+      }
+    }
+
+    return false;
+  } catch (error: any) {
+    console.log(`   ⚠️  Erro ao tratar tela "Continue as": ${error.message}`);
+    return false;
+  }
+}
+
+/**
  * Verifica se está logado no Instagram
  * NÃO recarrega a página, apenas verifica cookies e elementos DOM
+ * 🆕 Também detecta e trata a tela "Continue as [username]"
  */
 async function isLoggedIn(page: Page): Promise<boolean> {
   try {
@@ -648,6 +744,15 @@ async function isLoggedIn(page: Page): Promise<boolean> {
       // Se não estiver no Instagram, navegar (só uma vez)
       await page.goto('https://www.instagram.com/', { waitUntil: 'networkidle2', timeout: 30000 });
       await waitHuman(1300, 2000);
+    }
+
+    // 🆕 Verificar e tratar tela "Continue as [username]"
+    // Esta tela aparece quando o Instagram tem sessão parcial
+    const handledContinue = await handleContinueAsScreen(page);
+    if (handledContinue) {
+      console.log('   ✅ Tela "Continue as" tratada com sucesso');
+      // Aguardar um pouco mais após clicar
+      await waitHuman(2000, 3000);
     }
 
     const cookies = await page.cookies();
@@ -1007,6 +1112,19 @@ async function ensureLoggedSession(): Promise<void> {
         }
         await waitHuman(2700, 3500); // Esperar página carregar completamente (randomizado)
 
+        // 🆕 Verificar e tratar tela "Continue as [username]" antes de tentar login
+        const handledContinueScreen = await handleContinueAsScreen(sessionPage);
+        if (handledContinueScreen) {
+          console.log('✅ Sessão retomada via "Continue as" - verificando login...');
+          const alreadyLoggedIn = await isLoggedIn(sessionPage);
+          if (alreadyLoggedIn) {
+            console.log('✅ Login confirmado após "Continue as"!');
+            await saveCookies(sessionPage);
+            await resolveLoggedUsername();
+            return; // Sair do fluxo de login, sessão já está OK
+          }
+        }
+
         // Verificar se já está na página de login
         const currentUrl = sessionPage.url();
         console.log(`📍 URL atual: ${currentUrl}`);
@@ -1177,7 +1295,7 @@ async function handleSessionError(page: Page, errorType: string): Promise<boolea
         console.log(`   ⚠️  DESSINCRONIA DETECTADA!`);
         console.log(`   🔄 Corrigindo: index ${rotation['state'].currentAccountIndex} → ${actualAccountIndex}`);
         // 🎯 FIX: Usar setAccount para garantir persistência do estado
-        rotation.setAccount(actualAccountIndex);
+        await rotation.setAccount(actualAccountIndex);
         console.log(`   ✅ Sincronização completa - conta correta identificada e SALVA!`);
       } else {
         console.log(`   ✅ Estado sincronizado corretamente`);
@@ -1396,7 +1514,7 @@ export async function scrapeInstagramTag(
   // 🎯 SETAR CONTA MANUALMENTE se accountProfile fornecido
   if (accountProfile && accountProfile !== 'default') {
     const rotation = getAccountRotation();
-    const success = rotation.setAccount(accountProfile);
+    const success = await rotation.setAccount(accountProfile);
     if (!success) {
       console.log(`⚠️  Conta "${accountProfile}" não encontrada - usando rotação automática`);
     }
@@ -4309,10 +4427,14 @@ async function searchProfileHumanLike(page: any, username: string): Promise<void
  * @param page - Página Puppeteer já autenticada
  * @param username - Username do Instagram (sem @)
  */
-export async function scrapeProfileWithExistingPage(page: any, username: string): Promise<InstagramProfileData & { followers: string }> {
+export async function scrapeProfileWithExistingPage(page: any, username: string, skipNavigation: boolean = false): Promise<InstagramProfileData & { followers: string }> {
   try {
-    // Usar busca humana ao invés de URL direta
-    await searchProfileHumanLike(page, username);
+    // Usar busca humana ao invés de URL direta (apenas se não pular navegação)
+    if (!skipNavigation) {
+      await searchProfileHumanLike(page, username);
+    } else {
+      console.log(`   ⏩ Navegação pulada - página já está no perfil`);
+    }
 
     // Delay humano após carregar página (variável)
     const initialDelay = 800 + Math.random() * 700; // 0.8-1.5s
@@ -4886,4 +5008,610 @@ export async function killOrphanPuppeteerProcesses(): Promise<{ killed: number; 
       });
     });
   });
+}
+
+/**
+ * 🔥 SCRAPE INSTAGRAM EXPLORE
+ * Navega direto para a aba Explorar e coleta perfis válidos (com bio/contato)
+ * Baseado na scrapeInstagramTag mas sem termo de busca
+ *
+ * @param maxProfiles - Número máximo de perfis válidos a coletar
+ * @param accountProfile - Conta específica a usar (opcional)
+ * @returns Lista de perfis coletados do Explorar
+ */
+export async function scrapeInstagramExplore(
+  maxProfiles: number = 10,
+  accountProfile?: string
+): Promise<HashtagScrapeResult> {
+  const SEARCH_TERM_MARKER = 'explorar_instagram'; // Identificador no banco
+
+  console.log(`\n🔥 ========== SCRAPE-EXPLORE INICIADO ==========`);
+  console.log(`🔥 Alvo: Página Explorar do Instagram`);
+  console.log(`🔥 Perfis válidos desejados: ${maxProfiles}`);
+
+  // 🎯 SETAR CONTA MANUALMENTE se accountProfile fornecido
+  if (accountProfile && accountProfile !== 'default') {
+    const rotation = getAccountRotation();
+    const success = await rotation.setAccount(accountProfile);
+    if (!success) {
+      console.log(`⚠️  Conta "${accountProfile}" não encontrada - usando rotação automática`);
+    }
+  }
+
+  // 🆕 RESET MÉTRICAS DE RESILIÊNCIA PARA NOVA SESSÃO
+  resilienceMetrics.consecutiveErrors = 0;
+  resilienceMetrics.totalErrors = 0;
+  resilienceMetrics.totalSuccess = 0;
+  resilienceMetrics.lastErrorType = null;
+  resilienceMetrics.lastErrorTime = 0;
+  resilienceMetrics.sessionRecoveries = 0;
+  resilienceMetrics.hashtagsSkipped = [];
+  resilienceMetrics.adaptiveDelayMultiplier = 1.0;
+  resilienceMetrics.consecutiveSessionInvalid = 0;
+  console.log(`🔄 Métricas de resiliência resetadas para nova sessão`);
+
+  // Criar contexto
+  let context = await createIsolatedContext();
+  let page = context.page;
+  const requestId = context.requestId;
+  let cleanup = context.cleanup;
+  console.log(`🔒 Request ${requestId} iniciada para scrape-explore`);
+
+  const allFoundProfiles: any[] = [];
+
+  try {
+    // 🆕 NAVEGAR DIRETO PARA O EXPLORAR
+    const exploreUrl = 'https://www.instagram.com/explore/';
+    console.log(`\n🎯 Navegando para: ${exploreUrl}`);
+
+    // Verificar se página está válida ANTES de navegar
+    try {
+      const isPageClosed = page.isClosed();
+      if (isPageClosed) {
+        throw new Error('Page is closed');
+      }
+      await page.evaluate(() => window.location.href).catch(() => {
+        throw new Error('Page frame is detached before navigation');
+      });
+    } catch (checkError: any) {
+      console.log(`⚠️  Página corrompida detectada ANTES de navegar: ${checkError.message}`);
+      throw new Error(`Page invalidated: ${checkError.message}`);
+    }
+
+    // Navegar para Explorar COM DETECÇÃO DE 429
+    try {
+      await navigateWithRateLimitDetection(page, exploreUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
+      console.log(`   ✅ Navegação para Explorar concluída`);
+    } catch (navError: any) {
+      if (navError instanceof RateLimitError) {
+        console.log(`\n🚨 BLOQUEIO DETECTADO NA NAVEGAÇÃO!`);
+        throw navError;
+      }
+      console.log(`   ❌ Erro durante navegação: ${navError.message}`);
+      throw navError;
+    }
+
+    // 🆕 VERIFICAR SE INSTAGRAM REDIRECIONOU
+    let currentUrl = page.url();
+    console.log(`   🔍 URL atual: ${currentUrl}`);
+
+    const isLoginPage = currentUrl.includes('/accounts/login');
+    const isChallengePage = currentUrl.includes('/challenge') || currentUrl.includes('/checkpoint');
+    const isExplorePage = currentUrl.includes('/explore');
+
+    if (isLoginPage) {
+      console.log('❌ Instagram redirecionou para página de LOGIN - sessão inválida');
+      throw new Error('SESSION_INVALID: Redirected to login page');
+    }
+
+    if (isChallengePage) {
+      console.log('❌ Instagram redirecionou para CHALLENGE - verificação necessária');
+      throw new Error('CHALLENGE_REQUIRED: Instagram requires verification');
+    }
+
+    if (!isExplorePage) {
+      console.log(`⚠️  URL não é o Explorar! Recebido: ${currentUrl}`);
+      // Tentar navegar novamente
+      await page.goto(exploreUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+      await waitHuman(2700, 3500);
+    }
+
+    // Delay após navegação
+    const baseNavDelay = 2000 + Math.random() * 1000;
+    const postNavDelay = getAdaptiveDelay(baseNavDelay);
+    console.log(`   ⏳ Aguardando ${(postNavDelay/1000).toFixed(1)}s para renderização...`);
+    await new Promise(resolve => setTimeout(resolve, postNavDelay));
+
+    // 6. AGUARDAR MURAL CARREGAR
+    console.log(`⏳ Aguardando mural do Explorar carregar...`);
+    const postSelector = 'a[href*="/p/"], a[href*="/reel/"]';
+
+    // Esperar posts aparecerem
+    try {
+      await page.waitForFunction(
+        (selector) => {
+          const posts = document.querySelectorAll(selector);
+          return posts.length > 0;
+        },
+        { timeout: 20000 },
+        postSelector
+      );
+
+      const postCount = await page.evaluate((selector) => {
+        return document.querySelectorAll(selector).length;
+      }, postSelector);
+
+      console.log(`   ✅ Mural carregado com ${postCount} posts`);
+    } catch (waitError: any) {
+      console.log(`   ❌ Timeout ao aguardar mural do Explorar: ${waitError.message}`);
+      throw new Error('Mural do Explorar não carregou');
+    }
+
+    // ⏳ Aguardar lazy loading inicial
+    console.log(`⏳ Aguardando 1.8-2.5s para lazy loading...`);
+    await waitHuman(1800, 2500);
+
+    // 7. PROCESSAR POSTS DO MURAL (mesmo código do scrapeInstagramTag)
+    console.log(`🖼️  Iniciando processamento dos posts do Explorar...`);
+
+    const processedUsernames = new Set<string>();
+    const processedPostLinks = new Set<string>();
+    let attemptsWithoutNewPost = 0;
+    let consecutiveDuplicates = 0;
+    let totalFeedClicks = 0;
+
+    // 💾 SCROLL POSITION
+    let lastSavedScrollPosition = 0;
+
+    // FUNÇÃO HELPER: clickPostElement (copiada de scrapeInstagramTag)
+    const clickPostElement = async (
+      anchorHandle: ElementHandle<Element>,
+      url: string
+    ): Promise<boolean> => {
+      try {
+        console.log(`   🖱️  Preparando clique...`);
+
+        const box = await anchorHandle.boundingBox();
+        if (!box) {
+          throw new Error('Elemento não tem boundingBox');
+        }
+
+        await anchorHandle.evaluate((element) => {
+          element.scrollIntoView({ behavior: 'auto', block: 'center' });
+        });
+        await waitHuman(250, 400);
+
+        const boxAfterScroll = await anchorHandle.boundingBox();
+        if (!boxAfterScroll) {
+          throw new Error('Elemento não visível após scroll');
+        }
+
+        const x = boxAfterScroll.x + boxAfterScroll.width / 2;
+        const y = boxAfterScroll.y + boxAfterScroll.height / 2;
+
+        await moveMouseHuman(page, x, y);
+        await waitHuman(300, 500);
+
+        totalFeedClicks++;
+        console.log(`   📊 Total clicks no mural: ${totalFeedClicks}`);
+
+        await page.mouse.click(x, y, { delay: 100 });
+        await waitHuman(2000, 3000);
+
+        const currentUrl = page.url();
+        const isPostPage = currentUrl.includes('/p/') || currentUrl.includes('/reel/');
+
+        if (!isPostPage) {
+          console.log(`   ❌ Post NÃO abriu! URL: ${currentUrl}`);
+          return false;
+        }
+
+        console.log(`   ✅ Post abriu: ${currentUrl}`);
+        await waitHuman(5000, 8000);
+        return true;
+
+      } catch (clickError: any) {
+        console.log(`   ⚠️  Clique falhou: ${clickError.message}`);
+        await waitHuman(3000, 5000);
+        return false;
+      }
+    };
+
+    // LOOP PRINCIPAL: SCRAPAR ATÉ maxProfiles
+    while (allFoundProfiles.length < maxProfiles && attemptsWithoutNewPost < 8 && consecutiveDuplicates < 8 && totalFeedClicks < 50) {
+      console.log(`\n📊 Status (Explorar): ${allFoundProfiles.length}/${maxProfiles} perfis, tentativa ${attemptsWithoutNewPost}/8, clicks: ${totalFeedClicks}/50`);
+
+      // Salvar scroll position
+      lastSavedScrollPosition = await page.evaluate(() => {
+        return document.documentElement.scrollTop || document.body.scrollTop;
+      });
+
+      const anchorHandles = await page.$$(postSelector);
+      console.log(`   🔍 Encontrados ${anchorHandles.length} posts no mural`);
+
+      if (anchorHandles.length === 0) {
+        attemptsWithoutNewPost++;
+        console.log(`   ⚠️  Nenhum post encontrado. Tentando scroll...`);
+        await scrollHuman(page, 600 + Math.random() * 400);
+        await waitHuman(2000, 3000);
+        continue;
+      }
+
+      // Pegar posts com posição
+      const postsWithPosition: Array<{
+        handle: ElementHandle<Element>;
+        href: string;
+        y: number;
+      }> = [];
+
+      for (const handle of anchorHandles) {
+        const href = await handle.evaluate((node: Element) => (node as HTMLAnchorElement).href || '');
+        if (!href) {
+          await handle.dispose();
+          continue;
+        }
+
+        const box = await handle.boundingBox();
+        if (!box || box.y < -200) {
+          await handle.dispose();
+          continue;
+        }
+
+        postsWithPosition.push({ handle, href, y: box.y });
+      }
+
+      // Ordenar de cima para baixo
+      postsWithPosition.sort((a, b) => a.y - b.y);
+
+      // Selecionar próximo post não-processado
+      let selectedHandle: ElementHandle<Element> | null = null;
+      let selectedUrl: string | null = null;
+
+      for (const post of postsWithPosition) {
+        if (processedPostLinks.has(post.href)) {
+          await post.handle.dispose();
+          continue;
+        }
+
+        selectedHandle = post.handle;
+        selectedUrl = post.href;
+        console.log(`   ✅ Próximo post: ${post.href}`);
+        break;
+      }
+
+      // Dispose remaining handles
+      for (const post of postsWithPosition) {
+        if (post.handle !== selectedHandle) {
+          await post.handle.dispose();
+        }
+      }
+
+      if (!selectedHandle || !selectedUrl) {
+        attemptsWithoutNewPost++;
+        console.log(`   🔄 Nenhum novo post (tentativa ${attemptsWithoutNewPost}/8)`);
+
+        if (consecutiveDuplicates >= 2 || totalFeedClicks >= 8) {
+          console.log(`   📜 Fazendo scroll...`);
+          await scrollHuman(page, 600 + Math.random() * 400);
+          await waitHuman(2000, 3000);
+        }
+        continue;
+      }
+
+      // Abrir post
+      const opened = await clickPostElement(selectedHandle, selectedUrl);
+      await selectedHandle.dispose();
+
+      if (!opened) {
+        processedPostLinks.add(selectedUrl);
+        attemptsWithoutNewPost++;
+        continue;
+      }
+
+      attemptsWithoutNewPost = 0;
+      processedPostLinks.add(selectedUrl);
+
+      // EXTRAIR USERNAME DO POST
+      try {
+        await waitHuman(1500, 2500);
+
+        const ownerUsername = await page.evaluate(() => {
+          // Estratégia 1: header do post
+          const headerLink = document.querySelector('header a[href^="/"][role="link"]') as HTMLAnchorElement;
+          if (headerLink) {
+            const href = headerLink.getAttribute('href') || '';
+            const match = href.match(/^\/([^\/]+)\/?$/);
+            if (match) return match[1];
+          }
+
+          // Estratégia 2: link com username
+          const usernameLinks = document.querySelectorAll('a[href^="/"]');
+          for (const link of usernameLinks) {
+            const href = link.getAttribute('href') || '';
+            if (href.match(/^\/[a-zA-Z0-9._]+\/?$/) && !href.includes('/p/') && !href.includes('/explore')) {
+              return href.replace(/\//g, '');
+            }
+          }
+
+          // Estratégia 3: JSON no HTML
+          const html = document.body.innerHTML;
+          const ownerMatch = html.match(/"owner":\s*\{[^}]*"username":\s*"([^"]+)"/);
+          if (ownerMatch) return ownerMatch[1];
+
+          return null;
+        });
+
+        if (!ownerUsername) {
+          console.log(`   ❌ Não conseguiu extrair username do post`);
+          // Voltar para o Explorar
+          await page.goto(exploreUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+          await waitHuman(2000, 3000);
+          continue;
+        }
+
+        console.log(`   👤 Username do post: @${ownerUsername}`);
+
+        // Filtrar perfis do próprio Instagram
+        const instagramOfficialAccounts = ['reels', 'instagram', 'explore', 'shop', 'creators', 'music'];
+        if (instagramOfficialAccounts.includes(ownerUsername.toLowerCase())) {
+          console.log(`   ⏭️  Perfil oficial do Instagram - IGNORADO: @${ownerUsername}`);
+          await page.goto(exploreUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+          await waitHuman(2000, 3000);
+          continue;
+        }
+
+        // Verificar duplicata
+        if (processedUsernames.has(ownerUsername)) {
+          console.log(`   ⏭️  Username já processado: @${ownerUsername}`);
+          consecutiveDuplicates++;
+          // Voltar para o Explorar
+          await page.goto(exploreUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+          await waitHuman(2000, 3000);
+          continue;
+        }
+
+        processedUsernames.add(ownerUsername);
+        consecutiveDuplicates = 0;
+
+        // NAVEGAR PARA O PERFIL
+        const profileUrl = `https://www.instagram.com/${ownerUsername}/`;
+        console.log(`   🔗 Navegando para perfil: ${profileUrl}`);
+
+        await navigateWithRateLimitDetection(page, profileUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await waitHuman(3000, 5000);
+
+        // EXTRAIR DADOS DO PERFIL (skipNavigation=true porque já navegamos acima)
+        const profileData = await scrapeProfileWithExistingPage(page, ownerUsername, true);
+
+        // Filtrar websites inválidos (da conta logada) ANTES de validar contato
+        const invalidWebsitesEarly = ['gourmetsousvide.com.br', 'instagram.com'];
+        if (profileData.website && invalidWebsitesEarly.some(inv => profileData.website?.toLowerCase().includes(inv))) {
+          console.log(`   ⚠️  Website da conta logada detectado - ignorando: ${profileData.website}`);
+          profileData.website = null;
+        }
+
+        // VALIDAÇÃO: Tem bio ou contato?
+        const hasBio = profileData.bio && profileData.bio.trim().length > 10;
+        const hasContact = profileData.phone || profileData.email || profileData.website;
+
+        if (!hasBio && !hasContact) {
+          console.log(`   ❌ Perfil sem bio/contato - DESCARTADO`);
+          // Voltar para o Explorar
+          await page.goto(exploreUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+          await waitHuman(2000, 3000);
+          continue;
+        }
+
+        // ========================================
+        // VALIDAÇÃO 1: IDIOMA PORTUGUÊS (OBRIGATÓRIA)
+        // ========================================
+        console.log(`   🌍 Validando idioma...`);
+        const languageDetection = await detectLanguage(profileData.bio || '', ownerUsername);
+        console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
+
+        if (languageDetection.language !== 'pt') {
+          console.log(`   ❌ Perfil REJEITADO - idioma não-português: ${languageDetection.language}`);
+          await page.goto(exploreUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+          await waitHuman(2000, 3000);
+          continue;
+        }
+
+        console.log(`   ✅ Idioma: Português (${languageDetection.confidence})`);
+
+        // ========================================
+        // VALIDAÇÃO 2: WEBSITE OU BIO >= 100 → APROVAÇÃO AUTOMÁTICA
+        // ========================================
+        const bioLength = profileData.bio?.length || 0;
+
+        // Filtrar websites inválidos (da conta logada ou genéricos)
+        const invalidWebsites = [
+          'gourmetsousvide.com.br',
+          'instagram.com',
+          'linktr.ee/gourmetsousvide'
+        ];
+        const websiteIsValid = profileData.website &&
+          !invalidWebsites.some(invalid => profileData.website?.toLowerCase().includes(invalid));
+
+        if (profileData.website && !websiteIsValid) {
+          console.log(`   ⚠️  Website inválido (conta logada): ${profileData.website}`);
+          profileData.website = null; // Limpar website inválido
+        }
+
+        const hasWebsite = !!profileData.website && websiteIsValid;
+        const autoApprove = hasWebsite || bioLength >= 100;
+
+        // ========================================
+        // VALIDAÇÃO 3: ACTIVITY SCORE (se não aprovado automaticamente)
+        // ========================================
+        const activityScore = calculateActivityScore(profileData);
+        profileData.activity_score = activityScore.score;
+        profileData.is_active = activityScore.isActive;
+
+        console.log(`   📊 Activity Score: ${activityScore.score}/100 (${activityScore.isActive ? 'ATIVA ✅' : 'INATIVA ❌'})`);
+
+        if (autoApprove) {
+          const reasons = [];
+          if (hasWebsite) reasons.push('tem website');
+          if (bioLength >= 100) reasons.push(`bio >= 100 (${bioLength} chars)`);
+          console.log(`   ✅ APROVAÇÃO AUTOMÁTICA: ${reasons.join(' e ')}`);
+        } else if (!activityScore.isActive) {
+          console.log(`   ❌ Perfil REJEITADO por baixo activity score - não será contabilizado`);
+          await page.goto(exploreUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+          await waitHuman(2000, 3000);
+          continue;
+        }
+
+        console.log(`   ✅ Perfil VÁLIDO: @${ownerUsername}`);
+        console.log(`      Bio: ${hasBio ? 'SIM' : 'NÃO'} (${bioLength} chars)`);
+        console.log(`      Website: ${hasWebsite ? profileData.website : 'NÃO'}`);
+        console.log(`      Contato: ${hasContact ? 'SIM' : 'NÃO'}`);
+
+        // ========================================
+        // EXTRAIR HASHTAGS DOS 2 ÚLTIMOS POSTS
+        // ========================================
+        console.log(`   🏷️  Extraindo hashtags dos últimos 2 posts...`);
+        let postHashtags: string[] = [];
+        try {
+          const { extractHashtagsFromPosts } = await import('../services/instagram-profile.utils');
+
+          // Já estamos na página do perfil, extrair hashtags
+          postHashtags = await extractHashtagsFromPosts(page, 2);
+
+          if (postHashtags && postHashtags.length > 0) {
+            console.log(`   ✅ ${postHashtags.length} hashtags extraídas: ${postHashtags.slice(0, 5).join(', ')}${postHashtags.length > 5 ? '...' : ''}`);
+          } else {
+            console.log(`   ⚠️  Nenhuma hashtag encontrada nos posts`);
+          }
+        } catch (hashtagError: any) {
+          console.log(`   ⚠️  Erro ao extrair hashtags: ${hashtagError.message}`);
+        }
+
+        // PERSISTIR NO BANCO
+        console.log(`   💾 Salvando no banco de dados...`);
+        try {
+          const { createClient } = await import('@supabase/supabase-js');
+          const supabase = createClient(
+            process.env.SUPABASE_URL || '',
+            process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+          );
+
+          // Verificar se já existe
+          const { data: existing } = await supabase
+            .from('instagram_leads')
+            .select('id')
+            .eq('username', ownerUsername)
+            .single();
+
+          if (existing) {
+            console.log(`   ⚠️  @${ownerUsername} já existe no banco - atualizando hashtags`);
+            await supabase
+              .from('instagram_leads')
+              .update({
+                hashtags_posts: postHashtags && postHashtags.length > 0 ? postHashtags : null,
+                updated_at: new Date().toISOString()
+              })
+              .eq('username', ownerUsername);
+          } else {
+            // Inserir novo lead
+            const { error: insertError } = await supabase
+              .from('instagram_leads')
+              .insert({
+                username: ownerUsername,
+                full_name: profileData.full_name,
+                bio: profileData.bio,
+                website: profileData.website,
+                followers_count: profileData.followers_count,
+                following_count: profileData.following_count,
+                posts_count: profileData.posts_count,
+                profile_pic_url: profileData.profile_pic_url,
+                is_verified: profileData.is_verified,
+                is_business_account: profileData.is_business_account,
+                email: profileData.email,
+                phone: profileData.phone,
+                business_category: profileData.business_category,
+                city: profileData.city,
+                state: profileData.state,
+                neighborhood: profileData.neighborhood,
+                address: profileData.address,
+                zip_code: profileData.zip_code,
+                hashtags_bio: profileData.hashtags_bio || null,
+                hashtags_posts: postHashtags && postHashtags.length > 0 ? postHashtags : null,
+                search_term_used: SEARCH_TERM_MARKER,
+                lead_source: 'explore',
+                captured_at: new Date().toISOString()
+              });
+
+            if (insertError) {
+              console.log(`   ❌ Erro ao salvar: ${insertError.message}`);
+            } else {
+              console.log(`   ✅ @${ownerUsername} salvo no banco com search_term_used='${SEARCH_TERM_MARKER}'`);
+            }
+          }
+        } catch (dbError: any) {
+          console.log(`   ❌ Erro no banco: ${dbError.message}`);
+        }
+
+        // Adicionar ao resultado com marcador de origem
+        allFoundProfiles.push({
+          ...profileData,
+          hashtags_posts: postHashtags,
+          search_term_used: SEARCH_TERM_MARKER,
+          source: 'explore',
+          collected_at: new Date().toISOString()
+        });
+
+        console.log(`   📊 Total coletados: ${allFoundProfiles.length}/${maxProfiles}`);
+
+        // Voltar para o Explorar
+        await page.goto(exploreUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+        await waitHuman(2000, 3000);
+
+        // Restaurar scroll
+        if (lastSavedScrollPosition > 0) {
+          await page.evaluate((scrollY) => {
+            window.scrollTo(0, scrollY);
+          }, lastSavedScrollPosition);
+          await waitHuman(500, 800);
+        }
+
+      } catch (profileError: any) {
+        console.log(`   ❌ Erro ao processar perfil: ${profileError.message}`);
+        // Tentar voltar para o Explorar
+        await page.goto(exploreUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+        await waitHuman(2000, 3000);
+      }
+    }
+
+    // RESULTADO FINAL
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`✅ SCRAPE-EXPLORE FINALIZADO`);
+    console.log(`   📊 Perfis válidos coletados: ${allFoundProfiles.length}/${maxProfiles}`);
+    console.log(`   🖱️  Total clicks no mural: ${totalFeedClicks}`);
+    console.log(`${'='.repeat(60)}\n`);
+
+    return {
+      profiles: allFoundProfiles,
+      is_partial: allFoundProfiles.length < maxProfiles,
+      requested: maxProfiles,
+      collected: allFoundProfiles.length,
+      completion_rate: `${((allFoundProfiles.length / maxProfiles) * 100).toFixed(1)}%`
+    };
+
+  } catch (error: any) {
+    console.log(`\n❌ ERRO NO SCRAPE-EXPLORE: ${error.message}`);
+
+    // Retornar perfis coletados mesmo com erro
+    return {
+      profiles: allFoundProfiles,
+      is_partial: true,
+      requested: maxProfiles,
+      collected: allFoundProfiles.length,
+      completion_rate: `${((allFoundProfiles.length / maxProfiles) * 100).toFixed(1)}%`
+    };
+
+  } finally {
+    console.log(`🔓 Request ${requestId} finalizada (scrape-explore)`);
+    await cleanup();
+    console.log(`🏁 SCRAPE-EXPLORE ENCERRADO - Request ${requestId}`);
+  }
 }
