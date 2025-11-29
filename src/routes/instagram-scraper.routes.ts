@@ -1873,19 +1873,24 @@ router.post('/force-close', async (_req: Request, res: Response) => {
 /**
  * POST /api/instagram-scraper/kill-orphans
  * Mata todos os processos Puppeteer órfãos (ADMIN)
+ *
+ * IMPORTANTE: Preserva o browser ativo atual para não interromper scraping em andamento.
+ * Seguro para ser chamado via cron (N8N) a cada 30 minutos.
  */
 router.post('/kill-orphans', async (_req: Request, res: Response) => {
   try {
     console.log('🔪 [ADMIN] Matando processos Puppeteer órfãos...');
-    const before = await listPuppeteerProcesses();
-    await killOrphanPuppeteerProcesses();
-    const after = await listPuppeteerProcesses();
+
+    const result = await killOrphanPuppeteerProcesses();
 
     return res.status(200).json({
       success: true,
-      message: `Processos mortos: ${before.length - after.length}`,
-      before: before.length,
-      after: after.length
+      message: `Processos órfãos mortos: ${result.killed}`,
+      killed: result.killed,
+      currentBrowserPid: result.currentPid,
+      orphanPids: result.orphanPids,
+      preservedPids: result.preserved,
+      errors: result.errors
     });
   } catch (error: any) {
     return res.status(500).json({

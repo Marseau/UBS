@@ -13,6 +13,12 @@ import {
   LeadProfile,
   CampaignContext
 } from '../services/personalized-dm.service';
+import {
+  outreachAgentService,
+  ProcessMessageResult,
+  RateLimitStatus,
+  ClassificationResult
+} from '../services/outreach-agent.service';
 
 const router = express.Router();
 
@@ -692,6 +698,761 @@ router.post('/templates', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Erro ao criar template:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// AGENTE IA - ENDPOINTS
+// ============================================================================
+
+/**
+ * POST /api/outreach/rate-limit/check
+ * Verifica se pode enviar mensagem (rate limit + horário comercial)
+ */
+router.post('/rate-limit/check', async (req, res) => {
+  try {
+    const { project_id, hourly_limit = 15, daily_limit = 120 } = req.body;
+
+    if (!project_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'project_id é obrigatório'
+      });
+    }
+
+    const status = await outreachAgentService.checkRateLimit(project_id, hourly_limit, daily_limit);
+
+    return res.json({
+      success: true,
+      data: status
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /rate-limit/check:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/rate-limit/increment
+ * Incrementa contador de mensagens enviadas
+ */
+router.post('/rate-limit/increment', async (req, res) => {
+  try {
+    const { project_id } = req.body;
+
+    if (!project_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'project_id é obrigatório'
+      });
+    }
+
+    await outreachAgentService.incrementRateLimit(project_id);
+
+    return res.json({
+      success: true,
+      message: 'Rate limit incrementado'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /rate-limit/increment:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/classify-response
+ * Classifica resposta do lead para determinar interesse
+ */
+router.post('/classify-response', async (req, res) => {
+  try {
+    const { project_id, lead_message, conversation_id } = req.body;
+
+    if (!project_id || !lead_message) {
+      return res.status(400).json({
+        success: false,
+        message: 'project_id e lead_message são obrigatórios'
+      });
+    }
+
+    // Carregar contexto do negócio
+    const businessContext = await outreachAgentService.getClientBusinessContext(project_id);
+    if (!businessContext) {
+      return res.status(404).json({
+        success: false,
+        message: 'Contexto de negócio não encontrado para este projeto'
+      });
+    }
+
+    // Carregar histórico se tiver conversation_id
+    let history: any[] = [];
+    if (conversation_id) {
+      history = await outreachAgentService.getConversationHistory(conversation_id);
+    }
+
+    // Classificar
+    const classification = await outreachAgentService.classifyResponse(
+      lead_message,
+      history,
+      businessContext
+    );
+
+    return res.json({
+      success: true,
+      data: classification
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /classify-response:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/auto-reply
+ * Gera e processa resposta automática para mensagem do lead
+ * Este é o endpoint principal para o N8N chamar quando receber uma resposta
+ */
+router.post('/auto-reply', async (req, res) => {
+  try {
+    const {
+      project_id,
+      lead_id,
+      lead_username,
+      lead_full_name,
+      lead_bio,
+      lead_phone,
+      incoming_message,
+      campaign_id
+    } = req.body;
+
+    if (!project_id || !lead_id || !incoming_message) {
+      return res.status(400).json({
+        success: false,
+        message: 'project_id, lead_id e incoming_message são obrigatórios'
+      });
+    }
+
+    console.log(`\n🤖 [AUTO-REPLY] Processando resposta do lead @${lead_username}`);
+
+    const result = await outreachAgentService.processLeadMessage(
+      project_id,
+      lead_id,
+      {
+        username: lead_username,
+        full_name: lead_full_name,
+        bio: lead_bio,
+        phone: lead_phone
+      },
+      incoming_message,
+      campaign_id
+    );
+
+    return res.json({
+      success: result.success,
+      data: {
+        action: result.action,
+        response_message: result.response_message,
+        should_send_response: result.should_send_response,
+        conversation_id: result.conversation_id,
+        classification: result.classification
+      },
+      error: result.error_message
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /auto-reply:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/handoff
+ * Executa handoff de uma conversa para atendimento humano
+ */
+router.post('/handoff', async (req, res) => {
+  try {
+    const { conversation_id, reason, notes, notify_channels = ['email', 'whatsapp'] } = req.body;
+
+    if (!conversation_id || !reason) {
+      return res.status(400).json({
+        success: false,
+        message: 'conversation_id e reason são obrigatórios'
+      });
+    }
+
+    console.log(`\n🔄 [HANDOFF] Executando handoff`);
+    console.log(`   Conversa: ${conversation_id}`);
+    console.log(`   Motivo: ${reason}`);
+
+    const result = await outreachAgentService.executeHandoff(conversation_id, reason, notes);
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao executar handoff'
+      });
+    }
+
+    // Buscar dados da conversa para notificação
+    const { data: conversation } = await supabase
+      .from('outreach_conversations')
+      .select(`
+        *,
+        instagram_leads (
+          username,
+          full_name,
+          phone_normalized,
+          bio
+        )
+      `)
+      .eq('id', conversation_id)
+      .single();
+
+    // Buscar últimas mensagens para contexto
+    const history = await outreachAgentService.getConversationHistory(conversation_id, 10);
+
+    return res.json({
+      success: true,
+      data: {
+        handoff_id: result.handoff_id,
+        conversation,
+        recent_messages: history,
+        notify_channels
+      },
+      message: 'Handoff executado com sucesso'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /handoff:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/outreach/handoffs/pending
+ * Lista handoffs pendentes para atendimento
+ */
+router.get('/handoffs/pending', async (req, res) => {
+  try {
+    const { project_id } = req.query;
+
+    let query = supabase
+      .from('outreach_conversations')
+      .select(`
+        *,
+        instagram_leads (
+          username,
+          full_name,
+          phone_normalized,
+          bio,
+          business_category
+        )
+      `)
+      .in('status', ['handoff_pending', 'interested'])
+      .order('handoff_at', { ascending: false });
+
+    if (project_id) {
+      query = query.eq('project_id', project_id);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    return res.json({
+      success: true,
+      data: data || [],
+      count: data?.length || 0
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /handoffs/pending:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/handoff/complete
+ * Marca handoff como completado (humano assumiu)
+ */
+router.post('/handoff/complete', async (req, res) => {
+  try {
+    const { conversation_id, user_id, notes } = req.body;
+
+    if (!conversation_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'conversation_id é obrigatório'
+      });
+    }
+
+    await supabase
+      .from('outreach_conversations')
+      .update({
+        status: 'human_handling',
+        handoff_to_user_id: user_id,
+        handoff_notes: notes
+      })
+      .eq('id', conversation_id);
+
+    // Adicionar mensagem de sistema
+    await outreachAgentService.saveMessage(
+      conversation_id,
+      'outbound',
+      'system',
+      `[HANDOFF COMPLETO] Atendente humano assumiu a conversa`
+    );
+
+    return res.json({
+      success: true,
+      message: 'Handoff completado'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /handoff/complete:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/outreach/conversation/:id
+ * Busca conversa com histórico completo
+ */
+router.get('/conversation/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data: conversation, error } = await supabase
+      .from('outreach_conversations')
+      .select(`
+        *,
+        instagram_leads (
+          username,
+          full_name,
+          phone_normalized,
+          bio,
+          business_category,
+          external_url
+        )
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+
+    const messages = await outreachAgentService.getConversationHistory(id, 50);
+
+    return res.json({
+      success: true,
+      data: {
+        ...conversation,
+        messages
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /conversation/:id:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/blacklist/add
+ * Adiciona lead à blacklist
+ */
+router.post('/blacklist/add', async (req, res) => {
+  try {
+    const {
+      project_id,
+      lead_id,
+      phone,
+      instagram_username,
+      reason,
+      reason_details
+    } = req.body;
+
+    if (!project_id || !reason) {
+      return res.status(400).json({
+        success: false,
+        message: 'project_id e reason são obrigatórios'
+      });
+    }
+
+    await outreachAgentService.addToBlacklist(
+      project_id,
+      reason,
+      phone,
+      instagram_username,
+      lead_id,
+      reason_details
+    );
+
+    return res.json({
+      success: true,
+      message: 'Lead adicionado à blacklist'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /blacklist/add:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/blacklist/check
+ * Verifica se lead está na blacklist
+ */
+router.post('/blacklist/check', async (req, res) => {
+  try {
+    const { project_id, phone, instagram_username, lead_id } = req.body;
+
+    if (!project_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'project_id é obrigatório'
+      });
+    }
+
+    const isBlacklisted = await outreachAgentService.isBlacklisted(
+      project_id,
+      phone,
+      instagram_username,
+      lead_id
+    );
+
+    return res.json({
+      success: true,
+      is_blacklisted: isBlacklisted
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /blacklist/check:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/outreach/business-context/:project_id
+ * Busca contexto de negócio do projeto AIC
+ */
+router.get('/business-context/:project_id', async (req, res) => {
+  try {
+    const { project_id } = req.params;
+
+    const context = await outreachAgentService.getClientBusinessContext(project_id);
+
+    if (!context) {
+      return res.status(404).json({
+        success: false,
+        message: 'Contexto de negócio não encontrado'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: context
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /business-context:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/business-context
+ * Cria ou atualiza contexto de negócio do projeto AIC
+ */
+router.post('/business-context', async (req, res) => {
+  try {
+    const {
+      project_id,
+      business_name,
+      business_type,
+      business_description,
+      value_proposition,
+      main_products_services,
+      differentials,
+      location_city,
+      location_state,
+      website_url,
+      instagram_handle,
+      communication_tone,
+      brand_personality,
+      first_contact_script,
+      follow_up_script,
+      closing_phrases,
+      prohibited_phrases,
+      active_offers,
+      human_support_hours,
+      agent_name,
+      max_ai_responses_before_handoff,
+      interest_keywords,
+      rejection_keywords
+    } = req.body;
+
+    if (!project_id || !business_name || !value_proposition) {
+      return res.status(400).json({
+        success: false,
+        message: 'project_id, business_name e value_proposition são obrigatórios'
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('client_business_context')
+      .upsert({
+        project_id,
+        business_name,
+        business_type,
+        business_description,
+        value_proposition,
+        main_products_services,
+        differentials,
+        location_city,
+        location_state,
+        website_url,
+        instagram_handle,
+        communication_tone: communication_tone || 'profissional_amigavel',
+        brand_personality,
+        first_contact_script,
+        follow_up_script,
+        closing_phrases,
+        prohibited_phrases,
+        active_offers,
+        human_support_hours,
+        agent_name: agent_name || 'Assistente',
+        max_ai_responses_before_handoff: max_ai_responses_before_handoff || 5,
+        interest_keywords: interest_keywords || ['interessado', 'quero', 'quanto custa', 'preço'],
+        rejection_keywords: rejection_keywords || ['não quero', 'não tenho interesse', 'pare'],
+        is_active: true
+      }, {
+        onConflict: 'project_id'
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return res.json({
+      success: true,
+      data
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao salvar business context:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/send-whatsapp
+ * Endpoint completo para enviar mensagem via WhatsApp com rate limiting
+ * Usado pelo N8N Sender workflow
+ */
+router.post('/send-whatsapp', async (req, res) => {
+  try {
+    const {
+      project_id,
+      campaign_id,
+      dry_run = false
+    } = req.body;
+
+    if (!project_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'project_id é obrigatório'
+      });
+    }
+
+    console.log(`\n📤 [SEND-WHATSAPP] Processando envio`);
+    console.log(`   Projeto: ${project_id}`);
+    console.log(`   Dry Run: ${dry_run}`);
+
+    // 1. Verificar rate limit e horário comercial
+    const rateStatus = await outreachAgentService.checkRateLimit(project_id);
+
+    if (!rateStatus.can_send) {
+      return res.json({
+        success: true,
+        can_send: false,
+        reason: rateStatus.reason,
+        rate_status: rateStatus,
+        message: `Não é possível enviar agora: ${rateStatus.reason}`,
+        next_available: rateStatus.next_available_slot
+      });
+    }
+
+    // 2. Buscar próximo item da fila
+    const queueItem = await personalizedDMService.getNextOutreachItem(
+      'whatsapp',
+      campaign_id
+    );
+
+    if (!queueItem) {
+      return res.json({
+        success: true,
+        can_send: true,
+        has_item: false,
+        message: 'Nenhum item pendente na fila',
+        rate_status: rateStatus
+      });
+    }
+
+    // 3. Verificar blacklist
+    const isBlacklisted = await outreachAgentService.isBlacklisted(
+      project_id,
+      queueItem.lead_phone,
+      queueItem.lead_username
+    );
+
+    if (isBlacklisted) {
+      // Marcar como bloqueado e buscar próximo
+      await supabase
+        .from('campaign_outreach_queue')
+        .update({ status: 'blocked', error_message: 'Lead na blacklist' })
+        .eq('id', queueItem.id);
+
+      return res.json({
+        success: true,
+        can_send: true,
+        has_item: false,
+        message: 'Lead na blacklist, busque próximo',
+        skipped_lead: queueItem.lead_username
+      });
+    }
+
+    // 4. Gerar mensagem personalizada
+    const leadProfile: LeadProfile = {
+      id: queueItem.lead_id,
+      username: queueItem.lead_username,
+      full_name: queueItem.lead_full_name,
+      bio: queueItem.lead_bio,
+      business_category: queueItem.lead_business_category,
+      segment: queueItem.lead_segment,
+      hashtags_bio: queueItem.lead_hashtags_bio,
+      hashtags_posts: queueItem.lead_hashtags_posts,
+      has_phone: !!queueItem.lead_phone,
+      has_email: !!queueItem.lead_email
+    };
+
+    const campaignContext: CampaignContext = {
+      id: queueItem.campaign_id,
+      campaign_name: queueItem.campaign_name,
+      nicho_principal: queueItem.nicho_principal,
+      nicho_secundario: queueItem.nicho_secundario,
+      keywords: queueItem.campaign_keywords || [],
+      service_description: queueItem.service_description,
+      target_audience: queueItem.target_audience,
+      client_name: queueItem.client_name,
+      project_name: queueItem.project_name,
+      preferred_channel: 'auto'
+    };
+
+    const generatedDM = await generatePersonalizedDM({
+      lead: leadProfile,
+      campaign: campaignContext,
+      channel: 'whatsapp',
+      tone: 'professional'
+    });
+
+    // 5. Criar conversa se não existir
+    const conversation = await outreachAgentService.getOrCreateConversation(
+      project_id,
+      queueItem.lead_id,
+      {
+        username: queueItem.lead_username,
+        full_name: queueItem.lead_full_name,
+        bio: queueItem.lead_bio,
+        phone: queueItem.lead_phone
+      },
+      queueItem.campaign_id
+    );
+
+    // 6. Se não for dry run, salvar mensagem e incrementar rate limit
+    if (!dry_run) {
+      await personalizedDMService.saveOutreachMessage(
+        queueItem.id,
+        queueItem.campaign_id,
+        queueItem.lead_id,
+        'whatsapp',
+        generatedDM
+      );
+
+      // Salvar na conversa
+      await outreachAgentService.saveMessage(
+        conversation.id,
+        'outbound',
+        'ai',
+        generatedDM.message_text,
+        { detected_intent: 'first_contact' }
+      );
+
+      // Incrementar rate limit
+      await outreachAgentService.incrementRateLimit(project_id);
+
+      // Atualizar fila com mensagem gerada
+      await supabase
+        .from('campaign_outreach_queue')
+        .update({
+          message_text: generatedDM.message_text,
+          message_generated_by: generatedDM.message_generated_by,
+          personalization_data: generatedDM.personalization_data
+        })
+        .eq('id', queueItem.id);
+    }
+
+    return res.json({
+      success: true,
+      can_send: true,
+      has_item: true,
+      data: {
+        queue_id: queueItem.id,
+        lead_id: queueItem.lead_id,
+        conversation_id: conversation.id,
+        username: queueItem.lead_username,
+        full_name: queueItem.lead_full_name,
+        phone: queueItem.lead_phone,
+        campaign_name: queueItem.campaign_name,
+        message_text: generatedDM.message_text,
+        confidence_score: generatedDM.confidence_score
+      },
+      rate_status: {
+        hourly_remaining: rateStatus.hourly_remaining - 1,
+        daily_remaining: rateStatus.daily_remaining - 1
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /send-whatsapp:', error);
     return res.status(500).json({
       success: false,
       message: error.message
