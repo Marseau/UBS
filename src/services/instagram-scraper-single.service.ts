@@ -1532,6 +1532,18 @@ export async function scrapeInstagramTag(
   resilienceMetrics.consecutiveSessionInvalid = 0; // 🆕 RESET contador de SESSION_INVALID
   console.log(`🔄 Métricas de resiliência resetadas para nova sessão`);
 
+  // 🆕 CRÍTICO: Verificar conta disponível ANTES de criar contexto
+  const rotation = getAccountRotation();
+  const accountCheck = await rotation.ensureAvailableAccount();
+
+  if (!accountCheck.success) {
+    throw new Error(`ACCOUNT_UNAVAILABLE: ${accountCheck.reason}`);
+  }
+
+  if (accountCheck.rotated) {
+    console.log(`🔄 Rotacionado para @${accountCheck.account} antes de iniciar`);
+  }
+
   // Criar contexto UMA VEZ para discovery E scraping
   let context = await createIsolatedContext();
   let page = context.page;
@@ -1647,6 +1659,13 @@ export async function scrapeInstagramTag(
         cleanup = newContext.cleanup;
 
         console.log('✅ [SESSION RECOVERY] Nova sessão criada com sucesso!');
+
+        // 🆕 CRÍTICO: Registrar recuperação no sistema de rotação
+        // Isso reseta failureCount e isBlocked para evitar estado inconsistente
+        const rotation = getAccountRotation();
+        await rotation.recordSuccess();
+        console.log('✅ [SESSION RECOVERY] Estado de rotação atualizado (contadores resetados)');
+
         await waitHuman(2700, 3500); // Dar tempo para estabilizar (randomizado)
       }
 
@@ -1917,12 +1936,20 @@ export async function scrapeInstagramTag(
           // 🆕 CRITÉRIO ROBUSTO: 15+ posts = mural carregou com sucesso (mesmo com timeout)
           const muralLoaded = postCount >= 15;
 
-          // Só detecta login se REALMENTE tem form E tem 0 posts
-          const hasLoginForm = (pageContent.includes('loginForm') || pageContent.includes('Login')) && postCount === 0;
+          // 🆕 DETECTAR "No results" - hashtag sem posts (NÃO é erro!)
+          const hasNoResults = pageContent.includes('No results') ||
+                              pageContent.includes('Nenhum resultado') ||
+                              pageContent.includes("couldn't find anything") ||
+                              pageContent.includes('não encontramos nada') ||
+                              pageContent.includes("We couldn't find anything");
+
+          // Só detecta login se REALMENTE tem form E tem 0 posts E NÃO é "No results"
+          const hasLoginForm = (pageContent.includes('loginForm') || pageContent.includes('type="password"')) && postCount === 0 && !hasNoResults;
 
           console.log(`   ⚠️  ${context}: timeout ao aguardar mural`);
           console.log(`   📍 URL final: ${currentUrl}`);
           console.log(`   📊 Posts encontrados: ${postCount}`);
+          console.log(`   📭 No Results: ${hasNoResults ? 'SIM' : 'NÃO'}`);
           console.log(`   🔐 Página de login detectada: ${hasLoginForm ? 'SIM' : 'NÃO'}`);
           console.log(`   ${muralLoaded ? '✅ MURAL CARREGOU (15+ posts)' : '❌ Mural não carregou'}`);
           console.log(`   ❌ Erro: ${error?.message || error}`);
@@ -1931,6 +1958,13 @@ export async function scrapeInstagramTag(
           if (muralLoaded) {
             console.log(`   ✅ Ignorando timeout - mural carregou com ${postCount} posts`);
             return true;
+          }
+
+          // 🆕 HASHTAG SEM RESULTADOS - Não é erro, lançar erro especial para pular
+          if (hasNoResults) {
+            console.log(`\n📭 HASHTAG SEM RESULTADOS: Esta hashtag não tem posts`);
+            console.log(`   ℹ️  Isso é normal - hashtag inexistente ou sem conteúdo`);
+            throw new Error('NO_RESULTS: Hashtag sem resultados');
           }
 
           if (throwOnFail) {
@@ -2165,23 +2199,30 @@ export async function scrapeInstagramTag(
         const anchorHandles = await page.$$(postSelector);
         console.log(`   🔍 Encontrados ${anchorHandles.length} elementos com seletor: ${postSelector}`);
 
-        // 🚫 DETECÇÃO DE SHADOWBAN: Mural sem posts visíveis
+        // 🚫 DETECÇÃO DE PÁGINA SEM POSTS
         if (anchorHandles.length === 0) {
           const pageAnalysis = await page.evaluate(() => {
             const url = window.location.href;
+            const bodyText = document.body.innerText;
             const isHashtagPage = url.includes('/explore/tags/') || url.includes('/explore/search/keyword/');
             const isProfilePage = url.match(/instagram\.com\/[^\/]+\/?$/);
 
             // Detectar se é perfil privado
-            const isPrivate = document.body.innerText.includes('Esta conta é privada') ||
-                             document.body.innerText.includes('This Account is Private');
+            const isPrivate = bodyText.includes('Esta conta é privada') ||
+                             bodyText.includes('This Account is Private');
+
+            // 🆕 Detectar "No results" - hashtag sem posts (NÃO é shadowban!)
+            const hasNoResults = bodyText.includes('No results') ||
+                                bodyText.includes('Nenhum resultado') ||
+                                bodyText.includes("couldn't find anything") ||
+                                bodyText.includes('não encontramos nada');
 
             // Verificar se mural/grid existe (estrutura da página)
             const hasGrid = !!document.querySelector('article') ||
                            !!document.querySelector('main') ||
                            !!document.querySelector('[role="main"]');
 
-            return { isHashtagPage, isProfilePage, isPrivate, hasGrid };
+            return { isHashtagPage, isProfilePage, isPrivate, hasGrid, hasNoResults };
           });
 
           console.log(`\n🔍 Análise da página sem posts:`);
@@ -2189,9 +2230,18 @@ export async function scrapeInstagramTag(
           console.log(`   Perfil: ${pageAnalysis.isProfilePage}`);
           console.log(`   Privado: ${pageAnalysis.isPrivate}`);
           console.log(`   Grid existe: ${pageAnalysis.hasGrid}`);
+          console.log(`   No Results: ${pageAnalysis.hasNoResults}`);
 
-          // ⚠️ SHADOWBAN DETECTADO: Hashtag com grid mas sem posts
-          if (pageAnalysis.isHashtagPage && pageAnalysis.hasGrid && !pageAnalysis.isPrivate) {
+          // 🆕 HASHTAG SEM RESULTADOS - Não é erro, apenas pular para próxima
+          if (pageAnalysis.hasNoResults) {
+            console.log(`\n📭 HASHTAG SEM RESULTADOS: Esta hashtag não tem posts`);
+            console.log(`   ℹ️  Isso é normal - hashtag inexistente ou sem conteúdo`);
+            console.log(`   ➡️  Pulando para próxima hashtag...\n`);
+            break; // Sai do loop desta hashtag e vai para próxima
+          }
+
+          // ⚠️ SHADOWBAN DETECTADO: Hashtag com grid mas sem posts E sem mensagem "No results"
+          if (pageAnalysis.isHashtagPage && pageAnalysis.hasGrid && !pageAnalysis.isPrivate && !pageAnalysis.hasNoResults) {
             console.log(`\n⚠️  POSSÍVEL SHADOWBAN: Página de hashtag com estrutura mas 0 posts visíveis`);
             console.log(`   Tentativa ${attemptsWithoutNewPost}/8 sem posts`);
 
@@ -2971,12 +3021,14 @@ export async function scrapeInstagramTag(
               }
             }
 
-            // Fallback: JSON
-            const fullNameMatch = profileJsonBlock.match(/"full_name":"([^"]+)"/);
-            const fullNameFromJson = fullNameMatch ? fullNameMatch[1] : null;
+            // REMOVIDO FALLBACK JSON: O JSON pode conter full_name do viewer (conta logada)
+            // em vez do perfil visitado. Usar APENAS OG meta tag que é específica do perfil.
+            // Se OG não encontrar, persistir null em vez de arriscar pegar nome errado.
+            const finalFullName = fullNameFromOG || null;
 
-            // Escolher melhor fonte (prioridade: OG > JSON > DOM)
-            const finalFullName = fullNameFromOG || fullNameFromJson || profileData.full_name;
+            if (!finalFullName) {
+              console.log(`   ⚠️  Full name não encontrado na OG tag - persistindo null (evita pegar nome da conta logada)`);
+            }
 
             // ESTRATÉGIA BIO: Meta description (contém bio institucional completa)
             // Format: "X seguidores, Y seguindo, Z posts — Full Name (@username) no Instagram: "Bio text aqui""
@@ -3572,6 +3624,17 @@ export async function scrapeInstagramTag(
           console.log(`✅ Hashtag #${hashtagToScrape} scrapada com sucesso!`);
 
         } catch (hashtagError: any) {
+          // 🆕 NO_RESULTS: Hashtag sem posts - NÃO é erro, apenas pular para próxima
+          if (hashtagError.message.includes('NO_RESULTS')) {
+            console.log(`\n📭 ============================================`);
+            console.log(`📭 HASHTAG SEM RESULTADOS - PULANDO`);
+            console.log(`📭 ============================================`);
+            console.log(`   ℹ️  #${hashtagToScrape} não tem posts (hashtag inexistente ou vazia)`);
+            console.log(`   ➡️  Continuando para próxima hashtag...\n`);
+            hashtagSuccess = true; // Marca como "sucesso" para não fazer retry
+            break; // Sai do while de retry, vai para próxima hashtag
+          }
+
           console.error(`❌ Erro ao scrape hashtag #${hashtagToScrape} (tentativa ${retryCount}/${MAX_RETRIES}):`, hashtagError.message);
 
           // Atualizar métricas de resiliência
@@ -4994,17 +5057,118 @@ export async function listPuppeteerProcesses(): Promise<string[]> {
 
 /**
  * Mata todos os processos Puppeteer órfãos (exceto o atual)
+ *
+ * CORREÇÃO: Agora lista todos os PIDs e mata apenas os órfãos,
+ * preservando o browser ativo atual para não interromper scraping em andamento.
  */
-export async function killOrphanPuppeteerProcesses(): Promise<{ killed: number; currentPid: number | null }> {
-  const currentPid = browserInstance?.process()?.pid || null;
+export async function killOrphanPuppeteerProcesses(): Promise<{
+  killed: number;
+  currentPid: number | null;
+  orphanPids: number[];
+  preserved: number[];
+  errors: string[];
+}> {
   const { exec } = require('child_process');
+  const currentPid = browserInstance?.process()?.pid || null;
+
+  // Também pegar PIDs dos processos filhos do browser atual
+  const currentChildPids: number[] = [];
+  if (currentPid) {
+    try {
+      // Pegar todos os processos filhos do browser principal
+      const childPidsResult = await new Promise<string>((resolve) => {
+        exec(`pgrep -P ${currentPid}`, (_: any, stdout: string) => {
+          resolve(stdout || '');
+        });
+      });
+      childPidsResult.trim().split('\n').forEach(pid => {
+        const parsed = parseInt(pid);
+        if (!isNaN(parsed)) currentChildPids.push(parsed);
+      });
+    } catch {
+      // Ignorar erros ao buscar filhos
+    }
+  }
+
+  const preservedPids = currentPid ? [currentPid, ...currentChildPids] : [];
+
+  console.log(`\n🔪 ========== KILL ORPHAN PROCESSES ==========`);
+  console.log(`   🔍 Browser ativo PID: ${currentPid || 'NENHUM'}`);
+  console.log(`   🔍 PIDs filhos preservados: ${currentChildPids.length > 0 ? currentChildPids.join(', ') : 'nenhum'}`);
 
   return new Promise((resolve) => {
-    exec('pkill -f "Google Chrome for Testing"', (error: any) => {
-      // Re-verificar quantos foram mortos
-      exec('ps aux | grep "Chrome for Testing" | grep -v grep | wc -l', (_: any, stdout: string) => {
-        const remaining = parseInt(stdout.trim()) || 0;
-        resolve({ killed: 41 - remaining, currentPid }); // Aproximação
+    // 1. Listar todos os PIDs do Chrome for Testing
+    exec('pgrep -f "Chrome for Testing"', async (error: any, stdout: string) => {
+      if (error || !stdout.trim()) {
+        console.log(`   ✅ Nenhum processo Chrome for Testing encontrado`);
+        console.log(`==========================================\n`);
+        resolve({
+          killed: 0,
+          currentPid,
+          orphanPids: [],
+          preserved: preservedPids,
+          errors: []
+        });
+        return;
+      }
+
+      const allPids = stdout.trim().split('\n')
+        .map(pid => parseInt(pid.trim()))
+        .filter(pid => !isNaN(pid));
+
+      console.log(`   📊 Total processos Chrome for Testing: ${allPids.length}`);
+
+      // 2. Filtrar apenas órfãos (excluir browser atual e seus filhos)
+      const orphanPids = allPids.filter(pid => !preservedPids.includes(pid));
+
+      console.log(`   🎯 Processos órfãos a matar: ${orphanPids.length}`);
+      console.log(`   🔒 Processos preservados: ${preservedPids.filter(p => allPids.includes(p)).length}`);
+
+      if (orphanPids.length === 0) {
+        console.log(`   ✅ Nenhum processo órfão encontrado`);
+        console.log(`==========================================\n`);
+        resolve({
+          killed: 0,
+          currentPid,
+          orphanPids: [],
+          preserved: preservedPids,
+          errors: []
+        });
+        return;
+      }
+
+      // 3. Matar cada órfão individualmente
+      const errors: string[] = [];
+      let killed = 0;
+
+      for (const pid of orphanPids) {
+        try {
+          process.kill(pid, 'SIGKILL');
+          killed++;
+          console.log(`   ✅ Matou PID ${pid}`);
+        } catch (killError: any) {
+          // Processo já pode ter morrido
+          if (killError.code !== 'ESRCH') {
+            errors.push(`PID ${pid}: ${killError.message}`);
+            console.log(`   ⚠️  Erro ao matar PID ${pid}: ${killError.message}`);
+          } else {
+            console.log(`   ℹ️  PID ${pid} já não existe`);
+          }
+        }
+      }
+
+      console.log(`\n   📊 Resultado:`);
+      console.log(`   ✅ Processos mortos: ${killed}`);
+      console.log(`   🔒 Processos preservados: ${preservedPids.length}`);
+      console.log(`   ❌ Erros: ${errors.length}`);
+      console.log(`==========================================\n`);
+
+      resolve({
+        killed,
+        currentPid,
+        orphanPids,
+        preserved: preservedPids,
+        errors
       });
     });
   });

@@ -14,6 +14,7 @@
 import fs from 'fs';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
+import { resetSessionForRotation } from './instagram-session.service';
 
 interface AccountConfig {
   username: string;                  // Email para login
@@ -469,7 +470,14 @@ class InstagramAccountRotation {
     // Isso evita rotação desnecessária após 1 falha isolada
     if (account.failureCount >= FAILURE_THRESHOLD) {
       account.isBlocked = true;
+
+      // 🚨 CRÍTICO: Quando conta é bloqueada, marcar momento do bloqueio
+      // Isso FORÇA o wait de 30min antes de poder rotacionar para outra conta
+      // O IP precisa esfriar antes de trocar de conta!
+      this.state.lastRotationTime = Date.now();
+
       console.log(`❌ Falha registrada para ${account.username} (${account.failureCount} falhas) - 🚫 BLOQUEADA`);
+      console.log(`   ⏱️  IP cooling iniciado: 30 minutos obrigatórios antes de rotacionar`);
     } else {
       console.log(`⚠️  Falha registrada para ${account.username} (${account.failureCount}/${FAILURE_THRESHOLD} falhas) - ainda funcional`);
     }
@@ -594,21 +602,20 @@ class InstagramAccountRotation {
     const nextCooledDown = this.hasAccountCooledDown(nextAccount);
     const nextCooldownRemaining = bestOption.cooldownRemaining;
 
-    // 🆕 Verificar delay obrigatório de rotação (IP cooling)
-    const timeSinceLastRotation = Date.now() - this.state.lastRotationTime;
-    const rotationDelayRemaining = Math.max(0, ROTATION_DELAY_MS - timeSinceLastRotation);
-    const rotationDelayMinutes = Math.ceil(rotationDelayRemaining / 60000);
+    // 🆕 IP cooling baseado no último bloqueio (não em lastRotationTime)
+    const lastBlockTime = currentAccount.lastFailureTime || 0;
+    const timeSinceBlock = Date.now() - lastBlockTime;
+    const ipCoolingRemaining = currentAccount.isBlocked ? Math.max(0, ROTATION_DELAY_MS - timeSinceBlock) : 0;
+    const ipCoolingMinutes = Math.ceil(ipCoolingRemaining / 60000);
 
     console.log(`   Próxima conta esfriou? ${nextCooledDown ? '✅ SIM' : `❌ NÃO (faltam ${nextCooldownRemaining}min)`}`);
-    console.log(`   ⏱️  Delay de rotação (IP cooling): ${rotationDelayRemaining > 0 ? `${rotationDelayMinutes}min restantes` : '✅ OK'}`);
+    console.log(`   ⏱️  IP cooling: ${ipCoolingRemaining > 0 ? `${ipCoolingMinutes}min restantes` : '✅ OK (sem bloqueio recente)'}`);
 
-    // 🚨 CRÍTICO: Calcular tempo MÁXIMO necessário para poder rotacionar
-    // = MAX(IP cooling restante, cooldown conta destino)
-    const waitForIpCooling = rotationDelayRemaining > 0 ? rotationDelayMinutes : 0;
+    // Só espera IP cooling se conta atual está bloqueada E bloqueio foi recente
+    const waitForIpCooling = ipCoolingRemaining > 0 ? ipCoolingMinutes : 0;
     const waitForAccountCooldown = !nextCooledDown ? nextCooldownRemaining : 0;
     const maxWaitMinutes = Math.max(waitForIpCooling, waitForAccountCooldown);
 
-    // Se precisa aguardar qualquer um dos dois, retorna o MAIOR tempo
     if (maxWaitMinutes > 0) {
       const reasons: string[] = [];
       if (waitForIpCooling > 0) reasons.push(`IP cooling: ${waitForIpCooling}min`);
@@ -621,14 +628,14 @@ class InstagramAccountRotation {
       return {
         success: true,
         message: `Aguardando ${maxWaitMinutes}min (${reasons.join(', ')})`,
-        newAccount: currentAccount.username, // Mantém conta atual (NÃO rotaciona)
+        newAccount: currentAccount.username,
         requiresWait: true,
         waitMinutes: maxWaitMinutes
       };
     }
 
     // ✅ Ambas condições satisfeitas: IP esfriou E próxima conta disponível
-    console.log(`\n✅ IP esfriou (30min+) E próxima conta disponível - rotacionando`);
+    console.log(`\n✅ IP esfriou (30min desde último bloqueio) E próxima conta disponível - rotacionando`);
 
     nextAccount.failureCount = 0;
     nextAccount.isBlocked = false;
@@ -757,6 +764,102 @@ class InstagramAccountRotation {
   async forceSync(): Promise<void> {
     console.log(`🔄 [SYNC] Forçando sincronização com BD...`);
     await this.syncFromDatabase();
+  }
+
+  /**
+   * 🆕 CRÍTICO: Garante que há uma conta disponível ANTES de iniciar sessão
+   *
+   * LÓGICA: Sempre escolher a conta MAIS FRIA (menor cooldown restante)
+   * - Se a mais fria estiver disponível (cooldown = 0) → usar ela
+   * - Se a mais fria tiver cooldown mas IP cooling permitir → rotacionar para ela
+   * - Se todas bloqueadas → retornar tempo de espera
+   */
+  async ensureAvailableAccount(): Promise<{
+    success: boolean;
+    account: string;
+    rotated: boolean;
+    reason?: string;
+  }> {
+    console.log(`\n🔍 ========== VERIFICANDO CONTA MAIS FRIA ==========`);
+
+    // Rankear por lastFailureTime (menor = mais fria) e filtrar disponíveis
+    const rankedAccounts = this.accounts
+      .map((acc, idx) => ({
+        account: acc,
+        index: idx,
+        lastFailureTime: acc.lastFailureTime || 0,
+        available: this.hasAccountCooledDown(acc),
+        isCurrent: idx === this.state.currentAccountIndex
+      }))
+      .sort((a, b) => a.lastFailureTime - b.lastFailureTime);
+
+    console.log(`   📊 Ranking (mais fria = falha mais antiga):`);
+    for (const item of rankedAccounts) {
+      const status = item.available ? '✅' : '❌';
+      const current = item.isCurrent ? ' (ATUAL)' : '';
+      console.log(`      - @${item.account.instagramUsername}: ${status}${current}`);
+    }
+
+    // Pegar primeira disponível (já é a mais fria por estar ordenada)
+    const coldestAvailable = rankedAccounts.find(a => a.available);
+
+    if (!coldestAvailable) {
+      // Nenhuma disponível
+      const waitTime = Math.min(...rankedAccounts.map(a => this.getAccountCooldownRemaining(a.account)));
+      console.log(`   ❌ Nenhuma conta disponível. Aguarde ${waitTime}min`);
+      console.log(`====================================================\n`);
+      return {
+        success: false,
+        account: '',
+        rotated: false,
+        reason: `Todas em cooldown. Aguarde ${waitTime}min`
+      };
+    }
+
+    // Se já é a atual, usar
+    if (coldestAvailable.isCurrent) {
+      console.log(`   ✅ Conta atual @${coldestAvailable.account.instagramUsername} é a mais fria`);
+      console.log(`====================================================\n`);
+      return {
+        success: true,
+        account: coldestAvailable.account.instagramUsername || coldestAvailable.account.username,
+        rotated: false
+      };
+    }
+
+    // Precisa rotacionar - verificar IP cooling baseado no último bloqueio
+    const currentAccount = this.getCurrentAccount();
+    const lastBlockTime = currentAccount.lastFailureTime || 0;
+    const timeSinceBlock = Date.now() - lastBlockTime;
+    const ipCoolingRemaining = Math.max(0, ROTATION_DELAY_MS - timeSinceBlock);
+
+    if (ipCoolingRemaining > 0 && currentAccount.isBlocked) {
+      const ipCoolingMinutes = Math.ceil(ipCoolingRemaining / 60000);
+      console.log(`   ❌ IP cooling ativo: ${ipCoolingMinutes}min (último bloqueio há ${Math.round(timeSinceBlock / 60000)}min)`);
+      console.log(`====================================================\n`);
+      return {
+        success: false,
+        account: '',
+        rotated: false,
+        reason: `Aguarde ${ipCoolingMinutes}min (IP cooling)`
+      };
+    }
+
+    // Rotacionar
+    console.log(`   🔄 Rotacionando para @${coldestAvailable.account.instagramUsername}...`);
+    await resetSessionForRotation();
+
+    this.state.currentAccountIndex = coldestAvailable.index;
+    this.state.lastRotationTime = Date.now();
+    await this.saveState();
+
+    console.log(`   ✅ Rotacionado para @${coldestAvailable.account.instagramUsername}`);
+    console.log(`====================================================\n`);
+    return {
+      success: true,
+      account: coldestAvailable.account.instagramUsername || coldestAvailable.account.username,
+      rotated: true
+    };
   }
 }
 
