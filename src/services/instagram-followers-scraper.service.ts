@@ -47,7 +47,8 @@ async function humanDelay(min: number = 2000, max: number = 5000): Promise<void>
 async function scrollFollowersModal(page: Page, targetCount: number = 50): Promise<void> {
   console.log(`   📜 Scrollando modal para carregar ${targetCount} seguidores...`);
 
-  const maxScrollAttempts = 20;
+  // Calcular scrolls necessários: ~15 seguidores por scroll + margem de segurança
+  const maxScrollAttempts = Math.max(20, Math.ceil(targetCount / 10) + 10);
   let stableScrolls = 0;
   let previousCount = 0;
 

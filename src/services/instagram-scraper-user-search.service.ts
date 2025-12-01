@@ -668,6 +668,7 @@ export async function scrapeInstagramUserSearch(
             segment: null,
             search_term_id: null
           };
+          // phones_normalized será preenchido pelo trigger trg_normalize_instagram_lead()
 
           const { error: insertError } = await supabase
             .from('instagram_leads')

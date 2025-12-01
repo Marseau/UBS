@@ -206,17 +206,10 @@ export class UrlScraperService {
       const phoneRegex = /\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4}/g;
       const htmlPhones = html.match(phoneRegex) || [];
 
-      // Combine, deduplicate, validate and limit
+      // Combine, deduplicate and validate
       const cleanedFbPhones = [...whatsappPhones, ...textPhones, ...htmlPhones].map(p => p.replace(/[^0-9]/g, ''));
       const uniqueFbPhones = [...new Set(cleanedFbPhones)];
-
-      const allPhones: string[] = [];
-      for (const phone of uniqueFbPhones) {
-        if (allPhones.length >= 4) break;
-        if (this.isValidBrazilianPhone(phone)) {
-          allPhones.push(phone);
-        }
-      }
+      const allPhones = uniqueFbPhones.filter(p => this.isValidBrazilianPhone(p));
 
       console.log(`  ✅ [FACEBOOK] Encontrado: ${emails.length} emails, ${allPhones.length} telefones`);
       return { emails, phones: allPhones };
@@ -308,7 +301,7 @@ export class UrlScraperService {
 
       // Validar telefones
       const validPhones = phones.filter(p => this.isValidBrazilianPhone(p));
-      const uniquePhones = [...new Set(validPhones)].slice(0, 4);
+      const uniquePhones = [...new Set(validPhones)];
       const uniqueEmails = [...new Set(emails)];
 
       console.log(`  ✅ [LINKTR.EE] Encontrado: ${uniqueEmails.length} emails, ${uniquePhones.length} telefones`);
@@ -396,7 +389,7 @@ export class UrlScraperService {
       }
 
       const validPhones = phones.filter(p => this.isValidBrazilianPhone(p));
-      const uniquePhones = [...new Set(validPhones)].slice(0, 4);
+      const uniquePhones = [...new Set(validPhones)];
       const uniqueEmails = [...new Set(emails)];
 
       console.log(`  ✅ [BEACONS.AI] Encontrado: ${uniqueEmails.length} emails, ${uniquePhones.length} telefones`);
@@ -483,7 +476,7 @@ export class UrlScraperService {
       }
 
       const validPhones = phones.filter(p => this.isValidBrazilianPhone(p));
-      const uniquePhones = [...new Set(validPhones)].slice(0, 4);
+      const uniquePhones = [...new Set(validPhones)];
       const uniqueEmails = [...new Set(emails)];
 
       console.log(`  ✅ [LINKIN.BIO] Encontrado: ${uniqueEmails.length} emails, ${uniquePhones.length} telefones`);
@@ -535,17 +528,10 @@ export class UrlScraperService {
       const phoneRegex = /\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4}/g;
       const htmlPhones = html.match(phoneRegex) || [];
 
-      // Combine, deduplicate, validate and limit
+      // Combine, deduplicate and validate
       const cleanedYtPhones = [...whatsappPhones, ...textPhones, ...htmlPhones].map(p => p.replace(/[^0-9]/g, ''));
       const uniqueYtPhones = [...new Set(cleanedYtPhones)];
-
-      const allPhones: string[] = [];
-      for (const phone of uniqueYtPhones) {
-        if (allPhones.length >= 4) break;
-        if (this.isValidBrazilianPhone(phone)) {
-          allPhones.push(phone);
-        }
-      }
+      const allPhones = uniqueYtPhones.filter(p => this.isValidBrazilianPhone(p));
 
       console.log(`  ✅ [YOUTUBE] Encontrado: ${emails.length} emails, ${allPhones.length} telefones`);
       return { emails, phones: allPhones };
@@ -660,32 +646,31 @@ export class UrlScraperService {
       const uniqueText = [...new Set(cleanedText)];
       const uniqueHtml = [...new Set(cleanedHtml)];
 
-      // Validar com PRIORIDADE: WhatsApp > Text > HTML
-      let allPhones: string[] = [];
+      // Validar com PRIORIDADE: WhatsApp > Text > HTML (sem limite)
+      const allPhonesSet = new Set<string>();
 
       // 1. Primeiro WhatsApp links (prioridade máxima)
       for (const phone of uniqueWhatsApp) {
-        if (allPhones.length >= 4) break;
         if (this.isValidBrazilianPhone(phone)) {
-          allPhones.push(phone);
+          allPhonesSet.add(phone);
         }
       }
 
       // 2. Depois text phones com contexto
       for (const phone of uniqueText) {
-        if (allPhones.length >= 4) break;
-        if (!allPhones.includes(phone) && this.isValidBrazilianPhone(phone)) {
-          allPhones.push(phone);
+        if (this.isValidBrazilianPhone(phone)) {
+          allPhonesSet.add(phone);
         }
       }
 
       // 3. Por último HTML phones
       for (const phone of uniqueHtml) {
-        if (allPhones.length >= 4) break;
-        if (!allPhones.includes(phone) && this.isValidBrazilianPhone(phone)) {
-          allPhones.push(phone);
+        if (this.isValidBrazilianPhone(phone)) {
+          allPhonesSet.add(phone);
         }
       }
+
+      const allPhones = [...allPhonesSet];
 
       console.log(`✅ [DEBUG] Phones validados: ${allPhones.length} (WhatsApp sempre primeiro)`);
 

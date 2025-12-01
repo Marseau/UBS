@@ -20,12 +20,14 @@ const router = express.Router();
  * 1. Detecta curtidas em reels/posts
  * 2. Detecta comentários
  * 3. Detecta novos seguidores → Clica em "Seguir de volta" automaticamente
+ * 4. PERSISTE interações em account_actions
+ * 5. ATUALIZA last_interaction_at em instagram_leads
  *
  * Retorna lista de usernames que interagiram para processar depois
  */
 router.post('/check-engagement', async (req: Request, res: Response) => {
   try {
-    const { since } = req.body; // ISO timestamp da última verificação
+    const { since, persist = true } = req.body; // persist: se deve salvar no banco
 
     console.log(`\n📊 Verificando notificações do Instagram...`);
     if (since) {
@@ -63,6 +65,80 @@ router.post('/check-engagement', async (req: Request, res: Response) => {
       console.log(`   ⏭️  Já processadas anteriormente: ${filteredOut}`);
     }
 
+    // ========================================
+    // PERSISTIR INTERAÇÕES EM account_actions
+    // ========================================
+    let persistedCount = 0;
+    let updatedLeadsCount = 0;
+
+    if (persist && filteredInteractions.length > 0) {
+      console.log(`\n💾 Persistindo ${filteredInteractions.length} interações...`);
+
+      for (const interaction of filteredInteractions) {
+        try {
+          // Determinar tipos de ação baseado na interação
+          const actionTypes: string[] = [];
+          if (interaction.liked) actionTypes.push('like_received');
+          if (interaction.commented) actionTypes.push('comment_received');
+          if (interaction.is_new_follower) actionTypes.push('follow_received');
+
+          // Inserir cada tipo de ação em account_actions
+          for (const actionType of actionTypes) {
+            const { error: insertError } = await supabase
+              .from('account_actions')
+              .insert({
+                username: interaction.username,
+                action_type: actionType,
+                source_platform: 'instagram',  // Interações vêm do Instagram
+                success: true,
+                created_at: interaction.notification_date || new Date().toISOString()
+              });
+
+            if (!insertError) {
+              persistedCount++;
+              console.log(`   ✅ ${actionType} de @${interaction.username} salvo`);
+            }
+          }
+
+          // Atualizar last_interaction_at em instagram_leads via RPC atômica
+          const interactionType = interaction.commented ? 'comment' :
+                                  interaction.liked ? 'like' :
+                                  interaction.is_new_follower ? 'follow_back' : 'engagement';
+
+          const scoreIncrement = interaction.commented ? 20 : interaction.liked ? 10 : 30;
+
+          // Usar RPC para incremento atômico
+          const { error: rpcError } = await supabase.rpc('increment_lead_engagement', {
+            p_username: interaction.username,
+            p_interaction_type: interactionType,
+            p_score_increment: scoreIncrement
+          });
+
+          if (!rpcError) {
+            updatedLeadsCount++;
+          } else {
+            // Fallback: update direto se RPC falhar
+            const { error: updateError } = await supabase
+              .from('instagram_leads')
+              .update({
+                last_interaction_at: new Date().toISOString(),
+                last_interaction_type: interactionType
+              })
+              .eq('username', interaction.username);
+
+            if (!updateError) {
+              updatedLeadsCount++;
+            }
+          }
+
+        } catch (err) {
+          console.error(`   ❌ Erro ao persistir interação de @${interaction.username}:`, err);
+        }
+      }
+
+      console.log(`   📊 Total persistido: ${persistedCount} ações, ${updatedLeadsCount} leads atualizados`);
+    }
+
     // Retornar lista de usernames que interagiram
     return res.status(200).json({
       success: true,
@@ -70,6 +146,8 @@ router.post('/check-engagement', async (req: Request, res: Response) => {
       interactions: filteredInteractions,
       total_found: result.interactions.length,
       filtered_out: result.interactions.length - filteredInteractions.length,
+      persisted_actions: persistedCount,
+      updated_leads: updatedLeadsCount,
       since: since || null,
       checked_at: new Date().toISOString()
     });
@@ -607,6 +685,490 @@ router.post('/inspect-profile-html', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: 'Erro ao inspecionar HTML',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+// ============================================================================
+// SISTEMA DE UNFOLLOW INTELIGENTE (com interações e contas de clientes)
+// ============================================================================
+
+/**
+ * GET /api/instagram/unfollow-candidates
+ *
+ * Busca leads elegíveis para unfollow baseado em:
+ * 1. followed_at > X dias (padrão 3)
+ * 2. SEM interação (last_interaction_at é null OU last_interaction_at > X dias)
+ * 3. follow_status = 'followed' ou 'following'
+ *
+ * Pode filtrar por campaign_id para usar conta específica do cliente
+ */
+router.get('/unfollow-candidates', async (req: Request, res: Response) => {
+  try {
+    const {
+      campaign_id,
+      days_without_interaction = '3',
+      limit = '10'
+    } = req.query;
+
+    const daysThreshold = parseInt(days_without_interaction as string);
+    const resultLimit = Math.min(parseInt(limit as string), 50); // Max 50
+
+    console.log(`\n🔍 [UNFOLLOW] Buscando candidatos para unfollow`);
+    console.log(`   Dias sem interação: ${daysThreshold}`);
+    console.log(`   Campanha: ${campaign_id || 'todas'}`);
+    console.log(`   Limite: ${resultLimit}`);
+
+    // Data de corte: seguidos há mais de X dias
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysThreshold);
+    const cutoffISO = cutoffDate.toISOString();
+
+    // Query base
+    let query = supabase
+      .from('instagram_leads')
+      .select(`
+        id,
+        username,
+        full_name,
+        follow_status,
+        followed_at,
+        last_interaction_at,
+        last_interaction_type,
+        campaign_id
+      `)
+      .in('follow_status', ['followed', 'following'])
+      .not('followed_at', 'is', null)
+      .lt('followed_at', cutoffISO)
+      .order('followed_at', { ascending: true }) // Mais antigos primeiro
+      .limit(resultLimit);
+
+    // Filtrar por campanha se especificado
+    if (campaign_id) {
+      query = query.eq('campaign_id', campaign_id);
+    }
+
+    const { data: leads, error } = await query;
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    // Filtrar leads sem interação recente
+    const candidates = (leads || []).filter(lead => {
+      // Se nunca interagiu, é candidato
+      if (!lead.last_interaction_at) {
+        return true;
+      }
+
+      // Se última interação foi há mais de X dias, é candidato
+      const lastInteraction = new Date(lead.last_interaction_at);
+      return lastInteraction < cutoffDate;
+    });
+
+    console.log(`   ✅ Encontrados ${candidates.length} candidatos`);
+
+    // Agrupar por campanha para facilitar uso com contas de clientes
+    const byCampaign: Record<string, typeof candidates> = {};
+    for (const lead of candidates) {
+      const cid = lead.campaign_id || 'sem_campanha';
+      if (!byCampaign[cid]) {
+        byCampaign[cid] = [];
+      }
+      byCampaign[cid].push(lead);
+    }
+
+    return res.status(200).json({
+      success: true,
+      total: candidates.length,
+      days_threshold: daysThreshold,
+      cutoff_date: cutoffISO,
+      candidates: candidates.map(lead => ({
+        lead_id: lead.id,
+        username: lead.username,
+        full_name: lead.full_name,
+        follow_status: lead.follow_status,
+        followed_at: lead.followed_at,
+        days_since_follow: Math.floor((Date.now() - new Date(lead.followed_at!).getTime()) / (1000 * 60 * 60 * 24)),
+        last_interaction_at: lead.last_interaction_at,
+        last_interaction_type: lead.last_interaction_type,
+        days_since_interaction: lead.last_interaction_at
+          ? Math.floor((Date.now() - new Date(lead.last_interaction_at).getTime()) / (1000 * 60 * 60 * 24))
+          : null,
+        campaign_id: lead.campaign_id
+      })),
+      by_campaign: Object.entries(byCampaign).map(([cid, leads]) => ({
+        campaign_id: cid,
+        count: leads.length
+      }))
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar candidatos:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao buscar candidatos para unfollow',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+/**
+ * POST /api/instagram/unfollow-with-client-account
+ *
+ * Executa unfollow usando a conta Instagram do cliente (via credentials-vault)
+ * Integrado com o sistema de contas seguras
+ */
+router.post('/unfollow-with-client-account', async (req: Request, res: Response) => {
+  try {
+    const { lead_id, username, campaign_id, account_id } = req.body;
+
+    if (!lead_id || !username) {
+      return res.status(400).json({
+        error: 'Campos obrigatórios faltando',
+        required: ['lead_id', 'username']
+      });
+    }
+
+    console.log(`\n🗑️  [UNFOLLOW-CLIENT] Aplicando unfollow: @${username}`);
+
+    // Se tem account_id ou campaign_id, usar conta do cliente
+    let targetAccountId = account_id;
+
+    if (!targetAccountId && campaign_id) {
+      // Buscar conta da campanha
+      const { credentialsVault } = await import('../services/credentials-vault.service');
+      const account = await credentialsVault.getAccountByCampaign(campaign_id);
+
+      if (account) {
+        targetAccountId = account.id;
+        console.log(`   📱 Usando conta do cliente: @${account.instagramUsername}`);
+      }
+    }
+
+    let result;
+
+    if (targetAccountId) {
+      // Usar conta do cliente via instagramClientDMService (que gerencia sessões)
+      // Para unfollow, vamos usar o mesmo mecanismo de sessão
+      const { instagramClientDMService } = await import('../services/instagram-client-dm.service');
+
+      // Verificar se pode executar ação
+      const canExecute = await instagramClientDMService.canSendDM(targetAccountId);
+      if (!canExecute.canSend) {
+        return res.status(429).json({
+          success: false,
+          error: 'Rate limit ou fora do horário',
+          reason: canExecute.reason
+        });
+      }
+
+      // Obter sessão e executar unfollow
+      const session = await instagramClientDMService.getOrCreateSession(targetAccountId);
+      if (!session) {
+        return res.status(500).json({
+          success: false,
+          error: 'Não foi possível criar sessão para conta do cliente'
+        });
+      }
+
+      // Executar unfollow via página da sessão
+      try {
+        const page = session.page;
+
+        // Navegar para perfil
+        await page.goto(`https://www.instagram.com/${username}/`, {
+          waitUntil: 'networkidle2',
+          timeout: 30000
+        });
+
+        await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));
+
+        // Clicar no botão "Seguindo" para abrir menu
+        const followingButton = await page.$('button:has-text("Seguindo"), button:has-text("Following")');
+        if (followingButton) {
+          await followingButton.click();
+          await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
+
+          // Clicar em "Deixar de seguir"
+          const unfollowOption = await page.$('button:has-text("Deixar de seguir"), button:has-text("Unfollow")');
+          if (unfollowOption) {
+            await unfollowOption.click();
+            await new Promise(r => setTimeout(r, 2000));
+
+            result = { success: true };
+            console.log(`   ✅ Unfollow executado via conta do cliente`);
+
+            // Incrementar ação
+            const { credentialsVault } = await import('../services/credentials-vault.service');
+            await credentialsVault.incrementAction(targetAccountId, 'unfollow');
+          } else {
+            result = { success: false, error_message: 'Botão de unfollow não encontrado' };
+          }
+        } else {
+          result = { success: false, error_message: 'Usuário não está sendo seguido ou botão não encontrado' };
+        }
+      } catch (pageError) {
+        result = {
+          success: false,
+          error_message: pageError instanceof Error ? pageError.message : 'Erro na página'
+        };
+      }
+
+    } else {
+      // Fallback: usar conta oficial (@ubs.sistemas)
+      console.log(`   📱 Usando conta oficial (fallback)`);
+      await ensureCorrectAccount(OperationType.ENGAGEMENT);
+      result = await InstagramAutomationRefactored.unfollowUserShared(username);
+    }
+
+    // Atualizar lead no banco
+    if (result.success) {
+      await supabaseAdmin
+        .from('instagram_leads')
+        .update({
+          follow_status: 'unfollowed',
+          unfollowed_at: new Date().toISOString()
+        })
+        .eq('id', lead_id);
+
+      // Registrar ação em account_actions
+      await supabaseAdmin
+        .from('account_actions')
+        .insert({
+          lead_id: lead_id,
+          username: username,
+          action_type: 'unfollow',
+          source_platform: 'instagram',
+          success: true,
+          created_at: new Date().toISOString()
+        });
+    }
+
+    return res.status(200).json({
+      success: result.success,
+      lead_id,
+      username,
+      action_type: 'unfollow',
+      executed_at: new Date().toISOString(),
+      error_message: result.error_message,
+      used_client_account: !!targetAccountId,
+      account_id: targetAccountId || null,
+      follow_status: result.success ? 'unfollowed' : undefined,
+      unfollowed_at: result.success ? new Date().toISOString() : undefined
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao aplicar unfollow:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao aplicar unfollow',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+/**
+ * POST /api/instagram/batch-unfollow
+ *
+ * Processa batch de unfollows com rate limiting
+ * Pode usar conta do cliente ou conta oficial
+ */
+router.post('/batch-unfollow', async (req: Request, res: Response) => {
+  try {
+    const {
+      leads,  // Array de { lead_id, username }
+      campaign_id,
+      account_id,
+      delay_between_ms = 30000  // 30 segundos entre cada
+    } = req.body;
+
+    if (!leads || !Array.isArray(leads) || leads.length === 0) {
+      return res.status(400).json({
+        error: 'Array de leads é obrigatório',
+        example: { leads: [{ lead_id: '123', username: 'user1' }] }
+      });
+    }
+
+    if (leads.length > 10) {
+      return res.status(400).json({
+        error: 'Máximo de 10 leads por batch',
+        received: leads.length
+      });
+    }
+
+    console.log(`\n🗑️  [BATCH-UNFOLLOW] Processando ${leads.length} unfollows`);
+
+    const results: Array<{
+      lead_id: string;
+      username: string;
+      success: boolean;
+      error?: string;
+    }> = [];
+
+    for (let i = 0; i < leads.length; i++) {
+      const lead = leads[i];
+
+      console.log(`   [${i + 1}/${leads.length}] Processando @${lead.username}...`);
+
+      try {
+        // Chamar endpoint individual
+        const response = await fetch(`http://localhost:${process.env.PORT || 3333}/api/instagram/unfollow-with-client-account`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lead_id: lead.lead_id,
+            username: lead.username,
+            campaign_id,
+            account_id
+          })
+        });
+
+        const data = await response.json() as { success: boolean; error?: string };
+        results.push({
+          lead_id: lead.lead_id,
+          username: lead.username,
+          success: data.success,
+          error: data.error
+        });
+
+      } catch (err) {
+        results.push({
+          lead_id: lead.lead_id,
+          username: lead.username,
+          success: false,
+          error: err instanceof Error ? err.message : 'Erro desconhecido'
+        });
+      }
+
+      // Delay entre ações (exceto na última)
+      if (i < leads.length - 1) {
+        const delay = delay_between_ms + Math.random() * 5000; // + até 5s de variação
+        console.log(`   ⏳ Aguardando ${Math.round(delay / 1000)}s...`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+
+    const successful = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+
+    console.log(`\n✅ [BATCH-UNFOLLOW] Concluído: ${successful} sucesso, ${failed} falhas`);
+
+    return res.status(200).json({
+      success: true,
+      total: leads.length,
+      successful,
+      failed,
+      results
+    });
+
+  } catch (error) {
+    console.error('❌ Erro no batch unfollow:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao processar batch unfollow',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+/**
+ * POST /api/instagram/record-interaction
+ *
+ * Registra uma interação de um lead (like, comment, story_view, etc.)
+ * Atualiza last_interaction_at e last_interaction_type
+ */
+router.post('/record-interaction', async (req: Request, res: Response) => {
+  try {
+    const {
+      lead_id,
+      username,
+      interaction_type,  // 'like', 'comment', 'story_view', 'story_mention', 'follow_back', etc.
+      interaction_data   // Dados adicionais (opcional)
+    } = req.body;
+
+    if ((!lead_id && !username) || !interaction_type) {
+      return res.status(400).json({
+        error: 'Campos obrigatórios faltando',
+        required: ['lead_id ou username', 'interaction_type']
+      });
+    }
+
+    console.log(`\n📝 [INTERACTION] Registrando: ${interaction_type}`);
+    console.log(`   Lead: ${lead_id || username}`);
+
+    // Buscar lead se só tiver username
+    let targetLeadId = lead_id;
+    if (!targetLeadId && username) {
+      const { data: lead } = await supabase
+        .from('instagram_leads')
+        .select('id')
+        .eq('username', username)
+        .single();
+
+      if (lead) {
+        targetLeadId = lead.id;
+      }
+    }
+
+    if (!targetLeadId) {
+      return res.status(404).json({
+        success: false,
+        error: 'Lead não encontrado'
+      });
+    }
+
+    const now = new Date().toISOString();
+
+    // Atualizar lead
+    const updateData: Record<string, any> = {
+      last_interaction_at: now,
+      last_interaction_type: interaction_type
+    };
+
+    // Se for follow_back, atualizar status também
+    if (interaction_type === 'follow_back') {
+      updateData.follow_status = 'followed_back';
+    }
+
+    const { error: updateError } = await supabaseAdmin
+      .from('instagram_leads')
+      .update(updateData)
+      .eq('id', targetLeadId);
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+
+    // Registrar na tabela de interações (se existir)
+    try {
+      await supabaseAdmin
+        .from('instagram_interactions')
+        .insert({
+          lead_id: targetLeadId,
+          interaction_type,
+          interaction_data: interaction_data || {},
+          created_at: now
+        });
+    } catch {
+      // Tabela pode não existir, ignorar
+    }
+
+    console.log(`   ✅ Interação registrada`);
+
+    return res.status(200).json({
+      success: true,
+      lead_id: targetLeadId,
+      interaction_type,
+      recorded_at: now
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao registrar interação:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao registrar interação',
       message: error instanceof Error ? error.message : 'Erro desconhecido'
     });
   }

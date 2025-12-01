@@ -3,6 +3,7 @@ import {
   scrapeInstagramTag,
   scrapeInstagramExplore,
   scrapeInstagramProfile,
+  scrapeInstagramProfileByUrl,
   scrapeProfileWithExistingPage,
   closeBrowser,
   InstagramProfileData,
@@ -1225,7 +1226,11 @@ router.get('/debug-page', async (req: Request, res: Response) => {
  */
 router.post('/scrape-url', async (req: Request, res: Response) => {
   try {
-    const { lead_id, url, update_database = false } = req.body;
+    const {
+      lead_id,
+      url,
+      update_database = false
+    } = req.body;
 
     if (!url) {
       return res.status(400).json({
@@ -1241,16 +1246,51 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
 
     // Se update_database=true e lead_id fornecido, atualizar no banco
     if (update_database && lead_id) {
+      // Buscar lead atual para fazer MERGE (não substituir)
+      const { data: existingLead, error: fetchError } = await supabase
+        .from('instagram_leads')
+        .select('email, phone, additional_emails, additional_phones')
+        .eq('id', lead_id)
+        .single();
+
+      if (fetchError) {
+        console.error(`❌ [SCRAPE-URL] Erro ao buscar lead ${lead_id}:`, fetchError);
+        return res.status(500).json({
+          success: false,
+          message: 'Erro ao buscar lead no banco',
+          error: fetchError.message
+        });
+      }
+
+      // MERGE: combinar emails existentes com novos (sem duplicatas)
+      const existingEmails = existingLead?.additional_emails || [];
+      const newEmails = result.emails || [];
+      const mergedEmails = [...new Set([...existingEmails, ...newEmails])];
+
+      // MERGE: combinar telefones existentes com novos (sem duplicatas)
+      const existingPhones = existingLead?.additional_phones || [];
+      const newPhones = result.phones || [];
+      const mergedPhones = [...new Set([...existingPhones, ...newPhones])];
+
+      // Preparar dados para update
+      const updateData: any = {
+        additional_emails: mergedEmails,
+        additional_phones: mergedPhones,
+        url_enriched: true,
+        updated_at: new Date().toISOString()
+      };
+
+      // Só atualizar email/phone principal se não tiver
+      if (!existingLead?.email && newEmails.length > 0) {
+        updateData.email = newEmails[0];
+      }
+      if (!existingLead?.phone && newPhones.length > 0) {
+        updateData.phone = newPhones[0];
+      }
+
       const { error: updateError } = await supabase
         .from('instagram_leads')
-        .update({
-          email: result.emails[0] || null,
-          phone: result.phones[0] || null,
-          additional_emails: result.emails.slice(1),
-          additional_phones: result.phones.slice(1),
-          url_enriched: true,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', lead_id);
 
       if (updateError) {
@@ -1263,7 +1303,7 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
         });
       }
 
-      console.log(`✅ [SCRAPE-URL] Lead ${lead_id} atualizado com sucesso`);
+      console.log(`✅ [SCRAPE-URL] Lead ${lead_id} atualizado - Emails: ${existingEmails.length}→${mergedEmails.length}, Phones: ${existingPhones.length}→${mergedPhones.length}`);
     }
 
     return res.status(200).json({
@@ -2106,6 +2146,918 @@ router.post('/rotation-sync', async (_req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao sincronizar com BD',
+      error: error.message
+    });
+  }
+});
+
+// ============================================================================
+// PRE-LEADS: Sistema de coleta rápida de seguidores
+// ============================================================================
+
+/**
+ * POST /api/instagram-scraper/scrape-followers-fast
+ * Coleta RÁPIDA de usernames de seguidores - salva em pre_leads
+ * Suporta UM perfil ou MÚLTIPLOS perfis (batch com browser único)
+ *
+ * Body (single):
+ * {
+ *   "source_username": "perfil_concorrente",
+ *   "max_followers": 50,
+ *   "source_type": "followers",
+ *   "hashtag_origem": "#cabeleireirasp" (opcional - rastreabilidade)
+ * }
+ *
+ * Body (batch):
+ * {
+ *   "source_usernames": ["perfil1", "perfil2", "perfil3"],
+ *   "max_followers": 50,
+ *   "source_type": "followers",
+ *   "hashtag_origem": "#cabeleireirasp",
+ *   "delay_between_ms": 5000
+ * }
+ */
+router.post('/scrape-followers-fast', async (req: Request, res: Response) => {
+  const reqId = `FAST_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  let page: any = null;
+
+  try {
+    const {
+      source_username,
+      source_usernames,
+      max_followers = 50,
+      source_type = 'followers',
+      hashtag_origem,
+      delay_between_ms = 5000
+    } = req.body;
+
+    // Determinar se é batch ou single
+    const usernames: string[] = source_usernames && Array.isArray(source_usernames) && source_usernames.length > 0
+      ? source_usernames
+      : source_username
+        ? [source_username]
+        : [];
+
+    if (usernames.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo "source_username" ou "source_usernames" é obrigatório'
+      });
+    }
+
+    const isBatch = usernames.length > 1;
+
+    console.log(`\n⚡ [${reqId}] ========== SCRAPE-FOLLOWERS-FAST ${isBatch ? 'BATCH' : ''} INICIADO ==========`);
+    console.log(`⚡ [${reqId}] Perfis: ${usernames.length} | Max/perfil: ${max_followers}`);
+    if (hashtag_origem) console.log(`⚡ [${reqId}] Hashtag origem: ${hashtag_origem}`);
+
+    // 🔄 CRÍTICO: Verificar conta disponível ANTES de iniciar (rotação de contas)
+    const { getAccountRotation } = await import('../services/instagram-account-rotation.service');
+    const rotation = getAccountRotation();
+    const accountCheck = await rotation.ensureAvailableAccount();
+
+    if (!accountCheck.success) {
+      console.log(`⚠️  [${reqId}] Nenhuma conta disponível: ${accountCheck.reason}`);
+      return res.status(503).json({
+        success: false,
+        message: `Nenhuma conta disponível: ${accountCheck.reason}`,
+        retry_after_minutes: parseInt(accountCheck.reason?.match(/\d+/)?.[0] || '30')
+      });
+    }
+
+    if (accountCheck.rotated) {
+      console.log(`🔄 [${reqId}] Rotacionado para @${accountCheck.account} antes de iniciar`);
+    }
+
+    // Se batch, criar página única para todo o processo
+    if (isBatch) {
+      const { createAuthenticatedPage } = await import('../services/instagram-session.service');
+      page = await createAuthenticatedPage();
+      console.log(`✅ [${reqId}] Browser aberto - sessão única para ${usernames.length} perfis`);
+    }
+
+    const results: any[] = [];
+    let totalUsernamesCollected = 0;
+
+    // Processar cada perfil
+    for (let i = 0; i < usernames.length; i++) {
+      const currentUsername = usernames[i]!; // Non-null assertion - we checked length > 0
+
+      try {
+        console.log(`\n📍 [${reqId}] [${i + 1}/${usernames.length}] Processando @${currentUsername}...`);
+
+        // Scrape seguidores (passa page se batch, senão cria/fecha automaticamente)
+        const result = await scrapeInstagramFollowers(currentUsername, max_followers, page ? page : undefined);
+
+        if (!result.success) {
+          console.log(`⚠️  [${reqId}] Erro em @${currentUsername}: ${result.error_message}`);
+          results.push({
+            source_username: currentUsername,
+            success: false,
+            error: result.error_message
+          });
+          continue;
+        }
+
+        // Preparar JSON de usernames com status null
+        const usernamesJson = result.followers.map(f => ({
+          username: f.username,
+          full_name: f.full_name,
+          status: null
+        }));
+
+        // Salvar em pre_leads
+        const { data: preLead, error: insertError } = await supabase
+          .from('pre_leads')
+          .insert({
+            source_username: currentUsername,
+            source_type: source_type,
+            hashtag_origem: hashtag_origem || null,
+            usernames: usernamesJson,
+            total_count: usernamesJson.length,
+            processed_count: 0,
+            valid_count: 0,
+            invalid_count: 0
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          console.log(`⚠️  [${reqId}] Erro ao salvar @${currentUsername}: ${insertError.message}`);
+          results.push({
+            source_username: currentUsername,
+            success: false,
+            error: insertError.message
+          });
+        } else {
+          console.log(`✅ [${reqId}] @${currentUsername}: ${usernamesJson.length} usernames salvos`);
+          results.push({
+            source_username: currentUsername,
+            success: true,
+            pre_lead_id: preLead.id,
+            total_usernames: usernamesJson.length
+          });
+          totalUsernamesCollected += usernamesJson.length;
+        }
+
+        // Delay entre perfis (batch only, exceto último)
+        if (isBatch && i < usernames.length - 1) {
+          console.log(`⏳ [${reqId}] Aguardando ${delay_between_ms}ms...`);
+          await new Promise(r => setTimeout(r, delay_between_ms));
+        }
+
+      } catch (profileError: any) {
+        console.error(`❌ [${reqId}] Erro @${currentUsername}:`, profileError.message);
+        results.push({
+          source_username: currentUsername,
+          success: false,
+          error: profileError.message
+        });
+      }
+    }
+
+    // Fechar browser se foi batch
+    if (page) {
+      try {
+        const browser = page.browser();
+        if (browser) {
+          await browser.close();
+          console.log(`🔒 [${reqId}] Browser fechado`);
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    console.log(`⚡ [${reqId}] ========== SCRAPE-FOLLOWERS-FAST CONCLUÍDO ==========\n`);
+
+    // Resposta diferenciada single vs batch
+    if (!isBatch) {
+      const single = results[0];
+      return res.status(single.success ? 200 : 500).json({
+        success: single.success,
+        pre_lead_id: single.pre_lead_id,
+        source_username: single.source_username,
+        source_type,
+        total_usernames: single.total_usernames || 0,
+        message: single.success
+          ? `${single.total_usernames} usernames salvos para processamento posterior`
+          : single.error
+      });
+    }
+
+    // Resposta batch
+    const successCount = results.filter(r => r.success).length;
+    return res.status(200).json({
+      success: successCount > 0,
+      batch: true,
+      profiles_requested: usernames.length,
+      profiles_success: successCount,
+      profiles_failed: usernames.length - successCount,
+      total_usernames_collected: totalUsernamesCollected,
+      results
+    });
+
+  } catch (error: any) {
+    console.error(`❌ [${reqId}] Erro:`, error.message);
+
+    // Fechar browser em caso de erro
+    if (page) {
+      try {
+        const browser = page.browser();
+        if (browser) await browser.close();
+      } catch (e) { /* ignore */ }
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao extrair seguidores',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/process-pre-lead
+ * Processa UM username de um pre_lead - faz scrape completo e salva em instagram_leads
+ *
+ * Body:
+ * {
+ *   "pre_lead_id": "uuid-do-pre-lead",
+ *   "username": "username_a_processar"
+ * }
+ */
+router.post('/process-pre-lead', async (req: Request, res: Response) => {
+  const reqId = `PROC_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  try {
+    const { pre_lead_id, username } = req.body;
+
+    if (!pre_lead_id || !username) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campos obrigatórios: pre_lead_id, username'
+      });
+    }
+
+    console.log(`\n🔄 [${reqId}] Processando @${username} do pre_lead ${pre_lead_id}`);
+
+    // 🔄 CRÍTICO: Verificar conta disponível ANTES de iniciar (rotação de contas)
+    const { getAccountRotation } = await import('../services/instagram-account-rotation.service');
+    const rotation = getAccountRotation();
+    const accountCheck = await rotation.ensureAvailableAccount();
+
+    if (!accountCheck.success) {
+      console.log(`⚠️  [${reqId}] Nenhuma conta disponível: ${accountCheck.reason}`);
+      return res.status(503).json({
+        success: false,
+        message: `Nenhuma conta disponível: ${accountCheck.reason}`,
+        retry_after_minutes: parseInt(accountCheck.reason?.match(/\d+/)?.[0] || '30')
+      });
+    }
+
+    if (accountCheck.rotated) {
+      console.log(`🔄 [${reqId}] Rotacionado para @${accountCheck.account} antes de iniciar`);
+    }
+
+    // 1. Buscar pre_lead para pegar source_username
+    const { data: preLead, error: fetchError } = await supabase
+      .from('pre_leads')
+      .select('*')
+      .eq('id', pre_lead_id)
+      .single();
+
+    if (fetchError || !preLead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pre-lead não encontrado'
+      });
+    }
+
+    // 2. Verificar se username está no JSON e não foi processado
+    const usernames = preLead.usernames as Array<{username: string, status: boolean | null}>;
+    const userIndex = usernames.findIndex(u => u.username === username);
+
+    if (userIndex === -1) {
+      return res.status(400).json({
+        success: false,
+        message: `Username @${username} não encontrado no pre_lead`
+      });
+    }
+
+    const targetUser = usernames[userIndex];
+    if (!targetUser) {
+      return res.status(400).json({
+        success: false,
+        message: `Username @${username} não encontrado no índice`
+      });
+    }
+
+    if (targetUser.status !== null) {
+      return res.status(400).json({
+        success: false,
+        message: `Username @${username} já foi processado (status: ${targetUser.status})`
+      });
+    }
+
+    // 3. Verificar se já existe em instagram_leads
+    const { data: existingLead } = await supabase
+      .from('instagram_leads')
+      .select('id, username')
+      .eq('username', username)
+      .single();
+
+    let isValid = false;
+    let leadId = null;
+    let rejectionReason = '';
+
+    if (existingLead) {
+      // Já existe - marcar como válido mas não duplicar
+      console.log(`   ⚠️  @${username} já existe em instagram_leads`);
+      isValid = true;
+      leadId = existingLead.id;
+    } else {
+      // 4. Fazer scrape completo do perfil (IGUAL AO SCRAPE-TAG)
+      // Criar página autenticada para ter controle total
+      const { createAuthenticatedPage } = await import('../services/instagram-session.service');
+      const page = await createAuthenticatedPage();
+
+      try {
+        // Navegar direto para URL do perfil (não usar busca!)
+        console.log(`   🌐 Navegando direto para https://www.instagram.com/${username}/`);
+        await page.goto(`https://www.instagram.com/${username}/`, {
+          waitUntil: 'networkidle2',
+          timeout: 30000
+        });
+        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+
+        // Scrape básico do perfil
+        const profileData = await scrapeProfileWithExistingPage(page, username, true);
+
+        if (!profileData || !profileData.username) {
+          console.log(`   ❌ @${username} - perfil não encontrado ou privado`);
+          isValid = false;
+          rejectionReason = 'Perfil não encontrado ou privado';
+        } else {
+          console.log(`   ✅ @${username}: ${profileData.followers_count || 0} seguidores, ${profileData.posts_count || 0} posts`);
+
+          // ========================================
+          // 🚫 VALIDAÇÕES EARLY-EXIT (3 FILTROS) - IGUAL SCRAPE-TAG
+          // ========================================
+
+          // VALIDAÇÃO 1: FOLLOWERS < 250
+          const currentFollowersCount = profileData.followers_count || 0;
+          if (currentFollowersCount < 250) {
+            console.log(`   🚫 REJEITADO (Validação 1/3): @${username} tem apenas ${currentFollowersCount} seguidores (mínimo: 250)`);
+            isValid = false;
+            rejectionReason = `Followers ${currentFollowersCount} < 250`;
+          } else {
+            // VALIDAÇÃO 2: ACTIVITY SCORE < 50
+            const { calculateActivityScore } = await import('../services/instagram-profile.utils');
+            const activityScore = calculateActivityScore(profileData);
+            console.log(`   📊 Activity Score: ${activityScore.score}/100 (${activityScore.isActive ? 'ATIVA ✅' : 'INATIVA ❌'})`);
+
+            if (!activityScore.isActive) {
+              console.log(`   🚫 REJEITADO (Validação 2/3): Activity score muito baixo (score: ${activityScore.score})`);
+              isValid = false;
+              rejectionReason = `Activity score ${activityScore.score} < 50`;
+            } else {
+              // VALIDAÇÃO 3: IDIOMA != PT
+              const { detectLanguage } = await import('../services/language-country-detector.service');
+              console.log(`   🌍 Detectando idioma da bio...`);
+              const languageDetection = await detectLanguage(profileData.bio || '', username);
+              console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
+
+              if (languageDetection.language !== 'pt') {
+                console.log(`   🚫 REJEITADO (Validação 3/3): Idioma não-português (${languageDetection.language})`);
+                isValid = false;
+                rejectionReason = `Idioma ${languageDetection.language} != pt`;
+              } else {
+                // ✅ PERFIL APROVADO NAS 3 VALIDAÇÕES
+                console.log(`   ✅ PERFIL APROVADO NAS 3 VALIDAÇÕES - Extraindo hashtags dos posts...\n`);
+
+                // ========================================
+                // 🆕 EXTRAÇÃO DE HASHTAGS DOS POSTS (2 posts)
+                // ========================================
+                let hashtagsPosts: string[] | null = null;
+                try {
+                  const { extractHashtagsFromPosts, retryWithBackoff } = await import('../services/instagram-profile.utils');
+
+                  // Já estamos na página do perfil, só extrair hashtags
+                  const postHashtags = await retryWithBackoff(
+                    () => extractHashtagsFromPosts(page, 2),
+                    2, // máximo 2 tentativas
+                    3000 // backoff de 3s
+                  );
+
+                  if (postHashtags && postHashtags.length > 0) {
+                    hashtagsPosts = postHashtags;
+                    console.log(`   ✅ ${postHashtags.length} hashtags extraídas dos posts`);
+                  } else {
+                    console.log(`   ⚠️  Nenhuma hashtag encontrada nos posts`);
+                  }
+                } catch (hashtagError: any) {
+                  console.log(`   ⚠️  Erro ao extrair hashtags dos posts: ${hashtagError.message}`);
+                }
+
+                // 5. Salvar em instagram_leads com TODOS os campos
+                const { data: newLead, error: insertError } = await supabase
+                  .from('instagram_leads')
+                  .insert({
+                    username: profileData.username,
+                    full_name: profileData.full_name,
+                    bio: profileData.bio,
+                    website: profileData.website,
+                    email: profileData.email,
+                    phone: profileData.phone,
+                    followers_count: profileData.followers_count,
+                    following_count: profileData.following_count,
+                    posts_count: profileData.posts_count,
+                    profile_pic_url: profileData.profile_pic_url,
+                    is_business_account: profileData.is_business_account,
+                    is_verified: profileData.is_verified,
+                    city: profileData.city,
+                    state: profileData.state,
+                    address: profileData.address,
+                    // Campos de validação
+                    activity_score: activityScore.score,
+                    is_active: activityScore.isActive,
+                    language: languageDetection.language,
+                    hashtags_posts: hashtagsPosts,
+                    // Campos específicos para rastreabilidade
+                    search_term_used: preLead.source_username,
+                    followers_scraped: true,
+                    discovered_from_profile: preLead.source_username,
+                    lead_source: 'competitor_follower',
+                    captured_at: new Date().toISOString()
+                  })
+                  .select()
+                  .single();
+
+                if (insertError) {
+                  console.error(`   ❌ Erro ao inserir @${username}:`, insertError.message);
+                  isValid = false;
+                  rejectionReason = `Erro DB: ${insertError.message}`;
+                } else {
+                  console.log(`   ✅ @${username} salvo em instagram_leads (${profileData.followers_count} seguidores, score: ${activityScore.score}, idioma: ${languageDetection.language})`);
+                  isValid = true;
+                  leadId = newLead?.id;
+                }
+              }
+            }
+          }
+        }
+      } catch (scrapeError: any) {
+        console.error(`   ❌ Erro ao scrapear @${username}:`, scrapeError.message);
+        isValid = false;
+        rejectionReason = `Erro scrape: ${scrapeError.message}`;
+      } finally {
+        // Fechar página
+        try {
+          await page.close();
+        } catch {}
+      }
+    }
+
+    // 6. Atualizar status no JSON do pre_lead
+    targetUser.status = isValid;
+
+    const newProcessedCount = usernames.filter(u => u.status !== null).length;
+    const newValidCount = usernames.filter(u => u.status === true).length;
+    const newInvalidCount = usernames.filter(u => u.status === false).length;
+    const allProcessed = newProcessedCount === usernames.length;
+
+    const { error: updateError } = await supabase
+      .from('pre_leads')
+      .update({
+        usernames: usernames,
+        processed_count: newProcessedCount,
+        valid_count: newValidCount,
+        invalid_count: newInvalidCount,
+        completed_at: allProcessed ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', pre_lead_id);
+
+    if (updateError) {
+      console.error(`   ⚠️  Erro ao atualizar pre_lead:`, updateError.message);
+    }
+
+    console.log(`🔄 [${reqId}] Resultado: ${isValid ? '✅ VÁLIDO' : `❌ INVÁLIDO (${rejectionReason})`}`);
+
+    return res.status(200).json({
+      success: true,
+      username,
+      is_valid: isValid,
+      lead_id: leadId,
+      rejection_reason: rejectionReason || null,
+      pre_lead_stats: {
+        processed: newProcessedCount,
+        valid: newValidCount,
+        invalid: newInvalidCount,
+        total: usernames.length,
+        completed: allProcessed
+      }
+    });
+
+  } catch (error: any) {
+    console.error(`❌ [${reqId}] Erro:`, error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao processar username',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/instagram-scraper/pre-leads/pending
+ * Lista pre_leads com usernames pendentes (status = null)
+ * Para uso no N8N workflow
+ */
+router.get('/pre-leads/pending', async (req: Request, res: Response) => {
+  try {
+    // Buscar pre_leads não completados
+    const { data: preLeads, error } = await supabase
+      .from('pre_leads')
+      .select('*')
+      .is('completed_at', null)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    // Extrair usernames pendentes de cada pre_lead
+    const pending = preLeads?.map(pl => {
+      const usernames = pl.usernames as Array<{username: string, status: boolean | null}>;
+      const pendingUsernames = usernames
+        .filter(u => u.status === null)
+        .map(u => u.username);
+
+      return {
+        pre_lead_id: pl.id,
+        source_username: pl.source_username,
+        source_type: pl.source_type,
+        pending_usernames: pendingUsernames,
+        pending_count: pendingUsernames.length,
+        total_count: pl.total_count,
+        processed_count: pl.processed_count
+      };
+    }).filter(pl => pl.pending_count > 0) || [];
+
+    return res.status(200).json({
+      success: true,
+      total_pre_leads: pending.length,
+      total_pending_usernames: pending.reduce((sum, pl) => sum + pl.pending_count, 0),
+      pre_leads: pending
+    });
+
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar pre_leads pendentes',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/process-all-pre-lead
+ * Processa usernames pendentes de um ou mais pre_leads
+ * Aceita: pre_lead_id (string) OU pre_lead_ids (string[])
+ * Executa sequencialmente com delay entre cada um, UMA sessão de browser
+ */
+router.post('/process-all-pre-lead', async (req: Request, res: Response) => {
+  const reqId = `BATCH_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+  try {
+    const { pre_lead_id, pre_lead_ids, max_per_batch = 50, delay_ms = 3000 } = req.body;
+
+    // Aceitar pre_lead_id (string) ou pre_lead_ids (array)
+    let idsToProcess: string[] = [];
+    if (pre_lead_ids && Array.isArray(pre_lead_ids) && pre_lead_ids.length > 0) {
+      idsToProcess = pre_lead_ids;
+    } else if (pre_lead_id) {
+      idsToProcess = [pre_lead_id];
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo obrigatório: pre_lead_id ou pre_lead_ids'
+      });
+    }
+
+    console.log(`\n🚀 [${reqId}] PROCESSAMENTO EM LOTE INICIADO`);
+    console.log(`   Pre-leads: ${idsToProcess.length}`);
+    console.log(`   IDs: ${idsToProcess.slice(0, 3).join(', ')}${idsToProcess.length > 3 ? '...' : ''}`);
+    console.log(`   Max por batch: ${max_per_batch}`);
+    console.log(`   Delay entre perfis: ${delay_ms}ms`);
+
+    // 🔄 Verificar conta disponível ANTES de iniciar
+    const { getAccountRotation } = await import('../services/instagram-account-rotation.service');
+    const rotation = getAccountRotation();
+    const accountCheck = await rotation.ensureAvailableAccount();
+
+    if (!accountCheck.success) {
+      console.log(`⚠️  [${reqId}] Nenhuma conta disponível: ${accountCheck.reason}`);
+      return res.status(503).json({
+        success: false,
+        message: `Nenhuma conta disponível: ${accountCheck.reason}`,
+        retry_after_minutes: parseInt(accountCheck.reason?.match(/\d+/)?.[0] || '30')
+      });
+    }
+
+    // 1. Buscar TODOS os pre_leads
+    const { data: preLeads, error: fetchError } = await supabase
+      .from('pre_leads')
+      .select('*')
+      .in('id', idsToProcess);
+
+    if (fetchError || !preLeads || preLeads.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Nenhum pre_lead encontrado'
+      });
+    }
+
+    console.log(`   📋 ${preLeads.length} pre_leads carregados`);
+
+    // 2. Coletar TODOS os usernames pendentes de todos os pre_leads
+    interface PendingItem {
+      pre_lead_id: string;
+      source_username: string;
+      username: string;
+    }
+    const allPendingItems: PendingItem[] = [];
+
+    // Map para rastrear atualizações por pre_lead
+    const preLeadDataMap: Map<string, {
+      usernames: Array<{username: string, status: boolean | null}>,
+      source_username: string
+    }> = new Map();
+
+    for (const pl of preLeads) {
+      const usernames = pl.usernames as Array<{username: string, status: boolean | null}>;
+      preLeadDataMap.set(pl.id, {
+        usernames: [...usernames],
+        source_username: pl.source_username
+      });
+
+      usernames.forEach(u => {
+        if (u.status === null) {
+          allPendingItems.push({
+            pre_lead_id: pl.id,
+            source_username: pl.source_username,
+            username: u.username
+          });
+        }
+      });
+    }
+
+    if (allPendingItems.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'Nenhum username pendente para processar',
+        stats: {
+          pre_leads: preLeads.length,
+          total_usernames: preLeads.reduce((sum, pl) => sum + (pl.usernames?.length || 0), 0),
+          pending: 0
+        }
+      });
+    }
+
+    // 3. Limitar ao max_per_batch
+    const toProcess = allPendingItems.slice(0, max_per_batch);
+    console.log(`   📋 ${toProcess.length} usernames a processar (de ${allPendingItems.length} pendentes)`);
+
+    // 4. Criar página autenticada UMA VEZ para todo o batch
+    const { createAuthenticatedPage } = await import('../services/instagram-session.service');
+    const { calculateActivityScore } = await import('../services/instagram-profile.utils');
+    const { detectLanguage } = await import('../services/language-country-detector.service');
+    const { extractHashtagsFromPosts, retryWithBackoff } = await import('../services/instagram-profile.utils');
+
+    const page = await createAuthenticatedPage();
+    console.log(`   ✅ Sessão de browser criada (UMA para todos os pre_leads)`);
+
+    const results: Array<{username: string, valid: boolean, reason: string, lead_id?: string, source_username?: string}> = [];
+
+    // Helper para atualizar status no Map correto
+    const updateUsernameStatus = (pre_lead_id: string, username: string, status: boolean) => {
+      const plData = preLeadDataMap.get(pre_lead_id);
+      if (plData) {
+        const userItem = plData.usernames.find(u => u.username === username);
+        if (userItem) userItem.status = status;
+      }
+    };
+
+    try {
+      // 5. Processar cada username sequencialmente
+      for (let i = 0; i < toProcess.length; i++) {
+        const item = toProcess[i];
+        if (!item) continue;
+        const { username, pre_lead_id: itemPreLeadId, source_username } = item;
+        console.log(`\n[${i + 1}/${toProcess.length}] Processando @${username} (de @${source_username})...`);
+
+        try {
+          // Verificar se já existe
+          const { data: existingLead } = await supabase
+            .from('instagram_leads')
+            .select('id')
+            .eq('username', username)
+            .single();
+
+          if (existingLead) {
+            console.log(`   ⚠️  @${username} já existe em instagram_leads`);
+            results.push({ username, valid: true, reason: 'Já existe', lead_id: existingLead.id, source_username });
+            updateUsernameStatus(itemPreLeadId, username, true);
+            continue;
+          }
+
+          // Navegar para o perfil
+          console.log(`   🌐 Navegando para https://www.instagram.com/${username}/`);
+          await page.goto(`https://www.instagram.com/${username}/`, {
+            waitUntil: 'networkidle2',
+            timeout: 30000
+          });
+          await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+
+          // Scrape do perfil
+          const profileData = await scrapeProfileWithExistingPage(page, username, true);
+
+          if (!profileData || !profileData.username) {
+            console.log(`   ❌ Perfil não encontrado ou privado`);
+            results.push({ username, valid: false, reason: 'Perfil não encontrado ou privado', source_username });
+            updateUsernameStatus(itemPreLeadId, username, false);
+            continue;
+          }
+
+          // VALIDAÇÃO 1: FOLLOWERS < 250
+          const followersCount = profileData.followers_count || 0;
+          if (followersCount < 250) {
+            console.log(`   🚫 REJEITADO: ${followersCount} seguidores < 250`);
+            results.push({ username, valid: false, reason: `Followers ${followersCount} < 250`, source_username });
+            updateUsernameStatus(itemPreLeadId, username, false);
+            continue;
+          }
+
+          // VALIDAÇÃO 2: ACTIVITY SCORE
+          const activityScore = calculateActivityScore(profileData);
+          console.log(`   📊 Activity Score: ${activityScore.score}/100`);
+          if (!activityScore.isActive) {
+            console.log(`   🚫 REJEITADO: Activity score ${activityScore.score} < 50`);
+            results.push({ username, valid: false, reason: `Activity score ${activityScore.score} < 50`, source_username });
+            updateUsernameStatus(itemPreLeadId, username, false);
+            continue;
+          }
+
+          // VALIDAÇÃO 3: IDIOMA
+          const languageDetection = await detectLanguage(profileData.bio || '', username);
+          console.log(`   🌍 Idioma: ${languageDetection.language}`);
+          if (languageDetection.language !== 'pt') {
+            console.log(`   🚫 REJEITADO: Idioma ${languageDetection.language} != pt`);
+            results.push({ username, valid: false, reason: `Idioma ${languageDetection.language} != pt`, source_username });
+            updateUsernameStatus(itemPreLeadId, username, false);
+            continue;
+          }
+
+          // APROVADO - Extrair hashtags
+          console.log(`   ✅ APROVADO - Extraindo hashtags...`);
+          let hashtagsPosts: string[] | null = null;
+          try {
+            hashtagsPosts = await retryWithBackoff(
+              () => extractHashtagsFromPosts(page, 2),
+              2, 3000
+            );
+            if (hashtagsPosts && hashtagsPosts.length > 0) {
+              console.log(`   🏷️  ${hashtagsPosts.length} hashtags extraídas`);
+            }
+          } catch (e) {
+            console.log(`   ⚠️  Erro ao extrair hashtags`);
+          }
+
+          // Salvar no banco
+          const { data: newLead, error: insertError } = await supabase
+            .from('instagram_leads')
+            .insert({
+              username: profileData.username,
+              full_name: profileData.full_name,
+              bio: profileData.bio,
+              website: profileData.website,
+              email: profileData.email,
+              phone: profileData.phone,
+              followers_count: profileData.followers_count,
+              following_count: profileData.following_count,
+              posts_count: profileData.posts_count,
+              profile_pic_url: profileData.profile_pic_url,
+              is_business_account: profileData.is_business_account,
+              is_verified: profileData.is_verified,
+              city: profileData.city,
+              state: profileData.state,
+              address: profileData.address,
+              activity_score: activityScore.score,
+              is_active: activityScore.isActive,
+              language: languageDetection.language,
+              hashtags_posts: hashtagsPosts,
+              search_term_used: source_username,
+              followers_scraped: true,
+              discovered_from_profile: source_username,
+              lead_source: 'competitor_follower',
+              captured_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+          if (insertError) {
+            console.log(`   ❌ Erro ao salvar: ${insertError.message}`);
+            results.push({ username, valid: false, reason: `Erro DB: ${insertError.message}`, source_username });
+            updateUsernameStatus(itemPreLeadId, username, false);
+          } else {
+            console.log(`   ✅ Salvo com ID: ${newLead?.id}`);
+            results.push({ username, valid: true, reason: 'Aprovado', lead_id: newLead?.id, source_username });
+            updateUsernameStatus(itemPreLeadId, username, true);
+          }
+
+        } catch (profileError: any) {
+          console.log(`   ❌ Erro: ${profileError.message}`);
+          results.push({ username, valid: false, reason: `Erro: ${profileError.message}`, source_username });
+          updateUsernameStatus(itemPreLeadId, username, false);
+        }
+
+        // Delay entre perfis
+        if (i < toProcess.length - 1) {
+          console.log(`   ⏳ Aguardando ${delay_ms}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay_ms));
+        }
+      }
+
+    } finally {
+      // Fechar página
+      try { await page.close(); } catch {}
+      console.log(`   🧹 Sessão de browser encerrada`);
+    }
+
+    // 6. Atualizar TODOS os pre_leads com os resultados
+    console.log(`\n   💾 Atualizando ${preLeadDataMap.size} pre_leads...`);
+    let totalProcessed = 0;
+    let totalValid = 0;
+    let totalInvalid = 0;
+    let totalPending = 0;
+
+    for (const [plId, plData] of preLeadDataMap.entries()) {
+      const processedCount = plData.usernames.filter(u => u.status !== null).length;
+      const validCount = plData.usernames.filter(u => u.status === true).length;
+      const invalidCount = plData.usernames.filter(u => u.status === false).length;
+      const allProcessed = processedCount === plData.usernames.length;
+
+      totalProcessed += processedCount;
+      totalValid += validCount;
+      totalInvalid += invalidCount;
+      totalPending += plData.usernames.length - processedCount;
+
+      await supabase
+        .from('pre_leads')
+        .update({
+          usernames: plData.usernames,
+          processed_count: processedCount,
+          valid_count: validCount,
+          invalid_count: invalidCount,
+          completed_at: allProcessed ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', plId);
+    }
+
+    // 7. Resumo final
+    const validResults = results.filter(r => r.valid).length;
+    const invalidResults = results.filter(r => !r.valid).length;
+
+    console.log(`\n🏁 [${reqId}] PROCESSAMENTO CONCLUÍDO`);
+    console.log(`   📋 Pre-leads processados: ${preLeadDataMap.size}`);
+    console.log(`   ✅ Válidos: ${validResults}`);
+    console.log(`   ❌ Inválidos: ${invalidResults}`);
+    console.log(`   📊 Total: ${results.length}`);
+
+    return res.status(200).json({
+      success: true,
+      message: `Processados ${results.length} usernames de ${preLeadDataMap.size} pre_leads`,
+      batch_stats: {
+        processed: results.length,
+        valid: validResults,
+        invalid: invalidResults
+      },
+      pre_leads_stats: {
+        pre_leads_count: preLeadDataMap.size,
+        total_usernames: totalProcessed + totalPending,
+        processed: totalProcessed,
+        valid: totalValid,
+        invalid: totalInvalid,
+        pending: totalPending
+      },
+      results
+    });
+
+  } catch (error: any) {
+    console.error(`❌ [${reqId}] Erro:`, error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao processar batch',
       error: error.message
     });
   }

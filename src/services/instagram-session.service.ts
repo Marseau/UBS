@@ -460,11 +460,46 @@ async function cleanupOnFailure(): Promise<void> {
 /**
  * Força reset completo da sessão (usado durante rotação de contas)
  * IMPORTANTE: Chame isso ANTES de ensureLoggedSession() após rotação!
+ *
+ * Limpa TODAS as contas para simular situação real:
+ * - Browser e páginas em memória
+ * - UserDataDir de TODAS as contas (fingerprint do browser)
+ * - Arquivos de cookies JSON de TODAS as contas
  */
 export async function resetSessionForRotation(): Promise<void> {
   console.log('🔄 Resetando sessão do Instagram para rotação de conta...');
+
+  const rotation = getAccountRotation();
+  const allAccounts = rotation.getAllAccounts();
+
+  // 1. Fechar browser e páginas
   await cleanupOnFailure();
-  console.log('✅ Sessão resetada - pronta para nova conta');
+
+  // 2. Limpar TODAS as contas (simula situação real - browser limpo)
+  for (const account of allAccounts) {
+    // Limpar userDataDir
+    const userDataDir = getUserDataDir(account.username);
+    try {
+      if (fs.existsSync(userDataDir)) {
+        fs.rmSync(userDataDir, { recursive: true, force: true });
+        console.log(`   🗑️  UserDataDir limpo: @${account.instagramUsername}`);
+      }
+    } catch (e: any) {
+      console.warn(`   ⚠️  Erro ao limpar userDataDir: ${e.message}`);
+    }
+
+    // Limpar cookies JSON
+    if (account.cookiesFile && fs.existsSync(account.cookiesFile)) {
+      try {
+        fs.unlinkSync(account.cookiesFile);
+        console.log(`   🗑️  Cookies limpos: @${account.instagramUsername}`);
+      } catch (e: any) {
+        console.warn(`   ⚠️  Erro ao limpar cookies: ${e.message}`);
+      }
+    }
+  }
+
+  console.log('✅ Sessão resetada completamente - browser limpo');
 }
 
 export async function ensureLoggedSession(): Promise<void> {

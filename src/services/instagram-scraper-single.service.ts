@@ -3402,6 +3402,7 @@ export async function scrapeInstagramTag(
                 segment: null,
                 search_term_id: null
               };
+              // phones_normalized será preenchido pelo trigger trg_normalize_instagram_lead()
 
               const { error: insertError } = await supabase
                 .from('instagram_leads')
@@ -4974,6 +4975,48 @@ export async function scrapeInstagramProfile(username: string): Promise<Instagra
     console.log(`🔓 Request ${requestId} finalizada (scrape-profile: "${username}")`);
     await cleanup();
     console.log(`🏁 SCRAPE-PROFILE ENCERRADO COMPLETAMENTE: "@${username}" - Request ${requestId}`);
+  }
+}
+
+/**
+ * 🔄 Scrape de perfil navegando direto para URL (sem busca)
+ * Usa sessão compartilhada (como scrapeInstagramFollowers)
+ * @param username - Username do Instagram (sem @)
+ */
+export async function scrapeInstagramProfileByUrl(username: string): Promise<InstagramProfileData & { followers: string }> {
+  // Importar createAuthenticatedPage do session service
+  const { createAuthenticatedPage } = await import('./instagram-session.service');
+
+  console.log(`🔒 Iniciando scrape-profile-url para "@${username}"`);
+
+  const page = await createAuthenticatedPage();
+
+  try {
+    // Navegar direto para URL do perfil
+    console.log(`   🌐 Navegando direto para https://www.instagram.com/${username}/`);
+    await page.goto(`https://www.instagram.com/${username}/`, {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    });
+
+    // Delay humano após carregar
+    await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+
+    // Agora usar a função de scrape com skipNavigation=true
+    const result = await scrapeProfileWithExistingPage(page, username, true);
+    console.log(`✅ SCRAPE-PROFILE-URL CONCLUÍDO: dados coletados para "@${username}"`);
+    return result;
+  } catch (error: any) {
+    console.error(`❌ Erro ao scrape perfil "@${username}" por URL:`, error.message);
+    throw error;
+  } finally {
+    // Fechar apenas esta página, não o browser todo
+    try {
+      await page.close();
+      console.log(`🏁 SCRAPE-PROFILE-URL ENCERRADO: "@${username}"`);
+    } catch (closeError) {
+      // Ignorar erro ao fechar
+    }
   }
 }
 

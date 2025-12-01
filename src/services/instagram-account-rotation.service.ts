@@ -362,6 +362,13 @@ class InstagramAccountRotation {
   }
 
   /**
+   * Retorna todas as contas configuradas
+   */
+  getAllAccounts(): AccountConfig[] {
+    return this.accounts;
+  }
+
+  /**
    * Encontra conta pelo Instagram username
    */
   findAccountByInstagramUsername(instagramUsername: string): number {

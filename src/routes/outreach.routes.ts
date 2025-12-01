@@ -19,6 +19,20 @@ import {
   RateLimitStatus,
   ClassificationResult
 } from '../services/outreach-agent.service';
+import {
+  whatsappSessionManager,
+  WhatsAppSession,
+  SessionStatus
+} from '../services/whatsapp-session-manager.service';
+import {
+  responseQueueWorker,
+  enqueueResponse,
+  getQueueStatus,
+  cleanupOldQueueItems
+} from '../services/response-queue-worker.service';
+import {
+  credentialsVault
+} from '../services/credentials-vault.service';
 
 const router = express.Router();
 
@@ -715,16 +729,16 @@ router.post('/templates', async (req, res) => {
  */
 router.post('/rate-limit/check', async (req, res) => {
   try {
-    const { project_id, hourly_limit = 15, daily_limit = 120 } = req.body;
+    const { campaign_id, hourly_limit = 15, daily_limit = 120 } = req.body;
 
-    if (!project_id) {
+    if (!campaign_id) {
       return res.status(400).json({
         success: false,
-        message: 'project_id é obrigatório'
+        message: 'campaign_id é obrigatório'
       });
     }
 
-    const status = await outreachAgentService.checkRateLimit(project_id, hourly_limit, daily_limit);
+    const status = await outreachAgentService.checkRateLimit(campaign_id, hourly_limit, daily_limit);
 
     return res.json({
       success: true,
@@ -745,16 +759,16 @@ router.post('/rate-limit/check', async (req, res) => {
  */
 router.post('/rate-limit/increment', async (req, res) => {
   try {
-    const { project_id } = req.body;
+    const { campaign_id } = req.body;
 
-    if (!project_id) {
+    if (!campaign_id) {
       return res.status(400).json({
         success: false,
-        message: 'project_id é obrigatório'
+        message: 'campaign_id é obrigatório'
       });
     }
 
-    await outreachAgentService.incrementRateLimit(project_id);
+    await outreachAgentService.incrementRateLimit(campaign_id);
 
     return res.json({
       success: true,
@@ -775,21 +789,21 @@ router.post('/rate-limit/increment', async (req, res) => {
  */
 router.post('/classify-response', async (req, res) => {
   try {
-    const { project_id, lead_message, conversation_id } = req.body;
+    const { campaign_id, lead_message, conversation_id } = req.body;
 
-    if (!project_id || !lead_message) {
+    if (!campaign_id || !lead_message) {
       return res.status(400).json({
         success: false,
-        message: 'project_id e lead_message são obrigatórios'
+        message: 'campaign_id e lead_message são obrigatórios'
       });
     }
 
-    // Carregar contexto do negócio
-    const businessContext = await outreachAgentService.getClientBusinessContext(project_id);
+    // Carregar contexto do negócio da campanha
+    const businessContext = await outreachAgentService.getCampaignBusinessContext(campaign_id);
     if (!businessContext) {
       return res.status(404).json({
         success: false,
-        message: 'Contexto de negócio não encontrado para este projeto'
+        message: 'Contexto de negócio não encontrado para esta campanha'
       });
     }
 
@@ -827,27 +841,26 @@ router.post('/classify-response', async (req, res) => {
 router.post('/auto-reply', async (req, res) => {
   try {
     const {
-      project_id,
+      campaign_id,
       lead_id,
       lead_username,
       lead_full_name,
       lead_bio,
       lead_phone,
-      incoming_message,
-      campaign_id
+      incoming_message
     } = req.body;
 
-    if (!project_id || !lead_id || !incoming_message) {
+    if (!campaign_id || !lead_id || !incoming_message) {
       return res.status(400).json({
         success: false,
-        message: 'project_id, lead_id e incoming_message são obrigatórios'
+        message: 'campaign_id, lead_id e incoming_message são obrigatórios'
       });
     }
 
     console.log(`\n🤖 [AUTO-REPLY] Processando resposta do lead @${lead_username}`);
 
     const result = await outreachAgentService.processLeadMessage(
-      project_id,
+      campaign_id,
       lead_id,
       {
         username: lead_username,
@@ -855,8 +868,7 @@ router.post('/auto-reply', async (req, res) => {
         bio: lead_bio,
         phone: lead_phone
       },
-      incoming_message,
-      campaign_id
+      incoming_message
     );
 
     return res.json({
@@ -1085,7 +1097,7 @@ router.get('/conversation/:id', async (req, res) => {
 router.post('/blacklist/add', async (req, res) => {
   try {
     const {
-      project_id,
+      campaign_id,
       lead_id,
       phone,
       instagram_username,
@@ -1093,15 +1105,15 @@ router.post('/blacklist/add', async (req, res) => {
       reason_details
     } = req.body;
 
-    if (!project_id || !reason) {
+    if (!campaign_id || !reason) {
       return res.status(400).json({
         success: false,
-        message: 'project_id e reason são obrigatórios'
+        message: 'campaign_id e reason são obrigatórios'
       });
     }
 
     await outreachAgentService.addToBlacklist(
-      project_id,
+      campaign_id,
       reason,
       phone,
       instagram_username,
@@ -1128,20 +1140,19 @@ router.post('/blacklist/add', async (req, res) => {
  */
 router.post('/blacklist/check', async (req, res) => {
   try {
-    const { project_id, phone, instagram_username, lead_id } = req.body;
+    const { campaign_id, phone, instagram_username } = req.body;
 
-    if (!project_id) {
+    if (!campaign_id) {
       return res.status(400).json({
         success: false,
-        message: 'project_id é obrigatório'
+        message: 'campaign_id é obrigatório'
       });
     }
 
     const isBlacklisted = await outreachAgentService.isBlacklisted(
-      project_id,
+      campaign_id,
       phone,
-      instagram_username,
-      lead_id
+      instagram_username
     );
 
     return res.json({
@@ -1158,19 +1169,19 @@ router.post('/blacklist/check', async (req, res) => {
 });
 
 /**
- * GET /api/outreach/business-context/:project_id
- * Busca contexto de negócio do projeto AIC
+ * GET /api/outreach/business-context/:campaign_id
+ * Busca contexto de negócio da campanha
  */
-router.get('/business-context/:project_id', async (req, res) => {
+router.get('/business-context/:campaign_id', async (req, res) => {
   try {
-    const { project_id } = req.params;
+    const { campaign_id } = req.params;
 
-    const context = await outreachAgentService.getClientBusinessContext(project_id);
+    const context = await outreachAgentService.getCampaignBusinessContext(campaign_id);
 
     if (!context) {
       return res.status(404).json({
         success: false,
-        message: 'Contexto de negócio não encontrado'
+        message: 'Contexto de negócio não encontrado para esta campanha'
       });
     }
 
@@ -1189,22 +1200,18 @@ router.get('/business-context/:project_id', async (req, res) => {
 
 /**
  * POST /api/outreach/business-context
- * Cria ou atualiza contexto de negócio do projeto AIC
+ * Atualiza contexto de negócio/outreach da CAMPANHA (cluster_campaigns)
+ * O contexto agora é armazenado diretamente na tabela de campanhas
  */
 router.post('/business-context', async (req, res) => {
   try {
     const {
-      project_id,
+      campaign_id,
       business_name,
       business_type,
-      business_description,
       value_proposition,
       main_products_services,
       differentials,
-      location_city,
-      location_state,
-      website_url,
-      instagram_handle,
       communication_tone,
       brand_personality,
       first_contact_script,
@@ -1212,34 +1219,31 @@ router.post('/business-context', async (req, res) => {
       closing_phrases,
       prohibited_phrases,
       active_offers,
-      human_support_hours,
       agent_name,
       max_ai_responses_before_handoff,
       interest_keywords,
-      rejection_keywords
+      rejection_keywords,
+      outreach_hourly_limit,
+      outreach_daily_limit,
+      outreach_enabled
     } = req.body;
 
-    if (!project_id || !business_name || !value_proposition) {
+    if (!campaign_id) {
       return res.status(400).json({
         success: false,
-        message: 'project_id, business_name e value_proposition são obrigatórios'
+        message: 'campaign_id é obrigatório'
       });
     }
 
+    // Atualizar campos de outreach na campanha
     const { data, error } = await supabase
-      .from('client_business_context')
-      .upsert({
-        project_id,
+      .from('cluster_campaigns')
+      .update({
         business_name,
         business_type,
-        business_description,
         value_proposition,
         main_products_services,
         differentials,
-        location_city,
-        location_state,
-        website_url,
-        instagram_handle,
         communication_tone: communication_tone || 'profissional_amigavel',
         brand_personality,
         first_contact_script,
@@ -1247,15 +1251,15 @@ router.post('/business-context', async (req, res) => {
         closing_phrases,
         prohibited_phrases,
         active_offers,
-        human_support_hours,
         agent_name: agent_name || 'Assistente',
         max_ai_responses_before_handoff: max_ai_responses_before_handoff || 5,
         interest_keywords: interest_keywords || ['interessado', 'quero', 'quanto custa', 'preço'],
         rejection_keywords: rejection_keywords || ['não quero', 'não tenho interesse', 'pare'],
-        is_active: true
-      }, {
-        onConflict: 'project_id'
+        outreach_hourly_limit: outreach_hourly_limit || 15,
+        outreach_daily_limit: outreach_daily_limit || 120,
+        outreach_enabled: outreach_enabled !== undefined ? outreach_enabled : false
       })
+      .eq('id', campaign_id)
       .select()
       .single();
 
@@ -1282,24 +1286,23 @@ router.post('/business-context', async (req, res) => {
 router.post('/send-whatsapp', async (req, res) => {
   try {
     const {
-      project_id,
       campaign_id,
       dry_run = false
     } = req.body;
 
-    if (!project_id) {
+    if (!campaign_id) {
       return res.status(400).json({
         success: false,
-        message: 'project_id é obrigatório'
+        message: 'campaign_id é obrigatório'
       });
     }
 
     console.log(`\n📤 [SEND-WHATSAPP] Processando envio`);
-    console.log(`   Projeto: ${project_id}`);
+    console.log(`   Campanha: ${campaign_id}`);
     console.log(`   Dry Run: ${dry_run}`);
 
     // 1. Verificar rate limit e horário comercial
-    const rateStatus = await outreachAgentService.checkRateLimit(project_id);
+    const rateStatus = await outreachAgentService.checkRateLimit(campaign_id);
 
     if (!rateStatus.can_send) {
       return res.json({
@@ -1330,7 +1333,7 @@ router.post('/send-whatsapp', async (req, res) => {
 
     // 3. Verificar blacklist
     const isBlacklisted = await outreachAgentService.isBlacklisted(
-      project_id,
+      campaign_id,
       queueItem.lead_phone,
       queueItem.lead_username
     );
@@ -1387,15 +1390,14 @@ router.post('/send-whatsapp', async (req, res) => {
 
     // 5. Criar conversa se não existir
     const conversation = await outreachAgentService.getOrCreateConversation(
-      project_id,
+      campaign_id,
       queueItem.lead_id,
       {
         username: queueItem.lead_username,
         full_name: queueItem.lead_full_name,
         bio: queueItem.lead_bio,
         phone: queueItem.lead_phone
-      },
-      queueItem.campaign_id
+      }
     );
 
     // 6. Se não for dry run, salvar mensagem e incrementar rate limit
@@ -1418,7 +1420,7 @@ router.post('/send-whatsapp', async (req, res) => {
       );
 
       // Incrementar rate limit
-      await outreachAgentService.incrementRateLimit(project_id);
+      await outreachAgentService.incrementRateLimit(campaign_id);
 
       // Atualizar fila com mensagem gerada
       await supabase
@@ -1453,6 +1455,1243 @@ router.post('/send-whatsapp', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Erro em /send-whatsapp:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// WHATSAPP SESSION MANAGEMENT
+// ============================================================================
+
+/**
+ * GET /api/outreach/whatsapp-sessions
+ * Lista todas as sessões WhatsApp ativas
+ */
+router.get('/whatsapp-sessions', async (req, res) => {
+  try {
+    const sessions = await whatsappSessionManager.listActiveSessions();
+
+    return res.json({
+      success: true,
+      data: sessions,
+      count: sessions.length,
+      max_sessions: whatsappSessionManager.CONFIG.MAX_SESSIONS
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /whatsapp-sessions:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/outreach/whatsapp-sessions/:session_id
+ * Busca status de uma sessão específica
+ */
+router.get('/whatsapp-sessions/:session_id', async (req, res) => {
+  try {
+    const { session_id } = req.params;
+
+    const status = await whatsappSessionManager.getSessionStatus(session_id);
+
+    if (!status) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sessão não encontrada'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: status
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /whatsapp-sessions/:id:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/outreach/whatsapp-sessions/campaign/:campaign_id
+ * Busca sessão de uma campanha específica
+ */
+router.get('/whatsapp-sessions/campaign/:campaign_id', async (req, res) => {
+  try {
+    const { campaign_id } = req.params;
+
+    const session = await whatsappSessionManager.getSessionByCampaign(campaign_id);
+
+    if (!session) {
+      return res.json({
+        success: true,
+        has_session: false,
+        message: 'Nenhuma sessão configurada para esta campanha'
+      });
+    }
+
+    const status = await whatsappSessionManager.getSessionStatus(session.id);
+
+    return res.json({
+      success: true,
+      has_session: true,
+      data: status
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /whatsapp-sessions/campaign/:id:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/whatsapp-sessions/create
+ * Cria nova sessão WhatsApp para uma campanha
+ */
+router.post('/whatsapp-sessions/create', async (req, res) => {
+  try {
+    const { campaign_id, session_name } = req.body;
+
+    if (!campaign_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'campaign_id é obrigatório'
+      });
+    }
+
+    // Verificar se campanha existe
+    const { data: campaign, error: campaignError } = await supabase
+      .from('cluster_campaigns')
+      .select('id, campaign_name')
+      .eq('id', campaign_id)
+      .single();
+
+    if (campaignError || !campaign) {
+      return res.status(404).json({
+        success: false,
+        message: 'Campanha não encontrada'
+      });
+    }
+
+    const name = session_name || `WhatsApp - ${campaign.campaign_name}`;
+
+    console.log(`\n📱 [WHATSAPP] Criando sessão para campanha ${campaign_id}`);
+
+    const session = await whatsappSessionManager.createSession(campaign_id, name);
+
+    return res.json({
+      success: true,
+      data: {
+        session_id: session.id,
+        campaign_id: session.campaignId,
+        session_name: session.sessionName,
+        status: session.status
+      },
+      message: 'Sessão criada. Use /whatsapp-sessions/start-qr para gerar QR Code.'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao criar sessão:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/whatsapp-sessions/start-qr
+ * Inicia browser e gera QR Code para autenticação
+ */
+router.post('/whatsapp-sessions/start-qr', async (req, res) => {
+  try {
+    const { session_id, campaign_id } = req.body;
+
+    let targetSessionId = session_id;
+
+    // Se veio campaign_id, buscar sessão
+    if (!targetSessionId && campaign_id) {
+      const session = await whatsappSessionManager.getSessionByCampaign(campaign_id);
+      if (session) {
+        targetSessionId = session.id;
+      } else {
+        // Criar sessão automaticamente
+        const { data: campaign } = await supabase
+          .from('cluster_campaigns')
+          .select('campaign_name')
+          .eq('id', campaign_id)
+          .single();
+
+        const newSession = await whatsappSessionManager.createSession(
+          campaign_id,
+          `WhatsApp - ${campaign?.campaign_name || campaign_id}`
+        );
+        targetSessionId = newSession.id;
+      }
+    }
+
+    if (!targetSessionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'session_id ou campaign_id é obrigatório'
+      });
+    }
+
+    console.log(`\n🔄 [WHATSAPP] Gerando QR Code para sessão ${targetSessionId}`);
+
+    const { qrCode, expiresAt } = await whatsappSessionManager.startSessionAndGetQR(targetSessionId);
+
+    // Se já estava conectado, qrCode será vazio
+    if (!qrCode) {
+      return res.json({
+        success: true,
+        already_connected: true,
+        message: 'Sessão já está conectada'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        session_id: targetSessionId,
+        qr_code: qrCode,
+        expires_at: expiresAt,
+        expires_in_seconds: Math.floor((expiresAt.getTime() - Date.now()) / 1000)
+      },
+      message: 'QR Code gerado. Cliente deve escanear para conectar.'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao gerar QR Code:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/whatsapp-sessions/send-message
+ * Envia mensagem via sessão WhatsApp
+ */
+router.post('/whatsapp-sessions/send-message', async (req, res) => {
+  try {
+    const { session_id, campaign_id, phone_number, message_text } = req.body;
+
+    let targetSessionId = session_id;
+
+    // Se veio campaign_id, buscar sessão
+    if (!targetSessionId && campaign_id) {
+      const session = await whatsappSessionManager.getSessionByCampaign(campaign_id);
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          message: 'Nenhuma sessão encontrada para esta campanha'
+        });
+      }
+      targetSessionId = session.id;
+    }
+
+    if (!targetSessionId || !phone_number || !message_text) {
+      return res.status(400).json({
+        success: false,
+        message: 'session_id (ou campaign_id), phone_number e message_text são obrigatórios'
+      });
+    }
+
+    console.log(`\n📤 [WHATSAPP] Enviando mensagem via sessão ${targetSessionId}`);
+
+    const result = await whatsappSessionManager.sendMessage(
+      targetSessionId,
+      phone_number,
+      message_text
+    );
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error || 'Erro ao enviar mensagem'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        message_id: result.messageId,
+        sent_at: result.sentAt
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao enviar mensagem:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/whatsapp-sessions/close
+ * Fecha uma sessão WhatsApp
+ */
+router.post('/whatsapp-sessions/close', async (req, res) => {
+  try {
+    const { session_id, campaign_id } = req.body;
+
+    let targetSessionId = session_id;
+
+    // Se veio campaign_id, buscar sessão
+    if (!targetSessionId && campaign_id) {
+      const session = await whatsappSessionManager.getSessionByCampaign(campaign_id);
+      if (session) {
+        targetSessionId = session.id;
+      }
+    }
+
+    if (!targetSessionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'session_id ou campaign_id é obrigatório'
+      });
+    }
+
+    console.log(`\n🔌 [WHATSAPP] Fechando sessão ${targetSessionId}`);
+
+    await whatsappSessionManager.closeSession(targetSessionId);
+
+    return res.json({
+      success: true,
+      message: 'Sessão fechada com sucesso'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao fechar sessão:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/whatsapp-sessions/close-all
+ * Fecha todas as sessões WhatsApp (admin)
+ */
+router.post('/whatsapp-sessions/close-all', async (req, res) => {
+  try {
+    console.log(`\n🔌 [WHATSAPP] Fechando todas as sessões`);
+
+    await whatsappSessionManager.closeAllSessions();
+
+    return res.json({
+      success: true,
+      message: 'Todas as sessões foram fechadas'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao fechar sessões:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/whatsapp-sessions/start-heartbeat
+ * Inicia heartbeat para manter sessões vivas
+ */
+router.post('/whatsapp-sessions/start-heartbeat', async (req, res) => {
+  try {
+    whatsappSessionManager.startHeartbeat();
+
+    return res.json({
+      success: true,
+      message: 'Heartbeat iniciado'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao iniciar heartbeat:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// UNIFIED OUTREACH SENDER (Instagram DM + WhatsApp)
+// ============================================================================
+
+/**
+ * POST /api/outreach/unified/send
+ * Endpoint unificado para envio de mensagens (Instagram DM ou WhatsApp)
+ * Detecta automaticamente o canal e processa de forma unificada.
+ *
+ * Usado pelo N8N Unified Outreach Workflow
+ */
+router.post('/unified/send', async (req, res) => {
+  try {
+    const {
+      campaign_id,
+      channel,  // 'instagram_dm' | 'whatsapp' | 'auto'
+      dry_run = false
+    } = req.body;
+
+    if (!campaign_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'campaign_id é obrigatório'
+      });
+    }
+
+    const effectiveChannel = channel || 'auto';
+
+    console.log(`\n🚀 [UNIFIED SENDER] Processando envio`);
+    console.log(`   Campanha: ${campaign_id}`);
+    console.log(`   Canal: ${effectiveChannel}`);
+    console.log(`   Dry Run: ${dry_run}`);
+
+    // 1. Verificar rate limit e horário comercial
+    const rateStatus = await outreachAgentService.checkRateLimit(campaign_id);
+
+    if (!rateStatus.can_send) {
+      return res.json({
+        success: true,
+        can_send: false,
+        reason: rateStatus.reason,
+        rate_status: rateStatus,
+        message: `Não é possível enviar agora: ${rateStatus.reason}`,
+        next_available: rateStatus.next_available_slot
+      });
+    }
+
+    // 2. Buscar próximo item da fila
+    const queueItem = await personalizedDMService.getNextOutreachItem(
+      effectiveChannel === 'auto' ? undefined : effectiveChannel as 'instagram_dm' | 'whatsapp',
+      campaign_id
+    );
+
+    if (!queueItem) {
+      return res.json({
+        success: true,
+        can_send: true,
+        has_item: false,
+        message: 'Nenhum item pendente na fila',
+        rate_status: rateStatus
+      });
+    }
+
+    const targetChannel = queueItem.channel; // Canal real do lead
+
+    // 3. Verificar blacklist
+    const isBlacklisted = await outreachAgentService.isBlacklisted(
+      campaign_id,
+      queueItem.lead_phone,
+      queueItem.lead_username
+    );
+
+    if (isBlacklisted) {
+      await supabase
+        .from('campaign_outreach_queue')
+        .update({ status: 'blocked', error_message: 'Lead na blacklist' })
+        .eq('id', queueItem.id);
+
+      return res.json({
+        success: true,
+        can_send: true,
+        has_item: false,
+        message: 'Lead na blacklist, busque próximo',
+        skipped_lead: queueItem.lead_username
+      });
+    }
+
+    // 4. Verificar sessão WhatsApp se for canal WhatsApp
+    let whatsappSession: WhatsAppSession | null = null;
+    if (targetChannel === 'whatsapp') {
+      whatsappSession = await whatsappSessionManager.getSessionByCampaign(campaign_id);
+
+      if (!whatsappSession) {
+        return res.json({
+          success: true,
+          can_send: true,
+          has_item: true,
+          channel: 'whatsapp',
+          session_required: true,
+          message: 'Sessão WhatsApp não configurada para esta campanha',
+          setup_url: `/api/outreach/whatsapp-sessions/create`
+        });
+      }
+
+      const sessionStatus = await whatsappSessionManager.getSessionStatus(whatsappSession.id);
+
+      if (!sessionStatus?.isConnected) {
+        return res.json({
+          success: true,
+          can_send: true,
+          has_item: true,
+          channel: 'whatsapp',
+          session_status: sessionStatus?.status,
+          qr_required: true,
+          message: 'Sessão WhatsApp desconectada. Gere novo QR Code.',
+          qr_url: `/api/outreach/whatsapp-sessions/start-qr`
+        });
+      }
+
+      if (!sessionStatus.canSend) {
+        return res.json({
+          success: true,
+          can_send: false,
+          channel: 'whatsapp',
+          reason: 'Rate limit da sessão WhatsApp atingido',
+          session_status: sessionStatus
+        });
+      }
+    }
+
+    // 5. Gerar mensagem personalizada
+    const leadProfile: LeadProfile = {
+      id: queueItem.lead_id,
+      username: queueItem.lead_username,
+      full_name: queueItem.lead_full_name,
+      bio: queueItem.lead_bio,
+      business_category: queueItem.lead_business_category,
+      segment: queueItem.lead_segment,
+      hashtags_bio: queueItem.lead_hashtags_bio,
+      hashtags_posts: queueItem.lead_hashtags_posts,
+      has_phone: !!queueItem.lead_phone,
+      has_email: !!queueItem.lead_email
+    };
+
+    const campaignContext: CampaignContext = {
+      id: queueItem.campaign_id,
+      campaign_name: queueItem.campaign_name,
+      nicho_principal: queueItem.nicho_principal,
+      nicho_secundario: queueItem.nicho_secundario,
+      keywords: queueItem.campaign_keywords || [],
+      service_description: queueItem.service_description,
+      target_audience: queueItem.target_audience,
+      client_name: queueItem.client_name,
+      project_name: queueItem.project_name,
+      preferred_channel: 'auto'
+    };
+
+    const generatedDM = await generatePersonalizedDM({
+      lead: leadProfile,
+      campaign: campaignContext,
+      channel: targetChannel,
+      tone: 'professional'
+    });
+
+    // 6. Criar/obter conversa
+    const conversation = await outreachAgentService.getOrCreateConversation(
+      campaign_id,
+      queueItem.lead_id,
+      {
+        username: queueItem.lead_username,
+        full_name: queueItem.lead_full_name,
+        bio: queueItem.lead_bio,
+        phone: queueItem.lead_phone
+      }
+    );
+
+    // 7. Preparar resposta base
+    const responseData = {
+      queue_id: queueItem.id,
+      lead_id: queueItem.lead_id,
+      conversation_id: conversation.id,
+      username: queueItem.lead_username,
+      full_name: queueItem.lead_full_name,
+      phone: queueItem.lead_phone,
+      channel: targetChannel,
+      campaign_name: queueItem.campaign_name,
+      message_text: generatedDM.message_text,
+      confidence_score: generatedDM.confidence_score
+    };
+
+    // 8. Se não for dry run, salvar e preparar para envio
+    if (!dry_run) {
+      // Salvar mensagem
+      await personalizedDMService.saveOutreachMessage(
+        queueItem.id,
+        queueItem.campaign_id,
+        queueItem.lead_id,
+        targetChannel,
+        generatedDM
+      );
+
+      // Salvar na conversa
+      await outreachAgentService.saveMessage(
+        conversation.id,
+        'outbound',
+        'ai',
+        generatedDM.message_text,
+        { detected_intent: 'first_contact' }
+      );
+
+      // Atualizar fila
+      await supabase
+        .from('campaign_outreach_queue')
+        .update({
+          message_text: generatedDM.message_text,
+          message_generated_by: generatedDM.message_generated_by,
+          personalization_data: generatedDM.personalization_data
+        })
+        .eq('id', queueItem.id);
+    }
+
+    // 9. Retornar dados para o N8N processar o envio real
+    return res.json({
+      success: true,
+      can_send: true,
+      has_item: true,
+      channel: targetChannel,
+      data: responseData,
+      // Dados específicos por canal para o N8N usar
+      send_via: {
+        channel: targetChannel,
+        ...(targetChannel === 'whatsapp' && {
+          session_id: whatsappSession?.id,
+          phone: queueItem.lead_phone
+        }),
+        ...(targetChannel === 'instagram_dm' && {
+          instagram_username: queueItem.lead_username
+        })
+      },
+      rate_status: {
+        hourly_remaining: rateStatus.hourly_remaining - 1,
+        daily_remaining: rateStatus.daily_remaining - 1
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /unified/send:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/unified/confirm-sent
+ * Confirma envio de mensagem (chamado pelo N8N após envio real)
+ */
+router.post('/unified/confirm-sent', async (req, res) => {
+  try {
+    const { queue_id, channel, delivery_status = 'sent', external_message_id } = req.body;
+
+    if (!queue_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'queue_id é obrigatório'
+      });
+    }
+
+    // Buscar campaign_id para incrementar rate limit
+    const { data: queueItem } = await supabase
+      .from('campaign_outreach_queue')
+      .select('campaign_id')
+      .eq('id', queue_id)
+      .single();
+
+    // Marcar como enviado na fila
+    await supabase
+      .from('campaign_outreach_queue')
+      .update({
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        delivery_status,
+        external_message_id,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', queue_id);
+
+    // Incrementar rate limit da campanha
+    if (queueItem?.campaign_id) {
+      await outreachAgentService.incrementRateLimit(queueItem.campaign_id);
+    }
+
+    console.log(`✅ [UNIFIED] Envio confirmado: ${queue_id} via ${channel}`);
+
+    return res.json({
+      success: true,
+      message: 'Envio confirmado'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /unified/confirm-sent:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/unified/handle-response
+ * Processa resposta recebida de qualquer canal
+ */
+router.post('/unified/handle-response', async (req, res) => {
+  try {
+    const {
+      campaign_id,
+      lead_id,
+      lead_username,
+      lead_full_name,
+      lead_bio,
+      lead_phone,
+      incoming_message,
+      channel  // 'instagram_dm' | 'whatsapp'
+    } = req.body;
+
+    if (!campaign_id || !incoming_message) {
+      return res.status(400).json({
+        success: false,
+        message: 'campaign_id e incoming_message são obrigatórios'
+      });
+    }
+
+    console.log(`\n📩 [UNIFIED] Resposta recebida via ${channel || 'unknown'}`);
+    console.log(`   Lead: @${lead_username}`);
+
+    // Usar o serviço existente de processamento
+    const result = await outreachAgentService.processLeadMessage(
+      campaign_id,
+      lead_id,
+      {
+        username: lead_username,
+        full_name: lead_full_name,
+        bio: lead_bio,
+        phone: lead_phone
+      },
+      incoming_message
+    );
+
+    return res.json({
+      success: result.success,
+      data: {
+        action: result.action,
+        response_message: result.response_message,
+        should_send_response: result.should_send_response,
+        conversation_id: result.conversation_id,
+        classification: result.classification,
+        channel
+      },
+      // Dados para N8N enviar resposta
+      send_response_via: result.should_send_response ? {
+        channel,
+        message_text: result.response_message,
+        ...(channel === 'whatsapp' && { phone: lead_phone }),
+        ...(channel === 'instagram_dm' && { username: lead_username })
+      } : null,
+      error: result.error_message
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /unified/handle-response:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// RESPONSE QUEUE MANAGEMENT
+// ============================================================================
+
+/**
+ * GET /api/outreach/response-queue/status
+ * Retorna status da fila de respostas
+ */
+router.get('/response-queue/status', async (req, res) => {
+  try {
+    const { campaign_id } = req.query;
+
+    const status = await getQueueStatus(campaign_id as string);
+    const workerStats = responseQueueWorker.getStats();
+
+    return res.json({
+      success: true,
+      data: {
+        queue: status,
+        worker: {
+          isRunning: workerStats.isRunning,
+          activeWorkers: workerStats.activeWorkers,
+          processed: workerStats.processed,
+          successful: workerStats.successful,
+          failed: workerStats.failed,
+          retried: workerStats.retried,
+          startedAt: workerStats.startedAt,
+          lastProcessedAt: workerStats.lastProcessedAt
+        }
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /response-queue/status:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/response-queue/enqueue
+ * Adiciona item à fila de respostas
+ */
+router.post('/response-queue/enqueue', async (req, res) => {
+  try {
+    const {
+      campaign_id,
+      lead_id,
+      channel,
+      message_type = 'text',
+      message_content,
+      recipient_identifier,
+      account_id,
+      priority = 5,
+      scheduled_for,
+      metadata = {}
+    } = req.body;
+
+    if (!campaign_id || !lead_id || !channel || !message_content || !recipient_identifier) {
+      return res.status(400).json({
+        success: false,
+        message: 'campaign_id, lead_id, channel, message_content e recipient_identifier são obrigatórios'
+      });
+    }
+
+    const result = await enqueueResponse({
+      campaignId: campaign_id,
+      leadId: lead_id,
+      channel,
+      messageType: message_type,
+      messageContent: message_content,
+      recipientIdentifier: recipient_identifier,
+      accountId: account_id,
+      priority,
+      scheduledFor: scheduled_for ? new Date(scheduled_for) : undefined,
+      metadata
+    });
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: result.error
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        queue_id: result.queueId
+      },
+      message: 'Item adicionado à fila'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /response-queue/enqueue:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/response-queue/worker/start
+ * Inicia o worker de processamento da fila
+ */
+router.post('/response-queue/worker/start', async (req, res) => {
+  try {
+    await responseQueueWorker.start();
+
+    return res.json({
+      success: true,
+      message: 'Worker iniciado'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao iniciar worker:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/response-queue/worker/stop
+ * Para o worker de processamento da fila
+ */
+router.post('/response-queue/worker/stop', async (req, res) => {
+  try {
+    await responseQueueWorker.stop();
+
+    return res.json({
+      success: true,
+      message: 'Worker parado'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao parar worker:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/response-queue/cleanup
+ * Limpa itens antigos da fila (completed/failed)
+ */
+router.post('/response-queue/cleanup', async (req, res) => {
+  try {
+    const { days_old = 30 } = req.body;
+
+    const deletedCount = await cleanupOldQueueItems(days_old);
+
+    return res.json({
+      success: true,
+      data: {
+        deleted_count: deletedCount
+      },
+      message: `${deletedCount} itens antigos removidos`
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /response-queue/cleanup:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// INSTAGRAM ACCOUNTS MANAGEMENT (Secure Credentials)
+// ============================================================================
+
+/**
+ * GET /api/outreach/instagram-accounts
+ * Lista contas Instagram cadastradas (sem credenciais)
+ */
+router.get('/instagram-accounts', async (req, res) => {
+  try {
+    const { campaign_id, status } = req.query;
+
+    let query = supabase
+      .from('instagram_accounts')
+      .select(`
+        id,
+        campaign_id,
+        account_name,
+        instagram_username,
+        status,
+        daily_follow_count,
+        daily_unfollow_count,
+        daily_dm_count,
+        hourly_follow_count,
+        last_action_at,
+        last_login_at,
+        session_expires_at,
+        created_at,
+        updated_at
+      `)
+      .order('created_at', { ascending: false });
+
+    if (campaign_id) {
+      query = query.eq('campaign_id', campaign_id);
+    }
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    return res.json({
+      success: true,
+      data: data || [],
+      count: data?.length || 0
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /instagram-accounts:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/instagram-accounts
+ * Cadastra nova conta Instagram (credenciais encriptadas)
+ */
+router.post('/instagram-accounts', async (req, res) => {
+  try {
+    const {
+      campaign_id,
+      account_name,
+      instagram_username,
+      password,
+      created_by = 'api'
+    } = req.body;
+
+    if (!campaign_id || !instagram_username || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'campaign_id, instagram_username e password são obrigatórios'
+      });
+    }
+
+    // Verificar se campanha existe
+    const { data: campaign, error: campaignError } = await supabase
+      .from('cluster_campaigns')
+      .select('id, campaign_name')
+      .eq('id', campaign_id)
+      .single();
+
+    if (campaignError || !campaign) {
+      return res.status(404).json({
+        success: false,
+        message: 'Campanha não encontrada'
+      });
+    }
+
+    // Verificar se já existe conta com mesmo username para esta campanha
+    const { data: existing } = await supabase
+      .from('instagram_accounts')
+      .select('id')
+      .eq('campaign_id', campaign_id)
+      .eq('instagram_username', instagram_username)
+      .single();
+
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        message: 'Já existe uma conta com este username para esta campanha'
+      });
+    }
+
+    // Criar conta com credenciais encriptadas
+    const accountId = await credentialsVault.createInstagramAccount(
+      campaign_id,
+      account_name || `Instagram - ${instagram_username}`,
+      instagram_username,
+      password,
+      created_by
+    );
+
+    if (!accountId) {
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao criar conta Instagram'
+      });
+    }
+
+    console.log(`✅ [INSTAGRAM] Conta cadastrada: @${instagram_username} para campanha ${campaign_id}`);
+
+    return res.json({
+      success: true,
+      data: {
+        account_id: accountId,
+        instagram_username
+      },
+      message: 'Conta Instagram cadastrada com sucesso'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao cadastrar conta Instagram:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/outreach/instagram-accounts/:account_id/password
+ * Atualiza senha de conta Instagram
+ */
+router.put('/instagram-accounts/:account_id/password', async (req, res) => {
+  try {
+    const { account_id } = req.params;
+    const { password, updated_by = 'api' } = req.body;
+
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        message: 'password é obrigatório'
+      });
+    }
+
+    const success = await credentialsVault.updateInstagramPassword(
+      account_id,
+      password,
+      updated_by
+    );
+
+    if (!success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao atualizar senha'
+      });
+    }
+
+    console.log(`✅ [INSTAGRAM] Senha atualizada para conta ${account_id}`);
+
+    return res.json({
+      success: true,
+      message: 'Senha atualizada com sucesso'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao atualizar senha:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/outreach/instagram-accounts/:account_id/status
+ * Atualiza status de conta Instagram
+ */
+router.put('/instagram-accounts/:account_id/status', async (req, res) => {
+  try {
+    const { account_id } = req.params;
+    const { status, notes } = req.body;
+
+    if (!status || !['active', 'inactive', 'suspended', 'rate_limited'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'status inválido. Use: active, inactive, suspended ou rate_limited'
+      });
+    }
+
+    const { error } = await supabase
+      .from('instagram_accounts')
+      .update({
+        status,
+        notes: notes || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', account_id);
+
+    if (error) throw error;
+
+    console.log(`✅ [INSTAGRAM] Status atualizado para ${status}: conta ${account_id}`);
+
+    return res.json({
+      success: true,
+      message: `Status atualizado para ${status}`
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao atualizar status:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/outreach/instagram-accounts/:account_id/rate-limit
+ * Verifica rate limit de conta Instagram
+ */
+router.get('/instagram-accounts/:account_id/rate-limit', async (req, res) => {
+  try {
+    const { account_id } = req.params;
+
+    const rateLimit = await credentialsVault.checkRateLimit(account_id);
+
+    return res.json({
+      success: true,
+      data: rateLimit
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao verificar rate limit:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/outreach/instagram-accounts/:account_id
+ * Remove conta Instagram (soft delete - marca como inactive)
+ */
+router.delete('/instagram-accounts/:account_id', async (req, res) => {
+  try {
+    const { account_id } = req.params;
+    const { hard_delete = false } = req.query;
+
+    if (hard_delete === 'true') {
+      // Hard delete - remove completamente
+      const { error } = await supabase
+        .from('instagram_accounts')
+        .delete()
+        .eq('id', account_id);
+
+      if (error) throw error;
+
+      console.log(`🗑️ [INSTAGRAM] Conta removida permanentemente: ${account_id}`);
+    } else {
+      // Soft delete - marca como inactive
+      const { error } = await supabase
+        .from('instagram_accounts')
+        .update({
+          status: 'inactive',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', account_id);
+
+      if (error) throw error;
+
+      console.log(`🗑️ [INSTAGRAM] Conta desativada: ${account_id}`);
+    }
+
+    return res.json({
+      success: true,
+      message: hard_delete === 'true' ? 'Conta removida permanentemente' : 'Conta desativada'
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao remover conta:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/outreach/instagram-accounts/:account_id/access-log
+ * Retorna log de acessos às credenciais (auditoria)
+ */
+router.get('/instagram-accounts/:account_id/access-log', async (req, res) => {
+  try {
+    const { account_id } = req.params;
+    const { limit = 50 } = req.query;
+
+    const { data, error } = await supabase
+      .from('credentials_access_log')
+      .select('*')
+      .eq('account_id', account_id)
+      .order('accessed_at', { ascending: false })
+      .limit(parseInt(limit as string));
+
+    if (error) throw error;
+
+    return res.json({
+      success: true,
+      data: data || [],
+      count: data?.length || 0
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao buscar log de acessos:', error);
     return res.status(500).json({
       success: false,
       message: error.message

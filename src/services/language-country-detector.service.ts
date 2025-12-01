@@ -215,6 +215,23 @@ export async function detectLanguage(
     };
   }
 
+  // ========================================
+  // PASSO 0: Verificar BRAZILIAN_LOCATIONS ANTES de tudo (mais confiável)
+  // ========================================
+  const lowerBio = bio.toLowerCase();
+  let hasBrazilianLocation = false;
+  for (const location of BRAZILIAN_LOCATIONS) {
+    if (lowerBio.includes(location)) {
+      hasBrazilianLocation = true;
+      console.log(`   🇧🇷 Localização brasileira detectada: "${location}" - forçando português`);
+      return {
+        language: 'pt',
+        confidence: 'high',
+        method: 'franc'
+      };
+    }
+  }
+
   // Normaliza o texto
   const normalizedBio = normalizeText(bio);
 

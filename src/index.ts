@@ -778,6 +778,16 @@ try {
   console.error("❌ Failed to load Campaign Pipeline routes:", error);
 }
 
+// Whapi.cloud Routes - WhatsApp integration via API (replaces Puppeteer)
+try {
+  const whapiRoutes = require('./routes/whapi.routes');
+  const router = 'default' in whapiRoutes ? whapiRoutes.default : whapiRoutes;
+  app.use('/api/whapi', router);
+  console.log('✅ Whapi.cloud routes loaded - WHATSAPP API INTEGRATION READY');
+} catch (error) {
+  console.error("❌ Failed to load Whapi.cloud routes:", error);
+}
+
 // Define o caminho para a pasta frontend de forma explícita e segura
 const candidatePaths: string[] = [
   path.join(process.cwd(), 'src', 'frontend'),
@@ -859,6 +869,11 @@ app.get('/forgot-password', (_req, res) => {
 
 app.get('/privacy', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'privacy.html'));
+});
+
+// WhatsApp Sessions Management (AIC Admin)
+app.get('/whatsapp-sessions', (_req, res) => {
+  res.sendFile(path.join(frontendPath, 'whatsapp-sessions.html'));
 });
 
 app.get('/domain-details', (_req, res) => {

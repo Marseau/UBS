@@ -1,21 +1,21 @@
 import { supabase } from '../config/database';
 
+/**
+ * Interface para registrar ações em account_actions
+ * Estrutura simplificada alinhada com migration 057
+ */
 interface AccountAction {
   id?: string;
-  source_platform?: string;
   lead_id?: string | null;
+  campaign_id?: string | null;  // ID da campanha (sistema AIC)
   username: string;
   action_type: string;
-  post_id?: string | null;
-  media_id?: string | null;
-  comment_text?: string | null;
-  dm_text?: string | null;
-  executed_at?: string | null;
-  execution_method?: string | null;
+  source_platform?: string;     // instagram, whatsapp, etc.
   success?: boolean;
   error_message?: string | null;
-  retry_count?: number;
-  daily_action_count?: number;
+  // Campos opcionais para contexto (não persistidos)
+  comment_text?: string | null;
+  dm_text?: string | null;
 }
 
 interface LeadInfo {
@@ -60,24 +60,18 @@ export class AccountActionsNotifierService {
         }
       }
 
-      // 2. Inserir ação no banco
+      // 2. Inserir ação no banco (estrutura simplificada - migration 057)
       const { data: insertedAction, error: insertError } = await supabase
         .from('account_actions')
         .insert({
-          source_platform: action.source_platform || 'instagram',
           lead_id: action.lead_id,
+          campaign_id: action.campaign_id,
           username: action.username,
           action_type: action.action_type,
-          post_id: action.post_id,
-          media_id: action.media_id,
-          comment_text: action.comment_text,
-          dm_text: action.dm_text,
-          executed_at: action.executed_at || new Date().toISOString(),
-          execution_method: action.execution_method || 'manual',
+          source_platform: action.source_platform || 'instagram',
           success: action.success !== false, // Default true
           error_message: action.error_message,
-          retry_count: action.retry_count || 0,
-          daily_action_count: action.daily_action_count || 1,
+          created_at: new Date().toISOString()
         })
         .select()
         .single();
@@ -146,21 +140,15 @@ export class AccountActionsNotifierService {
         }
         break;
       case 'dm':
+      case 'whatsapp_sent':
         if (action.dm_text) {
           message += `\n📨 *Mensagem:*\n_"${action.dm_text}"_\n`;
         }
         break;
-      case 'like':
-        if (action.post_id) {
-          message += `\n🔗 *Post:* ${action.post_id}\n`;
-        }
-        break;
     }
 
-    // Método de execução
-    const methodEmoji = action.execution_method === 'puppeteer' ? '🤖' :
-                       action.execution_method === 'graph_api' ? '⚡' : '👤';
-    message += `\n${methodEmoji} *Método:* ${action.execution_method || 'manual'}\n`;
+    // Método de execução (sempre Puppeteer no sistema AIC)
+    message += `\n🤖 *Método:* Puppeteer\n`;
 
     // Status
     if (action.success === false && action.error_message) {
@@ -169,11 +157,6 @@ export class AccountActionsNotifierService {
 
     // Timestamp
     message += `\n🕐 *Data/Hora:* ${timestamp}`;
-
-    // Contador diário
-    if (action.daily_action_count && action.daily_action_count > 1) {
-      message += `\n📊 *Ação #${action.daily_action_count} hoje*`;
-    }
 
     return message;
   }
@@ -267,13 +250,17 @@ export class AccountActionsNotifierService {
    * Busca contador de ações de hoje
    */
   static async getTodayActionCount(actionType: string): Promise<number> {
-    const { data } = await supabase
-      .from('account_actions_today_count')
-      .select('count_today')
-      .eq('action_type', actionType)
-      .single();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    return data?.count_today || 0;
+    const { count } = await supabase
+      .from('account_actions')
+      .select('*', { count: 'exact', head: true })
+      .eq('action_type', actionType)
+      .eq('success', true)
+      .gte('created_at', today.toISOString());
+
+    return count || 0;
   }
 
   /**

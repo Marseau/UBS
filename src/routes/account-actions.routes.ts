@@ -14,11 +14,9 @@ router.post('/account-action', async (req: Request, res: Response) => {
       username,
       action_type,
       lead_id,
-      post_id,
-      media_id,
+      campaign_id,
       comment_text,
       dm_text,
-      execution_method,
       success,
       error_message,
     } = req.body;
@@ -30,7 +28,11 @@ router.post('/account-action', async (req: Request, res: Response) => {
       });
     }
 
-    const validActionTypes = ['follow', 'unfollow', 'like', 'comment', 'dm', 'mention', 'story_view'];
+    const validActionTypes = [
+      'follow', 'unfollow', 'like', 'comment', 'dm', 'story_view',
+      'like_received', 'comment_received', 'follow_received', 'dm_received',
+      'whatsapp_sent', 'whatsapp_received', 'mention_received'
+    ];
     if (!validActionTypes.includes(action_type)) {
       return res.status(400).json({
         error: `Invalid action_type. Must be one of: ${validActionTypes.join(', ')}`,
@@ -40,20 +42,17 @@ router.post('/account-action', async (req: Request, res: Response) => {
     // Buscar contador diário atual
     const todayCount = await AccountActionsNotifierService.getTodayActionCount(action_type);
 
-    // Registrar ação e retornar dados completos
+    // Registrar ação e retornar dados completos (estrutura simplificada)
     const result = await AccountActionsNotifierService.recordAndNotify({
       source_platform: source_platform || 'instagram',
       username,
       action_type,
       lead_id,
-      post_id,
-      media_id,
-      comment_text,
-      dm_text,
-      execution_method: execution_method || 'manual',
+      campaign_id,
+      comment_text, // Usado apenas para formatação de mensagem
+      dm_text,      // Usado apenas para formatação de mensagem
       success: success !== false, // Default true
       error_message,
-      daily_action_count: todayCount + 1,
     });
 
     return res.status(200).json({

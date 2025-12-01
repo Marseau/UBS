@@ -560,7 +560,7 @@ router.post('/chats/:chatId/read', async (req: Request, res: Response): Promise<
  *   "phones_normalized": [
  *     { "number": "+5511999999999", "valid_whatsapp": true },
  *     { "number": "+5511888888888", "valid_whatsapp": true },
- *     { "number": "+5511777777777" }
+ *     { "number": "+5511777777777", "valid_whatsapp": false }
  *   ]
  * }
  */
@@ -616,7 +616,7 @@ router.post('/validate-lead-phones', async (req: Request, res: Response): Promis
 
     // 3. Validar cada telefone via Whapi
     const whapiClient = getWhapiClient();
-    const validatedPhones: Array<{ number: string; valid_whatsapp?: true }> = [];
+    const validatedPhones: Array<{ number: string; valid_whatsapp: boolean }> = [];
     let withWhatsApp = 0;
     let withoutWhatsApp = 0;
 
@@ -625,20 +625,20 @@ router.post('/validate-lead-phones', async (req: Request, res: Response): Promis
         const contact = await whapiClient.checkNumber(phone);
         const hasWhatsApp = contact?.status === 'valid';
 
+        validatedPhones.push({ number: phone, valid_whatsapp: hasWhatsApp });
+
         if (hasWhatsApp) {
-          validatedPhones.push({ number: phone, valid_whatsapp: true });
           withWhatsApp++;
         } else {
-          validatedPhones.push({ number: phone });
           withoutWhatsApp++;
         }
 
         // Delay de 300ms entre verificações
         await new Promise(r => setTimeout(r, 300));
       } catch (error: any) {
-        // Em caso de erro, mantém o telefone sem validação
+        // Em caso de erro, marca como false (não validado)
         console.error(`[Whapi] Erro ao validar ${phone}:`, error.message);
-        validatedPhones.push({ number: phone });
+        validatedPhones.push({ number: phone, valid_whatsapp: false });
         withoutWhatsApp++;
       }
     }

@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Sessions - AIC Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .qr-container { min-height: 300px; }
+    .status-connected { color: #10b981; }
+    .status-disconnected { color: #ef4444; }
+    .status-qr_pending { color: #f59e0b; }
+    .status-expired { color: #6b7280; }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+  <div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold mb-2">WhatsApp Sessions</h1>
+      <p class="text-gray-400">Gerenciamento de sessões WhatsApp para campanhas AIC</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div class="bg-gray-800 rounded-lg p-4">
+        <div class="text-2xl font-bold" id="stat-total">0</div>
+        <div class="text-gray-400 text-sm">Sessões Totais</div>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4">
+        <div class="text-2xl font-bold text-green-500" id="stat-connected">0</div>
+        <div class="text-gray-400 text-sm">Conectadas</div>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4">
+        <div class="text-2xl font-bold text-yellow-500" id="stat-pending">0</div>
+        <div class="text-gray-400 text-sm">Aguardando QR</div>
+      </div>
+      <div class="bg-gray-800 rounded-lg p-4">
+        <div class="text-2xl font-bold text-red-500" id="stat-disconnected">0</div>
+        <div class="text-gray-400 text-sm">Desconectadas</div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex gap-4 mb-8">
+      <button onclick="refreshSessions()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+        Atualizar
+      </button>
+      <button onclick="showNewSessionModal()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+        Nova Sessão
+      </button>
+      <button onclick="startHeartbeat()" class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+        </svg>
+        Iniciar Heartbeat
+      </button>
+    </div>
+
+    <!-- Sessions Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6" id="sessions-grid">
+      <div class="bg-gray-800 rounded-lg p-8 text-center text-gray-400">
+        Carregando sessões...
+      </div>
+    </div>
+
+    <!-- QR Code Modal -->
+    <div id="qr-modal" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center z-50">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-xl font-bold">Escanear QR Code</h3>
+          <button onclick="closeQRModal()" class="text-gray-400 hover:text-white">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="qr-container flex items-center justify-center bg-white rounded-lg p-4 mb-4">
+          <div id="qr-code-display" class="text-gray-800">Gerando QR Code...</div>
+        </div>
+        <div class="text-center">
+          <p class="text-sm text-gray-400 mb-2">Campanha: <span id="qr-campaign-name" class="text-white">-</span></p>
+          <p class="text-sm text-yellow-500" id="qr-expiry">Expira em: --</p>
+        </div>
+        <div class="mt-4 flex gap-2">
+          <button onclick="regenerateQR()" class="flex-1 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg">
+            Gerar Novo QR
+          </button>
+          <button onclick="closeQRModal()" class="flex-1 bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- New Session Modal -->
+    <div id="new-session-modal" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center z-50">
+      <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-xl font-bold">Nova Sessão WhatsApp</h3>
+          <button onclick="closeNewSessionModal()" class="text-gray-400 hover:text-white">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium mb-2">Campanha</label>
+            <select id="campaign-select" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+              <option value="">Carregando campanhas...</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">Nome da Sessão (opcional)</label>
+            <input type="text" id="session-name" placeholder="WhatsApp - Campanha X"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+          </div>
+        </div>
+        <div class="mt-6 flex gap-2">
+          <button onclick="createNewSession()" class="flex-1 bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg">
+            Criar e Gerar QR
+          </button>
+          <button onclick="closeNewSessionModal()" class="flex-1 bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    let currentSessionId = null;
+    let qrExpiryInterval = null;
+
+    // Load sessions on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      refreshSessions();
+      loadCampaigns();
+    });
+
+    async function refreshSessions() {
+      try {
+        const response = await fetch(`${API_BASE}/api/outreach/whatsapp-sessions`);
+        const result = await response.json();
+
+        if (result.success) {
+          renderSessions(result.data);
+          updateStats(result.data);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar sessões:', error);
+        document.getElementById('sessions-grid').innerHTML = `
+          <div class="bg-gray-800 rounded-lg p-8 text-center text-red-400">
+            Erro ao carregar sessões: ${error.message}
+          </div>
+        `;
+      }
+    }
+
+    function updateStats(sessions) {
+      const total = sessions.length;
+      const connected = sessions.filter(s => s.status === 'connected').length;
+      const pending = sessions.filter(s => s.status === 'qr_pending').length;
+      const disconnected = sessions.filter(s => s.status === 'disconnected' || s.status === 'expired').length;
+
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stat-connected').textContent = connected;
+      document.getElementById('stat-pending').textContent = pending;
+      document.getElementById('stat-disconnected').textContent = disconnected;
+    }
+
+    function renderSessions(sessions) {
+      const grid = document.getElementById('sessions-grid');
+
+      if (sessions.length === 0) {
+        grid.innerHTML = `
+          <div class="bg-gray-800 rounded-lg p-8 text-center text-gray-400 col-span-2">
+            <p class="mb-4">Nenhuma sessão configurada</p>
+            <button onclick="showNewSessionModal()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg">
+              Criar Primeira Sessão
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = sessions.map(session => `
+        <div class="bg-gray-800 rounded-lg p-6">
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <h3 class="font-bold text-lg">${session.sessionId?.slice(0, 8) || 'N/A'}...</h3>
+              <p class="text-sm text-gray-400">Campaign: ${session.campaignId?.slice(0, 8) || 'N/A'}...</p>
+            </div>
+            <span class="status-${session.status} font-medium px-2 py-1 rounded bg-gray-700">
+              ${getStatusLabel(session.status)}
+            </span>
+          </div>
+
+          <div class="space-y-2 text-sm mb-4">
+            <div class="flex justify-between">
+              <span class="text-gray-400">Telefone:</span>
+              <span>${session.phoneNumber || 'Não conectado'}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-400">Msgs/Hora:</span>
+              <span>${session.hourlyCount}/${session.hourlyLimit} (${session.hourlyRemaining} restantes)</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-400">Msgs/Dia:</span>
+              <span>${session.dailyCount}/${session.dailyLimit} (${session.dailyRemaining} restantes)</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-400">Pode Enviar:</span>
+              <span class="${session.canSend ? 'text-green-500' : 'text-red-500'}">${session.canSend ? 'Sim' : 'Não'}</span>
+            </div>
+          </div>
+
+          <div class="flex gap-2">
+            ${session.status !== 'connected' ? `
+              <button onclick="generateQR('${session.sessionId}')" class="flex-1 bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded text-sm">
+                Gerar QR
+              </button>
+            ` : ''}
+            <button onclick="closeSession('${session.sessionId}')" class="flex-1 bg-red-600 hover:bg-red-700 px-3 py-2 rounded text-sm">
+              Fechar
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function getStatusLabel(status) {
+      const labels = {
+        'connected': 'Conectado',
+        'disconnected': 'Desconectado',
+        'qr_pending': 'Aguardando QR',
+        'connecting': 'Conectando...',
+        'expired': 'Expirado',
+        'banned': 'Banido'
+      };
+      return labels[status] || status;
+    }
+
+    async function loadCampaigns() {
+      try {
+        const response = await fetch(`${API_BASE}/api/outreach/campaigns`);
+        const result = await response.json();
+
+        if (result.success) {
+          const select = document.getElementById('campaign-select');
+          select.innerHTML = '<option value="">Selecione uma campanha</option>' +
+            result.data.map(c => `<option value="${c.id}">${c.campaign_name} (${c.cluster_projects?.client_name || 'N/A'})</option>`).join('');
+        }
+      } catch (error) {
+        console.error('Erro ao carregar campanhas:', error);
+      }
+    }
+
+    function showNewSessionModal() {
+      document.getElementById('new-session-modal').classList.remove('hidden');
+      document.getElementById('new-session-modal').classList.add('flex');
+    }
+
+    function closeNewSessionModal() {
+      document.getElementById('new-session-modal').classList.add('hidden');
+      document.getElementById('new-session-modal').classList.remove('flex');
+    }
+
+    async function createNewSession() {
+      const campaignId = document.getElementById('campaign-select').value;
+      const sessionName = document.getElementById('session-name').value;
+
+      if (!campaignId) {
+        alert('Selecione uma campanha');
+        return;
+      }
+
+      try {
+        // Criar sessão
+        const createResponse = await fetch(`${API_BASE}/api/outreach/whatsapp-sessions/create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ campaign_id: campaignId, session_name: sessionName })
+        });
+        const createResult = await createResponse.json();
+
+        if (createResult.success) {
+          closeNewSessionModal();
+          // Gerar QR automaticamente
+          generateQR(createResult.data.session_id);
+          refreshSessions();
+        } else {
+          alert('Erro: ' + createResult.message);
+        }
+      } catch (error) {
+        alert('Erro ao criar sessão: ' + error.message);
+      }
+    }
+
+    async function generateQR(sessionId) {
+      currentSessionId = sessionId;
+
+      document.getElementById('qr-modal').classList.remove('hidden');
+      document.getElementById('qr-modal').classList.add('flex');
+      document.getElementById('qr-code-display').innerHTML = 'Gerando QR Code...';
+
+      try {
+        const response = await fetch(`${API_BASE}/api/outreach/whatsapp-sessions/start-qr`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId })
+        });
+        const result = await response.json();
+
+        if (result.already_connected) {
+          document.getElementById('qr-code-display').innerHTML = `
+            <div class="text-green-600 text-center">
+              <svg class="w-24 h-24 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              <p class="font-bold">Já Conectado!</p>
+            </div>
+          `;
+          document.getElementById('qr-expiry').textContent = '';
+          refreshSessions();
+          return;
+        }
+
+        if (result.success && result.data.qr_code) {
+          document.getElementById('qr-code-display').innerHTML = `
+            <img src="${result.data.qr_code}" alt="QR Code" class="max-w-full">
+          `;
+
+          // Start expiry countdown
+          startExpiryCountdown(result.data.expires_in_seconds);
+
+          // Poll for connection
+          pollConnectionStatus(sessionId);
+        } else {
+          document.getElementById('qr-code-display').innerHTML = `
+            <div class="text-red-600 text-center">
+              <p>Erro ao gerar QR Code</p>
+              <p class="text-sm">${result.message || 'Tente novamente'}</p>
+            </div>
+          `;
+        }
+      } catch (error) {
+        document.getElementById('qr-code-display').innerHTML = `
+          <div class="text-red-600 text-center">
+            <p>Erro: ${error.message}</p>
+          </div>
+        `;
+      }
+    }
+
+    function startExpiryCountdown(seconds) {
+      let remaining = seconds;
+
+      if (qrExpiryInterval) clearInterval(qrExpiryInterval);
+
+      qrExpiryInterval = setInterval(() => {
+        remaining--;
+        document.getElementById('qr-expiry').textContent = `Expira em: ${remaining}s`;
+
+        if (remaining <= 0) {
+          clearInterval(qrExpiryInterval);
+          document.getElementById('qr-expiry').textContent = 'QR Code expirado';
+          document.getElementById('qr-code-display').innerHTML = `
+            <div class="text-yellow-600 text-center">
+              <p class="font-bold">QR Code Expirado</p>
+              <p class="text-sm">Clique em "Gerar Novo QR"</p>
+            </div>
+          `;
+        }
+      }, 1000);
+    }
+
+    async function pollConnectionStatus(sessionId) {
+      const checkInterval = setInterval(async () => {
+        try {
+          const response = await fetch(`${API_BASE}/api/outreach/whatsapp-sessions/${sessionId}`);
+          const result = await response.json();
+
+          if (result.success && result.data.status === 'connected') {
+            clearInterval(checkInterval);
+            if (qrExpiryInterval) clearInterval(qrExpiryInterval);
+
+            document.getElementById('qr-code-display').innerHTML = `
+              <div class="text-green-600 text-center">
+                <svg class="w-24 h-24 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <p class="font-bold">Conectado!</p>
+                <p class="text-sm">${result.data.phoneNumber || ''}</p>
+              </div>
+            `;
+            document.getElementById('qr-expiry').textContent = '';
+            refreshSessions();
+          }
+        } catch (error) {
+          console.error('Erro ao verificar status:', error);
+        }
+      }, 2000);
+
+      // Stop polling after 2 minutes
+      setTimeout(() => clearInterval(checkInterval), 120000);
+    }
+
+    function regenerateQR() {
+      if (currentSessionId) {
+        generateQR(currentSessionId);
+      }
+    }
+
+    function closeQRModal() {
+      document.getElementById('qr-modal').classList.add('hidden');
+      document.getElementById('qr-modal').classList.remove('flex');
+      if (qrExpiryInterval) clearInterval(qrExpiryInterval);
+      currentSessionId = null;
+    }
+
+    async function closeSession(sessionId) {
+      if (!confirm('Fechar esta sessão? O WhatsApp será desconectado.')) return;
+
+      try {
+        const response = await fetch(`${API_BASE}/api/outreach/whatsapp-sessions/close`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+          refreshSessions();
+        } else {
+          alert('Erro: ' + result.message);
+        }
+      } catch (error) {
+        alert('Erro ao fechar sessão: ' + error.message);
+      }
+    }
+
+    async function startHeartbeat() {
+      try {
+        const response = await fetch(`${API_BASE}/api/outreach/whatsapp-sessions/start-heartbeat`, {
+          method: 'POST'
+        });
+        const result = await response.json();
+
+        if (result.success) {
+          alert('Heartbeat iniciado! As sessões serão monitoradas automaticamente.');
+        } else {
+          alert('Erro: ' + result.message);
+        }
+      } catch (error) {
+        alert('Erro ao iniciar heartbeat: ' + error.message);
+      }
+    }
+
+    // Auto-refresh every 30 seconds
+    setInterval(refreshSessions, 30000);
+  </script>
+</body>
+</html>
