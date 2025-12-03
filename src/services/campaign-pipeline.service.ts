@@ -50,6 +50,11 @@ export interface CampaignData {
   target_location?: string;
   preferred_channel?: string;
   analysis_result?: any;
+  // Configurações de outreach - limite aplicado no final do pipeline
+  outreach_enabled?: boolean;
+  outreach_daily_limit?: number;
+  outreach_hourly_limit?: number;
+  total_leads_in_campaign?: number;
 }
 
 export interface Persona {
@@ -711,16 +716,21 @@ export async function executeCampaignPipeline(
     });
 
     // 6. Popular fila de outreach (se não skipado)
+    // Limite é determinado por: parâmetro maxLeads > campaign.outreach_daily_limit > default 2000
     let queuedCount = 0;
     if (!skipOutreachQueue) {
+      // Usar limite da campanha se disponível, senão usar parâmetro ou default
+      const effectiveLimit = maxLeads || campaign.outreach_daily_limit || 2000;
       console.log(`\n📬 Populando fila de outreach (canal: ${channel})...`);
+      console.log(`   📊 Limite efetivo: ${effectiveLimit} leads (campaign.outreach_daily_limit: ${campaign.outreach_daily_limit || 'não definido'})`);
+
       queuedCount = await populateOutreachQueue(
         campaignId,
         channel,
         subclusters,
         clusterToSubclusterId,
         clusteringResult.lead_associations,
-        maxLeads
+        effectiveLimit
       );
       console.log(`   ✅ ${queuedCount} leads na fila de outreach`);
     }

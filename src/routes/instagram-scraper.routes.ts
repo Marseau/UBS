@@ -1107,6 +1107,7 @@ router.get('/status', (req: Request, res: Response) => {
       'POST /scrape-followers': 'Scrape seguidores de concorrente - gera leads B2C',
       'POST /scrape-input-users': 'Scrape lista específica de usernames',
       'POST /scrape-url': 'Extrai emails/telefones de URLs',
+      'GET /url-scraper-stats': 'Estatísticas do URL scraper (concorrência, fila, cache)',
       'POST /cleanup-pages': 'Limpa todas as páginas abertas SEM fechar o browser',
       'POST /close-browser': 'Fechar browser Puppeteer',
       'GET /debug-page': 'Debug: mostra elementos da página atual',
@@ -1208,6 +1209,40 @@ router.get('/debug-page', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao debugar página',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/instagram-scraper/url-scraper-stats
+ * Retorna estatísticas do sistema de scraping de URLs
+ * - Scrapers ativos vs limite máximo
+ * - Quantidade na fila de espera
+ * - Tamanho do cache
+ */
+router.get('/url-scraper-stats', async (req: Request, res: Response) => {
+  try {
+    const stats = UrlScraperService.getConcurrencyStats();
+
+    return res.status(200).json({
+      success: true,
+      scraper_status: stats.active >= stats.maxConcurrent ? 'busy' : 'available',
+      stats: {
+        active_scrapers: stats.active,
+        max_concurrent: stats.maxConcurrent,
+        queued_requests: stats.queued,
+        cache_entries: stats.cacheSize,
+        available_slots: stats.maxConcurrent - stats.active
+      },
+      message: stats.active >= stats.maxConcurrent
+        ? `Sistema ocupado - ${stats.queued} requisições na fila`
+        : `Sistema disponível - ${stats.maxConcurrent - stats.active} slots livres`
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao obter estatísticas',
       error: error.message
     });
   }

@@ -34,6 +34,91 @@ export class UrlScraperService {
   private static cleanupTimer: NodeJS.Timeout | null = null;
   private static readonly CLEANUP_TIMEOUT_MS = 300000; // 5 minutes
 
+  // Controle de concorrência
+  private static activeScrapers: number = 0;
+  private static readonly MAX_CONCURRENT_SCRAPERS: number = 2; // Máximo 2 scrapes simultâneos
+  private static scrapeQueue: Array<{
+    url: string;
+    resolve: (value: ScrapedContacts) => void;
+    reject: (reason: any) => void;
+  }> = [];
+  private static isProcessingQueue: boolean = false;
+
+  // Cache de URLs já scrapeadas (evita reprocessamento)
+  private static urlCache: Map<string, { result: ScrapedContacts; timestamp: number }> = new Map();
+  private static readonly CACHE_TTL_MS = 3600000; // 1 hora de cache
+
+  /**
+   * Verifica se URL está no cache e ainda é válida
+   */
+  private static getCachedResult(url: string): ScrapedContacts | null {
+    const cached = this.urlCache.get(url);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL_MS) {
+      console.log(`📦 [URL-SCRAPER] Cache hit para: ${url.substring(0, 50)}...`);
+      return cached.result;
+    }
+    return null;
+  }
+
+  /**
+   * Salva resultado no cache
+   */
+  private static setCachedResult(url: string, result: ScrapedContacts): void {
+    this.urlCache.set(url, { result, timestamp: Date.now() });
+    // Limpar cache antigo periodicamente
+    if (this.urlCache.size > 1000) {
+      const now = Date.now();
+      for (const [key, value] of this.urlCache) {
+        if (now - value.timestamp > this.CACHE_TTL_MS) {
+          this.urlCache.delete(key);
+        }
+      }
+    }
+  }
+
+  /**
+   * Retorna estatísticas de concorrência
+   */
+  static getConcurrencyStats(): { active: number; queued: number; cacheSize: number; maxConcurrent: number } {
+    return {
+      active: this.activeScrapers,
+      queued: this.scrapeQueue.length,
+      cacheSize: this.urlCache.size,
+      maxConcurrent: this.MAX_CONCURRENT_SCRAPERS,
+    };
+  }
+
+  /**
+   * Processa próximo item da fila
+   */
+  private static async processQueue(): Promise<void> {
+    if (this.isProcessingQueue) return;
+    this.isProcessingQueue = true;
+
+    while (this.scrapeQueue.length > 0 && this.activeScrapers < this.MAX_CONCURRENT_SCRAPERS) {
+      const item = this.scrapeQueue.shift();
+      if (item) {
+        this.activeScrapers++;
+        console.log(`🔄 [URL-SCRAPER] Processando da fila (${this.activeScrapers}/${this.MAX_CONCURRENT_SCRAPERS} ativos, ${this.scrapeQueue.length} na fila)`);
+
+        this.doScrapeUrl(item.url)
+          .then(result => {
+            this.activeScrapers--;
+            this.setCachedResult(item.url, result); // Salvar no cache
+            item.resolve(result);
+            this.processQueue(); // Continuar processando fila
+          })
+          .catch(error => {
+            this.activeScrapers--;
+            item.reject(error);
+            this.processQueue();
+          });
+      }
+    }
+
+    this.isProcessingQueue = false;
+  }
+
   /**
    * Get or create shared browser instance
    * Always runs in headless mode (no visual browser)
@@ -543,29 +628,77 @@ export class UrlScraperService {
   }
 
   /**
-   * Scrape URL and extract contact information using comprehensive cascading strategy
-   * 1. Main page (HTML + visible text)
-   * 2. Facebook page (if link found and no contacts yet)
-   * 3. YouTube channel (if link found and no contacts yet)
+   * Normaliza URL (extrai URL real de redirects Instagram)
+   */
+  private static normalizeUrl(url: string): string {
+    if (url.includes('l.instagram.com')) {
+      try {
+        const urlParams = new URL(url);
+        const realUrl = urlParams.searchParams.get('u');
+        if (realUrl) {
+          const normalized = decodeURIComponent(realUrl);
+          console.log(`🔗 [URL-SCRAPER] Instagram redirect detectado, URL real: ${normalized.substring(0, 60)}...`);
+          return normalized;
+        }
+      } catch (e) {
+        // Ignorar erros de parsing
+      }
+    }
+    return url;
+  }
+
+  /**
+   * Scrape URL with concurrency control and caching
+   * - Limits to MAX_CONCURRENT_SCRAPERS simultaneous operations
+   * - Caches results for 1 hour
+   * - Uses queue for excess requests
    *
    * @param url - URL to scrape (must be valid HTTP/HTTPS)
    * @returns ScrapedContacts object with emails, phones and metadata
    */
   static async scrapeUrl(url: string): Promise<ScrapedContacts> {
+    // 1. Normalizar URL
+    const normalizedUrl = this.normalizeUrl(url);
+
+    // 2. Verificar cache
+    const cached = this.getCachedResult(normalizedUrl);
+    if (cached) {
+      return cached;
+    }
+
+    // 3. Se abaixo do limite, processar imediatamente
+    if (this.activeScrapers < this.MAX_CONCURRENT_SCRAPERS) {
+      this.activeScrapers++;
+      console.log(`🔍 [URL-SCRAPER] Processando direto (${this.activeScrapers}/${this.MAX_CONCURRENT_SCRAPERS} ativos)`);
+
+      try {
+        const result = await this.doScrapeUrl(normalizedUrl);
+        this.setCachedResult(normalizedUrl, result);
+        return result;
+      } finally {
+        this.activeScrapers--;
+        this.processQueue(); // Processar próximo da fila
+      }
+    }
+
+    // 4. Se no limite, adicionar à fila
+    console.log(`⏳ [URL-SCRAPER] Limite atingido, adicionando à fila (${this.scrapeQueue.length + 1} na fila)`);
+
+    return new Promise((resolve, reject) => {
+      this.scrapeQueue.push({ url: normalizedUrl, resolve, reject });
+      this.processQueue();
+    });
+  }
+
+  /**
+   * Executa o scraping real (método interno)
+   * @param url - URL normalizada para scrape
+   */
+  private static async doScrapeUrl(url: string): Promise<ScrapedContacts> {
     let page: Page | null = null;
 
     try {
       console.log(`🔍 [URL-SCRAPER] Scraping: ${url}`);
-
-      // Extract real URL from Instagram redirect links
-      if (url.includes('l.instagram.com')) {
-        const urlParams = new URL(url);
-        const realUrl = urlParams.searchParams.get('u');
-        if (realUrl) {
-          url = decodeURIComponent(realUrl);
-          console.log(`🔗 [URL-SCRAPER] Instagram redirect detectado, URL real: ${url}`);
-        }
-      }
 
       const browser = await this.getBrowser();
       page = await browser.newPage();

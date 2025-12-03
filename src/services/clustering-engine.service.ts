@@ -82,18 +82,77 @@ export interface ClusteringResult {
 }
 
 // ============================================
+// HASHTAGS GENÉRICAS A REMOVER (ruído no clustering)
+// ============================================
+
+const GENERIC_HASHTAGS = new Set([
+  // Engagement/Growth
+  'follow', 'followme', 'followback', 'follow4follow', 'f4f', 'followers',
+  'like', 'like4like', 'likeforlike', 'likes', 'likesforlikes',
+  'instagood', 'instadaily', 'instalike', 'instafollow', 'insta',
+  'instagram', 'instagrambrasil', 'instabrasil', 'igdaily',
+  'fyp', 'foryou', 'foryoupage', 'viral', 'trending', 'trend',
+  'explore', 'explorepage', 'explorer',
+
+  // Localização genérica
+  'brasil', 'brazil', 'br', 'brazilian',
+  'saopaulo', 'sp', 'riodejaneiro', 'rj', 'minasgerais', 'mg',
+
+  // Dias/Tempo
+  'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo',
+  'segunda-feira', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday',
+  'hoje', 'agora', 'now', 'today', 'morning', 'bomdia', 'boanoite', 'boatarde',
+
+  // Genéricos demais
+  'love', 'life', 'lifestyle', 'happy', 'happiness', 'beautiful', 'beauty',
+  'photo', 'photography', 'photooftheday', 'picoftheday', 'picture',
+  'selfie', 'me', 'myself', 'eu', 'vida', 'amor', 'feliz', 'felicidade',
+  'reels', 'reelsinstagram', 'reelsviral', 'reelsbrasil', 'reelsofinstagram',
+  'tbt', 'throwback', 'throwbackthursday',
+  'motivation', 'motivacao', 'motivacional', 'inspire', 'inspiration',
+  'success', 'sucesso', 'empreender', 'empreendedor', 'empreendedorismo',
+  'trabalho', 'work', 'job', 'business', 'negocio', 'negocios',
+  'money', 'dinheiro', 'rico', 'riqueza',
+
+  // Formato de conteúdo
+  'video', 'videos', 'stories', 'story', 'post', 'feed', 'carrossel',
+  'live', 'aovivo', 'podcast', 'youtube', 'tiktok',
+
+  // Muito genéricos no nicho saúde/beleza
+  'saude', 'health', 'healthy', 'wellness', 'bemestar', 'qualidadedevida',
+  'beleza', 'beauty', 'linda', 'lindo', 'bonita', 'bonito',
+  'mulher', 'mulheres', 'woman', 'women', 'homem', 'homens', 'man', 'men',
+  'brasil', 'brasileiro', 'brasileira'
+]);
+
+/**
+ * Remove hashtags genéricas que prejudicam o clustering
+ */
+function filterGenericHashtags(hashtags: HashtagFeatures[]): HashtagFeatures[] {
+  const filtered = hashtags.filter(h => {
+    const normalized = h.hashtag.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return !GENERIC_HASHTAGS.has(normalized);
+  });
+
+  console.log(`   🧹 Filtradas ${hashtags.length - filtered.length} hashtags genéricas`);
+  return filtered;
+}
+
+// ============================================
 // KMEANS IMPLEMENTATION (Pure TypeScript)
 // ============================================
 
 class KMeans {
   private k: number;
   private maxIterations: number;
+  private nInit: number;
   private centroids: number[][] = [];
   private assignments: number[] = [];
 
-  constructor(k: number, maxIterations: number = 100) {
+  constructor(k: number, maxIterations: number = 100, nInit: number = 50) {
     this.k = k;
     this.maxIterations = maxIterations;
+    this.nInit = nInit;
   }
 
   /**
@@ -242,24 +301,68 @@ class KMeans {
   }
 
   /**
-   * Executa o algoritmo KMeans
+   * Executa uma única iteração do KMeans
    */
-  fit(data: number[][]): { assignments: number[]; centroids: number[][] } {
-    if (data.length < this.k) {
-      throw new Error(`Dados insuficientes: ${data.length} pontos para ${this.k} clusters`);
-    }
-
+  private runOnce(data: number[][]): { assignments: number[]; centroids: number[][]; inertia: number } {
     this.initializeCentroids(data);
     this.assignments = new Array(data.length).fill(0);
 
     for (let iter = 0; iter < this.maxIterations; iter++) {
       const changed = this.assignClusters(data);
       if (!changed) {
-        console.log(`   KMeans convergiu em ${iter + 1} iterações`);
         break;
       }
       this.updateCentroids(data);
     }
+
+    // Calcular inertia (soma das distâncias ao centroid)
+    let inertia = 0;
+    for (let i = 0; i < data.length; i++) {
+      const point = data[i];
+      const cluster = this.assignments[i];
+      if (point && cluster !== undefined) {
+        const centroid = this.centroids[cluster];
+        if (centroid) {
+          inertia += this.euclideanDistance(point, centroid) ** 2;
+        }
+      }
+    }
+
+    return {
+      assignments: [...this.assignments],
+      centroids: this.centroids.map(c => [...c]),
+      inertia
+    };
+  }
+
+  /**
+   * Executa o algoritmo KMeans com múltiplas inicializações (n_init)
+   * Retorna a melhor execução (menor inertia)
+   */
+  fit(data: number[][]): { assignments: number[]; centroids: number[][] } {
+    if (data.length < this.k) {
+      throw new Error(`Dados insuficientes: ${data.length} pontos para ${this.k} clusters`);
+    }
+
+    let bestAssignments: number[] = [];
+    let bestCentroids: number[][] = [];
+    let bestInertia = Infinity;
+
+    // Executar n_init vezes e manter o melhor resultado
+    for (let init = 0; init < this.nInit; init++) {
+      const result = this.runOnce(data);
+
+      if (result.inertia < bestInertia) {
+        bestInertia = result.inertia;
+        bestAssignments = result.assignments;
+        bestCentroids = result.centroids;
+      }
+    }
+
+    this.assignments = bestAssignments;
+    this.centroids = bestCentroids;
+
+    console.log(`   KMeans: ${this.nInit} inicializações, melhor inertia: ${bestInertia.toFixed(2)}`);
 
     return {
       assignments: this.assignments,
@@ -376,7 +479,7 @@ function normalizeFeatures(hashtags: HashtagFeatures[]): number[][] {
 /**
  * Determina o número ideal de clusters usando elbow method simplificado
  */
-function findOptimalK(data: number[][], minK: number = 3, maxK: number = 10): number {
+function findOptimalK(data: number[][], minK: number = 3, maxK: number = 15): number {
   if (data.length < maxK) {
     maxK = Math.max(minK, Math.floor(data.length / 3));
   }
@@ -384,9 +487,10 @@ function findOptimalK(data: number[][], minK: number = 3, maxK: number = 10): nu
   let bestK = minK;
   let bestScore = -1;
 
+  // Usar n_init=10 durante busca de K (mais rápido), n_init=50 será usado no fit final
   for (let k = minK; k <= maxK; k++) {
     try {
-      const kmeans = new KMeans(k);
+      const kmeans = new KMeans(k, 100, 10); // n_init=10 para busca rápida
       const { assignments } = kmeans.fit(data);
       const score = KMeans.silhouetteScore(data, assignments, k);
 
@@ -400,6 +504,8 @@ function findOptimalK(data: number[][], minK: number = 3, maxK: number = 10): nu
       break;
     }
   }
+
+  console.log(`   ✅ Escolhido K=${bestK} (score: ${bestScore.toFixed(3)})`);
 
   return bestK;
 }
@@ -581,13 +687,18 @@ export async function executeClustering(
 
   // 1. Buscar hashtags do nicho
   console.log(`\n📊 Buscando hashtags do nicho...`);
-  const hashtags = await fetchNicheHashtags(seeds);
-  console.log(`   ✅ ${hashtags.length} hashtags encontradas`);
+  const rawHashtags = await fetchNicheHashtags(seeds);
+  console.log(`   ✅ ${rawHashtags.length} hashtags encontradas`);
+
+  // 1.1 Filtrar hashtags genéricas (ruído)
+  console.log(`\n🧹 Removendo hashtags genéricas...`);
+  const hashtags = filterGenericHashtags(rawHashtags);
+  console.log(`   ✅ ${hashtags.length} hashtags qualificadas para clustering`);
 
   if (hashtags.length < 10) {
     return {
       success: false,
-      error: `Dados insuficientes para clustering. Encontradas apenas ${hashtags.length} hashtags (mínimo: 10). Execute a validação de nicho primeiro.`,
+      error: `Dados insuficientes para clustering. Encontradas apenas ${hashtags.length} hashtags qualificadas (mínimo: 10). Execute a validação de nicho primeiro.`,
       nicho: nichoName,
       seeds,
       k: 0,
@@ -604,17 +715,17 @@ export async function executeClustering(
   console.log(`\n🔄 Normalizando features (log1p + z-score)...`);
   const features = normalizeFeatures(hashtags);
 
-  // 3. Determinar K ótimo ou usar override
+  // 3. Determinar K ótimo ou usar override (maxK aumentado para 15)
   let k = kOverride || 5;
   if (!kOverride) {
-    console.log(`\n🎯 Buscando K ótimo (silhouette method)...`);
-    k = findOptimalK(features, 3, Math.min(10, Math.floor(hashtags.length / 5)));
+    console.log(`\n🎯 Buscando K ótimo (silhouette method, maxK=15)...`);
+    k = findOptimalK(features, 3, Math.min(15, Math.floor(hashtags.length / 5)));
   }
   console.log(`   K escolhido: ${k}`);
 
-  // 4. Executar KMeans
-  console.log(`\n⚙️ Executando KMeans...`);
-  const kmeans = new KMeans(k);
+  // 4. Executar KMeans com n_init=50 (múltiplas inicializações)
+  console.log(`\n⚙️ Executando KMeans (n_init=50)...`);
+  const kmeans = new KMeans(k, 100, 50); // k, maxIterations=100, nInit=50
   const { assignments, centroids } = kmeans.fit(features);
   const silhouetteAvg = KMeans.silhouetteScore(features, assignments, k);
   console.log(`   ✅ Clustering concluído (silhouette avg: ${silhouetteAvg.toFixed(3)})`);
@@ -754,7 +865,7 @@ export async function executeClustering(
     total_hashtags: hashtags.length,
     total_leads: leadClusterAssociations.length,
     clusters: clusterResults,
-    lead_associations: leadClusterAssociations.slice(0, 100), // Top 100 leads
+    lead_associations: leadClusterAssociations, // Todos os leads - limite aplicado no pipeline/outreach
     silhouette_avg: parseFloat(silhouetteAvg.toFixed(3)),
     execution_time_ms: executionTime
   };

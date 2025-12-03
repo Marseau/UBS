@@ -1690,7 +1690,9 @@ router.post('/execute-clustering', async (req, res) => {
           clustering_result: result,
           related_clusters: relatedClusters, // Subnichos estruturados
           cluster_status: 'clustered',
-          last_clustering_at: new Date().toISOString()
+          last_clustering_at: new Date().toISOString(),
+          total_subclusters: relatedClusters.length,
+          total_leads_in_campaign: result.total_leads || 0
         })
         .eq('id', campaign_id);
 
@@ -1699,6 +1701,40 @@ router.post('/execute-clustering', async (req, res) => {
       } else {
         console.log(`   💾 Resultado salvo na campanha ${campaign_id}`);
         console.log(`   📊 ${relatedClusters.length} subnichos salvos em related_clusters`);
+      }
+
+      // === TAMBÉM SALVAR EM campaign_subclusters (tabela normalizada) ===
+      // Primeiro, deletar subclusters anteriores desta campanha
+      await supabase
+        .from('campaign_subclusters')
+        .delete()
+        .eq('campaign_id', campaign_id);
+
+      // Inserir novos subclusters
+      const subclustersToInsert = result.clusters?.map((c: any, index: number) => ({
+        campaign_id: campaign_id,
+        cluster_index: c.cluster_id ?? index,
+        cluster_name: c.cluster_name || `Cluster ${index + 1}`,
+        total_leads: c.total_leads || 0,
+        avg_contact_rate: Math.min((c.avg_contact_rate || 0) / 10, 9.9999), // Normalizar para NUMERIC(5,4)
+        hashtag_count: c.hashtag_count || 0,
+        relevance_score: Math.min(c.silhouette_score || 0.5, 9.9999),
+        priority_score: index + 1, // Prioridade por ordem
+        top_hashtags: c.top_hashtags?.slice(0, 10) || [],
+        theme_keywords: c.theme_keywords?.slice(0, 10) || [],
+        status: 'pending' // Aguardando geração de persona/DM/copy
+      })) || [];
+
+      if (subclustersToInsert.length > 0) {
+        const { error: insertError } = await supabase
+          .from('campaign_subclusters')
+          .insert(subclustersToInsert);
+
+        if (insertError) {
+          console.error('⚠️ Erro ao salvar em campaign_subclusters:', insertError);
+        } else {
+          console.log(`   ✅ ${subclustersToInsert.length} subclusters salvos em campaign_subclusters`);
+        }
       }
     }
 
@@ -2239,6 +2275,386 @@ Crie copies que:
     });
   } catch (error: any) {
     console.error('❌ Erro em /generate-copy:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ============================================
+// GERAÇÃO DE CONTEÚDO POR CLUSTER (PERSONALIZAÇÃO)
+// ============================================
+
+/**
+ * POST /api/hashtag-intelligence/generate-content-per-cluster
+ * Gera persona, DM scripts e copies para CADA cluster individualmente
+ * Permite personalização real por subnicho
+ */
+router.post('/generate-content-per-cluster', async (req, res) => {
+  try {
+    const {
+      campaign_id,
+      nicho,
+      service_description,
+      target_audience,
+      content_types = ['persona', 'dm', 'copy'] // Quais tipos gerar
+    } = req.body;
+
+    if (!campaign_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo "campaign_id" é obrigatório'
+      });
+    }
+
+    console.log(`\n🎯 [API] POST /generate-content-per-cluster - Campaign: ${campaign_id}`);
+    console.log(`   📋 Tipos de conteúdo: ${content_types.join(', ')}`);
+
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    // Buscar subclusters da campanha
+    const { data: subclusters, error: fetchError } = await supabase
+      .from('campaign_subclusters')
+      .select('*')
+      .eq('campaign_id', campaign_id)
+      .order('cluster_index', { ascending: true });
+
+    if (fetchError || !subclusters || subclusters.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nenhum subcluster encontrado. Execute o clustering primeiro.'
+      });
+    }
+
+    console.log(`   📊 ${subclusters.length} subclusters encontrados`);
+
+    const results: any[] = [];
+    let totalTokens = 0;
+
+    // Processar cada subcluster
+    for (const subcluster of subclusters) {
+      console.log(`\n   🔄 Processando cluster ${subcluster.cluster_index + 1}: ${subcluster.cluster_name}`);
+
+      const clusterResult: any = {
+        cluster_id: subcluster.id,
+        cluster_index: subcluster.cluster_index,
+        cluster_name: subcluster.cluster_name,
+        total_leads: subcluster.total_leads,
+        // Incluir dados existentes do banco (para quando geramos apenas um tipo de conteúdo)
+        persona: subcluster.persona || null,
+        dm_scripts: subcluster.dm_scripts || null
+      };
+
+      const clusterContext = `
+CLUSTER ESPECÍFICO: "${subcluster.cluster_name}"
+- ${subcluster.total_leads} leads neste cluster
+- ${subcluster.hashtag_count} hashtags relacionadas
+- Taxa de contato: ${(subcluster.avg_contact_rate * 10).toFixed(1)}%
+- Temas principais: ${(subcluster.theme_keywords || []).slice(0, 5).join(', ')}
+- Top hashtags: ${(subcluster.top_hashtags || []).slice(0, 5).map((h: any) => typeof h === 'string' ? h : h.hashtag).join(', ')}
+`;
+
+      // === GERAR PERSONA PARA ESTE CLUSTER ===
+      if (content_types.includes('persona')) {
+        const personaPrompt = `Você é um especialista em criação de personas ICP para marketing digital.
+
+Crie uma PERSONA ESPECÍFICA para o seguinte subnicho/cluster:
+
+NICHO GERAL: ${nicho}
+SERVIÇO/PRODUTO: ${service_description}
+PÚBLICO-ALVO: ${target_audience}
+${clusterContext}
+
+IMPORTANTE: Esta persona deve ser ESPECÍFICA para este cluster, não genérica.
+Baseie-se nos temas e hashtags do cluster para definir características únicas.
+
+FORMATO (JSON):
+{
+  "nome": "Nome fictício representativo",
+  "perfil": "Descrição em 1-2 frases",
+  "idade_tipica": "XX-YY anos",
+  "dores_principais": ["dor1", "dor2", "dor3"],
+  "objetivos": ["obj1", "obj2", "obj3"],
+  "gatilhos_conversao": ["gatilho1", "gatilho2", "gatilho3"],
+  "tom_comunicacao": "Como preferem ser abordados",
+  "horarios_ativos": "Quando estão mais ativos"
+}`;
+
+        const personaCompletion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: personaPrompt }],
+          temperature: 0.7,
+          max_tokens: 800
+        });
+
+        const personaContent = personaCompletion.choices[0]?.message?.content || '';
+        totalTokens += personaCompletion.usage?.total_tokens || 0;
+
+        // Tentar parsear como JSON
+        let personaJson: any = null;
+        try {
+          const jsonMatch = personaContent.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            personaJson = JSON.parse(jsonMatch[0]);
+          }
+        } catch (e) {
+          personaJson = { raw: personaContent };
+        }
+
+        clusterResult.persona = personaJson;
+        console.log(`      ✅ Persona gerada`);
+      }
+
+      // === GERAR DM SCRIPTS PARA ESTE CLUSTER ===
+      if (content_types.includes('dm')) {
+        const personaContext = clusterResult.persona ? `
+PERSONA DO CLUSTER:
+- Nome: ${clusterResult.persona.nome || 'N/A'}
+- Perfil: ${clusterResult.persona.perfil || 'N/A'}
+- Dores: ${(clusterResult.persona.dores_principais || []).join(', ')}
+- Tom preferido: ${clusterResult.persona.tom_comunicacao || 'N/A'}
+` : '';
+
+        const dmPrompt = `Você é um copywriter especializado em cold outreach via Instagram DM.
+
+Crie 3 SCRIPTS DE DM PERSONALIZADOS para este cluster específico:
+
+NICHO: ${nicho}
+SERVIÇO: ${service_description}
+${clusterContext}
+${personaContext}
+
+IMPORTANTE: Os scripts devem ser:
+1. Curtos (máx 3 mensagens por script)
+2. Personalizáveis (com placeholders como [NOME], [INTERESSE])
+3. Específicos para este cluster, não genéricos
+4. Começar com gancho relacionado aos temas do cluster
+
+FORMATO (JSON):
+{
+  "scripts": [
+    {
+      "nome": "Nome do script",
+      "abertura": "Primeira mensagem",
+      "follow_up": "Segunda mensagem se não responder",
+      "proposta": "Mensagem de proposta de valor"
+    }
+  ]
+}`;
+
+        const dmCompletion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: dmPrompt }],
+          temperature: 0.8,
+          max_tokens: 1200
+        });
+
+        const dmContent = dmCompletion.choices[0]?.message?.content || '';
+        totalTokens += dmCompletion.usage?.total_tokens || 0;
+
+        let dmJson: any = null;
+        try {
+          const jsonMatch = dmContent.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            dmJson = JSON.parse(jsonMatch[0]);
+          }
+        } catch (e) {
+          dmJson = { raw: dmContent };
+        }
+
+        clusterResult.dm_scripts = dmJson;
+        console.log(`      ✅ DM scripts gerados`);
+      }
+
+      // === SALVAR PERSONA/DM NO BANCO (por cluster) ===
+      const updateData: any = {
+        updated_at: new Date().toISOString()
+      };
+
+      // Determinar status baseado no que foi gerado
+      if (clusterResult.persona && clusterResult.dm_scripts) {
+        updateData.status = 'ready';
+      } else if (clusterResult.persona) {
+        updateData.status = 'persona_generated';
+      } else if (clusterResult.dm_scripts) {
+        updateData.status = 'dm_generated';
+      }
+
+      if (clusterResult.persona) {
+        updateData.persona = clusterResult.persona;
+        updateData.persona_generated_at = new Date().toISOString();
+        updateData.persona_generation_method = 'gpt-4o-mini';
+      }
+      if (clusterResult.dm_scripts) {
+        updateData.dm_scripts = clusterResult.dm_scripts;
+        updateData.dm_scripts_generated_at = new Date().toISOString();
+      }
+
+      if (Object.keys(updateData).length > 1) { // Tem mais que só updated_at
+        const { error: updateError } = await supabase
+          .from('campaign_subclusters')
+          .update(updateData)
+          .eq('id', subcluster.id);
+
+        if (updateError) {
+          console.error(`      ⚠️ Erro ao salvar cluster ${subcluster.cluster_index}:`, updateError);
+        } else {
+          console.log(`      💾 Conteúdo salvo no banco`);
+        }
+      }
+
+      results.push(clusterResult);
+    }
+
+    // === GERAR COPY ÚNICO PARA A CAMPANHA (consolidando todos os clusters) ===
+    let campaignCopy: any = null;
+    if (content_types.includes('copy')) {
+      console.log(`\n   📝 Gerando COPY ÚNICO consolidando ${subclusters.length} clusters...`);
+
+      // Construir contexto de TODOS os clusters
+      const allClustersContext = subclusters.map((sc: any, idx: number) => {
+        return `Cluster ${idx + 1} - "${sc.cluster_name}":
+  - ${sc.total_leads} leads
+  - Temas: ${(sc.theme_keywords || []).slice(0, 3).join(', ')}
+  - Hashtags: ${(sc.top_hashtags || []).slice(0, 3).map((h: any) => typeof h === 'string' ? h : h.hashtag).join(', ')}`;
+      }).join('\n');
+
+      // Resumo das personas geradas (se disponíveis)
+      const personasContext = results
+        .filter(r => r.persona)
+        .map(r => `- ${r.cluster_name}: ${r.persona.perfil || r.persona.nome || 'N/A'}`)
+        .join('\n');
+
+      const copyPrompt = `Você é um copywriter especializado em marketing digital.
+
+Crie COPIES para uma campanha que atinge MÚLTIPLOS SUBNICHOS simultaneamente:
+
+NICHO GERAL: ${nicho}
+SERVIÇO/PRODUTO: ${service_description}
+PÚBLICO-ALVO: ${target_audience}
+
+CLUSTERS DA CAMPANHA (${subclusters.length} segmentos):
+${allClustersContext}
+
+${personasContext ? `PERFIS IDENTIFICADOS:\n${personasContext}\n` : ''}
+
+IMPORTANTE: A copy deve:
+1. Ser ABRANGENTE o suficiente para ressoar com todos os clusters
+2. Usar linguagem que conecte os diferentes perfis
+3. Destacar benefícios universais que interessam a todos os segmentos
+
+FORMATO (JSON):
+{
+  "landing": {
+    "headline": "Headline impactante e abrangente",
+    "subheadline": "Subheadline complementar",
+    "bullets": ["Benefício 1", "Benefício 2", "Benefício 3"],
+    "cta": "Call to action principal"
+  },
+  "ads": [
+    { "tipo": "feed", "texto": "Copy para feed Instagram/Facebook", "cta": "CTA" },
+    { "tipo": "stories", "texto": "Copy curto para stories", "cta": "CTA" }
+  ],
+  "secoes_dor": ["Dor comum 1", "Dor comum 2", "Dor comum 3"],
+  "secoes_solucao": ["Como resolvemos 1", "Como resolvemos 2", "Como resolvemos 3"],
+  "secoes_beneficios": ["Benefício expandido 1", "Benefício expandido 2", "Benefício expandido 3"]
+}`;
+
+      const copyCompletion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: copyPrompt }],
+        temperature: 0.8,
+        max_tokens: 1500
+      });
+
+      const copyContent = copyCompletion.choices[0]?.message?.content || '';
+      totalTokens += copyCompletion.usage?.total_tokens || 0;
+
+      try {
+        const jsonMatch = copyContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          campaignCopy = JSON.parse(jsonMatch[0]);
+        }
+      } catch (e) {
+        campaignCopy = { raw: copyContent };
+      }
+
+      console.log(`      ✅ Copy única gerada para campanha`);
+
+      // Salvar copy na tabela de campanhas (campaign_clusters ou outro campo)
+      const { error: copyUpdateError } = await supabase
+        .from('campaign_clusters')
+        .update({
+          copies: campaignCopy,
+          copies_generated_at: new Date().toISOString()
+        })
+        .eq('id', campaign_id);
+
+      if (copyUpdateError) {
+        console.error(`      ⚠️ Erro ao salvar copy na campanha:`, copyUpdateError);
+      } else {
+        console.log(`      💾 Copy salva na campanha`);
+      }
+    }
+
+    console.log(`\n✅ Geração concluída: ${results.length} clusters processados`);
+    console.log(`   📊 Total de tokens: ${totalTokens}`);
+    if (campaignCopy) {
+      console.log(`   📝 Copy única da campanha: GERADA`);
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        campaign_id,
+        clusters_processed: results.length,
+        total_tokens: totalTokens,
+        content_types,
+        clusters: results, // Persona e DM por cluster
+        campaign_copy: campaignCopy // Copy única da campanha (se gerada)
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /generate-content-per-cluster:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/hashtag-intelligence/campaign/:campaignId/subclusters
+ * Lista os subclusters de uma campanha com seus conteúdos gerados
+ */
+router.get('/campaign/:campaignId/subclusters', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+
+    const { data: subclusters, error } = await supabase
+      .from('campaign_subclusters')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .order('cluster_index', { ascending: true });
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        campaign_id: campaignId,
+        total_subclusters: subclusters?.length || 0,
+        subclusters: subclusters || []
+      }
+    });
+  } catch (error: any) {
     return res.status(500).json({
       success: false,
       message: error.message

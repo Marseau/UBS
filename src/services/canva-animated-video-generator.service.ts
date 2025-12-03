@@ -126,10 +126,10 @@ export class CanvaAnimatedVideoGeneratorService {
           : (process.env.ELEVENLABS_VOICE_ID_BRUNO || '6jgYSR71sIsHEewpbat1');
 
         const voiceName = isOddSegment ? 'Carla' : 'Bruno';
+        // 🎙️ VELOCIDADE: Carla (feminina) +20%, Bruno (masculino) +10%
+        const speechSpeed = isOddSegment ? 1.2 : 1.1;
 
-        console.log(`  🎤 Segmento ${segmentNumber} (${voiceName}): ${text.substring(0, 40)}...`);
-
-        const speechSpeed = 1.0; // Velocidade igual para ambos os locutores
+        console.log(`  🎤 Segmento ${segmentNumber} (${voiceName}, ${speechSpeed}x): ${text.substring(0, 40)}...`)
 
         const audioPath = await this.generateVoiceover(
           text,
@@ -255,7 +255,7 @@ export class CanvaAnimatedVideoGeneratorService {
       `fontsize=60`,
       `fontcolor=white`,
       `box=1`,
-      `boxcolor=black@0.7`,
+      `boxcolor=black@0.5`,
       `boxborderw=20`,
       `x=(w-text_w)/2`,
       `y=(h-text_h)/2`,
@@ -365,9 +365,9 @@ export class CanvaAnimatedVideoGeneratorService {
         if (i === 0 && wrappedThreadTitle) {
           const titleFilePath = path.join(tempDir, 'overlay-thread-title.txt');
           fs.writeFileSync(titleFilePath, wrappedThreadTitle, 'utf8');
-          // 🎨 TÍTULO SEM FUNDO (transparente)
-          videoFilter += `,drawtext=fontfile='${interBoldPath}':textfile='${titleFilePath}':fontcolor=white:fontsize=58:line_spacing=0:text_align=center:x=(w-text_w)/2:y=320:enable='${enableCondition}'`;
-          console.log(`  📋 Título da thread: "${sanitizedThreadTitle}" [TRANSPARENTE]`);
+          // 🎨 TÍTULO COM FUNDO CINZA 50%
+          videoFilter += `,drawtext=fontfile='${interBoldPath}':textfile='${titleFilePath}':fontcolor=white:fontsize=58:line_spacing=0:x=(w-text_w)/2:y=320:box=1:boxcolor=black@0.5:boxborderw=20:enable='${enableCondition}'`;
+          console.log(`  📋 Título da thread: "${sanitizedThreadTitle}" [COM FUNDO]`);
         }
 
         // Conteúdo principal
@@ -379,10 +379,10 @@ export class CanvaAnimatedVideoGeneratorService {
             const textFilePath = path.join(tempDir, `overlay-page-${i + 1}-content.txt`);
             fs.writeFileSync(textFilePath, wrappedContent, 'utf8');
 
-            // 🎨 CONTEÚDO SEM FUNDO (transparente)
-            videoFilter += `,drawtext=fontfile='${interRegularPath}':textfile='${textFilePath}':fontcolor=white:fontsize=37:line_spacing=13:text_align=center:x=(w-text_w)/2:y=645:enable='${enableCondition}'`;
+            // 🎨 CONTEÚDO COM FUNDO CINZA 50%
+            videoFilter += `,drawtext=fontfile='${interRegularPath}':textfile='${textFilePath}':fontcolor=white:fontsize=37:line_spacing=13:x=(w-text_w)/2:y=645:box=1:boxcolor=black@0.5:boxborderw=20:enable='${enableCondition}'`;
 
-            console.log(`  📝 Página ${i + 1}: "${content.substring(0, 40)}..." [TRANSPARENTE]`);
+            console.log(`  📝 Página ${i + 1}: "${content.substring(0, 40)}..." [COM FUNDO]`);
           }
         }
 
@@ -399,9 +399,9 @@ export class CanvaAnimatedVideoGeneratorService {
         const ctaFilePath = path.join(tempDir, `overlay-cta.txt`);
         fs.writeFileSync(ctaFilePath, wrappedCta, 'utf8');
 
-        // 🎨 CTA SEM FUNDO (transparente) - Mesmo tamanho do título (fontsize=58)
-        videoFilter += `,drawtext=fontfile='${interBoldPath}':textfile='${ctaFilePath}':fontcolor=white:fontsize=58:line_spacing=0:text_align=center:x=(w-text_w)/2:y=800:enable='${enableCondition}'`;
-        console.log(`  🎯 CTA: "${text}" [TRANSPARENTE, TAMANHO TÍTULO]`);
+        // 🎨 CTA COM FUNDO CINZA 50% - Mesmo tamanho do título (fontsize=58)
+        videoFilter += `,drawtext=fontfile='${interBoldPath}':textfile='${ctaFilePath}':fontcolor=white:fontsize=58:line_spacing=0:x=(w-text_w)/2:y=800:box=1:boxcolor=black@0.5:boxborderw=20:enable='${enableCondition}'`;
+        console.log(`  🎯 CTA: "${text}" [COM FUNDO]`);
       }
     }
 

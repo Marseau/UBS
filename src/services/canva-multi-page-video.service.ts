@@ -105,6 +105,8 @@ export class CanvaMultiPageVideoService {
           : (process.env.ELEVENLABS_VOICE_ID_BRUNO || '6jgYSR71sIsHEewpbat1');
 
         const voiceName = isOddPage ? 'Carla' : 'Bruno';
+        // 🎙️ VELOCIDADE: Carla (feminina) +20%, Bruno (masculino) +10%
+        const voiceSpeed = isOddPage ? 1.2 : 1.1;
 
         // 🎙️ LIMPAR TEXTO PARA TTS
         let ttsText = text
@@ -113,9 +115,9 @@ export class CanvaMultiPageVideoService {
           .replace(/^[\u{1F000}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{231A}-\u{23FF}\u{FE00}-\u{FEFF}]+\s*/gu, '') // Remove emojis
           .trim();
 
-        console.log(`  🎤 Página ${pageNumber} (${voiceName}): ${ttsText.substring(0, 50)}...`);
+        console.log(`  🎤 Página ${pageNumber} (${voiceName}, speed ${voiceSpeed}x): ${ttsText.substring(0, 50)}...`);
 
-        const audioPath = await this.generateVoiceover(ttsText, voiceId, tempDir, `tts-page-${pageNumber}`);
+        const audioPath = await this.generateVoiceover(ttsText, voiceId, tempDir, `tts-page-${pageNumber}`, voiceSpeed);
         audioFiles.push(audioPath);
       }
 
@@ -252,6 +254,10 @@ export class CanvaMultiPageVideoService {
       console.log(`  📄 Página ${i + 1}: ${timestamps[i]!.start.toFixed(2)}s - ${timestamps[i]!.end.toFixed(2)}s (${duration.toFixed(2)}s)`);
     }
 
+    // 🎨 FUNDO CINZA/PRETO 50% - Usando box=1 do drawtext (centraliza automaticamente)
+    const bgColor = 'black@0.5';     // Preto com 50% opacidade (mais compatível)
+    const bgBorderWidth = 20;        // Padding ao redor do texto
+
     // Construir filtros de vídeo (overlays) com timestamps DINÂMICOS
     let videoFilter = '[0:v]scale=1080:1920,format=yuv420p';
     const textFiles: string[] = [];
@@ -263,27 +269,30 @@ export class CanvaMultiPageVideoService {
 
       const { content, hashtag } = parseTweet(texts[i]!);
 
-      // Página 1: Título
+      // Página 1: Título COM fundo cinza integrado
       if (i === 0 && title) {
         const wrappedTitle = wrapText(sanitize(title), 30);
         const titleFile = path.join(tempDir, `title.txt`);
         fs.writeFileSync(titleFile, wrappedTitle, 'utf8');
         textFiles.push(titleFile);
-        videoFilter += `,drawtext=fontfile='${interBoldPath}':textfile='${titleFile}':fontcolor=white:fontsize=58:line_spacing=0:text_align=center:x=(w-text_w)/2:y=320:enable='${enableCondition}'`;
+        // Texto do título COM fundo cinza (box=1)
+        videoFilter += `,drawtext=fontfile='${interBoldPath}':textfile='${titleFile}':fontcolor=white:fontsize=58:line_spacing=0:x=(w-text_w)/2:y=320:box=1:boxcolor=${bgColor}:boxborderw=${bgBorderWidth}:enable='${enableCondition}'`;
       }
 
-      // Todas as páginas: Conteúdo
+      // Todas as páginas: Conteúdo COM fundo cinza integrado
       if (content) {
         const wrappedContent = wrapText(sanitize(content), 40);
         const contentFile = path.join(tempDir, `content-${pageNumber}.txt`);
         fs.writeFileSync(contentFile, wrappedContent, 'utf8');
         textFiles.push(contentFile);
-        videoFilter += `,drawtext=fontfile='${interRegularPath}':textfile='${contentFile}':fontcolor=white:fontsize=42:line_spacing=13:text_align=center:x=(w-text_w)/2:y=645:enable='${enableCondition}'`;
+        // Texto do conteúdo COM fundo cinza (box=1)
+        videoFilter += `,drawtext=fontfile='${interRegularPath}':textfile='${contentFile}':fontcolor=white:fontsize=42:line_spacing=13:x=(w-text_w)/2:y=645:box=1:boxcolor=${bgColor}:boxborderw=${bgBorderWidth}:enable='${enableCondition}'`;
       }
 
-      // Hashtag (se existir)
+      // Hashtag COM fundo cinza integrado (se existir)
       if (hashtag) {
-        videoFilter += `,drawtext=fontfile='${interRegularPath}':text='${sanitize(hashtag)}':fontcolor=0x28a745:fontsize=60:line_spacing=24:text_align=center:x=(w-text_w)/2:y=1350:enable='${enableCondition}'`;
+        // Texto da hashtag COM fundo cinza (box=1)
+        videoFilter += `,drawtext=fontfile='${interRegularPath}':text='${sanitize(hashtag)}':fontcolor=0x28a745:fontsize=60:line_spacing=24:x=(w-text_w)/2:y=1350:box=1:boxcolor=${bgColor}:boxborderw=${bgBorderWidth}:enable='${enableCondition}'`;
       }
     }
 
@@ -449,11 +458,16 @@ export class CanvaMultiPageVideoService {
     // Construir overlays de texto
     let hasFilters = false;
 
+    // 🎨 FUNDO CINZA/PRETO 50% - Usando box=1 do drawtext (centraliza automaticamente)
+    const bgColor = 'black@0.5';     // Preto com 50% opacidade (mais compatível)
+    const bgBorderWidth = 20;        // Padding ao redor do texto
+
     // TÍTULO (página 1)
     if (isFirstPage && wrappedTitle) {
       const escapedTitle = escapeForFFmpeg(wrappedTitle);
       const sep = hasFilters ? ',' : '';
-      pageFilter += `${sep}drawtext=fontfile='${interBoldPath}':text='${escapedTitle}':fontcolor=white:fontsize=58:line_spacing=0:text_align=center:x=(w-text_w)/2:y=320:enable='${enableCondition}'`;
+      // Texto do título COM fundo cinza integrado (box=1)
+      pageFilter += `${sep}drawtext=fontfile='${interBoldPath}':text='${escapedTitle}':fontcolor=white:fontsize=58:line_spacing=0:x=(w-text_w)/2:y=320:box=1:boxcolor=${bgColor}:boxborderw=${bgBorderWidth}:enable='${enableCondition}'`;
       hasFilters = true;
     }
 
@@ -461,7 +475,8 @@ export class CanvaMultiPageVideoService {
     if (wrappedContent) {
       const escapedContent = escapeForFFmpeg(wrappedContent);
       const sep = hasFilters ? ',' : '';
-      pageFilter += `${sep}drawtext=fontfile='${interRegularPath}':text='${escapedContent}':fontcolor=white:fontsize=42:line_spacing=13:text_align=center:x=(w-text_w)/2:y=645:enable='${enableCondition}'`;
+      // Texto do conteúdo COM fundo cinza integrado (box=1)
+      pageFilter += `${sep}drawtext=fontfile='${interRegularPath}':text='${escapedContent}':fontcolor=white:fontsize=42:line_spacing=13:x=(w-text_w)/2:y=645:box=1:boxcolor=${bgColor}:boxborderw=${bgBorderWidth}:enable='${enableCondition}'`;
       hasFilters = true;
     }
 
@@ -469,7 +484,8 @@ export class CanvaMultiPageVideoService {
     if (sanitizedHashtag) {
       const escapedHashtag = escapeForFFmpeg(sanitizedHashtag);
       const sep = hasFilters ? ',' : '';
-      pageFilter += `${sep}drawtext=fontfile='${interRegularPath}':text='${escapedHashtag}':fontcolor=0x28a745:fontsize=60:line_spacing=24:text_align=center:x=(w-text_w)/2:y=1350:enable='${enableCondition}'`;
+      // Texto da hashtag COM fundo cinza integrado (box=1)
+      pageFilter += `${sep}drawtext=fontfile='${interRegularPath}':text='${escapedHashtag}':fontcolor=0x28a745:fontsize=60:line_spacing=24:x=(w-text_w)/2:y=1350:box=1:boxcolor=${bgColor}:boxborderw=${bgBorderWidth}:enable='${enableCondition}'`;
       hasFilters = true;
     }
 
@@ -563,12 +579,14 @@ export class CanvaMultiPageVideoService {
 
   /**
    * Gera voiceover via ElevenLabs
+   * @param speed - Velocidade da fala (1.0 = normal, 1.2 = 20% mais rápido)
    */
   private async generateVoiceover(
     text: string,
     voiceId: string,
     tempDir: string,
-    filename: string
+    filename: string,
+    speed: number = 1.0
   ): Promise<string> {
     const apiKey = process.env.ELEVENLABS_API_KEY;
 
@@ -579,6 +597,10 @@ export class CanvaMultiPageVideoService {
     const audioPath = path.join(tempDir, `${filename}.mp3`);
 
     try {
+      // 🎙️ ElevenLabs API: speed DEVE estar DENTRO de voice_settings
+      // Limite: 0.7 (mín) a 1.2 (máx) - Carla=1.2, Bruno=1.1
+      console.log(`  🎙️ Gerando TTS com velocidade: ${speed}x`);
+
       const response = await axios.post(
         `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
         {
@@ -588,7 +610,8 @@ export class CanvaMultiPageVideoService {
             stability: 0.5,
             similarity_boost: 0.75,
             style: 0.0,
-            use_speaker_boost: true
+            use_speaker_boost: true,
+            speed: speed  // 🎙️ Velocidade: Carla 1.2 (+20%), Bruno 1.1 (+10%)
           }
         },
         {

@@ -1225,23 +1225,7 @@
                 </div>
             </div>
 
-            <!-- Flags de Acao (so se viavel) -->
-            <div id="flagsSection" class="flags-grid" style="display: none;">
-                <div class="flag-card flag-yes" id="flagPersona" onclick="generatePersona()">
-                    <div class="flag-icon">👤</div>
-                    <div class="flag-label">Gerar Persona</div>
-                </div>
-                <div class="flag-card flag-yes" id="flagDM" onclick="generateDM()">
-                    <div class="flag-icon">✉️</div>
-                    <div class="flag-label">Gerar DM</div>
-                </div>
-                <div class="flag-card flag-yes" id="flagCopy" onclick="generateCopy()">
-                    <div class="flag-icon">📝</div>
-                    <div class="flag-label">Gerar Copy</div>
-                </div>
-            </div>
-
-            <!-- Clustering Section (so se viavel) -->
+            <!-- Clustering Section (PRIMEIRO - so se viavel) -->
             <div id="clusteringSection" class="clustering-section" style="display: none;">
                 <div class="clustering-header">
                     <h2>Clusterizacao KMeans</h2>
@@ -1261,7 +1245,8 @@
                         <div class="clustering-summary-grid">
                             <div class="clustering-summary-item">
                                 <div class="clustering-summary-value" id="clusterK">0</div>
-                                <div class="clustering-summary-label">Clusters</div>
+                                <div class="clustering-summary-label">K Ótimo</div>
+                                <div class="clustering-summary-sublabel" id="clusterKContext" style="font-size: 0.7em; opacity: 0.7;"></div>
                             </div>
                             <div class="clustering-summary-item">
                                 <div class="clustering-summary-value" id="clusterHashtags">0</div>
@@ -1274,6 +1259,7 @@
                             <div class="clustering-summary-item">
                                 <div class="clustering-summary-value" id="clusterSilhouette">0</div>
                                 <div class="clustering-summary-label">Silhouette Score</div>
+                                <div class="clustering-summary-sublabel" id="silhouetteQuality" style="font-size: 0.7em; font-weight: bold;"></div>
                             </div>
                         </div>
                     </div>
@@ -1288,6 +1274,25 @@
                         <h4>Top 20 Leads por Score</h4>
                         <div id="topLeadsList" class="leads-list">
                             <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Flags de Acao POR SUBCLUSTER (so apos clustering) -->
+                    <div id="flagsSection" class="flags-grid" style="margin-top: 30px;">
+                        <div class="flag-card flag-yes" id="flagPersona" onclick="generatePersonaPerCluster()">
+                            <div class="flag-icon">👤</div>
+                            <div class="flag-label">Gerar Personas</div>
+                            <div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">por subcluster</div>
+                        </div>
+                        <div class="flag-card flag-yes" id="flagDM" onclick="generateDMPerCluster()">
+                            <div class="flag-icon">✉️</div>
+                            <div class="flag-label">Gerar DMs</div>
+                            <div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">por subcluster</div>
+                        </div>
+                        <div class="flag-card flag-yes" id="flagCopy" onclick="generateCopyPerCluster()">
+                            <div class="flag-icon">📝</div>
+                            <div class="flag-label">Gerar Copies</div>
+                            <div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">por subcluster</div>
                         </div>
                     </div>
                 </div>
@@ -1464,6 +1469,51 @@
                 return;
             }
 
+            // ========== RESET DE ESTADOS ANTERIORES ==========
+            // Evita reutilização de dados de nichos anteriores
+            currentPersona = null;
+            currentDMScripts = null;
+            currentCopies = null;
+            currentClusteringResult = null;
+            currentValidation = null;
+
+            // Reset visual dos flag cards
+            const flagPersona = document.getElementById('flagPersona');
+            const flagDM = document.getElementById('flagDM');
+            const flagCopy = document.getElementById('flagCopy');
+
+            if (flagPersona) {
+                flagPersona.innerHTML = '<div class="flag-icon">🎭</div><div class="flag-label">Persona</div><div class="flag-sublabel">Por cluster</div>';
+            }
+            if (flagDM) {
+                flagDM.innerHTML = '<div class="flag-icon">💬</div><div class="flag-label">Scripts DM</div><div class="flag-sublabel">Personalizados</div>';
+            }
+            if (flagCopy) {
+                flagCopy.innerHTML = '<div class="flag-icon">📝</div><div class="flag-label">Copies</div><div class="flag-sublabel">Landing + Ads</div>';
+            }
+
+            // Reset status do clustering
+            const clusteringBadge = document.getElementById('clusteringStatusBadge');
+            if (clusteringBadge) {
+                clusteringBadge.className = 'clustering-status waiting';
+                clusteringBadge.innerHTML = 'Pendente';
+            }
+
+            // Esconder resultados de clustering anterior
+            const clusteringResults = document.getElementById('clusteringResults');
+            if (clusteringResults) {
+                clusteringResults.style.display = 'none';
+            }
+
+            // Limpar resultados de personas/DMs/copies anteriores
+            const personaResults = document.getElementById('personaResults');
+            const dmResults = document.getElementById('dmResults');
+            const copyResults = document.getElementById('copyResults');
+            if (personaResults) personaResults.innerHTML = '';
+            if (dmResults) dmResults.innerHTML = '';
+            if (copyResults) copyResults.innerHTML = '';
+            // ========== FIM RESET ==========
+
             // Obter criterios customizados
             const criteria = {
                 minHashtagsWithFreq5: parseInt(document.getElementById('criteriaHashtags').value) || 20,
@@ -1587,8 +1637,8 @@
             document.getElementById('uniqueLeads').textContent = data.totalUniqueLeads.toLocaleString('pt-BR');
             document.getElementById('contactRate').textContent = `${data.averageContactRate}%`;
 
-            // Flags (so se viavel)
-            document.getElementById('flagsSection').style.display = data.isViable ? 'grid' : 'none';
+            // Flags agora aparecem APOS o clustering (dentro de clusteringResults)
+            // Removido: flagsSection.style.display = data.isViable ? 'grid' : 'none';
 
             // Top Hashtags Table
             const tbody = document.getElementById('hashtagsTableBody');
@@ -1702,8 +1752,323 @@
             };
         }
 
-        // GERAR PERSONA
+        // ============================================
+        // FUNÇÕES PER CLUSTER (PERSONALIZAÇÃO REAL)
+        // ============================================
+
+        // Variável para armazenar subclusters com conteúdo gerado
+        let currentSubclustersContent = null;
+        let currentCampaignCopy = null; // Copy única da campanha (não por cluster)
+
+        // GERAR CONTEÚDO POR CLUSTER (endpoint unificado)
+        async function generateContentPerCluster(contentTypes = ['persona', 'dm', 'copy']) {
+            if (!currentCampaignId) {
+                alert('Salve a campanha primeiro antes de gerar conteúdo personalizado');
+                return;
+            }
+
+            if (!currentClusteringResult || !currentClusteringResult.clusters || currentClusteringResult.clusters.length === 0) {
+                alert('Execute o Clustering primeiro');
+                return;
+            }
+
+            const formData = collectFormData();
+            if (!formData.service_description || !formData.target_audience) {
+                alert('Preencha a Descrição do Serviço e Público Alvo');
+                return;
+            }
+
+            // Atualizar todos os flag cards para loading
+            const flags = {
+                persona: document.getElementById('flagPersona'),
+                dm: document.getElementById('flagDM'),
+                copy: document.getElementById('flagCopy')
+            };
+
+            const numClusters = currentClusteringResult.clusters.length;
+
+            contentTypes.forEach(type => {
+                if (flags[type]) {
+                    flags[type].innerHTML = `<div class="flag-icon">⏳</div><div class="flag-label">Gerando...</div><div class="flag-sublabel">${numClusters} clusters</div>`;
+                    flags[type].style.pointerEvents = 'none';
+                }
+            });
+
+            try {
+                const payload = {
+                    campaign_id: currentCampaignId,
+                    nicho: formData.nicho,
+                    service_description: formData.service_description,
+                    target_audience: formData.target_audience,
+                    content_types: contentTypes
+                };
+
+                const response = await fetch(`${API_BASE}/generate-content-per-cluster`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentSubclustersContent = result.data.clusters;
+                    currentCampaignCopy = result.data.campaign_copy; // Copy única da campanha
+
+                    // Atualizar flags com sucesso
+                    contentTypes.forEach(type => {
+                        if (flags[type]) {
+                            const label = type === 'persona' ? 'Personas' : type === 'dm' ? 'DMs' : 'Copies';
+                            // Copy é única da campanha, não por cluster
+                            const sublabel = type === 'copy' ? '1 única da campanha' : `${numClusters} personalizados`;
+                            flags[type].innerHTML = `<div class="flag-icon">✅</div><div class="flag-label">${label}</div><div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">${sublabel}</div>`;
+                            flags[type].classList.add('flag-completed');
+                        }
+                    });
+
+                    // Renderizar resultados (clusters + copy única)
+                    renderSubclustersContent(result.data.clusters, contentTypes, result.data.campaign_copy);
+
+                    const copyMsg = result.data.campaign_copy ? '\n📝 Copy única da campanha: GERADA' : '';
+                    alert(`✅ Conteúdo gerado para ${numClusters} clusters!${copyMsg}\n📊 Tokens usados: ${result.data.total_tokens}`);
+                } else {
+                    throw new Error(result.message || 'Erro ao gerar conteúdo');
+                }
+            } catch (error) {
+                console.error('Erro ao gerar conteúdo por cluster:', error);
+                alert('Erro: ' + error.message);
+
+                // Restaurar flags
+                contentTypes.forEach(type => {
+                    if (flags[type]) {
+                        const icon = type === 'persona' ? '🎭' : type === 'dm' ? '💬' : '📝';
+                        const label = type === 'persona' ? 'Persona' : type === 'dm' ? 'Scripts DM' : 'Copies';
+                        const sublabel = type === 'persona' ? 'Por cluster' : type === 'dm' ? 'Personalizados' : 'Landing + Ads';
+                        flags[type].innerHTML = `<div class="flag-icon">${icon}</div><div class="flag-label">${label}</div><div class="flag-sublabel">${sublabel}</div>`;
+                    }
+                });
+            } finally {
+                Object.values(flags).forEach(flag => {
+                    if (flag) flag.style.pointerEvents = 'auto';
+                });
+            }
+        }
+
+        // Renderizar conteúdo dos subclusters
+        function renderSubclustersContent(clusters, contentTypes, campaignCopy = null) {
+            let html = '';
+
+            // === COPY ÚNICA DA CAMPANHA (mostrar se existir, independente do contentTypes) ===
+            if (campaignCopy) {
+                const c = campaignCopy;
+                html += `
+                    <div class="campaign-copy-section" style="margin-top: 20px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #f59e0b; border-radius: 12px; padding: 20px;">
+                        <h3 style="color: #92400e; margin-bottom: 15px;">📝 Copy Única da Campanha</h3>
+                        <p style="color: #78350f; font-size: 0.85em; margin-bottom: 15px; opacity: 0.8;">Consolidando insights de ${clusters.length} clusters</p>
+
+                        ${c.landing ? `
+                            <div style="background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                                <h4 style="color: #d97706; margin-bottom: 10px;">🎯 Landing Page</h4>
+                                <p style="font-size: 1.2em; font-weight: bold; color: #1e293b;">${c.landing.headline || ''}</p>
+                                <p style="color: #64748b; margin-top: 5px;">${c.landing.subheadline || ''}</p>
+                                ${c.landing.bullets ? `
+                                    <ul style="margin-top: 10px; color: #475569;">
+                                        ${c.landing.bullets.map(b => `<li>✓ ${b}</li>`).join('')}
+                                    </ul>
+                                ` : ''}
+                                ${c.landing.cta ? `<p style="margin-top: 10px;"><strong>CTA:</strong> <span style="background: #f59e0b; color: #fff; padding: 5px 10px; border-radius: 4px;">${c.landing.cta}</span></p>` : ''}
+                            </div>
+                        ` : ''}
+
+                        ${c.ads && c.ads.length > 0 ? `
+                            <div style="background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                                <h4 style="color: #d97706; margin-bottom: 10px;">📱 Anúncios</h4>
+                                ${c.ads.map(ad => `
+                                    <div style="border-left: 3px solid #f59e0b; padding-left: 10px; margin-bottom: 10px;">
+                                        <strong>${ad.tipo || 'Ad'}:</strong> ${ad.texto || ''}<br>
+                                        <span style="color: #f59e0b; font-size: 0.9em;">${ad.cta || ''}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+
+                        ${c.secoes_dor ? `
+                            <div style="background: #fff; padding: 15px; border-radius: 8px;">
+                                <h4 style="color: #d97706; margin-bottom: 10px;">💡 Seções Adicionais</h4>
+                                <p><strong>Dores:</strong> ${c.secoes_dor.join(' | ')}</p>
+                                ${c.secoes_solucao ? `<p><strong>Soluções:</strong> ${c.secoes_solucao.join(' | ')}</p>` : ''}
+                                ${c.secoes_beneficios ? `<p><strong>Benefícios:</strong> ${c.secoes_beneficios.join(' | ')}</p>` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+
+            // === PERSONA E DM POR CLUSTER ===
+            // Verificar se algum cluster tem conteúdo (independente do que foi solicitado nessa requisição)
+            const hasAnyContent = clusters.some(c => c.persona || c.dm_scripts);
+            if (hasAnyContent && clusters.length > 0) {
+                html += `
+                    <div class="subclusters-content" style="margin-top: 20px;">
+                        <h3 style="color: #6366f1; margin-bottom: 15px;">📦 Conteúdo Personalizado por Cluster (${clusters.length} clusters)</h3>
+                        <div style="display: grid; gap: 15px;">
+                `;
+
+                clusters.forEach((cluster, index) => {
+                    // Verificar se tem conteúdo para mostrar (independente do contentTypes solicitado)
+                    const hasContent = cluster.persona || cluster.dm_scripts;
+                    if (!hasContent) return;
+
+                    html += `
+                        <details class="cluster-content-card" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px;">
+                            <summary style="cursor: pointer; font-weight: 600; color: #1e293b;">
+                                📍 ${cluster.cluster_name} <span style="color: #64748b; font-weight: normal;">(${cluster.total_leads} leads)</span>
+                            </summary>
+                            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
+                    `;
+
+                    // Persona (mostrar se existir, independente do contentTypes)
+                    if (cluster.persona) {
+                        const p = cluster.persona;
+                        html += `
+                            <div style="margin-bottom: 15px;">
+                                <h4 style="color: #8b5cf6; margin-bottom: 8px;">🎭 Persona: ${p.nome || 'N/A'}</h4>
+                                <p style="color: #64748b; font-size: 0.9em;">${p.perfil || ''}</p>
+                                <ul style="color: #475569; font-size: 0.85em; margin-top: 8px;">
+                                    <li><strong>Dores:</strong> ${(p.dores_principais || []).join(', ')}</li>
+                                    <li><strong>Gatilhos:</strong> ${(p.gatilhos_conversao || []).join(', ')}</li>
+                                    <li><strong>Tom:</strong> ${p.tom_comunicacao || 'N/A'}</li>
+                                </ul>
+                            </div>
+                        `;
+                    }
+
+                    // DM Scripts (mostrar se existir, independente do contentTypes)
+                    if (cluster.dm_scripts) {
+                        const scripts = cluster.dm_scripts.scripts || [];
+                        html += `
+                            <div style="margin-bottom: 15px;">
+                                <h4 style="color: #06b6d4; margin-bottom: 8px;">💬 Scripts de DM (${scripts.length})</h4>
+                                ${scripts.map((s, i) => `
+                                    <div style="background: #fff; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid #06b6d4;">
+                                        <strong>${s.nome || `Script ${i + 1}`}</strong><br>
+                                        <em style="color: #64748b; font-size: 0.85em;">Abertura:</em> ${s.abertura || ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    }
+
+                    html += `
+                            </div>
+                        </details>
+                    `;
+                });
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Inserir após os resultados do clustering
+            const clusteringResults = document.getElementById('clusteringResults');
+            let subclustersDiv = document.getElementById('subclustersContentDiv');
+            if (!subclustersDiv) {
+                subclustersDiv = document.createElement('div');
+                subclustersDiv.id = 'subclustersContentDiv';
+                clusteringResults.appendChild(subclustersDiv);
+            }
+            subclustersDiv.innerHTML = html;
+        }
+
+        // GERAR APENAS PERSONAS POR SUBCLUSTER
+        async function generatePersonaPerCluster() {
+            await generateContentPerCluster(['persona']);
+        }
+
+        // GERAR APENAS DMs POR SUBCLUSTER
+        async function generateDMPerCluster() {
+            await generateContentPerCluster(['dm']);
+        }
+
+        // GERAR APENAS COPIES POR SUBCLUSTER
+        async function generateCopyPerCluster() {
+            await generateContentPerCluster(['copy']);
+        }
+
+        // GERAR TUDO POR SUBCLUSTER (botão principal)
+        async function generateAllContentPerCluster() {
+            await generateContentPerCluster(['persona', 'dm', 'copy']);
+        }
+
+        // ============================================
+        // FUNÇÕES LEGADAS (mantidas para compatibilidade)
+        // ============================================
+
+        // GERAR COPIES LEGADO (chama endpoint antigo se necessário)
+        async function generateCopyLegacy() {
+            if (!currentClusteringResult || !currentClusteringResult.clusters || currentClusteringResult.clusters.length === 0) {
+                alert('Execute o Clustering primeiro para gerar Copies por subcluster');
+                return;
+            }
+
+            const formData = collectFormData();
+            if (!formData.service_description) {
+                alert('Preencha a Descricao do Servico antes de gerar copies');
+                return;
+            }
+
+            const flagCard = document.getElementById('flagCopy');
+            const originalHTML = flagCard.innerHTML;
+            flagCard.innerHTML = '<div class="flag-icon">⏳</div><div class="flag-label">Gerando...</div><div class="flag-sublabel">' + currentClusteringResult.clusters.length + ' subclusters</div>';
+            flagCard.style.pointerEvents = 'none';
+
+            try {
+                const payload = {
+                    ...formData,
+                    campaign_id: currentCampaignId || undefined,
+                    persona: currentPersona,
+                    clusters: currentClusteringResult.clusters,
+                    copy_type: 'all',
+                    generate_per_cluster: true // Flag para API gerar por subcluster
+                };
+
+                const response = await fetch(`${API_BASE}/generate-copy`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentCopies = result.data.copies;
+                    showGeneratedContent('copy', result.data);
+                    flagCard.innerHTML = '<div class="flag-icon">✅</div><div class="flag-label">Copies Gerados</div><div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">' + currentClusteringResult.clusters.length + ' subclusters</div>';
+                    flagCard.classList.add('flag-completed');
+                } else {
+                    throw new Error(result.message || 'Erro ao gerar copies');
+                }
+            } catch (error) {
+                console.error('Erro ao gerar copies:', error);
+                alert('Erro ao gerar copies: ' + error.message);
+                flagCard.innerHTML = originalHTML;
+            } finally {
+                flagCard.style.pointerEvents = 'auto';
+            }
+        }
+
+        // ============================================
+        // FUNÇÕES LEGADAS (mantidas para compatibilidade)
+        // ============================================
+
+        // GERAR PERSONA (legado - usa generatePersonaPerCluster se clustering disponivel)
         async function generatePersona() {
+            if (currentClusteringResult && currentClusteringResult.clusters && currentClusteringResult.clusters.length > 0) {
+                return generatePersonaPerCluster();
+            }
+
             if (!currentValidation || !currentValidation.isViable) {
                 alert('Nicho precisa ser viavel para gerar persona');
                 return;
@@ -1988,6 +2353,10 @@
         let projectsData = [];
         let campaignsData = [];
         let currentCampaignId = null;
+        // Armazenar nomes da campanha carregada para upsert
+        let loadedClientName = null;
+        let loadedProjectName = null;
+        let loadedCampaignName = null;
 
         // Carregar lista de clientes ao inicializar
         async function loadClients() {
@@ -2188,6 +2557,14 @@
 
                     currentCampaignId = campaign.id;
 
+                    // Salvar nomes para upsert (pegar dos dropdowns que já estão selecionados)
+                    loadedClientName = document.getElementById('clientSelect').value;
+                    const selectedProject = projectsData.find(p => p.id == document.getElementById('projectSelect').value);
+                    loadedProjectName = selectedProject ? selectedProject.project_name : campaign.project_name;
+                    loadedCampaignName = campaign.campaign_name;
+
+                    console.log('[DEBUG] Loaded campaign context:', { loadedClientName, loadedProjectName, loadedCampaignName });
+
                     // Preencher campos principais
                     document.getElementById('nichoInput').value = campaign.nicho_principal || '';
                     document.getElementById('seedsInput').value = Array.isArray(campaign.keywords) ? campaign.keywords.join(', ') : '';
@@ -2225,12 +2602,14 @@
                         currentClusteringResult = campaign.clustering_result;
                         renderClusteringResults(campaign.clustering_result);
 
-                        // Atualizar status do clustering
-                        const statusBadge = document.getElementById('clusteringStatus');
+                        // Atualizar status do clustering (ID correto: clusteringStatusBadge)
+                        const statusBadge = document.getElementById('clusteringStatusBadge');
                         const btn = document.getElementById('btnExecuteClustering');
                         if (statusBadge) {
+                            const silhouette = Number(campaign.clustering_result.silhouette_avg) || 0;
+                            const k = campaign.clustering_result.k || campaign.clustering_result.clusters.length;
                             statusBadge.className = 'clustering-status done';
-                            statusBadge.innerHTML = 'Clustering concluido';
+                            statusBadge.innerHTML = `K=${k} | Silhouette: ${silhouette.toFixed(3)}`;
                         }
                         if (btn) {
                             btn.innerHTML = 'Re-executar Clustering';
@@ -2317,20 +2696,26 @@
             document.getElementById('targetLocation').value = '';
             document.getElementById('targetIncomeClass').value = '';
             currentValidation = null;
+            currentCampaignId = null;
+            // Limpar cache de campanha carregada
+            loadedClientName = null;
+            loadedProjectName = null;
+            loadedCampaignName = null;
             document.getElementById('results').classList.remove('show');
         }
 
-        // Obter nome do cliente (do select ou input)
+        // Obter nome do cliente (do select ou input ou campanha carregada)
         function getClientName() {
             const select = document.getElementById('clientSelect');
             const input = document.getElementById('clientNameInput');
             if (select.value === '__NEW__') {
                 return input.value.trim();
             }
-            return select.value;
+            // Usar valor do select ou fallback para campanha carregada
+            return select.value || loadedClientName || '';
         }
 
-        // Obter nome do projeto (do select ou input)
+        // Obter nome do projeto (do select ou input ou campanha carregada)
         function getProjectName() {
             const select = document.getElementById('projectSelect');
             const input = document.getElementById('projectNameInput');
@@ -2338,10 +2723,11 @@
                 return input.value.trim();
             }
             const project = projectsData.find(p => p.id == select.value);
-            return project ? project.project_name : '';
+            // Usar valor encontrado ou fallback para campanha carregada
+            return project ? project.project_name : (loadedProjectName || '');
         }
 
-        // Obter nome da campanha (do select ou input)
+        // Obter nome da campanha (do select ou input ou campanha carregada)
         function getCampaignName() {
             const select = document.getElementById('campaignSelect');
             const input = document.getElementById('campaignNameInput');
@@ -2349,7 +2735,8 @@
                 return input.value.trim();
             }
             const campaign = campaignsData.find(c => c.id == select.value);
-            return campaign ? campaign.campaign_name : '';
+            // Usar valor encontrado ou fallback para campanha carregada
+            return campaign ? campaign.campaign_name : (loadedCampaignName || '');
         }
 
         // Salvar análise
@@ -2358,8 +2745,28 @@
             const projectName = getProjectName();
             const campaignName = getCampaignName();
 
-            if (!clientName || !projectName || !campaignName) {
-                alert('Selecione ou preencha Cliente, Projeto e Campanha para salvar.');
+            // Validação específica para cada campo
+            const missing = [];
+            if (!clientName) missing.push('Cliente');
+            if (!projectName) {
+                const projectSelect = document.getElementById('projectSelect');
+                if (projectSelect.value === '__NEW__') {
+                    missing.push('Nome do novo Projeto (preencha o campo)');
+                } else {
+                    missing.push('Projeto');
+                }
+            }
+            if (!campaignName) {
+                const campaignSelect = document.getElementById('campaignSelect');
+                if (campaignSelect.value === '__NEW__') {
+                    missing.push('Nome da nova Campanha (preencha o campo)');
+                } else {
+                    missing.push('Campanha');
+                }
+            }
+
+            if (missing.length > 0) {
+                alert('Campos faltando:\n• ' + missing.join('\n• '));
                 return;
             }
 
@@ -2452,12 +2859,36 @@
                     ? `<div style="background: #e0f2fe; border: 1px solid #0284c7; padding: 15px; border-radius: 8px; color: #0369a1;">
                         Atualizando campanha existente: <strong>${campaignName}</strong>
                     </div>`
-                    : '';
+                    : `<div style="background: #d1fae5; border: 1px solid #10b981; padding: 15px; border-radius: 8px; color: #065f46;">
+                        Criando nova campanha: <strong>${campaignName}</strong> no projeto <strong>${projectName}</strong>
+                    </div>`;
             } else {
+                // Mensagem específica sobre o que está faltando
+                const missing = [];
+                const projectSelect = document.getElementById('projectSelect');
+                const campaignSelect = document.getElementById('campaignSelect');
+
+                if (!clientName) missing.push('Selecione um Cliente');
+                if (!projectName) {
+                    if (projectSelect.value === '__NEW__') {
+                        missing.push('Digite o nome do novo Projeto');
+                    } else {
+                        missing.push('Selecione um Projeto');
+                    }
+                }
+                if (!campaignName) {
+                    if (campaignSelect.value === '__NEW__') {
+                        missing.push('Digite o nome da nova Campanha');
+                    } else {
+                        missing.push('Selecione uma Campanha');
+                    }
+                }
+
                 saveSection.style.display = 'block';
                 saveStatus.innerHTML = `
                     <div style="background: #fef3c7; border: 1px solid #f59e0b; padding: 15px; border-radius: 8px; color: #92400e;">
-                        Selecione ou crie <strong>Cliente</strong>, <strong>Projeto</strong> e <strong>Campanha</strong> para salvar a analise.
+                        <strong>Para salvar, complete:</strong><br>
+                        ${missing.map(m => '• ' + m).join('<br>')}
                     </div>
                 `;
             }
@@ -2535,61 +2966,98 @@
             // Show results section
             document.getElementById('clusteringResults').style.display = 'block';
 
-            // Summary
-            document.getElementById('clusterK').textContent = data.k;
-            document.getElementById('clusterHashtags').textContent = data.total_hashtags.toLocaleString('pt-BR');
-            document.getElementById('clusterLeads').textContent = data.lead_associations.length.toLocaleString('pt-BR');
-            document.getElementById('clusterSilhouette').textContent = data.silhouette_avg.toFixed(3);
+            // Guards para dados opcionais
+            const leads = Array.isArray(data.lead_associations) ? data.lead_associations : [];
+            const silhouette = Number(data.silhouette_avg) || 0;
+            const clusters = Array.isArray(data.clusters) ? data.clusters : [];
+            const totalLeads = data.total_leads || leads.length || 0;
+            const totalHashtags = data.total_hashtags || 0;
+
+            // Função helper para interpretar qualidade do Silhouette Score
+            function getSilhouetteQuality(score) {
+                if (score >= 0.70) return { label: 'Excelente', color: '#10b981' };
+                if (score >= 0.50) return { label: 'Bom', color: '#22c55e' };
+                if (score >= 0.35) return { label: 'Razoável', color: '#f59e0b' };
+                if (score >= 0.25) return { label: 'Aceitável', color: '#f97316' };
+                return { label: 'Fraco', color: '#ef4444' };
+            }
+
+            const k = data.k || clusters.length;
+            const quality = getSilhouetteQuality(silhouette);
+
+            // Summary com guards
+            document.getElementById('clusterK').textContent = k;
+            document.getElementById('clusterHashtags').textContent = totalHashtags.toLocaleString('pt-BR');
+            document.getElementById('clusterLeads').textContent = totalLeads.toLocaleString('pt-BR');
+            document.getElementById('clusterSilhouette').textContent = silhouette.toFixed(3);
+
+            // Contexto do K escolhido
+            const kContextEl = document.getElementById('clusterKContext');
+            if (kContextEl) {
+                kContextEl.textContent = `Melhor score: ${silhouette.toFixed(2)}`;
+            }
+
+            // Qualidade do Silhouette
+            const qualityEl = document.getElementById('silhouetteQuality');
+            if (qualityEl) {
+                qualityEl.textContent = quality.label;
+                qualityEl.style.color = quality.color;
+            }
 
             // Cluster Cards
             const clustersGrid = document.getElementById('clustersGrid');
-            clustersGrid.innerHTML = data.clusters.map(cluster => `
+            clustersGrid.innerHTML = clusters.map(cluster => `
                 <div class="cluster-card">
                     <div class="cluster-card-header">
-                        <span class="cluster-name">${cluster.cluster_name}</span>
-                        <span class="cluster-id-badge">Cluster ${cluster.cluster_id + 1}</span>
+                        <span class="cluster-name">${cluster.cluster_name || 'Cluster'}</span>
+                        <span class="cluster-id-badge">Cluster ${(cluster.cluster_id || 0) + 1}</span>
                     </div>
                     <div class="cluster-stats">
                         <div class="cluster-stat">
-                            <div class="cluster-stat-value">${cluster.hashtag_count}</div>
+                            <div class="cluster-stat-value">${cluster.hashtag_count || 0}</div>
                             <div class="cluster-stat-label">Hashtags</div>
                         </div>
                         <div class="cluster-stat">
-                            <div class="cluster-stat-value">${cluster.total_leads}</div>
+                            <div class="cluster-stat-value">${cluster.total_leads || 0}</div>
                             <div class="cluster-stat-label">Leads</div>
                         </div>
                         <div class="cluster-stat">
-                            <div class="cluster-stat-value">${cluster.avg_contact_rate}%</div>
+                            <div class="cluster-stat-value">${cluster.avg_contact_rate || 0}%</div>
                             <div class="cluster-stat-label">Contact</div>
                         </div>
                     </div>
                     <div class="cluster-hashtags">
                         <div class="cluster-hashtags-label">Top Hashtags:</div>
                         <div class="cluster-hashtag-pills">
-                            ${cluster.top_hashtags.slice(0, 6).map(h => `
-                                <span class="cluster-hashtag-pill">#${h.hashtag}</span>
+                            ${(cluster.top_hashtags || []).slice(0, 6).map(h => `
+                                <span class="cluster-hashtag-pill">#${h.hashtag || h}</span>
                             `).join('')}
                         </div>
                     </div>
                 </div>
             `).join('');
 
-            // Top Leads
+            // Top Leads (com guard)
             const topLeadsList = document.getElementById('topLeadsList');
-            const topLeads = data.lead_associations.slice(0, 20);
-            topLeadsList.innerHTML = topLeads.map((lead, idx) => {
-                const clusterName = data.clusters.find(c => c.cluster_id === lead.primary_cluster)?.cluster_name || `Cluster ${lead.primary_cluster + 1}`;
-                return `
-                    <div class="lead-item ${lead.has_contact ? 'has-contact' : ''}">
-                        <div class="lead-info">
-                            <span>#${idx + 1}</span>
-                            <span class="lead-cluster-badge">${clusterName}</span>
-                            ${lead.has_contact ? '<span class="lead-contact-badge">Com Contato</span>' : ''}
+            if (leads.length > 0) {
+                const topLeads = leads.slice(0, 20);
+                topLeadsList.innerHTML = topLeads.map((lead, idx) => {
+                    const clusterName = clusters.find(c => c.cluster_id === lead.primary_cluster)?.cluster_name || `Cluster ${(lead.primary_cluster || 0) + 1}`;
+                    const score = Number(lead.score) || 0;
+                    return `
+                        <div class="lead-item ${lead.has_contact ? 'has-contact' : ''}">
+                            <div class="lead-info">
+                                <span>#${idx + 1}</span>
+                                <span class="lead-cluster-badge">${clusterName}</span>
+                                ${lead.has_contact ? '<span class="lead-contact-badge">Com Contato</span>' : ''}
+                            </div>
+                            <span class="lead-score">Score: ${score.toFixed(2)}</span>
                         </div>
-                        <span class="lead-score">Score: ${lead.score.toFixed(2)}</span>
-                    </div>
-                `;
-            }).join('');
+                    `;
+                }).join('');
+            } else {
+                topLeadsList.innerHTML = '<div class="lead-item"><span>Nenhum lead associado ainda</span></div>';
+            }
         }
 
         // Update renderResults to show clustering section when viable
