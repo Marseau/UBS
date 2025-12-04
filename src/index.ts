@@ -1238,6 +1238,19 @@ async function initializeServices() {
       }
     }
 
+    // Instagram Daily Metrics Cron - Atualização a cada 5 minutos
+    if (process.env.ENABLE_INSTAGRAM_DAILY_METRICS !== 'false') {
+      try {
+        console.log('📊 Inicializando Instagram Daily Metrics Cron Service...');
+        const { startInstagramDailyMetricsCron } = await import('./cron/instagram-daily-metrics.cron');
+        startInstagramDailyMetricsCron();
+        console.log('✅ Instagram Daily Metrics Cron Service initialized successfully');
+        console.log('📅 Atualização automática: A cada 5 minutos\n');
+      } catch (error) {
+        console.error('❌ Failed to initialize Instagram Daily Metrics Cron:', error);
+      }
+    }
+
     console.log('🎉 All services initialized successfully');
     
   } catch (error) {

@@ -13,15 +13,20 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 /**
  * GET /api/hashtag-intelligence/kpis
  * Retorna KPIs principais do dashboard
+ * - Leads: últimos 45 dias (Zona Ativa)
+ * - Hashtags: últimos 90 dias (janela de inteligência)
  */
 router.get('/kpis', async (_req, res) => {
   try {
-    console.log('\n📊 [API] Buscando KPIs detalhados do dashboard');
+    console.log('\n📊 [API] Buscando KPIs detalhados do dashboard (Leads: 45d, Hashtags: 90d)');
 
-    // Query otimizada para KPIs com estatísticas segmentadas por Total/Com Contato/Sem Contato
+    // Query otimizada para KPIs com filtros de tempo
+    // Leads: últimos 45 dias | Hashtags: últimos 90 dias
     const { data, error } = await supabase.rpc('execute_sql', {
       query_text: `
-        WITH leads_classified AS (
+        WITH
+        -- LEADS: últimos 45 dias (Zona Ativa) - criado OU revalidado
+        leads_classified AS (
             SELECT
                 id,
                 hashtags_bio,
@@ -39,6 +44,8 @@ router.get('/kpis', async (_req, res) => {
                 additional_emails,
                 additional_phones
             FROM instagram_leads
+            WHERE captured_at >= CURRENT_DATE - INTERVAL '45 days'
+               OR updated_at >= CURRENT_DATE - INTERVAL '45 days'
         ),
         lead_stats AS (
             SELECT
@@ -52,47 +59,65 @@ router.get('/kpis', async (_req, res) => {
                 ROUND(COUNT(*) FILTER (WHERE contact_status = 'with_contact')::numeric / NULLIF(COUNT(*), 0)::numeric * 100, 1) as contact_rate
             FROM leads_classified
         ),
-        -- Hashtags TOTAL (todos os leads)
+        -- HASHTAGS: últimos 90 dias (janela de inteligência) - criado OU revalidado
+        leads_for_hashtags AS (
+            SELECT
+                id,
+                hashtags_bio,
+                hashtags_posts,
+                CASE
+                    WHEN email IS NOT NULL
+                    OR phone IS NOT NULL
+                    OR (additional_emails IS NOT NULL AND jsonb_array_length(additional_emails) > 0)
+                    OR (additional_phones IS NOT NULL AND jsonb_array_length(additional_phones) > 0)
+                    THEN 'with_contact'
+                    ELSE 'without_contact'
+                END as contact_status
+            FROM instagram_leads
+            WHERE captured_at >= CURRENT_DATE - INTERVAL '90 days'
+               OR updated_at >= CURRENT_DATE - INTERVAL '90 days'
+        ),
+        -- Hashtags TOTAL (90 dias)
         hashtags_total AS (
             SELECT
                 COUNT(DISTINCT hashtag) as unique_hashtags_total,
                 COUNT(*) as occurrences_total
             FROM (
-                SELECT jsonb_array_elements_text(hashtags_bio) as hashtag FROM leads_classified WHERE hashtags_bio IS NOT NULL AND jsonb_array_length(hashtags_bio) > 0
+                SELECT jsonb_array_elements_text(hashtags_bio) as hashtag FROM leads_for_hashtags WHERE hashtags_bio IS NOT NULL AND jsonb_array_length(hashtags_bio) > 0
                 UNION ALL
-                SELECT jsonb_array_elements_text(hashtags_posts) as hashtag FROM leads_classified WHERE hashtags_posts IS NOT NULL AND jsonb_array_length(hashtags_posts) > 0
+                SELECT jsonb_array_elements_text(hashtags_posts) as hashtag FROM leads_for_hashtags WHERE hashtags_posts IS NOT NULL AND jsonb_array_length(hashtags_posts) > 0
             ) t WHERE hashtag IS NOT NULL AND hashtag != ''
         ),
-        -- Hashtags COM CONTATO
+        -- Hashtags COM CONTATO (90 dias)
         hashtags_with_contact AS (
             SELECT
                 COUNT(DISTINCT hashtag) as unique_hashtags_with_contact,
                 COUNT(*) as occurrences_with_contact
             FROM (
-                SELECT jsonb_array_elements_text(hashtags_bio) as hashtag FROM leads_classified WHERE contact_status = 'with_contact' AND hashtags_bio IS NOT NULL AND jsonb_array_length(hashtags_bio) > 0
+                SELECT jsonb_array_elements_text(hashtags_bio) as hashtag FROM leads_for_hashtags WHERE contact_status = 'with_contact' AND hashtags_bio IS NOT NULL AND jsonb_array_length(hashtags_bio) > 0
                 UNION ALL
-                SELECT jsonb_array_elements_text(hashtags_posts) as hashtag FROM leads_classified WHERE contact_status = 'with_contact' AND hashtags_posts IS NOT NULL AND jsonb_array_length(hashtags_posts) > 0
+                SELECT jsonb_array_elements_text(hashtags_posts) as hashtag FROM leads_for_hashtags WHERE contact_status = 'with_contact' AND hashtags_posts IS NOT NULL AND jsonb_array_length(hashtags_posts) > 0
             ) t WHERE hashtag IS NOT NULL AND hashtag != ''
         ),
-        -- Hashtags SEM CONTATO
+        -- Hashtags SEM CONTATO (90 dias)
         hashtags_without_contact AS (
             SELECT
                 COUNT(DISTINCT hashtag) as unique_hashtags_without_contact,
                 COUNT(*) as occurrences_without_contact
             FROM (
-                SELECT jsonb_array_elements_text(hashtags_bio) as hashtag FROM leads_classified WHERE contact_status = 'without_contact' AND hashtags_bio IS NOT NULL AND jsonb_array_length(hashtags_bio) > 0
+                SELECT jsonb_array_elements_text(hashtags_bio) as hashtag FROM leads_for_hashtags WHERE contact_status = 'without_contact' AND hashtags_bio IS NOT NULL AND jsonb_array_length(hashtags_bio) > 0
                 UNION ALL
-                SELECT jsonb_array_elements_text(hashtags_posts) as hashtag FROM leads_classified WHERE contact_status = 'without_contact' AND hashtags_posts IS NOT NULL AND jsonb_array_length(hashtags_posts) > 0
+                SELECT jsonb_array_elements_text(hashtags_posts) as hashtag FROM leads_for_hashtags WHERE contact_status = 'without_contact' AND hashtags_posts IS NOT NULL AND jsonb_array_length(hashtags_posts) > 0
             ) t WHERE hashtag IS NOT NULL AND hashtag != ''
         ),
-        -- Detalhamento por fonte (bio vs posts)
+        -- Detalhamento por fonte (90 dias)
         hashtag_sources AS (
             SELECT
                 SUM(COALESCE(jsonb_array_length(hashtags_bio), 0)) as total_hashtags_in_bio,
                 SUM(COALESCE(jsonb_array_length(hashtags_posts), 0)) as total_hashtags_in_posts,
                 COUNT(*) FILTER (WHERE hashtags_bio IS NOT NULL AND jsonb_array_length(hashtags_bio) > 0) as leads_with_hashtags_bio,
                 COUNT(*) FILTER (WHERE hashtags_posts IS NOT NULL AND jsonb_array_length(hashtags_posts) > 0) as leads_with_hashtags_posts
-            FROM leads_classified
+            FROM leads_for_hashtags
         )
         SELECT
             l.*,
@@ -2711,6 +2736,27 @@ router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
 
     console.log(`   📊 ${clusters.length} clusters, ${leadAssociations.length} lead associations disponíveis`);
 
+    // Buscar subclusters para obter os IDs reais
+    const { data: subclusters, error: subclusterError } = await supabase
+      .from('campaign_subclusters')
+      .select('id, cluster_index, cluster_name, persona')
+      .eq('campaign_id', campaignId)
+      .order('cluster_index', { ascending: true });
+
+    if (subclusterError) {
+      console.error('   ⚠️ Erro ao buscar subclusters:', subclusterError.message);
+    }
+
+    // Criar mapa cluster_index → subcluster_id
+    const clusterToSubclusterId = new Map<number, string>();
+    const clusterToPersona = new Map<number, any>();
+    for (const sc of subclusters || []) {
+      clusterToSubclusterId.set(sc.cluster_index, sc.id);
+      clusterToPersona.set(sc.cluster_index, sc.persona);
+    }
+
+    console.log(`   🔗 ${clusterToSubclusterId.size} subclusters mapeados`);
+
     // Agrupar leads por cluster
     const leadsByCluster: Record<number, any[]> = {};
     for (const cluster of clusters) {
@@ -2733,24 +2779,31 @@ router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
 
     // Preparar dados para inserção
     const campaignLeadsData: any[] = [];
-    const statsByCluster: Record<number, { name: string; count: number }> = {};
+    const statsByCluster: Record<number, { name: string; count: number; subcluster_id: string | null; has_persona: boolean }> = {};
 
     for (const cluster of clusters) {
       const clusterLeads = leadsByCluster[cluster.cluster_id] || [];
+      const subclusterId = clusterToSubclusterId.get(cluster.cluster_id) || null;
+      const persona = clusterToPersona.get(cluster.cluster_id);
+
       statsByCluster[cluster.cluster_id] = {
         name: cluster.cluster_name,
-        count: clusterLeads.length
+        count: clusterLeads.length,
+        subcluster_id: subclusterId,
+        has_persona: !!persona
       };
 
       for (const lead of clusterLeads) {
         campaignLeadsData.push({
           campaign_id: campaignId,
           lead_id: lead.lead_id,
+          subcluster_id: subclusterId, // IMPORTANTE: FK para campaign_subclusters
           cluster_id: cluster.cluster_id,
           cluster_name: cluster.cluster_name,
           match_source: 'clustering',
-          match_hashtags: lead.top_hashtags || [],
-          fit_score: Math.round(lead.score * 100), // Converter score 0-1 para 0-100
+          match_hashtags: lead.clusters || [],
+          fit_score: Math.round(lead.score * 10), // Score já vem em escala adequada
+          fit_reasons: lead.clusters,
           status: 'pending'
         });
       }
@@ -3290,6 +3343,398 @@ router.get('/campaign/:campaignId/stats', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Erro em /campaign/:campaignId/stats:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/hashtag-intelligence/daily-scraping-stats
+ * Retorna estatísticas diárias de scraping (novos vs atualizados) desde uma data
+ */
+router.get('/daily-scraping-stats', async (req, res) => {
+  try {
+    // Default: 90 dias atrás
+    const defaultDate = new Date();
+    defaultDate.setDate(defaultDate.getDate() - 90);
+    const startDate = req.query.start_date as string || defaultDate.toISOString().split('T')[0];
+
+    console.log(`\n📊 [API] Buscando estatísticas diárias de scraping desde ${startDate}`);
+
+    const { data, error } = await supabase.rpc('execute_sql', {
+      query_text: `
+        WITH
+        -- Novos perfis: agrupados pela data de captura
+        novos_por_dia AS (
+          SELECT
+            DATE(captured_at) as date,
+            COUNT(*) as novos
+          FROM instagram_leads
+          WHERE captured_at >= '${startDate}'::date
+          GROUP BY DATE(captured_at)
+        ),
+        -- Atualizações: agrupadas pela data de updated_at (quando foi atualizado)
+        -- Nota: só considera atualizações a partir de 03/12/2025 (data que começou tracking real)
+        atualizados_por_dia AS (
+          SELECT
+            DATE(updated_at) as date,
+            COUNT(*) as atualizados
+          FROM instagram_leads
+          WHERE updated_at >= '${startDate}'::date
+            AND updated_at > captured_at  -- só conta se realmente foi atualizado depois
+            AND DATE(updated_at) >= '2025-12-03'  -- ignora atualizações antes do tracking real
+          GROUP BY DATE(updated_at)
+        ),
+        -- Combina as duas métricas
+        all_dates AS (
+          SELECT date FROM novos_por_dia
+          UNION
+          SELECT date FROM atualizados_por_dia
+        )
+        SELECT
+          ad.date,
+          COALESCE(n.novos, 0) as novos,
+          COALESCE(a.atualizados, 0) as atualizados
+        FROM all_dates ad
+        LEFT JOIN novos_por_dia n ON n.date = ad.date
+        LEFT JOIN atualizados_por_dia a ON a.date = ad.date
+        WHERE ad.date IS NOT NULL
+        ORDER BY ad.date ASC
+      `
+    });
+
+    if (error) throw error;
+
+    return res.json({
+      success: true,
+      start_date: startDate,
+      data: data || []
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /daily-scraping-stats:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/hashtag-intelligence/daily-metrics-evolution
+ * Lê métricas pré-calculadas da tabela instagram_daily_metrics
+ */
+router.get('/daily-metrics-evolution', async (req, res) => {
+  try {
+    console.log(`\n📊 [API] Buscando métricas diárias pré-calculadas`);
+
+    const { data, error } = await supabase.rpc('execute_sql', {
+      query_text: `
+        SELECT
+          metric_date as date,
+          total_leads,
+          leads_with_contact,
+          total_hashtags,
+          hashtags_with_contact,
+          scraped_new,
+          scraped_updated
+        FROM instagram_daily_metrics
+        WHERE metric_date >= CURRENT_DATE - INTERVAL '89 days'
+        ORDER BY metric_date ASC
+      `
+    });
+
+    if (error) throw error;
+
+    return res.json({
+      success: true,
+      data: data || []
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /daily-metrics-evolution:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/hashtag-intelligence/calculate-daily-metrics
+ * Calcula e armazena métricas para uma data específica (ou hoje)
+ * - Usado pelo cron a cada 5 minutos para atualizar o dia atual
+ * - Usado para backfill de datas históricas
+ */
+router.post('/calculate-daily-metrics', async (req, res) => {
+  try {
+    const targetDate = req.body.date || new Date().toISOString().split('T')[0];
+    console.log(`\n📊 [API] Calculando métricas para ${targetDate}`);
+
+    // Tabela instagram_daily_metrics criada via migration (scripts/migration-instagram-daily-metrics.sql)
+
+    // Calcular métricas para a data específica
+    const { data, error } = await supabase.rpc('execute_sql', {
+      query_text: `
+        WITH
+        -- Leads válidos (45d window a partir da data alvo)
+        leads_valid AS (
+          SELECT
+            id,
+            email,
+            phone,
+            additional_emails,
+            additional_phones,
+            hashtags_bio,
+            hashtags_posts
+          FROM instagram_leads
+          WHERE captured_at <= '${targetDate}'::date
+            AND (
+              captured_at >= '${targetDate}'::date - INTERVAL '44 days'
+              OR updated_at >= '${targetDate}'::date - INTERVAL '44 days'
+            )
+        ),
+        lead_counts AS (
+          SELECT
+            COUNT(*) as total_leads,
+            COUNT(*) FILTER (WHERE
+              email IS NOT NULL
+              OR phone IS NOT NULL
+              OR (additional_emails IS NOT NULL AND jsonb_array_length(additional_emails) > 0)
+              OR (additional_phones IS NOT NULL AND jsonb_array_length(additional_phones) > 0)
+            ) as leads_with_contact
+          FROM leads_valid
+        ),
+        -- Leads para hashtags (90d window)
+        leads_for_hashtags AS (
+          SELECT
+            id,
+            email,
+            phone,
+            additional_emails,
+            additional_phones,
+            hashtags_bio,
+            hashtags_posts
+          FROM instagram_leads
+          WHERE captured_at <= '${targetDate}'::date
+            AND (
+              captured_at >= '${targetDate}'::date - INTERVAL '89 days'
+              OR updated_at >= '${targetDate}'::date - INTERVAL '89 days'
+            )
+        ),
+        hashtag_counts AS (
+          SELECT
+            COUNT(DISTINCT LOWER(h.hashtag)) as total_hashtags,
+            COUNT(DISTINCT LOWER(h.hashtag)) FILTER (WHERE
+              l.email IS NOT NULL
+              OR l.phone IS NOT NULL
+              OR (l.additional_emails IS NOT NULL AND jsonb_array_length(l.additional_emails) > 0)
+              OR (l.additional_phones IS NOT NULL AND jsonb_array_length(l.additional_phones) > 0)
+            ) as hashtags_with_contact
+          FROM leads_for_hashtags l,
+          LATERAL (
+            SELECT jsonb_array_elements_text(l.hashtags_bio) as hashtag
+            WHERE l.hashtags_bio IS NOT NULL AND jsonb_array_length(l.hashtags_bio) > 0
+            UNION ALL
+            SELECT jsonb_array_elements_text(l.hashtags_posts) as hashtag
+            WHERE l.hashtags_posts IS NOT NULL AND jsonb_array_length(l.hashtags_posts) > 0
+          ) h
+          WHERE h.hashtag IS NOT NULL AND h.hashtag != ''
+        ),
+        -- Scraping do dia
+        scraping_stats AS (
+          SELECT
+            COUNT(*) FILTER (WHERE DATE(captured_at) = '${targetDate}'::date) as scraped_new,
+            COUNT(*) FILTER (WHERE DATE(updated_at) = '${targetDate}'::date AND updated_at > captured_at) as scraped_updated
+          FROM instagram_leads
+          WHERE DATE(captured_at) = '${targetDate}'::date
+             OR (DATE(updated_at) = '${targetDate}'::date AND updated_at > captured_at)
+        )
+        SELECT
+          lc.total_leads,
+          lc.leads_with_contact,
+          hc.total_hashtags,
+          hc.hashtags_with_contact,
+          ss.scraped_new,
+          ss.scraped_updated
+        FROM lead_counts lc, hashtag_counts hc, scraping_stats ss
+      `
+    });
+
+    if (error) throw error;
+
+    const metrics = data && data[0] ? data[0] : {
+      total_leads: 0,
+      leads_with_contact: 0,
+      total_hashtags: 0,
+      hashtags_with_contact: 0,
+      scraped_new: 0,
+      scraped_updated: 0
+    };
+
+    // Usar RPC para upsert (SECURITY DEFINER garante permissões)
+    const { error: upsertError } = await supabase.rpc('upsert_daily_metrics', {
+      p_metric_date: targetDate,
+      p_total_leads: metrics.total_leads || 0,
+      p_leads_with_contact: metrics.leads_with_contact || 0,
+      p_total_hashtags: metrics.total_hashtags || 0,
+      p_hashtags_with_contact: metrics.hashtags_with_contact || 0,
+      p_scraped_new: metrics.scraped_new || 0,
+      p_scraped_updated: metrics.scraped_updated || 0
+    });
+
+    if (upsertError) throw upsertError;
+
+    console.log(`✅ Métricas salvas para ${targetDate}:`, metrics);
+
+    return res.json({
+      success: true,
+      date: targetDate,
+      metrics
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao calcular métricas:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/hashtag-intelligence/backfill-daily-metrics
+ * Preenche métricas históricas para os últimos N dias
+ */
+router.post('/backfill-daily-metrics', async (req, res) => {
+  try {
+    const days = parseInt(req.body.days) || 90;
+    console.log(`\n📊 [API] Iniciando backfill de ${days} dias de métricas`);
+
+    const results: any[] = [];
+    const today = new Date();
+
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+
+      try {
+        // Chamar o endpoint de cálculo para cada data
+        const calcResponse = await fetch(`http://localhost:${process.env.PORT || 3000}/api/hashtag-intelligence/calculate-daily-metrics`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: dateStr })
+        });
+        const calcResult = await calcResponse.json() as { success: boolean };
+        results.push({ date: dateStr, success: calcResult.success });
+        console.log(`  ✓ ${dateStr} processado`);
+      } catch (err: any) {
+        results.push({ date: dateStr, success: false, error: err.message });
+        console.log(`  ✗ ${dateStr} falhou: ${err.message}`);
+      }
+    }
+
+    return res.json({
+      success: true,
+      processed: results.length,
+      results
+    });
+  } catch (error: any) {
+    console.error('❌ Erro no backfill:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/hashtag-intelligence/aggregated-metrics-90d
+ * Retorna métricas agregadas considerando apenas perfis dos últimos 90 dias
+ * - Total de leads vs leads com contato
+ * - Total de hashtags únicas vs hashtags com contato
+ */
+router.get('/aggregated-metrics-90d', async (req, res) => {
+  try {
+    const daysBack = parseInt(req.query.days as string) || 90;
+
+    console.log(`\n📊 [API] Buscando métricas agregadas dos últimos ${daysBack} dias`);
+
+    const { data, error } = await supabase.rpc('execute_sql', {
+      query_text: `
+        WITH leads_recent AS (
+          SELECT
+            id,
+            hashtags_bio,
+            hashtags_posts,
+            CASE
+              WHEN email IS NOT NULL
+                OR phone IS NOT NULL
+                OR (additional_emails IS NOT NULL AND jsonb_array_length(additional_emails) > 0)
+                OR (additional_phones IS NOT NULL AND jsonb_array_length(additional_phones) > 0)
+              THEN true
+              ELSE false
+            END as has_contact
+          FROM instagram_leads
+          WHERE captured_at >= CURRENT_DATE - INTERVAL '${daysBack} days'
+        ),
+        lead_metrics AS (
+          SELECT
+            COUNT(*) as total_leads,
+            COUNT(*) FILTER (WHERE has_contact = true) as leads_with_contact
+          FROM leads_recent
+        ),
+        hashtags_all AS (
+          SELECT DISTINCT
+            LOWER(TRANSLATE(
+              hashtag,
+              'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ',
+              'aaaaaeeeeiiiioooooouuuucnAAAAAEEEEIIIIOOOOOUUUUCN'
+            )) as hashtag_clean,
+            l.id as lead_id,
+            l.has_contact
+          FROM leads_recent l,
+            LATERAL (
+              SELECT jsonb_array_elements_text(l.hashtags_bio) as hashtag
+              WHERE l.hashtags_bio IS NOT NULL AND jsonb_array_length(l.hashtags_bio) > 0
+              UNION ALL
+              SELECT jsonb_array_elements_text(l.hashtags_posts) as hashtag
+              WHERE l.hashtags_posts IS NOT NULL AND jsonb_array_length(l.hashtags_posts) > 0
+            ) h
+          WHERE hashtag IS NOT NULL AND hashtag != ''
+        ),
+        hashtag_metrics AS (
+          SELECT
+            COUNT(DISTINCT hashtag_clean) as total_hashtags,
+            COUNT(DISTINCT hashtag_clean) FILTER (WHERE has_contact = true) as hashtags_with_contact
+          FROM hashtags_all
+        )
+        SELECT
+          lm.total_leads,
+          lm.leads_with_contact,
+          hm.total_hashtags,
+          hm.hashtags_with_contact,
+          ${daysBack} as days_period
+        FROM lead_metrics lm, hashtag_metrics hm
+      `
+    });
+
+    if (error) throw error;
+
+    const metrics = data && data.length > 0 ? data[0] : {
+      total_leads: 0,
+      leads_with_contact: 0,
+      total_hashtags: 0,
+      hashtags_with_contact: 0,
+      days_period: daysBack
+    };
+
+    return res.json({
+      success: true,
+      data: metrics
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /aggregated-metrics-90d:', error);
     return res.status(500).json({
       success: false,
       message: error.message
