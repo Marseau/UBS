@@ -1534,8 +1534,29 @@ export async function scrapeInstagramTag(
 
   // 🆕 CRÍTICO: Verificar conta disponível ANTES de criar contexto
   const rotation = getAccountRotation();
-  const accountCheck = await rotation.ensureAvailableAccount();
+  let accountCheck = await rotation.ensureAvailableAccount();
 
+  // 🔧 FIX: Se IP cooling ativo, AGUARDAR ao invés de jogar erro
+  if (!accountCheck.success && accountCheck.reason?.includes('Aguarde')) {
+    const waitMatch = accountCheck.reason.match(/Aguarde (\d+)min/);
+    if (waitMatch) {
+      const waitMinutes = parseInt(waitMatch[1]);
+      console.log(`\n⏰ ========================================`);
+      console.log(`⏰ 🧊 IP COOLING ATIVO - AGUARDANDO ${waitMinutes}min`);
+      console.log(`⏰ Motivo: ${accountCheck.reason}`);
+      console.log(`⏰ ========================================\n`);
+
+      // Aguardar o tempo necessário
+      await new Promise(resolve => setTimeout(resolve, waitMinutes * 60 * 1000));
+
+      console.log(`✅ Período de IP cooling concluído - verificando conta novamente...`);
+
+      // Verificar novamente após espera
+      accountCheck = await rotation.ensureAvailableAccount();
+    }
+  }
+
+  // Se ainda falhou após esperar, aí sim joga erro
   if (!accountCheck.success) {
     throw new Error(`ACCOUNT_UNAVAILABLE: ${accountCheck.reason}`);
   }
@@ -2634,98 +2655,24 @@ export async function scrapeInstagramTag(
           }
 
           // 🆕 VERIFICAR SE USERNAME JÁ EXISTE NO BANCO (DEPOIS de verificar memória)
+          // Se existir, vamos ATUALIZAR ao invés de pular!
           console.log(`   🔍 Verificando se @${username} já existe no banco de dados...`);
+          let existingLeadData: { id: string; hashtags_posts: string[] | null; contact_status: string | null; search_term_id: string | null; search_term_used: string | null; captured_at: string | null; is_qualified: boolean | null; qualification_notes: string | null; contacted_at: string | null; } | null = null;
           try {
             const { data: existingLead, error: checkError } = await supabase
               .from('instagram_leads')
-              .select('username')
+              .select('id, hashtags_posts, contact_status, search_term_id, search_term_used, captured_at, is_qualified, qualification_notes, contacted_at')
               .eq('username', username)
               .single();
 
             if (existingLead) {
-              console.log(`   ⏭️  @${username} JÁ EXISTE no banco! Pulando extração de perfil...`);
-              processedUsernames.add(username); // Marcar como processado para evitar reprocessar nesta sessão
-              console.log(`   ℹ️  Perfil já coletado anteriormente (não é duplicata desta sessão)`);
-
-              // 🔒 MARCAR POSIÇÃO como clicada (MESMO sendo duplicata! Senão clica infinitamente no mesmo)
-              if (selectedGridKey && selectedPosition) {
-                clickedGridPositions.add(selectedGridKey);
-                console.log(`   🔒 Posição (${selectedPosition.x}, ${selectedPosition.y}) marcada como clicada (duplicata)`);
-              }
-
-              // ⏭️  LÓGICA SEQUENCIAL: Apenas volta ao mural e pega PRÓXIMO post (sem scroll!)
-              console.log(`   ⬅️  Voltando ao mural para clicar no PRÓXIMO post sequencial...`);
-              try {
-                await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                await restoreScrollPosition(); // 🔄 Restaurar scroll
-                console.log(`   ✅ Voltou ao mural da hashtag`);
-              } catch (navError: any) {
-                console.log(`   ⚠️  Erro ao retornar ao mural: ${navError.message}`);
-              }
-
-              // ⏱️ DELAY ADAPTATIVO baseado na profundidade do scroll
-              let loadWaitTime = 5000; // Base: 5s
-              if (lastSavedScrollPosition > 10000) {
-                loadWaitTime = 25000; // 25s para posições muito avançadas
-              } else if (lastSavedScrollPosition > 5000) {
-                loadWaitTime = 18000; // 18s para posições avançadas
-              } else if (lastSavedScrollPosition > 2000) {
-                loadWaitTime = 12000; // 12s para posições médias
-              } else if (lastSavedScrollPosition > 0) {
-                loadWaitTime = 8000; // 8s para posições iniciais
-              }
-
-              console.log(`   ⏳ Aguardando ${loadWaitTime/1000}s para mural carregar (scroll: ${lastSavedScrollPosition}px)...`);
-              await new Promise(resolve => setTimeout(resolve, loadWaitTime));
-
-              // 🔄 RE-APLICAR scroll (Instagram reseta durante os 10s)
-              if (lastSavedScrollPosition > 0) {
-                console.log(`   🔄 Re-aplicando scroll para ${lastSavedScrollPosition}px (Instagram resetou durante espera)...`);
-                try {
-                  await page.evaluate((scrollY) => {
-                    window.scrollTo(0, scrollY);
-                  }, lastSavedScrollPosition);
-                  await waitHuman(1800, 2500);
-                  console.log(`   ✅ Scroll re-aplicado`);
-                } catch (err: any) {
-                  console.log(`   ⚠️  Erro ao re-aplicar scroll: ${err.message}`);
-                }
-              }
-
-              const feedReady = await waitForHashtagMural('Retorno após duplicata');
-              if (!feedReady) {
-                // 🚨 DETECTAR ERRO DE SESSÃO (about:blank, timeout, etc.)
-                const currentUrl = page.url();
-                const isSessionError = currentUrl === 'about:blank' || currentUrl === '' || currentUrl === 'data:,';
-
-                if (isSessionError) {
-                  console.log(`🚨 ERRO DE SESSÃO DETECTADO: URL=${currentUrl}`);
-                  const recovered = await handleSessionError(page, `URL inválida após duplicata: ${currentUrl}`);
-
-                  if (recovered) {
-                    // Nova sessão iniciada - recriar página e continuar
-                    console.log(`✅ Sessão recuperada - recriando página...`);
-                    try {
-                      page = await createAuthenticatedPage();
-                      await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                      await waitHuman(2700, 3500);
-                      continue;
-                    } catch (recreateError: any) {
-                      console.log(`❌ Erro ao recriar página: ${recreateError.message}`);
-                      break;
-                    }
-                  } else {
-                    console.log(`❌ Não foi possível recuperar sessão - encerrando scraping`);
-                    break;
-                  }
-                }
-
-                attemptsWithoutNewPost++;
-              }
-              continue;
+              existingLeadData = existingLead;
+              console.log(`   🔄 @${username} JÁ EXISTE no banco! Vamos ATUALIZAR o perfil...`);
+              console.log(`   📊 Hashtags existentes: ${existingLead.hashtags_posts?.length || 0}`);
+              // Continua para extração e fará UPDATE ao invés de INSERT
+            } else {
+              console.log(`   ✅ @${username} não existe no banco. Prosseguindo com extração de perfil...`);
             }
-
-            console.log(`   ✅ @${username} não existe no banco. Prosseguindo com extração de perfil...`);
           } catch (dbError: any) {
             console.log(`   ⚠️  Erro ao verificar banco de dados: ${dbError.message}`);
             console.log(`   🔄 Continuando com extração de perfil (fail-safe)...`);
@@ -3392,37 +3339,92 @@ export async function scrapeInstagramTag(
               // Sanitizar dados (similar ao toSQL do N8N)
               const sanitizedProfile = sanitizeForDatabase(completeProfile);
 
-              // Adicionar campos adicionais necessários para o banco
-              const profileToSave = {
-                ...sanitizedProfile,
-                captured_at: new Date().toISOString(),
-                lead_source: 'hashtag_search',
-                lead_score: leadScore,
-                // segment e search_term_id podem ser NULL para scraping manual
-                segment: null,
-                search_term_id: null
-              };
-              // phones_normalized será preenchido pelo trigger trg_normalize_instagram_lead()
+              if (existingLeadData) {
+                // 🔄 UPDATE: Perfil já existe - atualizar dados dinâmicos, preservar históricos
+                console.log(`   🔄 Atualizando perfil existente @${username}...`);
 
-              const { error: insertError } = await supabase
-                .from('instagram_leads')
-                .insert(profileToSave);
+                // MERGE hashtags_posts: combinar existentes + novas sem duplicatas
+                const existingHashtags = existingLeadData.hashtags_posts || [];
+                const newHashtags = sanitizedProfile.hashtags_posts || [];
+                const mergedHashtags = [...new Set([...existingHashtags, ...newHashtags])];
+                console.log(`   🏷️  Hashtags: ${existingHashtags.length} existentes + ${newHashtags.length} novas = ${mergedHashtags.length} únicas`);
 
-              if (insertError) {
-                console.log(`   ⚠️  Erro ao salvar @${username} no banco: ${insertError.message}`);
-              } else {
-                console.log(`   ✅ Perfil @${username} SALVO NO BANCO`);
+                // Campos a ATUALIZAR (dados dinâmicos)
+                const updateData = {
+                  full_name: sanitizedProfile.full_name,
+                  bio: sanitizedProfile.bio,
+                  website: sanitizedProfile.website,
+                  email: sanitizedProfile.email,
+                  phone: sanitizedProfile.phone,
+                  followers_count: sanitizedProfile.followers_count,
+                  following_count: sanitizedProfile.following_count,
+                  posts_count: sanitizedProfile.posts_count,
+                  profile_pic_url: sanitizedProfile.profile_pic_url,
+                  is_verified: sanitizedProfile.is_verified,
+                  is_business_account: sanitizedProfile.is_business_account,
+                  business_category: sanitizedProfile.business_category,
+                  city: sanitizedProfile.city,
+                  state: sanitizedProfile.state,
+                  neighborhood: sanitizedProfile.neighborhood,
+                  address: sanitizedProfile.address,
+                  zip_code: sanitizedProfile.zip_code,
+                  activity_score: sanitizedProfile.activity_score,
+                  is_active: sanitizedProfile.is_active,
+                  language: sanitizedProfile.language,
+                  hashtags_bio: sanitizedProfile.hashtags_bio,
+                  hashtags_posts: mergedHashtags.length > 0 ? mergedHashtags : null,
+                  lead_score: leadScore,
+                  updated_at: new Date().toISOString(),
+                  // RESETAR flags de enriquecimento para reprocessar
+                  url_enriched: false,
+                  dado_enriquecido: false
+                  // NÃO ATUALIZA: search_term_id, search_term_used, captured_at,
+                  //              contact_status, is_qualified, qualification_notes, contacted_at
+                };
 
-                // 🆕 MARCAR POSIÇÃO como clicada SOMENTE quando perfil é APROVADO (não duplicata)
-                if (selectedGridKey && selectedPosition) {
-                  clickedGridPositions.add(selectedGridKey);
-                  console.log(`   🔒 Posição (${selectedPosition.x}, ${selectedPosition.y}) marcada como clicada`);
+                const { error: updateError } = await supabase
+                  .from('instagram_leads')
+                  .update(updateData)
+                  .eq('id', existingLeadData.id);
+
+                if (updateError) {
+                  console.log(`   ⚠️  Erro ao atualizar @${username}: ${updateError.message}`);
+                } else {
+                  console.log(`   ✅ Perfil @${username} ATUALIZADO NO BANCO`);
                 }
+              } else {
+                // 🆕 INSERT: Novo perfil
+                const profileToSave = {
+                  ...sanitizedProfile,
+                  captured_at: new Date().toISOString(),
+                  lead_source: 'hashtag_search',
+                  lead_score: leadScore,
+                  // segment e search_term_id podem ser NULL para scraping manual
+                  segment: null,
+                  search_term_id: null
+                };
+                // phones_normalized será preenchido pelo trigger trg_normalize_instagram_lead()
 
-                // 🆕 NÃO limpar attemptedPositionsInCycle aqui!
-                // Queremos continuar na próxima coluna, não voltar pro início
-                // A limpeza acontece apenas no scroll (quando esgotou posições visíveis)
+                const { error: insertError } = await supabase
+                  .from('instagram_leads')
+                  .insert(profileToSave);
+
+                if (insertError) {
+                  console.log(`   ⚠️  Erro ao salvar @${username} no banco: ${insertError.message}`);
+                } else {
+                  console.log(`   ✅ Perfil @${username} SALVO NO BANCO (novo)`);
+                }
               }
+
+              // 🆕 MARCAR POSIÇÃO como clicada SOMENTE quando perfil é APROVADO
+              if (selectedGridKey && selectedPosition) {
+                clickedGridPositions.add(selectedGridKey);
+                console.log(`   🔒 Posição (${selectedPosition.x}, ${selectedPosition.y}) marcada como clicada`);
+              }
+
+              // 🆕 NÃO limpar attemptedPositionsInCycle aqui!
+              // Queremos continuar na próxima coluna, não voltar pro início
+              // A limpeza acontece apenas no scroll (quando esgotou posições visíveis)
             } catch (dbError: any) {
               console.log(`   ⚠️  Erro ao salvar @${username}: ${dbError.message}`);
             }
@@ -5702,24 +5704,62 @@ export async function scrapeInstagramExplore(
             process.env.SUPABASE_SERVICE_ROLE_KEY || ''
           );
 
-          // Verificar se já existe
+          // Verificar se já existe - buscar hashtags_posts para merge
           const { data: existing } = await supabase
             .from('instagram_leads')
-            .select('id')
+            .select('id, hashtags_posts')
             .eq('username', ownerUsername)
             .single();
 
           if (existing) {
-            console.log(`   ⚠️  @${ownerUsername} já existe no banco - atualizando hashtags`);
+            // 🔄 UPDATE com merge de hashtags
+            const existingHashtags = existing.hashtags_posts || [];
+            const newHashtags = postHashtags || [];
+            const mergedHashtags = [...new Set([...existingHashtags, ...newHashtags])];
+            console.log(`   🔄 @${ownerUsername} já existe - atualizando perfil (${existingHashtags.length} + ${newHashtags.length} = ${mergedHashtags.length} hashtags)`);
+
+            // Calcular lead_score (activity_score 0-100 → lead_score 0-1)
+            const leadScore = profileData.activity_score ? profileData.activity_score / 100 : null;
+
             await supabase
               .from('instagram_leads')
               .update({
-                hashtags_posts: postHashtags && postHashtags.length > 0 ? postHashtags : null,
-                updated_at: new Date().toISOString()
+                full_name: profileData.full_name,
+                bio: profileData.bio,
+                website: profileData.website,
+                email: profileData.email,
+                phone: profileData.phone,
+                followers_count: profileData.followers_count,
+                following_count: profileData.following_count,
+                posts_count: profileData.posts_count,
+                profile_pic_url: profileData.profile_pic_url,
+                is_verified: profileData.is_verified,
+                is_business_account: profileData.is_business_account,
+                business_category: profileData.business_category,
+                city: profileData.city,
+                state: profileData.state,
+                neighborhood: profileData.neighborhood,
+                address: profileData.address,
+                zip_code: profileData.zip_code,
+                activity_score: profileData.activity_score,
+                is_active: profileData.is_active,
+                language: languageDetection.language,  // ADICIONADO - estava faltando!
+                lead_score: leadScore,
+                hashtags_bio: profileData.hashtags_bio || null,
+                hashtags_posts: mergedHashtags.length > 0 ? mergedHashtags : null,
+                updated_at: new Date().toISOString(),
+                // RESETAR flags de enriquecimento para reprocessar
+                url_enriched: false,
+                dado_enriquecido: false
+                // NÃO ATUALIZA: search_term_used, captured_at, contact_status, etc.
               })
-              .eq('username', ownerUsername);
+              .eq('id', existing.id);
+            console.log(`   ✅ @${ownerUsername} ATUALIZADO`);
           } else {
             // Inserir novo lead
+            // Calcular lead_score para INSERT
+            const insertLeadScore = profileData.activity_score ? profileData.activity_score / 100 : null;
+
             const { error: insertError } = await supabase
               .from('instagram_leads')
               .insert({
@@ -5741,6 +5781,10 @@ export async function scrapeInstagramExplore(
                 neighborhood: profileData.neighborhood,
                 address: profileData.address,
                 zip_code: profileData.zip_code,
+                activity_score: profileData.activity_score,
+                is_active: profileData.is_active,
+                language: languageDetection.language,  // ADICIONADO - estava faltando!
+                lead_score: insertLeadScore,
                 hashtags_bio: profileData.hashtags_bio || null,
                 hashtags_posts: postHashtags && postHashtags.length > 0 ? postHashtags : null,
                 search_term_used: SEARCH_TERM_MARKER,

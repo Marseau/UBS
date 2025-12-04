@@ -2891,18 +2891,18 @@ router.post('/process-all-pre-lead', async (req: Request, res: Response) => {
         console.log(`\n[${i + 1}/${toProcess.length}] Processando @${username} (de @${source_username})...`);
 
         try {
-          // Verificar se já existe
+          // Verificar se já existe - buscar hashtags_posts para merge
+          let existingLeadData: { id: string; hashtags_posts: string[] | null } | null = null;
           const { data: existingLead } = await supabase
             .from('instagram_leads')
-            .select('id')
+            .select('id, hashtags_posts')
             .eq('username', username)
             .single();
 
           if (existingLead) {
-            console.log(`   ⚠️  @${username} já existe em instagram_leads`);
-            results.push({ username, valid: true, reason: 'Já existe', lead_id: existingLead.id, source_username });
-            updateUsernameStatus(itemPreLeadId, username, true);
-            continue;
+            existingLeadData = existingLead;
+            console.log(`   🔄 @${username} já existe - vamos ATUALIZAR (${existingLead.hashtags_posts?.length || 0} hashtags existentes)`);
+            // Continua para extração e fará UPDATE ao invés de INSERT
           }
 
           // Navegar para o perfil
@@ -2967,46 +2967,118 @@ router.post('/process-all-pre-lead', async (req: Request, res: Response) => {
             console.log(`   ⚠️  Erro ao extrair hashtags`);
           }
 
-          // Salvar no banco
-          const { data: newLead, error: insertError } = await supabase
-            .from('instagram_leads')
-            .insert({
-              username: profileData.username,
-              full_name: profileData.full_name,
-              bio: profileData.bio,
-              website: profileData.website,
-              email: profileData.email,
-              phone: profileData.phone,
-              followers_count: profileData.followers_count,
-              following_count: profileData.following_count,
-              posts_count: profileData.posts_count,
-              profile_pic_url: profileData.profile_pic_url,
-              is_business_account: profileData.is_business_account,
-              is_verified: profileData.is_verified,
-              city: profileData.city,
-              state: profileData.state,
-              address: profileData.address,
-              activity_score: activityScore.score,
-              is_active: activityScore.isActive,
-              language: languageDetection.language,
-              hashtags_posts: hashtagsPosts,
-              search_term_used: source_username,
-              followers_scraped: true,
-              discovered_from_profile: source_username,
-              lead_source: 'competitor_follower',
-              captured_at: new Date().toISOString()
-            })
-            .select()
-            .single();
+          // Salvar no banco (UPDATE se existe, INSERT se novo)
+          if (existingLeadData) {
+            // 🔄 UPDATE: Perfil já existe - atualizar dados dinâmicos, merge hashtags
+            const existingHashtags = existingLeadData.hashtags_posts || [];
+            const newHashtags = hashtagsPosts || [];
+            const mergedHashtags = [...new Set([...existingHashtags, ...newHashtags])];
+            console.log(`   🏷️  Hashtags: ${existingHashtags.length} existentes + ${newHashtags.length} novas = ${mergedHashtags.length} únicas`);
 
-          if (insertError) {
-            console.log(`   ❌ Erro ao salvar: ${insertError.message}`);
-            results.push({ username, valid: false, reason: `Erro DB: ${insertError.message}`, source_username });
-            updateUsernameStatus(itemPreLeadId, username, false);
+            // Calcular lead_score (activity_score 0-100 → lead_score 0-1)
+            const leadScore = activityScore.score ? activityScore.score / 100 : null;
+
+            // Extrair hashtags_bio se disponível
+            const hashtagsBio = profileData.bio
+              ? (profileData.bio.match(/#\w+/g) || []).map((h: string) => h.toLowerCase())
+              : null;
+
+            const { error: updateError } = await supabase
+              .from('instagram_leads')
+              .update({
+                full_name: profileData.full_name,
+                bio: profileData.bio,
+                website: profileData.website,
+                email: profileData.email,
+                phone: profileData.phone,
+                followers_count: profileData.followers_count,
+                following_count: profileData.following_count,
+                posts_count: profileData.posts_count,
+                profile_pic_url: profileData.profile_pic_url,
+                is_business_account: profileData.is_business_account,
+                is_verified: profileData.is_verified,
+                business_category: profileData.business_category,  // ADICIONADO
+                city: profileData.city,
+                state: profileData.state,
+                neighborhood: profileData.neighborhood,  // ADICIONADO
+                address: profileData.address,
+                zip_code: profileData.zip_code,  // ADICIONADO
+                activity_score: activityScore.score,
+                is_active: activityScore.isActive,
+                language: languageDetection.language,
+                hashtags_bio: hashtagsBio && hashtagsBio.length > 0 ? hashtagsBio : null,  // ADICIONADO
+                hashtags_posts: mergedHashtags.length > 0 ? mergedHashtags : null,
+                lead_score: leadScore,  // ADICIONADO
+                updated_at: new Date().toISOString(),
+                // RESETAR flags de enriquecimento para reprocessar
+                url_enriched: false,
+                dado_enriquecido: false
+                // NÃO ATUALIZA: search_term_used, captured_at, contact_status, etc.
+              })
+              .eq('id', existingLeadData.id);
+
+            if (updateError) {
+              console.log(`   ❌ Erro ao atualizar: ${updateError.message}`);
+              results.push({ username, valid: false, reason: `Erro DB: ${updateError.message}`, source_username });
+              updateUsernameStatus(itemPreLeadId, username, false);
+            } else {
+              console.log(`   ✅ Atualizado ID: ${existingLeadData.id}`);
+              results.push({ username, valid: true, reason: 'Atualizado', lead_id: existingLeadData.id, source_username });
+              updateUsernameStatus(itemPreLeadId, username, true);
+            }
           } else {
-            console.log(`   ✅ Salvo com ID: ${newLead?.id}`);
-            results.push({ username, valid: true, reason: 'Aprovado', lead_id: newLead?.id, source_username });
-            updateUsernameStatus(itemPreLeadId, username, true);
+            // 🆕 INSERT: Novo perfil
+            // Calcular lead_score e hashtags_bio para INSERT (mesmo cálculo do UPDATE)
+            const insertLeadScore = activityScore.score ? activityScore.score / 100 : null;
+            const insertHashtagsBio = profileData.bio
+              ? (profileData.bio.match(/#\w+/g) || []).map((h: string) => h.toLowerCase())
+              : null;
+
+            const { data: newLead, error: insertError } = await supabase
+              .from('instagram_leads')
+              .insert({
+                username: profileData.username,
+                full_name: profileData.full_name,
+                bio: profileData.bio,
+                website: profileData.website,
+                email: profileData.email,
+                phone: profileData.phone,
+                followers_count: profileData.followers_count,
+                following_count: profileData.following_count,
+                posts_count: profileData.posts_count,
+                profile_pic_url: profileData.profile_pic_url,
+                is_business_account: profileData.is_business_account,
+                is_verified: profileData.is_verified,
+                business_category: profileData.business_category,  // ADICIONADO
+                city: profileData.city,
+                state: profileData.state,
+                neighborhood: profileData.neighborhood,  // ADICIONADO
+                address: profileData.address,
+                zip_code: profileData.zip_code,  // ADICIONADO
+                activity_score: activityScore.score,
+                is_active: activityScore.isActive,
+                language: languageDetection.language,
+                hashtags_bio: insertHashtagsBio && insertHashtagsBio.length > 0 ? insertHashtagsBio : null,  // ADICIONADO
+                hashtags_posts: hashtagsPosts,
+                lead_score: insertLeadScore,  // ADICIONADO
+                search_term_used: source_username,
+                followers_scraped: true,
+                discovered_from_profile: source_username,
+                lead_source: 'competitor_follower',
+                captured_at: new Date().toISOString()
+              })
+              .select()
+              .single();
+
+            if (insertError) {
+              console.log(`   ❌ Erro ao salvar: ${insertError.message}`);
+              results.push({ username, valid: false, reason: `Erro DB: ${insertError.message}`, source_username });
+              updateUsernameStatus(itemPreLeadId, username, false);
+            } else {
+              console.log(`   ✅ Salvo com ID: ${newLead?.id}`);
+              results.push({ username, valid: true, reason: 'Aprovado', lead_id: newLead?.id, source_username });
+              updateUsernameStatus(itemPreLeadId, username, true);
+            }
           }
 
         } catch (profileError: any) {

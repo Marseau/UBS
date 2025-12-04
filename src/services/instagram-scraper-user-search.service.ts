@@ -564,7 +564,7 @@ export async function scrapeInstagramUserSearch(
         }
 
         // ========================================
-        // VALIDAÇÃO 0: VERIFICAR SE PERFIL JÁ EXISTE NO BANCO (ANTES DE TODAS AS VALIDAÇÕES)
+        // VERIFICAR SE PERFIL JÁ EXISTE NO BANCO - SE SIM, VAMOS ATUALIZAR
         // ========================================
         console.log(`   🔍 Verificando se @${username} já existe no banco de dados...`);
         const { createClient } = await import('@supabase/supabase-js');
@@ -573,18 +573,21 @@ export async function scrapeInstagramUserSearch(
           process.env.SUPABASE_SERVICE_ROLE_KEY || ''
         );
 
+        let existingLeadData: { id: string; hashtags_posts: string[] | null } | null = null;
         const { data: existingLead } = await supabase
           .from('instagram_leads')
-          .select('username')
+          .select('id, hashtags_posts')
           .eq('username', username)
           .single();
 
         if (existingLead) {
-          console.log(`   ⏭️  @${username} JÁ EXISTE no banco! Pulando TODAS as validações e extração de hashtags...`);
-          continue;
+          existingLeadData = existingLead;
+          console.log(`   🔄 @${username} JÁ EXISTE no banco! Vamos ATUALIZAR o perfil...`);
+          console.log(`   📊 Hashtags existentes: ${existingLead.hashtags_posts?.length || 0}`);
+          // Continua para extração e fará UPDATE ao invés de INSERT
+        } else {
+          console.log(`   ✅ @${username} não existe no banco. Prosseguindo com validações...`);
         }
-
-        console.log(`   ✅ @${username} não existe no banco. Prosseguindo com validações...`);
 
         // ========================================
         // VALIDAÇÃO ANTES DE CLICAR NOS POSTS
@@ -658,26 +661,81 @@ export async function scrapeInstagramUserSearch(
           // Sanitizar dados (similar ao toSQL do N8N)
           const sanitizedProfile = sanitizeForDatabase(profileData);
 
-          // Adicionar campos adicionais necessários para o banco
-          const profileToSave = {
-            ...sanitizedProfile,
-            captured_at: new Date().toISOString(),
-            lead_source: 'user_search',
-            lead_score: leadScore,
-            // segment e search_term_id podem ser NULL para scraping manual
-            segment: null,
-            search_term_id: null
-          };
-          // phones_normalized será preenchido pelo trigger trg_normalize_instagram_lead()
+          if (existingLeadData) {
+            // 🔄 UPDATE: Perfil já existe - atualizar dados dinâmicos, preservar históricos
+            console.log(`   🔄 Atualizando perfil existente @${username}...`);
 
-          const { error: insertError } = await supabase
-            .from('instagram_leads')
-            .insert(profileToSave);
+            // MERGE hashtags_posts: combinar existentes + novas sem duplicatas
+            const existingHashtags = existingLeadData.hashtags_posts || [];
+            const newHashtags = sanitizedProfile.hashtags_posts || [];
+            const mergedHashtags = [...new Set([...existingHashtags, ...newHashtags])];
+            console.log(`   🏷️  Hashtags: ${existingHashtags.length} existentes + ${newHashtags.length} novas = ${mergedHashtags.length} únicas`);
 
-          if (insertError) {
-            console.log(`   ⚠️  Erro ao salvar @${username} no banco: ${insertError.message}`);
+            // Campos a ATUALIZAR (dados dinâmicos)
+            const updateData = {
+              full_name: sanitizedProfile.full_name,
+              bio: sanitizedProfile.bio,
+              website: sanitizedProfile.website,
+              email: sanitizedProfile.email,
+              phone: sanitizedProfile.phone,
+              followers_count: sanitizedProfile.followers_count,
+              following_count: sanitizedProfile.following_count,
+              posts_count: sanitizedProfile.posts_count,
+              profile_pic_url: sanitizedProfile.profile_pic_url,
+              is_verified: sanitizedProfile.is_verified,
+              is_business_account: sanitizedProfile.is_business_account,
+              business_category: sanitizedProfile.business_category,
+              city: sanitizedProfile.city,
+              state: sanitizedProfile.state,
+              neighborhood: sanitizedProfile.neighborhood,
+              address: sanitizedProfile.address,
+              zip_code: sanitizedProfile.zip_code,
+              activity_score: sanitizedProfile.activity_score,
+              is_active: sanitizedProfile.is_active,
+              language: sanitizedProfile.language,
+              hashtags_bio: sanitizedProfile.hashtags_bio,
+              hashtags_posts: mergedHashtags.length > 0 ? mergedHashtags : null,
+              lead_score: leadScore,
+              updated_at: new Date().toISOString(),
+              // RESETAR flags de enriquecimento para reprocessar
+              url_enriched: false,
+              dado_enriquecido: false
+              // NÃO ATUALIZA: search_term_id, search_term_used, captured_at,
+              //              contact_status, is_qualified, qualification_notes, contacted_at
+            };
+
+            const { error: updateError } = await supabase
+              .from('instagram_leads')
+              .update(updateData)
+              .eq('id', existingLeadData.id);
+
+            if (updateError) {
+              console.log(`   ⚠️  Erro ao atualizar @${username}: ${updateError.message}`);
+            } else {
+              console.log(`   ✅ Perfil @${username} ATUALIZADO NO BANCO`);
+            }
           } else {
-            console.log(`   ✅ Perfil @${username} SALVO NO BANCO`);
+            // 🆕 INSERT: Novo perfil
+            const profileToSave = {
+              ...sanitizedProfile,
+              captured_at: new Date().toISOString(),
+              lead_source: 'user_search',
+              lead_score: leadScore,
+              // segment e search_term_id podem ser NULL para scraping manual
+              segment: null,
+              search_term_id: null
+            };
+            // phones_normalized será preenchido pelo trigger trg_normalize_instagram_lead()
+
+            const { error: insertError } = await supabase
+              .from('instagram_leads')
+              .insert(profileToSave);
+
+            if (insertError) {
+              console.log(`   ⚠️  Erro ao salvar @${username} no banco: ${insertError.message}`);
+            } else {
+              console.log(`   ✅ Perfil @${username} SALVO NO BANCO (novo)`);
+            }
           }
         } catch (dbError: any) {
           console.log(`   ⚠️  Erro ao salvar @${username}: ${dbError.message}`);
