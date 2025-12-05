@@ -1,0 +1,362 @@
+{
+  "name": "WhatsApp AI Agent - Responder Mensagens",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-warmup-response",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Whapi",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "whatsapp-warmup-response"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-message",
+              "leftValue": "={{ $json.body.event }}",
+              "rightValue": "messages",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "not-from-me",
+              "leftValue": "={{ $json.body.messages[0].from_me }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-incoming",
+      "name": "Mensagem Recebida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "phone",
+              "name": "phone",
+              "value": "={{ $json.body.messages[0].chat_id.replace('@s.whatsapp.net', '') }}",
+              "type": "string"
+            },
+            {
+              "id": "message",
+              "name": "message",
+              "value": "={{ $json.body.messages[0].text?.body || $json.body.messages[0].caption || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "name",
+              "name": "contact_name",
+              "value": "={{ $json.body.messages[0].from_name || 'Cliente' }}",
+              "type": "string"
+            },
+            {
+              "id": "message_id",
+              "name": "message_id",
+              "value": "={{ $json.body.messages[0].id }}",
+              "type": "string"
+            },
+            {
+              "id": "timestamp",
+              "name": "timestamp",
+              "value": "={{ $json.body.messages[0].timestamp }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-data",
+      "name": "Extrair Dados",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [440, -100]
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "warmup_schedule",
+          "mode": "list"
+        },
+        "limit": 1,
+        "where": {
+          "values": [
+            {
+              "column": "phone",
+              "value": "={{ $json.phone }}"
+            },
+            {
+              "column": "status",
+              "value": "sent"
+            }
+          ]
+        },
+        "sort": {
+          "values": [
+            {
+              "column": "sent_at",
+              "direction": "DESC"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-context",
+      "name": "Buscar Contexto",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [660, -100],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Voce e um assistente de vendas da AIC (Academia de Inteligencia Comercial). Seu objetivo e qualificar leads e agendar reunioes.\n\nContexto da conversa anterior:\n- DM enviada: {{ $('Buscar Contexto').item.json.dm_script || 'Mensagem inicial de prospecao' }}\n- Persona: {{ $('Buscar Contexto').item.json.persona_name || 'Consultor AIC' }}\n\nRegras:\n1. Seja cordial e profissional\n2. Responda de forma curta (max 2-3 frases)\n3. Se o lead demonstrar interesse, oferecer agendar uma conversa\n4. Se nao tiver interesse, agradecer educadamente\n5. Nunca seja insistente ou agressivo\n6. Use emojis com moderacao"
+            },
+            {
+              "role": "user",
+              "content": "=Nome do contato: {{ $('Extrair Dados').item.json.contact_name }}\n\nMensagem recebida:\n{{ $('Extrair Dados').item.json.message }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 150,
+          "temperature": 0.7
+        }
+      },
+      "id": "ai-agent",
+      "name": "Agente IA",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [880, -100],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credentials",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://gate.whapi.cloud/messages/text",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "typing_time",
+              "value": "={{ Math.floor(Math.random() * 3) + 1 }}"
+            },
+            {
+              "name": "to",
+              "value": "={{ $('Extrair Dados').item.json.phone }}"
+            },
+            {
+              "name": "body",
+              "value": "={{ $('Agente IA').item.json.message.content }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-response",
+      "name": "Enviar Resposta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, -100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "whapi-auth",
+          "name": "Whapi Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "warmup_conversations",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Extrair Dados').item.json.phone }}",
+            "contact_name": "={{ $('Extrair Dados').item.json.contact_name }}",
+            "message_received": "={{ $('Extrair Dados').item.json.message }}",
+            "message_sent": "={{ $('Agente IA').item.json.message.content }}",
+            "warmup_schedule_id": "={{ $('Buscar Contexto').item.json.id }}",
+            "created_at": "={{ $now.toISO() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-conversation",
+      "name": "Salvar Conversa",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1320, -100],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "no-op-ignored",
+      "name": "Ignorar",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [440, 100]
+    },
+    {
+      "parameters": {
+        "content": "### WhatsApp AI Agent\n\nEste workflow:\n1. Recebe mensagens via webhook Whapi\n2. Busca contexto da DM enviada\n3. Usa GPT-4 para gerar resposta\n4. Envia resposta via Whapi\n5. Salva conversa no banco\n\n**Webhook URL:**\n`/webhook/whatsapp-warmup-response`\n\n**Configurar no Whapi:**\nSettings > Webhooks > Add URL",
+        "height": 280,
+        "width": 320
+      },
+      "id": "sticky-info",
+      "name": "Info",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-200, -200]
+    }
+  ],
+  "connections": {
+    "Webhook Whapi": {
+      "main": [
+        [
+          {
+            "node": "Mensagem Recebida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensagem Recebida?": {
+      "main": [
+        [
+          {
+            "node": "Extrair Dados",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignorar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Dados": {
+      "main": [
+        [
+          {
+            "node": "Buscar Contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Contexto": {
+      "main": [
+        [
+          {
+            "node": "Agente IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente IA": {
+      "main": [
+        [
+          {
+            "node": "Enviar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Resposta": {
+      "main": [
+        [
+          {
+            "node": "Salvar Conversa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "WhatsApp",
+      "id": "whatsapp"
+    },
+    {
+      "name": "AI Agent",
+      "id": "ai-agent"
+    }
+  ]
+}

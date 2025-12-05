@@ -80,8 +80,97 @@ import { resolveTenant } from './middleware/resolve-tenant';
 app.use('/api/whatsapp-v3/webhook', resolveTenant);
 app.use('/api/whatsapp/webhook', resolveTenant);
 
-// Servir arquivos estáticos da pasta frontend
+// Rota para listar todos os arquivos HTML disponíveis (ANTES do static)
+app.get('/src/frontend/html', async (_req, res) => {
+  try {
+    const fs = await import('fs');
+    const frontendDir = path.join(__dirname, 'frontend');
+    const files = fs.readdirSync(frontendDir)
+      .filter((f: string) => f.endsWith('.html'))
+      .sort((a: string, b: string) => a.localeCompare(b));
+
+    const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Frontend HTML Files</title>
+  <style>
+    body { margin: 0; padding: 20px; font-family: 'Inter', system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+    .page { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 24px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 14px; }
+    .card a { color: #60a5fa; text-decoration: none; font-weight: 500; }
+    .card a:hover { text-decoration: underline; }
+    .card small { display: block; color: #94a3b8; margin-top: 4px; font-size: 12px; }
+    .stats { background: #0b1221; border: 1px solid #1f2937; border-radius: 10px; padding: 14px; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>📄 Frontend HTML Files</h1>
+    <div class="stats">Total: <strong>${files.length}</strong> arquivos HTML</div>
+    <div class="grid">
+      ${files.map((f: string) => `
+        <div class="card">
+          <a href="/${f}" target="_blank">${f}</a>
+          <small>/${f}</small>
+        </div>
+      `).join('')}
+    </div>
+  </div>
+</body>
+</html>`;
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Servir arquivos estáticos da pasta frontend (DEPOIS da rota /html)
 app.use('/src/frontend', express.static(path.join(__dirname, 'frontend')));
+
+// NOTA: Rota /docs removida - documentos MD são confidenciais
+// Documentação disponível apenas via páginas HTML estilizadas em /aic-docs.html
+
+// Rota protegida para PDFs confidenciais (usado pelo viewer)
+app.get('/api/aic-pdf/:filename', (req, res): void => {
+  const { filename } = req.params;
+
+  // Validar referer - deve vir do nosso viewer
+  const referer = req.get('Referer') || '';
+  const isFromViewer = referer.includes('/aic-pdf-viewer.html') || referer.includes('localhost');
+
+  if (!isFromViewer && process.env.NODE_ENV === 'production') {
+    res.status(403).json({ error: 'Acesso negado. Use o viewer oficial.' });
+    return;
+  }
+
+  // Caminho do PDF
+  const pdfPath = path.join(process.cwd(), 'src', 'assets', 'pdfs-protegidos', filename);
+
+  // Verificar se existe
+  const fs = require('fs');
+  if (!fs.existsSync(pdfPath)) {
+    res.status(404).json({ error: 'Documento não encontrado' });
+    return;
+  }
+
+  // Headers de proteção
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'inline'); // Não permite download direto
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+
+  // Stream o arquivo
+  const fileStream = fs.createReadStream(pdfPath);
+  fileStream.pipe(res);
+});
 
 // Autenticação para rotas da API de Admin
 const authMiddleware = new AdminAuthMiddleware();
@@ -786,6 +875,36 @@ try {
   console.log('✅ Whapi.cloud routes loaded - WHATSAPP API INTEGRATION READY');
 } catch (error) {
   console.error("❌ Failed to load Whapi.cloud routes:", error);
+}
+
+// WhatsApp Warmup Routes - Sistema de aquecimento de linhas
+try {
+  const warmupRoutes = require('./routes/warmup.routes');
+  const router = 'default' in warmupRoutes ? warmupRoutes.default : warmupRoutes;
+  app.use('/api/warmup', router);
+  console.log('✅ WhatsApp Warmup routes loaded - WARMUP SYSTEM READY');
+} catch (error) {
+  console.error("❌ Failed to load Warmup routes:", error);
+}
+
+// AIC Puppeteer Routes - Sistema de envio humanizado via Puppeteer
+try {
+  const aicPuppeteerRoutes = require('./routes/aic-puppeteer.routes');
+  const router = 'default' in aicPuppeteerRoutes ? aicPuppeteerRoutes.default : aicPuppeteerRoutes;
+  app.use('/api/aic/puppeteer', router);
+  console.log('✅ AIC Puppeteer routes loaded - HUMANIZED WHATSAPP SENDING READY');
+} catch (error) {
+  console.error("❌ Failed to load AIC Puppeteer routes:", error);
+}
+
+// AIC Outreach Routes - Sistema de controle de outreach e tracking
+try {
+  const aicOutreachRoutes = require('./routes/aic-outreach.routes');
+  const router = 'default' in aicOutreachRoutes ? aicOutreachRoutes.default : aicOutreachRoutes;
+  app.use('/api/aic/outreach', router);
+  console.log('✅ AIC Outreach routes loaded - MULTI-CHANNEL OUTREACH + LANDING PAGE TRACKING READY');
+} catch (error) {
+  console.error("❌ Failed to load AIC Outreach routes:", error);
 }
 
 // Define o caminho para a pasta frontend de forma explícita e segura
