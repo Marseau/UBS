@@ -21,6 +21,7 @@ import {
   moveMouseHuman
 } from './instagram-stealth.service';
 import { proxyRotationService } from './proxy-rotation.service';
+import { triggerLeadEmbedding } from './lead-embedding-webhook.service';
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase client para verificações de duplicatas
@@ -3405,14 +3406,20 @@ export async function scrapeInstagramTag(
                 };
                 // phones_normalized será preenchido pelo trigger trg_normalize_instagram_lead()
 
-                const { error: insertError } = await supabase
+                const { data: insertedLead, error: insertError } = await supabase
                   .from('instagram_leads')
-                  .insert(profileToSave);
+                  .insert(profileToSave)
+                  .select('id')
+                  .single();
 
                 if (insertError) {
                   console.log(`   ⚠️  Erro ao salvar @${username} no banco: ${insertError.message}`);
                 } else {
                   console.log(`   ✅ Perfil @${username} SALVO NO BANCO (novo)`);
+                  // 🔗 DISPARAR WEBHOOK PARA EMBEDDING (fire-and-forget)
+                  if (insertedLead?.id) {
+                    triggerLeadEmbedding(insertedLead.id, username, 'insert', 'scrape-tag');
+                  }
                 }
               }
 
