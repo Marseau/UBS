@@ -1264,7 +1264,8 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
     const {
       lead_id,
       url,
-      update_database = false
+      update_database = false,
+      deep_links = false
     } = req.body;
 
     if (!url) {
@@ -1276,8 +1277,30 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
 
     console.log(`🔍 [SCRAPE-URL] Iniciando scraping: ${url}`);
 
-    // Scrape URL
-    const result = await UrlScraperService.scrapeUrl(url);
+    // Scrape URL COM TIMEOUT DE 45 SEGUNDOS
+    const SCRAPE_TIMEOUT_MS = 45000;
+    const scrapePromise = UrlScraperService.scrapeUrl(url, { deepLinks: !!deep_links });
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`TIMEOUT: scraping de ${url} demorou mais de 45s`)), SCRAPE_TIMEOUT_MS)
+    );
+
+    let result;
+    try {
+      result = await Promise.race([scrapePromise, timeoutPromise]);
+    } catch (timeoutError: any) {
+      console.error(`⏰ [SCRAPE-URL] TIMEOUT para ${url}: ${timeoutError.message}`);
+      // Retorna erro mas não trava - o workflow n8n pode continuar
+      return res.status(408).json({
+        success: false,
+        message: 'Timeout: URL demorou muito para responder',
+        url,
+        lead_id,
+        error: timeoutError.message,
+        emails: [],
+        phones: [],
+        database_updated: false
+      });
+    }
 
     // Se update_database=true e lead_id fornecido, atualizar no banco
     if (update_database && lead_id) {
@@ -1312,6 +1335,7 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
         additional_emails: mergedEmails,
         additional_phones: mergedPhones,
         url_enriched: true,
+        website_text: result.website_text || null,  // Texto do website para embedding
         updated_at: new Date().toISOString()
       };
 
@@ -1347,6 +1371,8 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
       url,
       emails: result.emails,
       phones: result.phones,
+      website_text: result.website_text ? `${result.website_text.substring(0, 500)}...` : null,  // Preview truncado
+      website_text_length: result.website_text?.length || 0,
       total_contacts: result.emails.length + result.phones.length,
       database_updated: update_database && lead_id ? true : false
     });

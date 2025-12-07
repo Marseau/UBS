@@ -17,6 +17,7 @@ interface ScrapedContacts {
   phones: string[];
   success: boolean;
   error?: string;
+  website_text?: string;
   sources?: {
     main_page?: boolean;
     whatsapp_links?: boolean;
@@ -26,6 +27,10 @@ interface ScrapedContacts {
     facebook?: boolean;
     youtube?: boolean;
   };
+}
+
+interface ScrapeOptions {
+  deepLinks?: boolean;
 }
 
 export class UrlScraperService {
@@ -39,6 +44,8 @@ export class UrlScraperService {
   private static readonly MAX_CONCURRENT_SCRAPERS: number = 2; // Máximo 2 scrapes simultâneos
   private static scrapeQueue: Array<{
     url: string;
+    cacheKey: string;
+    options: ScrapeOptions;
     resolve: (value: ScrapedContacts) => void;
     reject: (reason: any) => void;
   }> = [];
@@ -101,10 +108,10 @@ export class UrlScraperService {
         this.activeScrapers++;
         console.log(`🔄 [URL-SCRAPER] Processando da fila (${this.activeScrapers}/${this.MAX_CONCURRENT_SCRAPERS} ativos, ${this.scrapeQueue.length} na fila)`);
 
-        this.doScrapeUrl(item.url)
+        this.doScrapeUrl(item.url, item.options)
           .then(result => {
             this.activeScrapers--;
-            this.setCachedResult(item.url, result); // Salvar no cache
+            this.setCachedResult(item.cacheKey, result); // Salvar no cache
             item.resolve(result);
             this.processQueue(); // Continuar processando fila
           })
@@ -311,7 +318,7 @@ export class UrlScraperService {
    * @param linktreeUrl - Linktr.ee URL
    * @returns Object with emails and phones arrays
    */
-  private static async scrapeLinktrPage(page: Page, linktreeUrl: string): Promise<{ emails: string[]; phones: string[] }> {
+  private static async scrapeLinktrPage(page: Page, linktreeUrl: string, options: ScrapeOptions = {}): Promise<{ emails: string[]; phones: string[] }> {
     try {
       console.log(`  🌳 [LINKTR.EE] Navegando para: ${linktreeUrl}`);
       await page.goto(linktreeUrl, { waitUntil: 'networkidle2', timeout: 30000 });
@@ -337,19 +344,29 @@ export class UrlScraperService {
 
       console.log(`  🔗 [LINKTR.EE] Encontrados ${links.length} links para processar`);
 
-      // 3. Visitar até 5 links (priorizar WhatsApp e sites próprios)
-      const prioritizedLinks = links.filter(link =>
-        link.includes('wa.me') || link.includes('whatsapp')
-      ).concat(links.filter(link =>
-        !link.includes('wa.me') && !link.includes('whatsapp') &&
-        !link.includes('instagram.com') && !link.includes('facebook.com') &&
-        !link.includes('youtube.com') && !link.includes('tiktok.com')
-      ));
+      // 3. Visitar links leves (priorizar contato direto; modo deep expande links)
+      const MAX_VISITS = options.deepLinks ? 5 : 3;
+      const PER_LINK_TIMEOUT_MS = 5000;
+      const contactLinks = links.filter(link =>
+        link.startsWith('http') &&
+        (link.includes('wa.me') || link.includes('whatsapp') || link.includes('mailto:') || link.includes('tel:'))
+      );
+      const genericLinks = links.filter(link =>
+        link.startsWith('http') &&
+        !contactLinks.includes(link) &&
+        !link.includes('instagram.com') &&
+        !link.includes('facebook.com') &&
+        !link.includes('youtube.com') &&
+        !link.includes('tiktok.com')
+      );
+      const prioritizedLinks = options.deepLinks
+        ? [...contactLinks, ...genericLinks].slice(0, MAX_VISITS)
+        : contactLinks.slice(0, MAX_VISITS);
 
-      for (let i = 0; i < Math.min(prioritizedLinks.length, 5); i++) {
+      for (let i = 0; i < Math.min(prioritizedLinks.length, MAX_VISITS); i++) {
         const link = prioritizedLinks[i];
         try {
-          console.log(`    🔍 [LINKTR.EE] Visitando link ${i + 1}/5: ${link}`);
+          console.log(`    🔍 [LINKTR.EE] Visitando link ${i + 1}/${MAX_VISITS}: ${link}`);
 
           // Se for WhatsApp, extrair diretamente
           if (link.includes('wa.me') || link.includes('whatsapp')) {
@@ -358,26 +375,33 @@ export class UrlScraperService {
             continue;
           }
 
-          // Navegar para o link
-          await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 15000 });
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          const linkPage = await page.browser().newPage();
+          try {
+            await Promise.race([
+              linkPage.goto(link, { waitUntil: 'domcontentloaded', timeout: PER_LINK_TIMEOUT_MS }),
+              new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout manual: link > ${PER_LINK_TIMEOUT_MS}ms`)), PER_LINK_TIMEOUT_MS))
+            ]);
+            await new Promise(resolve => setTimeout(resolve, 500));
 
-          const linkHtml = await page.content();
-          const linkText = await page.evaluate(() => (document as any).body.innerText);
+            const linkHtml = await linkPage.content();
+            const linkText = await linkPage.evaluate(() => (document as any).body.innerText);
 
-          // Extrair emails
-          const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-          const foundEmails = linkHtml.match(emailRegex) || [];
-          emails.push(...foundEmails.filter(e =>
-            !e.includes('example.com') && !e.includes('linktr.ee')
-          ));
+            // Extrair emails
+            const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+            const foundEmails = linkHtml.match(emailRegex) || [];
+            emails.push(...foundEmails.filter(e =>
+              !e.includes('example.com') && !e.includes('linktr.ee')
+            ));
 
-          // Extrair telefones
-          const linkPhones = this.extractWhatsAppPhones(linkHtml);
-          phones.push(...linkPhones.map(p => p.replace(/[^0-9]/g, '')));
+            // Extrair telefones
+            const linkPhones = this.extractWhatsAppPhones(linkHtml);
+            phones.push(...linkPhones.map(p => p.replace(/[^0-9]/g, '')));
 
-          const textPhones = this.extractPhonesFromText(linkText);
-          phones.push(...textPhones.map(p => p.replace(/[^0-9]/g, '')));
+            const textPhones = this.extractPhonesFromText(linkText);
+            phones.push(...textPhones.map(p => p.replace(/[^0-9]/g, '')));
+          } finally {
+            try { await linkPage.close(); } catch {}
+          }
 
         } catch (linkError: any) {
           console.log(`    ⚠️  [LINKTR.EE] Erro no link ${i + 1}: ${linkError.message}`);
@@ -404,7 +428,7 @@ export class UrlScraperService {
    * @param beaconsUrl - Beacons.ai URL
    * @returns Object with emails and phones arrays
    */
-  private static async scrapeBeaconsPage(page: Page, beaconsUrl: string): Promise<{ emails: string[]; phones: string[] }> {
+  private static async scrapeBeaconsPage(page: Page, beaconsUrl: string, options: ScrapeOptions = {}): Promise<{ emails: string[]; phones: string[] }> {
     try {
       console.log(`  🔦 [BEACONS.AI] Navegando para: ${beaconsUrl}`);
       await page.goto(beaconsUrl, { waitUntil: 'networkidle2', timeout: 30000 });
@@ -412,6 +436,8 @@ export class UrlScraperService {
 
       const emails: string[] = [];
       const phones: string[] = [];
+      const MAX_VISITS = options.deepLinks ? 5 : 3;
+      const PER_LINK_TIMEOUT_MS = 5000;
 
       // Extrair HTML da página principal
       const html = await page.content();
@@ -430,19 +456,27 @@ export class UrlScraperService {
 
       console.log(`  🔗 [BEACONS.AI] Encontrados ${links.length} links para processar`);
 
-      // 3. Visitar até 5 links (mesma lógica do linktr.ee)
-      const prioritizedLinks = links.filter(link =>
-        link.includes('wa.me') || link.includes('whatsapp')
-      ).concat(links.filter(link =>
-        !link.includes('wa.me') && !link.includes('whatsapp') &&
-        !link.includes('instagram.com') && !link.includes('facebook.com') &&
-        !link.includes('youtube.com') && !link.includes('tiktok.com')
-      ));
+      // 3. Visitar links leves (modo deep expande seleção)
+      const contactLinks = links.filter(link =>
+        link.startsWith('http') &&
+        (link.includes('wa.me') || link.includes('whatsapp') || link.includes('mailto:') || link.includes('tel:'))
+      );
+      const genericLinks = links.filter(link =>
+        link.startsWith('http') &&
+        !contactLinks.includes(link) &&
+        !link.includes('instagram.com') &&
+        !link.includes('facebook.com') &&
+        !link.includes('youtube.com') &&
+        !link.includes('tiktok.com')
+      );
+      const prioritizedLinks = options.deepLinks
+        ? [...contactLinks, ...genericLinks].slice(0, MAX_VISITS)
+        : contactLinks.slice(0, MAX_VISITS);
 
-      for (let i = 0; i < Math.min(prioritizedLinks.length, 5); i++) {
+      for (let i = 0; i < Math.min(prioritizedLinks.length, MAX_VISITS); i++) {
         const link = prioritizedLinks[i];
         try {
-          console.log(`    🔍 [BEACONS.AI] Visitando link ${i + 1}/5: ${link}`);
+          console.log(`    🔍 [BEACONS.AI] Visitando link ${i + 1}/${MAX_VISITS}: ${link}`);
 
           if (link.includes('wa.me') || link.includes('whatsapp')) {
             const waPhones = this.extractWhatsAppPhones(link);
@@ -450,23 +484,31 @@ export class UrlScraperService {
             continue;
           }
 
-          await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 15000 });
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          const linkPage = await page.browser().newPage();
+          try {
+            await Promise.race([
+              linkPage.goto(link, { waitUntil: 'domcontentloaded', timeout: PER_LINK_TIMEOUT_MS }),
+              new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout manual: link > ${PER_LINK_TIMEOUT_MS}ms`)), PER_LINK_TIMEOUT_MS))
+            ]);
+            await new Promise(resolve => setTimeout(resolve, 500));
 
-          const linkHtml = await page.content();
-          const linkText = await page.evaluate(() => (document as any).body.innerText);
+            const linkHtml = await linkPage.content();
+            const linkText = await linkPage.evaluate(() => (document as any).body.innerText);
 
-          const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-          const foundEmails = linkHtml.match(emailRegex) || [];
-          emails.push(...foundEmails.filter(e =>
-            !e.includes('example.com') && !e.includes('beacons.ai')
-          ));
+            const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+            const foundEmails = linkHtml.match(emailRegex) || [];
+            emails.push(...foundEmails.filter(e =>
+              !e.includes('example.com') && !e.includes('beacons.ai')
+            ));
 
-          const linkPhones = this.extractWhatsAppPhones(linkHtml);
-          phones.push(...linkPhones.map(p => p.replace(/[^0-9]/g, '')));
+            const linkPhones = this.extractWhatsAppPhones(linkHtml);
+            phones.push(...linkPhones.map(p => p.replace(/[^0-9]/g, '')));
 
-          const textPhones = this.extractPhonesFromText(linkText);
-          phones.push(...textPhones.map(p => p.replace(/[^0-9]/g, '')));
+            const textPhones = this.extractPhonesFromText(linkText);
+            phones.push(...textPhones.map(p => p.replace(/[^0-9]/g, '')));
+          } finally {
+            try { await linkPage.close(); } catch {}
+          }
 
         } catch (linkError: any) {
           console.log(`    ⚠️  [BEACONS.AI] Erro no link ${i + 1}: ${linkError.message}`);
@@ -492,7 +534,7 @@ export class UrlScraperService {
    * @param linkinUrl - Linkin.bio URL
    * @returns Object with emails and phones arrays
    */
-  private static async scrapeLinkinBioPage(page: Page, linkinUrl: string): Promise<{ emails: string[]; phones: string[] }> {
+  private static async scrapeLinkinBioPage(page: Page, linkinUrl: string, options: ScrapeOptions = {}): Promise<{ emails: string[]; phones: string[] }> {
     try {
       console.log(`  🔗 [LINKIN.BIO] Navegando para: ${linkinUrl}`);
       await page.goto(linkinUrl, { waitUntil: 'networkidle2', timeout: 30000 });
@@ -500,6 +542,8 @@ export class UrlScraperService {
 
       const emails: string[] = [];
       const phones: string[] = [];
+      const MAX_VISITS = options.deepLinks ? 5 : 3;
+      const PER_LINK_TIMEOUT_MS = 5000;
 
       const html = await page.content();
 
@@ -517,19 +561,27 @@ export class UrlScraperService {
 
       console.log(`  🔗 [LINKIN.BIO] Encontrados ${links.length} links para processar`);
 
-      // 3. Processar links
-      const prioritizedLinks = links.filter(link =>
-        link.includes('wa.me') || link.includes('whatsapp')
-      ).concat(links.filter(link =>
-        !link.includes('wa.me') && !link.includes('whatsapp') &&
-        !link.includes('instagram.com') && !link.includes('facebook.com') &&
-        !link.includes('youtube.com') && !link.includes('tiktok.com')
-      ));
+      // 3. Processar links leves (modo deep expande seleção)
+      const contactLinks = links.filter(link =>
+        link.startsWith('http') &&
+        (link.includes('wa.me') || link.includes('whatsapp') || link.includes('mailto:') || link.includes('tel:'))
+      );
+      const genericLinks = links.filter(link =>
+        link.startsWith('http') &&
+        !contactLinks.includes(link) &&
+        !link.includes('instagram.com') &&
+        !link.includes('facebook.com') &&
+        !link.includes('youtube.com') &&
+        !link.includes('tiktok.com')
+      );
+      const prioritizedLinks = options.deepLinks
+        ? [...contactLinks, ...genericLinks].slice(0, MAX_VISITS)
+        : contactLinks.slice(0, MAX_VISITS);
 
-      for (let i = 0; i < Math.min(prioritizedLinks.length, 5); i++) {
+      for (let i = 0; i < Math.min(prioritizedLinks.length, MAX_VISITS); i++) {
         const link = prioritizedLinks[i];
         try {
-          console.log(`    🔍 [LINKIN.BIO] Visitando link ${i + 1}/5: ${link}`);
+          console.log(`    🔍 [LINKIN.BIO] Visitando link ${i + 1}/${MAX_VISITS}: ${link}`);
 
           if (link.includes('wa.me') || link.includes('whatsapp')) {
             const waPhones = this.extractWhatsAppPhones(link);
@@ -537,23 +589,31 @@ export class UrlScraperService {
             continue;
           }
 
-          await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 15000 });
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          const linkPage = await page.browser().newPage();
+          try {
+            await Promise.race([
+              linkPage.goto(link, { waitUntil: 'domcontentloaded', timeout: PER_LINK_TIMEOUT_MS }),
+              new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout manual: link demorou mais de ${PER_LINK_TIMEOUT_MS}ms`)), PER_LINK_TIMEOUT_MS))
+            ]);
+            await new Promise(resolve => setTimeout(resolve, 500));
 
-          const linkHtml = await page.content();
-          const linkText = await page.evaluate(() => (document as any).body.innerText);
+            const linkHtml = await linkPage.content();
+            const linkText = await linkPage.evaluate(() => (document as any).body.innerText);
 
-          const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-          const foundEmails = linkHtml.match(emailRegex) || [];
-          emails.push(...foundEmails.filter(e =>
-            !e.includes('example.com') && !e.includes('linkin.bio')
-          ));
+            const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+            const foundEmails = linkHtml.match(emailRegex) || [];
+            emails.push(...foundEmails.filter(e =>
+              !e.includes('example.com') && !e.includes('linkin.bio')
+            ));
 
-          const linkPhones = this.extractWhatsAppPhones(linkHtml);
-          phones.push(...linkPhones.map(p => p.replace(/[^0-9]/g, '')));
+            const linkPhones = this.extractWhatsAppPhones(linkHtml);
+            phones.push(...linkPhones.map(p => p.replace(/[^0-9]/g, '')));
 
-          const textPhones = this.extractPhonesFromText(linkText);
-          phones.push(...textPhones.map(p => p.replace(/[^0-9]/g, '')));
+            const textPhones = this.extractPhonesFromText(linkText);
+            phones.push(...textPhones.map(p => p.replace(/[^0-9]/g, '')));
+          } finally {
+            try { await linkPage.close(); } catch {}
+          }
 
         } catch (linkError: any) {
           console.log(`    ⚠️  [LINKIN.BIO] Erro no link ${i + 1}: ${linkError.message}`);
@@ -656,12 +716,13 @@ export class UrlScraperService {
    * @param url - URL to scrape (must be valid HTTP/HTTPS)
    * @returns ScrapedContacts object with emails, phones and metadata
    */
-  static async scrapeUrl(url: string): Promise<ScrapedContacts> {
+  static async scrapeUrl(url: string, options: ScrapeOptions = {}): Promise<ScrapedContacts> {
     // 1. Normalizar URL
     const normalizedUrl = this.normalizeUrl(url);
+    const cacheKey = options.deepLinks ? `${normalizedUrl}::deep` : normalizedUrl;
 
     // 2. Verificar cache
-    const cached = this.getCachedResult(normalizedUrl);
+    const cached = this.getCachedResult(cacheKey);
     if (cached) {
       return cached;
     }
@@ -672,8 +733,8 @@ export class UrlScraperService {
       console.log(`🔍 [URL-SCRAPER] Processando direto (${this.activeScrapers}/${this.MAX_CONCURRENT_SCRAPERS} ativos)`);
 
       try {
-        const result = await this.doScrapeUrl(normalizedUrl);
-        this.setCachedResult(normalizedUrl, result);
+        const result = await this.doScrapeUrl(normalizedUrl, options);
+        this.setCachedResult(cacheKey, result);
         return result;
       } finally {
         this.activeScrapers--;
@@ -685,7 +746,7 @@ export class UrlScraperService {
     console.log(`⏳ [URL-SCRAPER] Limite atingido, adicionando à fila (${this.scrapeQueue.length + 1} na fila)`);
 
     return new Promise((resolve, reject) => {
-      this.scrapeQueue.push({ url: normalizedUrl, resolve, reject });
+      this.scrapeQueue.push({ url: normalizedUrl, cacheKey, options, resolve, reject });
       this.processQueue();
     });
   }
@@ -694,252 +755,337 @@ export class UrlScraperService {
    * Executa o scraping real (método interno)
    * @param url - URL normalizada para scrape
    */
-  private static async doScrapeUrl(url: string): Promise<ScrapedContacts> {
+  private static async doScrapeUrl(url: string, options: ScrapeOptions = {}): Promise<ScrapedContacts> {
     let page: Page | null = null;
+    const GLOBAL_TIMEOUT_MS = 60000;
+    let globalTimeoutHandle: NodeJS.Timeout | null = null;
 
-    try {
-      console.log(`🔍 [URL-SCRAPER] Scraping: ${url}`);
+    // Watchdog: se algo pendurar por 60s, força fechamento do browser e devolve erro controlado
+    const watchdogPromise = new Promise<ScrapedContacts>(resolve => {
+      globalTimeoutHandle = setTimeout(async () => {
+        console.error(`⏰ [URL-SCRAPER] TIMEOUT GLOBAL (${GLOBAL_TIMEOUT_MS / 1000}s) para: ${url}`);
+        try {
+          if (page && !page.isClosed()) {
+            await page.goto('about:blank', { waitUntil: 'domcontentloaded', timeout: 3000 }).catch(() => {});
+            await page.close().catch(() => {});
+          }
+        } catch {}
+        try {
+          await this.closeBrowser();
+        } catch {}
 
-      const browser = await this.getBrowser();
-      page = await browser.newPage();
-
-      // Set user agent to avoid bot detection
-      await page.setUserAgent(
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      );
-
-      // Navigate to main URL with better error handling
-      console.log(`🌐 [URL-SCRAPER] Navegando para: ${url}`);
-      try {
-        await page.goto(url, {
-          waitUntil: 'domcontentloaded',
-          timeout: 30000, // 30 segundos (reduzido de 60s)
+        resolve({
+          emails: [],
+          phones: [],
+          success: false,
+          error: `Timeout global de ${GLOBAL_TIMEOUT_MS / 1000}s ao processar ${url}`,
         });
-        console.log(`✅ [URL-SCRAPER] Página carregada com sucesso`);
-      } catch (navError: any) {
-        console.error(`❌ [URL-SCRAPER] Erro ao navegar: ${navError.message}`);
-        throw new Error(`Falha ao carregar URL: ${navError.message}`);
-      }
+      }, GLOBAL_TIMEOUT_MS);
+    });
 
-      await page.waitForSelector('body', { timeout: 10000 });
-      console.log(`✅ [URL-SCRAPER] Body encontrado`);
+    const scrapePromise = (async (): Promise<ScrapedContacts> => {
+      try {
+        console.log(`🔍 [URL-SCRAPER] Scraping: ${url}`);
 
-      // Wait for page to fully render (JavaScript, dynamic content, etc.)
-      await new Promise(resolve => setTimeout(resolve, 2000)); // 2 seconds delay
-      console.log(`✅ [URL-SCRAPER] Aguardou renderização completa`);
+        const browser = await this.getBrowser();
+        page = await browser.newPage();
 
-      // Extract from main page
-      const html = await page.content();
-      const visibleText = await page.evaluate(() => (document as any).body.innerText);
+        // Timeouts agressivos para evitar travamentos
+        page.setDefaultNavigationTimeout(15000);
+        page.setDefaultTimeout(8000);
 
-      const sources: any = { main_page: false, whatsapp_links: false, facebook: false, youtube: false };
+        // Bloquear recursos pesados e trackers que seguram navegação
+        await page.setRequestInterception(true);
+        page.on('request', (request) => {
+          const resourceType = request.resourceType();
+          const reqUrl = request.url();
+          if (['image', 'stylesheet', 'font', 'media', 'websocket'].includes(resourceType)) {
+            request.abort();
+            return;
+          }
+          const blockedDomains = [
+            'google-analytics.com', 'googletagmanager.com', 'facebook.net',
+            'doubleclick.net', 'hotjar', 'clarity.ms', 'tiktok.com',
+            'snap.com', 'pinterest.com'
+          ];
+          if (blockedDomains.some(domain => reqUrl.includes(domain))) {
+            request.abort();
+            return;
+          }
+          request.continue();
+        });
 
-      // 1. Extract emails from HTML
-      const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-      const emailMatches = html.match(emailRegex) || [];
+        // Evitar diálogos que travam a execução (alert/confirm)
+        page.on('dialog', async dialog => {
+          try { await dialog.dismiss(); } catch {}
+        });
 
-      const validEmails = emailMatches.filter((email) => {
-        const lower = email.toLowerCase();
-        return (
-          !lower.includes('example.com') &&
-          !lower.includes('test.com') &&
-          !lower.includes('sentry.io') &&
-          !lower.includes('facebook.com') &&
-          !lower.includes('instagram.com') &&
-          !lower.includes('yourdomain.com') &&
-          !lower.includes('placeholder') &&
-          !lower.endsWith('.png') &&
-          !lower.endsWith('.jpg') &&
-          !lower.endsWith('.svg') &&
-          !lower.endsWith('.gif')
+        // Set user agent to avoid bot detection
+        await page.setUserAgent(
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         );
-      });
 
-      // 2. Extract WhatsApp phones from links
-      const whatsappPhones = this.extractWhatsAppPhones(html);
-      console.log(`🔍 [DEBUG] WhatsApp phones: ${whatsappPhones.length} encontrados`);
-      if (whatsappPhones.length > 0) sources.whatsapp_links = true;
-
-      // 3. Extract phones from visible text WITH context
-      const textPhones = this.extractPhonesFromText(visibleText);
-      console.log(`🔍 [DEBUG] Text phones: ${textPhones.length} encontrados`);
-
-      // 4. Extract phones from HTML WITHOUT context (catch phones in page data)
-      const phoneRegex = /\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4}/g;
-      const htmlPhones = html.match(phoneRegex) || [];
-      console.log(`🔍 [DEBUG] HTML phones extraídos: ${htmlPhones.length} encontrados`);
-
-      // Clean all phones
-      const cleanedWhatsApp = whatsappPhones.map(p => p.replace(/[^0-9]/g, ''));
-      const cleanedText = textPhones.map(p => p.replace(/[^0-9]/g, ''));
-      const cleanedHtml = htmlPhones.map(p => p.replace(/[^0-9]/g, ''));
-
-      // Remove duplicatas em cada categoria
-      const uniqueWhatsApp = [...new Set(cleanedWhatsApp)];
-      const uniqueText = [...new Set(cleanedText)];
-      const uniqueHtml = [...new Set(cleanedHtml)];
-
-      // Validar com PRIORIDADE: WhatsApp > Text > HTML (sem limite)
-      const allPhonesSet = new Set<string>();
-
-      // 1. Primeiro WhatsApp links (prioridade máxima)
-      for (const phone of uniqueWhatsApp) {
-        if (this.isValidBrazilianPhone(phone)) {
-          allPhonesSet.add(phone);
+        // Navigate to main URL with manual timeout para abortar se pendurar
+        console.log(`🌐 [URL-SCRAPER] Navegando para: ${url}`);
+        try {
+          const NAV_TIMEOUT_MS = 15000;
+          const navigation = page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
+          const navTimeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout manual: navegação principal > ${NAV_TIMEOUT_MS}ms`)), NAV_TIMEOUT_MS)
+          );
+          await Promise.race([navigation, navTimeout]);
+          console.log(`✅ [URL-SCRAPER] Página carregada com sucesso`);
+        } catch (navError: any) {
+          console.error(`❌ [URL-SCRAPER] Erro ao navegar: ${navError.message}`);
+          try {
+            await page.goto('about:blank', { waitUntil: 'domcontentloaded', timeout: 3000 });
+          } catch {}
+          throw new Error(`Falha ao carregar URL: ${navError.message}`);
         }
-      }
 
-      // 2. Depois text phones com contexto
-      for (const phone of uniqueText) {
-        if (this.isValidBrazilianPhone(phone)) {
-          allPhonesSet.add(phone);
+        await page.waitForSelector('body', { timeout: 10000 });
+        console.log(`✅ [URL-SCRAPER] Body encontrado`);
+
+        // Aguardar render mínimo para pegar links dinâmicos
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log(`✅ [URL-SCRAPER] Aguardou renderização`);
+
+        // Extract from main page com timeout de 10s
+        const contentTimeout = 10000;
+        const timeoutError = new Error('Timeout: extração de conteúdo demorou mais de 10s');
+
+        const htmlPromise = page.content();
+        const html = await Promise.race([
+          htmlPromise,
+          new Promise<string>((_, reject) => setTimeout(() => reject(timeoutError), contentTimeout))
+        ]);
+        console.log(`✅ [URL-SCRAPER] HTML extraído (${html.length} chars)`);
+
+        const textPromise = page.evaluate(() => (document as any).body.innerText || '');
+        const visibleText = await Promise.race([
+          textPromise,
+          new Promise<string>((_, reject) => setTimeout(() => reject(timeoutError), contentTimeout))
+        ]);
+        console.log(`✅ [URL-SCRAPER] Texto extraído (${visibleText.length} chars)`);
+
+        const sources: any = { main_page: false, whatsapp_links: false, facebook: false, youtube: false };
+
+        // 1. Extract emails from HTML
+        const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+        const emailMatches = html.match(emailRegex) || [];
+
+        const validEmails = emailMatches.filter((email) => {
+          const lower = email.toLowerCase();
+          return (
+            !lower.includes('example.com') &&
+            !lower.includes('test.com') &&
+            !lower.includes('sentry.io') &&
+            !lower.includes('facebook.com') &&
+            !lower.includes('instagram.com') &&
+            !lower.includes('yourdomain.com') &&
+            !lower.includes('placeholder') &&
+            !lower.endsWith('.png') &&
+            !lower.endsWith('.jpg') &&
+            !lower.endsWith('.svg') &&
+            !lower.endsWith('.gif')
+          );
+        });
+
+        // 2. Extract WhatsApp phones from links
+        const whatsappPhones = this.extractWhatsAppPhones(html);
+        console.log(`🔍 [DEBUG] WhatsApp phones: ${whatsappPhones.length} encontrados`);
+        if (whatsappPhones.length > 0) sources.whatsapp_links = true;
+
+        // 3. Extract phones from visible text WITH context
+        const textPhones = this.extractPhonesFromText(visibleText);
+        console.log(`🔍 [DEBUG] Text phones: ${textPhones.length} encontrados`);
+
+        // 4. Extract phones from HTML WITHOUT context (catch phones in page data)
+        const phoneRegex = /\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4}/g;
+        const htmlPhones = html.match(phoneRegex) || [];
+        console.log(`🔍 [DEBUG] HTML phones extraídos: ${htmlPhones.length} encontrados`);
+
+        // Clean all phones
+        const cleanedWhatsApp = whatsappPhones.map(p => p.replace(/[^0-9]/g, ''));
+        const cleanedText = textPhones.map(p => p.replace(/[^0-9]/g, ''));
+        const cleanedHtml = htmlPhones.map(p => p.replace(/[^0-9]/g, ''));
+
+        // Remove duplicatas em cada categoria
+        const uniqueWhatsApp = [...new Set(cleanedWhatsApp)];
+        const uniqueText = [...new Set(cleanedText)];
+        const uniqueHtml = [...new Set(cleanedHtml)];
+
+        // Validar com PRIORIDADE: WhatsApp > Text > HTML (sem limite)
+        const allPhonesSet = new Set<string>();
+
+        // 1. Primeiro WhatsApp links (prioridade máxima)
+        for (const phone of uniqueWhatsApp) {
+          if (this.isValidBrazilianPhone(phone)) {
+            allPhonesSet.add(phone);
+          }
         }
-      }
 
-      // 3. Por último HTML phones
-      for (const phone of uniqueHtml) {
-        if (this.isValidBrazilianPhone(phone)) {
-          allPhonesSet.add(phone);
+        // 2. Depois text phones com contexto
+        for (const phone of uniqueText) {
+          if (this.isValidBrazilianPhone(phone)) {
+            allPhonesSet.add(phone);
+          }
         }
-      }
 
-      const allPhones = [...allPhonesSet];
+        // 3. Por último HTML phones
+        for (const phone of uniqueHtml) {
+          if (this.isValidBrazilianPhone(phone)) {
+            allPhonesSet.add(phone);
+          }
+        }
 
-      console.log(`✅ [DEBUG] Phones validados: ${allPhones.length} (WhatsApp sempre primeiro)`);
+        const allPhones = [...allPhonesSet];
 
-      let allEmails = [...validEmails];
+        console.log(`✅ [DEBUG] Phones validados: ${allPhones.length} (WhatsApp sempre primeiro)`);
 
-      if (allPhones.length > 0 || allEmails.length > 0) {
-        sources.main_page = true;
-        console.log(`✅ [URL-SCRAPER] Contato encontrado na página principal! Pulando redes sociais.`);
-      } else {
-        // ========================================
-        // LINK AGGREGATORS (linktr.ee, beacons.ai, linkin.bio)
-        // ========================================
-        console.log(`🔍 [URL-SCRAPER] Sem contato na página principal. Verificando agregadores de links...`);
+        let allEmails = [...validEmails];
+
+        if (allPhones.length > 0 || allEmails.length > 0) {
+          sources.main_page = true;
+          console.log(`✅ [URL-SCRAPER] Contato encontrado na página principal! Pulando redes sociais.`);
+        } else {
+          // ========================================
+          // LINK AGGREGATORS (linktr.ee, beacons.ai, linkin.bio)
+          // ========================================
+          console.log(`🔍 [URL-SCRAPER] Sem contato na página principal. Verificando agregadores de links...`);
 
         // Detect and process Linktr.ee
         if (url.includes('linktr.ee')) {
           console.log(`✅ [URL-SCRAPER] Linktr.ee detectado!`);
-          const linktreeResult = await this.scrapeLinktrPage(page, url);
+          const linktreeResult = await this.scrapeLinktrPage(page, url, options);
           allEmails.push(...linktreeResult.emails);
           allPhones.push(...linktreeResult.phones);
           if (linktreeResult.emails.length > 0 || linktreeResult.phones.length > 0) {
             sources.linktr = true;
             console.log(`✅ [URL-SCRAPER] Contato encontrado no Linktr.ee! Pulando redes sociais.`);
+            }
           }
-        }
 
-        // Detect and process Beacons.ai
+          // Detect and process Beacons.ai
         else if (url.includes('beacons.ai')) {
           console.log(`✅ [URL-SCRAPER] Beacons.ai detectado!`);
-          const beaconsResult = await this.scrapeBeaconsPage(page, url);
+          const beaconsResult = await this.scrapeBeaconsPage(page, url, options);
           allEmails.push(...beaconsResult.emails);
           allPhones.push(...beaconsResult.phones);
           if (beaconsResult.emails.length > 0 || beaconsResult.phones.length > 0) {
             sources.beacons = true;
             console.log(`✅ [URL-SCRAPER] Contato encontrado no Beacons.ai! Pulando redes sociais.`);
+            }
           }
-        }
 
-        // Detect and process Linkin.bio
+          // Detect and process Linkin.bio
         else if (url.includes('linkin.bio')) {
           console.log(`✅ [URL-SCRAPER] Linkin.bio detectado!`);
-          const linkinResult = await this.scrapeLinkinBioPage(page, url);
+          const linkinResult = await this.scrapeLinkinBioPage(page, url, options);
           allEmails.push(...linkinResult.emails);
           allPhones.push(...linkinResult.phones);
           if (linkinResult.emails.length > 0 || linkinResult.phones.length > 0) {
             sources.linkin = true;
             console.log(`✅ [URL-SCRAPER] Contato encontrado no Linkin.bio! Pulando redes sociais.`);
-          }
-        }
-
-        // ========================================
-        // FALLBACK: Facebook and YouTube
-        // ========================================
-        // Only try Facebook/YouTube if no contacts found in aggregators
-        if (allPhones.length === 0 && allEmails.length === 0) {
-        // 4. Extract Facebook link and scrape
-        const facebookRegex = /(?:https?:\/\/)?(?:www\.)?(?:facebook\.com|fb\.com)\/([a-zA-Z0-9._-]+)/;
-        const facebookMatch = html.match(facebookRegex);
-
-        console.log(`🔍 [URL-SCRAPER] Buscando link do Facebook...`);
-        if (facebookMatch && facebookMatch[0]) {
-          const facebookUrl = facebookMatch[0].startsWith('http') ? facebookMatch[0] : `https://${facebookMatch[0]}`;
-          console.log(`✅ [URL-SCRAPER] Link do Facebook encontrado: ${facebookUrl}`);
-          const fbResult = await this.scrapeFacebookPage(page, facebookUrl);
-          console.log(`📊 [URL-SCRAPER] Facebook retornou: ${fbResult.emails.length} emails, ${fbResult.phones.length} telefones`);
-          allEmails.push(...fbResult.emails);
-          allPhones.push(...fbResult.phones);
-          if (fbResult.emails.length > 0 || fbResult.phones.length > 0) {
-            sources.facebook = true;
-            console.log(`✅ [URL-SCRAPER] Contato encontrado no Facebook! Pulando YouTube.`);
-          } else {
-            console.log(`⚠️  [URL-SCRAPER] Facebook não retornou contatos, tentando YouTube...`);
-
-            // 5. Extract YouTube link and scrape
-            const youtubeRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:c\/|channel\/|user\/|@)?([a-zA-Z0-9._-]+)|youtu\.be\/([a-zA-Z0-9._-]+))/;
-            const youtubeMatch = html.match(youtubeRegex);
-
-            console.log(`🔍 [URL-SCRAPER] Buscando link do YouTube...`);
-            if (youtubeMatch && youtubeMatch[0]) {
-              const youtubeUrl = youtubeMatch[0].startsWith('http') ? youtubeMatch[0] : `https://${youtubeMatch[0]}`;
-              console.log(`✅ [URL-SCRAPER] Link do YouTube encontrado: ${youtubeUrl}`);
-              const ytResult = await this.scrapeYouTubePage(page, youtubeUrl);
-              console.log(`📊 [URL-SCRAPER] YouTube retornou: ${ytResult.emails.length} emails, ${ytResult.phones.length} telefones`);
-              allEmails.push(...ytResult.emails);
-              allPhones.push(...ytResult.phones);
-              if (ytResult.emails.length > 0 || ytResult.phones.length > 0) sources.youtube = true;
-            } else {
-              console.log(`❌ [URL-SCRAPER] Nenhum link do YouTube encontrado`);
             }
           }
-        } else {
-          console.log(`❌ [URL-SCRAPER] Nenhum link do Facebook encontrado`);
+
+          // ========================================
+          // FALLBACK: Facebook and YouTube
+          // ========================================
+          // Only try Facebook/YouTube if no contacts found in aggregators
+          if (allPhones.length === 0 && allEmails.length === 0) {
+          // 4. Extract Facebook link and scrape
+          const facebookRegex = /(?:https?:\/\/)?(?:www\.)?(?:facebook\.com|fb\.com)\/([a-zA-Z0-9._-]+)/;
+          const facebookMatch = html.match(facebookRegex);
+
+          console.log(`🔍 [URL-SCRAPER] Buscando link do Facebook...`);
+          if (facebookMatch && facebookMatch[0]) {
+            const facebookUrl = facebookMatch[0].startsWith('http') ? facebookMatch[0] : `https://${facebookMatch[0]}`;
+            console.log(`✅ [URL-SCRAPER] Link do Facebook encontrado: ${facebookUrl}`);
+            const fbResult = await this.scrapeFacebookPage(page, facebookUrl);
+            console.log(`📊 [URL-SCRAPER] Facebook retornou: ${fbResult.emails.length} emails, ${fbResult.phones.length} telefones`);
+            allEmails.push(...fbResult.emails);
+            allPhones.push(...fbResult.phones);
+            if (fbResult.emails.length > 0 || fbResult.phones.length > 0) {
+              sources.facebook = true;
+              console.log(`✅ [URL-SCRAPER] Contato encontrado no Facebook! Pulando YouTube.`);
+            } else {
+              console.log(`⚠️  [URL-SCRAPER] Facebook não retornou contatos, tentando YouTube...`);
+
+              // 5. Extract YouTube link and scrape
+              const youtubeRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:c\/|channel\/|user\/|@)?([a-zA-Z0-9._-]+)|youtu\.be\/([a-zA-Z0-9._-]+))/;
+              const youtubeMatch = html.match(youtubeRegex);
+
+              console.log(`🔍 [URL-SCRAPER] Buscando link do YouTube...`);
+              if (youtubeMatch && youtubeMatch[0]) {
+                const youtubeUrl = youtubeMatch[0].startsWith('http') ? youtubeMatch[0] : `https://${youtubeMatch[0]}`;
+                console.log(`✅ [URL-SCRAPER] Link do YouTube encontrado: ${youtubeUrl}`);
+                const ytResult = await this.scrapeYouTubePage(page, youtubeUrl);
+                console.log(`📊 [URL-SCRAPER] YouTube retornou: ${ytResult.emails.length} emails, ${ytResult.phones.length} telefones`);
+                allEmails.push(...ytResult.emails);
+                allPhones.push(...ytResult.phones);
+                if (ytResult.emails.length > 0 || ytResult.phones.length > 0) sources.youtube = true;
+              } else {
+                console.log(`❌ [URL-SCRAPER] Nenhum link do YouTube encontrado`);
+              }
+            }
+          } else {
+            console.log(`❌ [URL-SCRAPER] Nenhum link do Facebook encontrado`);
+          }
+          } // Fim do if (allPhones.length === 0 && allEmails.length === 0) para Facebook/YouTube
         }
-        } // Fim do if (allPhones.length === 0 && allEmails.length === 0) para Facebook/YouTube
-      }
 
-      // Cleanup
-      if (page && !page.isClosed()) {
-        await page.close();
-      }
-
-      // Remove duplicates
-      const uniqueEmails = [...new Set(allEmails)];
-      const uniquePhones = [...new Set(allPhones)];
-
-      console.log(
-        `✅ [URL-SCRAPER] Total: ${uniqueEmails.length} emails, ${uniquePhones.length} telefones`
-      );
-      console.log(`📊 [URL-SCRAPER] Fontes:`, sources);
-
-      return {
-        emails: uniqueEmails,
-        phones: uniquePhones,
-        success: true,
-        sources
-      };
-    } catch (error: any) {
-      console.error(`❌ [URL-SCRAPER] Erro ao scraping ${url}:`, error.message);
-      console.error(`❌ [URL-SCRAPER] Stack trace:`, error.stack);
-
-      // Ensure page cleanup
-      if (page && !page.isClosed()) {
-        try {
+        // Cleanup
+        if (page && !page.isClosed()) {
           await page.close();
-        } catch (closeError) {
-          console.error('⚠️ [URL-SCRAPER] Erro ao fechar página:', closeError);
         }
-      }
 
-      return {
-        emails: [],
-        phones: [],
-        success: false,
-        error: error.message,
-      };
+        // Remove duplicates
+        const uniqueEmails = [...new Set(allEmails)];
+        const uniquePhones = [...new Set(allPhones)];
+
+        console.log(
+          `✅ [URL-SCRAPER] Total: ${uniqueEmails.length} emails, ${uniquePhones.length} telefones`
+        );
+        console.log(`📊 [URL-SCRAPER] Fontes:`, sources);
+
+        return {
+          emails: uniqueEmails,
+          phones: uniquePhones,
+          success: true,
+          sources,
+          website_text: visibleText,
+        };
+      } catch (error: any) {
+        console.error(`❌ [URL-SCRAPER] Erro ao scraping ${url}:`, error.message);
+        console.error(`❌ [URL-SCRAPER] Stack trace:`, error.stack);
+
+        // Ensure page cleanup
+        if (page && !page.isClosed()) {
+          try {
+            await page.close();
+          } catch (closeError) {
+            console.error('⚠️ [URL-SCRAPER] Erro ao fechar página:', closeError);
+          }
+        }
+
+        return {
+          emails: [],
+          phones: [],
+          success: false,
+          error: error.message,
+        };
+      }
+    })();
+
+    const result = await Promise.race([scrapePromise, watchdogPromise]);
+
+    if (globalTimeoutHandle) {
+      clearTimeout(globalTimeoutHandle);
     }
+
+    return result;
   }
 
   /**
