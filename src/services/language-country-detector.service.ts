@@ -7,11 +7,101 @@ export interface LanguageDetection {
 }
 
 /**
+ * Converte caracteres Unicode estilizados (Mathematical Alphanumeric Symbols)
+ * para suas versões ASCII equivalentes.
+ * Ex: ℂ𝕚𝕔𝕝𝕚𝕤𝕞𝕠 → Ciclismo, ℕ𝕒𝕥𝕦𝕣𝕖𝕫𝕒 → Natureza
+ */
+function normalizeFancyUnicode(text: string): string {
+  // Mapeia ranges de caracteres Unicode estilizados para ASCII
+  // Mathematical Alphanumeric Symbols (U+1D400 - U+1D7FF)
+  const result: string[] = [];
+
+  for (const char of text) {
+    const code = char.codePointAt(0) || 0;
+
+    // Double-struck (𝔸-𝕫, ℂ, ℕ, ℙ, ℚ, ℝ, ℤ)
+    if (code >= 0x1D538 && code <= 0x1D551) { // 𝔸-𝕐 (uppercase)
+      result.push(String.fromCharCode(65 + (code - 0x1D538))); // A-Z
+    } else if (code >= 0x1D552 && code <= 0x1D56B) { // 𝕒-𝕫 (lowercase)
+      result.push(String.fromCharCode(97 + (code - 0x1D552))); // a-z
+    } else if (code === 0x2102) { // ℂ
+      result.push('C');
+    } else if (code === 0x210D) { // ℍ
+      result.push('H');
+    } else if (code === 0x2115) { // ℕ
+      result.push('N');
+    } else if (code === 0x2119) { // ℙ
+      result.push('P');
+    } else if (code === 0x211A) { // ℚ
+      result.push('Q');
+    } else if (code === 0x211D) { // ℝ
+      result.push('R');
+    } else if (code === 0x2124) { // ℤ
+      result.push('Z');
+    }
+    // Bold (𝐀-𝐳)
+    else if (code >= 0x1D400 && code <= 0x1D419) { // 𝐀-𝐙
+      result.push(String.fromCharCode(65 + (code - 0x1D400)));
+    } else if (code >= 0x1D41A && code <= 0x1D433) { // 𝐚-𝐳
+      result.push(String.fromCharCode(97 + (code - 0x1D41A)));
+    }
+    // Italic (𝐴-𝑧)
+    else if (code >= 0x1D434 && code <= 0x1D44D) { // 𝐴-𝑍
+      result.push(String.fromCharCode(65 + (code - 0x1D434)));
+    } else if (code >= 0x1D44E && code <= 0x1D467) { // 𝑎-𝑧
+      result.push(String.fromCharCode(97 + (code - 0x1D44E)));
+    }
+    // Script/Calligraphic (𝒜-𝓏)
+    else if (code >= 0x1D49C && code <= 0x1D4B5) { // 𝒜-𝒵
+      result.push(String.fromCharCode(65 + (code - 0x1D49C)));
+    } else if (code >= 0x1D4B6 && code <= 0x1D4CF) { // 𝒶-𝓏
+      result.push(String.fromCharCode(97 + (code - 0x1D4B6)));
+    }
+    // Fraktur (𝔄-𝔷)
+    else if (code >= 0x1D504 && code <= 0x1D51D) { // 𝔄-𝔜
+      result.push(String.fromCharCode(65 + (code - 0x1D504)));
+    } else if (code >= 0x1D51E && code <= 0x1D537) { // 𝔞-𝔷
+      result.push(String.fromCharCode(97 + (code - 0x1D51E)));
+    }
+    // Sans-serif (𝖠-𝗓)
+    else if (code >= 0x1D5A0 && code <= 0x1D5B9) { // 𝖠-𝖹
+      result.push(String.fromCharCode(65 + (code - 0x1D5A0)));
+    } else if (code >= 0x1D5BA && code <= 0x1D5D3) { // 𝖺-𝗓
+      result.push(String.fromCharCode(97 + (code - 0x1D5BA)));
+    }
+    // Monospace (𝙰-𝚣)
+    else if (code >= 0x1D670 && code <= 0x1D689) { // 𝙰-𝚉
+      result.push(String.fromCharCode(65 + (code - 0x1D670)));
+    } else if (code >= 0x1D68A && code <= 0x1D6A3) { // 𝚊-𝚣
+      result.push(String.fromCharCode(97 + (code - 0x1D68A)));
+    }
+    // Circled letters (Ⓐ-ⓩ)
+    else if (code >= 0x24B6 && code <= 0x24CF) { // Ⓐ-Ⓩ
+      result.push(String.fromCharCode(65 + (code - 0x24B6)));
+    } else if (code >= 0x24D0 && code <= 0x24E9) { // ⓐ-ⓩ
+      result.push(String.fromCharCode(97 + (code - 0x24D0)));
+    }
+    // Fullwidth (Ａ-ｚ)
+    else if (code >= 0xFF21 && code <= 0xFF3A) { // Ａ-Ｚ
+      result.push(String.fromCharCode(65 + (code - 0xFF21)));
+    } else if (code >= 0xFF41 && code <= 0xFF5A) { // ａ-ｚ
+      result.push(String.fromCharCode(97 + (code - 0xFF41)));
+    }
+    // Keep original character
+    else {
+      result.push(char);
+    }
+  }
+
+  return result.join('');
+}
+
+/**
  * Normaliza texto para detecção de idioma
- * Remove URLs, hashtags, menções e emojis
+ * Converte Unicode fancy, remove URLs, hashtags, menções e emojis
  */
 function normalizeText(text: string): string {
-  return text
+  return normalizeFancyUnicode(text)
     .toLowerCase()
     .replace(/https?:\/\/[^\s]+/g, '')  // Remove URLs
     .replace(/#\w+/g, '')                // Remove hashtags

@@ -1,6 +1,10 @@
 import OpenAI from 'openai';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import {
+  extractLocation,
+  inferStateFromCity
+} from './location-extractor.service';
 
 // ============================================
 // TIPOS E INTERFACES
@@ -41,6 +45,7 @@ interface EnrichmentResponse {
   enriched: EnrichedData;
   sources: string[];
   should_mark_enriched: boolean;
+  url_enriched: boolean; // true se não há URL para enriquecer, false se há URL pendente
 }
 
 // ============================================
@@ -871,7 +876,29 @@ export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentR
     }
   }
 
-  // 5. LOCALIZAÇÃO - Extrair do DDD do telefone (prioridade média)
+  // 5. LOCALIZAÇÃO - Usar LocationExtractor avançado (NOVO - prioridade alta)
+  // Este extrator usa múltiplas estratégias: emoji 📍, registros profissionais,
+  // padrões de texto, mapa expandido de cidades, e DDD do telefone
+  if (!enriched.city || !enriched.state) {
+    const advancedLocation = extractLocation(lead.bio || null, enriched.phone || null);
+    if (advancedLocation) {
+      // Só atualizar se encontrou dados novos
+      if (!enriched.city && advancedLocation.city) {
+        enriched.city = advancedLocation.city;
+        sources.push(`location-${advancedLocation.source}`);
+        console.log(`   ✅ Cidade (${advancedLocation.source}): ${advancedLocation.city}`);
+      }
+      if (!enriched.state && advancedLocation.state) {
+        enriched.state = advancedLocation.state;
+        if (!sources.includes(`location-${advancedLocation.source}`)) {
+          sources.push(`location-${advancedLocation.source}`);
+        }
+        console.log(`   ✅ Estado (${advancedLocation.source}): ${advancedLocation.state}`);
+      }
+    }
+  }
+
+  // 5.1 LOCALIZAÇÃO - Fallback: DDD do telefone
   if (!enriched.city && enriched.phone) {
     const locationFromPhone = extractLocationFromPhone(enriched.phone);
     if (locationFromPhone.city) {
@@ -896,6 +923,16 @@ export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentR
     }
   }
 
+  // 7. LOCALIZAÇÃO - Inferir state de city existente
+  if (enriched.city && !enriched.state) {
+    const inferredState = inferStateFromCity(enriched.city);
+    if (inferredState) {
+      enriched.state = inferredState;
+      sources.push('state-inferred');
+      console.log(`   ✅ Estado inferido: ${inferredState} (de ${enriched.city})`);
+    }
+  }
+
   // Determinar se houve enriquecimento significativo
   const hasChanges = !!(
     enriched.full_name ||
@@ -906,11 +943,15 @@ export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentR
 
   console.log(hasChanges ? '   ✅ Lead enriquecido' : '   ℹ️  Sem novos dados');
 
+  // url_enriched: true se não há website (nada a enriquecer), false se há URL pendente de scraping
+  const hasWebsite = !!(lead.website && lead.website.trim().length > 0);
+
   return {
     id: lead.id,
     username: lead.username,
     enriched,
     sources,
-    should_mark_enriched: true // Sempre marcar como processado, mesmo que não encontrou dados
+    should_mark_enriched: true, // Sempre marcar como processado, mesmo que não encontrou dados
+    url_enriched: !hasWebsite   // true = sem URL (completo), false = tem URL (pode precisar scraping)
   };
 }

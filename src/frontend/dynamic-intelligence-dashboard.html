@@ -3,10 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🧠 Dynamic Intelligence Dashboard 3.0 - KMeans</title>
+    <title>Dynamic Intelligence Dashboard 3.0 - KMeans</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <style>
+        :root {
+            --aic-green: #0ECC97;
+            --aic-green-dark: #0BA578;
+            --aic-green-glow: rgba(14, 204, 151, 0.15);
+            --aic-navy: #0C1B33;
+            --aic-navy-light: #122444;
+            --aic-navy-lighter: #1a3055;
+            --aic-white: #FDFDFD;
+            --aic-gray: #94a3b8;
+            --aic-gray-light: #cbd5e1;
+            --aic-border: #1e3a5f;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -14,11 +30,12 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #333;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--aic-navy);
+            color: var(--aic-white);
             padding: 20px;
             min-height: 100vh;
+            line-height: 1.6;
         }
 
         .container {
@@ -27,38 +44,58 @@
         }
 
         .header {
-            background: white;
+            background: linear-gradient(135deg, var(--aic-navy-light) 0%, var(--aic-navy) 100%);
+            border: 1px solid var(--aic-border);
             border-radius: 16px;
             padding: 30px;
             margin-bottom: 30px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, var(--aic-green-glow) 0%, transparent 50%);
+            pointer-events: none;
         }
 
         .header h1 {
-            color: #667eea;
-            font-size: 2.5em;
+            color: var(--aic-white);
+            font-size: 2em;
             margin-bottom: 10px;
+            position: relative;
+            z-index: 1;
         }
 
         .header p {
-            color: #666;
-            font-size: 1.1em;
+            color: var(--aic-gray);
+            font-size: 1em;
             margin-bottom: 20px;
+            position: relative;
+            z-index: 1;
         }
 
         .header-actions {
             display: flex;
-            gap: 15px;
+            gap: 12px;
             flex-wrap: wrap;
+            position: relative;
+            z-index: 1;
         }
 
         .btn {
-            background: #667eea;
-            color: white;
+            background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+            color: var(--aic-navy);
             border: none;
             border-radius: 8px;
-            padding: 12px 24px;
-            font-size: 1em;
+            padding: 12px 20px;
+            font-size: 0.9em;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
             display: flex;
@@ -67,37 +104,38 @@
         }
 
         .btn:hover {
-            background: #5568d3;
             transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(14, 204, 151, 0.3);
         }
 
         .btn:disabled {
-            background: #ccc;
+            background: var(--aic-gray);
             cursor: not-allowed;
             transform: none;
+            box-shadow: none;
         }
 
         .btn-secondary {
-            background: #f59e0b;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
         }
 
         .btn-secondary:hover {
-            background: #d97706;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
         }
 
         .btn-success {
-            background: #10b981;
+            background: linear-gradient(135deg, #10b981, #059669);
         }
 
         .btn-success:hover {
-            background: #059669;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
         }
 
         .loading {
             text-align: center;
             padding: 40px;
-            color: white;
-            font-size: 1.2em;
+            color: var(--aic-gray);
+            font-size: 1.1em;
         }
 
         .stats-grid {
@@ -108,53 +146,56 @@
         }
 
         .stat-card {
-            background: white;
-            border-radius: 8px;
-            padding: 12px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
+            background: var(--aic-navy-light);
+            border: 1px solid var(--aic-border);
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.2s;
         }
 
         .stat-card:hover {
             transform: translateY(-3px);
+            border-color: rgba(14, 204, 151, 0.4);
         }
 
         .stat-card .icon {
             font-size: 1.2em;
-            margin-bottom: 4px;
+            margin-bottom: 8px;
+            color: var(--aic-green);
         }
 
         .stat-card .label {
-            color: #666;
+            color: var(--aic-gray);
             font-size: 0.7em;
             text-transform: uppercase;
-            letter-spacing: 0.3px;
-            margin-bottom: 3px;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
         }
 
         .stat-card .value {
-            color: #333;
+            color: var(--aic-white);
             font-size: 1.4em;
-            font-weight: bold;
-            margin-bottom: 3px;
+            font-weight: 700;
+            margin-bottom: 4px;
         }
 
         .stat-card .change {
-            color: #10b981;
-            font-size: 0.7em;
+            color: var(--aic-green);
+            font-size: 0.75em;
         }
 
         .section-title {
-            background: white;
+            background: var(--aic-navy-light);
+            border: 1px solid var(--aic-border);
             border-radius: 12px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
 
         .section-title h2 {
-            color: #667eea;
-            font-size: 1.8em;
+            color: var(--aic-white);
+            font-size: 1.5em;
+            font-weight: 600;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -163,15 +204,15 @@
         .charts-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-            gap: 30px;
+            gap: 20px;
             margin-bottom: 30px;
         }
 
         .chart-card {
-            background: white;
+            background: var(--aic-navy-light);
+            border: 1px solid var(--aic-border);
             border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 24px;
         }
 
         .chart-card.full-width {
@@ -179,9 +220,10 @@
         }
 
         .chart-card h3 {
-            color: #667eea;
-            font-size: 1.3em;
-            margin-bottom: 20px;
+            color: var(--aic-white);
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 16px;
         }
 
         .chart-container {
@@ -201,27 +243,29 @@
         }
 
         .cluster-card {
-            background: white;
+            background: var(--aic-navy-light);
+            border: 1px solid var(--aic-border);
             border-radius: 12px;
             padding: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
+            transition: all 0.2s;
             cursor: pointer;
         }
 
         .cluster-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+            border-color: rgba(14, 204, 151, 0.4);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
         }
 
         .cluster-card.active {
-            border: 3px solid #667eea;
+            border: 2px solid var(--aic-green);
         }
 
         .cluster-card h4 {
-            color: #667eea;
+            color: var(--aic-green);
             margin-bottom: 10px;
-            font-size: 1.2em;
+            font-size: 1.1em;
+            font-weight: 600;
         }
 
         .cluster-card .cluster-stats {
@@ -232,22 +276,21 @@
         }
 
         .cluster-card .stat {
-            font-size: 0.9em;
-            color: #666;
+            font-size: 0.85em;
+            color: var(--aic-gray);
         }
 
         .cluster-card .stat strong {
-            color: #333;
+            color: var(--aic-white);
         }
 
         .behavioral-insights {
-            background: white;
-            border-radius: 8px;
-            padding: 12px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 15px;
+            background: var(--aic-navy-light);
+            border: 1px solid var(--aic-border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
             display: none;
-            font-size: 0.8em;
         }
 
         .behavioral-insights.visible {
@@ -255,19 +298,21 @@
         }
 
         .behavioral-insights h3 {
-            color: #667eea;
-            margin-bottom: 10px;
-            font-size: 1.1em;
+            color: var(--aic-green);
+            margin-bottom: 16px;
+            font-size: 1.2em;
+            font-weight: 600;
         }
 
         .insight-section {
-            margin-bottom: 10px;
+            margin-bottom: 16px;
         }
 
         .insight-section h4 {
-            color: #333;
-            margin-bottom: 5px;
+            color: var(--aic-white);
+            margin-bottom: 8px;
             font-size: 0.95em;
+            font-weight: 600;
         }
 
         .insight-section ul {
@@ -276,29 +321,31 @@
         }
 
         .insight-section li {
-            padding: 4px 0;
-            padding-left: 15px;
+            padding: 6px 0;
+            padding-left: 20px;
             position: relative;
             font-size: 0.9em;
+            color: var(--aic-gray-light);
         }
 
         .insight-section li:before {
             content: "•";
             position: absolute;
             left: 0;
-            color: #667eea;
+            color: var(--aic-green);
             font-size: 1.2em;
         }
 
         .insight-section p {
             font-size: 0.9em;
-            margin: 3px 0;
+            margin: 4px 0;
+            color: var(--aic-gray-light);
         }
 
         .behavioral-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
+            gap: 20px;
         }
 
         @media (max-width: 768px) {
@@ -311,29 +358,33 @@
             display: inline-block;
             padding: 4px 12px;
             border-radius: 12px;
-            font-size: 0.85em;
+            font-size: 0.8em;
             font-weight: 600;
-            margin-right: 5px;
+            margin-right: 6px;
         }
 
         .badge.high {
-            background: #d1fae5;
-            color: #065f46;
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
         }
 
         .badge.medium {
-            background: #fef3c7;
-            color: #92400e;
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.3);
         }
 
         .badge.low {
-            background: #fee2e2;
-            color: #991b1b;
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
         }
 
         .badge.critical {
-            background: #fecaca;
-            color: #7f1d1d;
+            background: rgba(220, 38, 38, 0.2);
+            color: #dc2626;
+            border: 1px solid rgba(220, 38, 38, 0.3);
         }
 
         .trends-grid {
@@ -344,26 +395,26 @@
         }
 
         .trend-card {
-            background: #f0fdf4;
-            border-left: 4px solid #10b981;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
             padding: 15px;
-            border-radius: 8px;
+            border-radius: 12px;
         }
 
         .trend-card.viral {
-            background: #fef3c7;
-            border-color: #f59e0b;
+            background: rgba(251, 191, 36, 0.1);
+            border-color: rgba(251, 191, 36, 0.3);
         }
 
         .trend-card .hashtag {
-            font-weight: bold;
-            color: #333;
+            font-weight: 600;
+            color: var(--aic-white);
             margin-bottom: 5px;
         }
 
         .trend-card .growth {
-            font-size: 0.9em;
-            color: #666;
+            font-size: 0.85em;
+            color: var(--aic-gray);
         }
 
         .table-container {
@@ -379,28 +430,121 @@
 
         th, td {
             text-align: left;
-            padding: 6px 8px;
-            border-bottom: 1px solid #e5e7eb;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--aic-border);
         }
 
         th {
-            background: #f9fafb;
+            background: var(--aic-navy);
             font-weight: 600;
-            color: #667eea;
-            font-size: 0.9em;
+            color: var(--aic-green);
+            font-size: 0.85em;
         }
 
         tr:hover {
-            background: #f9fafb;
+            background: rgba(14, 204, 151, 0.05);
+        }
+
+        td {
+            color: var(--aic-gray-light);
         }
 
         .error {
-            background: #fee;
-            border: 2px solid #fcc;
-            border-radius: 8px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
             padding: 20px;
             margin: 20px 0;
-            color: #c33;
+            color: #ef4444;
+        }
+
+        .vector-store-status {
+            margin-top: 20px;
+            padding: 16px;
+            background: rgba(14, 204, 151, 0.1);
+            border: 1px solid rgba(14, 204, 151, 0.3);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .vector-store-status .icon {
+            font-size: 1.5em;
+            color: var(--aic-green);
+        }
+
+        .vector-store-status .content {
+            flex: 1;
+        }
+
+        .vector-store-status .title {
+            font-weight: 600;
+            color: var(--aic-green);
+            margin-bottom: 4px;
+        }
+
+        .vector-store-status .details {
+            font-size: 0.85em;
+            color: var(--aic-gray);
+        }
+
+        .vector-store-status .badge-status {
+            padding: 6px 14px;
+            background: var(--aic-green);
+            color: var(--aic-navy);
+            border-radius: 6px;
+            font-size: 0.8em;
+            font-weight: 700;
+        }
+
+        .last-execution-info {
+            margin-top: 12px;
+            font-size: 0.85em;
+            color: var(--aic-gray);
+            position: relative;
+            z-index: 1;
+        }
+
+        .section-header-banner {
+            background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+            color: var(--aic-navy);
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+
+        .section-header-banner h3 {
+            margin: 0;
+            font-size: 1.2em;
+            font-weight: 700;
+        }
+
+        .section-header-banner span {
+            font-size: 0.75em;
+            opacity: 0.8;
+        }
+
+        .section-header-hashtags {
+            background: linear-gradient(135deg, var(--aic-navy-lighter), var(--aic-navy-light));
+            border: 1px solid var(--aic-border);
+            color: var(--aic-white);
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin: 25px 0 15px 0;
+        }
+
+        .section-header-hashtags h3 {
+            margin: 0;
+            font-size: 1.2em;
+            font-weight: 700;
+        }
+
+        .section-header-hashtags span {
+            font-size: 0.75em;
+            color: var(--aic-gray);
         }
 
         @media (max-width: 768px) {
@@ -411,76 +555,286 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        /* Persona Cards */
+        .persona-card {
+            background: var(--aic-navy-light);
+            border: 1px solid var(--aic-border);
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.2s;
+        }
+
+        .persona-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(14, 204, 151, 0.4);
+        }
+
+        .persona-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .persona-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .persona-avatar {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            color: var(--aic-navy);
+        }
+
+        .persona-name {
+            margin: 0;
+            color: var(--aic-white);
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+
+        .persona-occupation {
+            color: var(--aic-gray);
+            font-size: 0.85em;
+        }
+
+        .persona-score {
+            background: linear-gradient(135deg, #ec4899, #db2777);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: 700;
+        }
+
+        .persona-metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .persona-metric {
+            text-align: center;
+            background: var(--aic-navy);
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .persona-metric-value {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: var(--aic-green);
+        }
+
+        .persona-metric-label {
+            font-size: 0.7em;
+            color: var(--aic-gray);
+        }
+
+        .persona-tags {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .persona-tag {
+            background: rgba(14, 204, 151, 0.1);
+            border: 1px solid rgba(14, 204, 151, 0.3);
+            color: var(--aic-green);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+        }
+
+        .persona-section-title {
+            font-weight: 600;
+            color: var(--aic-white);
+            font-size: 0.85em;
+            margin-bottom: 6px;
+        }
+
+        .persona-section-content {
+            font-size: 0.8em;
+            color: var(--aic-gray-light);
+            line-height: 1.5;
+        }
+
+        .persona-approach-box {
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .persona-approach-box .title {
+            font-weight: 600;
+            color: #fbbf24;
+            font-size: 0.85em;
+            margin-bottom: 6px;
+        }
+
+        .persona-approach-box .content {
+            font-size: 0.75em;
+            color: var(--aic-gray-light);
+            line-height: 1.5;
+        }
+
+        .persona-footer {
+            font-size: 0.75em;
+            color: var(--aic-gray);
+            border-top: 1px solid var(--aic-border);
+            padding-top: 10px;
+            margin-top: 10px;
+        }
+
+        .persona-stats-grid {
+            background: var(--aic-navy-light);
+            border: 1px solid var(--aic-border);
+            border-radius: 12px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+        }
+
+        .persona-stat-item {
+            text-align: center;
+        }
+
+        .persona-stat-value {
+            font-size: 2em;
+            font-weight: 700;
+            color: var(--aic-green);
+        }
+
+        .persona-stat-label {
+            font-size: 0.85em;
+            color: var(--aic-gray);
+        }
+
+        .empty-state {
+            grid-column: 1/-1;
+            background: var(--aic-navy-light);
+            border: 1px solid var(--aic-border);
+            border-radius: 12px;
+            padding: 50px;
+            text-align: center;
+        }
+
+        .empty-state-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+            color: var(--aic-gray);
+        }
+
+        .empty-state h3 {
+            color: var(--aic-white);
+            margin-bottom: 10px;
+        }
+
+        .empty-state p {
+            color: var(--aic-gray);
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧠 Dynamic Intelligence Dashboard 3.0</h1>
-            <p>Sistema inteligente com KMeans local (GRATUITO) | Clustering Automático + Análise Comportamental + Detecção de Tendências</p>
+            <h1>Dynamic Intelligence Dashboard 3.0</h1>
+            <p>Sistema inteligente com KMeans local (GRATUITO) | Clustering Automatico + Analise Comportamental + Deteccao de Tendencias</p>
             <div class="header-actions">
                 <button class="btn" onclick="loadAllData()">
-                    <span>🔄</span> Atualizar Dados
+                    Atualizar Dados
                 </button>
-                <button class="btn btn-success" id="recalculateBtn" onclick="recalculateMetrics()" title="Recalcula métricas SEM chamar GPT-4 (GRATUITO)">
-                    <span>📊</span> Recalcular Métricas
+                <button class="btn btn-success" id="recalculateBtn" onclick="recalculateMetrics()" title="Recalcula metricas SEM chamar GPT-4 (GRATUITO)">
+                    Recalcular Metricas
                 </button>
                 <button class="btn btn-secondary" id="pipelineBtn" onclick="executePipeline()" title="LEGADO: Executa clustering GPT-4 (PAGO ~$0.10) - Prefira usar KMeans no Cluster-Intention-Dashboard" style="opacity: 0.6;">
-                    <span>🚀</span> Pipeline GPT-4 (Legado)
+                    Pipeline GPT-4 (Legado)
                 </button>
-                <button class="btn" id="populateSearchTermsBtn" onclick="populateSearchTerms()" title="Cria termos de busca a partir dos clusters GPT-4" style="background: #8b5cf6;">
-                    <span>🔍</span> Gerar Search Terms
+                <button class="btn" id="populateSearchTermsBtn" onclick="populateSearchTerms()" title="Cria termos de busca a partir dos clusters GPT-4" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+                    Gerar Search Terms
                 </button>
-                <button class="btn" id="syncParquetBtn" onclick="syncVectorStore()" title="Sincroniza PostgreSQL → Parquet → Vector Store" style="background: #06b6d4;">
-                    <span>🔷</span> Sync Vector Store
+                <button class="btn" id="syncParquetBtn" onclick="syncVectorStore()" title="Sincroniza PostgreSQL - Parquet - Vector Store" style="background: linear-gradient(135deg, #06b6d4, #0891b2);">
+                    Sync Vector Store
                 </button>
             </div>
 
             <!-- Vector Store Status Badge -->
-            <div id="vectorStoreStatus" style="margin-top: 15px; padding: 12px; background: rgba(6, 182, 212, 0.1); border-left: 4px solid #06b6d4; border-radius: 8px; display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 1.2em;">🔷</span>
-                <div style="flex: 1;">
-                    <div style="font-weight: 600; color: #06b6d4; margin-bottom: 4px;">
-                        Vector Store + Busca Semântica AI
-                    </div>
-                    <div id="vectorStoreDetails" style="font-size: 0.85em; color: #666;">
-                        Carregando status...
-                    </div>
+            <div class="vector-store-status">
+                <div class="icon">VS</div>
+                <div class="content">
+                    <div class="title">Vector Store + Busca Semantica AI</div>
+                    <div id="vectorStoreDetails" class="details">Carregando status...</div>
                 </div>
-                <div id="vectorStoreBadge" style="padding: 6px 12px; background: #10b981; color: white; border-radius: 6px; font-size: 0.85em; font-weight: 600;">
-                    ATIVO
-                </div>
+                <div id="vectorStoreBadge" class="badge-status">ATIVO</div>
             </div>
 
-            <div id="lastExecutionInfo" style="margin-top: 10px; font-size: 0.85em; color: rgba(255,255,255,0.8);">
-                Carregando última execução...
+            <div id="lastExecutionInfo" class="last-execution-info">
+                Carregando ultima execucao...
             </div>
         </div>
 
-        <div id="loading" class="loading">⏳ Carregando dados...</div>
+        <div id="loading" class="loading">Carregando dados...</div>
         <div id="error-container"></div>
 
         <!-- KPI Cards -->
         <div id="stats-grid" class="stats-grid" style="display: none;"></div>
 
+        <!-- Scraping Metrics Charts (NEW) -->
+        <div id="scraping-metrics-section" class="charts-grid" style="display: none; margin-bottom: 30px;">
+            <!-- Chart 1: Line Chart - Daily Scraping Stats -->
+            <div class="chart-card">
+                <h3>Perfis Coletados por Dia (ultimos 45 dias)</h3>
+                <div class="chart-container">
+                    <canvas id="dailyScrapingChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 2: Pool Ativo - Leads & Hashtags -->
+            <div class="chart-card">
+                <h3>Pool Ativo - Leads e Hashtags</h3>
+                <p style="font-size: 0.8em; color: var(--aic-gray); margin: 0 0 10px 0;">
+                    <span style="color: #10b981;">■</span> Leads validos (45d) |
+                    <span style="color: var(--aic-green);">■</span> Hashtags validas (90d)
+                </p>
+                <div class="chart-container">
+                    <canvas id="dailyEvolutionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
         <!-- Charts Section -->
         <div id="charts-section" style="display: none;">
             <div class="section-title">
-                <h2>📊 Análise Visual de Hashtags</h2>
+                <h2>Analise Visual de Hashtags</h2>
             </div>
 
             <div class="charts-grid">
                 <!-- Top Hashtags -->
                 <div class="chart-card full-width">
-                    <h3>🔥 Top 20 Hashtags por Frequência</h3>
+                    <h3>Top 20 Hashtags por Frequencia</h3>
                     <div class="chart-container tall">
                         <canvas id="topHashtagsChart"></canvas>
                     </div>
                 </div>
 
-                <!-- Distribuição por Clusters -->
+                <!-- Distribuicao por Clusters -->
                 <div class="chart-card">
-                    <h3>🎯 Distribuição por Clusters</h3>
+                    <h3>Distribuicao por Clusters</h3>
                     <div class="chart-container">
                         <canvas id="clustersChart"></canvas>
                     </div>
@@ -488,7 +842,7 @@
 
                 <!-- Taxa de Contato -->
                 <div class="chart-card">
-                    <h3>📞 Taxa de Contato por Cluster</h3>
+                    <h3>Taxa de Contato por Cluster</h3>
                     <div class="chart-container">
                         <canvas id="contactRateChart"></canvas>
                     </div>
@@ -496,7 +850,7 @@
 
                 <!-- Premium Hashtags -->
                 <div class="chart-card full-width">
-                    <h3>💎 Top 15 Hashtags Premium</h3>
+                    <h3>Top 15 Hashtags Premium</h3>
                     <div class="chart-container">
                         <canvas id="premiumHashtagsChart"></canvas>
                     </div>
@@ -504,7 +858,7 @@
 
                 <!-- Search Terms -->
                 <div class="chart-card">
-                    <h3>📋 Registros de Search Terms</h3>
+                    <h3>Registros de Search Terms</h3>
                     <div class="chart-container">
                         <canvas id="searchTermsChart"></canvas>
                     </div>
@@ -512,23 +866,23 @@
 
                 <!-- Quality Score -->
                 <div class="chart-card">
-                    <h3>⭐ Distribuição de Quality Score</h3>
+                    <h3>Distribuicao de Quality Score</h3>
                     <div class="chart-container">
                         <canvas id="qualityScoreChart"></canvas>
                     </div>
                 </div>
 
-                <!-- Co-ocorrências -->
+                <!-- Co-ocorrencias -->
                 <div class="chart-card full-width">
-                    <h3>🔗 Top 10 Co-ocorrências de Hashtags</h3>
+                    <h3>Top 10 Co-ocorrencias de Hashtags</h3>
                     <div class="table-container">
                         <table id="cooccurrenceTable">
                             <thead>
                                 <tr>
                                     <th>Hashtag 1</th>
                                     <th>Hashtag 2</th>
-                                    <th>Co-ocorrências</th>
-                                    <th>Confiança</th>
+                                    <th>Co-ocorrencias</th>
+                                    <th>Confianca</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -538,20 +892,113 @@
             </div>
         </div>
 
-        
+
         <!-- All Behavioral Insights -->
         <div id="all-behavioral-section" style="display: none;">
             <div class="section-title">
-                <h2>🧠 Análise Comportamental - Todos os Clusters (KMeans)</h2>
+                <h2>Analise Comportamental - Todos os Clusters (KMeans)</h2>
             </div>
             <div id="all-behavioral-insights" class="behavioral-grid"></div>
         </div>
 
         <!-- Clusters Section -->
         <div id="clusters-section" style="display: none;">
-            <div class="section-title">
-                <h2>🤖 Clusters KMeans (Local & Gratuito)</h2>
+            <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                <h2>Clusters KMeans (Local e Gratuito)</h2>
+                <button class="btn" id="btnToggleClusteringControls" onclick="toggleClusteringControls()" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+                    Configurar Clustering
+                </button>
             </div>
+
+            <!-- Controles de Clustering Genérico -->
+            <div id="clusteringControlsPanel" style="display: none; background: var(--aic-navy-light); border: 1px solid var(--aic-border); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="color: var(--aic-green); margin-bottom: 15px; font-size: 1.1em;">Executar Clustering na Base Completa</h3>
+                <p style="color: var(--aic-gray); font-size: 0.85em; margin-bottom: 15px;">
+                    Gera clusters da base de dados para demonstrar capacidades da plataforma. Resultados são salvos automaticamente.
+                </p>
+
+                <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 15px;">
+                    <div style="min-width: 200px; flex: 2;">
+                        <label style="display: block; font-size: 0.8em; color: var(--aic-gray); margin-bottom: 4px;">Seeds (hashtags raiz)</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="genericSeeds" class="input-field" placeholder="estetica, beleza, skincare" style="flex: 1; padding: 10px; background: var(--aic-navy); border: 1px solid var(--aic-border); border-radius: 8px; color: var(--aic-white);">
+                            <button type="button" id="btnGenerateSeedsDID" onclick="generateSeedsWithAI()" title="Gerar seeds otimizadas com IA baseado no nicho" style="padding: 10px 14px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; border-radius: 8px; color: white; cursor: pointer; font-size: 0.85em; white-space: nowrap;">
+                                🤖 Gerar
+                            </button>
+                        </div>
+                    </div>
+                    <div style="min-width: 140px;">
+                        <label style="display: block; font-size: 0.8em; color: var(--aic-gray); margin-bottom: 4px;">Nicho</label>
+                        <input type="text" id="genericNicho" class="input-field" placeholder="Estética" style="width: 100%; padding: 10px; background: var(--aic-navy); border: 1px solid var(--aic-border); border-radius: 8px; color: var(--aic-white);">
+                    </div>
+                    <div style="min-width: 120px;">
+                        <label style="display: block; font-size: 0.8em; color: var(--aic-gray); margin-bottom: 4px;">Modo</label>
+                        <select id="genericMode" style="width: 100%; padding: 10px; background: var(--aic-navy); border: 1px solid var(--aic-border); border-radius: 8px; color: var(--aic-white);">
+                            <option value="vector" selected>Vector (embeddings)</option>
+                            <option value="vector_hashtag">Vector (hashtags)</option>
+                            <option value="hashtag">Hashtags (legado)</option>
+                        </select>
+                    </div>
+                    <div style="min-width: 80px;">
+                        <label style="display: block; font-size: 0.8em; color: var(--aic-gray); margin-bottom: 4px;">K</label>
+                        <input type="number" id="genericK" placeholder="5" min="2" max="15" style="width: 100%; padding: 10px; background: var(--aic-navy); border: 1px solid var(--aic-border); border-radius: 8px; color: var(--aic-white);">
+                    </div>
+                </div>
+
+                <!-- Filtros de Recência e Localização -->
+                <div style="display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; background: rgba(14, 204, 151, 0.08); border: 1px solid rgba(14, 204, 151, 0.2); border-radius: 10px; margin-bottom: 15px;">
+                    <div style="width: 100%; margin-bottom: 4px;">
+                        <strong style="color: var(--aic-green); font-size: 0.85em;">Filtros de Qualidade</strong>
+                    </div>
+                    <div style="min-width: 150px;">
+                        <label style="display: block; font-size: 0.75em; color: var(--aic-gray); margin-bottom: 4px;">Estados (BR)</label>
+                        <input type="text" id="genericTargetStates" placeholder="SP, RJ, MG" title="Estados brasileiros separados por vírgula. Vazio = todos." style="width: 100%; padding: 8px; background: var(--aic-navy); border: 1px solid var(--aic-border); border-radius: 6px; color: var(--aic-white); font-size: 0.9em;">
+                    </div>
+                    <div style="min-width: 110px;">
+                        <label style="display: block; font-size: 0.75em; color: var(--aic-gray); margin-bottom: 4px;">Leads (dias)</label>
+                        <input type="number" id="genericLeadMaxAge" value="45" min="7" max="180" style="width: 100%; padding: 8px; background: var(--aic-navy); border: 1px solid var(--aic-border); border-radius: 6px; color: var(--aic-white); font-size: 0.9em;">
+                    </div>
+                    <div style="min-width: 110px;">
+                        <label style="display: block; font-size: 0.75em; color: var(--aic-gray); margin-bottom: 4px;">Hashtags (dias)</label>
+                        <input type="number" id="genericHashtagMaxAge" value="90" min="7" max="365" style="width: 100%; padding: 8px; background: var(--aic-navy); border: 1px solid var(--aic-border); border-radius: 6px; color: var(--aic-white); font-size: 0.9em;">
+                    </div>
+                    <div style="flex: 1; min-width: 150px; display: flex; align-items: flex-end;">
+                        <span style="font-size: 0.7em; color: var(--aic-gray);">Leads recentes (45d) + Hashtags válidas (90d)</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button class="btn" id="btnExecuteGenericClustering" onclick="executeGenericClustering()" style="background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));">
+                        Executar Clustering
+                    </button>
+                    <span id="genericClusteringStatus" style="font-size: 0.85em; color: var(--aic-gray);"></span>
+                </div>
+
+                <!-- Resultado do Clustering (sincronizado do CID) -->
+                <div id="clusteringResultSummary" style="display: none; margin-top: 15px; padding: 15px; background: rgba(14, 204, 151, 0.1); border: 1px solid var(--aic-green); border-radius: 10px;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 0.75em; color: var(--aic-gray);">K (Clusters)</div>
+                            <div id="resultK" style="font-size: 1.5em; font-weight: 700; color: var(--aic-white);">-</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 0.75em; color: var(--aic-gray);">Leads</div>
+                            <div id="resultLeads" style="font-size: 1.5em; font-weight: 700; color: var(--aic-white);">-</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 0.75em; color: var(--aic-gray);">Silhouette Score</div>
+                            <div id="resultSilhouette" style="font-size: 1.5em; font-weight: 700;">-</div>
+                            <div id="resultSilhouetteLabel" style="font-size: 0.7em; margin-top: 2px;">-</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 0.75em; color: var(--aic-gray);">Método</div>
+                            <div id="resultMethod" style="font-size: 0.9em; font-weight: 600; color: var(--aic-green);">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lista de Clusters -->
             <div id="clusters-list" class="clusters-list"></div>
         </div>
 
@@ -561,7 +1008,7 @@
         <!-- Trends Section -->
         <div id="trends-section" style="display: none;">
             <div class="section-title">
-                <h2>📈 Tendências Emergentes</h2>
+                <h2>Tendencias Emergentes</h2>
             </div>
             <div id="trends-grid" class="trends-grid"></div>
         </div>
@@ -569,13 +1016,13 @@
         <!-- Personas Section -->
         <div id="personas-section" style="display: none;">
             <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
-                <h2>🎭 Personas Dinâmicas (GPT-4/5)</h2>
+                <h2>Personas Dinamicas (GPT-4/5)</h2>
                 <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-success" id="recalcPersonaMetricsBtn" onclick="recalculatePersonaMetrics()" title="Recalcula métricas das personas existentes (GRATUITO)">
-                        <span>📊</span> Atualizar Métricas
+                    <button class="btn btn-success" id="recalcPersonaMetricsBtn" onclick="recalculatePersonaMetrics()" title="Recalcula metricas das personas existentes (GRATUITO)">
+                        Atualizar Metricas
                     </button>
-                    <button class="btn" id="generatePersonasBtn" onclick="generatePersonas()" style="background: #ec4899;" title="Gera novas personas via GPT (CUSTO ~$0.15)">
-                        <span>🎭</span> Gerar Personas (GPT)
+                    <button class="btn" id="generatePersonasBtn" onclick="generatePersonas()" style="background: linear-gradient(135deg, #ec4899, #db2777);" title="Gera novas personas via GPT (CUSTO ~$0.15)">
+                        Gerar Personas (GPT)
                     </button>
                 </div>
             </div>
@@ -589,7 +1036,8 @@
         let charts = {};
         let allClusters = [];
 
-        Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        Chart.defaults.font.family = "'Inter', system-ui, -apple-system, sans-serif";
+        Chart.defaults.color = '#94a3b8';
         Chart.register(ChartDataLabels);
 
         async function fetchData(endpoint) {
@@ -599,12 +1047,13 @@
         }
 
         function showError(message) {
-            document.getElementById('error-container').innerHTML = `<div class="error">❌ ${message}</div>`;
+            document.getElementById('error-container').innerHTML = `<div class="error">${message}</div>`;
         }
 
         function hideLoading() {
             document.getElementById('loading').style.display = 'none';
             document.getElementById('stats-grid').style.display = 'grid';
+            document.getElementById('scraping-metrics-section').style.display = 'grid';
             document.getElementById('charts-section').style.display = 'block';
             document.getElementById('clusters-section').style.display = 'block';
             document.getElementById('trends-section').style.display = 'block';
@@ -621,87 +1070,75 @@
                 const pctWithPhone = totalLeads > 0 ? ((kpis.leads_with_phone / totalLeads) * 100).toFixed(1) : 0;
 
                 document.getElementById('stats-grid').innerHTML = `
-                    <!-- ========== SEÇÃO LEADS ========== -->
-                    <div style="grid-column: 1 / -1; background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 15px; border-radius: 12px; margin-bottom: 10px;">
-                        <h3 style="margin: 0; font-size: 1.3em;">👥 ESTATÍSTICAS DE LEADS</h3>
+                    <!-- ========== SECAO LEADS (45 dias) ========== -->
+                    <div class="section-header-banner" style="grid-column: 1 / -1;">
+                        <h3>ESTATISTICAS DE LEADS <span>(45 dias - criados ou revalidados)</span></h3>
                     </div>
-                    <div class="stat-card" style="border-left: 4px solid #667eea;">
-                        <div class="icon">📊</div>
+                    <div class="stat-card" style="border-left: 4px solid var(--aic-green);">
                         <div class="label">TOTAL</div>
                         <div class="value">${totalLeads.toLocaleString()}</div>
-                        <div class="change">Base completa</div>
+                        <div class="change">Zona Ativa</div>
                     </div>
                     <div class="stat-card" style="border-left: 4px solid #10b981;">
-                        <div class="icon">✅</div>
                         <div class="label">COM CONTATO</div>
                         <div class="value">${(kpis.leads_with_contact || 0).toLocaleString()}</div>
                         <div class="change" style="color: #10b981;">${pctWithContact}% do total</div>
                     </div>
                     <div class="stat-card" style="border-left: 4px solid #ef4444;">
-                        <div class="icon">❌</div>
                         <div class="label">SEM CONTATO</div>
                         <div class="value">${(kpis.leads_without_contact || 0).toLocaleString()}</div>
                         <div class="change" style="color: #ef4444;">${pctWithoutContact}% do total</div>
                     </div>
                     <div class="stat-card">
-                        <div class="icon">📧</div>
                         <div class="label">Com Email Principal</div>
                         <div class="value">${(kpis.leads_with_email || 0).toLocaleString()}</div>
                         <div class="change">${pctWithEmail}% do total</div>
                     </div>
                     <div class="stat-card">
-                        <div class="icon">📱</div>
                         <div class="label">Com Phone Principal</div>
                         <div class="value">${(kpis.leads_with_phone || 0).toLocaleString()}</div>
                         <div class="change">${pctWithPhone}% do total</div>
                     </div>
                     <div class="stat-card">
-                        <div class="icon">📨</div>
                         <div class="label">Com Emails Adicionais</div>
                         <div class="value">${(kpis.leads_with_additional_emails || 0).toLocaleString()}</div>
                         <div class="change">Campos extras</div>
                     </div>
                     <div class="stat-card">
-                        <div class="icon">📲</div>
                         <div class="label">Com Phones Adicionais</div>
                         <div class="value">${(kpis.leads_with_additional_phones || 0).toLocaleString()}</div>
                         <div class="change">Campos extras</div>
                     </div>
 
-                    <!-- ========== SEÇÃO HASHTAGS ========== -->
-                    <div style="grid-column: 1 / -1; background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 15px; border-radius: 12px; margin: 20px 0 10px 0;">
-                        <h3 style="margin: 0; font-size: 1.3em;">#️⃣ ESTATÍSTICAS DE HASHTAGS (Bio + Posts)</h3>
+                    <!-- ========== SECAO HASHTAGS ========== -->
+                    <div class="section-header-hashtags" style="grid-column: 1 / -1;">
+                        <h3>ESTATISTICAS DE HASHTAGS <span>(90 dias - criados ou revalidados)</span></h3>
                     </div>
                     <!-- Hashtags TOTAL -->
-                    <div class="stat-card" style="border-left: 4px solid #667eea;">
-                        <div class="icon">📊</div>
-                        <div class="label">HASHTAGS ÚNICAS - TOTAL</div>
+                    <div class="stat-card" style="border-left: 4px solid var(--aic-green);">
+                        <div class="label">HASHTAGS UNICAS - TOTAL</div>
                         <div class="value">${(kpis.unique_hashtags_total || 0).toLocaleString()}</div>
-                        <div class="change">${(kpis.occurrences_total || 0).toLocaleString()} ocorrências</div>
+                        <div class="change">${(kpis.occurrences_total || 0).toLocaleString()} ocorrencias</div>
                     </div>
                     <!-- Hashtags COM CONTATO -->
                     <div class="stat-card" style="border-left: 4px solid #10b981;">
-                        <div class="icon">✅</div>
                         <div class="label">HASHTAGS - COM CONTATO</div>
                         <div class="value">${(kpis.unique_hashtags_with_contact || 0).toLocaleString()}</div>
-                        <div class="change" style="color: #10b981;">${(kpis.occurrences_with_contact || 0).toLocaleString()} ocorrências</div>
+                        <div class="change" style="color: #10b981;">${(kpis.occurrences_with_contact || 0).toLocaleString()} ocorrencias</div>
                     </div>
                     <!-- Hashtags SEM CONTATO -->
                     <div class="stat-card" style="border-left: 4px solid #ef4444;">
-                        <div class="icon">❌</div>
                         <div class="label">HASHTAGS - SEM CONTATO</div>
                         <div class="value">${(kpis.unique_hashtags_without_contact || 0).toLocaleString()}</div>
-                        <div class="change" style="color: #ef4444;">${(kpis.occurrences_without_contact || 0).toLocaleString()} ocorrências</div>
+                        <div class="change" style="color: #ef4444;">${(kpis.occurrences_without_contact || 0).toLocaleString()} ocorrencias</div>
                     </div>
                     <!-- Detalhamento por fonte -->
                     <div class="stat-card">
-                        <div class="icon">🏷️</div>
                         <div class="label">Hashtags na Bio</div>
                         <div class="value">${(kpis.total_hashtags_in_bio || 0).toLocaleString()}</div>
                         <div class="change">${(kpis.leads_with_hashtags_bio || 0).toLocaleString()} leads</div>
                     </div>
                     <div class="stat-card">
-                        <div class="icon">📸</div>
                         <div class="label">Hashtags em Posts</div>
                         <div class="value">${(kpis.total_hashtags_in_posts || 0).toLocaleString()}</div>
                         <div class="change">${(kpis.leads_with_hashtags_posts || 0).toLocaleString()} leads</div>
@@ -720,10 +1157,10 @@
                     data: {
                         labels: response.data.map(d => d.hashtag),
                         datasets: [{
-                            label: 'Frequência',
+                            label: 'Frequencia',
                             data: response.data.map(d => d.frequency),
-                            backgroundColor: 'rgba(102, 126, 234, 0.8)',
-                            borderWidth: 2
+                            backgroundColor: 'rgba(14, 204, 151, 0.8)',
+                            borderWidth: 0
                         }]
                     },
                     options: {
@@ -735,7 +1172,7 @@
                             datalabels: {
                                 anchor: 'end',
                                 align: 'end',
-                                color: '#667eea',
+                                color: '#0ECC97',
                                 font: { weight: 'bold' },
                                 formatter: (v) => v.toLocaleString()
                             }
@@ -754,11 +1191,11 @@
                 console.log('[DEBUG] Clusters encontrados:', response.clusters.length);
                 const ctx = document.getElementById('clustersChart').getContext('2d');
                 if (charts.clusters) charts.clusters.destroy();
-                const colors = ['rgba(102, 126, 234, 0.8)', 'rgba(118, 75, 162, 0.8)',
-                               'rgba(237, 100, 166, 0.8)', 'rgba(255, 154, 158, 0.8)',
-                               'rgba(255, 198, 93, 0.8)', 'rgba(16, 185, 129, 0.8)',
-                               'rgba(59, 130, 246, 0.8)', 'rgba(251, 191, 36, 0.8)',
-                               'rgba(139, 92, 246, 0.8)'];
+                const colors = ['rgba(14, 204, 151, 0.8)', 'rgba(16, 185, 129, 0.8)',
+                               'rgba(6, 182, 212, 0.8)', 'rgba(59, 130, 246, 0.8)',
+                               'rgba(139, 92, 246, 0.8)', 'rgba(236, 72, 153, 0.8)',
+                               'rgba(251, 191, 36, 0.8)', 'rgba(249, 115, 22, 0.8)',
+                               'rgba(239, 68, 68, 0.8)'];
                 console.log('[DEBUG] Criando chart doughnut...');
                 charts.clusters = new Chart(ctx, {
                     type: 'doughnut',
@@ -794,7 +1231,7 @@
                         datasets: [{
                             label: 'Taxa de Contato (%)',
                             data: response.clusters.map(c => ((c.conversion_rate || c.avg_contact_rate || 0) * 100).toFixed(1)),
-                            backgroundColor: 'rgba(16, 185, 129, 0.8)'
+                            backgroundColor: 'rgba(14, 204, 151, 0.8)'
                         }]
                     },
                     options: {
@@ -805,7 +1242,7 @@
                             datalabels: {
                                 anchor: 'end',
                                 align: 'end',
-                                color: '#10b981',
+                                color: '#0ECC97',
                                 font: { weight: 'bold' },
                                 formatter: (v) => v + '%'
                             }
@@ -865,7 +1302,7 @@
                         labels: Object.keys(modelData),
                         datasets: [{
                             data: Object.values(modelData),
-                            backgroundColor: ['rgba(102, 126, 234, 0.8)', 'rgba(251, 191, 36, 0.8)', 
+                            backgroundColor: ['rgba(14, 204, 151, 0.8)', 'rgba(251, 191, 36, 0.8)',
                                             'rgba(16, 185, 129, 0.8)', 'rgba(239, 68, 68, 0.8)']
                         }]
                     },
@@ -902,10 +1339,246 @@
                         maintainAspectRatio: false,
                         plugins: {
                             legend: { display: false },
-                            datalabels: { anchor: 'end', align: 'end', color: '#667eea', font: { weight: 'bold' } }
+                            datalabels: { anchor: 'end', align: 'end', color: '#0ECC97', font: { weight: 'bold' } }
                         }
                     }
                 });
+            }
+        }
+
+        // =====================================================
+        // NOVOS GRAFICOS DE SCRAPING METRICS
+        // =====================================================
+
+        async function loadDailyScrapingStats() {
+            try {
+                // Calcular data de 45 dias atras dinamicamente
+                const startDate = new Date();
+                startDate.setDate(startDate.getDate() - 45);
+                const startDateStr = startDate.toISOString().split('T')[0];
+                const response = await fetchData(`/hashtag-intelligence/daily-scraping-stats?start_date=${startDateStr}`);
+                if (response?.success && response.data && response.data.length > 0) {
+                    const ctx = document.getElementById('dailyScrapingChart').getContext('2d');
+                    if (charts.dailyScraping) charts.dailyScraping.destroy();
+
+                    const labels = response.data.map(d => {
+                        // Adiciona T12:00:00 para evitar problema de timezone (UTC->Local)
+                        const date = new Date(d.date + 'T12:00:00');
+                        return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                    });
+
+                    charts.dailyScraping = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Novos Perfis',
+                                    data: response.data.map(d => parseInt(d.novos) || 0),
+                                    borderColor: 'rgba(14, 204, 151, 1)',
+                                    backgroundColor: 'rgba(14, 204, 151, 0.1)',
+                                    fill: true,
+                                    tension: 0.4,
+                                    pointRadius: 4,
+                                    pointHoverRadius: 6
+                                },
+                                {
+                                    label: 'Atualizados',
+                                    data: response.data.map(d => parseInt(d.atualizados) || 0),
+                                    borderColor: 'rgba(59, 130, 246, 1)',
+                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                    fill: true,
+                                    tension: 0.4,
+                                    pointRadius: 4,
+                                    pointHoverRadius: 6
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: {
+                                intersect: false,
+                                mode: 'index'
+                            },
+                            plugins: {
+                                legend: { position: 'top' },
+                                datalabels: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        footer: (tooltipItems) => {
+                                            const total = tooltipItems.reduce((sum, item) => sum + item.raw, 0);
+                                            return `Total: ${total}`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    title: { display: true, text: 'Quantidade de Perfis' }
+                                },
+                                x: {
+                                    title: { display: true, text: 'Data' },
+                                    ticks: {
+                                        maxTicksLimit: 7,
+                                        callback: function(value, index, ticks) {
+                                            const totalTicks = ticks.length;
+                                            const interval = Math.ceil(totalTicks / 7);
+                                            if (index % interval === 0 || index === totalTicks - 1) {
+                                                return this.getLabelForValue(value);
+                                            }
+                                            return '';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Erro ao carregar daily scraping stats:', error);
+            }
+        }
+
+        async function loadDailyEvolutionChart() {
+            try {
+                const response = await fetchData('/hashtag-intelligence/daily-metrics-evolution');
+                console.log('[DEBUG] daily-metrics-evolution response:', response);
+
+                if (response?.success && response.data && response.data.length > 0) {
+                    const ctx = document.getElementById('dailyEvolutionChart').getContext('2d');
+                    if (charts.dailyEvolution) charts.dailyEvolution.destroy();
+
+                    const rawData = response.data;
+
+                    const labels = rawData.map(d => {
+                        const date = new Date(d.date + 'T12:00:00');
+                        return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                    });
+
+                    charts.dailyEvolution = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                // Leads Total (fundo claro)
+                                {
+                                    label: 'Leads Total (45d)',
+                                    data: rawData.map(d => parseInt(d.total_leads) || 0),
+                                    backgroundColor: 'rgba(16, 185, 129, 0.3)',
+                                    borderColor: 'rgba(16, 185, 129, 0.5)',
+                                    borderWidth: 1,
+                                    barPercentage: 0.9,
+                                    categoryPercentage: 0.45,
+                                    order: 2,
+                                    yAxisID: 'y'
+                                },
+                                // Leads c/ Contato (sobreposto)
+                                {
+                                    label: 'Leads c/ Contato',
+                                    data: rawData.map(d => parseInt(d.leads_with_contact) || 0),
+                                    backgroundColor: 'rgba(16, 185, 129, 1)',
+                                    borderWidth: 0,
+                                    barPercentage: 0.9,
+                                    categoryPercentage: 0.45,
+                                    order: 1,
+                                    yAxisID: 'y'
+                                },
+                                // Hashtags Total (fundo claro)
+                                {
+                                    label: 'Hashtags Total (90d)',
+                                    data: rawData.map(d => parseInt(d.total_hashtags) || 0),
+                                    backgroundColor: 'rgba(14, 204, 151, 0.3)',
+                                    borderColor: 'rgba(14, 204, 151, 0.5)',
+                                    borderWidth: 1,
+                                    barPercentage: 0.9,
+                                    categoryPercentage: 0.45,
+                                    order: 4,
+                                    yAxisID: 'y1'
+                                },
+                                // Hashtags c/ Contato (sobreposto)
+                                {
+                                    label: 'Hashtags c/ Contato',
+                                    data: rawData.map(d => parseInt(d.hashtags_with_contact) || 0),
+                                    backgroundColor: 'rgba(14, 204, 151, 1)',
+                                    borderWidth: 0,
+                                    barPercentage: 0.9,
+                                    categoryPercentage: 0.45,
+                                    order: 3,
+                                    yAxisID: 'y1'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: { intersect: false, mode: 'index' },
+                            plugins: {
+                                legend: {
+                                    display: true,
+                                    position: 'top',
+                                    labels: { usePointStyle: true, padding: 10, font: { size: 10 } }
+                                },
+                                datalabels: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        afterBody: (items) => {
+                                            const idx = items[0].dataIndex;
+                                            const d = rawData[idx];
+                                            const leadsPct = d.total_leads > 0 ? ((d.leads_with_contact / d.total_leads) * 100).toFixed(1) : 0;
+                                            const hashPct = d.total_hashtags > 0 ? ((d.hashtags_with_contact / d.total_hashtags) * 100).toFixed(1) : 0;
+                                            return `\nLeads: ${Number(d.leads_with_contact).toLocaleString('pt-BR')}/${Number(d.total_leads).toLocaleString('pt-BR')} (${leadsPct}%)` +
+                                                   `\nHashtags: ${Number(d.hashtags_with_contact).toLocaleString('pt-BR')}/${Number(d.total_hashtags).toLocaleString('pt-BR')} (${hashPct}%)`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    type: 'linear',
+                                    position: 'left',
+                                    beginAtZero: true,
+                                    title: { display: true, text: 'Leads (45d)', color: '#10b981' },
+                                    ticks: {
+                                        color: '#10b981',
+                                        callback: function(value) {
+                                            return Number(value).toLocaleString('pt-BR');
+                                        }
+                                    },
+                                    grid: { display: true, color: 'rgba(16, 185, 129, 0.1)' }
+                                },
+                                y1: {
+                                    type: 'linear',
+                                    position: 'right',
+                                    beginAtZero: true,
+                                    title: { display: true, text: 'Hashtags (90d)', color: '#0ECC97' },
+                                    ticks: {
+                                        color: '#0ECC97',
+                                        callback: function(value) {
+                                            return Number(value).toLocaleString('pt-BR');
+                                        }
+                                    },
+                                    grid: { display: false }
+                                },
+                                x: {
+                                    grid: { display: false },
+                                    ticks: {
+                                        maxTicksLimit: 13,
+                                        callback: function(value, index, ticks) {
+                                            const interval = Math.ceil(ticks.length / 13);
+                                            return (index % interval === 0) ? this.getLabelForValue(value) : '';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    console.warn('[WARN] daily-metrics-evolution sem dados:', response);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar daily evolution chart:', error);
             }
         }
 
@@ -915,7 +1588,7 @@
                 const tbody = document.querySelector('#cooccurrenceTable tbody');
                 tbody.innerHTML = response.data.map(row => {
                     const conf = row.cooccurrence >= 50 ? 'high' : row.cooccurrence >= 20 ? 'medium' : 'low';
-                    const label = conf === 'high' ? 'Alta' : conf === 'medium' ? 'Média' : 'Baixa';
+                    const label = conf === 'high' ? 'Alta' : conf === 'medium' ? 'Media' : 'Baixa';
                     return `<tr>
                         <td><strong>#${row.hashtag1}</strong></td>
                         <td><strong>#${row.hashtag2}</strong></td>
@@ -926,6 +1599,204 @@
             }
         }
 
+        // ==================== CLUSTERING GENÉRICO ====================
+
+        // ID da campanha demo para clustering genérico da plataforma
+        let platformDemoCampaignId = null;
+
+        function toggleClusteringControls() {
+            const panel = document.getElementById('clusteringControlsPanel');
+            const btn = document.getElementById('btnToggleClusteringControls');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+                btn.textContent = 'Ocultar Controles';
+            } else {
+                panel.style.display = 'none';
+                btn.textContent = 'Configurar Clustering';
+            }
+        }
+
+        async function getOrCreatePlatformDemoCampaign() {
+            // Usar endpoint dedicado que cria ou retorna a campanha demo
+            const response = await fetch(`${API_BASE}/hashtag-intelligence/platform-demo-campaign`);
+            const data = await response.json();
+
+            if (data?.success && data.data?.id) {
+                const action = data.created ? 'criada' : 'encontrada';
+                console.log(`📦 Campanha Platform Demo ${action}:`, data.data.id);
+                return data.data.id;
+            }
+
+            throw new Error(data?.message || 'Não foi possível obter campanha demo');
+        }
+
+        // ==========================================
+        // GERAÇÃO DE SEEDS COM IA (sincronizado do CID)
+        // ==========================================
+        async function generateSeedsWithAI() {
+            const btn = document.getElementById('btnGenerateSeedsDID');
+            const nichoInput = document.getElementById('genericNicho')?.value?.trim() || '';
+            const targetStates = document.getElementById('genericTargetStates')?.value?.trim() || '';
+
+            if (!nichoInput) {
+                alert('Preencha o campo "Nicho" para gerar seeds com IA.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '⏳...';
+
+            try {
+                const response = await fetch(`${API_BASE}/hashtag-intelligence/generate-seeds`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        service_description: nichoInput,
+                        target_audience: 'Profissionais e empresas do nicho ' + nichoInput,
+                        location: targetStates || null,
+                        objective: 'prospecção'
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success && result.data?.seeds?.length > 0) {
+                    // Preencher campo de seeds
+                    document.getElementById('genericSeeds').value = result.data.seeds.join(', ');
+
+                    // Feedback visual
+                    btn.innerHTML = '✅';
+                    setTimeout(() => {
+                        btn.innerHTML = '🤖 Gerar';
+                        btn.disabled = false;
+                    }, 2000);
+                } else {
+                    throw new Error(result.message || 'Erro ao gerar seeds');
+                }
+
+            } catch (error) {
+                console.error('Erro ao gerar seeds:', error);
+                alert(`Erro: ${error.message}`);
+                btn.innerHTML = '🤖 Gerar';
+                btn.disabled = false;
+            }
+        }
+
+        async function executeGenericClustering() {
+            const btn = document.getElementById('btnExecuteGenericClustering');
+            const status = document.getElementById('genericClusteringStatus');
+
+            const seedsRaw = document.getElementById('genericSeeds')?.value || '';
+            const nicho = document.getElementById('genericNicho')?.value || 'Geral';
+            const mode = document.getElementById('genericMode')?.value || 'vector';
+            const kRaw = parseInt(document.getElementById('genericK')?.value || '5', 10);
+
+            // Filtros de recência e localização
+            const targetStatesRaw = document.getElementById('genericTargetStates')?.value || '';
+            const targetStates = targetStatesRaw
+                ? targetStatesRaw.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length === 2)
+                : undefined;
+            const leadMaxAgeDays = parseInt(document.getElementById('genericLeadMaxAge')?.value || '45', 10);
+            const hashtagMaxAgeDays = parseInt(document.getElementById('genericHashtagMaxAge')?.value || '90', 10);
+
+            const seeds = seedsRaw.split(',').map(s => s.trim()).filter(s => s.length > 0);
+
+            // Validação para modo não-vector
+            const isVectorMode = mode === 'vector' || mode === 'vector_hashtag';
+            if (!isVectorMode && seeds.length === 0) {
+                alert('Preencha seeds para o modo hashtag');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Processando...';
+            status.textContent = 'Obtendo/criando campanha demo...';
+            status.style.color = 'var(--aic-green)';
+
+            try {
+                // Obter ou criar campanha demo
+                platformDemoCampaignId = await getOrCreatePlatformDemoCampaign();
+                status.textContent = 'Executando clustering...';
+
+                const payload = {
+                    seeds: seeds.length > 0 ? seeds : undefined,
+                    nicho: nicho,
+                    campaign_id: platformDemoCampaignId,
+                    mode: mode,
+                    k: Number.isFinite(kRaw) && kRaw > 0 ? kRaw : undefined,
+                    target_states: targetStates,
+                    lead_max_age_days: leadMaxAgeDays,
+                    hashtag_max_age_days: hashtagMaxAgeDays
+                };
+
+                console.log('🎯 [Generic Clustering] Payload:', payload);
+
+                const response = await fetch(`${API_BASE}/hashtag-intelligence/execute-clustering`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    const data = result.data;
+                    const clustersCount = data.clusters?.length || 0;
+                    const leadsCount = data.total_leads || 0;
+                    const silhouette = data.silhouette_avg || 0;
+
+                    status.innerHTML = `✅ ${clustersCount} clusters, ${leadsCount} leads | <a href="#" onclick="loadClusters(); loadClusterDistribution(); loadContactRateByCluster(); return false;" style="color: var(--aic-green);">Atualizar gráficos</a>`;
+
+                    // Atualizar resumo visual (sincronizado do CID)
+                    const summaryDiv = document.getElementById('clusteringResultSummary');
+                    if (summaryDiv) {
+                        summaryDiv.style.display = 'block';
+                        document.getElementById('resultK').textContent = clustersCount;
+                        document.getElementById('resultLeads').textContent = leadsCount.toLocaleString();
+                        document.getElementById('resultSilhouette').textContent = silhouette.toFixed(3);
+
+                        // Qualidade do Silhouette Score
+                        let silLabel, silColor;
+                        if (silhouette >= 0.70) { silLabel = 'Excelente'; silColor = '#10b981'; }
+                        else if (silhouette >= 0.50) { silLabel = 'Bom'; silColor = '#22c55e'; }
+                        else if (silhouette >= 0.35) { silLabel = 'Razoável'; silColor = '#f59e0b'; }
+                        else if (silhouette >= 0.25) { silLabel = 'Aceitável'; silColor = '#f97316'; }
+                        else { silLabel = 'Fraco'; silColor = '#ef4444'; }
+
+                        document.getElementById('resultSilhouette').style.color = silColor;
+                        document.getElementById('resultSilhouetteLabel').textContent = silLabel;
+                        document.getElementById('resultSilhouetteLabel').style.color = silColor;
+
+                        // Método usado
+                        const methodLabel = mode === 'vector' ? 'Vector (embeddings)'
+                            : mode === 'vector_hashtag' ? 'Vector (hashtags)'
+                            : 'Hashtags (legado)';
+                        document.getElementById('resultMethod').textContent = methodLabel;
+                    }
+
+                    // Recarregar dados automaticamente
+                    await loadClusters();
+                    await loadClusterDistribution();
+                    await loadContactRateByCluster();
+
+                    // Mostrar seção de clusters se escondida
+                    document.getElementById('clusters-section').style.display = 'block';
+                } else {
+                    throw new Error(result.message || 'Erro ao executar clustering');
+                }
+            } catch (error) {
+                console.error('Erro no clustering genérico:', error);
+                status.textContent = `❌ Erro: ${error.message}`;
+                status.style.color = '#ef4444';
+                alert(`Erro: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Executar Clustering';
+            }
+        }
+
+        // ==================== FIM CLUSTERING GENÉRICO ====================
+
         async function loadClusters() {
             // Usar unified-intelligence (KMeans local, gratuito)
             const response = await fetchData('/unified-intelligence/clusters');
@@ -935,14 +1806,14 @@
                 container.innerHTML = allClusters.map(c => `
                     <div class="cluster-card" onclick="selectCluster('${c.id}')">
                         <h4>${c.cluster_name}</h4>
-                        <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">${c.cluster_description || ''}</p>
+                        <p style="font-size: 0.85em; color: var(--aic-gray); margin-bottom: 10px;">${c.cluster_description || ''}</p>
                         <div class="cluster-stats">
                             <div class="stat"><strong>${c.hashtag_count || 0}</strong> hashtags</div>
                             <div class="stat"><strong>${c.total_leads || 0}</strong> leads</div>
-                            <div class="stat"><strong>${((c.conversion_rate || 0) * 100).toFixed(1)}%</strong> conversão</div>
+                            <div class="stat"><strong>${((c.conversion_rate || 0) * 100).toFixed(1)}%</strong> conversao</div>
                             <div class="stat">Score: <strong>${c.priority_score || 0}</strong></div>
                         </div>
-                        <div style="margin-top: 8px; font-size: 0.75em; color: #999;">KMeans: ${c.generated_at ? c.generated_at.substring(0, 19).replace('T', ' ') : 'N/A'}</div>
+                        <div style="margin-top: 8px; font-size: 0.7em; color: var(--aic-gray);">KMeans: ${c.generated_at ? c.generated_at.substring(0, 19).replace('T', ' ') : 'N/A'}</div>
                     </div>
                 `).join('');
             }
@@ -957,41 +1828,41 @@
             if (response?.success && response.insights) {
                 const insights = response.insights;
                 const cluster = response.cluster;
-                const painBadge = insights.pain_intensity === 'crítica' ? 'critical' :
+                const painBadge = insights.pain_intensity === 'critica' ? 'critical' :
                                  insights.pain_intensity === 'alta' ? 'high' :
-                                 insights.pain_intensity === 'média' ? 'medium' : 'low';
+                                 insights.pain_intensity === 'media' ? 'medium' : 'low';
 
                 const container = document.getElementById('behavioral-insights');
                 container.innerHTML = `
-                    <h3>🧠 Análise Comportamental: ${cluster.cluster_name}</h3>
+                    <h3>Analise Comportamental: ${cluster.cluster_name}</h3>
                     <div class="insight-section">
-                        <h4>🔥 Pain Points <span class="badge ${painBadge}">${insights.pain_intensity}</span></h4>
+                        <h4>Pain Points <span class="badge ${painBadge}">${insights.pain_intensity}</span></h4>
                         <ul>${(insights.pain_points || []).map(p => `<li>${p}</li>`).join('')}</ul>
                     </div>
                     <div class="insight-section">
-                        <h4>📈 Tendências Emergentes</h4>
+                        <h4>Tendencias Emergentes</h4>
                         <ul>${(insights.emerging_trends || []).map(t => `<li>${t}</li>`).join('')}</ul>
                     </div>
                     <div class="insight-section">
-                        <h4>🎯 Perfil Psicográfico</h4>
-                        <p><strong>Consciência:</strong> ${insights.audience_awareness_level}</p>
-                        <p><strong>Estágio de Compra:</strong> ${insights.buying_stage}</p>
+                        <h4>Perfil Psicografico</h4>
+                        <p><strong>Consciencia:</strong> ${insights.audience_awareness_level}</p>
+                        <p><strong>Estagio de Compra:</strong> ${insights.buying_stage}</p>
                         <p><strong>Tom:</strong> ${insights.communication_tone}</p>
                     </div>
                     <div class="insight-section">
-                        <h4>💡 Recomendações</h4>
+                        <h4>Recomendacoes</h4>
                         <ul>${(insights.approach_recommendations || []).map(r => `<li>${r}</li>`).join('')}</ul>
                     </div>
                     <div class="insight-section">
-                        <h4>🧠 Gatilhos Mentais</h4>
+                        <h4>Gatilhos Mentais</h4>
                         <div>${(insights.mental_triggers || []).map(t => `<span class="badge medium">${t}</span>`).join('')}</div>
                     </div>
                     <div class="insight-section">
-                        <h4>🚧 Objeções Comuns</h4>
+                        <h4>Objecoes Comuns</h4>
                         <ul>${(insights.common_objections || []).map(o => `<li>${o}</li>`).join('')}</ul>
                     </div>
                     <div class="insight-section">
-                        <h4>🎁 Oportunidades</h4>
+                        <h4>Oportunidades</h4>
                         <ul>${(insights.market_gaps || []).map(g => `<li>${g}</li>`).join('')}</ul>
                     </div>
                 `;
@@ -1008,7 +1879,7 @@
                 container.innerHTML = response.trends.map(t => `
                     <div class="trend-card ${t.trend_type === 'viral' ? 'viral' : ''}">
                         <div class="hashtag">#${t.hashtag}</div>
-                        <div class="growth">📈 ${t.growth_rate.toFixed(0)}% crescimento</div>
+                        <div class="growth">${t.growth_rate.toFixed(0)}% crescimento</div>
                         <div class="growth" style="font-size: 0.8em; margin-top: 5px;">${t.trend_type}</div>
                     </div>
                 `).join('');
@@ -1016,12 +1887,12 @@
         }
 
         async function executePipeline() {
-            if (!confirm('⚠️ Isso vai chamar a API GPT-4 (custo ~$0.10).\n\nDeseja continuar?')) {
+            if (!confirm('Isso vai chamar a API GPT-4 (custo ~$0.10).\n\nDeseja continuar?')) {
                 return;
             }
             const btn = document.getElementById('pipelineBtn');
             btn.disabled = true;
-            btn.innerHTML = '<span>⏳</span> Executando GPT-4...';
+            btn.innerHTML = 'Executando GPT-4...';
             try {
                 // Timeout de 10 minutos (600000ms) - GPT-4 pode demorar com 5k+ hashtags
                 const controller = new AbortController();
@@ -1034,69 +1905,69 @@
                 clearTimeout(timeoutId);
                 const data = await response.json();
                 if (data.success) {
-                    alert(`✅ Pipeline executado!\n\nClusters: ${data.clusters_updated}\n\nRecarregando...`);
+                    alert(`Pipeline executado!\n\nClusters: ${data.clusters_updated}\n\nRecarregando...`);
                     await loadAllData();
                     await loadLastExecution();
                 } else {
-                    alert('❌ Erro: ' + data.error);
+                    alert('Erro: ' + data.error);
                 }
             } catch (error) {
                 if (error.name === 'AbortError') {
-                    alert('⏱️ Timeout: Pipeline demorou mais de 10 minutos.\n\nVerifique os logs do servidor ou execute novamente.');
+                    alert('Timeout: Pipeline demorou mais de 10 minutos.\n\nVerifique os logs do servidor ou execute novamente.');
                 } else {
-                    alert('❌ Erro: ' + error.message);
+                    alert('Erro: ' + error.message);
                 }
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<span>🚀</span> Pipeline Completo (GPT-4)';
+                btn.innerHTML = 'Pipeline GPT-4 (Legado)';
             }
         }
 
         async function recalculateMetrics() {
             const btn = document.getElementById('recalculateBtn');
             btn.disabled = true;
-            btn.innerHTML = '<span>⏳</span> Recalculando...';
+            btn.innerHTML = 'Recalculando...';
             try {
                 // Usar unified-intelligence (KMeans local, gratuito)
                 const response = await fetch(`${API_BASE}/unified-intelligence/recalculate-metrics`, { method: 'POST' });
                 const data = await response.json();
                 if (data.success) {
-                    alert(`✅ Métricas recalculadas (SEM GPT-4)!\n\nClusters atualizados: ${data.clusters_updated}\nErros: ${data.errors}\n\nRecarregando...`);
+                    alert(`Metricas recalculadas (SEM GPT-4)!\n\nClusters atualizados: ${data.clusters_updated}\nErros: ${data.errors}\n\nRecarregando...`);
                     await loadAllData();
                     await loadLastExecution();
                 } else {
-                    alert('❌ Erro: ' + data.error);
+                    alert('Erro: ' + data.error);
                 }
             } catch (error) {
-                alert('❌ Erro: ' + error.message);
+                alert('Erro: ' + error.message);
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<span>📊</span> Recalcular Métricas';
+                btn.innerHTML = 'Recalcular Metricas';
             }
         }
 
         async function populateSearchTerms() {
-            if (!confirm('🔍 Isso vai criar termos de busca baseados nos clusters GPT-4.\n\nDeseja continuar?')) {
+            if (!confirm('Isso vai criar termos de busca baseados nos clusters GPT-4.\n\nDeseja continuar?')) {
                 return;
             }
             const btn = document.getElementById('populateSearchTermsBtn');
             btn.disabled = true;
-            btn.innerHTML = '<span>⏳</span> Gerando...';
+            btn.innerHTML = 'Gerando...';
             try {
                 const response = await fetch(`${API_BASE}/dynamic-intelligence/populate-search-terms`, { method: 'POST' });
                 const data = await response.json();
                 if (data.success) {
-                    alert(`✅ Search Terms Gerados!\n\nCriados: ${data.terms_created}\nAtualizados: ${data.terms_updated}\nErros: ${data.errors}\nTotal: ${data.total_processed}\n\nRecarregando...`);
+                    alert(`Search Terms Gerados!\n\nCriados: ${data.terms_created}\nAtualizados: ${data.terms_updated}\nErros: ${data.errors}\nTotal: ${data.total_processed}\n\nRecarregando...`);
                     await loadAllData();
                     await loadLastExecution();
                 } else {
-                    alert('❌ Erro: ' + data.error);
+                    alert('Erro: ' + data.error);
                 }
             } catch (error) {
-                alert('❌ Erro: ' + error.message);
+                alert('Erro: ' + error.message);
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<span>🔍</span> Gerar Search Terms';
+                btn.innerHTML = 'Gerar Search Terms';
             }
         }
 
@@ -1105,9 +1976,9 @@
                 // Usar unified-intelligence (KMeans local, gratuito)
                 const response = await fetch(`${API_BASE}/unified-intelligence/last-execution`);
                 if (!response.ok) {
-                    console.warn('Endpoint last-execution não disponível (servidor precisa reiniciar)');
+                    console.warn('Endpoint last-execution nao disponivel (servidor precisa reiniciar)');
                     const container = document.getElementById('lastExecutionInfo');
-                    if (container) container.innerHTML = '⚠️ Reinicie o servidor para ver última execução';
+                    if (container) container.innerHTML = 'Reinicie o servidor para ver ultima execucao';
                     return;
                 }
                 const data = await response.json();
@@ -1119,28 +1990,28 @@
 
                 if (data.last_full_pipeline) {
                     const date = new Date(data.last_full_pipeline);
-                    html += `🚀 <strong>Último Pipeline (GPT-4):</strong> ${date.toLocaleDateString('pt-BR')} ${date.toLocaleTimeString('pt-BR')}`;
+                    html += `<strong>Ultimo Pipeline (GPT-4):</strong> ${date.toLocaleDateString('pt-BR')} ${date.toLocaleTimeString('pt-BR')}`;
                 }
 
                 if (data.last_metrics_only) {
                     const date = new Date(data.last_metrics_only);
                     if (html) html += ' | ';
-                    html += `📊 <strong>Última Atualização:</strong> ${date.toLocaleDateString('pt-BR')} ${date.toLocaleTimeString('pt-BR')}`;
+                    html += `<strong>Ultima Atualizacao:</strong> ${date.toLocaleDateString('pt-BR')} ${date.toLocaleTimeString('pt-BR')}`;
                 }
 
                 if (!html) {
-                    html = '⚠️ Nenhuma execução registrada ainda';
+                    html = 'Nenhuma execucao registrada ainda';
                 }
 
                 container.innerHTML = html;
             } catch (error) {
-                console.warn('Erro ao carregar última execução:', error);
+                console.warn('Erro ao carregar ultima execucao:', error);
                 const container = document.getElementById('lastExecutionInfo');
-                if (container) container.innerHTML = '⚠️ Reinicie o servidor para habilitar';
+                if (container) container.innerHTML = 'Reinicie o servidor para habilitar';
             }
         }
 
-        
+
         async function loadAllBehavioralInsights() {
             try {
                 // Usar unified-intelligence (KMeans local, gratuito)
@@ -1154,41 +2025,41 @@
                         const insightsResp = await fetchData(`/unified-intelligence/cluster/${cluster.id}`);
                         if (insightsResp?.success && insightsResp.insights) {
                             const insights = insightsResp.insights;
-                            const painBadge = insights.pain_intensity === 'crítica' ? 'critical' :
+                            const painBadge = insights.pain_intensity === 'critica' ? 'critical' :
                                            insights.pain_intensity === 'alta' ? 'high' :
-                                           insights.pain_intensity === 'média' ? 'medium' : 'low';
-                            
+                                           insights.pain_intensity === 'media' ? 'medium' : 'low';
+
                             html += `
                                 <div class="behavioral-insights visible" style="margin-bottom: 30px;">
-                                    <h3>🧠 ${cluster.cluster_name}</h3>
+                                    <h3>${cluster.cluster_name}</h3>
                                     <div class="insight-section">
-                                        <h4>🔥 Pain Points <span class="badge ${painBadge}">${insights.pain_intensity}</span></h4>
+                                        <h4>Pain Points <span class="badge ${painBadge}">${insights.pain_intensity}</span></h4>
                                         <ul>${(insights.pain_points || []).map(p => `<li>${p}</li>`).join('')}</ul>
                                     </div>
                                     <div class="insight-section">
-                                        <h4>📈 Tendências Emergentes</h4>
+                                        <h4>Tendencias Emergentes</h4>
                                         <ul>${(insights.emerging_trends || []).map(t => `<li>${t}</li>`).join('')}</ul>
                                     </div>
                                     <div class="insight-section">
-                                        <h4>🎯 Perfil Psicográfico</h4>
-                                        <p><strong>Consciência:</strong> ${insights.audience_awareness_level}</p>
-                                        <p><strong>Estágio de Compra:</strong> ${insights.buying_stage}</p>
+                                        <h4>Perfil Psicografico</h4>
+                                        <p><strong>Consciencia:</strong> ${insights.audience_awareness_level}</p>
+                                        <p><strong>Estagio de Compra:</strong> ${insights.buying_stage}</p>
                                         <p><strong>Tom:</strong> ${insights.communication_tone}</p>
                                     </div>
                                     <div class="insight-section">
-                                        <h4>💡 Recomendações</h4>
+                                        <h4>Recomendacoes</h4>
                                         <ul>${(insights.approach_recommendations || []).map(r => `<li>${r}</li>`).join('')}</ul>
                                     </div>
                                     <div class="insight-section">
-                                        <h4>🧠 Gatilhos Mentais</h4>
+                                        <h4>Gatilhos Mentais</h4>
                                         <div>${(insights.mental_triggers || []).map(t => `<span class="badge medium">${t}</span>`).join('')}</div>
                                     </div>
                                     <div class="insight-section">
-                                        <h4>🚧 Objeções Comuns</h4>
+                                        <h4>Objecoes Comuns</h4>
                                         <ul>${(insights.common_objections || []).map(o => `<li>${o}</li>`).join('')}</ul>
                                     </div>
                                     <div class="insight-section">
-                                        <h4>🎁 Oportunidades</h4>
+                                        <h4>Oportunidades</h4>
                                         <ul>${(insights.market_gaps || []).map(g => `<li>${g}</li>`).join('')}</ul>
                                     </div>
                                 </div>
@@ -1213,7 +2084,8 @@
                     loadKPIs(), loadTopHashtags(), loadClusterDistribution(),
                     loadContactRateByCluster(), loadPremiumHashtags(), loadSearchTermsStats(),
                     loadQualityScoreDistribution(), loadCooccurrenceTable(), loadClusters(), loadTrends(), loadAllBehavioralInsights(),
-                    loadLastExecution(), loadPersonas()
+                    loadLastExecution(), loadPersonas(),
+                    loadDailyScrapingStats(), loadDailyEvolutionChart()
                 ]);
 
                 hideLoading();
@@ -1224,9 +2096,9 @@
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // FUNÇÕES DE PERSONAS DINÂMICAS
-        // ═══════════════════════════════════════════════════════════════
+        // =====================================================
+        // FUNCOES DE PERSONAS DINAMICAS
+        // =====================================================
 
         async function loadPersonas() {
             try {
@@ -1244,8 +2116,8 @@
                     renderPersonasStats(statsResp.stats);
                 }
             } catch (error) {
-                console.warn('Personas não disponíveis:', error);
-                // Não bloqueia se tabela não existir ainda
+                console.warn('Personas nao disponiveis:', error);
+                // Nao bloqueia se tabela nao existir ainda
             }
         }
 
@@ -1254,22 +2126,22 @@
             if (!container || !stats.total_personas) return;
 
             container.innerHTML = `
-                <div style="background: white; border-radius: 12px; padding: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
-                    <div style="text-align: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: #ec4899;">🎭 ${stats.total_personas}</div>
-                        <div style="color: #666; font-size: 0.85em;">Personas Ativas</div>
+                <div class="persona-stats-grid">
+                    <div class="persona-stat-item">
+                        <div class="persona-stat-value">${stats.total_personas}</div>
+                        <div class="persona-stat-label">Personas Ativas</div>
                     </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: #667eea;">👥 ${stats.total_leads_assigned || 0}</div>
-                        <div style="color: #666; font-size: 0.85em;">Leads Associados</div>
+                    <div class="persona-stat-item">
+                        <div class="persona-stat-value" style="color: #3b82f6;">${stats.total_leads_assigned || 0}</div>
+                        <div class="persona-stat-label">Leads Associados</div>
                     </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: #10b981;">${(stats.avg_conversion || 0).toFixed(1)}%</div>
-                        <div style="color: #666; font-size: 0.85em;">Conversão Média</div>
+                    <div class="persona-stat-item">
+                        <div class="persona-stat-value">${(stats.avg_conversion || 0).toFixed(1)}%</div>
+                        <div class="persona-stat-label">Conversao Media</div>
                     </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: #f59e0b;">${(stats.avg_monetization || 0).toFixed(0)}</div>
-                        <div style="color: #666; font-size: 0.85em;">Potencial Médio</div>
+                    <div class="persona-stat-item">
+                        <div class="persona-stat-value" style="color: #f59e0b;">${(stats.avg_monetization || 0).toFixed(0)}</div>
+                        <div class="persona-stat-label">Potencial Medio</div>
                     </div>
                 </div>
             `;
@@ -1281,14 +2153,12 @@
 
             if (!personas || personas.length === 0) {
                 container.innerHTML = `
-                    <div style="grid-column: 1/-1; background: white; border-radius: 12px; padding: 40px; text-align: center;">
-                        <div style="font-size: 3em; margin-bottom: 15px;">🎭</div>
-                        <h3 style="color: #333; margin-bottom: 10px;">Nenhuma Persona Gerada</h3>
-                        <p style="color: #666; margin-bottom: 20px;">
-                            Clique em "Gerar Personas (GPT)" para criar personas baseadas nos seus clusters dinâmicos.
-                        </p>
-                        <button class="btn" onclick="generatePersonas()" style="background: #ec4899;">
-                            🎭 Gerar Personas Agora
+                    <div class="empty-state">
+                        <div class="empty-state-icon">P</div>
+                        <h3>Nenhuma Persona Gerada</h3>
+                        <p>Clique em "Gerar Personas (GPT)" para criar personas baseadas nos seus clusters dinamicos.</p>
+                        <button class="btn" onclick="generatePersonas()" style="background: linear-gradient(135deg, #ec4899, #db2777);">
+                            Gerar Personas Agora
                         </button>
                     </div>
                 `;
@@ -1296,55 +2166,48 @@
             }
 
             container.innerHTML = personas.map(p => `
-                <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.2s;"
-                     onmouseover="this.style.transform='translateY(-5px)'"
-                     onmouseout="this.style.transform='translateY(0)'">
-
+                <div class="persona-card">
                     <!-- Header -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <div style="font-size: 2.5em;">${p.persona_avatar_emoji || '👤'}</div>
+                    <div class="persona-header">
+                        <div class="persona-info">
+                            <div class="persona-avatar">${(p.persona_name || 'P').charAt(0).toUpperCase()}</div>
                             <div>
-                                <h3 style="margin: 0; color: #333; font-size: 1.2em;">${p.persona_name}</h3>
-                                <div style="color: #666; font-size: 0.85em;">${p.primary_occupation || 'Profissional'}</div>
+                                <h3 class="persona-name">${p.persona_name}</h3>
+                                <div class="persona-occupation">${p.primary_occupation || 'Profissional'}</div>
                             </div>
                         </div>
-                        <div style="background: #ec4899; color: white; padding: 4px 10px; border-radius: 20px; font-size: 0.75em; font-weight: bold;">
-                            ${(p.monetization_potential || 0).toFixed(0)} pts
-                        </div>
+                        <div class="persona-score">${(p.monetization_potential || 0).toFixed(0)} pts</div>
                     </div>
 
-                    <!-- Métricas -->
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
-                        <div style="text-align: center; background: #f3f4f6; padding: 8px; border-radius: 8px;">
-                            <div style="font-size: 1.3em; font-weight: bold; color: #667eea;">${p.total_leads || 0}</div>
-                            <div style="font-size: 0.7em; color: #666;">Leads</div>
+                    <!-- Metricas -->
+                    <div class="persona-metrics">
+                        <div class="persona-metric">
+                            <div class="persona-metric-value" style="color: #3b82f6;">${p.total_leads || 0}</div>
+                            <div class="persona-metric-label">Leads</div>
                         </div>
-                        <div style="text-align: center; background: #f3f4f6; padding: 8px; border-radius: 8px;">
-                            <div style="font-size: 1.3em; font-weight: bold; color: #10b981;">${(p.percentage_of_base || 0).toFixed(1)}%</div>
-                            <div style="font-size: 0.7em; color: #666;">da Base</div>
+                        <div class="persona-metric">
+                            <div class="persona-metric-value">${(p.percentage_of_base || 0).toFixed(1)}%</div>
+                            <div class="persona-metric-label">da Base</div>
                         </div>
-                        <div style="text-align: center; background: #f3f4f6; padding: 8px; border-radius: 8px;">
-                            <div style="font-size: 1.3em; font-weight: bold; color: #f59e0b;">${(p.avg_conversion_rate || 0).toFixed(1)}%</div>
-                            <div style="font-size: 0.7em; color: #666;">Conversão</div>
+                        <div class="persona-metric">
+                            <div class="persona-metric-value" style="color: #f59e0b;">${(p.avg_conversion_rate || 0).toFixed(1)}%</div>
+                            <div class="persona-metric-label">Conversao</div>
                         </div>
                     </div>
 
                     <!-- Perfil -->
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.8em;">
-                            ${p.age_range ? `<span style="background: #e0e7ff; color: #4f46e5; padding: 3px 8px; border-radius: 12px;">📅 ${p.age_range}</span>` : ''}
-                            ${p.business_stage ? `<span style="background: #fef3c7; color: #d97706; padding: 3px 8px; border-radius: 12px;">🏢 ${p.business_stage}</span>` : ''}
-                            ${p.awareness_level ? `<span style="background: #d1fae5; color: #059669; padding: 3px 8px; border-radius: 12px;">🎯 ${p.awareness_level.replace(/_/g, ' ')}</span>` : ''}
-                        </div>
+                    <div class="persona-tags">
+                        ${p.age_range ? `<span class="persona-tag">${p.age_range}</span>` : ''}
+                        ${p.business_stage ? `<span class="persona-tag">${p.business_stage}</span>` : ''}
+                        ${p.awareness_level ? `<span class="persona-tag">${p.awareness_level.replace(/_/g, ' ')}</span>` : ''}
                     </div>
 
-                    <!-- Motivações -->
+                    <!-- Motivacoes -->
                     ${p.primary_motivations && p.primary_motivations.length > 0 ? `
                     <div style="margin-bottom: 12px;">
-                        <div style="font-weight: bold; color: #333; font-size: 0.85em; margin-bottom: 5px;">💡 Motivações</div>
-                        <div style="font-size: 0.8em; color: #555; line-height: 1.4;">
-                            ${p.primary_motivations.slice(0, 3).map(m => `• ${m.replace(/_/g, ' ')}`).join('<br>')}
+                        <div class="persona-section-title">Motivacoes</div>
+                        <div class="persona-section-content">
+                            ${p.primary_motivations.slice(0, 3).map(m => `- ${m.replace(/_/g, ' ')}`).join('<br>')}
                         </div>
                     </div>
                     ` : ''}
@@ -1352,80 +2215,74 @@
                     <!-- Pain Points -->
                     ${p.core_pain_points && p.core_pain_points.length > 0 ? `
                     <div style="margin-bottom: 12px;">
-                        <div style="font-weight: bold; color: #dc2626; font-size: 0.85em; margin-bottom: 5px;">🔥 Dores Principais</div>
-                        <div style="font-size: 0.8em; color: #555; line-height: 1.4;">
-                            ${p.core_pain_points.slice(0, 3).map(pp => `• ${pp.replace(/_/g, ' ')}`).join('<br>')}
+                        <div class="persona-section-title" style="color: #ef4444;">Dores Principais</div>
+                        <div class="persona-section-content">
+                            ${p.core_pain_points.slice(0, 3).map(pp => `- ${pp.replace(/_/g, ' ')}`).join('<br>')}
                         </div>
                     </div>
                     ` : ''}
 
                     <!-- Abordagem Ideal -->
                     ${p.ideal_first_contact ? `
-                    <div style="background: #fef3c7; padding: 10px; border-radius: 8px; margin-bottom: 12px;">
-                        <div style="font-weight: bold; color: #92400e; font-size: 0.85em; margin-bottom: 5px;">💬 Abordagem Ideal</div>
-                        <div style="font-size: 0.75em; color: #78350f; line-height: 1.4;">
+                    <div class="persona-approach-box">
+                        <div class="title">Abordagem Ideal</div>
+                        <div class="content">
                             ${p.ideal_first_contact.substring(0, 200)}${p.ideal_first_contact.length > 200 ? '...' : ''}
                         </div>
                     </div>
                     ` : ''}
 
-                    <!-- Cluster Associado -->
-                    ${p.primary_cluster_name ? `
-                    <div style="font-size: 0.75em; color: #999; border-top: 1px solid #eee; padding-top: 10px;">
-                        🤖 Cluster: ${p.primary_cluster_name}
-                    </div>
-                    ` : ''}
-
-                    <!-- Data de Geração -->
-                    <div style="font-size: 0.7em; color: #bbb; text-align: right; margin-top: 5px;">
-                        Gerado: ${p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : 'N/A'}
+                    <!-- Footer -->
+                    <div class="persona-footer">
+                        ${p.primary_cluster_name ? `Cluster: ${p.primary_cluster_name}` : ''}
+                        ${p.created_at ? ` | Gerado: ${new Date(p.created_at).toLocaleDateString('pt-BR')}` : ''}
                     </div>
                 </div>
             `).join('');
         }
 
         async function generatePersonas() {
-            if (!confirm('🎭 Isso vai gerar personas via GPT (custo ~$0.15).\n\nDeseja continuar?')) {
+            if (!confirm('Isso vai gerar personas via GPT (custo ~$0.15).\n\nDeseja continuar?')) {
                 return;
             }
             const btn = document.getElementById('generatePersonasBtn');
             btn.disabled = true;
-            btn.innerHTML = '<span>⏳</span> Gerando...';
+            btn.innerHTML = 'Gerando...';
             try {
                 const response = await fetch(`${API_BASE}/dynamic-intelligence/generate-personas`, { method: 'POST' });
                 const data = await response.json();
                 if (data.success) {
-                    alert(`✅ Personas Geradas!\n\nCriadas: ${data.personas_created}\nAtualizadas: ${data.personas_updated}\nLeads Associados: ${data.leads_assigned}\n\nRecarregando...`);
+                    alert(`Personas Geradas!\n\nCriadas: ${data.personas_created}\nAtualizadas: ${data.personas_updated}\nLeads Associados: ${data.leads_assigned}\n\nRecarregando...`);
                     await loadPersonas();
                 } else {
-                    alert('❌ Erro: ' + (data.errors?.join(', ') || data.error));
+                    alert('Erro: ' + (data.errors?.join(', ') || data.error));
                 }
             } catch (error) {
-                alert('❌ Erro: ' + error.message);
+                alert('Erro: ' + error.message);
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<span>🎭</span> Gerar Personas (GPT)';
+                btn.innerHTML = 'Gerar Personas (GPT)';
             }
         }
 
         async function recalculatePersonaMetrics() {
             const btn = document.getElementById('recalcPersonaMetricsBtn');
             btn.disabled = true;
-            btn.innerHTML = '<span>⏳</span> Calculando...';
+            btn.innerHTML = 'Calculando...';
             try {
                 const response = await fetch(`${API_BASE}/dynamic-intelligence/recalculate-persona-metrics`, { method: 'POST' });
                 const data = await response.json();
                 if (data.success) {
-                    alert(`✅ Métricas Atualizadas!\n\nPersonas: ${data.personas_updated}\n\nRecarregando...`);
+                    alert(`Metricas Atualizadas!\n\nPersonas: ${data.personas_updated}\n\nRecarregando...`);
                     await loadPersonas();
                 } else {
-                    alert('❌ Erro: ' + data.error);
+                    alert('Erro: ' + data.error);
                 }
             } catch (error) {
-                alert('❌ Erro: ' + error.message);
+                alert('Erro: ' + error.message);
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<span>📊</span> Atualizar Métricas';
+                btn.innerHTML = 'Atualizar Metricas';
             }
         }
 
@@ -1446,44 +2303,44 @@
                     const badgeDiv = document.getElementById('vectorStoreBadge');
 
                     if (csv.exists && vectorStore.exists) {
-                        const ageText = csv.ageHours < 1 ? 'Atualizado há minutos' :
-                                       csv.ageHours < 24 ? `Atualizado há ${csv.ageHours}h` :
-                                       `Atualizado há ${Math.floor(csv.ageHours / 24)}d`;
+                        const ageText = csv.ageHours < 1 ? 'Atualizado ha minutos' :
+                                       csv.ageHours < 24 ? `Atualizado ha ${csv.ageHours}h` :
+                                       `Atualizado ha ${Math.floor(csv.ageHours / 24)}d`;
 
                         detailsDiv.innerHTML = `
-                            📊 ${csv.rowCount.toLocaleString()} hashtags |
-                            💾 ${(csv.sizeKB / 1024).toFixed(1)}MB |
-                            🕐 ${ageText}
+                            ${csv.rowCount.toLocaleString()} hashtags |
+                            ${(csv.sizeKB / 1024).toFixed(1)}MB |
+                            ${ageText}
                         `;
 
                         if (csv.needsUpdate) {
                             badgeDiv.style.background = '#f59e0b';
                             badgeDiv.textContent = 'DESATUALIZADO';
                         } else {
-                            badgeDiv.style.background = '#10b981';
+                            badgeDiv.style.background = 'var(--aic-green)';
                             badgeDiv.textContent = 'ATIVO';
                         }
                     } else {
-                        detailsDiv.innerHTML = '⚠️ Vector Store não inicializado - Execute Sync';
+                        detailsDiv.innerHTML = 'Vector Store nao inicializado - Execute Sync';
                         badgeDiv.style.background = '#ef4444';
                         badgeDiv.textContent = 'INATIVO';
                     }
                 }
             } catch (error) {
                 console.error('Erro ao carregar status Vector Store:', error);
-                document.getElementById('vectorStoreDetails').innerHTML = '❌ Erro ao carregar status';
+                document.getElementById('vectorStoreDetails').innerHTML = 'Erro ao carregar status';
             }
         }
 
         async function syncVectorStore() {
-            if (!confirm('🔷 Sincronização Vector Store\n\nIsso vai:\n1. Exportar todas as hashtags do PostgreSQL para CSV\n2. Fazer upload para OpenAI Vector Store\n3. Processar embeddings para busca semântica\n\nTempo estimado: 2-5 minutos\n\nDeseja continuar?')) {
+            if (!confirm('Sincronizacao Vector Store\n\nIsso vai:\n1. Exportar todas as hashtags do PostgreSQL para CSV\n2. Fazer upload para OpenAI Vector Store\n3. Processar embeddings para busca semantica\n\nTempo estimado: 2-5 minutos\n\nDeseja continuar?')) {
                 return;
             }
 
             const btn = document.getElementById('syncParquetBtn');
             const originalHTML = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<span>⏳</span> Sincronizando...';
+            btn.innerHTML = 'Sincronizando...';
 
             try {
                 const response = await fetch('/api/hashtag-intelligence/sync', {
@@ -1493,20 +2350,20 @@
 
                 if (data.success) {
                     const { csv, vectorStore } = data.data;
-                    alert(`✅ Sincronização Concluída!\n\n` +
-                          `📊 Hashtags exportadas: ${csv.totalRecords.toLocaleString()}\n` +
-                          `💾 Tamanho arquivo: ${(csv.fileSizeKB / 1024).toFixed(1)}MB\n` +
-                          `🔷 Vector Store: ${vectorStore.vectorStoreId}\n` +
-                          `📈 Status: ${vectorStore.status}\n\n` +
-                          `Sistema pronto para análise com busca semântica!`);
+                    alert(`Sincronizacao Concluida!\n\n` +
+                          `Hashtags exportadas: ${csv.totalRecords.toLocaleString()}\n` +
+                          `Tamanho arquivo: ${(csv.fileSizeKB / 1024).toFixed(1)}MB\n` +
+                          `Vector Store: ${vectorStore.vectorStoreId}\n` +
+                          `Status: ${vectorStore.status}\n\n` +
+                          `Sistema pronto para analise com busca semantica!`);
 
                     // Reload status
                     await loadVectorStoreStatus();
                 } else {
-                    alert('❌ Erro na sincronização:\n\n' + (data.error || 'Erro desconhecido'));
+                    alert('Erro na sincronizacao:\n\n' + (data.error || 'Erro desconhecido'));
                 }
             } catch (error) {
-                alert('❌ Erro ao sincronizar:\n\n' + error.message);
+                alert('Erro ao sincronizar:\n\n' + error.message);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;

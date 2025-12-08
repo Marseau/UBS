@@ -7,6 +7,7 @@ import path from 'path';
 
 const COOKIES_FILE = path.join(process.cwd(), 'instagram-cookies.json');
 
+
 /**
  * Sistema de gerenciamento de Páginas para requisições paralelas
  *
@@ -199,3 +200,4 @@ export async function cleanupStaleContexts(maxAgeMs: number = 600000): Promise<n
 
   return staleIds.length;
 }
+

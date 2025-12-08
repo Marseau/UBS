@@ -54,7 +54,8 @@ router.post('/enrich-lead', express.text({ type: '*/*', limit: '10mb' }), async 
       zip_code: result.enriched.zip_code || lead.zip_code || null,
       business_category: result.enriched.business_category || lead.business_category || null,
       hashtags_bio: result.enriched.hashtags_bio || lead.hashtags_bio || [],
-      sources: result.sources
+      sources: result.sources,
+      url_enriched: result.url_enriched // true se não há URL, false se há URL pendente
     };
 
     // Retornar dados mesclados prontos para UPDATE

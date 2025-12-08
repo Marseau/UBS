@@ -987,9 +987,20 @@ export async function scrapeInstagramUserSearchV1(
             }
           }
 
-          // WEBSITE
-          const websiteEl = document.querySelector('header section a[href^="http"]');
-          const website = websiteEl ? websiteEl.getAttribute('href') : null;
+          // WEBSITE (filtrar links de Threads)
+          const usernameFromHeader = document.querySelector('header section h2')?.textContent?.trim() || '';
+          const allWebsiteLinks = Array.from(document.querySelectorAll('header section a[href^="http"]'))
+            .filter((a: any) => {
+              const text = a.textContent?.trim() || '';
+              const href = a.getAttribute('href') || '';
+              const isButton = a.getAttribute('role') === 'button' || a.closest('button');
+              const isIcon = text.length < 3;
+              // Filtrar links de Threads
+              const isThreadsLink = text.startsWith('Threads') || text === usernameFromHeader ||
+                                    text.toLowerCase().includes('threads') || href.includes('threads.net');
+              return !isButton && !isIcon && !isThreadsLink;
+            });
+          const website = allWebsiteLinks.length > 0 ? (allWebsiteLinks[0] as HTMLAnchorElement).getAttribute('href') : null;
 
           // RECENT POSTS
           const timeElements = Array.from(document.querySelectorAll('article time[datetime]'));

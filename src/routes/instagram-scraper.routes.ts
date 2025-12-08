@@ -1456,7 +1456,10 @@ router.post('/scrape-followers', async (req: Request, res: Response) => {
             segment: target_segment || null,
             search_term_used: `follower_of_${competitor_username}`,
             lead_source: 'competitor_follower',
-            captured_at: new Date().toISOString()
+            captured_at: new Date().toISOString(),
+            // Flags de enriquecimento - novo lead precisa ser processado
+            dado_enriquecido: false,
+            url_enriched: false
           })
           .select()
           .single();
@@ -1741,7 +1744,10 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
             engagement_score: engagementScore,
             follow_status: followStatus,
             followed_at: followedAt,
-            last_check_notified_at: engagement?.notification_date || null
+            last_check_notified_at: engagement?.notification_date || null,
+            // Flags de enriquecimento - novo lead precisa ser processado
+            dado_enriquecido: false,
+            url_enriched: false
           });
 
         if (insertError) {
@@ -2647,7 +2653,10 @@ router.post('/process-pre-lead', async (req: Request, res: Response) => {
                     followers_scraped: true,
                     discovered_from_profile: preLead.source_username,
                     lead_source: 'competitor_follower',
-                    captured_at: new Date().toISOString()
+                    captured_at: new Date().toISOString(),
+                    // Flags de enriquecimento - novo lead precisa ser processado
+                    dado_enriquecido: false,
+                    url_enriched: false
                   })
                   .select()
                   .single();
@@ -3091,7 +3100,10 @@ router.post('/process-all-pre-lead', async (req: Request, res: Response) => {
                 followers_scraped: true,
                 discovered_from_profile: source_username,
                 lead_source: 'competitor_follower',
-                captured_at: new Date().toISOString()
+                captured_at: new Date().toISOString(),
+                // Flags de enriquecimento - novo lead precisa ser processado
+                dado_enriquecido: false,
+                url_enriched: false
               })
               .select()
               .single();

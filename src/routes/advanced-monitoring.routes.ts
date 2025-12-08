@@ -364,6 +364,58 @@ router.post('/initialize', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/monitoring/force-gc
+ * Força garbage collection e cleanup de memória
+ */
+router.post('/force-gc', async (req: Request, res: Response) => {
+  try {
+    const beforeMemory = process.memoryUsage();
+    const beforeRss = Math.round(beforeMemory.rss / 1024 / 1024);
+    const beforeHeap = Math.round(beforeMemory.heapUsed / 1024 / 1024);
+
+    // Importar e executar memory optimizer
+    const { memoryOptimizer } = await import('../utils/memory-optimizer');
+    memoryOptimizer.aggressiveCleanup();
+
+    // Forçar GC se disponível
+    if (typeof global.gc === 'function') {
+      global.gc();
+      console.log('🧹 Manual GC executado via endpoint');
+    }
+
+    // Aguardar um pouco para GC processar
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    const afterMemory = process.memoryUsage();
+    const afterRss = Math.round(afterMemory.rss / 1024 / 1024);
+    const afterHeap = Math.round(afterMemory.heapUsed / 1024 / 1024);
+
+    const savedRss = beforeRss - afterRss;
+    const savedHeap = beforeHeap - afterHeap;
+
+    console.log(`✅ Force GC: RSS ${beforeRss}MB → ${afterRss}MB (saved ${savedRss}MB)`);
+
+    return res.json({
+      success: true,
+      message: 'Garbage collection executado',
+      before: { rss: beforeRss, heap: beforeHeap },
+      after: { rss: afterRss, heap: afterHeap },
+      saved: { rss: savedRss, heap: savedHeap },
+      gc_available: typeof global.gc === 'function',
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error forcing GC:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to force garbage collection',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
 // Middleware para carregar serviço de monitoramento se já existir
 router.use((req: Request, res: Response, next) => {
   if (!monitoringService && (global as any).advancedMonitoringService) {

@@ -190,6 +190,7 @@ export class WhapiClientService {
       const chatId = this.formatChatId(options.to);
 
       const response = await this.client.post('/messages/text', {
+        typing_time: 0,
         to: chatId,
         body: options.body,
         preview_url: options.previewUrl ?? false,

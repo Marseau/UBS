@@ -16,6 +16,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { executeClustering, ClusteringResult, ClusterResult, LeadClusterAssociation } from './clustering-engine.service';
+import { executeVectorClustering } from './vector-clustering.service';
 import {
   generateAllInsights,
   generatePainPoints,
@@ -568,13 +569,14 @@ export async function executeCampaignPipeline(
     maxLeads?: number;
     channel?: string;
     skipOutreachQueue?: boolean;
+    clusteringMethod?: 'hashtag' | 'vector'; // 'vector' usa embeddings, mais preciso e rápido
   } = {}
 ): Promise<PipelineResult> {
   const startTime = Date.now();
   // Normalizar channel para valores aceitos pelo banco: 'instagram_dm' ou 'whatsapp'
   const rawChannel = options.channel || 'instagram_dm';
   const channel = rawChannel === 'instagram' ? 'instagram_dm' : rawChannel;
-  const { kOverride, maxLeads = 2000, skipOutreachQueue = false } = options;
+  const { kOverride, maxLeads = 2000, skipOutreachQueue = false, clusteringMethod = 'vector' } = options;
 
   console.log(`\n${'='.repeat(60)}`);
   console.log(`🚀 [CAMPAIGN PIPELINE] Iniciando execução`);
@@ -610,13 +612,27 @@ export async function executeCampaignPipeline(
       pipeline_started_at: new Date().toISOString()
     });
 
-    // 2. Executar clustering
-    console.log('\n🔬 Executando clustering...');
-    const clusteringResult = await executeClustering(
-      campaign.keywords,
-      campaign.nicho_principal,
-      kOverride
-    );
+    // 2. Executar clustering (vector = embeddings, hashtag = KMeans tradicional)
+    console.log(`\n🔬 Executando clustering (método: ${clusteringMethod})...`);
+    let clusteringResult: ClusteringResult;
+
+    if (clusteringMethod === 'vector') {
+      // Vector clustering: usa embeddings + cosine similarity (mais preciso, 10x mais rápido)
+      clusteringResult = await executeVectorClustering(
+        campaignId,
+        campaign.nicho_principal,
+        campaign.keywords,
+        kOverride || 5,
+        0.60 // similarity threshold
+      );
+    } else {
+      // Hashtag clustering: KMeans tradicional
+      clusteringResult = await executeClustering(
+        campaign.keywords,
+        campaign.nicho_principal,
+        kOverride
+      );
+    }
 
     if (!clusteringResult.success) {
       await updatePipelineStatus(campaignId, 'clustering_failed');

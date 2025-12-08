@@ -508,9 +508,20 @@ export async function scrapeInstagramUserSearch(
             }
           }
 
-          // WEBSITE
-          const websiteEl = document.querySelector('header section a[href^="http"]');
-          const website = websiteEl ? websiteEl.getAttribute('href') : null;
+          // WEBSITE (filtrar links de Threads)
+          const usernameFromHeader = document.querySelector('header section h2')?.textContent?.trim() || '';
+          const allWebsiteLinks = Array.from(document.querySelectorAll('header section a[href^="http"]'))
+            .filter((a: any) => {
+              const text = a.textContent?.trim() || '';
+              const href = a.getAttribute('href') || '';
+              const isButton = a.getAttribute('role') === 'button' || a.closest('button');
+              const isIcon = text.length < 3;
+              // Filtrar links de Threads
+              const isThreadsLink = text.startsWith('Threads') || text === usernameFromHeader ||
+                                    text.toLowerCase().includes('threads') || href.includes('threads.net');
+              return !isButton && !isIcon && !isThreadsLink;
+            });
+          const website = allWebsiteLinks.length > 0 ? (allWebsiteLinks[0] as HTMLAnchorElement).getAttribute('href') : null;
 
           return {
             full_name,
@@ -713,6 +724,7 @@ export async function scrapeInstagramUserSearch(
               console.log(`   ⚠️  Erro ao atualizar @${username}: ${updateError.message}`);
             } else {
               console.log(`   ✅ Perfil @${username} ATUALIZADO NO BANCO`);
+              // Embedding será feito pelo workflow n8n após enriquecimento completo
             }
           } else {
             // 🆕 INSERT: Novo perfil
@@ -723,18 +735,24 @@ export async function scrapeInstagramUserSearch(
               lead_score: leadScore,
               // segment e search_term_id podem ser NULL para scraping manual
               segment: null,
-              search_term_id: null
+              search_term_id: null,
+              // Flags de enriquecimento - novo lead precisa ser processado
+              dado_enriquecido: false,
+              url_enriched: false
             };
             // phones_normalized será preenchido pelo trigger trg_normalize_instagram_lead()
 
-            const { error: insertError } = await supabase
+            const { data: insertedLead, error: insertError } = await supabase
               .from('instagram_leads')
-              .insert(profileToSave);
+              .insert(profileToSave)
+              .select('id')
+              .single();
 
             if (insertError) {
               console.log(`   ⚠️  Erro ao salvar @${username} no banco: ${insertError.message}`);
             } else {
               console.log(`   ✅ Perfil @${username} SALVO NO BANCO (novo)`);
+              // Embedding será feito pelo workflow n8n após enriquecimento completo
             }
           }
         } catch (dbError: any) {

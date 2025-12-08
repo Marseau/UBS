@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { aicEngineService } from '../services/aic-engine.service';
 import { nicheValidatorService, DEFAULT_CRITERIA, ViabilityCriteria } from '../services/niche-validator.service';
 import { clusteringEngineService } from '../services/clustering-engine.service';
+import { vectorClusteringService, executeHashtagVectorClustering } from '../services/vector-clustering.service';
 
 const router = express.Router();
 
@@ -1356,6 +1357,215 @@ router.get('/campaign/:campaignId', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// CAMPAIGN LIFECYCLE - Status Management
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Estados válidos do pipeline de campanha:
+ * - draft: Pode editar tudo (clustering, captura, conteúdo)
+ * - ready: Bloqueado para edição, pronto para outreach
+ * - active: Outreach em andamento
+ * - completed: Campanha finalizada
+ * - paused: Temporariamente pausada
+ */
+const CAMPAIGN_STATES = {
+  DRAFT: 'draft',
+  READY: 'ready',
+  READY_FOR_OUTREACH: 'ready_for_outreach',  // Legacy status
+  ACTIVE: 'active',
+  COMPLETED: 'completed',
+  PAUSED: 'paused'
+} as const;
+
+// Estados que permitem edição (clustering, captura de leads, geração de conteúdo)
+const EDITABLE_STATES = [CAMPAIGN_STATES.DRAFT];
+
+// Transições válidas de estado
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  'draft': ['ready'],
+  'ready': ['draft', 'active'],  // Pode voltar para draft se necessário
+  'ready_for_outreach': ['draft', 'active'],  // Legacy - tratar como 'ready'
+  'active': ['paused', 'completed'],
+  'paused': ['active', 'completed'],
+  'completed': []  // Estado final, não permite transição
+};
+
+/**
+ * Helper: Verifica se campanha permite edição
+ */
+async function checkCampaignEditable(campaignId: string): Promise<{ editable: boolean; status: string; message?: string }> {
+  const { data: campaign, error } = await supabase
+    .from('cluster_campaigns')
+    .select('pipeline_status, campaign_name')
+    .eq('id', campaignId)
+    .single();
+
+  if (error || !campaign) {
+    return { editable: false, status: 'unknown', message: 'Campanha não encontrada' };
+  }
+
+  const status = campaign.pipeline_status || 'draft';
+  const editable = EDITABLE_STATES.includes(status as any);
+
+  return {
+    editable,
+    status,
+    message: editable ? undefined : `Campanha "${campaign.campaign_name}" está em status "${status}" e não pode ser editada. Retorne para "draft" primeiro.`
+  };
+}
+
+/**
+ * PUT /api/hashtag-intelligence/campaign/:campaignId/status
+ * Transiciona o status da campanha
+ * Body: { status: 'draft' | 'ready' | 'active' | 'completed' | 'paused' }
+ */
+router.put('/campaign/:campaignId/status', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const { status: newStatus } = req.body;
+
+    console.log(`\n🔄 [API] PUT /campaign/${campaignId}/status -> ${newStatus}`);
+
+    // Validar novo status
+    if (!Object.values(CAMPAIGN_STATES).includes(newStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Status inválido. Valores permitidos: ${Object.values(CAMPAIGN_STATES).join(', ')}`
+      });
+    }
+
+    // Buscar status atual
+    const { data: campaign, error: fetchError } = await supabase
+      .from('cluster_campaigns')
+      .select('pipeline_status, campaign_name, clustering_result, total_leads_in_campaign')
+      .eq('id', campaignId)
+      .single();
+
+    if (fetchError || !campaign) {
+      return res.status(404).json({
+        success: false,
+        message: 'Campanha não encontrada'
+      });
+    }
+
+    const currentStatus = campaign.pipeline_status || 'draft';
+
+    // Validar transição
+    const allowedTransitions = VALID_TRANSITIONS[currentStatus] || [];
+    if (!allowedTransitions.includes(newStatus) && currentStatus !== newStatus) {
+      return res.status(400).json({
+        success: false,
+        message: `Transição inválida: ${currentStatus} → ${newStatus}. Transições permitidas: ${allowedTransitions.join(', ') || 'nenhuma'}`
+      });
+    }
+
+    // Validações específicas para transição para "ready"
+    if (newStatus === 'ready') {
+      if (!campaign.clustering_result) {
+        return res.status(400).json({
+          success: false,
+          message: 'Execute o clustering antes de marcar como "ready"'
+        });
+      }
+      if (!campaign.total_leads_in_campaign || campaign.total_leads_in_campaign === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Capture leads antes de marcar como "ready"'
+        });
+      }
+    }
+
+    // Atualizar status
+    const updateData: any = {
+      pipeline_status: newStatus,
+      updated_at: new Date().toISOString()
+    };
+
+    // Registrar timestamps de transição
+    if (newStatus === 'active' && currentStatus !== 'active') {
+      updateData.pipeline_started_at = new Date().toISOString();
+    }
+    if (newStatus === 'completed') {
+      updateData.pipeline_completed_at = new Date().toISOString();
+    }
+
+    const { error: updateError } = await supabase
+      .from('cluster_campaigns')
+      .update(updateData)
+      .eq('id', campaignId);
+
+    if (updateError) throw updateError;
+
+    console.log(`   ✅ Status alterado: ${currentStatus} → ${newStatus}`);
+
+    return res.json({
+      success: true,
+      message: `Status alterado para "${newStatus}"`,
+      data: {
+        campaign_id: campaignId,
+        previous_status: currentStatus,
+        current_status: newStatus
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em PUT /campaign/:campaignId/status:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/hashtag-intelligence/campaign/:campaignId/status
+ * Retorna status atual da campanha e ações permitidas
+ */
+router.get('/campaign/:campaignId/status', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+
+    const { data: campaign, error } = await supabase
+      .from('cluster_campaigns')
+      .select('pipeline_status, campaign_name, clustering_result, total_leads_in_campaign, pipeline_started_at, pipeline_completed_at')
+      .eq('id', campaignId)
+      .single();
+
+    if (error || !campaign) {
+      return res.status(404).json({
+        success: false,
+        message: 'Campanha não encontrada'
+      });
+    }
+
+    const status = campaign.pipeline_status || 'draft';
+    const editable = EDITABLE_STATES.includes(status as any);
+    const allowedTransitions = VALID_TRANSITIONS[status] || [];
+
+    return res.json({
+      success: true,
+      data: {
+        campaign_id: campaignId,
+        campaign_name: campaign.campaign_name,
+        status,
+        editable,
+        allowed_transitions: allowedTransitions,
+        has_clustering: !!campaign.clustering_result,
+        has_leads: campaign.total_leads_in_campaign > 0,
+        pipeline_started_at: campaign.pipeline_started_at,
+        pipeline_completed_at: campaign.pipeline_completed_at,
+        can_start_outreach: status === 'ready' || status === 'active'
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em GET /campaign/:campaignId/status:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 /**
  * POST /api/hashtag-intelligence/sync
  * Executa sincronização manual completa: PostgreSQL → Parquet → Vector Store
@@ -1662,11 +1872,27 @@ router.post('/validate-niche', async (req, res) => {
  *   "nicho": "Gestão de Tráfego",
  *   "k": 5,  // opcional - se não fornecido, usa silhouette para encontrar K ótimo
  *   "campaign_id": "uuid"  // opcional - salva resultado na campanha
+ *   "mode": "vector" | "hashtag" // opcional - default hashtag; vector usa embeddings
+ *   "similarity_threshold": 0.65 // opcional (apenas vector)
+ *   "target_states": ["SP", "RJ"] // opcional - filtrar por estados brasileiros
+ *   "lead_max_age_days": 45 // opcional - máximo 45 dias para leads (default)
+ *   "hashtag_max_age_days": 90 // opcional - máximo 90 dias para hashtags (default)
  * }
  */
 router.post('/execute-clustering', async (req, res) => {
   try {
-    const { seeds, nicho, k, campaign_id } = req.body;
+    const {
+      seeds = [],
+      nicho,
+      k,
+      campaign_id,
+      mode = 'hashtag',
+      similarity_threshold,
+      // Novos filtros de localização e recência
+      target_states,
+      lead_max_age_days,
+      hashtag_max_age_days
+    } = req.body;
 
     if (!seeds || !Array.isArray(seeds) || seeds.length === 0) {
       return res.status(400).json({
@@ -1682,11 +1908,59 @@ router.post('/execute-clustering', async (req, res) => {
       });
     }
 
-    console.log(`\n🔬 [API] POST /execute-clustering - Nicho: ${nicho}, Seeds: [${seeds.join(', ')}]`);
-    if (k) console.log(`   📊 K fixo: ${k}`);
+    // Validar se campanha permite edição (se campaign_id fornecido)
+    if (campaign_id) {
+      const editCheck = await checkCampaignEditable(campaign_id);
+      if (!editCheck.editable) {
+        return res.status(403).json({
+          success: false,
+          message: editCheck.message,
+          status: editCheck.status
+        });
+      }
+    }
 
-    // Executar clusterização
-    const result = await clusteringEngineService.executeClustering(seeds, nicho, k);
+    // Determinar modo de clusterização
+    const normalizedMode = String(mode).toLowerCase();
+    const isVectorMode = normalizedMode === 'vector';
+    const isHashtagVectorMode = normalizedMode === 'vector_hashtag';
+
+    // Construir objeto de filtros
+    const filters = {
+      target_states: target_states as string[] | undefined,
+      lead_max_age_days: lead_max_age_days as number | undefined,
+      hashtag_max_age_days: hashtag_max_age_days as number | undefined
+    };
+
+    console.log(`\n🔬 [API] POST /execute-clustering - Nicho: ${nicho}, Seeds: [${(seeds || []).join(', ')}]`);
+    if (k) console.log(`   📊 K fixo: ${k}`);
+    console.log(`   🧠 Modo: ${isVectorMode ? 'vector (pgvector)' : isHashtagVectorMode ? 'vector_hashtag' : 'hashtag'}`);
+    if (target_states?.length) console.log(`   🗺️  Estados: [${target_states.join(', ')}]`);
+    console.log(`   📅 Recência: leads ≤${lead_max_age_days || 45}d, hashtags ≤${hashtag_max_age_days || 90}d`);
+
+    let result;
+    if (isVectorMode) {
+      result = await vectorClusteringService.executeVectorClustering(
+        campaign_id,
+        nicho,
+        seeds || [],
+        k,
+        similarity_threshold || 0.65,
+        filters
+      );
+    } else if (isHashtagVectorMode) {
+      result = await executeHashtagVectorClustering(
+        campaign_id,
+        nicho,
+        seeds || [],
+        k || 5,
+        similarity_threshold || 0.65,
+        filters
+      );
+    } else {
+      // Modo hashtag tradicional - também aplicar filtros
+      result = await clusteringEngineService.executeClustering(seeds, nicho, k, filters);
+    }
 
     if (!result.success) {
       return res.status(400).json({
@@ -1769,6 +2043,147 @@ router.post('/execute-clustering', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Erro em /execute-clustering:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/hashtag-intelligence/platform-demo-campaign
+ * Retorna ou cria a campanha "Platform Demo" para clustering genérico
+ */
+router.get('/platform-demo-campaign', async (_req, res) => {
+  try {
+    console.log('\n🏷️ [API] GET /platform-demo-campaign');
+
+    // Buscar campanha demo existente
+    const { data: existing, error: searchError } = await supabase
+      .from('cluster_campaigns')
+      .select('id, name, nicho, cluster_status, last_clustering_at')
+      .eq('name', 'Platform Demo')
+      .single();
+
+    if (existing && !searchError) {
+      console.log('   ✅ Campanha Platform Demo encontrada:', existing.id);
+      return res.json({
+        success: true,
+        data: existing,
+        created: false
+      });
+    }
+
+    // Criar nova campanha demo
+    console.log('   🆕 Criando campanha Platform Demo...');
+    const { data: newCampaign, error: createError } = await supabase
+      .from('cluster_campaigns')
+      .insert({
+        name: 'Platform Demo',
+        nicho: 'Demonstração',
+        description: 'Campanha automática para clustering genérico da plataforma',
+        cluster_status: 'pending'
+      })
+      .select()
+      .single();
+
+    if (createError) {
+      throw new Error(`Erro ao criar campanha: ${createError.message}`);
+    }
+
+    console.log('   ✅ Campanha Platform Demo criada:', newCampaign.id);
+    return res.json({
+      success: true,
+      data: newCampaign,
+      created: true
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro em /platform-demo-campaign:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ============================================
+// VECTOR CLUSTERING (Embedding-based)
+// ============================================
+
+/**
+ * POST /api/hashtag-intelligence/vector-clustering
+ * Clustering de leads usando embeddings e cosine similarity via pgvector.
+ * Mais preciso e rápido que clustering por hashtags.
+ *
+ * Body:
+ * {
+ *   "campaign_id": "uuid",       // opcional - filtra leads da campanha
+ *   "num_clusters": 5,           // opcional - número de clusters (default: 5)
+ *   "min_similarity": 0.65       // opcional - similaridade mínima (default: 0.65)
+ * }
+ */
+router.post('/vector-clustering', async (req, res) => {
+  try {
+    const { campaign_id, num_clusters = 5, min_similarity = 0.65 } = req.body;
+
+    console.log(`\n🔬 [API] POST /vector-clustering`);
+    if (campaign_id) console.log(`   📋 Campaign: ${campaign_id}`);
+    console.log(`   🎯 Clusters: ${num_clusters}, Min similarity: ${min_similarity}`);
+
+    const result = await vectorClusteringService.clusterBySimilarity(
+      campaign_id,
+      num_clusters,
+      10, // min leads per cluster
+      min_similarity
+    );
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error || 'Erro ao executar vector clustering'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: result
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /vector-clustering:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/hashtag-intelligence/similar-leads/:leadId
+ * Busca leads similares a um lead de referência usando cosine similarity
+ *
+ * Query params:
+ * - limit: número máximo de resultados (default: 50)
+ * - min_similarity: similaridade mínima (default: 0.7)
+ */
+router.get('/similar-leads/:leadId', async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const minSimilarity = parseFloat(req.query.min_similarity as string) || 0.7;
+
+    console.log(`\n🔍 [API] GET /similar-leads/${leadId} (limit: ${limit}, min: ${minSimilarity})`);
+
+    const results = await vectorClusteringService.findSimilarLeads(leadId, limit, minSimilarity);
+
+    return res.json({
+      success: true,
+      reference_lead_id: leadId,
+      count: results.length,
+      data: results
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /similar-leads:', error);
     return res.status(500).json({
       success: false,
       message: error.message
@@ -2333,6 +2748,16 @@ router.post('/generate-content-per-cluster', async (req, res) => {
       });
     }
 
+    // Validar se campanha permite edição
+    const editCheck = await checkCampaignEditable(campaign_id);
+    if (!editCheck.editable) {
+      return res.status(403).json({
+        success: false,
+        message: editCheck.message,
+        status: editCheck.status
+      });
+    }
+
     console.log(`\n🎯 [API] POST /generate-content-per-cluster - Campaign: ${campaign_id}`);
     console.log(`   📋 Tipos de conteúdo: ${content_types.join(', ')}`);
 
@@ -2697,17 +3122,33 @@ router.get('/campaign/:campaignId/subclusters', async (req, res) => {
  * Cada lead é associado ao seu subnicho (cluster) específico
  *
  * Body: {
- *   limit_per_cluster?: number (máximo de leads por cluster - default 500),
+ *   limit_per_cluster?: number (máximo de leads por cluster - sem limite por padrão),
  *   only_with_contact?: boolean (apenas leads com email/telefone - default false)
  * }
  */
 router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
   try {
     const { campaignId } = req.params;
-    const { limit_per_cluster = 500, only_with_contact = false } = req.body;
+    const { limit_per_cluster, only_with_contact = false, cluster_ids } = req.body;
 
+    // Se cluster_ids específicos fornecidos, não precisa checar editabilidade da campanha toda
+    // Apenas verificar se os clusters específicos não estão bloqueados
+    if (!cluster_ids || cluster_ids.length === 0) {
+      // Validar se campanha permite edição (captura de todos os clusters)
+      const editCheck = await checkCampaignEditable(campaignId);
+      if (!editCheck.editable) {
+        return res.status(403).json({
+          success: false,
+          message: editCheck.message,
+          status: editCheck.status
+        });
+      }
+    }
+
+    const clusterFilter = cluster_ids && cluster_ids.length > 0 ? cluster_ids : null;
     console.log(`\n👥 [API] POST /campaign/${campaignId}/capture-leads`);
-    console.log(`   📊 Limite por cluster: ${limit_per_cluster}, Apenas com contato: ${only_with_contact}`);
+    console.log(`   📊 Limite por cluster: ${limit_per_cluster || 'SEM LIMITE'}, Apenas com contato: ${only_with_contact}`);
+    console.log(`   🎯 Clusters específicos: ${clusterFilter ? clusterFilter.join(', ') : 'TODOS'}`);
 
     // Buscar campanha com clustering_result
     const { data: campaign, error: campaignError } = await supabase
@@ -2736,10 +3177,10 @@ router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
 
     console.log(`   📊 ${clusters.length} clusters, ${leadAssociations.length} lead associations disponíveis`);
 
-    // Buscar subclusters para obter os IDs reais
+    // Buscar subclusters para obter os IDs reais e status
     const { data: subclusters, error: subclusterError } = await supabase
       .from('campaign_subclusters')
-      .select('id, cluster_index, cluster_name, persona')
+      .select('id, cluster_index, cluster_name, persona, status')
       .eq('campaign_id', campaignId)
       .order('cluster_index', { ascending: true });
 
@@ -2747,21 +3188,46 @@ router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
       console.error('   ⚠️ Erro ao buscar subclusters:', subclusterError.message);
     }
 
-    // Criar mapa cluster_index → subcluster_id
+    // Criar mapa cluster_index → subcluster_id e verificar bloqueados
     const clusterToSubclusterId = new Map<number, string>();
     const clusterToPersona = new Map<number, any>();
+    const blockedClusters: number[] = [];
     for (const sc of subclusters || []) {
       clusterToSubclusterId.set(sc.cluster_index, sc.id);
       clusterToPersona.set(sc.cluster_index, sc.persona);
+      // Clusters em in_outreach ou completed estão bloqueados
+      if (sc.status === 'in_outreach' || sc.status === 'completed') {
+        blockedClusters.push(sc.cluster_index);
+      }
     }
+
+    console.log(`   🔒 Clusters bloqueados: ${blockedClusters.length > 0 ? blockedClusters.join(', ') : 'nenhum'}`);
 
     console.log(`   🔗 ${clusterToSubclusterId.size} subclusters mapeados`);
 
-    // Agrupar leads por cluster
+    // Agrupar leads por cluster (filtrando por cluster_ids se especificado e pulando bloqueados)
     const leadsByCluster: Record<number, any[]> = {};
+    const clustersToProcess: any[] = [];
+
     for (const cluster of clusters) {
-      leadsByCluster[cluster.cluster_id] = [];
+      const clusterId = cluster.cluster_id;
+
+      // Pular clusters bloqueados (já em outreach ou completed)
+      if (blockedClusters.includes(clusterId)) {
+        console.log(`   ⏭️ Pulando cluster ${clusterId} (${cluster.cluster_name}) - já bloqueado`);
+        continue;
+      }
+
+      // Filtrar por cluster_ids se especificado
+      if (clusterFilter && !clusterFilter.includes(clusterId)) {
+        continue;
+      }
+
+      leadsByCluster[clusterId] = [];
+      clustersToProcess.push(cluster);
     }
+
+    console.log(`   🎯 ${clustersToProcess.length} clusters serão processados`);
 
     // Processar associações de leads
     for (const assoc of leadAssociations) {
@@ -2770,8 +3236,8 @@ router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
         // Aplicar filtro de contato se solicitado
         if (only_with_contact && !assoc.has_contact) continue;
 
-        // Aplicar limite por cluster
-        if (leadsByCluster[clusterId].length < limit_per_cluster) {
+        // Aplicar limite por cluster apenas se especificado
+        if (!limit_per_cluster || leadsByCluster[clusterId].length < limit_per_cluster) {
           leadsByCluster[clusterId].push(assoc);
         }
       }
@@ -2780,8 +3246,9 @@ router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
     // Preparar dados para inserção
     const campaignLeadsData: any[] = [];
     const statsByCluster: Record<number, { name: string; count: number; subcluster_id: string | null; has_persona: boolean }> = {};
+    const subclusterIdsToBlock: string[] = [];
 
-    for (const cluster of clusters) {
+    for (const cluster of clustersToProcess) {
       const clusterLeads = leadsByCluster[cluster.cluster_id] || [];
       const subclusterId = clusterToSubclusterId.get(cluster.cluster_id) || null;
       const persona = clusterToPersona.get(cluster.cluster_id);
@@ -2792,6 +3259,11 @@ router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
         subcluster_id: subclusterId,
         has_persona: !!persona
       };
+
+      // Coletar subcluster IDs para bloquear após inserção
+      if (subclusterId && clusterLeads.length > 0) {
+        subclusterIdsToBlock.push(subclusterId);
+      }
 
       for (const lead of clusterLeads) {
         campaignLeadsData.push({
@@ -2842,12 +3314,27 @@ router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
 
     console.log(`   💾 ${totalInserted} leads capturados e associados aos subnichos`);
 
+    // Bloquear subclusters capturados (status → in_outreach)
+    if (subclusterIdsToBlock.length > 0 && totalInserted > 0) {
+      const { error: blockError } = await supabase
+        .from('campaign_subclusters')
+        .update({ status: 'in_outreach', updated_at: new Date().toISOString() })
+        .in('id', subclusterIdsToBlock);
+
+      if (blockError) {
+        console.error('   ⚠️ Erro ao bloquear subclusters:', blockError.message);
+      } else {
+        console.log(`   🔒 ${subclusterIdsToBlock.length} subclusters bloqueados (status: in_outreach)`);
+      }
+    }
+
     return res.json({
       success: true,
       message: `${totalInserted} leads capturados para "${campaign.campaign_name}"`,
       data: {
         captured: totalInserted,
         by_cluster: statsByCluster,
+        blocked_subclusters: subclusterIdsToBlock,
         campaign_id: campaignId
       }
     });
@@ -3377,13 +3864,14 @@ router.get('/daily-scraping-stats', async (req, res) => {
         ),
         -- Atualizações: agrupadas pela data de updated_at (quando foi atualizado)
         -- Nota: só considera atualizações a partir de 03/12/2025 (data que começou tracking real)
+        -- Perfil só conta como "atualizado" se a DATA de update for diferente da DATA de captura
         atualizados_por_dia AS (
           SELECT
             DATE(updated_at) as date,
             COUNT(*) as atualizados
           FROM instagram_leads
           WHERE updated_at >= '${startDate}'::date
-            AND updated_at > captured_at  -- só conta se realmente foi atualizado depois
+            AND DATE(updated_at) > DATE(captured_at)  -- só conta se atualizado em dia diferente
             AND DATE(updated_at) >= '2025-12-03'  -- ignora atualizações antes do tracking real
           GROUP BY DATE(updated_at)
         ),
@@ -3735,6 +4223,125 @@ router.get('/aggregated-metrics-90d', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Erro em /aggregated-metrics-90d:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// ============================================
+// GERADOR DE SEEDS COM IA
+// ============================================
+
+/**
+ * POST /api/hashtag-intelligence/generate-seeds
+ * Gera seeds otimizadas para clustering usando IA
+ *
+ * Body:
+ * {
+ *   "service_description": "Clínica de estética facial especializada em harmonização",
+ *   "target_audience": "Mulheres 25-45 anos, classe média-alta",
+ *   "location": "São Paulo", // opcional
+ *   "objective": "prospecção" // opcional: prospecção, parceria, influenciadores
+ * }
+ */
+router.post('/generate-seeds', async (req, res) => {
+  try {
+    const {
+      service_description,
+      target_audience,
+      location,
+      objective = 'prospecção'
+    } = req.body;
+
+    if (!service_description || !target_audience) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campos "service_description" e "target_audience" são obrigatórios'
+      });
+    }
+
+    console.log('\n🎯 [API] POST /generate-seeds');
+    console.log(`   📝 Serviço: ${service_description.substring(0, 50)}...`);
+    console.log(`   👥 Público: ${target_audience.substring(0, 50)}...`);
+    if (location) console.log(`   📍 Local: ${location}`);
+
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const prompt = `Você é um especialista em marketing digital e prospecção de leads no Instagram.
+
+Dado o seguinte contexto de negócio, gere EXATAMENTE 5 seeds (termos de busca) otimizadas para encontrar leads qualificados no Instagram.
+
+## CONTEXTO DO NEGÓCIO:
+- **Serviço/Produto:** ${service_description}
+- **Público-alvo:** ${target_audience}
+${location ? `- **Localização:** ${location}` : ''}
+- **Objetivo:** ${objective}
+
+## REGRAS PARA AS SEEDS:
+1. Use termos que aparecem em bios e hashtags do Instagram
+2. Inclua variações (ex: "nutricionista" e "nutri")
+3. Misture termos de profissão, serviço e qualificadores
+4. Evite termos muito genéricos (ex: "saúde", "beleza")
+5. Prefira termos em português brasileiro
+6. Cada seed deve ter 1-3 palavras no máximo
+
+## FORMATO DE RESPOSTA:
+Retorne APENAS um JSON válido no formato:
+{
+  "seeds": ["seed1", "seed2", "seed3", "seed4", "seed5"],
+  "explanation": "Breve explicação de 1 linha sobre a estratégia"
+}`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'Você retorna apenas JSON válido, sem markdown ou explicações extras.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 300
+    });
+
+    const responseText = completion.choices[0]?.message?.content || '{}';
+
+    // Limpar possíveis marcadores de código
+    const cleanJson = responseText
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim();
+
+    let result;
+    try {
+      result = JSON.parse(cleanJson);
+    } catch (parseError) {
+      console.error('❌ Erro ao parsear resposta da IA:', responseText);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao processar resposta da IA'
+      });
+    }
+
+    console.log(`   ✅ Seeds geradas: [${result.seeds?.join(', ')}]`);
+
+    return res.json({
+      success: true,
+      data: {
+        seeds: result.seeds || [],
+        explanation: result.explanation || '',
+        input: {
+          service_description,
+          target_audience,
+          location,
+          objective
+        }
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro em /generate-seeds:', error);
     return res.status(500).json({
       success: false,
       message: error.message

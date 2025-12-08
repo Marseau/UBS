@@ -21,7 +21,6 @@ import {
   moveMouseHuman
 } from './instagram-stealth.service';
 import { proxyRotationService } from './proxy-rotation.service';
-import { triggerLeadEmbedding } from './lead-embedding-webhook.service';
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase client para verificações de duplicatas
@@ -3392,6 +3391,7 @@ export async function scrapeInstagramTag(
                   console.log(`   ⚠️  Erro ao atualizar @${username}: ${updateError.message}`);
                 } else {
                   console.log(`   ✅ Perfil @${username} ATUALIZADO NO BANCO`);
+                  // Embedding será feito pelo workflow n8n após enriquecimento completo
                 }
               } else {
                 // 🆕 INSERT: Novo perfil
@@ -3402,7 +3402,10 @@ export async function scrapeInstagramTag(
                   lead_score: leadScore,
                   // segment e search_term_id podem ser NULL para scraping manual
                   segment: null,
-                  search_term_id: null
+                  search_term_id: null,
+                  // Flags de enriquecimento - novo lead precisa ser processado
+                  dado_enriquecido: false,
+                  url_enriched: false
                 };
                 // phones_normalized será preenchido pelo trigger trg_normalize_instagram_lead()
 
@@ -3416,10 +3419,7 @@ export async function scrapeInstagramTag(
                   console.log(`   ⚠️  Erro ao salvar @${username} no banco: ${insertError.message}`);
                 } else {
                   console.log(`   ✅ Perfil @${username} SALVO NO BANCO (novo)`);
-                  // 🔗 DISPARAR WEBHOOK PARA EMBEDDING (fire-and-forget)
-                  if (insertedLead?.id) {
-                    triggerLeadEmbedding(insertedLead.id, username, 'insert', 'scrape-tag');
-                  }
+                  // Embedding será feito pelo workflow n8n após enriquecimento completo
                 }
               }
 
@@ -4649,13 +4649,16 @@ export async function scrapeProfileWithExistingPage(page: any, username: string,
 
       // Link da bio (visível no DOM, filtrado para evitar links de botões/threads)
       let website_visible = null;
+      const usernameFromHeader = document.querySelector('header section h2')?.textContent?.trim() || '';
       const bioLinks = Array.from(document.querySelectorAll('header section a[href^="http"]'))
         .filter((a: any) => {
           const text = a.textContent?.trim() || '';
           const isButton = a.getAttribute('role') === 'button' || a.closest('button');
           const looksLikeUrl = text.includes('.') || text.startsWith('http');
           const isIcon = text.length < 3;
-          return !isButton && looksLikeUrl && !isIcon;
+          // Filtrar links de Threads (texto começa com "Threads" ou é igual ao username)
+          const isThreadsLink = text.startsWith('Threads') || text === usernameFromHeader || text.toLowerCase().includes('threads');
+          return !isButton && looksLikeUrl && !isIcon && !isThreadsLink;
         });
 
       if (bioLinks.length > 0) {
@@ -5796,7 +5799,10 @@ export async function scrapeInstagramExplore(
                 hashtags_posts: postHashtags && postHashtags.length > 0 ? postHashtags : null,
                 search_term_used: SEARCH_TERM_MARKER,
                 lead_source: 'explore',
-                captured_at: new Date().toISOString()
+                captured_at: new Date().toISOString(),
+                // Flags de enriquecimento - novo lead precisa ser processado
+                dado_enriquecido: false,
+                url_enriched: false
               });
 
             if (insertError) {

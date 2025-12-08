@@ -12,6 +12,11 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import {
+  ClusteringFilters,
+  DEFAULT_LEAD_MAX_AGE_DAYS,
+  DEFAULT_HASHTAG_MAX_AGE_DAYS
+} from './vector-clustering.service';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -598,15 +603,42 @@ async function fetchNicheHashtags(seeds: string[]): Promise<HashtagFeatures[]> {
 /**
  * Busca associação lead → hashtags para o nicho
  */
-async function fetchLeadHashtagAssociations(seeds: string[]): Promise<Map<string, { hashtags: string[]; has_contact: boolean }>> {
+async function fetchLeadHashtagAssociations(
+  seeds: string[],
+  filters: ClusteringFilters = {}
+): Promise<Map<string, { hashtags: string[]; has_contact: boolean }>> {
   const normalizedSeeds = seeds.map(normalizeString).filter(s => s.length > 0);
   const seedConditions = normalizedSeeds
     .map(seed => `hashtag_normalized LIKE '%${seed}%'`)
     .join(' OR ');
 
+  // Aplicar valores padrão para filtros de recência
+  const leadMaxAgeDays = filters.lead_max_age_days ?? DEFAULT_LEAD_MAX_AGE_DAYS;
+  const targetStates = filters.target_states;
+
+  // Construir condições de filtro para leads
+  const leadFilterConditions: string[] = [
+    'hashtags_bio IS NOT NULL OR hashtags_posts IS NOT NULL',
+    // Filtro de recência para leads
+    `(created_at >= NOW() - INTERVAL '${leadMaxAgeDays} days' OR updated_at >= NOW() - INTERVAL '${leadMaxAgeDays} days')`
+  ];
+
+  // Filtro de estados (se especificado)
+  if (targetStates && targetStates.length > 0) {
+    const statesArray = targetStates.map(s => `'${s.toUpperCase()}'`).join(', ');
+    leadFilterConditions.push(`state IN (${statesArray})`);
+  }
+
+  const leadFilterClause = leadFilterConditions.join(' AND ');
+
   const { data, error } = await supabase.rpc('execute_sql', {
     query_text: `
-      WITH hashtag_occurrences AS (
+      WITH filtered_leads AS (
+        SELECT id, hashtags_bio, hashtags_posts, email, phone
+        FROM instagram_leads
+        WHERE ${leadFilterClause}
+      ),
+      hashtag_occurrences AS (
         SELECT
           LOWER(TRANSLATE(hashtag, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnAAAAAEEEEIIIIOOOOOUUUUCN')) as hashtag_normalized,
           lead_id,
@@ -616,7 +648,7 @@ async function fetchLeadHashtagAssociations(seeds: string[]): Promise<Map<string
             jsonb_array_elements_text(hashtags_bio) as hashtag,
             id as lead_id,
             (email IS NOT NULL OR phone IS NOT NULL) as has_contact
-          FROM instagram_leads
+          FROM filtered_leads
           WHERE hashtags_bio IS NOT NULL
 
           UNION ALL
@@ -625,7 +657,7 @@ async function fetchLeadHashtagAssociations(seeds: string[]): Promise<Map<string
             jsonb_array_elements_text(hashtags_posts) as hashtag,
             id as lead_id,
             (email IS NOT NULL OR phone IS NOT NULL) as has_contact
-          FROM instagram_leads
+          FROM filtered_leads
           WHERE hashtags_posts IS NOT NULL
         ) raw
         WHERE hashtag IS NOT NULL AND hashtag != ''
@@ -675,15 +707,29 @@ function extractThemeKeywords(hashtags: string[]): string[] {
 
 /**
  * Executa clustering completo no nicho
+ *
+ * @param seeds - Keywords seed para busca de hashtags
+ * @param nichoName - Nome do nicho
+ * @param kOverride - Número fixo de clusters (opcional)
+ * @param filters - Filtros de localização e recência (opcional)
  */
 export async function executeClustering(
   seeds: string[],
   nichoName: string,
-  kOverride?: number
+  kOverride?: number,
+  filters: ClusteringFilters = {}
 ): Promise<ClusteringResult> {
   const startTime = Date.now();
   console.log(`\n🔬 [CLUSTERING ENGINE] Iniciando clustering para: ${nichoName}`);
   console.log(`   Seeds: [${seeds.join(', ')}]`);
+
+  // Log dos filtros aplicados
+  const leadMaxAgeDays = filters.lead_max_age_days ?? DEFAULT_LEAD_MAX_AGE_DAYS;
+  const hashtagMaxAgeDays = filters.hashtag_max_age_days ?? DEFAULT_HASHTAG_MAX_AGE_DAYS;
+  console.log(`   📅 Filtros de recência: leads ≤${leadMaxAgeDays}d, hashtags ≤${hashtagMaxAgeDays}d`);
+  if (filters.target_states?.length) {
+    console.log(`   🗺️  Estados: [${filters.target_states.join(', ')}]`);
+  }
 
   // 1. Buscar hashtags do nicho
   console.log(`\n📊 Buscando hashtags do nicho...`);
@@ -750,10 +796,10 @@ export async function executeClustering(
     hashtagClusterMap.set(hashtagData.hashtag, assignments[i] ?? 0);
   }
 
-  // 7. Buscar associações lead → hashtags
+  // 7. Buscar associações lead → hashtags (com filtros de localização e recência)
   console.log(`\n👥 Buscando associações lead → hashtags...`);
-  const leadAssociations = await fetchLeadHashtagAssociations(seeds);
-  console.log(`   ✅ ${leadAssociations.size} leads encontrados`);
+  const leadAssociations = await fetchLeadHashtagAssociations(seeds, filters);
+  console.log(`   ✅ ${leadAssociations.size} leads encontrados (filtros aplicados)`);
 
   // 8. Calcular peso de cada cluster (baseado em freq_total)
   const clusterWeights: number[] = [];

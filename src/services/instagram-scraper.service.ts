@@ -169,7 +169,10 @@ export async function executarScrapingInstagram(
                 search_term_id: searchTermsId,
                 search_term_used: term,
                 lead_score: 0.75,
-                is_qualified: followersCount >= 500
+                is_qualified: followersCount >= 500,
+                // RESETAR flags de enriquecimento para reprocessar
+                dado_enriquecido: false,
+                url_enriched: false
               }, {
                 onConflict: 'username',
                 ignoreDuplicates: false
