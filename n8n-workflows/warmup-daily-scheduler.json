@@ -1,0 +1,215 @@
+{
+  "name": "WhatsApp Warmup - Daily Scheduler",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "A cada hora",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "business-hours",
+              "leftValue": "={{ $now.hour }}",
+              "rightValue": 8,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "business-hours-end",
+              "leftValue": "={{ $now.hour }}",
+              "rightValue": 18,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            },
+            {
+              "id": "weekday",
+              "leftValue": "={{ $now.weekday }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "weekday-end",
+              "leftValue": "={{ $now.weekday }}",
+              "rightValue": 6,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-business-hours",
+      "name": "Horario Comercial?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3001/api/warmup/process",
+        "options": {}
+      },
+      "id": "process-warmup",
+      "name": "Processar Warmup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, -100]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:3001/api/warmup/stats",
+        "options": {}
+      },
+      "id": "get-stats",
+      "name": "Obter Estatisticas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, -100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-pending",
+              "leftValue": "={{ $json.total_pending }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-pending",
+      "name": "Tem Pendentes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, -100]
+    },
+    {
+      "parameters": {
+        "content": "=### Warmup Stats\n- Enviados hoje: {{ $json.sent_today }}\n- Pendentes: {{ $json.total_pending }}\n- Total enviados: {{ $json.total_sent }}\n- Falhas: {{ $json.total_failed }}",
+        "height": 160,
+        "width": 260
+      },
+      "id": "sticky-stats",
+      "name": "Stats Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [880, 100]
+    },
+    {
+      "parameters": {},
+      "id": "no-op-outside-hours",
+      "name": "Fora do Horario",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [440, 100]
+    }
+  ],
+  "connections": {
+    "A cada hora": {
+      "main": [
+        [
+          {
+            "node": "Horario Comercial?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Horario Comercial?": {
+      "main": [
+        [
+          {
+            "node": "Processar Warmup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fora do Horario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Warmup": {
+      "main": [
+        [
+          {
+            "node": "Obter Estatisticas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obter Estatisticas": {
+      "main": [
+        [
+          {
+            "node": "Tem Pendentes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "WhatsApp",
+      "id": "whatsapp"
+    },
+    {
+      "name": "Warmup",
+      "id": "warmup"
+    }
+  ]
+}

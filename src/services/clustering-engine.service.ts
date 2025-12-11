@@ -522,11 +522,31 @@ function findOptimalK(data: number[][], minK: number = 3, maxK: number = 15): nu
 /**
  * Busca hashtags do nicho com todas as features necessárias
  */
-async function fetchNicheHashtags(seeds: string[]): Promise<HashtagFeatures[]> {
+async function fetchNicheHashtags(
+  seeds: string[],
+  filters: ClusteringFilters = {}
+): Promise<HashtagFeatures[]> {
   const normalizedSeeds = seeds.map(normalizeString).filter(s => s.length > 0);
   const seedConditions = normalizedSeeds
     .map(seed => `hashtag_normalized LIKE '%${seed}%'`)
     .join(' OR ');
+
+  const leadMaxAgeDays = filters.lead_max_age_days ?? DEFAULT_LEAD_MAX_AGE_DAYS;
+  const hashtagMaxAgeDays = filters.hashtag_max_age_days ?? DEFAULT_HASHTAG_MAX_AGE_DAYS;
+  const targetStates = filters.target_states;
+
+  const leadFilterConditions: string[] = [
+    '(hashtags_bio IS NOT NULL OR hashtags_posts IS NOT NULL)',
+    `(created_at >= NOW() - INTERVAL '${leadMaxAgeDays} days' OR updated_at >= NOW() - INTERVAL '${leadMaxAgeDays} days')`,
+    `(created_at >= NOW() - INTERVAL '${hashtagMaxAgeDays} days' OR updated_at >= NOW() - INTERVAL '${hashtagMaxAgeDays} days')`
+  ];
+
+  if (targetStates && targetStates.length > 0) {
+    const statesArray = targetStates.map(s => `'${s.toUpperCase()}'`).join(', ');
+    leadFilterConditions.push(`state IN (${statesArray})`);
+  }
+
+  const leadFilterClause = leadFilterConditions.join(' AND ');
 
   const { data, error } = await supabase.rpc('execute_sql', {
     query_text: `
@@ -543,7 +563,7 @@ async function fetchNicheHashtags(seeds: string[]): Promise<HashtagFeatures[]> {
             id as lead_id,
             (email IS NOT NULL OR phone IS NOT NULL) as has_contact
           FROM instagram_leads
-          WHERE hashtags_bio IS NOT NULL AND jsonb_array_length(hashtags_bio) > 0
+          WHERE ${leadFilterClause} AND hashtags_bio IS NOT NULL AND jsonb_array_length(hashtags_bio) > 0
 
           UNION ALL
 
@@ -553,7 +573,7 @@ async function fetchNicheHashtags(seeds: string[]): Promise<HashtagFeatures[]> {
             id as lead_id,
             (email IS NOT NULL OR phone IS NOT NULL) as has_contact
           FROM instagram_leads
-          WHERE hashtags_posts IS NOT NULL AND jsonb_array_length(hashtags_posts) > 0
+          WHERE ${leadFilterClause} AND hashtags_posts IS NOT NULL AND jsonb_array_length(hashtags_posts) > 0
         ) raw
         WHERE hashtag IS NOT NULL AND hashtag != ''
       ),
@@ -614,13 +634,16 @@ async function fetchLeadHashtagAssociations(
 
   // Aplicar valores padrão para filtros de recência
   const leadMaxAgeDays = filters.lead_max_age_days ?? DEFAULT_LEAD_MAX_AGE_DAYS;
+  const hashtagMaxAgeDays = filters.hashtag_max_age_days ?? DEFAULT_HASHTAG_MAX_AGE_DAYS;
   const targetStates = filters.target_states;
 
   // Construir condições de filtro para leads
   const leadFilterConditions: string[] = [
     'hashtags_bio IS NOT NULL OR hashtags_posts IS NOT NULL',
     // Filtro de recência para leads
-    `(created_at >= NOW() - INTERVAL '${leadMaxAgeDays} days' OR updated_at >= NOW() - INTERVAL '${leadMaxAgeDays} days')`
+    `(created_at >= NOW() - INTERVAL '${leadMaxAgeDays} days' OR updated_at >= NOW() - INTERVAL '${leadMaxAgeDays} days')`,
+    // Filtro de recência para hashtags associadas
+    `(created_at >= NOW() - INTERVAL '${hashtagMaxAgeDays} days' OR updated_at >= NOW() - INTERVAL '${hashtagMaxAgeDays} days')`
   ];
 
   // Filtro de estados (se especificado)
@@ -733,7 +756,7 @@ export async function executeClustering(
 
   // 1. Buscar hashtags do nicho
   console.log(`\n📊 Buscando hashtags do nicho...`);
-  const rawHashtags = await fetchNicheHashtags(seeds);
+  const rawHashtags = await fetchNicheHashtags(seeds, filters);
   console.log(`   ✅ ${rawHashtags.length} hashtags encontradas`);
 
   // 1.1 Filtrar hashtags genéricas (ruído)

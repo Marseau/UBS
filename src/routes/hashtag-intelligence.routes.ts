@@ -1891,7 +1891,9 @@ router.post('/execute-clustering', async (req, res) => {
       // Novos filtros de localização e recência
       target_states,
       lead_max_age_days,
-      hashtag_max_age_days
+      hashtag_max_age_days,
+      // Mínimo de leads por cluster (opcional)
+      min_leads_per_cluster
     } = req.body;
 
     if (!seeds || !Array.isArray(seeds) || seeds.length === 0) {
@@ -1946,7 +1948,8 @@ router.post('/execute-clustering', async (req, res) => {
         seeds || [],
         k,
         similarity_threshold || 0.65,
-        filters
+        filters,
+        min_leads_per_cluster || 1
       );
     } else if (isHashtagVectorMode) {
       result = await executeHashtagVectorClustering(
@@ -2061,8 +2064,8 @@ router.get('/platform-demo-campaign', async (_req, res) => {
     // Buscar campanha demo existente
     const { data: existing, error: searchError } = await supabase
       .from('cluster_campaigns')
-      .select('id, name, nicho, cluster_status, last_clustering_at')
-      .eq('name', 'Platform Demo')
+      .select('id, campaign_name, nicho_principal, cluster_status, last_clustering_at')
+      .eq('campaign_name', 'Platform Demo')
       .single();
 
     if (existing && !searchError) {
@@ -2079,9 +2082,11 @@ router.get('/platform-demo-campaign', async (_req, res) => {
     const { data: newCampaign, error: createError } = await supabase
       .from('cluster_campaigns')
       .insert({
-        name: 'Platform Demo',
-        nicho: 'Demonstração',
-        description: 'Campanha automática para clustering genérico da plataforma',
+        campaign_name: 'Platform Demo',
+        nicho_principal: 'Demonstração',
+        keywords: ['demo', 'teste', 'plataforma'],
+        service_description: 'Campanha de demonstração para testes de clustering na plataforma',
+        target_audience: 'Usuários de teste da plataforma',
         cluster_status: 'pending'
       })
       .select()

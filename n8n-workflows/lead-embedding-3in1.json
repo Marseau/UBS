@@ -1,0 +1,376 @@
+{
+  "name": "AIC - Lead Embedding 3-in-1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "embedar-lead",
+        "options": {}
+      },
+      "id": "webhook-receiver",
+      "name": "Webhook: Embedar Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [180, 300],
+      "webhookId": "embedar-lead-3in1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n    il.id as lead_id,\n    il.username,\n    il.full_name,\n    il.bio,\n    il.profession,\n    il.business_category,\n    il.city,\n    il.state,\n    il.website_text,\n    -- Texto para embedding_bio\n    CONCAT_WS(' | ',\n        'Nome: ' || COALESCE(il.full_name, il.username),\n        'Bio: ' || COALESCE(il.bio, ''),\n        'Profissao: ' || COALESCE(il.profession, il.business_category, ''),\n        'Cidade: ' || COALESCE(il.city, '') || COALESCE('/' || il.state, ''),\n        'Seguidores: ' || COALESCE(il.followers_count::text, '0')\n    ) as bio_text,\n    -- Texto para embedding_website (primeiros 4000 chars)\n    LEFT(COALESCE(il.website_text, ''), 4000) as website_text_truncated,\n    -- Verificar se tem dados para cada componente\n    (il.bio IS NOT NULL AND il.bio != '') as has_bio,\n    (il.website_text IS NOT NULL AND il.website_text != '') as has_website\nFROM instagram_leads il\nWHERE il.id = '{{ $json.body.lead_id }}'::uuid",
+        "options": {}
+      },
+      "id": "get-lead-data",
+      "name": "1. Buscar Dados Lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [400, 300],
+      "credentials": {
+        "postgres": {
+          "id": "VALf3SpY8cJkKg5D",
+          "name": "SupabaseUBS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-has-bio",
+              "leftValue": "={{ $json.has_bio }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-has-bio",
+      "name": "Tem Bio?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [620, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"text-embedding-3-small\",\n  \"input\": {{ JSON.stringify($json.bio_text.substring(0, 8000)) }}\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "embed-bio",
+      "name": "2a. Embedding Bio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [840, 200],
+      "credentials": {
+        "openAiApi": {
+          "id": "BTEALfDsbh3nPABI",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-has-website",
+              "leftValue": "={{ $('1. Buscar Dados Lead').item.json.has_website }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-has-website",
+      "name": "Tem Website?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1060, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"text-embedding-3-small\",\n  \"input\": {{ JSON.stringify($('1. Buscar Dados Lead').item.json.website_text_truncated.substring(0, 8000)) }}\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "embed-website",
+      "name": "2b. Embedding Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1280, 100],
+      "credentials": {
+        "openAiApi": {
+          "id": "BTEALfDsbh3nPABI",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT * FROM get_lead_hashtags_embedding('{{ $('1. Buscar Dados Lead').item.json.lead_id }}'::uuid)",
+        "options": {}
+      },
+      "id": "get-hashtags-embedding",
+      "name": "2c. Get Hashtags Embedding",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1280, 300],
+      "credentials": {
+        "postgres": {
+          "id": "VALf3SpY8cJkKg5D",
+          "name": "SupabaseUBS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-embeddings",
+      "name": "3. Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1500, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Coletar embeddings dos nodes anteriores\nconst leadData = $('1. Buscar Dados Lead').first().json;\nconst lead_id = leadData.lead_id;\nconst username = leadData.username;\n\n// Embedding Bio\nlet embedding_bio = null;\nlet embedding_bio_text = null;\ntry {\n  const bioResult = $('2a. Embedding Bio').first();\n  if (bioResult && bioResult.json && bioResult.json.data && bioResult.json.data[0]) {\n    embedding_bio = bioResult.json.data[0].embedding;\n    embedding_bio_text = leadData.bio_text;\n  }\n} catch (e) {}\n\n// Embedding Website\nlet embedding_website = null;\nlet embedding_website_text = null;\ntry {\n  const websiteResult = $('2b. Embedding Website').first();\n  if (websiteResult && websiteResult.json && websiteResult.json.data && websiteResult.json.data[0]) {\n    embedding_website = websiteResult.json.data[0].embedding;\n    embedding_website_text = leadData.website_text_truncated;\n  }\n} catch (e) {}\n\n// Embedding Hashtags (da funcao PostgreSQL)\nlet embedding_hashtags = null;\nlet hashtags_used = [];\nlet hashtags_count = 0;\ntry {\n  const hashtagsResult = $('2c. Get Hashtags Embedding').first();\n  if (hashtagsResult && hashtagsResult.json && hashtagsResult.json.embedding) {\n    embedding_hashtags = hashtagsResult.json.embedding;\n    hashtags_used = hashtagsResult.json.hashtags_used || [];\n    hashtags_count = hashtagsResult.json.hashtags_count || 0;\n  }\n} catch (e) {}\n\n// Calcular embedding_final (media dos embeddings disponiveis)\nlet embedding_final = null;\nlet components_used = [];\nconst embeddings_to_average = [];\n\nif (embedding_bio) {\n  embeddings_to_average.push(embedding_bio);\n  components_used.push('bio');\n}\nif (embedding_website) {\n  embeddings_to_average.push(embedding_website);\n  components_used.push('website');\n}\nif (embedding_hashtags) {\n  // embedding_hashtags vem como string do PostgreSQL, precisa parsear\n  const parsed = typeof embedding_hashtags === 'string' \n    ? JSON.parse(embedding_hashtags.replace(/^\\[|\\]$/g, '').split(',').map(Number))\n    : embedding_hashtags;\n  if (Array.isArray(parsed) && parsed.length === 1536) {\n    embeddings_to_average.push(parsed);\n    components_used.push('hashtags');\n  }\n}\n\n// Calcular media se temos pelo menos 1 embedding\nif (embeddings_to_average.length > 0) {\n  embedding_final = new Array(1536).fill(0);\n  for (const emb of embeddings_to_average) {\n    for (let i = 0; i < 1536; i++) {\n      embedding_final[i] += emb[i];\n    }\n  }\n  for (let i = 0; i < 1536; i++) {\n    embedding_final[i] /= embeddings_to_average.length;\n  }\n}\n\nreturn {\n  lead_id,\n  username,\n  embedding_bio,\n  embedding_bio_text,\n  embedding_website,\n  embedding_website_text,\n  embedding_hashtags,\n  hashtags_used,\n  hashtags_count,\n  embedding_final,\n  components_used,\n  components_count: components_used.length\n};"
+      },
+      "id": "process-embeddings",
+      "name": "4. Process & Calculate Final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1720, 200]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO lead_embeddings (\n    lead_id,\n    embedding_bio,\n    embedding_bio_text,\n    embedding_website,\n    embedding_website_text,\n    embedding_hashtags,\n    hashtags_used,\n    hashtags_count,\n    embedding_final,\n    components_used,\n    created_at,\n    updated_at\n) VALUES (\n    '{{ $json.lead_id }}'::uuid,\n    {{ $json.embedding_bio ? \"'[\" + $json.embedding_bio.join(',') + \"]'::vector\" : 'NULL' }},\n    {{ $json.embedding_bio_text ? \"$escape$\" + $json.embedding_bio_text + \"$escape$\" : 'NULL' }},\n    {{ $json.embedding_website ? \"'[\" + $json.embedding_website.join(',') + \"]'::vector\" : 'NULL' }},\n    {{ $json.embedding_website_text ? \"$escape$\" + $json.embedding_website_text + \"$escape$\" : 'NULL' }},\n    {{ $json.embedding_hashtags ? \"'\" + $json.embedding_hashtags + \"'::vector\" : 'NULL' }},\n    {{ $json.hashtags_used && $json.hashtags_used.length > 0 ? \"ARRAY['\" + $json.hashtags_used.join(\"','\") + \"']\" : 'NULL' }},\n    {{ $json.hashtags_count || 0 }},\n    {{ $json.embedding_final ? \"'[\" + $json.embedding_final.join(',') + \"]'::vector\" : 'NULL' }},\n    {{ $json.components_used && $json.components_used.length > 0 ? \"ARRAY['\" + $json.components_used.join(\"','\") + \"']\" : 'ARRAY[]::text[]' }},\n    NOW(),\n    NOW()\n)\nON CONFLICT (lead_id) DO UPDATE SET\n    embedding_bio = EXCLUDED.embedding_bio,\n    embedding_bio_text = EXCLUDED.embedding_bio_text,\n    embedding_website = EXCLUDED.embedding_website,\n    embedding_website_text = EXCLUDED.embedding_website_text,\n    embedding_hashtags = EXCLUDED.embedding_hashtags,\n    hashtags_used = EXCLUDED.hashtags_used,\n    hashtags_count = EXCLUDED.hashtags_count,\n    embedding_final = EXCLUDED.embedding_final,\n    components_used = EXCLUDED.components_used,\n    updated_at = NOW()\nRETURNING id, lead_id",
+        "options": {}
+      },
+      "id": "save-embeddings",
+      "name": "5. Salvar Embeddings",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1940, 200],
+      "credentials": {
+        "postgres": {
+          "id": "VALf3SpY8cJkKg5D",
+          "name": "SupabaseUBS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"lead_id\": \"{{ $('4. Process & Calculate Final').item.json.lead_id }}\",\n  \"username\": \"{{ $('4. Process & Calculate Final').item.json.username }}\",\n  \"components\": {{ JSON.stringify($('4. Process & Calculate Final').item.json.components_used) }},\n  \"components_count\": {{ $('4. Process & Calculate Final').item.json.components_count }}\n}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "6. Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2160, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": false, \"error\": \"Lead sem bio\" }",
+        "options": {}
+      },
+      "id": "respond-no-bio",
+      "name": "Respond: Sem Bio",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [840, 400]
+    },
+    {
+      "parameters": {
+        "content": "## AIC - Lead Embedding 3-in-1\n\n**Arquitetura:**\n- `embedding_bio`: Bio + Nome + Profissao\n- `embedding_website`: Texto do website\n- `embedding_hashtags`: Media das hashtags (via funcao PG)\n- `embedding_final`: Media dos 3 componentes\n\n**Endpoint:** POST /webhook/embedar-lead\n\n**Payload:**\n```json\n{\n  \"lead_id\": \"uuid\"\n}\n```\n\n**TTL:** 45 dias (controlado via view)",
+        "height": 340,
+        "width": 320
+      },
+      "id": "sticky-info",
+      "name": "Info",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [180, -80]
+    }
+  ],
+  "connections": {
+    "Webhook: Embedar Lead": {
+      "main": [
+        [
+          {
+            "node": "1. Buscar Dados Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Buscar Dados Lead": {
+      "main": [
+        [
+          {
+            "node": "Tem Bio?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem Bio?": {
+      "main": [
+        [
+          {
+            "node": "2a. Embedding Bio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Sem Bio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2a. Embedding Bio": {
+      "main": [
+        [
+          {
+            "node": "Tem Website?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "2c. Get Hashtags Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem Website?": {
+      "main": [
+        [
+          {
+            "node": "2b. Embedding Website",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "3. Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2b. Embedding Website": {
+      "main": [
+        [
+          {
+            "node": "3. Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2c. Get Hashtags Embedding": {
+      "main": [
+        [
+          {
+            "node": "3. Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "3. Merge Results": {
+      "main": [
+        [
+          {
+            "node": "4. Process & Calculate Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Process & Calculate Final": {
+      "main": [
+        [
+          {
+            "node": "5. Salvar Embeddings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. Salvar Embeddings": {
+      "main": [
+        [
+          {
+            "node": "6. Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "tags": []
+}

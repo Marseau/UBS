@@ -170,6 +170,7 @@ export async function executarScrapingInstagram(
                 search_term_used: term,
                 lead_score: 0.75,
                 is_qualified: followersCount >= 500,
+                updated_at: new Date().toISOString(), // SCRAPING = única operação que atualiza updated_at
                 // RESETAR flags de enriquecimento para reprocessar
                 dado_enriquecido: false,
                 url_enriched: false

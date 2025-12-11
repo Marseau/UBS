@@ -1,0 +1,30 @@
+# robots.txt - UBS (Universal Booking System)
+# https://ubs.app.br
+
+User-agent: *
+Allow: /
+
+# Páginas públicas
+Allow: /landing.html
+Allow: /login
+Allow: /register
+Allow: /demo
+
+# Bloquear áreas administrativas e APIs
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /super-admin
+Disallow: /settings
+Disallow: /billing
+Disallow: /*.json$
+
+# Bloquear assets desnecessários para indexação
+Disallow: /assets/js/
+Disallow: /js/
+
+# Sitemap
+Sitemap: https://ubs.app.br/sitemap.xml
+
+# Crawl-delay para bots (opcional)
+Crawl-delay: 1

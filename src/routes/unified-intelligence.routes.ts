@@ -6,23 +6,20 @@
 
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
-import {
-  calculatePriorityScore,
-  generateClusterDescription,
-  generatePainPoints,
-  generateTrends,
-  detectAwarenessLevel,
-  detectBuyingStage,
-  detectCommunicationTone,
-  detectMentalTriggers,
-  generateObjections,
-  generateMarketGaps,
-  generateUnderservedNiches,
-  generateApproachRecommendations,
-  generateAllInsights
-} from '../services/unified-clustering-insights.service';
+// REMOVIDO: imports de unified-clustering-insights.service.ts (dados fake/hardcoded)
+// Agora usamos apenas dados reais do cluster
 
 const router = express.Router();
+
+// Função simples para calcular priority score baseado em dados reais
+function calculatePriorityScoreReal(cluster: any): number {
+  const leads = cluster.total_leads || 0;
+  const contactRate = cluster.avg_contact_rate || 0;
+  const hashtagCount = cluster.hashtag_count || 0;
+
+  // Score baseado em: leads * taxa_contato + bônus por hashtags
+  return Math.round((leads * (contactRate / 100)) + (hashtagCount * 10));
+}
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -30,20 +27,29 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
  * GET /api/unified-intelligence/clusters
- * Retorna todos os clusters KMeans de todas as campanhas ativas
+ * Retorna clusters KMeans - filtrados por campaign_id se fornecido
  * Formato compatível com /api/dynamic-intelligence/clusters
  */
-router.get('/clusters', async (_req, res) => {
+router.get('/clusters', async (req, res) => {
   try {
-    console.log('\n🤖 [API] Buscando clusters KMeans unificados de todas as campanhas');
+    const campaignId = req.query.campaign_id as string | undefined;
 
-    // Buscar todas as campanhas com clustering executado
-    const { data: campaigns, error: campaignsError } = await supabase
+    console.log(`\n🤖 [API] Buscando clusters KMeans${campaignId ? ` para campanha ${campaignId}` : ' de todas as campanhas'}`);
+
+    // Buscar campanhas com clustering executado
+    let query = supabase
       .from('cluster_campaigns')
-      .select('id, name, nicho, related_clusters, clustering_result, last_clustering_at, cluster_status')
+      .select('id, campaign_name, nicho_principal, related_clusters, clustering_result, last_clustering_at, cluster_status')
       .eq('cluster_status', 'clustered')
       .not('related_clusters', 'is', null)
       .order('last_clustering_at', { ascending: false });
+
+    // Filtrar por campaign_id se fornecido
+    if (campaignId) {
+      query = query.eq('id', campaignId);
+    }
+
+    const { data: campaigns, error: campaignsError } = await query;
 
     if (campaignsError) throw campaignsError;
 
@@ -63,37 +69,34 @@ router.get('/clusters', async (_req, res) => {
       const relatedClusters = campaign.related_clusters || [];
 
       for (const cluster of relatedClusters) {
-        // Gerar insights comportamentais baseados nas hashtags (SEM GPT)
+        // Usar apenas dados REAIS do cluster - sem insights fake
         const themeKeywords = cluster.theme_keywords || [];
         const topHashtags = cluster.top_hashtags || [];
 
-        // Análise de intenção baseada em keywords
-        const painPoints = generatePainPoints(themeKeywords, campaign.nicho);
-        const awarenessLevel = detectAwarenessLevel(themeKeywords);
+        // Converter avg_contact_rate de % para decimal (0-1) para o frontend multiplicar corretamente
+        const contactRateDecimal = (cluster.avg_contact_rate || 0) / 100;
 
         allClusters.push({
           id: `${campaign.id}_cluster_${cluster.cluster_id}`,
           campaign_id: campaign.id,
-          campaign_name: campaign.name,
+          campaign_name: campaign.campaign_name,
           cluster_key: `kmeans_${cluster.cluster_id}`,
           cluster_name: cluster.cluster_name || `Cluster ${cluster.cluster_id + 1}`,
-          cluster_description: generateClusterDescription(themeKeywords, campaign.nicho),
+          // Descrição simplificada baseada apenas em keywords reais
+          cluster_description: themeKeywords.length > 0
+            ? `Profissionais focados em ${themeKeywords.slice(0, 3).join(', ')}`
+            : `Cluster ${cluster.cluster_id + 1} - ${campaign.nicho_principal || 'Geral'}`,
           hashtag_count: cluster.hashtag_count || 0,
           total_leads: cluster.total_leads || 0,
-          conversion_rate: cluster.avg_contact_rate || 0,
-          priority_score: calculatePriorityScore(cluster),
+          // conversion_rate como decimal (0-1) para frontend multiplicar por 100
+          conversion_rate: contactRateDecimal,
+          priority_score: calculatePriorityScoreReal(cluster),
           is_active: true,
           generated_at: campaign.last_clustering_at,
-          // Campos compatíveis com v_clusters_with_insights
-          opportunity_score: (cluster.relevance_score || 0.5) * 100,
-          pain_intensity: painPoints.length > 3 ? 'alta' : 'média',
-          audience_awareness_level: awarenessLevel,
-          trend_direction: 'growing',
-          trend_velocity: 'moderada',
-          // Dados adicionais
+          // Dados adicionais REAIS
           theme_keywords: themeKeywords,
-          top_hashtags: topHashtags,
-          insights: generateAllInsights(cluster, campaign.nicho)
+          top_hashtags: topHashtags
+          // REMOVIDO: insights fake (pain_points, trends, etc.)
         });
       }
     }
@@ -166,39 +169,38 @@ router.get('/cluster/:id', async (req, res) => {
     }
 
     const themeKeywords = cluster.theme_keywords || [];
+    const topHashtags = cluster.top_hashtags || [];
 
-    // Gerar insights comportamentais (SEM GPT)
-    const painPoints = generatePainPoints(themeKeywords, campaign.nicho);
-    const emergingTrends = generateTrends(themeKeywords);
+    // Usar apenas dados REAIS do cluster - sem insights fake
+    // Converter avg_contact_rate de % para decimal (0-1)
+    const contactRateDecimal = (cluster.avg_contact_rate || 0) / 100;
+    const opportunityScore = (cluster.relevance_score || 0.5) * 100;
 
     const clusterData = {
       id: id,
       campaign_id: campaign.id,
       cluster_key: `kmeans_${clusterId}`,
       cluster_name: cluster.cluster_name || `Cluster ${clusterId + 1}`,
-      cluster_description: generateClusterDescription(themeKeywords, campaign.nicho),
+      cluster_description: themeKeywords.length > 0
+        ? `Profissionais focados em ${themeKeywords.slice(0, 3).join(', ')}`
+        : `Cluster ${clusterId + 1} - ${campaign.nicho || 'Geral'}`,
       hashtag_count: cluster.hashtag_count || 0,
       total_leads: cluster.total_leads || 0,
-      conversion_rate: cluster.avg_contact_rate || 0,
-      priority_score: calculatePriorityScore(cluster),
+      conversion_rate: contactRateDecimal,
+      priority_score: calculatePriorityScoreReal(cluster),
       is_active: true,
-      generated_at: campaign.last_clustering_at
+      generated_at: campaign.last_clustering_at,
+      theme_keywords: themeKeywords,
+      top_hashtags: topHashtags
     };
 
+    // Insights baseados apenas em dados reais do cluster
     const insights = {
       cluster_id: id,
-      pain_points: painPoints,
-      pain_intensity: painPoints.length > 3 ? 'alta' : painPoints.length > 1 ? 'média' : 'baixa',
-      emerging_trends: emergingTrends,
-      audience_awareness_level: detectAwarenessLevel(themeKeywords),
-      buying_stage: detectBuyingStage(themeKeywords),
-      communication_tone: detectCommunicationTone(themeKeywords),
-      mental_triggers: detectMentalTriggers(themeKeywords),
-      common_objections: generateObjections(campaign.nicho),
-      market_gaps: generateMarketGaps(themeKeywords, campaign.nicho),
-      underserved_niches: generateUnderservedNiches(themeKeywords, campaign.nicho),
-      approach_recommendations: generateApproachRecommendations(themeKeywords, campaign.nicho),
-      opportunity_score: (cluster.relevance_score || 0.5) * 100,
+      theme_keywords: themeKeywords,
+      top_hashtags: topHashtags,
+      opportunity_score: opportunityScore,
+      pain_intensity: opportunityScore > 70 ? 'alta' : opportunityScore > 50 ? 'média' : 'baixa',
       trend_direction: 'growing',
       trend_velocity: 'moderada'
     };
@@ -335,8 +337,10 @@ router.get('/opportunity-ranking', async (_req, res) => {
 
     for (const campaign of campaigns || []) {
       for (const cluster of campaign.related_clusters || []) {
-        const priorityScore = calculatePriorityScore(cluster);
+        const priorityScore = calculatePriorityScoreReal(cluster);
         const opportunityScore = (cluster.relevance_score || 0.5) * 100;
+        // Converter avg_contact_rate de % para decimal (0-1)
+        const contactRateDecimal = (cluster.avg_contact_rate || 0) / 100;
 
         ranking.push({
           cluster_name: cluster.cluster_name,
@@ -345,10 +349,10 @@ router.get('/opportunity-ranking', async (_req, res) => {
           nicho: campaign.nicho,
           priority_score: priorityScore,
           total_leads: cluster.total_leads || 0,
-          conversion_rate: cluster.avg_contact_rate || 0,
+          conversion_rate: contactRateDecimal,
           opportunity_score: opportunityScore,
           pain_intensity: opportunityScore > 70 ? 'alta' : opportunityScore > 50 ? 'média' : 'baixa',
-          audience_awareness_level: detectAwarenessLevel(cluster.theme_keywords || []),
+          theme_keywords: cluster.theme_keywords || [],
           trend_direction: 'growing',
           trend_velocity: 'moderada'
         });
@@ -393,16 +397,18 @@ router.get('/market-gaps', async (_req, res) => {
     for (const campaign of campaigns || []) {
       for (const cluster of campaign.related_clusters || []) {
         const themeKeywords = cluster.theme_keywords || [];
-        const marketGaps = generateMarketGaps(themeKeywords, campaign.nicho);
-        const underservedNiches = generateUnderservedNiches(themeKeywords, campaign.nicho);
+        const topHashtags = cluster.top_hashtags || [];
+        const opportunityScore = (cluster.relevance_score || 0.5) * 100;
 
+        // Usar dados REAIS do cluster - sem geradores fake
         gaps.push({
-          market_gaps: marketGaps,
-          underserved_niches: underservedNiches,
-          opportunity_score: (cluster.relevance_score || 0.5) * 100,
+          theme_keywords: themeKeywords,
+          top_hashtags: topHashtags,
+          opportunity_score: opportunityScore,
           cluster_id: `${campaign.id}_cluster_${cluster.cluster_id}`,
           cluster_name: cluster.cluster_name,
-          campaign_name: campaign.name
+          campaign_name: campaign.name,
+          total_leads: cluster.total_leads || 0
         });
       }
     }
@@ -483,10 +489,10 @@ router.post('/recalculate-metrics', async (_req, res) => {
 
     for (const campaign of campaigns || []) {
       try {
-        // Recalcular priority_score para cada cluster
+        // Recalcular priority_score para cada cluster usando função real
         const updatedClusters = (campaign.related_clusters || []).map((cluster: any) => ({
           ...cluster,
-          priority_score: calculatePriorityScore(cluster)
+          priority_score: calculatePriorityScoreReal(cluster)
         }));
 
         await supabase

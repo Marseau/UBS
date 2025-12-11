@@ -5757,7 +5757,7 @@ export async function scrapeInstagramExplore(
                 lead_score: leadScore,
                 hashtags_bio: profileData.hashtags_bio || null,
                 hashtags_posts: mergedHashtags.length > 0 ? mergedHashtags : null,
-                updated_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(), // SCRAPING = única operação que atualiza updated_at
                 // RESETAR flags de enriquecimento para reprocessar
                 url_enriched: false,
                 dado_enriquecido: false

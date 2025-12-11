@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dynamic Intelligence Dashboard 3.0 - KMeans</title>
+    <title>Dynamic Intelligence Dashboard 3.1 - KMeans</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -894,13 +894,6 @@
 
 
         <!-- All Behavioral Insights -->
-        <div id="all-behavioral-section" style="display: none;">
-            <div class="section-title">
-                <h2>Analise Comportamental - Todos os Clusters (KMeans)</h2>
-            </div>
-            <div id="all-behavioral-insights" class="behavioral-grid"></div>
-        </div>
-
         <!-- Clusters Section -->
         <div id="clusters-section" style="display: none;">
             <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
@@ -967,11 +960,24 @@
                     </div>
                 </div>
 
-                <div style="display: flex; gap: 10px; align-items: center;">
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <button class="btn" id="btnValidateNiche" onclick="validateNicheBeforeClustering()" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+                        ✓ Validar Nicho
+                    </button>
                     <button class="btn" id="btnExecuteGenericClustering" onclick="executeGenericClustering()" style="background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));">
                         Executar Clustering
                     </button>
                     <span id="genericClusteringStatus" style="font-size: 0.85em; color: var(--aic-gray);"></span>
+                </div>
+
+                <!-- Resultado da Validação de Nicho -->
+                <div id="nicheValidationResult" style="display: none; margin-top: 15px; padding: 15px; border-radius: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <strong id="nicheValidationTitle" style="font-size: 0.95em;"></strong>
+                        <span id="nicheValidationBadge" style="padding: 4px 12px; border-radius: 12px; font-size: 0.8em; font-weight: 600;"></span>
+                    </div>
+                    <div id="nicheValidationMetrics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;"></div>
+                    <div id="nicheValidationMessage" style="margin-top: 10px; font-size: 0.85em; padding: 8px; border-radius: 6px;"></div>
                 </div>
 
                 <!-- Resultado do Clustering (sincronizado do CID) -->
@@ -1002,32 +1008,71 @@
             <div id="clusters-list" class="clusters-list"></div>
         </div>
 
-        <!-- Behavioral Insights -->
+        <!-- Detalhes do Cluster Selecionado -->
         <div id="behavioral-insights" class="behavioral-insights"></div>
 
-        <!-- Trends Section -->
-        <div id="trends-section" style="display: none;">
+        <!-- Seção de Geração de Conteúdo (GPT-4 Mini + Embeddings) -->
+        <div id="content-generation-section" style="display: none;">
             <div class="section-title">
-                <h2>Tendencias Emergentes</h2>
+                <h2>Gerar Conteudo para Campanha</h2>
             </div>
-            <div id="trends-grid" class="trends-grid"></div>
-        </div>
 
-        <!-- Personas Section -->
-        <div id="personas-section" style="display: none;">
-            <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
-                <h2>Personas Dinamicas (GPT-4/5)</h2>
-                <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-success" id="recalcPersonaMetricsBtn" onclick="recalculatePersonaMetrics()" title="Recalcula metricas das personas existentes (GRATUITO)">
-                        Atualizar Metricas
+            <div style="background: var(--aic-navy-light); border: 1px solid var(--aic-border); border-radius: 12px; padding: 25px; margin-bottom: 20px;">
+                <p style="color: var(--aic-gray); margin-bottom: 20px;">
+                    Gere Personas, Scripts de DM e Copies personalizados para cada cluster usando GPT-4 Mini com base nos embeddings dos leads.
+                </p>
+
+                <!-- Flags de Geração -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <div class="flag-card" id="flagPersonaDemo" onclick="generateContentDemo('persona')" style="background: var(--aic-navy); border: 2px solid var(--aic-border); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                        <div style="font-size: 2em; margin-bottom: 8px;">👤</div>
+                        <div style="font-weight: 600; color: var(--aic-white);">Gerar Personas</div>
+                        <div style="font-size: 0.8em; color: var(--aic-gray);">por cluster</div>
+                    </div>
+                    <div class="flag-card" id="flagDMDemo" onclick="generateContentDemo('dm')" style="background: var(--aic-navy); border: 2px solid var(--aic-border); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                        <div style="font-size: 2em; margin-bottom: 8px;">✉️</div>
+                        <div style="font-weight: 600; color: var(--aic-white);">Gerar DMs</div>
+                        <div style="font-size: 0.8em; color: var(--aic-gray);">scripts personalizados</div>
+                    </div>
+                    <div class="flag-card" id="flagCopyDemo" onclick="generateContentDemo('copy')" style="background: var(--aic-navy); border: 2px solid var(--aic-border); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                        <div style="font-size: 2em; margin-bottom: 8px;">📝</div>
+                        <div style="font-weight: 600; color: var(--aic-white);">Gerar Copies</div>
+                        <div style="font-size: 0.8em; color: var(--aic-gray);">landing + ads</div>
+                    </div>
+                    <div class="flag-card" id="flagAllDemo" onclick="generateContentDemo('all')" style="background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark)); border: 2px solid var(--aic-green); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s;">
+                        <div style="font-size: 2em; margin-bottom: 8px;">🚀</div>
+                        <div style="font-weight: 600; color: var(--aic-navy);">Gerar Tudo</div>
+                        <div style="font-size: 0.8em; color: var(--aic-navy); opacity: 0.8;">completo</div>
+                    </div>
+                </div>
+
+                <div id="contentGenerationStatus" style="display: none; padding: 15px; border-radius: 8px; margin-top: 15px;"></div>
+            </div>
+
+            <!-- Resultados Gerados -->
+            <div id="generated-content-results" style="display: none;">
+                <div class="section-title">
+                    <h2>Conteudo Gerado</h2>
+                </div>
+
+                <!-- Tabs -->
+                <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <button class="content-tab active" data-tab="personas" onclick="showContentTabDemo('personas')" style="padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; background: var(--aic-green); color: var(--aic-navy);">
+                        👤 Personas
                     </button>
-                    <button class="btn" id="generatePersonasBtn" onclick="generatePersonas()" style="background: linear-gradient(135deg, #ec4899, #db2777);" title="Gera novas personas via GPT (CUSTO ~$0.15)">
-                        Gerar Personas (GPT)
+                    <button class="content-tab" data-tab="dms" onclick="showContentTabDemo('dms')" style="padding: 10px 20px; border: 1px solid var(--aic-border); border-radius: 8px; cursor: pointer; font-weight: 600; background: var(--aic-navy); color: var(--aic-white);">
+                        ✉️ DMs
+                    </button>
+                    <button class="content-tab" data-tab="copies" onclick="showContentTabDemo('copies')" style="padding: 10px 20px; border: 1px solid var(--aic-border); border-radius: 8px; cursor: pointer; font-weight: 600; background: var(--aic-navy); color: var(--aic-white);">
+                        📝 Copies
                     </button>
                 </div>
+
+                <!-- Panels -->
+                <div id="contentPanelPersonas" class="content-panel" style="display: block;"></div>
+                <div id="contentPanelDms" class="content-panel" style="display: none;"></div>
+                <div id="contentPanelCopies" class="content-panel" style="display: none;"></div>
             </div>
-            <div id="personas-stats" style="margin-bottom: 20px;"></div>
-            <div id="personas-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 20px;"></div>
         </div>
     </div>
 
@@ -1056,7 +1101,6 @@
             document.getElementById('scraping-metrics-section').style.display = 'grid';
             document.getElementById('charts-section').style.display = 'block';
             document.getElementById('clusters-section').style.display = 'block';
-            document.getElementById('trends-section').style.display = 'block';
         }
 
         async function loadKPIs() {
@@ -1682,6 +1726,141 @@
             }
         }
 
+        // Estado da validação do nicho
+        let lastNicheValidation = null;
+
+        async function validateNicheBeforeClustering() {
+            const btn = document.getElementById('btnValidateNiche');
+            const status = document.getElementById('genericClusteringStatus');
+            const resultDiv = document.getElementById('nicheValidationResult');
+
+            const seedsRaw = document.getElementById('genericSeeds')?.value || '';
+            const seeds = seedsRaw.split(',').map(s => s.trim()).filter(s => s.length > 0);
+
+            if (seeds.length === 0) {
+                alert('Preencha as seeds (hashtags raiz) para validar o nicho');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Validando...';
+            status.textContent = 'Validando viabilidade do nicho...';
+            status.style.color = 'var(--aic-green)';
+
+            try {
+                // Critérios de validação (mesmos do cluster-intention-dashboard)
+                const criteria = {
+                    minHashtagsWithFreq5: 20,
+                    minUniqueLeads: 100,
+                    minHashtagsWithLeads3: 5,
+                    minContactRate: 20
+                };
+
+                const response = await fetch(`${API_BASE}/hashtag-intelligence/validate-niche`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ seeds, criteria })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    lastNicheValidation = result.data;
+                    renderNicheValidation(result.data);
+                    status.textContent = result.data.isViable ? '✅ Nicho viável!' : '⚠️ Nicho com baixa viabilidade';
+                } else {
+                    throw new Error(result.message || 'Erro na validação');
+                }
+            } catch (error) {
+                console.error('Erro ao validar nicho:', error);
+                status.textContent = `❌ Erro: ${error.message}`;
+                status.style.color = '#ef4444';
+                lastNicheValidation = null;
+                resultDiv.style.display = 'none';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '✓ Validar Nicho';
+            }
+        }
+
+        function renderNicheValidation(data) {
+            console.log('[v3.1] renderNicheValidation received:', JSON.stringify(data, null, 2));
+
+            const resultDiv = document.getElementById('nicheValidationResult');
+            const titleEl = document.getElementById('nicheValidationTitle');
+            const badgeEl = document.getElementById('nicheValidationBadge');
+            const metricsEl = document.getElementById('nicheValidationMetrics');
+            const messageEl = document.getElementById('nicheValidationMessage');
+
+            const isViable = data.isViable;
+            const passedCriteria = data.passedCriteria || {};
+
+            console.log('[v3.1] Parsed values:', {
+                hashtagsWithFreq5: data.hashtagsWithFreq5,
+                totalUniqueLeads: data.totalUniqueLeads,
+                hashtagsWithLeads3: data.hashtagsWithLeads3,
+                averageContactRate: data.averageContactRate,
+                isViable: isViable,
+                passedCriteria: passedCriteria
+            });
+
+            // Estilo baseado na viabilidade
+            if (isViable) {
+                resultDiv.style.background = 'rgba(16, 185, 129, 0.1)';
+                resultDiv.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                titleEl.style.color = '#10b981';
+                titleEl.textContent = '✅ Nicho Viável para Clustering';
+                badgeEl.textContent = 'APROVADO';
+                badgeEl.style.background = 'rgba(16, 185, 129, 0.2)';
+                badgeEl.style.color = '#10b981';
+            } else {
+                resultDiv.style.background = 'rgba(251, 191, 36, 0.1)';
+                resultDiv.style.border = '1px solid rgba(251, 191, 36, 0.3)';
+                titleEl.style.color = '#fbbf24';
+                titleEl.textContent = '⚠️ Nicho com Baixa Viabilidade';
+                badgeEl.textContent = 'ATENÇÃO';
+                badgeEl.style.background = 'rgba(251, 191, 36, 0.2)';
+                badgeEl.style.color = '#fbbf24';
+            }
+
+            // Renderizar métricas usando campos corretos do backend
+            const metricItems = [
+                { label: 'Hashtags (freq≥5)', value: data.hashtagsWithFreq5 || 0, min: 20, passed: passedCriteria.hashtagsWithFreq5 },
+                { label: 'Leads Únicos', value: data.totalUniqueLeads || 0, min: 100, passed: passedCriteria.uniqueLeads },
+                { label: 'Hashtags (leads≥3)', value: data.hashtagsWithLeads3 || 0, min: 5, passed: passedCriteria.hashtagsWithLeads3 },
+                { label: 'Taxa Contato', value: `${(data.averageContactRate || 0).toFixed(1)}%`, min: 20, isPercent: true, passed: passedCriteria.contactRate }
+            ];
+
+            metricsEl.innerHTML = metricItems.map(m => {
+                const color = m.passed ? '#10b981' : '#ef4444';
+                return `
+                    <div style="text-align: center; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                        <div style="font-size: 0.7em; color: var(--aic-gray);">${m.label}</div>
+                        <div style="font-size: 1.1em; font-weight: 700; color: ${color};">${m.value}</div>
+                        <div style="font-size: 0.65em; color: var(--aic-gray);">mín: ${m.min}${m.isPercent ? '%' : ''}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Mensagem de recomendação
+            if (isViable) {
+                messageEl.style.background = 'rgba(16, 185, 129, 0.1)';
+                messageEl.style.color = '#10b981';
+                messageEl.innerHTML = '🚀 <strong>Pronto para clustering!</strong> O nicho possui dados suficientes.';
+            } else {
+                const failedCount = Object.values(passedCriteria).filter(v => !v).length;
+                messageEl.style.background = 'rgba(251, 191, 36, 0.1)';
+                messageEl.style.color = '#fbbf24';
+                messageEl.innerHTML = `⚠️ <strong>${failedCount} critério(s) não atingido(s).</strong> O clustering pode gerar resultados menos precisos.`;
+            }
+
+            resultDiv.style.display = 'block';
+        }
+
         async function executeGenericClustering() {
             const btn = document.getElementById('btnExecuteGenericClustering');
             const status = document.getElementById('genericClusteringStatus');
@@ -1706,6 +1885,21 @@
             if (!isVectorMode && seeds.length === 0) {
                 alert('Preencha seeds para o modo hashtag');
                 return;
+            }
+
+            // Verificar se nicho foi validado quando há seeds
+            if (seeds.length > 0 && !lastNicheValidation) {
+                const shouldValidate = confirm('O nicho não foi validado. Deseja validar antes de executar o clustering?');
+                if (shouldValidate) {
+                    await validateNicheBeforeClustering();
+                    return; // Usuário pode clicar novamente após validação
+                }
+            }
+
+            // Avisar se nicho não é viável
+            if (lastNicheValidation && !lastNicheValidation.isViable) {
+                const proceed = confirm('O nicho possui baixa viabilidade. Os resultados podem ser menos precisos. Deseja continuar?');
+                if (!proceed) return;
             }
 
             btn.disabled = true;
@@ -1781,6 +1975,10 @@
 
                     // Mostrar seção de clusters se escondida
                     document.getElementById('clusters-section').style.display = 'block';
+
+                    // Mostrar seção de geração de conteúdo após clustering bem-sucedido
+                    document.getElementById('content-generation-section').style.display = 'block';
+                    document.getElementById('content-generation-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
                 } else {
                     throw new Error(result.message || 'Erro ao executar clustering');
                 }
@@ -1799,7 +1997,9 @@
 
         async function loadClusters() {
             // Usar unified-intelligence (KMeans local, gratuito)
-            const response = await fetchData('/unified-intelligence/clusters');
+            // Filtrar por campaign_id da sessão actual se disponível
+            const campaignFilter = platformDemoCampaignId ? `?campaign_id=${platformDemoCampaignId}` : '';
+            const response = await fetchData(`/unified-intelligence/clusters${campaignFilter}`);
             if (response?.success && response.clusters) {
                 allClusters = response.clusters;
                 const container = document.getElementById('clusters-list');
@@ -1823,68 +2023,54 @@
             document.querySelectorAll('.cluster-card').forEach(card => card.classList.remove('active'));
             event.currentTarget.classList.add('active');
 
-            // Usar unified-intelligence (KMeans local, gratuito)
-            const response = await fetchData(`/unified-intelligence/cluster/${clusterId}`);
-            if (response?.success && response.insights) {
-                const insights = response.insights;
-                const cluster = response.cluster;
-                const painBadge = insights.pain_intensity === 'critica' ? 'critical' :
-                                 insights.pain_intensity === 'alta' ? 'high' :
-                                 insights.pain_intensity === 'media' ? 'medium' : 'low';
+            // Buscar detalhes do cluster selecionado
+            const cluster = allClusters.find(c => c.id === clusterId);
+            if (!cluster) return;
 
-                const container = document.getElementById('behavioral-insights');
-                container.innerHTML = `
-                    <h3>Analise Comportamental: ${cluster.cluster_name}</h3>
-                    <div class="insight-section">
-                        <h4>Pain Points <span class="badge ${painBadge}">${insights.pain_intensity}</span></h4>
-                        <ul>${(insights.pain_points || []).map(p => `<li>${p}</li>`).join('')}</ul>
+            const container = document.getElementById('behavioral-insights');
+            const topHashtags = (cluster.top_hashtags || cluster.theme_keywords || []).slice(0, 10);
+
+            container.innerHTML = `
+                <h3>📊 Detalhes: ${cluster.cluster_name}</h3>
+
+                <div class="insight-section">
+                    <h4>Métricas do Cluster</h4>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 15px 0;">
+                        <div style="text-align: center; padding: 15px; background: rgba(14, 204, 151, 0.1); border-radius: 8px;">
+                            <div style="font-size: 1.8em; font-weight: 700; color: var(--aic-green);">${cluster.total_leads || 0}</div>
+                            <div style="font-size: 0.85em; color: var(--aic-gray);">Leads</div>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: rgba(14, 204, 151, 0.1); border-radius: 8px;">
+                            <div style="font-size: 1.8em; font-weight: 700; color: var(--aic-green);">${cluster.hashtag_count || 0}</div>
+                            <div style="font-size: 0.85em; color: var(--aic-gray);">Hashtags</div>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: rgba(14, 204, 151, 0.1); border-radius: 8px;">
+                            <div style="font-size: 1.8em; font-weight: 700; color: var(--aic-green);">${((cluster.conversion_rate || 0) * 100).toFixed(1)}%</div>
+                            <div style="font-size: 0.85em; color: var(--aic-gray);">Taxa Contato</div>
+                        </div>
                     </div>
-                    <div class="insight-section">
-                        <h4>Tendencias Emergentes</h4>
-                        <ul>${(insights.emerging_trends || []).map(t => `<li>${t}</li>`).join('')}</ul>
+                </div>
+
+                <div class="insight-section">
+                    <h4>Top Keywords/Hashtags</h4>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+                        ${topHashtags.map(h => `<span style="background: var(--aic-navy); border: 1px solid var(--aic-green); color: var(--aic-green); padding: 4px 12px; border-radius: 20px; font-size: 0.85em;">#${h}</span>`).join('')}
                     </div>
-                    <div class="insight-section">
-                        <h4>Perfil Psicografico</h4>
-                        <p><strong>Consciencia:</strong> ${insights.audience_awareness_level}</p>
-                        <p><strong>Estagio de Compra:</strong> ${insights.buying_stage}</p>
-                        <p><strong>Tom:</strong> ${insights.communication_tone}</p>
-                    </div>
-                    <div class="insight-section">
-                        <h4>Recomendacoes</h4>
-                        <ul>${(insights.approach_recommendations || []).map(r => `<li>${r}</li>`).join('')}</ul>
-                    </div>
-                    <div class="insight-section">
-                        <h4>Gatilhos Mentais</h4>
-                        <div>${(insights.mental_triggers || []).map(t => `<span class="badge medium">${t}</span>`).join('')}</div>
-                    </div>
-                    <div class="insight-section">
-                        <h4>Objecoes Comuns</h4>
-                        <ul>${(insights.common_objections || []).map(o => `<li>${o}</li>`).join('')}</ul>
-                    </div>
-                    <div class="insight-section">
-                        <h4>Oportunidades</h4>
-                        <ul>${(insights.market_gaps || []).map(g => `<li>${g}</li>`).join('')}</ul>
-                    </div>
-                `;
-                container.classList.add('visible');
-                container.scrollIntoView({ behavior: 'smooth' });
-            }
+                </div>
+
+                <div class="insight-section" style="margin-top: 20px;">
+                    <h4>🚀 Ações - Versão PRO</h4>
+                    <p style="color: var(--aic-gray); margin: 10px 0;">Para gerar Personas, DMs e Copies personalizados para cada cluster, acesse a versão PRO:</p>
+                    <a href="/cluster-intention-dashboard" class="btn" style="display: inline-block; margin-top: 10px; text-decoration: none;">
+                        Acessar Dashboard PRO →
+                    </a>
+                </div>
+            `;
+            container.classList.add('visible');
+            container.scrollIntoView({ behavior: 'smooth' });
         }
 
-        async function loadTrends() {
-            // Usar unified-intelligence (KMeans local, gratuito)
-            const response = await fetchData('/unified-intelligence/trends?limit=20');
-            if (response?.success && response.trends) {
-                const container = document.getElementById('trends-grid');
-                container.innerHTML = response.trends.map(t => `
-                    <div class="trend-card ${t.trend_type === 'viral' ? 'viral' : ''}">
-                        <div class="hashtag">#${t.hashtag}</div>
-                        <div class="growth">${t.growth_rate.toFixed(0)}% crescimento</div>
-                        <div class="growth" style="font-size: 0.8em; margin-top: 5px;">${t.trend_type}</div>
-                    </div>
-                `).join('');
-            }
-        }
+        // REMOVIDO: loadTrends() - dados fake/hardcoded da arquitetura legada
 
         async function executePipeline() {
             if (!confirm('Isso vai chamar a API GPT-4 (custo ~$0.10).\n\nDeseja continuar?')) {
@@ -2012,81 +2198,29 @@
         }
 
 
-        async function loadAllBehavioralInsights() {
-            try {
-                // Usar unified-intelligence (KMeans local, gratuito)
-                const response = await fetchData('/unified-intelligence/clusters');
-                if (response?.success && response.clusters) {
-                    const container = document.getElementById('all-behavioral-insights');
-                    if (!container) return;
-
-                    let html = '';
-                    for (const cluster of response.clusters) {
-                        const insightsResp = await fetchData(`/unified-intelligence/cluster/${cluster.id}`);
-                        if (insightsResp?.success && insightsResp.insights) {
-                            const insights = insightsResp.insights;
-                            const painBadge = insights.pain_intensity === 'critica' ? 'critical' :
-                                           insights.pain_intensity === 'alta' ? 'high' :
-                                           insights.pain_intensity === 'media' ? 'medium' : 'low';
-
-                            html += `
-                                <div class="behavioral-insights visible" style="margin-bottom: 30px;">
-                                    <h3>${cluster.cluster_name}</h3>
-                                    <div class="insight-section">
-                                        <h4>Pain Points <span class="badge ${painBadge}">${insights.pain_intensity}</span></h4>
-                                        <ul>${(insights.pain_points || []).map(p => `<li>${p}</li>`).join('')}</ul>
-                                    </div>
-                                    <div class="insight-section">
-                                        <h4>Tendencias Emergentes</h4>
-                                        <ul>${(insights.emerging_trends || []).map(t => `<li>${t}</li>`).join('')}</ul>
-                                    </div>
-                                    <div class="insight-section">
-                                        <h4>Perfil Psicografico</h4>
-                                        <p><strong>Consciencia:</strong> ${insights.audience_awareness_level}</p>
-                                        <p><strong>Estagio de Compra:</strong> ${insights.buying_stage}</p>
-                                        <p><strong>Tom:</strong> ${insights.communication_tone}</p>
-                                    </div>
-                                    <div class="insight-section">
-                                        <h4>Recomendacoes</h4>
-                                        <ul>${(insights.approach_recommendations || []).map(r => `<li>${r}</li>`).join('')}</ul>
-                                    </div>
-                                    <div class="insight-section">
-                                        <h4>Gatilhos Mentais</h4>
-                                        <div>${(insights.mental_triggers || []).map(t => `<span class="badge medium">${t}</span>`).join('')}</div>
-                                    </div>
-                                    <div class="insight-section">
-                                        <h4>Objecoes Comuns</h4>
-                                        <ul>${(insights.common_objections || []).map(o => `<li>${o}</li>`).join('')}</ul>
-                                    </div>
-                                    <div class="insight-section">
-                                        <h4>Oportunidades</h4>
-                                        <ul>${(insights.market_gaps || []).map(g => `<li>${g}</li>`).join('')}</ul>
-                                    </div>
-                                </div>
-                            `;
-                        }
-                    }
-                    container.innerHTML = html;
-                    document.getElementById('all-behavioral-section').style.display = 'block';
-                }
-            } catch (error) {
-                console.error('Error loading all behavioral insights:', error);
-            }
-        }
-
+        // REMOVIDO: loadAllBehavioralInsights() - dados fake/hardcoded da arquitetura legada
 
         async function loadAllData() {
             try {
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('error-container').innerHTML = '';
 
+                // Carregar apenas dados REAIS - sem funções fake/hardcoded
                 await Promise.allSettled([
-                    loadKPIs(), loadTopHashtags(), loadClusterDistribution(),
-                    loadContactRateByCluster(), loadPremiumHashtags(), loadSearchTermsStats(),
-                    loadQualityScoreDistribution(), loadCooccurrenceTable(), loadClusters(), loadTrends(), loadAllBehavioralInsights(),
-                    loadLastExecution(), loadPersonas(),
-                    loadDailyScrapingStats(), loadDailyEvolutionChart()
+                    loadKPIs(),
+                    loadTopHashtags(),
+                    loadClusterDistribution(),
+                    loadContactRateByCluster(),
+                    loadPremiumHashtags(),
+                    loadSearchTermsStats(),
+                    loadQualityScoreDistribution(),
+                    loadCooccurrenceTable(),
+                    loadClusters(),
+                    loadLastExecution(),
+                    loadDailyScrapingStats(),
+                    loadDailyEvolutionChart()
                 ]);
+                // REMOVIDO: loadTrends(), loadAllBehavioralInsights(), loadPersonas() - dados fake/hardcoded
 
                 hideLoading();
             } catch (error) {
@@ -2368,6 +2502,235 @@
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
             }
+        }
+
+        // ============================================================================
+        // FUNCOES DE GERACAO DE CONTEUDO DEMO (GPT-4 Mini + Embeddings)
+        // ============================================================================
+
+        let demoClusteringResult = null; // Armazena resultado do clustering para geracao de conteudo
+
+        async function generateContentDemo(contentType) {
+            if (!platformDemoCampaignId) {
+                alert('Execute o Clustering primeiro antes de gerar conteudo');
+                return;
+            }
+
+            const statusDiv = document.getElementById('contentGenerationStatus');
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = 'rgba(14, 204, 151, 0.1)';
+            statusDiv.style.color = 'var(--aic-green)';
+
+            const contentTypes = contentType === 'all' ? ['persona', 'dm', 'copy'] : [contentType];
+            const typeLabels = { persona: 'Personas', dm: 'DMs', copy: 'Copies' };
+
+            // Atualizar flags para loading
+            const flags = {
+                persona: document.getElementById('flagPersonaDemo'),
+                dm: document.getElementById('flagDMDemo'),
+                copy: document.getElementById('flagCopyDemo'),
+                all: document.getElementById('flagAllDemo')
+            };
+
+            contentTypes.forEach(type => {
+                if (flags[type]) {
+                    flags[type].innerHTML = `<div style="font-size: 2em; margin-bottom: 8px;">⏳</div><div style="font-weight: 600; color: var(--aic-white);">Gerando...</div>`;
+                    flags[type].style.pointerEvents = 'none';
+                }
+            });
+
+            statusDiv.innerHTML = `⏳ Gerando ${contentTypes.map(t => typeLabels[t]).join(', ')} via GPT-4 Mini...`;
+
+            try {
+                // Usar o mesmo endpoint do PRO (com campaign_id da demo)
+                const nicho = document.getElementById('genericNicho')?.value || 'Geral';
+                const seeds = document.getElementById('genericSeeds')?.value || '';
+
+                const payload = {
+                    campaign_id: platformDemoCampaignId,
+                    nicho: nicho,
+                    service_description: `Servicos de ${nicho} - seeds: ${seeds}`,
+                    target_audience: `Profissionais e interessados em ${nicho}`,
+                    content_types: contentTypes
+                };
+
+                const response = await fetch(`${API_BASE}/hashtag-intelligence/generate-content-per-cluster`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    statusDiv.innerHTML = `✅ Conteudo gerado com sucesso! Tokens usados: ${result.data.total_tokens || 'N/A'}`;
+
+                    // Atualizar flags com sucesso
+                    contentTypes.forEach(type => {
+                        if (flags[type]) {
+                            const icon = type === 'persona' ? '👤' : type === 'dm' ? '✉️' : '📝';
+                            flags[type].innerHTML = `<div style="font-size: 2em; margin-bottom: 8px;">${icon}</div><div style="font-weight: 600; color: var(--aic-white);">✅ ${typeLabels[type]}</div><div style="font-size: 0.8em; color: var(--aic-gray);">Gerado</div>`;
+                            flags[type].classList.add('flag-completed');
+                        }
+                    });
+
+                    // Renderizar resultados
+                    renderDemoContent(result.data.clusters, contentTypes, result.data.campaign_copy);
+                    document.getElementById('generated-content-results').style.display = 'block';
+
+                } else {
+                    throw new Error(result.message || 'Erro ao gerar conteudo');
+                }
+            } catch (error) {
+                console.error('Erro ao gerar conteudo demo:', error);
+                statusDiv.style.background = 'rgba(239, 68, 68, 0.1)';
+                statusDiv.style.color = '#ef4444';
+                statusDiv.innerHTML = `❌ Erro: ${error.message}`;
+
+                // Restaurar flags
+                contentTypes.forEach(type => {
+                    if (flags[type]) {
+                        const icon = type === 'persona' ? '👤' : type === 'dm' ? '✉️' : '📝';
+                        const label = typeLabels[type];
+                        flags[type].innerHTML = `<div style="font-size: 2em; margin-bottom: 8px;">${icon}</div><div style="font-weight: 600; color: var(--aic-white);">Gerar ${label}</div>`;
+                    }
+                });
+            } finally {
+                Object.values(flags).forEach(flag => {
+                    if (flag) flag.style.pointerEvents = 'auto';
+                });
+            }
+        }
+
+        function renderDemoContent(clusters, contentTypes, campaignCopy) {
+            const personasPanel = document.getElementById('contentPanelPersonas');
+            const dmsPanel = document.getElementById('contentPanelDms');
+            const copiesPanel = document.getElementById('contentPanelCopies');
+
+            // Personas - Backend retorna: nome, perfil, idade_tipica, dores_principais, objetivos
+            if (contentTypes.includes('persona') && clusters) {
+                let personasHtml = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">';
+                clusters.forEach((cluster, idx) => {
+                    if (cluster.persona) {
+                        const p = cluster.persona;
+                        // Suportar ambos os formatos (PT e EN) para compatibilidade
+                        const nome = p.nome || p.name || 'Persona ' + (idx+1);
+                        const perfil = p.perfil || p.profile || '';
+                        const idade = p.idade_tipica || p.age_range || '';
+                        const dores = p.dores_principais || p.pain_points || [];
+                        const objetivos = p.objetivos || p.goals || [];
+                        const tom = p.tom_comunicacao || '';
+
+                        personasHtml += `
+                            <div style="background: var(--aic-navy); border: 1px solid var(--aic-border); border-radius: 12px; padding: 20px;">
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                                    <div style="width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark)); display: flex; align-items: center; justify-content: center; font-size: 1.5em; font-weight: 700; color: var(--aic-navy);">
+                                        ${nome.charAt(0)}
+                                    </div>
+                                    <div>
+                                        <h4 style="margin: 0; color: var(--aic-white);">${nome}</h4>
+                                        <div style="font-size: 0.85em; color: var(--aic-gray);">${cluster.cluster_name || 'Cluster ' + (idx+1)}</div>
+                                    </div>
+                                </div>
+                                ${perfil ? `<p style="color: var(--aic-gray); margin-bottom: 8px;"><strong>Perfil:</strong> ${perfil}</p>` : ''}
+                                ${idade ? `<p style="color: var(--aic-gray); margin-bottom: 8px;"><strong>Faixa Etaria:</strong> ${idade}</p>` : ''}
+                                ${dores.length > 0 ? `<p style="color: var(--aic-gray); margin-bottom: 8px;"><strong>Dores:</strong> ${dores.slice(0,3).join(', ')}</p>` : ''}
+                                ${objetivos.length > 0 ? `<p style="color: var(--aic-gray); margin-bottom: 8px;"><strong>Objetivos:</strong> ${objetivos.slice(0,3).join(', ')}</p>` : ''}
+                                ${tom ? `<p style="color: var(--aic-gray);"><strong>Tom:</strong> ${tom}</p>` : ''}
+                            </div>
+                        `;
+                    }
+                });
+                personasHtml += '</div>';
+                personasPanel.innerHTML = personasHtml;
+            } else {
+                personasPanel.innerHTML = '<p style="color: var(--aic-gray); text-align: center; padding: 40px;">Clique em "Gerar Personas" para criar personas para cada cluster.</p>';
+            }
+
+            // DMs - Backend pode retornar: {scripts: [...]} ou array direto
+            if (contentTypes.includes('dm') && clusters) {
+                let dmsHtml = '<div style="display: grid; gap: 15px;">';
+                clusters.forEach((cluster, idx) => {
+                    // Suportar ambos formatos: {scripts: [...]} ou array direto
+                    let scripts = [];
+                    if (cluster.dm_scripts) {
+                        if (Array.isArray(cluster.dm_scripts)) {
+                            scripts = cluster.dm_scripts;
+                        } else if (cluster.dm_scripts.scripts && Array.isArray(cluster.dm_scripts.scripts)) {
+                            scripts = cluster.dm_scripts.scripts;
+                        }
+                    }
+
+                    if (scripts.length > 0) {
+                        dmsHtml += `
+                            <div style="background: var(--aic-navy); border: 1px solid var(--aic-border); border-radius: 12px; padding: 20px;">
+                                <h4 style="color: var(--aic-green); margin-bottom: 15px;">✉️ ${cluster.cluster_name || 'Cluster ' + (idx+1)}</h4>
+                                ${scripts.map((dm, dmIdx) => {
+                                    // Suportar formato {abertura, follow_up, proposta} ou {message} ou string
+                                    let content = '';
+                                    if (typeof dm === 'string') {
+                                        content = dm;
+                                    } else if (dm.message) {
+                                        content = dm.message;
+                                    } else if (dm.abertura) {
+                                        content = `<strong>Abertura:</strong> ${dm.abertura}`;
+                                        if (dm.follow_up) content += `<br><br><strong>Follow-up:</strong> ${dm.follow_up}`;
+                                        if (dm.proposta) content += `<br><br><strong>Proposta:</strong> ${dm.proposta}`;
+                                    }
+                                    return `
+                                        <div style="background: var(--aic-navy-light); padding: 15px; border-radius: 8px; margin-bottom: 10px;">
+                                            <div style="font-size: 0.85em; color: var(--aic-green); margin-bottom: 8px;">${dm.nome || 'Script ' + (dmIdx + 1)}</div>
+                                            <p style="color: var(--aic-white); line-height: 1.6;">${content}</p>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        `;
+                    }
+                });
+                dmsHtml += '</div>';
+                dmsPanel.innerHTML = dmsHtml;
+            } else {
+                dmsPanel.innerHTML = '<p style="color: var(--aic-gray); text-align: center; padding: 40px;">Clique em "Gerar DMs" para criar scripts de mensagem para cada cluster.</p>';
+            }
+
+            // Copies (unica da campanha)
+            if (contentTypes.includes('copy') && campaignCopy) {
+                let copiesHtml = `
+                    <div style="background: var(--aic-navy); border: 1px solid var(--aic-border); border-radius: 12px; padding: 25px;">
+                        <h4 style="color: var(--aic-green); margin-bottom: 20px;">📝 Copy da Campanha</h4>
+                        ${campaignCopy.headline ? `<div style="margin-bottom: 15px;"><strong style="color: var(--aic-green);">Headline:</strong><p style="color: var(--aic-white); font-size: 1.2em; margin-top: 5px;">${campaignCopy.headline}</p></div>` : ''}
+                        ${campaignCopy.subheadline ? `<div style="margin-bottom: 15px;"><strong style="color: var(--aic-green);">Subheadline:</strong><p style="color: var(--aic-gray); margin-top: 5px;">${campaignCopy.subheadline}</p></div>` : ''}
+                        ${campaignCopy.body ? `<div style="margin-bottom: 15px;"><strong style="color: var(--aic-green);">Body:</strong><p style="color: var(--aic-white); margin-top: 5px; white-space: pre-wrap;">${campaignCopy.body}</p></div>` : ''}
+                        ${campaignCopy.cta ? `<div><strong style="color: var(--aic-green);">CTA:</strong><p style="color: var(--aic-green); font-weight: 600; margin-top: 5px;">${campaignCopy.cta}</p></div>` : ''}
+                    </div>
+                `;
+                copiesPanel.innerHTML = copiesHtml;
+            } else {
+                copiesPanel.innerHTML = '<p style="color: var(--aic-gray); text-align: center; padding: 40px;">Clique em "Gerar Copies" para criar copy de landing page e ads.</p>';
+            }
+        }
+
+        function showContentTabDemo(tabName) {
+            // Atualizar botoes de tab
+            document.querySelectorAll('.content-tab').forEach(tab => {
+                if (tab.dataset.tab === tabName) {
+                    tab.style.background = 'var(--aic-green)';
+                    tab.style.color = 'var(--aic-navy)';
+                    tab.style.border = 'none';
+                    tab.classList.add('active');
+                } else {
+                    tab.style.background = 'var(--aic-navy)';
+                    tab.style.color = 'var(--aic-white)';
+                    tab.style.border = '1px solid var(--aic-border)';
+                    tab.classList.remove('active');
+                }
+            });
+
+            // Mostrar/ocultar paineis
+            document.getElementById('contentPanelPersonas').style.display = tabName === 'personas' ? 'block' : 'none';
+            document.getElementById('contentPanelDms').style.display = tabName === 'dms' ? 'block' : 'none';
+            document.getElementById('contentPanelCopies').style.display = tabName === 'copies' ? 'block' : 'none';
         }
 
         window.addEventListener('load', () => {

@@ -1,0 +1,262 @@
+{
+  "name": "AIC - Lead Embedding On-Ingest",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "embedar-lead",
+        "options": {}
+      },
+      "id": "webhook-receiver",
+      "name": "Webhook: Embedar Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [180, 300],
+      "webhookId": "embedar-lead-receiver"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-batch",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "batch_insert",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-batch",
+      "name": "Is Batch?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [380, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT \n    il.id as lead_id,\n    il.username,\n    CONCAT_WS(' | ',\n        'Nome: ' || COALESCE(il.full_name, il.username),\n        'Bio: ' || COALESCE(il.bio, ''),\n        'Profissao: ' || COALESCE(il.profession, il.business_category, ''),\n        'Cidade: ' || COALESCE(il.city, '') || '/' || COALESCE(il.state, ''),\n        'Hashtags: ' || COALESCE((SELECT string_agg(h::text, ', ') FROM jsonb_array_elements_text(il.hashtags_posts) h LIMIT 20), ''),\n        'Categoria: ' || COALESCE(il.business_category, ''),\n        'Seguidores: ' || COALESCE(il.followers_count::text, '0')\n    ) as embedding_text\nFROM instagram_leads il\nWHERE il.id = '{{ $json.lead_id }}'::uuid\n  AND il.bio IS NOT NULL",
+        "options": {}
+      },
+      "id": "get-lead-single",
+      "name": "Buscar Lead (Single)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [580, 200],
+      "credentials": {
+        "postgres": {
+          "id": "VALf3SpY8cJkKg5D",
+          "name": "SupabaseUBS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT \n    il.id as lead_id,\n    il.username,\n    CONCAT_WS(' | ',\n        'Nome: ' || COALESCE(il.full_name, il.username),\n        'Bio: ' || COALESCE(il.bio, ''),\n        'Profissao: ' || COALESCE(il.profession, il.business_category, ''),\n        'Cidade: ' || COALESCE(il.city, '') || '/' || COALESCE(il.state, ''),\n        'Hashtags: ' || COALESCE((SELECT string_agg(h::text, ', ') FROM jsonb_array_elements_text(il.hashtags_posts) h LIMIT 20), ''),\n        'Categoria: ' || COALESCE(il.business_category, ''),\n        'Seguidores: ' || COALESCE(il.followers_count::text, '0')\n    ) as embedding_text\nFROM instagram_leads il\nWHERE il.id = ANY(ARRAY[{{ $json.leads.map(l => \"'\" + l.lead_id + \"'::uuid\").join(',') }}])\n  AND il.bio IS NOT NULL",
+        "options": {}
+      },
+      "id": "get-leads-batch",
+      "name": "Buscar Leads (Batch)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [580, 400],
+      "credentials": {
+        "postgres": {
+          "id": "VALf3SpY8cJkKg5D",
+          "name": "SupabaseUBS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "loop-leads",
+      "name": "Loop Leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [780, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"text-embedding-3-small\",\n  \"input\": {{ JSON.stringify(($json.embedding_text || '').substring(0, 8000)) }}\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "openai-embedding",
+      "name": "OpenAI Embedding",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [980, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "BTEALfDsbh3nPABI",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE instagram_leads SET\n    embedding = '[{{ $json.data[0].embedding.join(\",\") }}]'::vector,\n    embedding_text = $escape${{ $('Loop Leads').item.json.embedding_text }}$escape$,\n    embedding_at = NOW()\nWHERE id = '{{ $('Loop Leads').item.json.lead_id }}'::uuid\nRETURNING id, username",
+        "options": {}
+      },
+      "id": "save-embedding",
+      "name": "Salvar Embedding",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1180, 300],
+      "credentials": {
+        "postgres": {
+          "id": "VALf3SpY8cJkKg5D",
+          "name": "SupabaseUBS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"embedded\": {{ $('Loop Leads').item.json.username ? 1 : 0 }} }",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1380, 300]
+    },
+    {
+      "parameters": {
+        "content": "## AIC - Lead Embedding On-Ingest\n\n**Recebe webhook do scraper e embeda lead automaticamente**\n\nEndpoint: POST /webhook/embedar-lead\n\nPayload single:\n```json\n{\n  \"lead_id\": \"uuid\",\n  \"username\": \"@user\",\n  \"action\": \"insert\" | \"update\"\n}\n```\n\nPayload batch:\n```json\n{\n  \"leads\": [{\"lead_id\": \"uuid\"}],\n  \"action\": \"batch_insert\"\n}\n```",
+        "height": 320,
+        "width": 300
+      },
+      "id": "sticky-info",
+      "name": "Info",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [180, -60]
+    }
+  ],
+  "connections": {
+    "Webhook: Embedar Lead": {
+      "main": [
+        [
+          {
+            "node": "Is Batch?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Batch?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Leads (Batch)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buscar Lead (Single)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Lead (Single)": {
+      "main": [
+        [
+          {
+            "node": "Loop Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Leads (Batch)": {
+      "main": [
+        [
+          {
+            "node": "Loop Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Leads": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "OpenAI Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Embedding": {
+      "main": [
+        [
+          {
+            "node": "Salvar Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar Embedding": {
+      "main": [
+        [
+          {
+            "node": "Loop Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "tags": []
+}

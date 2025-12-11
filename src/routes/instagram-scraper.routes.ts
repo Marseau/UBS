@@ -1331,12 +1331,12 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
       const mergedPhones = [...new Set([...existingPhones, ...newPhones])];
 
       // Preparar dados para update
+      // NÃO setar updated_at - enriquecimento de URL não é scraping de dados do Instagram
       const updateData: any = {
         additional_emails: mergedEmails,
         additional_phones: mergedPhones,
         url_enriched: true,
-        website_text: result.website_text || null,  // Texto do website para embedding
-        updated_at: new Date().toISOString()
+        website_text: result.website_text || null  // Texto do website para embedding
       };
 
       // Só atualizar email/phone principal se não tiver
