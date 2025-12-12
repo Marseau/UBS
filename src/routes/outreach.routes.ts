@@ -518,6 +518,101 @@ router.post('/mark-failed', async (req, res) => {
 });
 
 /**
+ * POST /api/outreach/whatsapp-phone-failed
+ * Endpoint específico para falha de telefone WhatsApp.
+ * Implementa estratégia anti-ban:
+ * - Marca telefone como inválido (valid_whatsapp: false)
+ * - Se há mais telefones: muda status para pending_retry (final da fila)
+ * - Se não há mais telefones: muda canal para Instagram
+ *
+ * IMPORTANTE: NUNCA tenta 2 telefones do mesmo lead em sequência!
+ */
+router.post('/whatsapp-phone-failed', async (req, res) => {
+  try {
+    const { campaign_lead_id, lead_id, phone, error_message } = req.body;
+
+    if (!lead_id || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'lead_id e phone são obrigatórios'
+      });
+    }
+
+    console.log(`\n📱❌ [WHATSAPP] Telefone falhou: ${phone}`);
+    console.log(`   Lead ID: ${lead_id}`);
+    console.log(`   Campaign Lead ID: ${campaign_lead_id || 'N/A'}`);
+
+    // Chamar a função PostgreSQL handle_phone_failure
+    const { data, error } = await supabase.rpc('handle_phone_failure', {
+      p_lead_id: lead_id,
+      p_campaign_lead_id: campaign_lead_id || null,
+      p_phone: phone
+    });
+
+    if (error) {
+      console.error('❌ Erro ao executar handle_phone_failure:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    const result = data?.[0] || { action: 'error', has_more_phones: false, phones_remaining: 0 };
+
+    console.log(`   Resultado: ${result.action}`);
+    console.log(`   Telefones restantes: ${result.phones_remaining}`);
+    console.log(`   Tem mais telefones: ${result.has_more_phones}`);
+
+    // Log adicional do erro se fornecido
+    if (error_message && campaign_lead_id) {
+      // Buscar notes atual e concatenar
+      const { data: currentLead } = await supabase
+        .from('campaign_leads')
+        .select('notes')
+        .eq('id', campaign_lead_id)
+        .single();
+
+      const timestamp = new Date().toISOString();
+      const newNote = `\n[${timestamp}] WhatsApp falhou (${phone}): ${error_message}`;
+      const updatedNotes = (currentLead?.notes || '') + newNote;
+
+      await supabase
+        .from('campaign_leads')
+        .update({
+          notes: updatedNotes,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', campaign_lead_id);
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        action: result.action,
+        has_more_phones: result.has_more_phones,
+        phones_remaining: result.phones_remaining,
+        next_action: result.action === 'pending_retry'
+          ? 'Lead vai para o final da fila, próximo telefone será tentado depois'
+          : result.action === 'switch_to_instagram'
+            ? 'Sem telefones válidos, lead mudou para canal Instagram'
+            : 'Erro ao processar'
+      },
+      message: result.action === 'pending_retry'
+        ? `Telefone marcado como inválido. Lead tem mais ${result.phones_remaining} telefone(s) e foi para o final da fila.`
+        : result.action === 'switch_to_instagram'
+          ? 'Todos os telefones inválidos. Lead mudou para canal Instagram.'
+          : 'Processado com resultado: ' + result.action
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /whatsapp-phone-failed:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
  * POST /api/outreach/mark-replied
  * Marca um item quando o lead responde
  */
