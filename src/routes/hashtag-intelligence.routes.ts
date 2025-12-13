@@ -1016,6 +1016,7 @@ router.post('/save-analysis', async (req, res) => {
       target_gender,
       target_location,
       target_income_class,
+      whapi_channel_id,
       analysis_result
     } = req.body;
 
@@ -1089,6 +1090,7 @@ router.post('/save-analysis', async (req, res) => {
           target_gender: target_gender || null,
           target_location: target_location || null,
           target_income_class: target_income_class || null,
+          whapi_channel_id: whapi_channel_id || null,
           analysis_result,
           cluster_status: analysis_result.isViable ? 'approved' : 'analyzing',
           last_analysis_at: new Date().toISOString()
@@ -1113,6 +1115,7 @@ router.post('/save-analysis', async (req, res) => {
           target_gender: target_gender || null,
           target_location: target_location || null,
           target_income_class: target_income_class || null,
+          whapi_channel_id: whapi_channel_id || null,
           analysis_result,
           cluster_status: analysis_result.isViable ? 'approved' : 'analyzing',
           last_analysis_at: new Date().toISOString()
@@ -1239,6 +1242,35 @@ router.get('/clients', async (_req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Erro em /clients:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/hashtag-intelligence/whapi-channels
+ * Lista todos os canais Whapi disponíveis para seleção
+ */
+router.get('/whapi-channels', async (_req, res) => {
+  try {
+    console.log('\n📱 [API] Listando canais Whapi...');
+
+    const { data, error } = await supabase
+      .from('whapi_channels')
+      .select('id, name, channel_id, phone_number, status, rate_limit_hourly, rate_limit_daily, warmup_mode')
+      .eq('status', 'active')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+
+    return res.json({
+      success: true,
+      data: data || []
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /whapi-channels:', error);
     return res.status(500).json({
       success: false,
       message: error.message
@@ -3835,6 +3867,422 @@ router.get('/campaign/:campaignId/stats', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Erro em /campaign/:campaignId/stats:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// =====================================================
+// ENDPOINTS DE NICHOS SUGERIDOS POR CAMPANHA
+// =====================================================
+
+/**
+ * GET /api/hashtag-intelligence/campaign/:campaignId/niches
+ * Retorna os nichos sugeridos de uma campanha
+ */
+router.get('/campaign/:campaignId/niches', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    console.log(`\n📊 [API] Buscando nichos sugeridos da campanha ${campaignId}`);
+
+    const { data: campaign, error } = await supabase
+      .from('cluster_campaigns')
+      .select('id, campaign_name, suggested_niches, active_niche_index')
+      .eq('id', campaignId)
+      .single();
+
+    if (error || !campaign) {
+      return res.status(404).json({
+        success: false,
+        message: 'Campanha não encontrada'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        campaign_id: campaign.id,
+        campaign_name: campaign.campaign_name,
+        niches: campaign.suggested_niches || [],
+        active_index: campaign.active_niche_index || 0
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em /campaign/:campaignId/niches:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/hashtag-intelligence/campaign/:campaignId/niches
+ * Adiciona um novo nicho sugerido à campanha
+ */
+router.post('/campaign/:campaignId/niches', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const { name, seeds } = req.body;
+
+    if (!name || !seeds || !Array.isArray(seeds) || seeds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nome do nicho e seeds são obrigatórios'
+      });
+    }
+
+    console.log(`\n📊 [API] Adicionando nicho "${name}" à campanha ${campaignId}`);
+
+    // Buscar nichos atuais
+    const { data: campaign, error: fetchError } = await supabase
+      .from('cluster_campaigns')
+      .select('suggested_niches')
+      .eq('id', campaignId)
+      .single();
+
+    if (fetchError || !campaign) {
+      return res.status(404).json({
+        success: false,
+        message: 'Campanha não encontrada'
+      });
+    }
+
+    // Criar novo nicho
+    const newNiche = {
+      name,
+      seeds,
+      is_validated: false,
+      validation_result: null,
+      clustering_result: null,
+      created_at: new Date().toISOString()
+    };
+
+    // Adicionar ao array
+    const updatedNiches = [...(campaign.suggested_niches || []), newNiche];
+
+    // Atualizar campanha
+    const { error: updateError } = await supabase
+      .from('cluster_campaigns')
+      .update({
+        suggested_niches: updatedNiches,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', campaignId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return res.json({
+      success: true,
+      message: 'Nicho adicionado com sucesso',
+      data: {
+        niche: newNiche,
+        niche_index: updatedNiches.length - 1,
+        total_niches: updatedNiches.length
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em POST /campaign/:campaignId/niches:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/hashtag-intelligence/campaign/:campaignId/niches/:nicheIndex/validate
+ * Valida um nicho e armazena o resultado
+ */
+router.put('/campaign/:campaignId/niches/:nicheIndex/validate', async (req, res) => {
+  try {
+    const { campaignId, nicheIndex } = req.params;
+    const { validation_result, is_validated } = req.body;
+    const idx = parseInt(nicheIndex);
+
+    console.log(`\n📊 [API] Atualizando validação do nicho ${idx} na campanha ${campaignId}`);
+
+    // Buscar nichos atuais
+    const { data: campaign, error: fetchError } = await supabase
+      .from('cluster_campaigns')
+      .select('suggested_niches')
+      .eq('id', campaignId)
+      .single();
+
+    if (fetchError || !campaign) {
+      return res.status(404).json({
+        success: false,
+        message: 'Campanha não encontrada'
+      });
+    }
+
+    const niches = campaign.suggested_niches || [];
+    if (idx < 0 || idx >= niches.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Índice de nicho inválido'
+      });
+    }
+
+    // Atualizar nicho
+    niches[idx] = {
+      ...niches[idx],
+      is_validated: is_validated ?? true,
+      validation_result,
+      validated_at: new Date().toISOString()
+    };
+
+    // Salvar
+    const { error: updateError } = await supabase
+      .from('cluster_campaigns')
+      .update({
+        suggested_niches: niches,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', campaignId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return res.json({
+      success: true,
+      message: 'Validação do nicho atualizada',
+      data: {
+        niche: niches[idx],
+        niche_index: idx
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em PUT /campaign/:campaignId/niches/:nicheIndex/validate:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/hashtag-intelligence/campaign/:campaignId/niches/:nicheIndex/clustering
+ * Atualiza o resultado do clustering de um nicho
+ */
+router.put('/campaign/:campaignId/niches/:nicheIndex/clustering', async (req, res) => {
+  try {
+    const { campaignId, nicheIndex } = req.params;
+    const { clustering_result } = req.body;
+    const idx = parseInt(nicheIndex);
+
+    console.log(`\n📊 [API] Atualizando clustering do nicho ${idx} na campanha ${campaignId}`);
+
+    // Buscar nichos atuais
+    const { data: campaign, error: fetchError } = await supabase
+      .from('cluster_campaigns')
+      .select('suggested_niches')
+      .eq('id', campaignId)
+      .single();
+
+    if (fetchError || !campaign) {
+      return res.status(404).json({
+        success: false,
+        message: 'Campanha não encontrada'
+      });
+    }
+
+    const niches = campaign.suggested_niches || [];
+    if (idx < 0 || idx >= niches.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Índice de nicho inválido'
+      });
+    }
+
+    // Atualizar nicho
+    niches[idx] = {
+      ...niches[idx],
+      clustering_result,
+      clustered_at: new Date().toISOString()
+    };
+
+    // Salvar
+    const { error: updateError } = await supabase
+      .from('cluster_campaigns')
+      .update({
+        suggested_niches: niches,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', campaignId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return res.json({
+      success: true,
+      message: 'Clustering do nicho atualizado',
+      data: {
+        niche: niches[idx],
+        niche_index: idx
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em PUT /campaign/:campaignId/niches/:nicheIndex/clustering:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/hashtag-intelligence/campaign/:campaignId/niches/:nicheIndex/activate
+ * Define um nicho como ativo e sincroniza com campos principais da campanha
+ */
+router.put('/campaign/:campaignId/niches/:nicheIndex/activate', async (req, res) => {
+  try {
+    const { campaignId, nicheIndex } = req.params;
+    const idx = parseInt(nicheIndex);
+
+    console.log(`\n📊 [API] Ativando nicho ${idx} na campanha ${campaignId}`);
+
+    // Buscar nichos atuais
+    const { data: campaign, error: fetchError } = await supabase
+      .from('cluster_campaigns')
+      .select('suggested_niches')
+      .eq('id', campaignId)
+      .single();
+
+    if (fetchError || !campaign) {
+      return res.status(404).json({
+        success: false,
+        message: 'Campanha não encontrada'
+      });
+    }
+
+    const niches = campaign.suggested_niches || [];
+    if (idx < 0 || idx >= niches.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Índice de nicho inválido'
+      });
+    }
+
+    const activeNiche = niches[idx];
+
+    // Atualizar campanha com nicho ativo
+    const { error: updateError } = await supabase
+      .from('cluster_campaigns')
+      .update({
+        active_niche_index: idx,
+        nicho_principal: activeNiche.name,
+        nicho: activeNiche.name,
+        keywords: activeNiche.seeds,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', campaignId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return res.json({
+      success: true,
+      message: `Nicho "${activeNiche.name}" ativado com sucesso`,
+      data: {
+        active_niche: activeNiche,
+        active_index: idx
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em PUT /campaign/:campaignId/niches/:nicheIndex/activate:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/hashtag-intelligence/campaign/:campaignId/niches/:nicheIndex
+ * Remove um nicho sugerido da campanha
+ */
+router.delete('/campaign/:campaignId/niches/:nicheIndex', async (req, res) => {
+  try {
+    const { campaignId, nicheIndex } = req.params;
+    const idx = parseInt(nicheIndex);
+
+    console.log(`\n📊 [API] Removendo nicho ${idx} da campanha ${campaignId}`);
+
+    // Buscar nichos atuais
+    const { data: campaign, error: fetchError } = await supabase
+      .from('cluster_campaigns')
+      .select('suggested_niches, active_niche_index')
+      .eq('id', campaignId)
+      .single();
+
+    if (fetchError || !campaign) {
+      return res.status(404).json({
+        success: false,
+        message: 'Campanha não encontrada'
+      });
+    }
+
+    const niches = campaign.suggested_niches || [];
+    if (idx < 0 || idx >= niches.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Índice de nicho inválido'
+      });
+    }
+
+    // Verificar se o nicho está em uso (tem leads capturados)
+    if (niches[idx].clustering_result && niches[idx].clustering_result.total_leads > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Não é possível remover um nicho com leads capturados'
+      });
+    }
+
+    // Remover nicho
+    const removedNiche = niches.splice(idx, 1)[0];
+
+    // Ajustar active_niche_index se necessário
+    let newActiveIndex = campaign.active_niche_index || 0;
+    if (idx < newActiveIndex) {
+      newActiveIndex--;
+    } else if (idx === newActiveIndex && niches.length > 0) {
+      newActiveIndex = Math.min(newActiveIndex, niches.length - 1);
+    } else if (niches.length === 0) {
+      newActiveIndex = 0;
+    }
+
+    // Salvar
+    const { error: updateError } = await supabase
+      .from('cluster_campaigns')
+      .update({
+        suggested_niches: niches,
+        active_niche_index: newActiveIndex,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', campaignId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return res.json({
+      success: true,
+      message: `Nicho "${removedNiche.name}" removido com sucesso`,
+      data: {
+        removed_niche: removedNiche,
+        remaining_niches: niches.length
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em DELETE /campaign/:campaignId/niches/:nicheIndex:', error);
     return res.status(500).json({
       success: false,
       message: error.message

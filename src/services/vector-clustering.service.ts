@@ -282,37 +282,25 @@ export async function clusterBySimilarity(
   }
 
   // Filtro por seeds em hashtags (bio/posts) para aderência ao nicho
+  // Usa operadores GIN indexados (?|) nas colunas JSONB existentes
+  // Gera variações: com underscore, sem underscore, e original
   if (hasSeeds) {
-    const seedArraySQL = normalizedSeeds.map(seed => `'${seed}'`).join(', ');
-    // Usa ?| em JSONB para aproveitar índice GIN nas colunas de hashtags (sem varrer todo o array com LIKE)
-    // Fallback normalizado (removendo acentos/espacos) para capturar variações
+    const seedVariations = new Set<string>();
+    for (const seed of normalizedSeeds) {
+      seedVariations.add(seed);                        // digital_creator
+      seedVariations.add(seed.replace(/_/g, ''));      // digitalcreator
+    }
+    // Adicionar seeds originais (sem normalização) também
+    for (const seed of seeds) {
+      const cleaned = seed.toLowerCase().trim();
+      seedVariations.add(cleaned);
+      seedVariations.add(cleaned.replace(/\s+/g, ''));  // sem espaços
+    }
+    const seedArraySQL = Array.from(seedVariations).map(s => `'${s}'`).join(', ');
     whereConditions.push(`(
       (il.hashtags_bio ?| ARRAY[${seedArraySQL}])
       OR
       (il.hashtags_posts ?| ARRAY[${seedArraySQL}])
-      OR EXISTS (
-        SELECT 1 FROM (
-          SELECT jsonb_array_elements_text(il.hashtags_bio) AS tag
-          UNION ALL
-          SELECT jsonb_array_elements_text(il.hashtags_posts) AS tag
-        ) tags
-        WHERE (
-          -- Igualdade exata (normalizada)
-          regexp_replace(
-            LOWER(TRANSLATE(tags.tag, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnAAAAAEEEEIIIIOOOOOUUUUCN')),
-            '[^a-z0-9]+',
-            '_',
-            'g'
-          ) = ANY(ARRAY[${seedArraySQL}]::text[])
-          -- OU contém a seed (permissivo)
-          OR (${normalizedSeeds.map(seed => `regexp_replace(
-                LOWER(TRANSLATE(tags.tag, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnAAAAAEEEEIIIIOOOOOUUUUCN')),
-                '[^a-z0-9]+',
-                '_',
-                'g'
-              ) LIKE '%${seed}%'`).join(' OR ')})
-        )
-      )
     )`);
   }
 
@@ -626,6 +614,13 @@ export async function clusterBySimilarity(
   // Ordenar por total de leads
   clusterResults.sort((a, b) => b.total_leads - a.total_leads);
 
+  // IMPORTANTE: Reindexar cluster_id para ser sequencial (0, 1, 2...)
+  // Isso evita gaps quando clusters são filtrados por minLeadsPerCluster
+  // e garante que lead_associations.primary_cluster corresponda ao cluster_index nos subclusters
+  clusterResults.forEach((cluster, idx) => {
+    cluster.cluster_id = idx;
+  });
+
   const executionTime = Date.now() - startTime;
   console.log(`\n✅ [VECTOR CLUSTERING - KMeans Iterativo] Concluído em ${executionTime}ms`);
   console.log(`   ${clusterResults.length} clusters gerados`);
@@ -817,7 +812,7 @@ function computeCentroidEmbedding(embeddings: number[][]): number[] {
  */
 function computeSilhouetteScore(
   assignments: Map<number, { embedding: number[]; leadId: string }[]>,
-  centroidEmbeddings: number[][]
+  _centroidEmbeddings: number[][]
 ): number {
   const clusterIds = Array.from(assignments.keys());
   if (clusterIds.length < 2) return 0;
@@ -1101,7 +1096,7 @@ export async function executeHashtagVectorClustering(
   nicho: string,
   seeds: string[],
   numClusters: number = 5,
-  similarityThreshold: number = 0.65,
+  _similarityThreshold: number = 0.65,
   filters: ClusteringFilters = {}
 ): Promise<ClusteringResult> {
   const startTime = Date.now();

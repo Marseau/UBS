@@ -30,7 +30,8 @@ app.set('trust proxy', 1);
 // 🛡️ Helmet: Headers de segurança
 app.use(helmet({
   contentSecurityPolicy: false, // Desabilitar CSP para permitir inline scripts no dashboard
-  crossOriginEmbedderPolicy: false // Desabilitar para permitir embeds externos
+  crossOriginEmbedderPolicy: false, // Desabilitar para permitir embeds externos
+  crossOriginResourcePolicy: { policy: "cross-origin" } // Permitir Facebook/crawlers acessarem imagens OG
 }));
 
 // 🌐 CORS: Configuração segura
@@ -741,6 +742,12 @@ app.get('/hashtag-intelligence-dashboard', (_req, res) => {
 });
 console.log('✅ Legacy route /hashtag-intelligence-dashboard redirects to Dynamic Intelligence 2.0');
 
+// Cluster Intention Dashboard - Validação de nichos e clustering
+app.get('/cluster-intention-dashboard', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'cluster-intention-dashboard.html'));
+});
+console.log('✅ Cluster Intention Dashboard route loaded at /cluster-intention-dashboard');
+
 // Supabase Query Executor - Execute custom SQL queries (DEPRECATED - use specific endpoints)
 app.post('/api/supabase/execute', async (req, res) => {
   try {
@@ -907,6 +914,16 @@ try {
   console.error("❌ Failed to load AIC Outreach routes:", error);
 }
 
+// Campaign Credentials Routes - WhatsApp sessions + Instagram accounts for onboarding
+try {
+  const campaignCredentialsRoutes = require('./routes/campaign-credentials.routes');
+  const router = 'default' in campaignCredentialsRoutes ? campaignCredentialsRoutes.default : campaignCredentialsRoutes;
+  app.use('/api', router);
+  console.log('✅ Campaign Credentials routes loaded - WHATSAPP SESSIONS + INSTAGRAM ACCOUNTS READY');
+} catch (error) {
+  console.error("❌ Failed to load Campaign Credentials routes:", error);
+}
+
 // Define o caminho para a pasta frontend de forma explícita e segura
 const candidatePaths: string[] = [
   path.join(process.cwd(), 'src', 'frontend'),
@@ -988,6 +1005,16 @@ app.get('/forgot-password', (_req, res) => {
 
 app.get('/privacy', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'privacy.html'));
+});
+
+// AIC Landing Page
+app.get('/aic', (_req, res) => {
+  res.sendFile(path.join(frontendPath, 'aic-landing.html'));
+});
+
+// AIC Campaign Onboarding (Client Setup)
+app.get('/aic/onboarding', (_req, res) => {
+  res.sendFile(path.join(frontendPath, 'aic-campaign-onboarding.html'));
 });
 
 // WhatsApp Sessions Management (AIC Admin)

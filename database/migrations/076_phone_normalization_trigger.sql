@@ -1,12 +1,15 @@
 -- ============================================================================
--- MIGRATION 076: Phone Normalization Trigger
+-- MIGRATION 076: Phone Normalization Trigger (v2 - usa normalize_phone_meta)
 -- ============================================================================
 -- Descrição: Trigger para normalizar telefones automaticamente quando
 --            phone, additional_phones ou bio são atualizados.
 --
+-- IMPORTANTE: Esta migration usa a função normalize_phone_meta() da migration 059
+--             que já valida DDDs brasileiros corretamente (11-99, exceto 10, 20, etc.)
+--
 -- Comportamento:
 --   1. Coleta telefones de: phone, additional_phones, bio (regex)
---   2. Normaliza para formato +55XXXXXXXXXXX
+--   2. Normaliza usando normalize_phone_meta() com validação de DDD
 --   3. Prioriza telefone da bio (primeiro da lista)
 --   4. Limita a 4 telefones únicos
 --   5. Persiste em phones_normalized como JSONB array:
@@ -19,50 +22,62 @@
 -- ============================================================================
 
 -- ============================================================================
--- 1. FUNÇÃO DE NORMALIZAÇÃO DE TELEFONE BRASILEIRO
+-- 1. GARANTIR QUE normalize_phone_meta EXISTE (da migration 059)
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION normalize_brazilian_phone(raw_phone TEXT)
+-- Se não existir, criar a função com validação de DDD correta
+CREATE OR REPLACE FUNCTION normalize_phone_meta(raw_input TEXT)
 RETURNS TEXT AS $$
 DECLARE
     cleaned TEXT;
-    result TEXT;
+    ddd TEXT;
+    number_part TEXT;
 BEGIN
-    -- Remove tudo que não é número
-    cleaned := regexp_replace(raw_phone, '[^0-9]', '', 'g');
-
-    -- Se vazio ou muito curto, retorna null
-    IF cleaned IS NULL OR length(cleaned) < 8 THEN
+    -- Retorna NULL para input vazio
+    IF raw_input IS NULL OR TRIM(raw_input) = '' THEN
         RETURN NULL;
     END IF;
 
-    -- Remove 0 inicial (código de área com 0)
-    IF cleaned LIKE '0%' AND length(cleaned) > 10 THEN
-        cleaned := substring(cleaned from 2);
+    -- Remove tudo exceto dígitos
+    cleaned := regexp_replace(raw_input, '[^0-9]', '', 'g');
+
+    -- Se começar com 55 (código do Brasil) e tiver mais de 11 dígitos, remove
+    IF cleaned ~ '^55' AND length(cleaned) > 11 THEN
+        cleaned := substring(cleaned from 3);
     END IF;
 
-    -- Se já começa com 55, verifica tamanho
-    IF cleaned LIKE '55%' THEN
-        -- 55 + DDD(2) + número(8-9) = 12-13 dígitos
-        IF length(cleaned) >= 12 AND length(cleaned) <= 13 THEN
-            result := '+' || cleaned;
-        ELSE
+    -- Verifica comprimento válido (10 ou 11 dígitos: DDD + número)
+    IF length(cleaned) NOT IN (10, 11) THEN
+        RETURN NULL;
+    END IF;
+
+    -- Extrai DDD (primeiros 2 dígitos)
+    ddd := substring(cleaned from 1 for 2);
+
+    -- Valida DDD brasileiro (11-99, onde ambos os dígitos são 1-9)
+    -- Isso exclui DDDs inválidos como 10, 20, 30, 40, 50, 60, 70, 80, 90
+    IF ddd !~ '^([1-9][1-9])$' THEN
+        RETURN NULL;
+    END IF;
+
+    -- Extrai parte do número (após DDD)
+    number_part := substring(cleaned from 3);
+
+    -- Valida número (8 ou 9 dígitos)
+    IF length(number_part) = 9 THEN
+        -- Celular: deve começar com 9
+        IF number_part !~ '^9' THEN
             RETURN NULL;
         END IF;
-    -- Se tem 10-11 dígitos (DDD + número), adiciona 55
-    ELSIF length(cleaned) >= 10 AND length(cleaned) <= 11 THEN
-        result := '+55' || cleaned;
-    -- Se tem 8-9 dígitos (só número, sem DDD), não podemos normalizar
+    ELSIF length(number_part) = 8 THEN
+        -- Fixo: aceita qualquer início (2-5 é comum, mas há exceções)
+        NULL;
     ELSE
         RETURN NULL;
     END IF;
 
-    -- Validação final: deve ter entre 13-14 caracteres (+55DDNNNNNNNNN)
-    IF length(result) >= 13 AND length(result) <= 14 THEN
-        RETURN result;
-    END IF;
-
-    RETURN NULL;
+    -- Retorna no formato E.164 brasileiro: +55DDNNNNNNNNN
+    RETURN '+55' || cleaned;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -93,7 +108,7 @@ BEGIN
 
     IF matches IS NOT NULL THEN
         FOREACH phone IN ARRAY matches LOOP
-            normalized := normalize_brazilian_phone(phone);
+            normalized := normalize_phone_meta(phone);
             IF normalized IS NOT NULL AND NOT (normalized = ANY(phones)) THEN
                 phones := array_append(phones, normalized);
             END IF;
@@ -129,9 +144,9 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- 2. TELEFONE PRINCIPAL (phone)
+    -- 2. TELEFONE PRINCIPAL (phone) - usa normalize_phone_meta com validação de DDD
     IF NEW.phone IS NOT NULL AND NEW.phone != '' THEN
-        main_phone := normalize_brazilian_phone(NEW.phone);
+        main_phone := normalize_phone_meta(NEW.phone);
         IF main_phone IS NOT NULL AND NOT (main_phone = ANY(all_phones)) THEN
             all_phones := array_append(all_phones, main_phone);
         END IF;
@@ -142,7 +157,7 @@ BEGIN
         FOR i IN 0..jsonb_array_length(NEW.additional_phones) - 1 LOOP
             add_phone := NEW.additional_phones->>i;
             IF add_phone IS NOT NULL THEN
-                normalized := normalize_brazilian_phone(add_phone);
+                normalized := normalize_phone_meta(add_phone);
                 IF normalized IS NOT NULL AND NOT (normalized = ANY(all_phones)) THEN
                     all_phones := array_append(all_phones, normalized);
                 END IF;
@@ -157,31 +172,33 @@ BEGIN
 
     -- 4. CONSTRUIR JSONB COM STATUS DE VALIDAÇÃO
     -- Preservar valid_whatsapp existente se o número já estava na lista
-    FOR i IN 1..LEAST(array_length(all_phones, 1), 4) LOOP
-        normalized := all_phones[i];
+    IF array_length(all_phones, 1) > 0 THEN
+        FOR i IN 1..LEAST(array_length(all_phones, 1), 4) LOOP
+            normalized := all_phones[i];
 
-        -- Verificar se já existe no phones_normalized atual com status
-        existing_entry := NULL;
-        IF OLD.phones_normalized IS NOT NULL THEN
-            SELECT elem INTO existing_entry
-            FROM jsonb_array_elements(OLD.phones_normalized) AS elem
-            WHERE elem->>'number' = normalized
-            LIMIT 1;
-        END IF;
+            -- Verificar se já existe no phones_normalized atual com status
+            existing_entry := NULL;
+            IF OLD IS NOT NULL AND OLD.phones_normalized IS NOT NULL THEN
+                SELECT elem INTO existing_entry
+                FROM jsonb_array_elements(OLD.phones_normalized) AS elem
+                WHERE elem->>'number' = normalized
+                LIMIT 1;
+            END IF;
 
-        IF existing_entry IS NOT NULL THEN
-            -- Manter o status existente
-            phone_entry := existing_entry;
-        ELSE
-            -- Novo telefone, status null (não testado)
-            phone_entry := jsonb_build_object(
-                'number', normalized,
-                'valid_whatsapp', null
-            );
-        END IF;
+            IF existing_entry IS NOT NULL THEN
+                -- Manter o status existente
+                phone_entry := existing_entry;
+            ELSE
+                -- Novo telefone, status null (não testado)
+                phone_entry := jsonb_build_object(
+                    'number', normalized,
+                    'valid_whatsapp', null
+                );
+            END IF;
 
-        final_phones := final_phones || phone_entry;
-    END LOOP;
+            final_phones := final_phones || phone_entry;
+        END LOOP;
+    END IF;
 
     -- 5. ATUALIZAR phones_normalized
     NEW.phones_normalized := final_phones;
@@ -348,14 +365,17 @@ $$ LANGUAGE plpgsql;
 -- 7. COMENTÁRIOS
 -- ============================================================================
 
-COMMENT ON FUNCTION normalize_brazilian_phone IS
-'Normaliza telefone brasileiro para formato +55DDNNNNNNNNN';
+COMMENT ON FUNCTION normalize_phone_meta IS
+'Normaliza telefone brasileiro para formato E.164 (+55DDNNNNNNNNN).
+Valida DDDs brasileiros (11-99, excluindo 10, 20, 30, etc.).
+Valida formato de celular (9 dígitos começando com 9) e fixo (8 dígitos).';
 
 COMMENT ON FUNCTION extract_phones_from_bio IS
-'Extrai números de telefone de texto livre (bio do Instagram)';
+'Extrai números de telefone de texto livre (bio do Instagram) usando regex';
 
 COMMENT ON FUNCTION normalize_lead_phones IS
-'Trigger function que normaliza telefones quando phone, additional_phones ou bio são atualizados';
+'Trigger function que normaliza telefones quando phone, additional_phones ou bio são atualizados.
+Usa normalize_phone_meta() para validação de DDD.';
 
 COMMENT ON FUNCTION update_phone_whatsapp_status IS
 'Atualiza status valid_whatsapp após tentativa de envio. Retorna próxima ação (send, try_next, switch_to_instagram)';
@@ -364,13 +384,64 @@ COMMENT ON FUNCTION get_next_untested_phone IS
 'Retorna próximo telefone não testado ou já validado para um lead';
 
 COMMENT ON TRIGGER trg_normalize_phones ON instagram_leads IS
-'Trigger que normaliza telefones automaticamente. Prioriza: 1) Bio, 2) phone, 3) additional_phones. Máximo 4 telefones.';
+'Trigger que normaliza telefones automaticamente. Prioriza: 1) Bio, 2) phone, 3) additional_phones. Máximo 4 telefones.
+Usa normalize_phone_meta() com validação de DDD brasileiro.';
 
 -- ============================================================================
--- 8. MIGRAR DADOS EXISTENTES (opcional, executar uma vez)
+-- 8. MIGRAR DADOS EXISTENTES
 -- ============================================================================
 
--- Para normalizar leads existentes, executar:
--- UPDATE instagram_leads SET updated_at = NOW() WHERE phone IS NOT NULL OR additional_phones IS NOT NULL;
--- Isso dispara o trigger para todos os leads com telefones.
+-- Re-normalizar todos os leads que têm telefone usando a função corrigida
+UPDATE instagram_leads
+SET
+    phones_normalized = (
+        SELECT COALESCE(
+            jsonb_agg(
+                jsonb_build_object(
+                    'number', normalized_phone,
+                    'valid_whatsapp', null
+                )
+            ),
+            '[]'::jsonb
+        )
+        FROM (
+            SELECT DISTINCT normalized_phone
+            FROM (
+                -- Telefone principal
+                SELECT normalize_phone_meta(phone) as normalized_phone
+                WHERE phone IS NOT NULL AND phone != ''
+
+                UNION
+
+                -- Telefones adicionais
+                SELECT normalize_phone_meta(phone_value)
+                FROM jsonb_array_elements_text(COALESCE(additional_phones, '[]'::jsonb)) AS phone_value
+                WHERE phone_value IS NOT NULL AND phone_value != ''
+
+                -- Bio phones são extraídos pelo trigger automaticamente
+            ) phones
+            WHERE normalized_phone IS NOT NULL
+            LIMIT 4
+        ) unique_phones
+    ),
+    updated_at = NOW()
+WHERE phone IS NOT NULL
+   OR (additional_phones IS NOT NULL AND jsonb_array_length(additional_phones) > 0);
+
+-- ============================================================================
+-- 9. ESTATÍSTICAS PÓS-MIGRAÇÃO
+-- ============================================================================
+
+-- Verificar resultado da normalização
+SELECT
+    'Resultado da Normalização' as info,
+    COUNT(*) as total_leads,
+    COUNT(CASE WHEN phone IS NOT NULL AND phone != '' THEN 1 END) as leads_com_phone_original,
+    COUNT(CASE WHEN jsonb_array_length(phones_normalized) > 0 THEN 1 END) as leads_com_phones_normalized,
+    ROUND(
+        COUNT(CASE WHEN jsonb_array_length(phones_normalized) > 0 THEN 1 END)::NUMERIC /
+        NULLIF(COUNT(CASE WHEN phone IS NOT NULL AND phone != '' THEN 1 END), 0) * 100,
+        2
+    ) as taxa_normalizacao_pct
+FROM instagram_leads;
 

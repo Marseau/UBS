@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Qualidade AIC</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+        .page {
+            max-width: 1300px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .card {
+            background: #0b1221;
+            border: 1px solid #1f2937;
+            border-radius: 14px;
+            padding: 18px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .title {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+        .meta {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .pill {
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: #1e293b;
+            color: #cbd5e1;
+            font-size: 13px;
+            border: 1px solid #273449;
+        }
+        .grid {
+            display: grid;
+            gap: 12px;
+        }
+        .grid-3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+        .grid-4 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+        .stat {
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 12px;
+            padding: 12px;
+        }
+        .stat label {
+            display: block;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+        .stat .value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #e2e8f0;
+        }
+        .stat .hint {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+        .cluster {
+            padding: 12px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #111827, #0f172a 60%);
+            border: 1px solid #1f2937;
+        }
+        .cluster h4 {
+            margin: 0 0 6px 0;
+            font-size: 15px;
+            color: #cbd5e1;
+        }
+        .cluster .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .tag {
+            background: #1d4ed8;
+            color: #e0e7ff;
+            border-radius: 10px;
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+        .alert {
+            background: #2e1065;
+            border: 1px solid #4c1d95;
+            color: #e9d5ff;
+            border-radius: 10px;
+            padding: 10px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="card">
+            <div class="header">
+                <div>
+                    <div class="title">Dashboard de Qualidade AIC</div>
+                    <div style="color:#94a3b8;font-size:13px;">Visão rápida de qualidade, clusterização e operação DM/WA.</div>
+                </div>
+                <div class="meta">
+                    <div class="pill" id="nicho">Nicho: —</div>
+                    <div class="pill" id="ciclo">Ciclo: —</div>
+                    <div class="pill" id="refresh">Refresh: —</div>
+                    <div class="pill" id="tier">Tier: —</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="header">
+                <div class="title">Top 3 Clusters Ativos</div>
+                <div style="color:#94a3b8;font-size:13px;">Densidade, ruído, intenção e resposta</div>
+            </div>
+            <div class="grid grid-3" id="topClusters">
+                <div class="cluster" style="opacity:0.6;">Carregue uma campanha para ver clusters.</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="header">
+                <div class="title">Indicadores de Qualidade</div>
+                <div style="color:#94a3b8;font-size:13px;">Base global (KPIs + distribuição de qualidade)</div>
+            </div>
+            <div class="grid grid-4">
+                <div class="stat">
+                    <label>Densidade de hashtags</label>
+                    <div class="value" id="densidadeMediana">—</div>
+                    <div class="hint">Hashtags por lead</div>
+                </div>
+                <div class="stat">
+                    <label>Ruído (baixa qualidade)</label>
+                    <div class="value" id="ruido">—</div>
+                    <div class="hint">% com score &lt; 60</div>
+                </div>
+                <div class="stat">
+                    <label>Intenção (contact rate)</label>
+                    <div class="value" id="intencao">—</div>
+                    <div class="hint">Taxa de contato</div>
+                </div>
+                <div class="stat">
+                    <label>Hashtags únicas</label>
+                    <div class="value" id="reputacao">—</div>
+                    <div class="hint">Bio + Posts</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="header">
+                <div class="title">Operação DM/WhatsApp</div>
+                <div style="color:#94a3b8;font-size:13px;">Envios, follow-ups, janela e opt-out</div>
+            </div>
+            <div class="grid grid-4">
+                <div class="stat">
+                    <label>Leads</label>
+                    <div class="value" id="enviosDia">—</div>
+                    <div class="hint">Total / Pendentes</div>
+                </div>
+                <div class="stat">
+                    <label>Contactados</label>
+                    <div class="value" id="followUps">—</div>
+                    <div class="hint">Contacted</div>
+                </div>
+                <div class="stat">
+                    <label>Respondidos</label>
+                    <div class="value" id="resposta">—</div>
+                    <div class="hint">Responded</div>
+                </div>
+                <div class="stat">
+                    <label>Convertidos</label>
+                    <div class="value" id="optOut">—</div>
+                    <div class="hint">Converted</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="header">
+                <div class="title">Dados Vivos</div>
+                <div style="color:#94a3b8;font-size:13px;">Refresh, pruning, aging</div>
+            </div>
+            <div class="grid grid-3">
+                <div class="stat">
+                    <label>Refresh</label>
+                    <div class="value" id="refreshData">—</div>
+                    <div class="hint">Data do último refresh</div>
+                </div>
+                <div class="stat">
+                    <label>Pruning</label>
+                    <div class="value" id="pruning">—</div>
+                    <div class="hint">% clusters ativos vs. removidos</div>
+                </div>
+                <div class="stat">
+                    <label>Aging</label>
+                    <div class="value" id="aging">—</div>
+                    <div class="hint">% dados >60/90 dias</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="header" style="gap:10px;flex-wrap:wrap;">
+                <div>
+                    <div class="title">Campanha</div>
+                    <div style="color:#94a3b8;font-size:13px;">Use o ID para carregar clusters e operação</div>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <input id="campaignIdInput" placeholder="Campaign ID (UUID)" style="padding:8px 10px;border-radius:8px;border:1px solid #1f2937;background:#0f172a;color:#e2e8f0;min-width:260px;">
+                    <button id="loadCampaignBtn" style="background:#2563eb;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer;">Carregar Campanha</button>
+                </div>
+            </div>
+            <div class="alert" id="alertas">Nenhum alerta no momento.</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin + '/api/hashtag-intelligence';
+
+        async function fetchJson(url, options = {}) {
+            const res = await fetch(url, options);
+            if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+            return res.json();
+        }
+
+        // === Global KPIs ===
+        async function loadGlobal() {
+            try {
+                const [kpis, quality, syncStatus] = await Promise.all([
+                    fetchJson(`${API_BASE}/kpis`),
+                    fetchJson(`${API_BASE}/quality-distribution`),
+                    fetchJson(`${API_BASE}/sync/status`).catch(() => null)
+                ]);
+
+                renderKpis(kpis?.data);
+                renderQuality(quality?.data);
+                if (syncStatus?.data) renderSync(syncStatus.data);
+            } catch (err) {
+                console.error('Erro ao carregar KPIs globais', err);
+            }
+        }
+
+        function renderKpis(data = {}) {
+            const totalLeads = Number(data.total_leads) || 0;
+            const occurrences = Number(data.occurrences_total) || 0;
+            const uniqueHashtags = Number(data.unique_hashtags_total) || 0;
+            const contactRate = Number(data.contact_rate) || 0;
+
+            const densidade = totalLeads > 0 ? (occurrences / totalLeads).toFixed(2) : '—';
+
+            document.getElementById('densidadeMediana').textContent = densidade;
+            document.getElementById('intencao').textContent = `${contactRate.toFixed(1)}%`;
+            document.getElementById('reputacao').textContent = uniqueHashtags.toLocaleString('pt-BR');
+        }
+
+        function renderQuality(distribution = {}) {
+            const total = Object.values(distribution).reduce((acc, v) => acc + (Number(v) || 0), 0);
+            const low = Number(distribution['<60']) || 0;
+            const ruidoPct = total > 0 ? ((low / total) * 100).toFixed(1) : '—';
+            document.getElementById('ruido').textContent = total ? `${ruidoPct}%` : '—';
+        }
+
+        function renderSync(status) {
+            if (!status) return;
+            const hours = status.csv?.ageHours ?? null;
+            document.getElementById('refresh').textContent = hours !== null ? `Refresh: ${hours.toFixed(1)}h` : 'Refresh: —';
+            document.getElementById('refreshData').textContent = status.csv?.ageHours !== undefined
+                ? `${status.csv.ageHours.toFixed(1)}h atrás`
+                : '—';
+            document.getElementById('pruning').textContent = status.vectorStore?.status || '—';
+            document.getElementById('aging').textContent = status.csv?.needsUpdate ? 'Precisa atualizar' : 'OK';
+        }
+
+        // === Campanha ===
+        async function loadCampaignStats(campaignId) {
+            if (!campaignId) return;
+            try {
+                const result = await fetchJson(`${API_BASE}/campaign/${campaignId}/stats`);
+                if (!result.success) throw new Error(result.message || 'Erro');
+                renderCampaign(result.data);
+                document.getElementById('alertas').innerHTML = 'Dados carregados da campanha.';
+            } catch (err) {
+                console.error('Erro ao carregar campanha', err);
+                document.getElementById('alertas').innerHTML = `Erro: ${err.message}`;
+            }
+        }
+
+        function renderCampaign(data) {
+            if (!data) return;
+            document.getElementById('nicho').textContent = data.campaign_name ? `Campanha: ${data.campaign_name}` : 'Campanha: —';
+            document.getElementById('ciclo').textContent = data.cluster_status ? `Status: ${data.cluster_status}` : 'Status: —';
+            document.getElementById('tier').textContent = `Clusters: ${data.clusters?.length || 0}`;
+
+            renderClusters(data.clusters || []);
+            renderLeads(data.leads || {});
+        }
+
+        function renderClusters(clusters) {
+            const top = document.getElementById('topClusters');
+            if (!clusters.length) {
+                top.innerHTML = '<div class="cluster" style="opacity:0.6;">Nenhum cluster carregado.</div>';
+                return;
+            }
+            const sorted = [...clusters].sort((a, b) => (b.total_leads || 0) - (a.total_leads || 0)).slice(0, 3);
+            top.innerHTML = sorted.map(c => `
+                <div class="cluster">
+                    <h4>${c.cluster_name || 'Cluster'}</h4>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:13px;color:#94a3b8;">
+                        <span>Hashtags: ${c.hashtag_count || 0}</span>
+                        <span>| Leads: ${c.total_leads || 0}</span>
+                        <span>| Contact: ${(c.avg_contact_rate || 0)}%</span>
+                    </div>
+                    <div class="tags">
+                        ${(c.top_hashtags || []).slice(0, 6).map(h => `<span class="tag">#${h}</span>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderLeads(leads) {
+            document.getElementById('enviosDia').textContent = `${leads.total || 0} / ${leads.pending || 0}`;
+            document.getElementById('followUps').textContent = leads.contacted || 0;
+            document.getElementById('resposta').textContent = leads.responded || 0;
+            document.getElementById('optOut').textContent = leads.converted || 0;
+        }
+
+        function init() {
+            loadGlobal();
+
+            const params = new URLSearchParams(window.location.search);
+            const campaignId = params.get('campaignId') || params.get('campaign_id');
+            if (campaignId) {
+                document.getElementById('campaignIdInput').value = campaignId;
+                loadCampaignStats(campaignId);
+            }
+
+            document.getElementById('loadCampaignBtn').addEventListener('click', () => {
+                const id = document.getElementById('campaignIdInput').value.trim();
+                if (!id) {
+                    document.getElementById('alertas').innerHTML = 'Informe um Campaign ID.';
+                    return;
+                }
+                loadCampaignStats(id);
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>

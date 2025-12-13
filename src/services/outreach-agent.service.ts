@@ -599,7 +599,7 @@ Gere uma resposta apropriada considerando:
 export async function checkRateLimit(
   campaignId: string,
   hourlyLimit: number = 15,
-  dailyLimit: number = 120
+  dailyLimit: number = 120  // 15/hora × 8 horas = 120/dia
 ): Promise<RateLimitStatus> {
   // Verificar horário comercial
   const { data: businessHoursResult } = await supabase.rpc('is_business_hours');

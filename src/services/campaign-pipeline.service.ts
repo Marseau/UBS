@@ -727,6 +727,19 @@ export async function executeCampaignPipeline(
     );
     console.log(`   ✅ ${assignedCount} leads associados`);
 
+    // 5.1. Distribuir canais de outreach (60% WA, 40% IG)
+    console.log('\n📱 Distribuindo canais de outreach (60% WA / 40% IG)...');
+    const { data: channelDistribution, error: distError } = await supabase
+      .rpc('distribute_outreach_channels', { p_campaign_id: campaignId });
+
+    if (distError) {
+      console.error('   ⚠️ Erro ao distribuir canais:', distError.message);
+    } else if (channelDistribution && channelDistribution[0]) {
+      const dist = channelDistribution[0];
+      console.log(`   ✅ WhatsApp: ${dist.whatsapp_count} leads (${Math.round(dist.whatsapp_count / dist.total_leads * 100)}%)`);
+      console.log(`   ✅ Instagram: ${dist.instagram_count} leads (${Math.round(dist.instagram_count / dist.total_leads * 100)}%)`);
+    }
+
     await updatePipelineStatus(campaignId, 'personas_generated', {
       total_leads_in_campaign: assignedCount
     });

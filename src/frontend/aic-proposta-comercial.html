@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIC — Proposta Comercial</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-green-glow: rgba(14, 204, 151, 0.15);
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-navy-lighter: #1a3055;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-gray-light: #cbd5e1;
+      --aic-border: #1e3a5f;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      line-height: 1.7;
+    }
+    .page { max-width: 900px; margin: 0 auto; }
+
+    /* Header */
+    .header {
+      text-align: center;
+      padding: 40px 20px;
+      margin-bottom: 30px;
+    }
+    .logo {
+      width: 160px;
+      height: auto;
+      margin-bottom: 24px;
+    }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0 0 12px 0;
+      color: var(--aic-white);
+    }
+    .header .subtitle {
+      font-size: 18px;
+      color: var(--aic-gray);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      margin: 0 0 16px 0;
+      font-size: 20px;
+      color: var(--aic-green);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .card h3 {
+      margin: 20px 0 10px 0;
+      font-size: 16px;
+      color: var(--aic-white);
+    }
+    .card p {
+      margin: 0 0 16px 0;
+      font-size: 15px;
+      color: var(--aic-gray-light);
+    }
+    .card ul {
+      margin: 0 0 16px 0;
+      padding-left: 20px;
+    }
+    .card li {
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: var(--aic-gray-light);
+    }
+    .card li strong {
+      color: var(--aic-white);
+    }
+
+    /* Highlight box */
+    .highlight-box {
+      background: var(--aic-green-glow);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .highlight-box p {
+      margin: 0;
+      color: var(--aic-white);
+      font-size: 15px;
+    }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .stat-card {
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-number {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aic-green);
+      margin-bottom: 4px;
+    }
+    .stat-label {
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+
+    /* Steps */
+    .steps {
+      counter-reset: step;
+    }
+    .step {
+      position: relative;
+      padding-left: 50px;
+      margin-bottom: 24px;
+    }
+    .step::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--aic-navy);
+    }
+    .step h4 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      color: var(--aic-white);
+    }
+    .step p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--aic-gray);
+    }
+
+    /* Benefits grid */
+    .benefits-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .benefit {
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .benefit-icon {
+      font-size: 14px;
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--aic-navy);
+      margin-bottom: 12px;
+    }
+    .benefit h4 {
+      margin: 0 0 8px 0;
+      font-size: 15px;
+      color: var(--aic-white);
+    }
+    .benefit p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+
+    /* Pricing */
+    .pricing-card {
+      background: linear-gradient(135deg, var(--aic-navy-lighter), var(--aic-navy-light));
+      border: 2px solid var(--aic-green);
+      border-radius: 16px;
+      padding: 32px;
+      text-align: center;
+      margin: 20px 0;
+    }
+    .pricing-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aic-green);
+      margin-bottom: 8px;
+    }
+    .pricing-detail {
+      font-size: 14px;
+      color: var(--aic-gray);
+      margin-bottom: 16px;
+    }
+    .pricing-bonus {
+      display: inline-block;
+      background: var(--aic-green-glow);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 14px;
+      color: var(--aic-green);
+    }
+
+    /* Disclaimer */
+    .disclaimer {
+      font-size: 12px;
+      color: var(--aic-gray);
+      text-align: center;
+      padding: 20px;
+      border-top: 1px solid var(--aic-border);
+      margin-top: 30px;
+    }
+
+    /* CTA */
+    .cta-section {
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .cta-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      color: var(--aic-navy);
+      text-decoration: none;
+      padding: 16px 32px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 16px;
+      transition: all 0.2s ease;
+    }
+    .cta-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px var(--aic-green-glow);
+    }
+
+    /* Pills */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      color: var(--aic-gray-light);
+      font-size: 12px;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <!-- Header -->
+    <div class="header">
+      <img src="/assets/AIC/Imagens%20Vetor%20/LOGO%20completo%20sem%20fundo%20Icone%20cheio%20e%20nome%20cheio.png" alt="AIC" class="logo">
+      <h1>Proposta Comercial</h1>
+      <p class="subtitle">Campanha de Aquisição e Qualificação de Oportunidades</p>
+    </div>
+
+    <!-- Introdução -->
+    <div class="card">
+      <h2>O que é a AIC?</h2>
+      <p>
+        A <strong style="color: var(--aic-green);">AIC (Audience Intelligence Cluster)</strong> é uma plataforma inovadora desenvolvida para transformar dados públicos em agrupamentos inteligentes e acionáveis.
+      </p>
+      <p>
+        Utilizando algoritmos avançados de análise de dados e machine learning, a AIC identifica grupos de indivíduos com comportamentos e características semelhantes, permitindo que empresas obtenham insights estratégicos para suas ações de marketing e negócios.
+      </p>
+
+      <div class="highlight-box">
+        <p><strong>Diferença fundamental:</strong> Enquanto o público-alvo representa um segmento amplo e a persona detalha um perfil semificcional, o <strong>cluster AIC agrupa indivíduos reais</strong> que compartilham padrões de comportamento e atributos, validando e quantificando esses perfis em escala.</p>
+      </div>
+    </div>
+
+    <!-- Benefícios -->
+    <div class="card">
+      <h2>Benefícios da AIC</h2>
+      <div class="benefits-grid">
+        <div class="benefit">
+          <div class="benefit-icon">01</div>
+          <h4>Personalização Eficaz</h4>
+          <p>Campanhas e mensagens altamente personalizadas para cada grupo identificado, aumentando relevância e engajamento.</p>
+        </div>
+        <div class="benefit">
+          <div class="benefit-icon">02</div>
+          <h4>Decisão Baseada em Dados</h4>
+          <p>Identificação de padrões e relações, tornando a tomada de decisão mais fundamentada e estratégica.</p>
+        </div>
+        <div class="benefit">
+          <div class="benefit-icon">03</div>
+          <h4>Otimização de Recursos</h4>
+          <p>Esforços direcionados para segmentos com maior potencial de conversão, maximizando o ROI.</p>
+        </div>
+        <div class="benefit">
+          <div class="benefit-icon">04</div>
+          <h4>Escalabilidade Inteligente</h4>
+          <p>Validação de perfis no mercado e expansão eficiente das estratégias orientada por dados.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Objetivo -->
+    <div class="card">
+      <h2>Objetivo da Campanha</h2>
+      <p>
+        Realizar uma campanha estruturada de prospecção ativa, enviando mensagens cuidadosas e personalizadas a até <strong style="color: var(--aic-green);">2.000 potenciais clientes</strong> pertencentes ao mesmo segmento ("cluster"), ao longo de 30 dias.
+      </p>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number">2.000</div>
+          <div class="stat-label">Contatos qualificados</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">30</div>
+          <div class="stat-label">Dias de campanha</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">1</div>
+          <div class="stat-label">Cluster focado</div>
+        </div>
+      </div>
+
+      <h3>Foco:</h3>
+      <ul>
+        <li><strong>Gerar conversas reais</strong> — não apenas números</li>
+        <li><strong>Identificar interesse genuíno</strong> — sinais de intenção</li>
+        <li><strong>Transformar conversas em leads qualificados</strong> — prontos para seu funil</li>
+      </ul>
+
+      <div class="highlight-box">
+        <p>Tudo isso de forma ética, progressiva e respeitando os limites das plataformas utilizadas.</p>
+      </div>
+    </div>
+
+    <!-- Metodologia -->
+    <div class="card">
+      <h2>Metodologia AIC</h2>
+      <p>Nossa metodologia é estruturada em 6 etapas para garantir resultados consistentes:</p>
+
+      <div class="steps">
+        <div class="step">
+          <h4>Diagnóstico Estruturado</h4>
+          <p>Entendemos profundamente seu negócio, produto, problema que resolve, dores do cliente ideal, posicionamento, tom de voz e concorrência.</p>
+        </div>
+
+        <div class="step">
+          <h4>Seleção dos 2.000 Perfis (AIC Filtering)</h4>
+          <p>Analisamos comportamento de conteúdo, sinais de intenção, perfis ativos e aderentes, filtrando até chegarmos a 2.000 prospects qualificados do mesmo nicho.</p>
+        </div>
+
+        <div class="step">
+          <h4>Avaliação da Landing Page</h4>
+          <p>Revisamos sua landing page com foco em clareza, narrativa, autoridade, prova social, promessa e consistência com a campanha. Se necessário, sugerimos ajustes ou reescrita.</p>
+        </div>
+
+        <div class="step">
+          <h4>Coleta de Materiais de Apoio</h4>
+          <p>Solicitamos fotos, vídeos, depoimentos, logos, referências e apresentações existentes como insumo para a linha editorial AIC.</p>
+        </div>
+
+        <div class="step">
+          <h4>Criação da Linha Editorial</h4>
+          <p>Desenvolvemos conteúdo estratégico (Tweets, Reels, Shorts, Posts) alinhado ao cluster, com DMs personalizados, direcionamento para WhatsApp/Landing e segregação de perfis quentes.</p>
+        </div>
+
+        <div class="step">
+          <h4>Acompanhamento Contínuo</h4>
+          <p>Análise de comportamento, validação/alteração de estratégia, possível reforço com e-mails, métricas e estatísticas em tempo real.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Expectativa de Resultados -->
+    <div class="card">
+      <h2>Expectativa de Resultados</h2>
+      <p>Com base em campanhas semelhantes, projetamos:</p>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number">2.000</div>
+          <div class="stat-label">Contatos enviados</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">300-500</div>
+          <div class="stat-label">Respostas iniciais</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">120-200</div>
+          <div class="stat-label">Leads qualificados</div>
+        </div>
+      </div>
+
+      <div class="highlight-box">
+        <p><strong>Importante:</strong> Esses números são projeções realistas baseadas em histórico, não garantias. Os resultados variam conforme nicho, oferta e maturidade do mercado.</p>
+      </div>
+    </div>
+
+    <!-- Diferenciais -->
+    <div class="card">
+      <h2>Diferenciais da AIC</h2>
+      <ul>
+        <li><strong>Processo gradual e não invasivo</strong> — respeitamos o ritmo das plataformas e das pessoas</li>
+        <li><strong>Acompanhamento diário</strong> — monitoramento constante e ajustes em tempo real</li>
+        <li><strong>Transparência total</strong> — você acompanha cada etapa do processo</li>
+        <li><strong>Ajustes durante o processo</strong> — flexibilidade para otimizar a estratégia</li>
+        <li><strong>Parceiro estratégico</strong> — não apenas operacional, pensamos junto com você</li>
+      </ul>
+    </div>
+
+    <!-- Investimento -->
+    <div class="card">
+      <h2>Investimento</h2>
+
+      <div class="pricing-card">
+        <div class="pricing-value">R$ 4.000</div>
+        <div class="pricing-detail">+ R$ 10,00 por lead qualificado (pago ao final)</div>
+        <div class="pricing-bonus">Pagamento: 50% no início + 50% após 15 dias</div>
+      </div>
+
+      <h3>O que está incluso:</h3>
+      <ul>
+        <li>Diagnóstico completo do negócio e cluster</li>
+        <li>Seleção e validação de até 2.000 perfis</li>
+        <li>Avaliação e sugestões para landing page</li>
+        <li>Criação de linha editorial completa</li>
+        <li>Execução da campanha por 30 dias</li>
+        <li>Acompanhamento e relatórios</li>
+        <li>Entrega de leads qualificados</li>
+      </ul>
+
+      <h3>Lead qualificado = </h3>
+      <p>
+        Quem responde com intenção aderente + contato válido (email/telefone/WA) ou agenda conversa.
+        Exclui spam, concorrente ou curiosidade sem fit. Contestação em até 5 dias.
+      </p>
+    </div>
+
+    <!-- Compromisso -->
+    <div class="card">
+      <h2>Nosso Compromisso</h2>
+      <p>
+        Trabalhamos de forma ética, respeitando o ritmo das plataformas e das pessoas, mantendo comunicação clara e entregando oportunidades reais.
+      </p>
+      <div class="highlight-box">
+        <p><strong>Nosso papel é ser parceiro estratégico, não apenas operacional.</strong></p>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="cta-section">
+      <a href="https://wa.me/5511999999999?text=Olá! Gostaria de saber mais sobre a proposta AIC." class="cta-button" target="_blank">
+        Vamos Conversar
+      </a>
+    </div>
+
+    <!-- Disclaimer -->
+    <div class="disclaimer">
+      <p>Documento confidencial AIC. © 2025 Audience Intelligence Cluster.</p>
+      <p>Faixas de resultado são típicas e variam por nicho/copy/maturidade.</p>
+    </div>
+  </div>
+</body>
+</html>

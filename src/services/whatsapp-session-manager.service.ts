@@ -43,6 +43,9 @@ const CONFIG = {
   SESSIONS_DIR: path.join(process.cwd(), 'whatsapp-sessions'),
   SCREENSHOTS_DIR: path.join(process.cwd(), 'screenshots', 'whatsapp'),
   HEADLESS: process.env.WHATSAPP_HEADLESS === 'true',
+  // Rate limits seguros para WhatsApp cold outreach humanizado
+  // 15/hora com delays de 20-50s entre mensagens
+  // 15/hora × 8 horas comerciais = 120/dia
   DEFAULT_HOURLY_LIMIT: 15,
   DEFAULT_DAILY_LIMIT: 120
 };

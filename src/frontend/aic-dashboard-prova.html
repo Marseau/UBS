@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIC — Dashboard de Prova</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-green-glow: rgba(14, 204, 151, 0.15);
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-navy-lighter: #1a3055;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-gray-light: #cbd5e1;
+      --aic-border: #1e3a5f;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      line-height: 1.7;
+    }
+    .page { max-width: 1100px; margin: 0 auto; }
+
+    /* Header */
+    .header {
+      text-align: center;
+      padding: 40px 20px;
+      margin-bottom: 30px;
+      background: linear-gradient(135deg, var(--aic-navy-light) 0%, var(--aic-navy) 100%);
+      border: 1px solid var(--aic-border);
+      border-radius: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .header::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, var(--aic-green-glow) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    .logo {
+      width: 160px;
+      height: auto;
+      margin-bottom: 24px;
+      position: relative;
+      z-index: 1;
+    }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0 0 12px 0;
+      color: var(--aic-white);
+      position: relative;
+      z-index: 1;
+    }
+    .header .subtitle {
+      font-size: 16px;
+      color: var(--aic-gray);
+      max-width: 700px;
+      margin: 0 auto 20px auto;
+      position: relative;
+      z-index: 1;
+    }
+    .pills {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 1;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(14, 204, 151, 0.1);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      color: var(--aic-green);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      color: var(--aic-green);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .card p {
+      margin: 0 0 16px 0;
+      font-size: 15px;
+      color: var(--aic-gray-light);
+    }
+    .card ul {
+      margin: 0 0 16px 0;
+      padding-left: 20px;
+    }
+    .card li {
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: var(--aic-gray-light);
+    }
+    .card li strong {
+      color: var(--aic-white);
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 14px;
+      border-bottom: 1px solid var(--aic-border);
+    }
+    th {
+      color: var(--aic-gray);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      background: var(--aic-navy);
+    }
+    td {
+      color: var(--aic-gray-light);
+    }
+    tr:hover td {
+      background: rgba(14, 204, 151, 0.05);
+    }
+
+    /* Section divider */
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aic-white);
+      margin: 30px 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .section-title span {
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Highlight box */
+    .highlight-box {
+      background: var(--aic-green-glow);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin: 16px 0;
+    }
+    .highlight-box p {
+      margin: 0;
+      color: var(--aic-white);
+      font-size: 14px;
+    }
+    .highlight-box strong {
+      color: var(--aic-green);
+    }
+
+    /* Grid layout */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 20px;
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 30px 20px;
+      border-top: 1px solid var(--aic-border);
+      margin-top: 30px;
+    }
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .footer-links a {
+      color: var(--aic-gray);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover {
+      color: var(--aic-green);
+    }
+    .footer p {
+      font-size: 12px;
+      color: var(--aic-gray);
+      margin: 0;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <!-- Header -->
+    <div class="header">
+      <img src="/assets/AIC/Imagens%20Vetor%20/LOGO%20completo%20sem%20fundo%20Icone%20cheio%20e%20nome%20cheio.png" alt="AIC" class="logo">
+      <h1>Dashboard de Prova</h1>
+      <p class="subtitle">Modelo oficial com métricas de clusters, comportamento e resultados reais. Uso em PDF/slide/proposta.</p>
+      <div class="pills">
+        <span class="pill">Applied Intelligence</span>
+        <span class="pill">Clusters de Intenção</span>
+        <span class="pill">Execução Humana</span>
+      </div>
+    </div>
+
+    <!-- Arquitetura de Cluster -->
+    <div class="card">
+      <h2>1. Arquitetura de Cluster</h2>
+      <p>Clusters de intenção, subclusters de comportamento, grupos de afinidade, mapas de necessidade.</p>
+      <table>
+        <thead>
+          <tr><th>Indicador</th><th>Significado</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Densidade</td><td>Coesão entre perfis.</td></tr>
+          <tr><td>Ruído</td><td>Perfis fora do padrão (baixo = mensagens mais assertivas).</td></tr>
+          <tr><td>Intenção média</td><td>Probabilidade de interesse real.</td></tr>
+          <tr><td>Score AIC</td><td>w1*densidade + w2*intenção – w3*ruído.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid-2">
+      <!-- Curva Score → Resposta -->
+      <div class="card">
+        <h2>2. Curva Score → Resposta</h2>
+        <table>
+          <thead><tr><th>Score AIC</th><th>Prob. Resposta</th><th>Interpretação</th></tr></thead>
+          <tbody>
+            <tr><td>0–20</td><td>3–8%</td><td>Ruidoso, difícil recuperar</td></tr>
+            <tr><td>20–40</td><td>10–18%</td><td>Pouco qualificado</td></tr>
+            <tr><td>40–60</td><td>18–28%</td><td>Bom, consistente</td></tr>
+            <tr><td>60–80</td><td>30–45%</td><td>Alta intenção</td></tr>
+            <tr><td>80–100</td><td>45–60%</td><td>Hipersegmentado</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Resposta por Canal -->
+      <div class="card">
+        <h2>3. Resposta por Canal</h2>
+        <p style="font-size: 13px; color: var(--aic-gray);">Cadência humana + copy</p>
+        <table>
+          <thead><tr><th>Canal</th><th>Taxa média</th><th>Observação</th></tr></thead>
+          <tbody>
+            <tr><td>Instagram DM</td><td>12–22%</td><td>Conversas curtas, volume</td></tr>
+            <tr><td>WhatsApp</td><td>25–45%</td><td>Conversas profundas</td></tr>
+            <tr><td>Híbrido IG→WA</td><td>30–50%</td><td>Mais eficiente</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Cluster Breakdown -->
+    <div class="card">
+      <h2>4. Cluster Breakdown (exemplo real)</h2>
+      <p>Fitness e Estética Feminina 25–45 (média recente AIC)</p>
+      <table>
+        <thead><tr><th>Métrica</th><th>Valor</th><th>Interpretação</th></tr></thead>
+        <tbody>
+          <tr><td>Densidade</td><td>0.71</td><td>Coesão alta</td></tr>
+          <tr><td>Ruído</td><td>12%</td><td>Baixo; cluster limpo</td></tr>
+          <tr><td>Intenção média</td><td>0.63</td><td>Alta propensão</td></tr>
+          <tr><td>Score AIC</td><td>78</td><td>Excelente</td></tr>
+        </tbody>
+      </table>
+      <div class="highlight-box">
+        <p>Resultado esperado → ~35% resposta. Campanha ~10 dias / 2.000 contatos.</p>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Tempo de Resposta -->
+      <div class="card">
+        <h2>5. Tempo de Resposta por Cluster</h2>
+        <table>
+          <thead><tr><th>Cluster</th><th>Tempo médio</th><th>Janela</th></tr></thead>
+          <tbody>
+            <tr><td>Moda e Estilo</td><td>1h45</td><td>Manhã/tarde</td></tr>
+            <tr><td>Estética</td><td>1h10</td><td>Manhã/tarde</td></tr>
+            <tr><td>Nutrição e Fitness</td><td>2h15</td><td>Manhã</td></tr>
+            <tr><td>Profissões (Mentorias)</td><td>3h00</td><td>Manhã/tarde</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Conversão Esperada -->
+      <div class="card">
+        <h2>6. Conversão Esperada</h2>
+        <p style="font-size: 13px; color: var(--aic-gray);">10 dias / 2.000 contatos</p>
+        <ul>
+          <li>200–350 respostas totais</li>
+          <li>80–120 conversas úteis</li>
+          <li>25–60 leads qualificados</li>
+          <li>CPL 3–6x menor que tráfego pago (varia por nicho/oferta)</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Impacto da Personalização -->
+    <div class="card">
+      <h2>7. Impacto da Personalização</h2>
+      <table>
+        <thead><tr><th>Abordagem</th><th>Taxa resposta</th></tr></thead>
+        <tbody>
+          <tr><td>Genérica (sem cluster)</td><td>3–7%</td></tr>
+          <tr><td>Cluster pouco qualificado</td><td>8–12%</td></tr>
+          <tr><td>Cluster AIC</td><td>18–28%</td></tr>
+          <tr><td>Subcluster + copy personalizada + híbrido IG→WA</td><td>30–50%</td></tr>
+        </tbody>
+      </table>
+      <div class="highlight-box">
+        <p><strong>Personalização + cluster limpo = diferencial.</strong></p>
+      </div>
+    </div>
+
+    <!-- LQS -->
+    <div class="card">
+      <h2>8. LQS (Lead Quality Score)</h2>
+      <table>
+        <thead><tr><th>Score</th><th>Classificação</th><th>Exemplo</th></tr></thead>
+        <tbody>
+          <tr><td><strong>LQS 1</strong></td><td>Lead Bruto</td><td>Respondeu sem clareza. Ex.: "do que se trata?"</td></tr>
+          <tr><td><strong>LQS 2</strong></td><td>Lead Morno</td><td>Curiosidade genérica. Ex.: "como funciona?"</td></tr>
+          <tr><td><strong>LQS 3</strong></td><td>Lead Quente</td><td>Interesse direto. Ex.: "quanto custa? quais planos?"</td></tr>
+          <tr><td><strong>LQS 4</strong></td><td>Lead Pronto</td><td>Pede preço/agenda/detalhe. Ex.: "consigo amanhã às 15h?"</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top: 16px; font-size: 14px;">Distribuição típica: 40–60% LQS2; 30–40% LQS3; 10–20% LQS4.</p>
+    </div>
+
+    <!-- AIC vs Tráfego Pago -->
+    <div class="card">
+      <h2>9. AIC vs Tráfego Pago</h2>
+      <table>
+        <thead><tr><th>Critério</th><th>Tráfego Pago</th><th>AIC</th></tr></thead>
+        <tbody>
+          <tr><td>Custo por Lead</td><td>Alto/instável</td><td>Baixo/previsível</td></tr>
+          <tr><td>Controle da audiência</td><td>Meta define</td><td>Você controla</td></tr>
+          <tr><td>Alcance</td><td>Amplo</td><td>Limitado, hiperqualificado</td></tr>
+          <tr><td>Retenção</td><td>Baixa</td><td>Alta</td></tr>
+          <tr><td>Feedback</td><td>Difícil</td><td>Imediato</td></tr>
+          <tr><td>Escalabilidade</td><td>Média (volume)</td><td>Controlada/previsível</td></tr>
+          <tr><td>Qualidade</td><td>Variável</td><td>Consistente</td></tr>
+        </tbody>
+      </table>
+      <div class="highlight-box">
+        <p>AIC depende dos sinais reais do usuário, não do algoritmo.</p>
+      </div>
+    </div>
+
+    <!-- Guia de Layout -->
+    <div class="card">
+      <h2>10. Guia de Layout (Figma/Canva)</h2>
+      <ul>
+        <li>Heatmap de intenção (azul→vermelho)</li>
+        <li>Curva Score → Resposta (linha)</li>
+        <li>Barras: Densidade × Ruído × Intenção × Score AIC (Top 5 clusters)</li>
+        <li>Pizza: LQS (1–4)</li>
+        <li>Colunas: resultados por canal (IG, WA, híbrido)</li>
+        <li>Top 3 clusters ativos (densidade, ruído, intenção, resposta)</li>
+        <li>Alertas/guardrails (ruído alto, intenção baixa, limite de envio)</li>
+      </ul>
+    </div>
+
+    <!-- Conclusão -->
+    <div class="card">
+      <h2>Conclusão</h2>
+      <p>A inteligência aplicada da AIC reduz ruído, maximiza intenção, aumenta respostas, gera leads reais, reduz custos, aumenta previsibilidade e entrega valor imediato.</p>
+      <div class="highlight-box">
+        <p><strong>AIC não é tráfego pago. Não é automação. É inteligência aplicada + execução humana controlada.</strong></p>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-links">
+        <a href="/aic-docs.html">Central de Docs</a>
+        <a href="/aic-proposta-comercial.html">Proposta</a>
+        <a href="/aic-execution-agreement.html">Acordo</a>
+        <a href="/aic-faq-compliance.html">FAQ</a>
+      </div>
+      <p>Documento confidencial AIC. © 2025 Applied Intelligence Clustering.</p>
+    </div>
+  </div>
+</body>
+</html>

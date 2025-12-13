@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIC — Execution Agreement</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-green-glow: rgba(14, 204, 151, 0.15);
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-navy-lighter: #1a3055;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-gray-light: #cbd5e1;
+      --aic-border: #1e3a5f;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      line-height: 1.7;
+    }
+    .page { max-width: 900px; margin: 0 auto; }
+
+    /* Header */
+    .header {
+      text-align: center;
+      padding: 40px 20px;
+      margin-bottom: 30px;
+      background: linear-gradient(135deg, var(--aic-navy-light) 0%, var(--aic-navy) 100%);
+      border: 1px solid var(--aic-border);
+      border-radius: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .header::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, var(--aic-green-glow) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    .logo {
+      width: 160px;
+      height: auto;
+      margin-bottom: 24px;
+      position: relative;
+      z-index: 1;
+    }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0 0 12px 0;
+      color: var(--aic-white);
+      position: relative;
+      z-index: 1;
+    }
+    .header .subtitle {
+      font-size: 16px;
+      color: var(--aic-gray);
+      max-width: 600px;
+      margin: 0 auto 20px auto;
+      position: relative;
+      z-index: 1;
+    }
+    .pills {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 1;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(14, 204, 151, 0.1);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      color: var(--aic-green);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      margin: 0 0 16px 0;
+      font-size: 20px;
+      color: var(--aic-green);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .card h3 {
+      margin: 20px 0 10px 0;
+      font-size: 16px;
+      color: var(--aic-white);
+    }
+    .card p {
+      margin: 0 0 16px 0;
+      font-size: 15px;
+      color: var(--aic-gray-light);
+    }
+    .card ul {
+      margin: 0 0 16px 0;
+      padding-left: 20px;
+    }
+    .card li {
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: var(--aic-gray-light);
+    }
+    .card li strong {
+      color: var(--aic-white);
+    }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .stat-card {
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-number {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--aic-green);
+      margin-bottom: 4px;
+    }
+    .stat-label {
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+
+    /* Phase cards */
+    .phase {
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .phase-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .phase-number {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--aic-navy);
+      flex-shrink: 0;
+    }
+    .phase-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--aic-white);
+    }
+    .phase ul {
+      margin: 0;
+      padding-left: 44px;
+    }
+    .phase li {
+      margin-bottom: 6px;
+      font-size: 14px;
+      color: var(--aic-gray-light);
+    }
+    .phase .passage {
+      margin-top: 12px;
+      padding-left: 44px;
+      font-size: 13px;
+      color: var(--aic-green);
+      font-weight: 500;
+    }
+
+    /* SLA grid */
+    .sla-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .sla-item {
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .sla-item strong {
+      display: block;
+      font-size: 14px;
+      color: var(--aic-white);
+      margin-bottom: 4px;
+    }
+    .sla-item span {
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+
+    /* Highlight box */
+    .highlight-box {
+      background: var(--aic-green-glow);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .highlight-box p {
+      margin: 0;
+      color: var(--aic-white);
+      font-size: 15px;
+    }
+    .highlight-box strong {
+      color: var(--aic-green);
+    }
+
+    /* Progress bar */
+    .progress-bar {
+      height: 8px;
+      border-radius: 8px;
+      background: var(--aic-border);
+      margin-top: 16px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--aic-green), var(--aic-green-dark));
+      border-radius: 8px;
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 30px 20px;
+      border-top: 1px solid var(--aic-border);
+      margin-top: 30px;
+    }
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .footer-links a {
+      color: var(--aic-gray);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover {
+      color: var(--aic-green);
+    }
+    .footer p {
+      font-size: 12px;
+      color: var(--aic-gray);
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <!-- Header -->
+    <div class="header">
+      <img src="/assets/AIC/Imagens%20Vetor%20/LOGO%20completo%20sem%20fundo%20Icone%20cheio%20e%20nome%20cheio.png" alt="AIC" class="logo">
+      <h1>Execution Agreement</h1>
+      <p class="subtitle">Definição de entregas, limites, prazos, responsabilidades e resultados esperados.</p>
+      <div class="pills">
+        <span class="pill">DFY Inteligente</span>
+        <span class="pill">3 Fases ~10 dias cada</span>
+        <span class="pill">Operação Humana</span>
+      </div>
+    </div>
+
+    <!-- Objetivo -->
+    <div class="card">
+      <h2>Objetivo</h2>
+      <p>Definir entregas, limites, prazos, responsabilidades e resultados esperados em um ciclo de campanha AIC.</p>
+    </div>
+
+    <!-- Fases -->
+    <div class="card">
+      <h2>Fases da Campanha</h2>
+
+      <div class="phase">
+        <div class="phase-header">
+          <span class="phase-number">1</span>
+          <span class="phase-title">Inteligência e Preparação</span>
+        </div>
+        <ul>
+          <li>Diagnóstico do nicho/oferta + seleção/validação de até 2.000 perfis públicos (CSV/Sheets/CRM)</li>
+          <li>Critérios mínimos: densidade, ruído máximo, intenção mínima por cluster</li>
+          <li>Refino de landing (copy), linha editorial (tweets/reels/short), scripts DM/WA por intenção</li>
+          <li>Contas IG/WA configuradas e validadas</li>
+        </ul>
+        <div class="passage">Passagem: cluster atende mínimos + aprovação do cliente</div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-header">
+          <span class="phase-number">2</span>
+          <span class="phase-title">Contato e Conversão Inicial</span>
+        </div>
+        <ul>
+          <li>Envio humano/assistido em ritmo seguro; monitoramento diário; ajustes de copy/cadência</li>
+          <li>Limites por conta aquecida: IG 10/hora = 80 DMs/dia; WA 15/hora = 120 msgs/dia</li>
+          <li>Horário comercial; follow-up máx. 2; opt-out imediato</li>
+          <li>Perfis novos começam abaixo do teto até aquecer</li>
+        </ul>
+        <div class="passage">Passagem: mínimo de respostas por 100 contatos + intenção aderente</div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-header">
+          <span class="phase-number">3</span>
+          <span class="phase-title">Engajamento e Qualificação</span>
+        </div>
+        <ul>
+          <li>Triagem/qualificação de respostas</li>
+          <li>Relatório de respostas, objeções e intenção</li>
+          <li>Ajustes finais e recomendações</li>
+        </ul>
+        <div class="passage">Sucesso: gatilho de leads qualificados ou taxa de resposta acordada</div>
+      </div>
+    </div>
+
+    <!-- SLAs -->
+    <div class="card">
+      <h2>SLAs</h2>
+      <div class="sla-grid">
+        <div class="sla-item">
+          <strong>Respostas/Ajustes</strong>
+          <span>até 24h úteis</span>
+        </div>
+        <div class="sla-item">
+          <strong>Mudanças de copy/cadência</strong>
+          <span>até 48h</span>
+        </div>
+        <div class="sla-item">
+          <strong>Revalidação de contas</strong>
+          <span>até 72h; se >72h, conta reserva ou pausa avisada</span>
+        </div>
+        <div class="sla-item">
+          <strong>Relatórios</strong>
+          <span>semanais</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Escopo -->
+    <div class="card">
+      <h2>Escopo</h2>
+      <h3>Incluído</h3>
+      <p>Coleta de perfis públicos IG; clustering de intenção; linha editorial; configuração/aquecimento de contas; DMs/WA controladas; análise e qualificação; relatório final.</p>
+
+      <h3>Não incluído</h3>
+      <p>Tráfego pago; gestão contínua de redes; sites completos (apenas refino de landing); atendimento contínuo via WA (só triagem); suporte técnico externo; mudanças fora do tier sem aprovação.</p>
+    </div>
+
+    <!-- Riscos e Mitigações -->
+    <div class="card">
+      <h2>Riscos e Mitigações</h2>
+      <h3>Possíveis riscos</h3>
+      <p>Limitação de envio, bloqueio preventivo, necessidade de reaquecer contas, instabilidade IG/Meta.</p>
+
+      <h3>Mitigações</h3>
+      <p>Contas aquecidas; fingerprints/device hygiene; limites rígidos; fallback multi-conta; opt-out imediato; se bloqueio >72h, conta reserva ou pausa.</p>
+    </div>
+
+    <!-- Pagamento -->
+    <div class="card">
+      <h2>Pagamento e Lead Real</h2>
+      <p>50% na contratação + 50% ao fim da Fase 2. R$10 por lead real (ou valor por tier).</p>
+
+      <div class="highlight-box">
+        <p><strong>Lead real:</strong> responde com intenção aderente + contato válido (email/telefone/WA) ou agenda conversa. Exclui spam/concorrente/curiosidade sem fit. Contestação em 5 dias; depois conta como aceito. Limite de leads faturáveis por ciclo conforme tier.</p>
+      </div>
+    </div>
+
+    <!-- Benchmarks -->
+    <div class="card">
+      <h2>Benchmarks</h2>
+      <p style="color: var(--aic-gray); font-size: 14px; margin-bottom: 16px;">Variáveis por nicho/oferta</p>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number">200–350</div>
+          <div class="stat-label">Respostas / 2.000 contatos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">80–120</div>
+          <div class="stat-label">Conversas úteis</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">25–60</div>
+          <div class="stat-label">Leads qualificados</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">3–6x</div>
+          <div class="stat-label">CPL menor que tráfego pago</div>
+        </div>
+      </div>
+
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: 68%;"></div>
+      </div>
+    </div>
+
+    <!-- Encerramento -->
+    <div class="card">
+      <h2>Encerramento</h2>
+      <h3>Entregas finais</h3>
+      <ul>
+        <li>Lista de leads qualificados (CSV/Sheets/CRM)</li>
+        <li>Relatório de performance</li>
+        <li>Recomendações estratégicas</li>
+        <li>Materiais de copy/editorial usados</li>
+      </ul>
+      <p>Importação em CRM: feita pela AIC (se autorizado) ou pelo cliente, conforme combinado.</p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-links">
+        <a href="/aic-docs.html">Central de Docs</a>
+        <a href="/aic-proposta-comercial.html">Proposta</a>
+        <a href="/aic-faq-compliance.html">FAQ</a>
+        <a href="/aic-dashboard-prova.html">Dashboard</a>
+      </div>
+      <p>Documento confidencial AIC. © 2025 Applied Intelligence Clustering.</p>
+    </div>
+  </div>
+</body>
+</html>

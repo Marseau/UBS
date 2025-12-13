@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIC — Central de Documentação</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-green-glow: rgba(14, 204, 151, 0.25);
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-navy-lighter: #1a3055;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-gray-light: #cbd5e1;
+      --aic-border: #1e3a5f;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      min-height: 100vh;
+    }
+    .page { max-width: 1100px; margin: 0 auto; }
+
+    /* Hero Section */
+    .hero {
+      background: linear-gradient(135deg, var(--aic-navy-light) 0%, var(--aic-navy) 100%);
+      border: 1px solid var(--aic-border);
+      border-radius: 20px;
+      padding: 40px;
+      text-align: center;
+      margin-bottom: 30px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, var(--aic-green-glow) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    .hero-logo {
+      width: 180px;
+      height: auto;
+      margin-bottom: 20px;
+      position: relative;
+      z-index: 1;
+    }
+    .hero h1 {
+      margin: 0 0 12px 0;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aic-white);
+      position: relative;
+      z-index: 1;
+    }
+    .hero .subtitle {
+      font-size: 18px;
+      color: var(--aic-gray);
+      margin-bottom: 24px;
+      line-height: 1.6;
+      position: relative;
+      z-index: 1;
+    }
+    .hero .highlight {
+      display: inline-block;
+      background: rgba(14, 204, 151, 0.1);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      border-radius: 8px;
+      padding: 12px 20px;
+      font-size: 15px;
+      color: var(--aic-green);
+      font-weight: 500;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* What is AIC */
+    .intro-card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 30px;
+    }
+    .intro-card h2 {
+      margin: 0 0 16px 0;
+      font-size: 20px;
+      color: var(--aic-white);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .intro-card p {
+      font-size: 15px;
+      line-height: 1.8;
+      color: var(--aic-gray-light);
+      margin: 0 0 16px 0;
+    }
+    .intro-card strong {
+      color: var(--aic-green);
+    }
+    .intro-card .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .intro-card .step {
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .intro-card .step-number {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 10px;
+      color: var(--aic-navy);
+    }
+    .intro-card .step-title {
+      font-weight: 600;
+      color: var(--aic-white);
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+    .intro-card .step-desc {
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+
+    /* Section Title */
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aic-white);
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Journey Cards */
+    .journey-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+    .journey-card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 24px;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      display: block;
+    }
+    .journey-card:hover {
+      border-color: var(--aic-green);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px var(--aic-green-glow);
+    }
+    .journey-card .icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--aic-navy-lighter), var(--aic-navy-light));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 16px;
+    }
+    .journey-card.primary .icon { background: linear-gradient(135deg, var(--aic-green-dark), var(--aic-green)); }
+    .journey-card.success .icon { background: linear-gradient(135deg, #065f46, #10b981); }
+    .journey-card.warning .icon { background: linear-gradient(135deg, #92400e, #f59e0b); }
+    .journey-card.purple .icon { background: linear-gradient(135deg, var(--aic-navy-lighter), var(--aic-border)); }
+    .journey-card h3 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      color: var(--aic-white);
+    }
+    .journey-card p {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      color: var(--aic-gray);
+      line-height: 1.6;
+    }
+    .journey-card .tag {
+      display: inline-block;
+      background: rgba(14, 204, 151, 0.1);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      color: var(--aic-green);
+      font-weight: 500;
+    }
+
+    /* Glossary */
+    .glossary {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 30px;
+    }
+    .glossary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+    }
+    .glossary-item {
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .glossary-term {
+      font-weight: 600;
+      color: var(--aic-green);
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+    .glossary-def {
+      font-size: 13px;
+      color: var(--aic-gray);
+      line-height: 1.6;
+    }
+
+    /* CTA */
+    .cta-section {
+      background: linear-gradient(135deg, var(--aic-navy-lighter) 0%, var(--aic-navy-light) 100%);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 32px;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .cta-section h3 {
+      margin: 0 0 12px 0;
+      font-size: 20px;
+      color: var(--aic-white);
+    }
+    .cta-section p {
+      margin: 0 0 20px 0;
+      font-size: 15px;
+      color: var(--aic-gray);
+    }
+    .cta-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      color: var(--aic-navy);
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 15px;
+      transition: all 0.2s ease;
+    }
+    .cta-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px var(--aic-green-glow);
+    }
+
+    /* Footer Links */
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      padding: 20px 0;
+      border-top: 1px solid var(--aic-border);
+    }
+    .footer-links a {
+      color: var(--aic-gray);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover {
+      color: var(--aic-green);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <!-- Hero -->
+    <div class="hero">
+      <img src="/assets/AIC/Imagens%20Vetor%20/LOGO%20completo%20sem%20fundo%20Icone%20cheio%20e%20nome%20cheio.png" alt="AIC Logo" class="hero-logo">
+      <h1>Central de Documentação</h1>
+      <p class="subtitle">
+        Tudo o que você precisa saber sobre como a AIC funciona,<br>
+        o que esperar e como acompanhar seus resultados.
+      </p>
+      <div class="highlight">
+        "Nós não procuramos leads. Nós entregamos."
+      </div>
+    </div>
+
+    <!-- O que é a AIC -->
+    <div class="intro-card">
+      <h2>O que é a AIC?</h2>
+      <p>
+        A <strong>AIC (Applied Intelligence Clustering)</strong> é um método inteligente de prospecção que transforma dados públicos em oportunidades reais de negócio. Em vez de disparar mensagens em massa para qualquer pessoa, nós identificamos quem tem <strong>maior probabilidade de se interessar</strong> pelo seu produto ou serviço.
+      </p>
+      <p>
+        Pense assim: enquanto outros atiram no escuro, nós acendemos a luz e miramos com precisão.
+      </p>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-title">Inteligência</div>
+          <div class="step-desc">Analisamos milhares de perfis e encontramos quem combina com você</div>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-title">Preparação</div>
+          <div class="step-desc">Criamos mensagens personalizadas que geram conversas reais</div>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-title">Contato</div>
+          <div class="step-desc">Abordagem humanizada via DM e WhatsApp em ritmo seguro</div>
+        </div>
+        <div class="step">
+          <div class="step-number">4</div>
+          <div class="step-title">Entrega</div>
+          <div class="step-desc">Você recebe leads qualificados prontos para o seu funil</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Documentos por Jornada -->
+    <h2 class="section-title">Documentação por Etapa</h2>
+    <div class="journey-grid">
+      <a href="/aic-proposta-comercial.html" class="journey-card primary">
+        <div class="icon">01</div>
+        <h3>Proposta Comercial</h3>
+        <p>Entenda o método, as fases da campanha, o que está incluso e os resultados esperados.</p>
+        <span class="tag">Comece aqui</span>
+      </a>
+
+      <a href="/aic-execution-agreement.html" class="journey-card success">
+        <div class="icon">02</div>
+        <h3>Acordo de Execução</h3>
+        <p>Detalhes sobre prazos, SLAs, responsabilidades e critérios de sucesso de cada fase.</p>
+        <span class="tag">Contrato</span>
+      </a>
+
+      <a href="/aic-dashboard-prova.html" class="journey-card purple">
+        <div class="icon">03</div>
+        <h3>Dashboard de Prova</h3>
+        <p>Veja como medimos resultados: métricas de cluster, taxas de resposta e qualidade dos leads.</p>
+        <span class="tag">Métricas</span>
+      </a>
+
+      <a href="/aic-faq-compliance.html" class="journey-card warning">
+        <div class="icon">04</div>
+        <h3>FAQ — Segurança e Ética</h3>
+        <p>Dúvidas sobre legalidade, LGPD, riscos de bloqueio e como protegemos sua conta.</p>
+        <span class="tag">Compliance</span>
+      </a>
+    </div>
+
+    <!-- Glossário Rápido -->
+    <div class="glossary">
+      <h2 class="section-title">Glossário Rápido</h2>
+      <p style="color: #94a3b8; margin-bottom: 20px; font-size: 14px;">Termos que você vai encontrar na nossa documentação:</p>
+
+      <div class="glossary-grid">
+        <div class="glossary-item">
+          <div class="glossary-term">Cluster</div>
+          <div class="glossary-def">Grupo de pessoas com características e interesses similares. Quanto mais "limpo" o cluster, mais assertivas são as mensagens.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">LQS (Lead Quality Score)</div>
+          <div class="glossary-def">Nota de 1 a 4 que indica o quão qualificado é um lead. LQS 4 = pronto para comprar. LQS 1 = apenas curioso.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Score AIC</div>
+          <div class="glossary-def">Pontuação do cluster considerando densidade, ruído e intenção. Quanto maior, melhor a taxa de resposta esperada.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Cadência Humana</div>
+          <div class="glossary-def">Ritmo de envio que simula comportamento humano real: WhatsApp 15/hora (120/dia) + Instagram 10/hora (80/dia) = 200 contatos/dia por conjunto de contas.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Warm-up (Aquecimento)</div>
+          <div class="glossary-def">Período inicial onde a conta é "aquecida" gradualmente antes de atingir o volume máximo de envios.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Opt-out</div>
+          <div class="glossary-def">Quando alguém pede para não receber mais mensagens. Respeitamos imediatamente e nunca recontatamos.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="cta-section">
+      <h3>Tem dúvidas ou quer começar?</h3>
+      <p>Nossa equipe está pronta para explicar como a AIC pode funcionar para o seu negócio.</p>
+      <a href="https://wa.me/5511999999999?text=Olá! Vim pela documentação da AIC e gostaria de saber mais." class="cta-button" target="_blank">
+        Falar com um Especialista
+      </a>
+    </div>
+
+    <!-- Footer Links -->
+    <div class="footer-links">
+      <a href="/aic-proposta-comercial.html">Proposta</a>
+      <a href="/aic-execution-agreement.html">Acordo</a>
+      <a href="/aic-faq-compliance.html">FAQ</a>
+      <a href="/aic-dashboard-prova.html">Dashboard</a>
+      <span style="color: var(--aic-gray);">© AIC - Documentação Confidencial</span>
+    </div>
+  </div>
+</body>
+</html>

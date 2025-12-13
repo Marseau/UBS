@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIC — Documento Protegido</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-border: #1e3a5f;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      /* Disable text selection */
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+
+    /* Header */
+    .header {
+      background: var(--aic-navy-light);
+      border-bottom: 1px solid var(--aic-border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo {
+      height: 32px;
+      width: auto;
+    }
+
+    .doc-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--aic-white);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .page-info {
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+
+    .nav-btn {
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      color: var(--aic-white);
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .nav-btn:hover {
+      border-color: var(--aic-green);
+      color: var(--aic-green);
+    }
+
+    .nav-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .zoom-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .zoom-btn {
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      color: var(--aic-white);
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .zoom-btn:hover {
+      border-color: var(--aic-green);
+      color: var(--aic-green);
+    }
+
+    .zoom-level {
+      font-size: 12px;
+      color: var(--aic-gray);
+      min-width: 50px;
+      text-align: center;
+    }
+
+    /* PDF Container */
+    .pdf-container {
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+      background: #1a1a2e;
+    }
+
+    #pdf-canvas {
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      background: white;
+    }
+
+    /* Watermark */
+    .watermark {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-30deg);
+      font-size: 80px;
+      font-weight: 700;
+      color: rgba(14, 204, 151, 0.05);
+      pointer-events: none;
+      z-index: 50;
+      white-space: nowrap;
+    }
+
+    /* Footer */
+    .footer {
+      background: var(--aic-navy-light);
+      border-top: 1px solid var(--aic-border);
+      padding: 10px 20px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--aic-gray);
+    }
+
+    /* Loading */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 400px;
+      gap: 16px;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--aic-border);
+      border-top-color: var(--aic-green);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* No document */
+    .no-doc {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 400px;
+      gap: 16px;
+      text-align: center;
+    }
+
+    .no-doc-icon {
+      font-size: 64px;
+      opacity: 0.5;
+    }
+
+    .no-doc h2 {
+      color: var(--aic-white);
+      font-size: 20px;
+    }
+
+    .no-doc p {
+      color: var(--aic-gray);
+      font-size: 14px;
+    }
+
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      color: var(--aic-navy);
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      margin-top: 16px;
+      transition: all 0.2s;
+    }
+
+    .back-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(14, 204, 151, 0.3);
+    }
+
+    /* Print protection */
+    @media print {
+      body { display: none !important; }
+    }
+  </style>
+</head>
+<body oncontextmenu="return false;" ondragstart="return false;">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <img src="/assets/AIC/Imagens%20Vetor%20/AIC%20Icone%20Cheio.png" alt="AIC" class="logo">
+      <span class="doc-title" id="docTitle">Documento AIC</span>
+    </div>
+    <div class="header-right">
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoomOut" title="Diminuir">−</button>
+        <span class="zoom-level" id="zoomLevel">100%</span>
+        <button class="zoom-btn" id="zoomIn" title="Aumentar">+</button>
+      </div>
+      <span class="page-info">
+        Página <span id="currentPage">1</span> de <span id="totalPages">1</span>
+      </span>
+      <button class="nav-btn" id="prevPage">← Anterior</button>
+      <button class="nav-btn" id="nextPage">Próxima →</button>
+    </div>
+  </div>
+
+  <!-- Watermark -->
+  <div class="watermark">CONFIDENCIAL AIC</div>
+
+  <!-- PDF Container -->
+  <div class="pdf-container" id="pdfContainer">
+    <div class="no-doc" id="noDoc">
+      <div class="no-doc-icon">📄</div>
+      <h2>Nenhum documento selecionado</h2>
+      <p>Acesse este viewer através de um link autorizado.</p>
+      <a href="/aic-docs.html" class="back-btn">← Voltar para Documentação</a>
+    </div>
+    <div class="loading" id="loading" style="display: none;">
+      <div class="spinner"></div>
+      <span>Carregando documento...</span>
+    </div>
+    <canvas id="pdf-canvas" style="display: none;"></canvas>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    © AIC - Documento Confidencial. Reprodução, cópia ou distribuição não autorizada é proibida.
+  </div>
+
+  <script>
+    // PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    // State
+    let pdfDoc = null;
+    let pageNum = 1;
+    let pageRendering = false;
+    let pageNumPending = null;
+    let scale = 1.0;
+
+    const canvas = document.getElementById('pdf-canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Get PDF URL from query params
+    const urlParams = new URLSearchParams(window.location.search);
+    const pdfUrl = urlParams.get('doc');
+    const docTitle = urlParams.get('title') || 'Documento AIC';
+
+    document.getElementById('docTitle').textContent = docTitle;
+
+    // Render page
+    function renderPage(num) {
+      pageRendering = true;
+
+      pdfDoc.getPage(num).then(function(page) {
+        const viewport = page.getViewport({ scale: scale });
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        const renderContext = {
+          canvasContext: ctx,
+          viewport: viewport
+        };
+
+        const renderTask = page.render(renderContext);
+
+        renderTask.promise.then(function() {
+          pageRendering = false;
+          if (pageNumPending !== null) {
+            renderPage(pageNumPending);
+            pageNumPending = null;
+          }
+        });
+      });
+
+      document.getElementById('currentPage').textContent = num;
+    }
+
+    // Queue render
+    function queueRenderPage(num) {
+      if (pageRendering) {
+        pageNumPending = num;
+      } else {
+        renderPage(num);
+      }
+    }
+
+    // Previous page
+    function onPrevPage() {
+      if (pageNum <= 1) return;
+      pageNum--;
+      queueRenderPage(pageNum);
+    }
+
+    // Next page
+    function onNextPage() {
+      if (pageNum >= pdfDoc.numPages) return;
+      pageNum++;
+      queueRenderPage(pageNum);
+    }
+
+    // Zoom
+    function updateZoom(newScale) {
+      scale = Math.max(0.5, Math.min(2.5, newScale));
+      document.getElementById('zoomLevel').textContent = Math.round(scale * 100) + '%';
+      queueRenderPage(pageNum);
+    }
+
+    // Event listeners
+    document.getElementById('prevPage').addEventListener('click', onPrevPage);
+    document.getElementById('nextPage').addEventListener('click', onNextPage);
+    document.getElementById('zoomIn').addEventListener('click', () => updateZoom(scale + 0.1));
+    document.getElementById('zoomOut').addEventListener('click', () => updateZoom(scale - 0.1));
+
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'ArrowLeft') onPrevPage();
+      if (e.key === 'ArrowRight') onNextPage();
+      if (e.key === '+' || e.key === '=') updateZoom(scale + 0.1);
+      if (e.key === '-') updateZoom(scale - 0.1);
+
+      // Block Ctrl+S, Ctrl+P, Ctrl+C
+      if (e.ctrlKey && (e.key === 's' || e.key === 'p' || e.key === 'c')) {
+        e.preventDefault();
+        return false;
+      }
+    });
+
+    // Load PDF
+    if (pdfUrl) {
+      document.getElementById('noDoc').style.display = 'none';
+      document.getElementById('loading').style.display = 'flex';
+
+      pdfjsLib.getDocument(pdfUrl).promise.then(function(pdf) {
+        pdfDoc = pdf;
+        document.getElementById('totalPages').textContent = pdf.numPages;
+        document.getElementById('loading').style.display = 'none';
+        canvas.style.display = 'block';
+        renderPage(pageNum);
+      }).catch(function(error) {
+        console.error('Error loading PDF:', error);
+        document.getElementById('loading').innerHTML = `
+          <div class="no-doc-icon">⚠️</div>
+          <h2 style="color: var(--aic-white);">Erro ao carregar documento</h2>
+          <p style="color: var(--aic-gray);">O documento não está disponível ou você não tem permissão para acessá-lo.</p>
+          <a href="/aic-docs.html" class="back-btn">← Voltar para Documentação</a>
+        `;
+      });
+    }
+
+    // Disable right-click context menu
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Disable drag
+    document.addEventListener('dragstart', e => e.preventDefault());
+
+    // Disable copy
+    document.addEventListener('copy', e => e.preventDefault());
+  </script>
+</body>
+</html>

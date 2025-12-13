@@ -1,0 +1,1601 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Briefing da Campanha | AIC - Applied Intelligence Clustering</title>
+  <meta name="robots" content="noindex, nofollow">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/assets/AIC/Imagens%20Vetor%20/AIC%20Icone%20Cheio.png">
+
+  <!-- Theme Color -->
+  <meta name="theme-color" content="#0C1B33">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-green-glow: rgba(14, 204, 151, 0.25);
+      --aic-green-subtle: rgba(14, 204, 151, 0.1);
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-navy-lighter: #1a3055;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-gray-light: #cbd5e1;
+      --aic-border: #1e3a5f;
+      --aic-red: #ef4444;
+      --aic-red-subtle: rgba(239, 68, 68, 0.1);
+      --aic-yellow: #f59e0b;
+      --aic-yellow-subtle: rgba(245, 158, 11, 0.1);
+      --aic-blue: #3b82f6;
+      --aic-blue-subtle: rgba(59, 130, 246, 0.1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* Container */
+    .container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+
+    /* Header */
+    .header {
+      background: rgba(12, 27, 51, 0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--aic-border);
+      padding: 20px 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header-logo {
+      height: 36px;
+      width: auto;
+      filter: brightness(1.1);
+    }
+    .header-progress {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-progress-text {
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+    .header-progress-bar {
+      width: 120px;
+      height: 6px;
+      background: var(--aic-navy-lighter);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .header-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--aic-green), var(--aic-green-dark));
+      transition: width 0.3s ease;
+    }
+
+    /* Main Content */
+    .main {
+      padding: 48px 0 80px;
+    }
+
+    /* Page Title */
+    .page-title {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .page-title h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aic-white);
+      margin-bottom: 12px;
+    }
+    .page-title p {
+      font-size: 16px;
+      color: var(--aic-gray);
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    /* Info Box */
+    .info-box {
+      background: var(--aic-blue-subtle);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 32px;
+    }
+    .info-box-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--aic-blue);
+      margin-bottom: 12px;
+    }
+    .info-box p {
+      font-size: 14px;
+      color: var(--aic-gray-light);
+      line-height: 1.6;
+    }
+
+    /* Section Navigation */
+    .section-nav {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+    .section-nav-btn {
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      border: 1px solid var(--aic-border);
+      background: var(--aic-navy-light);
+      color: var(--aic-gray);
+      transition: all 0.2s;
+    }
+    .section-nav-btn:hover {
+      border-color: var(--aic-green);
+      color: var(--aic-white);
+    }
+    .section-nav-btn.active {
+      background: var(--aic-green-subtle);
+      border-color: var(--aic-green);
+      color: var(--aic-green);
+    }
+    .section-nav-btn.completed::after {
+      content: ' ';
+      margin-left: 4px;
+    }
+
+    /* Section Card */
+    .section-card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 20px;
+      padding: 32px;
+      margin-bottom: 24px;
+      display: none;
+    }
+    .section-card.active {
+      display: block;
+    }
+    .section-card.highlight {
+      border-color: var(--aic-green);
+      box-shadow: 0 0 30px var(--aic-green-glow);
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .section-number {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--aic-navy);
+      flex-shrink: 0;
+    }
+    .section-title h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--aic-white);
+      margin-bottom: 4px;
+    }
+    .section-title p {
+      font-size: 14px;
+      color: var(--aic-gray);
+    }
+    .section-badge {
+      margin-left: auto;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .section-badge.required {
+      background: var(--aic-red-subtle);
+      color: var(--aic-red);
+    }
+    .section-badge.important {
+      background: var(--aic-yellow-subtle);
+      color: var(--aic-yellow);
+    }
+
+    /* Form */
+    .form-group {
+      margin-bottom: 24px;
+    }
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--aic-white);
+      margin-bottom: 8px;
+    }
+    .form-label .required {
+      color: var(--aic-red);
+      margin-left: 4px;
+    }
+    .form-input, .form-textarea, .form-select {
+      width: 100%;
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 15px;
+      color: var(--aic-white);
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus, .form-textarea:focus, .form-select:focus {
+      outline: none;
+      border-color: var(--aic-green);
+    }
+    .form-input::placeholder, .form-textarea::placeholder {
+      color: var(--aic-gray);
+    }
+    .form-textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    .form-textarea.large {
+      min-height: 180px;
+    }
+    .form-hint {
+      font-size: 12px;
+      color: var(--aic-gray);
+      margin-top: 6px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .form-select {
+      cursor: pointer;
+    }
+    .form-select option {
+      background: var(--aic-navy);
+      color: var(--aic-white);
+    }
+
+    /* Tags Input */
+    .tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px;
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 10px;
+      min-height: 50px;
+    }
+    .tags-container:focus-within {
+      border-color: var(--aic-green);
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--aic-green-subtle);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      color: var(--aic-green);
+    }
+    .tag-remove {
+      cursor: pointer;
+      opacity: 0.7;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .tag-remove:hover {
+      opacity: 1;
+    }
+    .tags-input {
+      flex: 1;
+      min-width: 150px;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-size: 14px;
+      color: var(--aic-white);
+      padding: 6px 0;
+    }
+    .tags-input::placeholder {
+      color: var(--aic-gray);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      color: var(--aic-navy);
+    }
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px var(--aic-green-glow);
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--aic-border);
+      color: var(--aic-white);
+    }
+    .btn-secondary:hover {
+      border-color: var(--aic-green);
+      background: var(--aic-green-subtle);
+    }
+
+    /* Section Actions */
+    .section-actions {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid var(--aic-border);
+    }
+
+    /* Status Messages */
+    .status-message {
+      padding: 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      margin-top: 20px;
+      display: none;
+    }
+    .status-message.show {
+      display: block;
+    }
+    .status-message.success {
+      background: var(--aic-green-subtle);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      color: var(--aic-green);
+    }
+    .status-message.error {
+      background: var(--aic-red-subtle);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: var(--aic-red);
+    }
+
+    /* Footer */
+    .footer {
+      background: var(--aic-navy);
+      border-top: 1px solid var(--aic-border);
+      padding: 24px 0;
+      text-align: center;
+    }
+    .footer p {
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .container { padding: 0 16px; }
+      .main { padding: 32px 0 60px; }
+      .page-title h1 { font-size: 24px; }
+      .section-card { padding: 24px 20px; }
+      .form-row { grid-template-columns: 1fr; }
+      .section-nav { gap: 6px; }
+      .section-nav-btn { padding: 8px 12px; font-size: 12px; }
+      .header-progress { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container header-content">
+      <img src="/assets/AIC/Imagens%20Vetor%20/LOGO%20completo%20sem%20fundo%20Icone%20cheio%20e%20nome%20cheio.png" alt="AIC" class="header-logo">
+      <div class="header-progress">
+        <span class="header-progress-text"><span id="progress-percent">0</span>% completo</span>
+        <div class="header-progress-bar">
+          <div class="header-progress-fill" id="progress-fill" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main">
+    <div class="container">
+      <!-- Page Title -->
+      <div class="page-title">
+        <h1>Briefing da Campanha</h1>
+        <p>Quanto mais detalhes você fornecer, mais personalizado e eficaz será o agente de IA. Este briefing guiará todas as comunicações com seus leads.</p>
+      </div>
+
+      <!-- Info Box -->
+      <div class="info-box">
+        <div class="info-box-title">Por que preencher o briefing?</div>
+        <p>Este documento é similar ao que usamos internamente na AIC para treinar nosso agente de IA. Com estas informações, o agente poderá: responder objeções dos leads, destacar seus diferenciais, usar o tom de voz adequado e direcionar para a conversão correta.</p>
+      </div>
+
+      <!-- Section Navigation -->
+      <div class="section-nav">
+        <button class="section-nav-btn active" onclick="showSection(1)">1. Empresa</button>
+        <button class="section-nav-btn" onclick="showSection(2)">2. Produto/Serviço</button>
+        <button class="section-nav-btn" onclick="showSection(3)">3. Diferencial</button>
+        <button class="section-nav-btn" onclick="showSection(4)">4. Cliente Ideal</button>
+        <button class="section-nav-btn" onclick="showSection(5)">5. Provas Sociais</button>
+        <button class="section-nav-btn" onclick="showSection(6)">6. Tom de Voz</button>
+        <button class="section-nav-btn" onclick="showSection(7)">7. Links</button>
+        <button class="section-nav-btn" onclick="showSection(8)">8. Documentos</button>
+      </div>
+
+      <form id="briefing-form" onsubmit="return false;">
+        <!-- Section 1: Empresa -->
+        <div class="section-card active" id="section-1">
+          <div class="section-header">
+            <div class="section-number">1</div>
+            <div class="section-title">
+              <h2>Sobre a Empresa</h2>
+              <p>Informações básicas sobre sua empresa</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="company_name">Nome da Empresa<span class="required">*</span></label>
+            <input type="text" id="company_name" class="form-input" placeholder="Ex: AIC - Applied Intelligence Clustering" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="company_history">Historia e Contexto</label>
+            <textarea id="company_history" class="form-textarea" placeholder="Conte brevemente a história da empresa: quando foi fundada, por quem, qual problema motivou a criação..."></textarea>
+            <p class="form-hint">Isso ajuda o agente a criar conexão emocional com os leads</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="company_mission">Missão/Proposito</label>
+            <textarea id="company_mission" class="form-textarea" placeholder="Qual e a missão da empresa? Qual impacto voces querem causar?"></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="years_in_market">Anos no Mercado</label>
+              <input type="number" id="years_in_market" class="form-input" placeholder="Ex: 5" min="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="team_size">Tamanho da Equipe</label>
+              <input type="text" id="team_size" class="form-input" placeholder="Ex: 10-50 pessoas">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="location_city">Cidade</label>
+              <input type="text" id="location_city" class="form-input" placeholder="Ex: Sao Paulo">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="location_state">Estado</label>
+              <input type="text" id="location_state" class="form-input" placeholder="Ex: SP">
+            </div>
+          </div>
+
+          <div class="section-actions">
+            <div></div>
+            <button type="button" class="btn btn-primary" onclick="nextSection()">Proximo: Produto/Serviço</button>
+          </div>
+        </div>
+
+        <!-- Section 2: Produto/Serviço -->
+        <div class="section-card" id="section-2">
+          <div class="section-header">
+            <div class="section-number">2</div>
+            <div class="section-title">
+              <h2>Produto ou Serviço</h2>
+              <p>O que voce vende e como funciona</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="product_service_name">Nome do Produto/Serviço<span class="required">*</span></label>
+            <input type="text" id="product_service_name" class="form-input" placeholder="Ex: Consultoria em Marketing Digital" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="product_service_description">Descrição Completa<span class="required">*</span></label>
+            <textarea id="product_service_description" class="form-textarea large" placeholder="Descreva em detalhes o que voce oferece, como funciona, o que esta incluso..." required></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="product_service_type">Tipo</label>
+              <select id="product_service_type" class="form-select">
+                <option value="">Selecione...</option>
+                <option value="produto_fisico">Produto Fisico</option>
+                <option value="produto_digital">Produto Digital</option>
+                <option value="servico_presencial">Serviço Presencial</option>
+                <option value="servico_online">Serviço Online</option>
+                <option value="servico_hibrido">Serviço Hibrido</option>
+                <option value="consultoria">Consultoria</option>
+                <option value="curso_formacao">Curso/Formacao</option>
+                <option value="assinatura">Assinatura/Recorrente</option>
+                <option value="outro">Outro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="price_range">Faixa de Preco</label>
+              <input type="text" id="price_range" class="form-input" placeholder="Ex: R$ 2.000 a R$ 10.000">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="price_model">Modelo de Cobranca</label>
+            <input type="text" id="price_model" class="form-input" placeholder="Ex: Pagamento unico, Mensal, Por projeto...">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="delivery_method">Metodo de Entrega</label>
+              <input type="text" id="delivery_method" class="form-input" placeholder="Ex: Online via Zoom, Presencial, Plataforma EAD...">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="delivery_time">Tempo de Entrega/Duracao</label>
+              <input type="text" id="delivery_time" class="form-input" placeholder="Ex: 3 meses, 10 sessoes, Imediato...">
+            </div>
+          </div>
+
+          <div class="section-actions">
+            <button type="button" class="btn btn-secondary" onclick="prevSection()">Voltar</button>
+            <button type="button" class="btn btn-primary" onclick="nextSection()">Proximo: Diferencial</button>
+          </div>
+        </div>
+
+        <!-- Section 3: Diferencial Competitivo (DESTAQUE) -->
+        <div class="section-card highlight" id="section-3">
+          <div class="section-header">
+            <div class="section-number">3</div>
+            <div class="section-title">
+              <h2>Diferencial Competitivo</h2>
+              <p>O que te faz unico no mercado</p>
+            </div>
+            <span class="section-badge required">MAIS IMPORTANTE</span>
+          </div>
+
+          <div class="info-box" style="margin-bottom: 24px;">
+            <div class="info-box-title">Por que esta secao e crucial?</div>
+            <p>Esta e a secao mais importante do briefing. O diferencial competitivo e o que o agente de IA usara para convencer os leads de que voce e a melhor opcao. Seja especifico e honesto sobre o que te diferencia dos concorrentes.</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="main_differentiator">Principal Diferencial<span class="required">*</span></label>
+            <textarea id="main_differentiator" class="form-textarea large" placeholder="Qual e o seu PRINCIPAL diferencial? O que voce faz que ninguem mais faz igual? Por que um cliente deveria escolher voce e nao o concorrente?" required></textarea>
+            <p class="form-hint">Seja especifico. "Qualidade" e "atendimento" sao genericos. O que EXATAMENTE voce faz diferente?</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Diferenciais Secundarios</label>
+            <div class="tags-container" id="secondary_differentiators_container">
+              <input type="text" class="tags-input" id="secondary_differentiators_input" placeholder="Digite e pressione Enter para adicionar...">
+            </div>
+            <p class="form-hint">Outros pontos que te diferenciam (tecnologia, metodologia, experiencia, etc.)</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Nomes dos Principais Concorrentes</label>
+            <div class="tags-container" id="competitors_names_container">
+              <input type="text" class="tags-input" id="competitors_names_input" placeholder="Digite o nome de um concorrente e pressione Enter...">
+            </div>
+            <p class="form-hint">Conhecer seus concorrentes ajuda o agente a posicionar voce melhor</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="competitor_weaknesses">Pontos Fracos dos Concorrentes</label>
+            <textarea id="competitor_weaknesses" class="form-textarea" placeholder="O que os concorrentes fazem mal? Onde eles falham? Que reclamacoes os clientes deles tem?"></textarea>
+            <p class="form-hint">Isso ajuda o agente a destacar suas vantagens quando necessario</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="why_choose_us">Por Que Escolher Voce?<span class="required">*</span></label>
+            <textarea id="why_choose_us" class="form-textarea large" placeholder="Escreva como se estivesse respondendo diretamente a um lead: 'Por que eu deveria te contratar e nao o concorrente X?'" required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="unique_methodology">Metodologia Exclusiva</label>
+            <textarea id="unique_methodology" class="form-textarea" placeholder="Voce tem algum metodo, framework ou processo proprio? Descreva-o aqui."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="exclusive_technology">Tecnologia Exclusiva</label>
+            <textarea id="exclusive_technology" class="form-textarea" placeholder="Usa alguma tecnologia ou ferramenta exclusiva? IA? Sistema proprio?"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Certificacoes e Qualificacoes</label>
+            <div class="tags-container" id="certifications_container">
+              <input type="text" class="tags-input" id="certifications_input" placeholder="Ex: ISO 9001, Google Partner, MBA...">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Premios e Reconhecimentos</label>
+            <div class="tags-container" id="awards_container">
+              <input type="text" class="tags-input" id="awards_input" placeholder="Ex: Melhor Agencia 2024, Top 10 Startups...">
+            </div>
+          </div>
+
+          <div class="section-actions">
+            <button type="button" class="btn btn-secondary" onclick="prevSection()">Voltar</button>
+            <button type="button" class="btn btn-primary" onclick="nextSection()">Proximo: Cliente Ideal</button>
+          </div>
+        </div>
+
+        <!-- Section 4: Cliente Ideal -->
+        <div class="section-card" id="section-4">
+          <div class="section-header">
+            <div class="section-number">4</div>
+            <div class="section-title">
+              <h2>Cliente Ideal (ICP)</h2>
+              <p>Quem voce quer atingir com esta campanha</p>
+            </div>
+            <span class="section-badge important">IMPORTANTE</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="icp_description">Descrição do Cliente Ideal<span class="required">*</span></label>
+            <textarea id="icp_description" class="form-textarea large" placeholder="Descreva em detalhes quem e seu cliente ideal. Como ele e? O que ele faz? Qual o perfil dele?" required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="icp_demographics">Demografia</label>
+            <textarea id="icp_demographics" class="form-textarea" placeholder="Idade, genero, localizacao, renda, escolaridade..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Cargos/Profissoes Alvo</label>
+            <div class="tags-container" id="icp_job_titles_container">
+              <input type="text" class="tags-input" id="icp_job_titles_input" placeholder="Ex: CEO, Gerente de Marketing, Dentista...">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Segmentos/Industrias</label>
+            <div class="tags-container" id="icp_industries_container">
+              <input type="text" class="tags-input" id="icp_industries_input" placeholder="Ex: Tecnologia, Saude, E-commerce...">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="icp_company_size">Tamanho da Empresa (se B2B)</label>
+            <input type="text" id="icp_company_size" class="form-input" placeholder="Ex: PMEs com 10-100 funcionarios">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="icp_main_pain">Principal Dor/Problema<span class="required">*</span></label>
+            <textarea id="icp_main_pain" class="form-textarea large" placeholder="Qual e o PRINCIPAL problema que seu cliente ideal tem e que voce resolve? Seja especifico." required></textarea>
+            <p class="form-hint">O agente usara isso para criar conexão e mostrar que voce entende o problema</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Dores Secundarias</label>
+            <div class="tags-container" id="icp_secondary_pains_container">
+              <input type="text" class="tags-input" id="icp_secondary_pains_input" placeholder="Outros problemas que voce resolve...">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Desejos e Objetivos</label>
+            <div class="tags-container" id="icp_desires_container">
+              <input type="text" class="tags-input" id="icp_desires_input" placeholder="O que seu cliente quer alcancar?">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Objecoes Comuns<span class="required">*</span></label>
+            <div class="tags-container" id="icp_objections_container">
+              <input type="text" class="tags-input" id="icp_objections_input" placeholder="Ex: 'Esta muito caro', 'Nao tenho tempo'...">
+            </div>
+            <p class="form-hint">O agente precisa saber como responder a essas objecoes</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Fatores de Decisao</label>
+            <div class="tags-container" id="icp_decision_factors_container">
+              <input type="text" class="tags-input" id="icp_decision_factors_input" placeholder="O que pesa na hora de decidir? Preco, qualidade, prazo...">
+            </div>
+          </div>
+
+          <div class="section-actions">
+            <button type="button" class="btn btn-secondary" onclick="prevSection()">Voltar</button>
+            <button type="button" class="btn btn-primary" onclick="nextSection()">Proximo: Provas Sociais</button>
+          </div>
+        </div>
+
+        <!-- Section 5: Provas Sociais -->
+        <div class="section-card" id="section-5">
+          <div class="section-header">
+            <div class="section-number">5</div>
+            <div class="section-title">
+              <h2>Provas Sociais</h2>
+              <p>Evidencias de que voce entrega resultados</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="client_count">Quantidade de Clientes Atendidos</label>
+            <input type="text" id="client_count" class="form-input" placeholder="Ex: +500 clientes, +2.000 projetos...">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Cases de Sucesso</label>
+            <div class="tags-container" id="success_cases_container">
+              <input type="text" class="tags-input" id="success_cases_input" placeholder="Ex: 'Cliente X aumentou vendas em 300%'...">
+            </div>
+            <p class="form-hint">Resultados concretos que voce ajudou clientes a alcancar</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Depoimentos</label>
+            <div class="tags-container" id="testimonials_container">
+              <input type="text" class="tags-input" id="testimonials_input" placeholder="Copie e cole depoimentos de clientes...">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Metricas de Resultado</label>
+            <div class="tags-container" id="results_metrics_container">
+              <input type="text" class="tags-input" id="results_metrics_input" placeholder="Ex: '98% de satisfacao', 'NPS 72'...">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Mencoes na Midia</label>
+            <div class="tags-container" id="media_mentions_container">
+              <input type="text" class="tags-input" id="media_mentions_input" placeholder="Ex: Forbes, Exame, G1...">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Parcerias Estrategicas</label>
+            <div class="tags-container" id="partnerships_container">
+              <input type="text" class="tags-input" id="partnerships_input" placeholder="Empresas parceiras ou clientes renomados...">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="guarantees">Garantias Oferecidas</label>
+            <textarea id="guarantees" class="form-textarea" placeholder="Voce oferece alguma garantia? Devolucao em 7 dias? Resultado ou dinheiro de volta?"></textarea>
+          </div>
+
+          <div class="section-actions">
+            <button type="button" class="btn btn-secondary" onclick="prevSection()">Voltar</button>
+            <button type="button" class="btn btn-primary" onclick="nextSection()">Proximo: Tom de Voz</button>
+          </div>
+        </div>
+
+        <!-- Section 6: Tom de Voz -->
+        <div class="section-card" id="section-6">
+          <div class="section-header">
+            <div class="section-number">6</div>
+            <div class="section-title">
+              <h2>Tom de Voz e Comunicacao</h2>
+              <p>Como o agente deve se comunicar</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="tone_of_voice">Tom de Voz Principal</label>
+            <select id="tone_of_voice" class="form-select">
+              <option value="">Selecione...</option>
+              <option value="formal">Formal - Corporativo, profissional</option>
+              <option value="informal">Informal - Descontraido, proximo</option>
+              <option value="tecnico">Tecnico - Especializado, detalhado</option>
+              <option value="consultivo">Consultivo - Orientador, didatico</option>
+              <option value="amigavel">Amigavel - Caloroso, acolhedor</option>
+              <option value="autoridade">Autoridade - Confiante, especialista</option>
+              <option value="inspirador">Inspirador - Motivacional, energetico</option>
+              <option value="educativo">Educativo - Explicativo, paciente</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="communication_style">Estilo de Comunicacao</label>
+            <textarea id="communication_style" class="form-textarea" placeholder="Descreva como voce quer que o agente se comunique. Ex: 'Direto ao ponto, sem enrolacao', 'Detalhado e explicativo', 'Usa humor leve'..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Palavras/Expressoes para USAR</label>
+            <div class="tags-container" id="words_to_use_container">
+              <input type="text" class="tags-input" id="words_to_use_input" placeholder="Termos que combinam com sua marca...">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Palavras/Expressoes para EVITAR</label>
+            <div class="tags-container" id="words_to_avoid_container">
+              <input type="text" class="tags-input" id="words_to_avoid_input" placeholder="Termos que nao combinam ou que voce nao quer usar...">
+            </div>
+            <p class="form-hint">Ex: girias, termos tecnicos demais, palavras negativas...</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Mensagens-Chave</label>
+            <div class="tags-container" id="key_messages_container">
+              <input type="text" class="tags-input" id="key_messages_input" placeholder="Frases importantes que devem ser comunicadas...">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="call_to_action">CTA Principal (Call to Action)</label>
+            <textarea id="call_to_action" class="form-textarea" placeholder="Qual acao voce quer que o lead tome? Ex: 'Agendar uma reuniao', 'Baixar o ebook', 'Comecar o teste gratis'..."></textarea>
+            <p class="form-hint">Este e o objetivo final de cada conversa do agente</p>
+          </div>
+
+          <div class="section-actions">
+            <button type="button" class="btn btn-secondary" onclick="prevSection()">Voltar</button>
+            <button type="button" class="btn btn-primary" onclick="nextSection()">Proximo: Links</button>
+          </div>
+        </div>
+
+        <!-- Section 7: Links -->
+        <div class="section-card" id="section-7">
+          <div class="section-header">
+            <div class="section-number">7</div>
+            <div class="section-title">
+              <h2>Links e Recursos</h2>
+              <p>URLs importantes para a campanha</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="landing_page_url">Landing Page da Campanha</label>
+            <input type="url" id="landing_page_url" class="form-input" placeholder="https://seusite.com/campanha">
+            <p class="form-hint">Link que o agente enviara aos leads interessados</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="website_url">Site Principal</label>
+            <input type="url" id="website_url" class="form-input" placeholder="https://seusite.com">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="instagram_url">Instagram</label>
+              <input type="url" id="instagram_url" class="form-input" placeholder="https://instagram.com/seuuser">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="linkedin_url">LinkedIn</label>
+              <input type="url" id="linkedin_url" class="form-input" placeholder="https://linkedin.com/company/...">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="youtube_url">YouTube</label>
+              <input type="url" id="youtube_url" class="form-input" placeholder="https://youtube.com/@seucanal">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="portfolio_url">Portfolio/Casos</label>
+              <input type="url" id="portfolio_url" class="form-input" placeholder="https://seusite.com/portfolio">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="media_kit_url">Media Kit / Apresentacao</label>
+            <input type="url" id="media_kit_url" class="form-input" placeholder="Link para PDF ou apresentacao">
+          </div>
+
+          <div class="section-actions">
+            <button type="button" class="btn btn-secondary" onclick="prevSection()">Voltar</button>
+            <button type="button" class="btn btn-primary" onclick="nextSection()">Proximo</button>
+          </div>
+        </div>
+
+        <!-- Section 8: Documentos -->
+        <div class="section-card" id="section-8">
+          <div class="section-header">
+            <div class="section-number">8</div>
+            <div class="section-title">
+              <h2>Documentos Complementares</h2>
+              <p>Envie documentos que ajudarao o agente de IA a conhecer melhor seu negocio</p>
+            </div>
+          </div>
+
+          <div class="info-box" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #00d4ff; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+            <h4 style="color: #00d4ff; margin-bottom: 12px;">Como funciona o processamento de documentos?</h4>
+            <p style="color: #a0a0a0; font-size: 14px; line-height: 1.6;">
+              Os documentos enviados serao processados automaticamente: o texto sera extraido, dividido em blocos semanticos e transformado em vetores de busca. Isso permite que o agente de IA encontre informacoes relevantes durante as conversas com leads.
+            </p>
+            <p style="color: #a0a0a0; font-size: 14px; margin-top: 12px;">
+              <strong style="color: #fff;">Formatos aceitos:</strong> PDF, DOCX, TXT, MD (max 10MB)
+            </p>
+          </div>
+
+          <!-- Upload Area -->
+          <div class="form-group">
+            <label class="form-label">Enviar Novo Documento</label>
+            <div id="upload-area" style="border: 2px dashed #333; border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s ease;"
+                 onclick="document.getElementById('file-input').click()"
+                 ondragover="handleDragOver(event)"
+                 ondragleave="handleDragLeave(event)"
+                 ondrop="handleDrop(event)">
+              <div style="font-size: 48px; margin-bottom: 16px;">📄</div>
+              <p style="color: #fff; font-size: 16px; margin-bottom: 8px;">Arraste um arquivo aqui ou clique para selecionar</p>
+              <p style="color: #666; font-size: 14px;">PDF, DOCX, TXT ou MD - Maximo 10MB</p>
+            </div>
+            <input type="file" id="file-input" style="display: none;" accept=".pdf,.docx,.txt,.md" onchange="handleFileSelect(event)">
+          </div>
+
+          <!-- Document Title -->
+          <div class="form-group" id="doc-title-group" style="display: none;">
+            <label class="form-label" for="doc_title">Titulo do Documento *</label>
+            <input type="text" id="doc_title" class="form-input" placeholder="Ex: Apresentacao Institucional, FAQ Completo, etc.">
+          </div>
+
+          <!-- Document Type -->
+          <div class="form-group" id="doc-type-group" style="display: none;">
+            <label class="form-label" for="doc_type">Tipo de Documento</label>
+            <select id="doc_type" class="form-select">
+              <option value="knowledge">Base de Conhecimento</option>
+              <option value="faq">FAQ / Perguntas Frequentes</option>
+              <option value="product">Catalogo de Produtos</option>
+              <option value="policy">Politicas e Termos</option>
+              <option value="script">Script de Vendas</option>
+              <option value="other">Outro</option>
+            </select>
+          </div>
+
+          <!-- Upload Button -->
+          <div class="form-group" id="upload-btn-group" style="display: none;">
+            <button type="button" class="btn btn-primary" onclick="uploadDocument()" id="upload-btn" style="width: 100%;">
+              Processar Documento
+            </button>
+            <div id="upload-status" class="status-message" style="margin-top: 12px;"></div>
+          </div>
+
+          <!-- Documents List -->
+          <div class="form-group" style="margin-top: 32px;">
+            <label class="form-label">Documentos da Campanha</label>
+            <div id="documents-list" style="background: #1a1a2e; border-radius: 12px; padding: 16px; min-height: 100px;">
+              <p style="color: #666; text-align: center; padding: 20px;">Carregando documentos...</p>
+            </div>
+          </div>
+
+          <div class="section-actions">
+            <button type="button" class="btn btn-secondary" onclick="prevSection()">Voltar</button>
+            <button type="button" class="btn btn-primary" onclick="saveBriefing()">Salvar Briefing</button>
+          </div>
+
+          <div class="status-message" id="save-status"></div>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <p>AIC - Applied Intelligence Clustering | Briefing seguro e criptografado</p>
+    </div>
+  </footer>
+
+  <script>
+    // State
+    let campaignId = null;
+    let currentSection = 1;
+    const totalSections = 8;
+    const tagsData = {};
+    let selectedFile = null;
+
+    // Get campaign ID from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    campaignId = urlParams.get('campaign');
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+      if (!campaignId) {
+        alert('ID da campanha nao encontrado. Redirecionando...');
+        window.location.href = '/aic-campaign-onboarding.html';
+        return;
+      }
+
+      // Setup tag inputs
+      setupTagInputs();
+
+      // Load existing briefing
+      loadBriefing();
+
+      // Setup form change listeners
+      setupFormListeners();
+    });
+
+    // Setup tag inputs
+    function setupTagInputs() {
+      const tagFields = [
+        'secondary_differentiators',
+        'competitors_names',
+        'certifications',
+        'awards',
+        'icp_job_titles',
+        'icp_industries',
+        'icp_secondary_pains',
+        'icp_desires',
+        'icp_objections',
+        'icp_decision_factors',
+        'success_cases',
+        'testimonials',
+        'results_metrics',
+        'media_mentions',
+        'partnerships',
+        'words_to_use',
+        'words_to_avoid',
+        'key_messages'
+      ];
+
+      tagFields.forEach(field => {
+        tagsData[field] = [];
+        const input = document.getElementById(`${field}_input`);
+        const container = document.getElementById(`${field}_container`);
+
+        if (input && container) {
+          input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              const value = this.value.trim();
+              if (value && !tagsData[field].includes(value)) {
+                tagsData[field].push(value);
+                renderTags(field);
+                updateProgress();
+              }
+              this.value = '';
+            }
+          });
+        }
+      });
+    }
+
+    // Render tags
+    function renderTags(field) {
+      const container = document.getElementById(`${field}_container`);
+      const input = document.getElementById(`${field}_input`);
+
+      // Clear existing tags
+      const existingTags = container.querySelectorAll('.tag');
+      existingTags.forEach(tag => tag.remove());
+
+      // Add new tags
+      tagsData[field].forEach((value, index) => {
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.innerHTML = `${value}<span class="tag-remove" onclick="removeTag('${field}', ${index})">x</span>`;
+        container.insertBefore(tag, input);
+      });
+    }
+
+    // Remove tag
+    function removeTag(field, index) {
+      tagsData[field].splice(index, 1);
+      renderTags(field);
+      updateProgress();
+    }
+
+    // Setup form listeners
+    function setupFormListeners() {
+      const inputs = document.querySelectorAll('.form-input, .form-textarea, .form-select');
+      inputs.forEach(input => {
+        input.addEventListener('change', updateProgress);
+        input.addEventListener('input', debounce(updateProgress, 500));
+      });
+    }
+
+    // Debounce
+    function debounce(func, wait) {
+      let timeout;
+      return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+      };
+    }
+
+    // Show section
+    function showSection(sectionNum) {
+      // Hide all sections
+      for (let i = 1; i <= totalSections; i++) {
+        document.getElementById(`section-${i}`).classList.remove('active');
+        document.querySelectorAll('.section-nav-btn')[i - 1].classList.remove('active');
+      }
+
+      // Show selected section
+      document.getElementById(`section-${sectionNum}`).classList.add('active');
+      document.querySelectorAll('.section-nav-btn')[sectionNum - 1].classList.add('active');
+      currentSection = sectionNum;
+
+      // Scroll to top
+      window.scrollTo({ top: 200, behavior: 'smooth' });
+    }
+
+    // Next section
+    function nextSection() {
+      if (currentSection < totalSections) {
+        showSection(currentSection + 1);
+      }
+    }
+
+    // Previous section
+    function prevSection() {
+      if (currentSection > 1) {
+        showSection(currentSection - 1);
+      }
+    }
+
+    // Update progress
+    function updateProgress() {
+      let filledFields = 0;
+      let totalFields = 19; // campos importantes
+
+      // Check required and important fields
+      const fieldsToCheck = [
+        'company_name',
+        'company_history',
+        'product_service_name',
+        'product_service_description',
+        'price_range',
+        'main_differentiator',
+        'why_choose_us',
+        'icp_description',
+        'icp_main_pain',
+        'tone_of_voice',
+        'call_to_action',
+        'landing_page_url'
+      ];
+
+      fieldsToCheck.forEach(field => {
+        const element = document.getElementById(field);
+        if (element && element.value && element.value.trim()) {
+          filledFields++;
+        }
+      });
+
+      // Check tag fields
+      const importantTagFields = ['competitors_names', 'icp_objections', 'success_cases', 'results_metrics', 'secondary_differentiators', 'key_messages', 'words_to_avoid'];
+      importantTagFields.forEach(field => {
+        if (tagsData[field] && tagsData[field].length > 0) {
+          filledFields++;
+        }
+      });
+
+      const percent = Math.round((filledFields / totalFields) * 100);
+
+      document.getElementById('progress-percent').textContent = percent;
+      document.getElementById('progress-fill').style.width = `${percent}%`;
+    }
+
+    // Load existing briefing
+    async function loadBriefing() {
+      try {
+        const response = await fetch(`/api/campaigns/${campaignId}/briefing`);
+        if (response.ok) {
+          const briefing = await response.json();
+          if (briefing) {
+            populateForm(briefing);
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao carregar briefing:', error);
+      }
+    }
+
+    // Populate form with existing data
+    function populateForm(briefing) {
+      // Text fields
+      const textFields = [
+        'company_name', 'company_history', 'company_mission', 'years_in_market', 'team_size',
+        'location_city', 'location_state', 'product_service_name', 'product_service_description',
+        'product_service_type', 'price_range', 'price_model', 'delivery_method', 'delivery_time',
+        'main_differentiator', 'competitor_weaknesses', 'why_choose_us', 'unique_methodology',
+        'exclusive_technology', 'icp_description', 'icp_demographics', 'icp_company_size',
+        'icp_main_pain', 'client_count', 'guarantees', 'tone_of_voice', 'communication_style',
+        'call_to_action', 'landing_page_url', 'website_url', 'instagram_url', 'linkedin_url',
+        'youtube_url', 'portfolio_url', 'media_kit_url'
+      ];
+
+      textFields.forEach(field => {
+        const element = document.getElementById(field);
+        if (element && briefing[field]) {
+          element.value = briefing[field];
+        }
+      });
+
+      // Array fields (tags)
+      const arrayFields = [
+        'secondary_differentiators', 'competitors_names', 'certifications', 'awards',
+        'icp_job_titles', 'icp_industries', 'icp_secondary_pains', 'icp_desires',
+        'icp_objections', 'icp_decision_factors', 'success_cases', 'testimonials',
+        'results_metrics', 'media_mentions', 'partnerships', 'words_to_use',
+        'words_to_avoid', 'key_messages'
+      ];
+
+      arrayFields.forEach(field => {
+        if (briefing[field] && Array.isArray(briefing[field])) {
+          tagsData[field] = briefing[field];
+          renderTags(field);
+        }
+      });
+
+      updateProgress();
+    }
+
+    // Collect form data
+    function collectFormData() {
+      const data = { campaign_id: campaignId };
+
+      // Text fields
+      const textFields = [
+        'company_name', 'company_history', 'company_mission', 'years_in_market', 'team_size',
+        'location_city', 'location_state', 'product_service_name', 'product_service_description',
+        'product_service_type', 'price_range', 'price_model', 'delivery_method', 'delivery_time',
+        'main_differentiator', 'competitor_weaknesses', 'why_choose_us', 'unique_methodology',
+        'exclusive_technology', 'icp_description', 'icp_demographics', 'icp_company_size',
+        'icp_main_pain', 'client_count', 'guarantees', 'tone_of_voice', 'communication_style',
+        'call_to_action', 'landing_page_url', 'website_url', 'instagram_url', 'linkedin_url',
+        'youtube_url', 'portfolio_url', 'media_kit_url'
+      ];
+
+      textFields.forEach(field => {
+        const element = document.getElementById(field);
+        if (element) {
+          const value = element.value.trim();
+          if (value) {
+            data[field] = field === 'years_in_market' ? parseInt(value) : value;
+          }
+        }
+      });
+
+      // Array fields (tags)
+      Object.keys(tagsData).forEach(field => {
+        if (tagsData[field] && tagsData[field].length > 0) {
+          data[field] = tagsData[field];
+        }
+      });
+
+      return data;
+    }
+
+    // Save briefing
+    async function saveBriefing() {
+      const btn = document.querySelector('#section-7 .btn-primary');
+      const statusEl = document.getElementById('save-status');
+
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+
+      try {
+        const data = collectFormData();
+
+        // Validate required fields
+        if (!data.main_differentiator) {
+          showStatus('save-status', 'O campo "Principal Diferencial" e obrigatorio.', 'error');
+          showSection(3);
+          btn.disabled = false;
+          btn.textContent = 'Salvar Briefing';
+          return;
+        }
+
+        const response = await fetch(`/api/campaigns/${campaignId}/briefing`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Erro ao salvar briefing');
+        }
+
+        showStatus('save-status', 'Briefing salvo com sucesso! Voce pode continuar editando a qualquer momento.', 'success');
+
+        // Check if should redirect to onboarding
+        const percent = parseInt(document.getElementById('progress-percent').textContent);
+        if (percent >= 50) {
+          setTimeout(() => {
+            if (confirm('Briefing salvo! Deseja continuar para a configuracao tecnica (WhatsApp/Instagram)?')) {
+              window.location.href = `/aic-campaign-onboarding.html?campaign=${campaignId}`;
+            }
+          }, 1500);
+        }
+
+      } catch (error) {
+        console.error('Erro:', error);
+        showStatus('save-status', error.message, 'error');
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Salvar Briefing';
+    }
+
+    // Show status message
+    function showStatus(elementId, message, type) {
+      const element = document.getElementById(elementId);
+      element.textContent = message;
+      element.className = `status-message show ${type}`;
+    }
+
+    // =====================================================
+    // DOCUMENT UPLOAD FUNCTIONS
+    // =====================================================
+
+    // Handle drag over
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('upload-area').style.borderColor = '#00d4ff';
+      document.getElementById('upload-area').style.background = 'rgba(0, 212, 255, 0.1)';
+    }
+
+    // Handle drag leave
+    function handleDragLeave(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('upload-area').style.borderColor = '#333';
+      document.getElementById('upload-area').style.background = 'transparent';
+    }
+
+    // Handle drop
+    function handleDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleDragLeave(e);
+
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        processFile(files[0]);
+      }
+    }
+
+    // Handle file select
+    function handleFileSelect(e) {
+      const files = e.target.files;
+      if (files.length > 0) {
+        processFile(files[0]);
+      }
+    }
+
+    // Process selected file
+    function processFile(file) {
+      const allowedTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain',
+        'text/markdown'
+      ];
+
+      if (!allowedTypes.includes(file.type) && !file.name.endsWith('.md')) {
+        alert('Formato nao suportado. Use PDF, DOCX, TXT ou MD.');
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Arquivo muito grande. Maximo 10MB.');
+        return;
+      }
+
+      selectedFile = file;
+
+      // Update UI
+      const uploadArea = document.getElementById('upload-area');
+      uploadArea.innerHTML = `
+        <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
+        <p style="color: #00d4ff; font-size: 16px; margin-bottom: 8px;">${file.name}</p>
+        <p style="color: #666; font-size: 14px;">${(file.size / 1024).toFixed(1)} KB</p>
+        <button type="button" onclick="clearFile(event)" style="margin-top: 12px; padding: 8px 16px; background: #333; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Trocar arquivo</button>
+      `;
+
+      // Show title and type fields
+      document.getElementById('doc-title-group').style.display = 'block';
+      document.getElementById('doc-type-group').style.display = 'block';
+      document.getElementById('upload-btn-group').style.display = 'block';
+
+      // Suggest title from filename
+      const suggestedTitle = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+      document.getElementById('doc_title').value = suggestedTitle;
+    }
+
+    // Clear selected file
+    function clearFile(e) {
+      e.stopPropagation();
+      selectedFile = null;
+      document.getElementById('file-input').value = '';
+
+      const uploadArea = document.getElementById('upload-area');
+      uploadArea.innerHTML = `
+        <div style="font-size: 48px; margin-bottom: 16px;">📄</div>
+        <p style="color: #fff; font-size: 16px; margin-bottom: 8px;">Arraste um arquivo aqui ou clique para selecionar</p>
+        <p style="color: #666; font-size: 14px;">PDF, DOCX, TXT ou MD - Maximo 10MB</p>
+      `;
+
+      document.getElementById('doc-title-group').style.display = 'none';
+      document.getElementById('doc-type-group').style.display = 'none';
+      document.getElementById('upload-btn-group').style.display = 'none';
+    }
+
+    // Upload document
+    async function uploadDocument() {
+      if (!selectedFile) {
+        alert('Selecione um arquivo primeiro.');
+        return;
+      }
+
+      const title = document.getElementById('doc_title').value.trim();
+      if (!title) {
+        alert('Informe um titulo para o documento.');
+        return;
+      }
+
+      const docType = document.getElementById('doc_type').value;
+      const btn = document.getElementById('upload-btn');
+      const statusEl = document.getElementById('upload-status');
+
+      btn.disabled = true;
+      btn.textContent = 'Processando...';
+      statusEl.textContent = 'Enviando e processando documento...';
+      statusEl.className = 'status-message show';
+
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('title', title);
+        formData.append('docType', docType);
+
+        const response = await fetch(`/api/campaigns/${campaignId}/documents`, {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Erro ao processar documento');
+        }
+
+        statusEl.textContent = `Documento processado: ${result.chunksCreated} blocos criados`;
+        statusEl.className = 'status-message show success';
+
+        // Clear form and reload list
+        clearFile({ stopPropagation: () => {} });
+        loadDocuments();
+
+      } catch (error) {
+        console.error('Erro ao enviar documento:', error);
+        statusEl.textContent = error.message;
+        statusEl.className = 'status-message show error';
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Processar Documento';
+    }
+
+    // Load campaign documents
+    async function loadDocuments() {
+      const listEl = document.getElementById('documents-list');
+
+      try {
+        const response = await fetch(`/api/campaigns/${campaignId}/documents`);
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Erro ao carregar documentos');
+        }
+
+        if (result.documents.length === 0) {
+          listEl.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">Nenhum documento enviado ainda.</p>';
+          return;
+        }
+
+        listEl.innerHTML = result.documents.map(doc => `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #0d0d1a; border-radius: 8px; margin-bottom: 8px;">
+            <div>
+              <p style="color: #fff; font-weight: 500; margin-bottom: 4px;">${doc.title}</p>
+              <p style="color: #666; font-size: 12px;">${getDocTypeLabel(doc.doc_type)} • ${doc.chunks} blocos</p>
+            </div>
+            <button onclick="deleteDocument('${encodeURIComponent(doc.title)}')" style="padding: 6px 12px; background: #ff4757; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-size: 12px;">Remover</button>
+          </div>
+        `).join('');
+
+      } catch (error) {
+        console.error('Erro ao carregar documentos:', error);
+        listEl.innerHTML = '<p style="color: #ff4757; text-align: center; padding: 20px;">Erro ao carregar documentos.</p>';
+      }
+    }
+
+    // Get document type label
+    function getDocTypeLabel(type) {
+      const labels = {
+        'knowledge': 'Base de Conhecimento',
+        'faq': 'FAQ',
+        'product': 'Catalogo',
+        'policy': 'Politicas',
+        'script': 'Script',
+        'other': 'Outro'
+      };
+      return labels[type] || type;
+    }
+
+    // Delete document
+    async function deleteDocument(title) {
+      if (!confirm('Tem certeza que deseja remover este documento?')) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/campaigns/${campaignId}/documents/${title}`, {
+          method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Erro ao remover documento');
+        }
+
+        loadDocuments();
+
+      } catch (error) {
+        console.error('Erro ao remover documento:', error);
+        alert(error.message);
+      }
+    }
+
+    // Load documents when section 8 is shown
+    const originalShowSection = showSection;
+    showSection = function(num) {
+      originalShowSection(num);
+      if (num === 8) {
+        loadDocuments();
+      }
+    };
+  </script>
+</body>
+</html>

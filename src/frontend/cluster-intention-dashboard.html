@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cluster Intention Dashboard - AIC v3</title>
+    <!-- Umami Analytics -->
+    <script defer src="https://analytics.ubs.app.br/script.js" data-website-id="e139b226-0b32-4a40-a53b-cbc5e708ff83"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -1169,6 +1171,14 @@
                             style="display: none; margin-top: 8px;"
                         >
                     </div>
+
+                    <div class="input-group">
+                        <label class="input-label" for="whapiChannelSelect">Canal Whapi (Linha WhatsApp)</label>
+                        <select id="whapiChannelSelect" class="input-field">
+                            <option value="">-- Selecione um canal --</option>
+                        </select>
+                        <div class="input-hint">Linha WhatsApp para envio de mensagens desta campanha.</div>
+                    </div>
                 </div>
 
                 <!-- Modo de edição indicator -->
@@ -1314,14 +1324,15 @@
                     </div>
                 </details>
 
-                <div class="suggestions">
-                    <div class="suggestions-label">Ou selecione um nicho pre-definido:</div>
-                    <div class="suggestion-pills" id="suggestionPills">
-                        <!-- Sugestoes serao inseridas via JavaScript -->
+                <!-- Nichos salvos da campanha (carregados dinamicamente) -->
+                <div id="savedNichesSection" style="display: none; margin-top: 15px;">
+                    <div class="suggestions-label">Nichos salvos nesta campanha:</div>
+                    <div id="savedNichesPills" class="suggestion-pills">
+                        <!-- Nichos da campanha serão carregados via API -->
                     </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
                     <button class="btn" id="analyzeBtn" onclick="validateNiche()">
                         🔍 Validar Nicho
                     </button>
@@ -1637,41 +1648,8 @@
                 .replace(/'/g, '&#39;');
         };
 
-        // Nichos pre-definidos com seeds
-        const NICHOS = {
-            gestao_trafego: {
-                name: 'Gestao de Trafego',
-                seeds: ['gestao', 'trafego', 'marketing', 'ads', 'leads']
-            },
-            social_media: {
-                name: 'Social Media',
-                seeds: ['socialmedia', 'conteudo', 'instagram', 'redes', 'digital']
-            },
-            estetica: {
-                name: 'Estetica',
-                seeds: ['estetica', 'beleza', 'skincare', 'micropigmentacao', 'sobrancelha']
-            },
-            advocacia: {
-                name: 'Advocacia',
-                seeds: ['advocacia', 'advogado', 'direito', 'juridico', 'lei']
-            },
-            contabilidade: {
-                name: 'Contabilidade',
-                seeds: ['contabilidade', 'contador', 'contabil', 'fiscal', 'tributario']
-            },
-            psicologia: {
-                name: 'Psicologia',
-                seeds: ['psicologia', 'psicologo', 'terapia', 'mental', 'emocional']
-            },
-            fitness: {
-                name: 'Fitness',
-                seeds: ['fitness', 'treino', 'academia', 'musculacao', 'personal']
-            },
-            nutricao: {
-                name: 'Nutricao',
-                seeds: ['nutricao', 'nutricionista', 'dieta', 'alimentacao', 'emagrecimento']
-            }
-        };
+        // Nichos são carregados dinamicamente da campanha via API
+        // Não há nichos pré-definidos - são criados através da validação
 
         // Resultado atual da validacao
         let currentValidation = null;
@@ -1718,23 +1696,171 @@
             };
         }
 
-        // Renderizar sugestoes
-        function renderSuggestions() {
-            const pills = document.getElementById('suggestionPills');
-            pills.innerHTML = Object.keys(NICHOS).map(key => {
-                const nicho = NICHOS[key];
+        // Carregar nichos salvos da campanha
+        async function loadCampaignNiches(campaignId) {
+            if (!campaignId) {
+                hideSavedNiches();
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/campaign/${campaignId}/niches`);
+                const result = await response.json();
+
+                if (result.success && result.data && result.data.length > 0) {
+                    renderSavedNiches(result.data, result.active_niche_index || 0);
+                } else {
+                    hideSavedNiches();
+                }
+            } catch (error) {
+                console.error('Erro ao carregar nichos da campanha:', error);
+                hideSavedNiches();
+            }
+        }
+
+        // Renderizar nichos salvos da campanha
+        function renderSavedNiches(niches, activeIndex) {
+            const section = document.getElementById('savedNichesSection');
+            const pills = document.getElementById('savedNichesPills');
+
+            if (!niches || niches.length === 0) {
+                hideSavedNiches();
+                return;
+            }
+
+            pills.innerHTML = niches.map((nicho, index) => {
+                const isActive = index === activeIndex;
+                const isValidated = nicho.is_validated;
+                const statusIcon = isValidated ? '✅' : '⏳';
+                const activeStyle = isActive ? 'background: var(--aic-green); color: var(--aic-navy);' : '';
+
                 return `
-                    <div class="suggestion-pill" onclick="loadSuggestion('${key}')">
-                        ${nicho.name}
+                    <div class="suggestion-pill"
+                         onclick="loadSavedNiche(${index})"
+                         style="${activeStyle}"
+                         title="${isValidated ? 'Nicho validado' : 'Aguardando validação'}">
+                        ${statusIcon} ${escapeHTML(nicho.name)}
                     </div>
                 `;
             }).join('');
+
+            section.style.display = 'block';
         }
 
-        function loadSuggestion(nichoKey) {
-            const nicho = NICHOS[nichoKey];
-            document.getElementById('nichoInput').value = nicho.name;
-            document.getElementById('seedsInput').value = nicho.seeds.join(', ');
+        // Carregar um nicho salvo no formulário
+        function loadSavedNiche(nicheIndex) {
+            if (!currentCampaignId) return;
+
+            // Buscar nicho do array em memória ou recarregar
+            fetch(`${API_BASE}/campaign/${currentCampaignId}/niches`)
+                .then(res => res.json())
+                .then(result => {
+                    if (result.success && result.data && result.data[nicheIndex]) {
+                        const nicho = result.data[nicheIndex];
+                        document.getElementById('nichoInput').value = nicho.name || '';
+                        document.getElementById('seedsInput').value = (nicho.seeds || []).join(', ');
+
+                        // Se o nicho tem resultado de validação, carregar
+                        if (nicho.validation_result) {
+                            currentValidation = nicho.validation_result;
+                            renderResults(nicho.validation_result);
+                        }
+
+                        // Se o nicho tem resultado de clustering, carregar
+                        if (nicho.clustering_result) {
+                            currentClusteringResult = nicho.clustering_result;
+                            renderClusteringResults(nicho.clustering_result);
+                        }
+
+                        // Ativar este nicho na campanha
+                        activateNiche(nicheIndex);
+                    }
+                })
+                .catch(err => console.error('Erro ao carregar nicho:', err));
+        }
+
+        // Ativar um nicho na campanha
+        async function activateNiche(nicheIndex) {
+            if (!currentCampaignId) return;
+
+            try {
+                await fetch(`${API_BASE}/campaign/${currentCampaignId}/niches/${nicheIndex}/activate`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                // Recarregar nichos para atualizar visual
+                await loadCampaignNiches(currentCampaignId);
+            } catch (error) {
+                console.error('Erro ao ativar nicho:', error);
+            }
+        }
+
+        // Ocultar seção de nichos salvos
+        function hideSavedNiches() {
+            document.getElementById('savedNichesSection').style.display = 'none';
+        }
+
+        // Salvar nicho na campanha após validação bem-sucedida
+        async function saveNicheToCampaign(nicheName, seeds, validationResult) {
+            if (!currentCampaignId) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/campaign/${currentCampaignId}/niches`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: nicheName,
+                        seeds: seeds
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Atualizar validação do nicho recém-criado
+                    const nicheIndex = result.data.length - 1; // Último adicionado
+                    await updateNicheValidation(nicheIndex, validationResult);
+                    // Recarregar nichos
+                    await loadCampaignNiches(currentCampaignId);
+                }
+            } catch (error) {
+                console.error('Erro ao salvar nicho na campanha:', error);
+            }
+        }
+
+        // Atualizar validação de um nicho
+        async function updateNicheValidation(nicheIndex, validationResult) {
+            if (!currentCampaignId) return;
+
+            try {
+                await fetch(`${API_BASE}/campaign/${currentCampaignId}/niches/${nicheIndex}/validate`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        is_validated: validationResult.isViable,
+                        validation_result: validationResult
+                    })
+                });
+            } catch (error) {
+                console.error('Erro ao atualizar validação do nicho:', error);
+            }
+        }
+
+        // Atualizar clustering de um nicho
+        async function updateNicheClustering(nicheIndex, clusteringResult) {
+            if (!currentCampaignId) return;
+
+            try {
+                await fetch(`${API_BASE}/campaign/${currentCampaignId}/niches/${nicheIndex}/clustering`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        clustering_result: clusteringResult
+                    })
+                });
+            } catch (error) {
+                console.error('Erro ao atualizar clustering do nicho:', error);
+            }
         }
 
         // ==================== GERADOR DE SEEDS COM IA ====================
@@ -1798,27 +1924,94 @@
         }
         // ==================== FIM GERADOR DE SEEDS ====================
 
-        async function validateNiche() {
+        // ==================== VALIDAÇÃO DE FORMULÁRIO ====================
+        function showFieldError(fieldId, message) {
+            const field = document.getElementById(fieldId);
+            if (!field) return;
+
+            field.style.borderColor = '#ef4444';
+            field.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.15)';
+
+            // Remover mensagem de erro anterior se existir
+            const existingError = field.parentNode.querySelector('.field-error');
+            if (existingError) existingError.remove();
+
+            // Adicionar mensagem de erro
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'field-error';
+            errorDiv.style.cssText = 'color: #f87171; font-size: 0.85em; margin-top: 5px;';
+            errorDiv.textContent = message;
+            field.parentNode.appendChild(errorDiv);
+        }
+
+        function clearFieldError(fieldId) {
+            const field = document.getElementById(fieldId);
+            if (!field) return;
+
+            field.style.borderColor = '';
+            field.style.boxShadow = '';
+
+            const existingError = field.parentNode.querySelector('.field-error');
+            if (existingError) existingError.remove();
+        }
+
+        function clearAllFieldErrors() {
+            ['nichoInput', 'seedsInput', 'serviceDescription', 'targetAudience'].forEach(clearFieldError);
+        }
+
+        function validateFormFields() {
+            clearAllFieldErrors();
+            let isValid = true;
+            const errors = [];
+
             const nichoInput = document.getElementById('nichoInput').value.trim();
             const seedsInput = document.getElementById('seedsInput').value.trim();
 
             if (!nichoInput) {
-                alert('Por favor, digite o nicho alvo');
-                return;
+                showFieldError('nichoInput', 'Nicho alvo é obrigatório');
+                errors.push('Nicho alvo');
+                isValid = false;
             }
 
             if (!seedsInput) {
-                alert('Por favor, digite as seeds do nicho');
+                showFieldError('seedsInput', 'Seeds são obrigatórias (separe por vírgula)');
+                errors.push('Seeds');
+                isValid = false;
+            } else {
+                const seeds = seedsInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                if (seeds.length === 0) {
+                    showFieldError('seedsInput', 'Digite pelo menos uma seed válida');
+                    errors.push('Seeds válidas');
+                    isValid = false;
+                }
+            }
+
+            return { isValid, errors };
+        }
+
+        // Adicionar listeners para limpar erros quando o usuário digita
+        document.addEventListener('DOMContentLoaded', function() {
+            ['nichoInput', 'seedsInput', 'serviceDescription', 'targetAudience'].forEach(fieldId => {
+                const field = document.getElementById(fieldId);
+                if (field) {
+                    field.addEventListener('input', () => clearFieldError(fieldId));
+                }
+            });
+        });
+        // ==================== FIM VALIDAÇÃO DE FORMULÁRIO ====================
+
+        async function validateNiche() {
+            // Validar campos primeiro
+            const validation = validateFormFields();
+            if (!validation.isValid) {
                 return;
             }
 
-            // Processar seeds
+            const nichoInput = document.getElementById('nichoInput').value.trim();
+            const seedsInput = document.getElementById('seedsInput').value.trim();
+
+            // Processar seeds (já validadas acima)
             const seeds = seedsInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
-
-            if (seeds.length === 0) {
-                alert('Por favor, digite pelo menos uma seed valida');
-                return;
-            }
 
             // ========== RESET DE ESTADOS ANTERIORES ==========
             // Evita reutilização de dados de nichos anteriores
@@ -1895,6 +2088,11 @@
                 if (result.success) {
                     currentValidation = result.data;
                     renderResults(result.data);
+
+                    // Se temos uma campanha selecionada, salvar o nicho validado
+                    if (currentCampaignId) {
+                        await saveNicheToCampaign(nichoInput, seeds, result.data);
+                    }
                 } else {
                     throw new Error(result.message || 'Erro desconhecido');
                 }
@@ -2528,10 +2726,7 @@
             html += `
                     </div>
                     <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #10b981;">
-                        <button onclick="viewCapturedLeads()" style="background: #059669; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                            👁️ Ver Lista de Leads
-                        </button>
-                        <button onclick="startOutreach()" style="background: #7c3aed; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; margin-left: 10px;">
+                        <button onclick="startOutreach()" style="background: #7c3aed; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">
                             🚀 Iniciar Outreach
                         </button>
                     </div>
@@ -3381,6 +3576,25 @@
             }
         }
 
+        // Carregar canais Whapi disponíveis
+        async function loadWhapiChannels() {
+            try {
+                const response = await fetch(`${API_BASE}/whapi-channels`);
+                const result = await response.json();
+
+                if (result.success) {
+                    const channelSelect = document.getElementById('whapiChannelSelect');
+                    const channels = result.data || [];
+                    channelSelect.innerHTML = `
+                        <option value="">-- Selecione um canal --</option>
+                        ${channels.map(ch => `<option value="${ch.id}">${ch.name} (${ch.phone_number || ch.channel_id})</option>`).join('')}
+                    `;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar canais Whapi:', error);
+            }
+        }
+
         // Quando cliente é selecionado
         async function onClientChange() {
             const clientSelect = document.getElementById('clientSelect');
@@ -3592,6 +3806,9 @@
                     document.getElementById('targetLocation').value = campaign.target_location || '';
                     document.getElementById('targetIncomeClass').value = campaign.target_income_class || '';
 
+                    // Preencher canal Whapi (se existir)
+                    document.getElementById('whapiChannelSelect').value = campaign.whapi_channel_id || '';
+
                     showEditMode(campaign.campaign_name);
 
                     // Se já tem resultado de análise, mostrar
@@ -3659,6 +3876,9 @@
 
                     // Carregar conteúdo gerado (personas, DMs, copies, leads) para visualização
                     await loadGeneratedContent(campaign.id);
+
+                    // Carregar nichos salvos da campanha
+                    await loadCampaignNiches(campaign.id);
                 }
             } catch (error) {
                 console.error('Erro ao carregar campanha:', error);
@@ -3681,6 +3901,8 @@
         function hideEditMode() {
             document.getElementById('editModeIndicator').style.display = 'none';
             currentCampaignId = null;
+            // Ocultar nichos salvos quando sair do modo de edição
+            hideSavedNiches();
         }
 
         function clearSelection() {
@@ -3711,6 +3933,7 @@
             document.getElementById('targetGender').value = '';
             document.getElementById('targetLocation').value = '';
             document.getElementById('targetIncomeClass').value = '';
+            document.getElementById('whapiChannelSelect').value = '';
             currentValidation = null;
             currentCampaignId = null;
             // Limpar cache de campanha carregada
@@ -3818,6 +4041,7 @@
                     target_gender: document.getElementById('targetGender').value || null,
                     target_location: document.getElementById('targetLocation').value.trim() || null,
                     target_income_class: document.getElementById('targetIncomeClass').value || null,
+                    whapi_channel_id: document.getElementById('whapiChannelSelect').value || null,
                     analysis_result: currentValidation
                 };
 
@@ -4007,6 +4231,22 @@
                     currentClusteringResult = result.data;
                     renderClusteringResults(result.data);
 
+                    // Salvar resultado do clustering no nicho ativo da campanha
+                    // O nicho ativo é o último adicionado (ou o active_niche_index)
+                    if (currentCampaignId) {
+                        // Buscar o índice do nicho ativo
+                        try {
+                            const nichesResponse = await fetch(`${API_BASE}/campaign/${currentCampaignId}/niches`);
+                            const nichesResult = await nichesResponse.json();
+                            if (nichesResult.success && nichesResult.data && nichesResult.data.length > 0) {
+                                const activeIndex = nichesResult.active_niche_index || nichesResult.data.length - 1;
+                                await updateNicheClustering(activeIndex, result.data);
+                            }
+                        } catch (err) {
+                            console.error('Erro ao salvar clustering no nicho:', err);
+                        }
+                    }
+
                     const silhouette = Number(result.data.silhouette_avg || 0);
                     if (silhouette < 0.35) {
                         alert('⚠️ Clustering com similaridade baixa. Considere ajustar seeds/K ou refazer antes de gerar personas/DM.');
@@ -4185,8 +4425,8 @@
         };
 
         // Inicializar
-        renderSuggestions();
         loadClients();
+        loadWhapiChannels();
     </script>
 </body>
 </html>
