@@ -1335,13 +1335,12 @@ router.post('/campaigns/:campaignId/documents/:title/reprocess', async (req: Req
 
 /**
  * GET /api/aic/my-campaigns
- * Lista todas as campanhas do cliente AIC (para o dashboard)
+ * Lista TODAS as campanhas de TODOS os clientes (para dashboard interno AIC)
  */
 router.get('/aic/my-campaigns', async (req: Request, res: Response): Promise<void> => {
   try {
-    // TODO: Implementar autenticação real para pegar o tenant_id do usuário logado
-    // Por enquanto, retorna todas as campanhas para desenvolvimento
-
+    // Buscar TODAS as campanhas (sem filtro por tenant)
+    // Dashboard é apenas para equipe interna AIC
     const { data: campaigns, error } = await supabase
       .from('cluster_campaigns')
       .select(`
@@ -1350,7 +1349,11 @@ router.get('/aic/my-campaigns', async (req: Request, res: Response): Promise<voi
         campaign_status,
         created_at,
         updated_at,
-        tenant_id
+        tenant_id,
+        tenants:tenant_id (
+          business_name,
+          contact_name
+        )
       `)
       .order('created_at', { ascending: false });
 
@@ -1388,6 +1391,10 @@ router.get('/aic/my-campaigns', async (req: Request, res: Response): Promise<voi
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-+|-+$/g, '');
 
+        // Get client name from tenant relationship
+        const tenantData: any = campaign.tenants;
+        const clientName = tenantData?.business_name || tenantData?.contact_name || null;
+
         return {
           id: campaign.id,
           campaign_name: campaign.campaign_name,
@@ -1396,6 +1403,8 @@ router.get('/aic/my-campaigns', async (req: Request, res: Response): Promise<voi
           docs_count: docsCount || 0,
           conversion_rate: conversionRate,
           slug: slug,
+          client_name: clientName,
+          tenant_id: campaign.tenant_id,
           created_at: campaign.created_at,
           updated_at: campaign.updated_at
         };

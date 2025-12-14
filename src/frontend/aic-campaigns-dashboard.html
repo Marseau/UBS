@@ -679,6 +679,71 @@
       color: var(--aic-white);
     }
 
+    /* Link Copy Box */
+    .link-copy-box {
+      background: var(--aic-navy);
+      border: 2px solid var(--aic-green);
+      border-radius: 12px;
+      padding: 24px;
+      margin: 24px 0;
+    }
+    .link-copy-label {
+      font-size: 14px;
+      color: var(--aic-green);
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .link-input-group {
+      display: flex;
+      gap: 12px;
+    }
+    .link-input {
+      flex: 1;
+      padding: 12px 16px;
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 8px;
+      color: var(--aic-white);
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
+    }
+    .btn-copy {
+      padding: 12px 24px;
+      background: var(--aic-green);
+      color: var(--aic-navy);
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-copy:hover {
+      background: var(--aic-green-dark);
+      transform: translateY(-1px);
+    }
+    .btn-copy.copied {
+      background: var(--aic-blue);
+    }
+    .success-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .success-message {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .success-message h3 {
+      color: var(--aic-green);
+      margin-bottom: 8px;
+    }
+    .success-message p {
+      color: var(--aic-gray);
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .campaigns-grid {
@@ -862,6 +927,50 @@
     </div>
   </div>
 
+  <!-- Campaign Link Modal -->
+  <div id="campaign-link-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>✅ Campanha Criada com Sucesso!</h2>
+        <button class="modal-close" onclick="closeLinkModal()">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="success-icon">🎉</div>
+        <div class="success-message">
+          <h3 id="success-campaign-name"></h3>
+          <p>Copie o link abaixo e envie para o cliente configurar a campanha</p>
+        </div>
+
+        <div class="link-copy-box">
+          <label class="link-copy-label">🔗 Link de Configuração do Cliente</label>
+          <div class="link-input-group">
+            <input type="text" id="campaign-link-input" class="link-input" readonly>
+            <button class="btn-copy" onclick="copyLinkToClipboard()">Copiar Link</button>
+          </div>
+        </div>
+
+        <div class="confirmation-box" style="margin-top: 24px;">
+          <div class="confirmation-item">
+            <strong>O que o cliente precisa fazer:</strong>
+            <ol>
+              <li>Acessar o link fornecido</li>
+              <li>Configurar credenciais WhatsApp e/ou Instagram</li>
+              <li>Preencher o briefing da campanha</li>
+              <li>Fazer upload dos documentos de contexto</li>
+              <li>Aceitar os termos e ativar a campanha</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-modal btn-secondary" onclick="closeLinkModal()">Fechar</button>
+        <button class="btn-modal btn-primary" onclick="closeLinkModal()">Entendido</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Footer -->
   <footer class="footer">
     <div class="container">
@@ -879,16 +988,32 @@
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
+      // Check authentication first
+      if (!checkAICTeamAuth()) {
+        window.location.href = '/aic-landing.html';
+        return;
+      }
+
       loadUserInfo();
       loadCampaigns();
       setupFilterTabs();
     });
 
+    // Check if user is part of AIC internal team
+    function checkAICTeamAuth() {
+      // Simple authentication check - can be enhanced later
+      const aicTeamToken = localStorage.getItem('aic_team_token');
+      const aicTeamEmail = localStorage.getItem('aic_team_email');
+
+      // For development, allow access if either exists OR if bypass flag is set
+      // In production, this should be a proper JWT validation
+      return !!(aicTeamToken || aicTeamEmail || localStorage.getItem('aic_dev_bypass'));
+    }
+
     // Load user info
     async function loadUserInfo() {
       try {
-        // TODO: Implementar autenticação real
-        const userEmail = localStorage.getItem('aic_user_email') || 'usuario@exemplo.com';
+        const userEmail = localStorage.getItem('aic_team_email') || 'equipe@aic.com.br';
         document.getElementById('user-email').textContent = userEmail;
         document.getElementById('user-avatar').textContent = userEmail.charAt(0).toUpperCase();
       } catch (error) {
@@ -952,12 +1077,16 @@
       }[statusClass] || 'Rascunho';
 
       const chartId = `chart-${campaign.id}`;
+      const clientName = campaign.client_name || 'Cliente não atribuído';
 
       return `
         <div class="campaign-card" data-campaign-id="${campaign.id}">
           <div class="campaign-card-header">
             <div>
               <h3 class="campaign-name">${campaign.campaign_name}</h3>
+              <div style="font-size: 12px; color: var(--aic-gray); margin-top: 4px;">
+                👤 ${clientName}
+              </div>
             </div>
             <span class="campaign-status ${statusClass}">
               <span class="status-dot"></span>
@@ -1235,20 +1364,78 @@
 
         const result = await response.json();
 
-        // Close modal
+        // Close creation modal
         closeCreateModal();
 
         // Reload campaigns
         await loadCampaigns();
 
-        // Show success message
-        alert(`✅ Campanha "${campaignData.name}" criada com sucesso!\n\nPróximos passos:\n1. Configure as credenciais\n2. Preencha o briefing`);
-
-        // Redirect to credentials
-        window.location.href = `/campaign/${result.slug}/credentials`;
+        // Show link modal instead of redirecting
+        showLinkModal(result.campaign.id, campaignData.name);
       } catch (error) {
         console.error('[Create Campaign] Error:', error);
         alert('❌ Erro ao criar campanha. Tente novamente.');
+      }
+    }
+
+    // Show campaign link modal
+    function showLinkModal(campaignId, campaignName) {
+      const modal = document.getElementById('campaign-link-modal');
+      const linkInput = document.getElementById('campaign-link-input');
+      const successName = document.getElementById('success-campaign-name');
+
+      // Generate onboarding link
+      const baseUrl = window.location.origin;
+      const onboardingLink = `${baseUrl}/aic-campaign-onboarding.html?campaign=${campaignId}`;
+
+      // Set values
+      successName.textContent = campaignName;
+      linkInput.value = onboardingLink;
+
+      // Show modal
+      modal.classList.add('active');
+    }
+
+    // Close link modal
+    function closeLinkModal() {
+      const modal = document.getElementById('campaign-link-modal');
+      modal.classList.remove('active');
+    }
+
+    // Copy link to clipboard
+    function copyLinkToClipboard() {
+      const linkInput = document.getElementById('campaign-link-input');
+      const copyBtn = document.querySelector('.btn-copy');
+
+      // Select and copy
+      linkInput.select();
+      linkInput.setSelectionRange(0, 99999); // For mobile devices
+
+      try {
+        navigator.clipboard.writeText(linkInput.value).then(() => {
+          // Visual feedback
+          copyBtn.textContent = '✓ Copiado!';
+          copyBtn.classList.add('copied');
+
+          // Reset after 2 seconds
+          setTimeout(() => {
+            copyBtn.textContent = 'Copiar Link';
+            copyBtn.classList.remove('copied');
+          }, 2000);
+        }).catch(() => {
+          // Fallback for older browsers
+          document.execCommand('copy');
+          copyBtn.textContent = '✓ Copiado!';
+          copyBtn.classList.add('copied');
+
+          setTimeout(() => {
+            copyBtn.textContent = 'Copiar Link';
+            copyBtn.classList.remove('copied');
+          }, 2000);
+        });
+      } catch (error) {
+        console.error('Failed to copy:', error);
+        alert('Erro ao copiar. Selecione o texto manualmente.');
       }
     }
 
