@@ -23,7 +23,7 @@ const supabase = createClient(
 );
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'https://n8n.ubs.app.br/webhook';
-const N8N_WORKFLOW_ID = '2WRfnvReul8k7LEu'; // AIC WhatsApp AI Agent (RAG + Memory)
+const N8N_WORKFLOW_ID = 'msXwN1pEc23RuZmu'; // AIC Instagram AI Agent v7 (3-Layer Memory)
 const VERIFY_TOKEN = process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN || 'instagram_dm_verify_2025';
 
 // =====================================================
