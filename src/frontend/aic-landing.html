@@ -1434,5 +1434,136 @@
       rejectBtn.addEventListener('click', () => { setConsent('rejected'); hide(); });
     })();
   </script>
+
+  <!-- Lead Capture & Tracking Script -->
+  <script>
+    (function() {
+      // =====================================================
+      // CONFIGURAÇÃO DA CAMPANHA
+      // =====================================================
+      const CAMPAIGN_ID = 'e14454d3-9c58-4607-9592-a590a5c807c7'; // Social Media BOOSTER 360
+      const API_ENDPOINT = '/api/aic/outreach/landing-page-click';
+
+      // =====================================================
+      // UTILITÁRIOS
+      // =====================================================
+      function getUTMParams() {
+        const params = new URLSearchParams(window.location.search);
+        return {
+          utm_source: params.get('utm_source') || 'organic',
+          utm_medium: params.get('utm_medium') || 'landing',
+          utm_campaign: params.get('utm_campaign') || 'aic',
+          utm_content: params.get('utm_content') || null,
+          utm_term: params.get('utm_term') || null
+        };
+      }
+
+      function extractPhoneFromWhatsAppLink(url) {
+        try {
+          const match = url.match(/wa\.me\/(\d+)/);
+          return match ? match[1] : null;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function getSessionId() {
+        let sessionId = sessionStorage.getItem('aic-session-id');
+        if (!sessionId) {
+          sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+          sessionStorage.setItem('aic-session-id', sessionId);
+        }
+        return sessionId;
+      }
+
+      function trackLeadClick(ctaElement) {
+        const ctaName = ctaElement.getAttribute('data-umami-event') || 'unknown_cta';
+        const ctaHref = ctaElement.getAttribute('href') || '';
+        const phone = extractPhoneFromWhatsAppLink(ctaHref);
+
+        if (!phone) {
+          console.warn('[AIC Lead Capture] Não foi possível extrair telefone do link:', ctaHref);
+          return;
+        }
+
+        const utms = getUTMParams();
+        const sessionId = getSessionId();
+
+        const payload = {
+          campaign_id: CAMPAIGN_ID,
+          phone: phone,
+          name: null, // Não temos nome ainda
+          utm_source: utms.utm_source,
+          utm_medium: utms.utm_medium,
+          utm_campaign: utms.utm_campaign,
+          utm_content: utms.utm_content || ctaName,
+          utm_term: utms.utm_term,
+          cta_clicked: ctaName,
+          session_id: sessionId,
+          referrer: document.referrer || null,
+          landing_url: window.location.href
+        };
+
+        // Enviar para API (fire and forget)
+        fetch(API_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+          console.log('[AIC Lead Capture] Lead registrado:', data);
+        })
+        .catch(error => {
+          console.error('[AIC Lead Capture] Erro ao registrar lead:', error);
+        });
+
+        // Armazenar no localStorage para tracking de conversão
+        try {
+          const leadData = {
+            phone: phone,
+            cta: ctaName,
+            timestamp: new Date().toISOString(),
+            utms: utms
+          };
+          localStorage.setItem('aic-last-lead-click', JSON.stringify(leadData));
+        } catch (e) {
+          console.warn('[AIC Lead Capture] Erro ao salvar no localStorage:', e);
+        }
+      }
+
+      // =====================================================
+      // INICIALIZAÇÃO
+      // =====================================================
+      function init() {
+        // Adicionar listeners em todos os CTAs com data-umami-event
+        const ctaButtons = document.querySelectorAll('[data-umami-event]');
+
+        ctaButtons.forEach(cta => {
+          // Apenas processar links do WhatsApp
+          const href = cta.getAttribute('href') || '';
+          if (href.includes('wa.me')) {
+            cta.addEventListener('click', function(e) {
+              // Não prevenir default - deixar o link abrir normalmente
+              trackLeadClick(this);
+            });
+            console.log('[AIC Lead Capture] Listener adicionado:', cta.getAttribute('data-umami-event'));
+          }
+        });
+
+        console.log(`[AIC Lead Capture] Inicializado para campanha ${CAMPAIGN_ID}`);
+        console.log(`[AIC Lead Capture] ${ctaButtons.length} CTAs monitorados`);
+      }
+
+      // Executar quando DOM estiver pronto
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
 </body>
 </html>
