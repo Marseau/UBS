@@ -1279,8 +1279,8 @@
       const placeholder = document.getElementById('qr-placeholder-backup');
       const status = document.getElementById('qr-status-backup');
 
-      if (!sessionId) {
-        showStatus('whatsapp-backup-status', 'Configure primeiro a conexão principal (Passo 1).', 'error');
+      if (!campaignId) {
+        showStatus('whatsapp-backup-status', 'Selecione uma campanha primeiro.', 'error');
         return;
       }
 
@@ -1290,8 +1290,21 @@
       status.textContent = 'Gerando QR Code Backup...';
 
       try {
-        // Get QR Code from Whapi
-        const qrResponse = await fetch(`/api/whapi/sessions/${sessionId}/qr`, {
+        // Buscar whapi_channel_uuid da campanha
+        const campaignResponse = await fetch(`/api/campaigns/${campaignId}`);
+        if (!campaignResponse.ok) {
+          throw new Error('Erro ao buscar dados da campanha');
+        }
+
+        const campaign = await campaignResponse.json();
+        const channelId = campaign.whapi_channel_uuid;
+
+        if (!channelId) {
+          throw new Error('Campanha não tem canal Whapi configurado. Configure um canal primeiro.');
+        }
+
+        // Get QR Code from Whapi Channel
+        const qrResponse = await fetch(`/api/whapi/channels/${channelId}/qr`, {
           method: 'POST'
         });
 
@@ -1310,7 +1323,7 @@
           placeholder.classList.remove('loading');
 
           // Start polling for backup connection status
-          pollBackupConnectionStatus();
+          pollBackupConnectionStatus(channelId);
         }
 
       } catch (error) {
@@ -1325,11 +1338,11 @@
     }
 
     // Poll for backup connection status
-    async function pollBackupConnectionStatus() {
-      if (!sessionId) return;
+    async function pollBackupConnectionStatus(channelId) {
+      if (!channelId) return;
 
       try {
-        const response = await fetch(`/api/whapi/sessions/${sessionId}/status`);
+        const response = await fetch(`/api/whapi/channels/${channelId}/status`);
         if (response.ok) {
           const data = await response.json();
 
@@ -1340,11 +1353,11 @@
         }
 
         // Continue polling
-        setTimeout(pollBackupConnectionStatus, 3000);
+        setTimeout(() => pollBackupConnectionStatus(channelId), 3000);
 
       } catch (error) {
         console.error('Erro ao verificar status backup:', error);
-        setTimeout(pollBackupConnectionStatus, 5000);
+        setTimeout(() => pollBackupConnectionStatus(channelId), 5000);
       }
     }
 

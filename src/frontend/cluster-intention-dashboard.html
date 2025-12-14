@@ -3807,7 +3807,7 @@
                     document.getElementById('targetIncomeClass').value = campaign.target_income_class || '';
 
                     // Preencher canal Whapi (se existir)
-                    document.getElementById('whapiChannelSelect').value = campaign.whapi_channel_id || '';
+                    document.getElementById('whapiChannelSelect').value = campaign.whapi_channel_uuid || '';
 
                     showEditMode(campaign.campaign_name);
 
@@ -4041,7 +4041,7 @@
                     target_gender: document.getElementById('targetGender').value || null,
                     target_location: document.getElementById('targetLocation').value.trim() || null,
                     target_income_class: document.getElementById('targetIncomeClass').value || null,
-                    whapi_channel_id: document.getElementById('whapiChannelSelect').value || null,
+                    whapi_channel_uuid: document.getElementById('whapiChannelSelect').value || null,
                     analysis_result: currentValidation
                 };
 

@@ -1016,7 +1016,7 @@ router.post('/save-analysis', async (req, res) => {
       target_gender,
       target_location,
       target_income_class,
-      whapi_channel_id,
+      whapi_channel_uuid,
       analysis_result
     } = req.body;
 
@@ -1090,7 +1090,7 @@ router.post('/save-analysis', async (req, res) => {
           target_gender: target_gender || null,
           target_location: target_location || null,
           target_income_class: target_income_class || null,
-          whapi_channel_id: whapi_channel_id || null,
+          whapi_channel_uuid: whapi_channel_uuid || null,
           analysis_result,
           cluster_status: analysis_result.isViable ? 'approved' : 'analyzing',
           last_analysis_at: new Date().toISOString()
@@ -1115,7 +1115,7 @@ router.post('/save-analysis', async (req, res) => {
           target_gender: target_gender || null,
           target_location: target_location || null,
           target_income_class: target_income_class || null,
-          whapi_channel_id: whapi_channel_id || null,
+          whapi_channel_uuid: whapi_channel_uuid || null,
           analysis_result,
           cluster_status: analysis_result.isViable ? 'approved' : 'analyzing',
           last_analysis_at: new Date().toISOString()
