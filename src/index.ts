@@ -834,6 +834,16 @@ try {
   console.error('❌ Failed to load Instagram Hashtag Discovery routes:', error);
 }
 
+// Instagram Official DM Routes - Send DMs with official client account (rate limiting)
+try {
+  const instagramOfficialDMRoutes = require('./routes/instagram-official-dm.routes');
+  const router = 'default' in instagramOfficialDMRoutes ? instagramOfficialDMRoutes.default : instagramOfficialDMRoutes;
+  app.use('/api/instagram/official-dm', router);
+  console.log('✅ Instagram Official DM routes loaded - OFFICIAL ACCOUNT DM AUTOMATION + RATE LIMITING READY');
+} catch (error) {
+  console.error('❌ Failed to load Instagram Official DM routes:', error);
+}
+
 // Account Actions Routes - Record social media actions (multi-platform)
 try {
   const accountActionsRoutes = require('./routes/account-actions.routes');
