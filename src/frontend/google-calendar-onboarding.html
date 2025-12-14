@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configurar Google Calendar - AIC</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    .card-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 32px;
+      text-align: center;
+    }
+
+    .card-header h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .card-header p {
+      font-size: 16px;
+      opacity: 0.9;
+    }
+
+    .card-body {
+      padding: 40px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+
+    .status-pending {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .status-active {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .status-expired {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .status-error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .info-box {
+      background: #e7f3ff;
+      border-left: 4px solid #2196F3;
+      padding: 16px;
+      margin-bottom: 24px;
+      border-radius: 4px;
+    }
+
+    .info-box h3 {
+      color: #1976D2;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .info-box p {
+      color: #333;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .info-box ul {
+      margin-top: 12px;
+      margin-left: 20px;
+    }
+
+    .info-box li {
+      color: #333;
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 4px;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 14px 32px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-align: center;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-danger {
+      background: #dc3545;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #c82333;
+      transform: translateY(-2px);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-top: 24px;
+    }
+
+    .config-item label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .config-item input,
+    .config-item select {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s ease;
+    }
+
+    .config-item input:focus,
+    .config-item select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .checkbox-group {
+      margin-top: 24px;
+    }
+
+    .checkbox-group label {
+      display: flex;
+      align-items: center;
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 12px;
+      cursor: pointer;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      margin-right: 8px;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+    }
+
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .alert {
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+    }
+
+    .alert-success {
+      background: #d4edda;
+      color: #155724;
+      border-left: 4px solid #28a745;
+    }
+
+    .alert-error {
+      background: #f8d7da;
+      color: #721c24;
+      border-left: 4px solid #dc3545;
+    }
+
+    .steps {
+      counter-reset: step;
+      margin-bottom: 24px;
+    }
+
+    .step {
+      position: relative;
+      padding-left: 50px;
+      margin-bottom: 24px;
+    }
+
+    .step::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 32px;
+      height: 32px;
+      background: #667eea;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .step h3 {
+      font-size: 16px;
+      margin-bottom: 8px;
+      color: #333;
+    }
+
+    .step p {
+      font-size: 14px;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="card-header">
+        <h1>📅 Google Calendar</h1>
+        <p>Configure agendamento automático de reuniões</p>
+      </div>
+
+      <div class="card-body">
+        <!-- Loading State -->
+        <div id="loading" class="loading">
+          <div class="spinner"></div>
+          <p>Carregando configurações...</p>
+        </div>
+
+        <!-- Alerts -->
+        <div id="alerts"></div>
+
+        <!-- OAuth Status -->
+        <div id="oauth-status" style="display: none;">
+          <div class="status-section" style="margin-bottom: 32px;">
+            <h2 style="font-size: 20px; margin-bottom: 16px;">Status da Conexão</h2>
+            <span id="status-badge" class="status-badge">Aguardando configuração</span>
+          </div>
+
+          <!-- Not Configured State -->
+          <div id="not-configured" style="display: none;">
+            <div class="info-box">
+              <h3>ℹ️ Por que conectar o Google Calendar?</h3>
+              <p>Com a integração do Google Calendar, seu AI Agent pode:</p>
+              <ul>
+                <li>Agendar reuniões automaticamente com leads quentes</li>
+                <li>Verificar sua disponibilidade em tempo real</li>
+                <li>Criar eventos no seu calendário com Google Meet links</li>
+                <li>Enviar convites e lembretes automáticos</li>
+                <li>Transferir leads com compromisso já confirmado</li>
+              </ul>
+            </div>
+
+            <div class="steps">
+              <div class="step">
+                <h3>Autorize o acesso</h3>
+                <p>Clique no botão abaixo para autorizar a AIC a acessar seu Google Calendar</p>
+              </div>
+
+              <div class="step">
+                <h3>Faça login no Google</h3>
+                <p>Você será redirecionado para fazer login na sua conta Google</p>
+              </div>
+
+              <div class="step">
+                <h3>Conceda permissões</h3>
+                <p>Permita que a AIC visualize e crie eventos no seu calendário</p>
+              </div>
+
+              <div class="step">
+                <h3>Pronto!</h3>
+                <p>Após autorizar, você será redirecionado de volta e poderá configurar preferências</p>
+              </div>
+            </div>
+
+            <button id="btn-connect" class="btn btn-primary">
+              🔗 Conectar Google Calendar
+            </button>
+          </div>
+
+          <!-- Configured State -->
+          <div id="configured" style="display: none;">
+            <div class="alert alert-success">
+              ✅ Google Calendar conectado com sucesso! Agora você pode configurar as preferências de agendamento.
+            </div>
+
+            <h2 style="font-size: 20px; margin-bottom: 16px; margin-top: 32px;">Configurações de Agendamento</h2>
+
+            <div class="config-grid">
+              <div class="config-item">
+                <label>Início do expediente</label>
+                <input type="number" id="working_hours_start" min="0" max="23" value="9">
+              </div>
+
+              <div class="config-item">
+                <label>Fim do expediente</label>
+                <input type="number" id="working_hours_end" min="0" max="23" value="18">
+              </div>
+
+              <div class="config-item">
+                <label>Duração das reuniões (min)</label>
+                <input type="number" id="slot_duration_minutes" min="5" max="120" step="5" value="15">
+              </div>
+
+              <div class="config-item">
+                <label>Intervalo entre reuniões (min)</label>
+                <input type="number" id="buffer_between_meetings_minutes" min="0" max="60" step="5" value="5">
+              </div>
+
+              <div class="config-item">
+                <label>Máximo de reuniões por dia</label>
+                <input type="number" id="max_meetings_per_day" min="1" max="50" value="10">
+              </div>
+
+              <div class="config-item">
+                <label>ID do Calendário</label>
+                <input type="text" id="google_calendar_id" value="primary" placeholder="primary">
+              </div>
+            </div>
+
+            <div class="checkbox-group">
+              <label>
+                <input type="checkbox" id="send_calendar_invites" checked>
+                Enviar convites de calendário por email
+              </label>
+
+              <label>
+                <input type="checkbox" id="send_reminder_24h" checked>
+                Enviar lembrete 24 horas antes
+              </label>
+
+              <label>
+                <input type="checkbox" id="send_reminder_1h" checked>
+                Enviar lembrete 1 hora antes
+              </label>
+            </div>
+
+            <div class="btn-group">
+              <button id="btn-save-config" class="btn btn-primary">
+                💾 Salvar Configurações
+              </button>
+
+              <button id="btn-revoke" class="btn btn-danger">
+                🔓 Desconectar Google Calendar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Extrair campaign_id da URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const campaignId = urlParams.get('campaign_id') || window.location.pathname.split('/').pop();
+
+    // API Base URL
+    const API_BASE = '';
+
+    // State
+    let currentStatus = null;
+
+    // ========================================================================
+    // UTILITY FUNCTIONS
+    // ========================================================================
+
+    function showAlert(message, type = 'success') {
+      const alertsDiv = document.getElementById('alerts');
+      const alertClass = type === 'success' ? 'alert-success' : 'alert-error';
+
+      const alert = document.createElement('div');
+      alert.className = `alert ${alertClass}`;
+      alert.textContent = message;
+
+      alertsDiv.appendChild(alert);
+
+      setTimeout(() => {
+        alert.remove();
+      }, 5000);
+    }
+
+    function setLoading(isLoading) {
+      const loading = document.getElementById('loading');
+      const oauthStatus = document.getElementById('oauth-status');
+
+      if (isLoading) {
+        loading.style.display = 'block';
+        oauthStatus.style.display = 'none';
+      } else {
+        loading.style.display = 'none';
+        oauthStatus.style.display = 'block';
+      }
+    }
+
+    // ========================================================================
+    // API CALLS
+    // ========================================================================
+
+    async function fetchOAuthStatus() {
+      try {
+        const response = await fetch(`${API_BASE}/api/campaigns/${campaignId}/google-calendar/auth/status`);
+        const data = await response.json();
+
+        return data;
+      } catch (error) {
+        console.error('Erro ao buscar status OAuth:', error);
+        throw error;
+      }
+    }
+
+    async function startOAuthFlow() {
+      try {
+        const response = await fetch(`${API_BASE}/api/campaigns/${campaignId}/google-calendar/auth/start`, {
+          method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.auth_url) {
+          // Redirecionar para página de autenticação do Google
+          window.location.href = data.auth_url;
+        } else {
+          throw new Error('URL de autenticação não recebida');
+        }
+      } catch (error) {
+        console.error('Erro ao iniciar OAuth:', error);
+        showAlert('Erro ao conectar com Google Calendar', 'error');
+      }
+    }
+
+    async function fetchConfig() {
+      try {
+        const response = await fetch(`${API_BASE}/api/campaigns/${campaignId}/google-calendar/config`);
+
+        if (!response.ok) {
+          return null;
+        }
+
+        const data = await response.json();
+        return data.config;
+      } catch (error) {
+        console.error('Erro ao buscar configurações:', error);
+        return null;
+      }
+    }
+
+    async function saveConfig() {
+      try {
+        const config = {
+          google_calendar_id: document.getElementById('google_calendar_id').value,
+          working_hours_start: parseInt(document.getElementById('working_hours_start').value),
+          working_hours_end: parseInt(document.getElementById('working_hours_end').value),
+          slot_duration_minutes: parseInt(document.getElementById('slot_duration_minutes').value),
+          buffer_between_meetings_minutes: parseInt(document.getElementById('buffer_between_meetings_minutes').value),
+          max_meetings_per_day: parseInt(document.getElementById('max_meetings_per_day').value),
+          send_calendar_invites: document.getElementById('send_calendar_invites').checked,
+          send_reminder_24h: document.getElementById('send_reminder_24h').checked,
+          send_reminder_1h: document.getElementById('send_reminder_1h').checked
+        };
+
+        const response = await fetch(`${API_BASE}/api/campaigns/${campaignId}/google-calendar/config`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(config)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showAlert('Configurações salvas com sucesso!', 'success');
+        } else {
+          throw new Error(data.error || 'Erro ao salvar configurações');
+        }
+      } catch (error) {
+        console.error('Erro ao salvar configurações:', error);
+        showAlert('Erro ao salvar configurações', 'error');
+      }
+    }
+
+    async function revokeOAuth() {
+      if (!confirm('Tem certeza que deseja desconectar o Google Calendar? Você precisará autorizar novamente.')) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/api/campaigns/${campaignId}/google-calendar/auth/revoke`, {
+          method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showAlert('Google Calendar desconectado com sucesso', 'success');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else {
+          throw new Error(data.error || 'Erro ao revogar acesso');
+        }
+      } catch (error) {
+        console.error('Erro ao revogar OAuth:', error);
+        showAlert('Erro ao desconectar Google Calendar', 'error');
+      }
+    }
+
+    // ========================================================================
+    // UI UPDATE
+    // ========================================================================
+
+    function updateUI(status) {
+      currentStatus = status;
+
+      const statusBadge = document.getElementById('status-badge');
+      const notConfigured = document.getElementById('not-configured');
+      const configured = document.getElementById('configured');
+
+      // Update status badge
+      const statusMap = {
+        'pending': { text: '⏳ Aguardando configuração', class: 'status-pending' },
+        'active': { text: '✅ Conectado e ativo', class: 'status-active' },
+        'expired': { text: '⚠️ Token expirado', class: 'status-expired' },
+        'error': { text: '❌ Erro na autenticação', class: 'status-error' },
+        'revoked': { text: '🔓 Acesso revogado', class: 'status-pending' }
+      };
+
+      const statusInfo = statusMap[status.status] || statusMap['pending'];
+      statusBadge.textContent = statusInfo.text;
+      statusBadge.className = `status-badge ${statusInfo.class}`;
+
+      // Show appropriate section
+      if (status.status === 'active') {
+        notConfigured.style.display = 'none';
+        configured.style.display = 'block';
+
+        // Load existing config
+        loadConfigValues();
+      } else {
+        notConfigured.style.display = 'block';
+        configured.style.display = 'none';
+      }
+    }
+
+    async function loadConfigValues() {
+      const config = await fetchConfig();
+
+      if (config) {
+        document.getElementById('google_calendar_id').value = config.google_calendar_id || 'primary';
+        document.getElementById('working_hours_start').value = config.working_hours_start || 9;
+        document.getElementById('working_hours_end').value = config.working_hours_end || 18;
+        document.getElementById('slot_duration_minutes').value = config.slot_duration_minutes || 15;
+        document.getElementById('buffer_between_meetings_minutes').value = config.buffer_between_meetings_minutes || 5;
+        document.getElementById('max_meetings_per_day').value = config.max_meetings_per_day || 10;
+        document.getElementById('send_calendar_invites').checked = config.send_calendar_invites !== false;
+        document.getElementById('send_reminder_24h').checked = config.send_reminder_24h !== false;
+        document.getElementById('send_reminder_1h').checked = config.send_reminder_1h !== false;
+      }
+    }
+
+    // ========================================================================
+    // EVENT LISTENERS
+    // ========================================================================
+
+    document.getElementById('btn-connect').addEventListener('click', startOAuthFlow);
+    document.getElementById('btn-save-config').addEventListener('click', saveConfig);
+    document.getElementById('btn-revoke').addEventListener('click', revokeOAuth);
+
+    // ========================================================================
+    // INITIALIZATION
+    // ========================================================================
+
+    async function init() {
+      setLoading(true);
+
+      try {
+        const status = await fetchOAuthStatus();
+        updateUI(status);
+      } catch (error) {
+        console.error('Erro ao inicializar:', error);
+        showAlert('Erro ao carregar configurações', 'error');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // Run on page load
+    init();
+  </script>
+</body>
+</html>

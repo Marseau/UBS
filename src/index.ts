@@ -220,6 +220,15 @@ try {
 }
 
 try {
+  // Load Google Calendar OAuth routes for AIC campaigns
+  const googleCalendarOAuthRoutes = require('./routes/google-calendar-oauth.routes');
+  app.use('/api/campaigns', 'default' in googleCalendarOAuthRoutes ? googleCalendarOAuthRoutes.default : googleCalendarOAuthRoutes);
+  console.log('✅ Google Calendar OAuth routes loaded successfully - AIC SCHEDULING READY');
+} catch (error) {
+  console.error("❌ Failed to load Google Calendar OAuth routes:", error);
+}
+
+try {
   // Load auth routes first (critical for registration)
   const authRoutes = require('./routes/auth');
   app.use('/api/auth', 'default' in authRoutes ? authRoutes.default : authRoutes);

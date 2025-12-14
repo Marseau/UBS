@@ -74,6 +74,9 @@ export interface ConversationContext {
   last_topic: string;
   lead_questions: string[];
   lead_objections: string[];
+  whatsapp_phone?: string;
+  has_scheduled_meeting?: boolean;
+  scheduled_meeting_at?: string;
 }
 
 export interface ConversationMessage {
@@ -698,6 +701,7 @@ function calculateNextSlot(businessHours: any, rateLimit: any): string {
 
 /**
  * Executa handoff para humano
+ * AGORA COM: Envio WhatsApp ao cliente + Tracking para billing
  */
 export async function executeHandoff(
   conversationId: string,
@@ -709,28 +713,230 @@ export async function executeHandoff(
   console.log(`   Motivo: ${reason}`);
 
   try {
-    // Atualizar status da conversa
+    // 1. Buscar dados da conversa (incluindo dados de reunião agendada)
+    const { data: conversation, error: convError } = await supabase
+      .from('outreach_conversations')
+      .select(`
+        campaign_id,
+        lead_id,
+        interest_score,
+        interest_signals,
+        conversation_summary,
+        last_topic,
+        has_scheduled_meeting,
+        scheduled_meeting_at,
+        meet_link,
+        meeting_status
+      `)
+      .eq('id', conversationId)
+      .single();
+
+    if (convError || !conversation) {
+      console.error('❌ Conversa não encontrada:', convError);
+      return { success: false };
+    }
+
+    // 2. Buscar dados da campanha (incluindo client_whatsapp_number)
+    const { data: campaign, error: campaignError } = await supabase
+      .from('cluster_campaigns')
+      .select('id, campaign_name, client_whatsapp_number, client_contact_name')
+      .eq('id', conversation.campaign_id)
+      .single();
+
+    if (campaignError || !campaign) {
+      console.error('❌ Campanha não encontrada:', campaignError);
+      return { success: false };
+    }
+
+    if (!campaign.client_whatsapp_number) {
+      console.error('❌ Número de WhatsApp do cliente não configurado na campanha');
+      return { success: false };
+    }
+
+    // 3. Buscar dados do lead
+    const { data: lead, error: leadError } = await supabase
+      .from('instagram_leads')
+      .select('username, full_name, bio, email, phone, followers_count, profile_pic_url')
+      .eq('id', conversation.lead_id)
+      .single();
+
+    if (leadError || !lead) {
+      console.error('❌ Lead não encontrado:', leadError);
+      return { success: false };
+    }
+
+    // 4. Buscar histórico da conversa para extrair perguntas/objeções
+    const { data: messages } = await supabase
+      .from('outreach_conversation_messages')
+      .select('content, sender_type, detected_intent')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true });
+
+    const leadQuestions = messages
+      ?.filter(m => m.sender_type === 'lead')
+      .map(m => m.content)
+      .slice(-5) || []; // Últimas 5 mensagens do lead
+
+    const leadObjections = messages
+      ?.filter(m => m.detected_intent?.includes('objection') || m.detected_intent?.includes('concern'))
+      .map(m => m.content) || [];
+
+    // 5. Criar registro de handoff para billing
+    const { data: handoff, error: handoffError } = await supabase
+      .from('lead_handoffs')
+      .insert({
+        campaign_id: conversation.campaign_id,
+        conversation_id: conversationId,
+        lead_id: conversation.lead_id,
+
+        // Dados do lead
+        lead_username: lead.username,
+        lead_full_name: lead.full_name,
+        lead_bio: lead.bio,
+        lead_email: lead.email,
+        lead_phone: lead.phone,
+        lead_followers_count: lead.followers_count,
+
+        // Dados do cliente (destino)
+        client_contact_name: campaign.client_contact_name || 'Cliente',
+        client_whatsapp_number: campaign.client_whatsapp_number,
+
+        // Contexto da transferência
+        handoff_reason: reason,
+        interest_score: conversation.interest_score,
+        interest_signals: conversation.interest_signals || [],
+        conversation_summary: conversation.conversation_summary || notes || '',
+        lead_questions: leadQuestions,
+        lead_objections: leadObjections,
+
+        // Status inicial
+        handoff_status: 'pending',
+
+        // Billing (configurável por campanha - aqui usando valor padrão)
+        billable: true,
+        billing_amount_cents: 1500, // R$ 15,00 por lead quente (configurável)
+        billing_status: 'pending'
+      })
+      .select()
+      .single();
+
+    if (handoffError) {
+      console.error('❌ Erro ao criar registro de handoff:', handoffError);
+      return { success: false };
+    }
+
+    console.log(`✅ Registro de handoff criado: ${handoff.id}`);
+
+    // 6. Enviar mensagem WhatsApp para o cliente
+    const { getWhapiClient } = await import('./whapi-client.service');
+    const whapiClient = getWhapiClient();
+
+    // Formatar data/hora da reunião (se houver)
+    let meetingSection = '';
+    if ((conversation as any).has_scheduled_meeting && (conversation as any).scheduled_meeting_at) {
+      const meetingDate = new Date((conversation as any).scheduled_meeting_at);
+      const formatted = meetingDate.toLocaleDateString('pt-BR', {
+        weekday: 'long',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      meetingSection = `
+⏰ *REUNIÃO JÁ AGENDADA:*
+📅 *Data/Hora:* ${formatted}
+⏱️ *Duração:* 15 minutos
+${(conversation as any).meet_link ? `🔗 *Link:* ${(conversation as any).meet_link}` : ''}
+
+✅ *O LEAD JÁ CONFIRMOU PRESENÇA!*
+Você só precisa comparecer no horário marcado.
+
+`;
+    }
+
+    const notificationMessage = `🔥 *NOVO LEAD QUENTE - ${campaign.campaign_name}*
+
+👤 *Lead:* ${lead.full_name || lead.username}
+📸 *Instagram:* @${lead.username}
+${lead.followers_count ? `👥 *Seguidores:* ${lead.followers_count.toLocaleString('pt-BR')}` : ''}
+${lead.phone ? `📞 *WhatsApp/Telefone:* ${lead.phone}` : ''}
+${lead.email ? `📧 *Email:* ${lead.email}` : ''}
+
+${meetingSection}${lead.bio ? `📝 *Bio do Lead:*\n${lead.bio.substring(0, 150)}${lead.bio.length > 150 ? '...' : ''}\n\n` : ''}🎯 *Score de Interesse:* ${(conversation.interest_score * 100).toFixed(0)}%
+
+💬 *Sinais de Interesse:*
+${conversation.interest_signals?.slice(0, 3).map(s => `  • ${s}`).join('\n') || '  • Lead muito interessado'}
+
+${leadQuestions.length > 0 ? `❓ *Últimas perguntas do lead:*\n${leadQuestions.slice(-3).map(q => `  • "${q.substring(0, 70)}${q.length > 70 ? '...' : ''}"`).join('\n')}\n\n` : ''}🔗 *Link do perfil:* https://instagram.com/${lead.username}
+
+⚡ *AÇÃO NECESSÁRIA:*
+${(conversation as any).has_scheduled_meeting
+  ? 'Compareça na reunião marcada. O lead já confirmou presença!'
+  : 'Entre em contato o mais rápido possível para agendar reunião e fechar a venda!'}
+
+_Lead transferido em ${new Date().toLocaleString('pt-BR')}_`;
+
+    try {
+      const sendResult = await whapiClient.sendText({
+        to: campaign.client_whatsapp_number,
+        body: notificationMessage,
+        previewUrl: false
+      });
+
+      // 7. Atualizar status da notificação
+      await supabase
+        .from('lead_handoffs')
+        .update({
+          notification_sent_at: new Date().toISOString(),
+          notification_message_id: sendResult.message_id,
+          notification_status: sendResult.sent ? 'sent' : 'failed',
+          notification_error: sendResult.error,
+          handoff_status: sendResult.sent ? 'sent' : 'pending'
+        })
+        .eq('id', handoff.id);
+
+      if (sendResult.sent) {
+        console.log(`✅ Notificação enviada para ${campaign.client_whatsapp_number}`);
+      } else {
+        console.error(`❌ Falha ao enviar notificação: ${sendResult.error}`);
+      }
+    } catch (notifError: any) {
+      console.error('❌ Erro ao enviar notificação WhatsApp:', notifError.message);
+
+      // Registrar erro mas não falhar o handoff
+      await supabase
+        .from('lead_handoffs')
+        .update({
+          notification_status: 'failed',
+          notification_error: notifError.message
+        })
+        .eq('id', handoff.id);
+    }
+
+    // 8. Atualizar status da conversa
     await supabase
       .from('outreach_conversations')
       .update({
-        status: 'handoff_pending',
+        status: 'handoff_completed',
         handoff_reason: reason,
         handoff_at: new Date().toISOString(),
         handoff_notes: notes
       })
       .eq('id', conversationId);
 
-    // Adicionar mensagem de sistema
+    // 9. Adicionar mensagem de sistema
     await saveMessage(
       conversationId,
       'outbound',
       'system',
-      `[HANDOFF] Conversa transferida para atendimento humano. Motivo: ${reason}`
+      `[HANDOFF] Lead transferido para ${campaign.client_contact_name || 'cliente'}. Motivo: ${reason}`
     );
 
-    console.log(`✅ Handoff executado com sucesso`);
+    console.log(`✅ Handoff executado com sucesso - Lead ID: ${handoff.id}`);
 
-    return { success: true, handoff_id: conversationId };
+    return { success: true, handoff_id: handoff.id };
   } catch (error: any) {
     console.error('❌ Erro no handoff:', error.message);
     return { success: false };
@@ -827,7 +1033,7 @@ export async function addToBlacklist(
 
 export interface ProcessMessageResult {
   success: boolean;
-  action: 'responded' | 'handoff' | 'blacklisted' | 'error';
+  action: 'responded' | 'handoff' | 'blacklisted' | 'error' | 'scheduling_offered' | 'scheduling_confirmed' | 'scheduling_error';
   response_message?: string;
   classification?: ClassificationResult;
   conversation_id?: string;
@@ -927,6 +1133,105 @@ export async function processLeadMessage(
       };
     }
 
+    // 8.5. AGENDAMENTO: Processar escolha de slot OU oferecer agendamento
+    // Se lead já recebeu oferta de slots, processar escolha
+    if (conversation.last_topic === 'scheduling_offered') {
+      console.log('📅 [SCHEDULING] Lead respondeu à oferta de agendamento');
+
+      const slotChoice = parseSlotChoice(incomingMessage);
+
+      if (slotChoice !== null) {
+        console.log(`📅 [SCHEDULING] Lead escolheu slot ${slotChoice + 1}`);
+
+        // Confirmar agendamento
+        const confirmResult = await confirmScheduling(
+          campaignId,
+          conversation.id,
+          {
+            id: leadId,
+            username: leadData.username,
+            full_name: leadData.full_name || leadData.username,
+            phone: leadData.phone || conversation.whatsapp_phone,
+            email: undefined // Email não disponível por WhatsApp
+          },
+          slotChoice,
+          businessContext
+        );
+
+        if (confirmResult.success) {
+          // Salvar mensagem de confirmação
+          await saveMessage(conversation.id, 'outbound', 'ai', confirmResult.message!, {
+            detected_intent: 'scheduling_confirmed'
+          });
+
+          // Atualizar conversa
+          await supabase
+            .from('outreach_conversations')
+            .update({
+              last_topic: 'scheduling_confirmed',
+              interest_score: Math.min(classification.interest_score + 0.1, 1.0) // Boost no score
+            })
+            .eq('id', conversation.id);
+
+          return {
+            success: true,
+            action: 'scheduling_confirmed',
+            response_message: confirmResult.message!,
+            classification,
+            conversation_id: conversation.id,
+            should_send_response: true
+          };
+        } else {
+          console.error('❌ [SCHEDULING] Erro ao confirmar agendamento:', confirmResult.error);
+
+          const errorMessage = 'Desculpe, tive um problema ao confirmar o agendamento. Pode tentar novamente ou me dizer outro horário que prefere?';
+
+          await saveMessage(conversation.id, 'outbound', 'ai', errorMessage, {
+            detected_intent: 'scheduling_error'
+          });
+
+          return {
+            success: true,
+            action: 'scheduling_error',
+            response_message: errorMessage,
+            classification,
+            conversation_id: conversation.id,
+            should_send_response: true
+          };
+        }
+      } else {
+        console.log('📅 [SCHEDULING] Lead não escolheu slot válido, continuando conversa normal');
+        // Continua para gerar resposta normal
+      }
+    }
+
+    // Se ainda não ofereceu agendamento, verificar se deve oferecer
+    const schedulingCheck = await shouldOfferScheduling(conversation, classification);
+    if (schedulingCheck.should_offer) {
+      console.log(`📅 [SCHEDULING] Oferecendo agendamento: ${schedulingCheck.reason}`);
+
+      const offerResult = await offerSchedulingSlots(campaignId, conversation.id);
+
+      if (offerResult.success && offerResult.message) {
+        // Salvar mensagem com slots
+        await saveMessage(conversation.id, 'outbound', 'ai', offerResult.message, {
+          detected_intent: 'scheduling_offered'
+        });
+
+        return {
+          success: true,
+          action: 'scheduling_offered',
+          response_message: offerResult.message,
+          classification,
+          conversation_id: conversation.id,
+          should_send_response: true
+        };
+      } else {
+        console.warn('⚠️ [SCHEDULING] Erro ao oferecer slots, continuando conversa normal');
+        // Continua para gerar resposta normal
+      }
+    }
+
     // 9. Gerar resposta (inclui histórico de interações do account_actions)
     const response = await generateResponse(incomingMessage, history, businessContext, classification, leadData.username);
 
@@ -982,6 +1287,280 @@ export async function processLeadMessage(
 }
 
 // ============================================================================
+// FUNÇÕES DE AGENDAMENTO (NOVO)
+// ============================================================================
+
+import { createCalendarService, TimeSlot } from './google-calendar.service';
+
+/**
+ * Verifica se deve oferecer agendamento ao lead
+ * Oferece quando interesse é alto mas ainda não tem reunião
+ */
+export async function shouldOfferScheduling(
+  conversation: ConversationContext,
+  classification: ClassificationResult
+): Promise<{ should_offer: boolean; reason: string }> {
+
+  // Já tem reunião agendada? Não oferece de novo
+  if (conversation.status === 'scheduled' || (conversation as any).has_scheduled_meeting) {
+    return { should_offer: false, reason: 'Reunião já agendada' };
+  }
+
+  // Score de interesse alto (≥ 0.6) mas não tão alto para handoff imediato
+  if (classification.interest_score >= 0.6 && classification.interest_score < 0.8) {
+    return {
+      should_offer: true,
+      reason: `Interest score ${classification.interest_score} - ideal para agendamento`
+    };
+  }
+
+  // Lead perguntou sobre preço, agendamento ou horários
+  const schedulingKeywords = [
+    'preço', 'quanto custa', 'valor', 'horário', 'horarios',
+    'agendar', 'marcar', 'consulta', 'atendimento', 'conversar',
+    'disponibilidade', 'quando', 'dia', 'hora'
+  ];
+
+  const hasSchedulingIntent = classification.signals.some(signal =>
+    schedulingKeywords.some(keyword => signal.toLowerCase().includes(keyword))
+  );
+
+  if (hasSchedulingIntent && classification.interest_score >= 0.5) {
+    return {
+      should_offer: true,
+      reason: 'Lead demonstrou interesse em agendar ou conhecer mais'
+    };
+  }
+
+  return { should_offer: false, reason: '' };
+}
+
+/**
+ * Oferece slots de agendamento ao lead
+ */
+export async function offerSchedulingSlots(
+  campaignId: string,
+  conversationId: string
+): Promise<{ success: boolean; slots?: TimeSlot[]; message?: string; error?: string }> {
+  try {
+    console.log(`\n📅 [SCHEDULING] Oferecendo agendamento para conversa ${conversationId}`);
+
+    // Criar serviço de calendar
+    const calendarService = await createCalendarService(campaignId);
+
+    // Buscar slots disponíveis (próximos 7 dias)
+    const availableSlots = await calendarService.getAvailableSlots(7);
+
+    if (availableSlots.length === 0) {
+      return {
+        success: false,
+        error: 'Nenhum horário disponível encontrado'
+      };
+    }
+
+    // Pegar os 3 primeiros slots
+    const topSlots = availableSlots.slice(0, 3);
+
+    // Formatar mensagem para o lead
+    const message = `Ótimo! Que tal agendarmos uma consultoria rápida de 15 minutos para eu te explicar melhor tudo o que você precisa saber? 😊
+
+Tenho os seguintes horários disponíveis:
+
+${topSlots.map((slot, i) => `${i + 1}. ${slot.formatted}`).join('\n')}
+
+Qual funciona melhor para você? É só responder com o número (1, 2 ou 3)! 📲`;
+
+    // Salvar slots oferecidos na conversa (para processar escolha depois)
+    await supabase
+      .from('outreach_conversations')
+      .update({
+        last_topic: 'scheduling_offered',
+        conversation_summary: JSON.stringify({
+          offered_slots: topSlots,
+          offered_at: new Date().toISOString()
+        })
+      })
+      .eq('id', conversationId);
+
+    console.log(`✅ [SCHEDULING] ${topSlots.length} slots oferecidos`);
+
+    return {
+      success: true,
+      slots: topSlots,
+      message
+    };
+  } catch (error: any) {
+    console.error('❌ [SCHEDULING] Erro ao oferecer slots:', error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Processa escolha de slot do lead (ex: "1", "2", "3" ou "primeiro", "segunda")
+ */
+export function parseSlotChoice(message: string): number | null {
+  const normalized = message.toLowerCase().trim();
+
+  // Números diretos
+  if (normalized === '1' || normalized.includes('primeiro') || normalized.includes('primeira')) {
+    return 0;
+  }
+  if (normalized === '2' || normalized.includes('segundo') || normalized.includes('segunda')) {
+    return 1;
+  }
+  if (normalized === '3' || normalized.includes('terceiro') || normalized.includes('terceira')) {
+    return 2;
+  }
+
+  return null;
+}
+
+/**
+ * Confirma agendamento escolhido pelo lead
+ */
+export async function confirmScheduling(
+  campaignId: string,
+  conversationId: string,
+  leadData: {
+    id: string;
+    username: string;
+    full_name?: string;
+    phone?: string;
+    email?: string;
+  },
+  slotIndex: number,
+  businessContext: CampaignBusinessContext
+): Promise<{ success: boolean; meetLink?: string; message?: string; error?: string }> {
+  try {
+    console.log(`\n✅ [SCHEDULING] Confirmando agendamento - slot ${slotIndex}`);
+
+    // Buscar slots oferecidos anteriormente
+    const { data: conversation } = await supabase
+      .from('outreach_conversations')
+      .select('conversation_summary, interest_score, interest_signals')
+      .eq('id', conversationId)
+      .single();
+
+    if (!conversation?.conversation_summary) {
+      return {
+        success: false,
+        error: 'Slots não encontrados. Por favor, solicite novos horários.'
+      };
+    }
+
+    const summary = typeof conversation.conversation_summary === 'string'
+      ? JSON.parse(conversation.conversation_summary)
+      : conversation.conversation_summary;
+
+    const offeredSlots = summary.offered_slots as TimeSlot[];
+
+    if (!offeredSlots || slotIndex >= offeredSlots.length) {
+      return {
+        success: false,
+        error: 'Slot inválido'
+      };
+    }
+
+    const selectedSlot = offeredSlots[slotIndex];
+
+    if (!selectedSlot) {
+      return {
+        success: false,
+        error: 'Slot não encontrado'
+      };
+    }
+
+    // Reconstruir objeto TimeSlot com Date objects
+    const slot: TimeSlot = {
+      start: new Date(selectedSlot.start),
+      end: new Date(selectedSlot.end),
+      formatted: selectedSlot.formatted
+    };
+
+    // Buscar perguntas do lead para contexto
+    const { data: messages } = await supabase
+      .from('outreach_conversation_messages')
+      .select('content')
+      .eq('conversation_id', conversationId)
+      .eq('sender_type', 'lead')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    const leadQuestions = messages?.map(m => m.content) || [];
+
+    // Criar serviço de calendar e agendar
+    const calendarService = await createCalendarService(campaignId);
+    const scheduleResult = await calendarService.scheduleAppointment(
+      {
+        name: leadData.full_name || leadData.username,
+        phone: leadData.phone || '',
+        email: leadData.email,
+        username: leadData.username
+      },
+      slot,
+      {
+        campaignName: businessContext.campaign_name,
+        interestScore: conversation.interest_score || 0,
+        questions: leadQuestions,
+        signals: conversation.interest_signals || []
+      }
+    );
+
+    if (!scheduleResult.success) {
+      return {
+        success: false,
+        error: scheduleResult.error || 'Erro ao criar evento no calendário'
+      };
+    }
+
+    // Atualizar conversa com dados da reunião
+    await supabase
+      .from('outreach_conversations')
+      .update({
+        has_scheduled_meeting: true,
+        scheduled_meeting_at: slot.start.toISOString(),
+        meeting_duration_minutes: 15,
+        google_event_id: scheduleResult.eventId,
+        meet_link: scheduleResult.meetLink,
+        meeting_status: 'confirmed',
+        meeting_confirmed_by_lead: true,
+        meeting_notes: `Agendado via IA. Perguntas: ${leadQuestions.slice(0, 3).join('; ')}`
+      })
+      .eq('id', conversationId);
+
+    // Mensagem de confirmação para o lead
+    const confirmationMessage = `Perfeito! ✅
+
+Sua consultoria está confirmada:
+📅 ${slot.formatted}
+⏱️ Duração: 15 minutos
+
+${scheduleResult.meetLink ? `🔗 Link da reunião: ${scheduleResult.meetLink}\n\n` : ''}Vou te enviar lembretes:
+🔔 1 dia antes
+🔔 1 hora antes
+
+Prepare suas dúvidas! Estou ansioso para nossa conversa! 😊`;
+
+    console.log(`✅ [SCHEDULING] Reunião confirmada para ${slot.formatted}`);
+
+    return {
+      success: true,
+      meetLink: scheduleResult.meetLink,
+      message: confirmationMessage
+    };
+  } catch (error: any) {
+    console.error('❌ [SCHEDULING] Erro ao confirmar agendamento:', error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+// ============================================================================
 // EXPORT
 // ============================================================================
 
@@ -1009,5 +1588,11 @@ export const outreachAgentService = {
 
   // Blacklist
   isBlacklisted,
-  addToBlacklist
+  addToBlacklist,
+
+  // Agendamento (NOVO)
+  shouldOfferScheduling,
+  offerSchedulingSlots,
+  parseSlotChoice,
+  confirmScheduling
 };
