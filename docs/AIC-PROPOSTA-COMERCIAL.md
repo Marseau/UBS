@@ -66,6 +66,16 @@ Desenvolvemos conteúdo estratégico (Tweets, Reels, Shorts, Posts) alinhado ao 
 ### Etapa 6 — Acompanhamento Contínuo
 Análise de comportamento, validação/alteração de estratégia, possível reforço com e-mails, métricas e estatísticas em tempo real.
 
+### Etapa 7 — Agendamento Automático (Novo!)
+Leads com alto interesse recebem oferta automática de reunião. O AI Agent:
+- Detecta interesse genuíno (interest score 0.6-0.8)
+- Busca 3 horários disponíveis no seu Google Calendar
+- Oferece slots diretamente no WhatsApp
+- Confirma escolha e cria evento automaticamente
+- Envia convite por email e lembretes (24h e 1h antes)
+
+**Configuração:** Integração OAuth com Google Calendar, configurável por campanha com horário comercial, buffer entre reuniões e preferências de notificação.
+
 ---
 
 ## 5. Expectativa de Resultados
@@ -89,6 +99,9 @@ Com base em campanhas semelhantes, projetamos:
 - **Transparência total** — você acompanha cada etapa do processo
 - **Ajustes durante o processo** — flexibilidade para otimizar a estratégia
 - **Parceiro estratégico** — não apenas operacional, pensamos junto com você
+- **Agendamento automático** — AI Agent oferece e confirma reuniões direto no Google Calendar com leads qualificados
+- **Lembretes automáticos** — Sistema envia lembretes 24h e 1h antes das reuniões agendadas
+- **Zero fricção para reuniões** — Leads escolhem horário e recebem convite por email automaticamente
 
 ---
 
@@ -120,6 +133,9 @@ Com base em campanhas semelhantes, projetamos:
 - Execução da campanha por 30 dias
 - Acompanhamento e relatórios
 - Entrega de leads qualificados
+- **Agendamento automático via Google Calendar** (novo!)
+- **Sistema de lembretes** para reuniões agendadas
+- **Configuração de horário comercial** personalizada
 
 ### Definição de Lead Qualificado
 Quem responde com intenção aderente + contato válido (email/telefone/WA) ou agenda conversa.
