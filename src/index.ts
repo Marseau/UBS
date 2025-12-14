@@ -853,6 +853,16 @@ try {
   console.error('❌ Failed to load Instagram Official DM routes:', error);
 }
 
+// Instagram DM Webhook Routes - Receive inbound DMs and process with AI Agent
+try {
+  const instagramDMWebhookRoutes = require('./routes/instagram-dm-webhook.routes');
+  const router = 'default' in instagramDMWebhookRoutes ? instagramDMWebhookRoutes.default : instagramDMWebhookRoutes;
+  app.use('/api/instagram/dm', router);
+  console.log('✅ Instagram DM Webhook routes loaded - INBOUND DM DETECTION + AI AGENT INTEGRATION READY');
+} catch (error) {
+  console.error('❌ Failed to load Instagram DM Webhook routes:', error);
+}
+
 // Account Actions Routes - Record social media actions (multi-platform)
 try {
   const accountActionsRoutes = require('./routes/account-actions.routes');
