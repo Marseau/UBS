@@ -1481,4 +1481,168 @@ router.get('/campaign/:identifier', async (req: Request, res: Response): Promise
   }
 });
 
+/**
+ * POST /api/campaigns/create
+ * Cria uma nova campanha
+ */
+router.post('/campaigns/create', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { name, objective } = req.body;
+
+    if (!name) {
+      res.status(400).json({ error: 'Campaign name is required' });
+      return;
+    }
+
+    // TODO: Get tenant_id from authenticated user
+    const tenantId = null; // For now, allow NULL for development
+
+    // Generate slug
+    const slug = name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove accents
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    // Create campaign
+    const { data: campaign, error } = await supabase
+      .from('cluster_campaigns')
+      .insert({
+        campaign_name: name,
+        campaign_status: 'draft',
+        tenant_id: tenantId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error || !campaign) {
+      console.error('[Create Campaign] Error:', error);
+      res.status(500).json({ error: 'Failed to create campaign' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      campaign: campaign,
+      slug: slug,
+      message: 'Campaign created successfully'
+    });
+  } catch (error: any) {
+    console.error('[Create Campaign] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PATCH /api/campaigns/:id/status
+ * Atualiza o status de uma campanha (active/paused/draft)
+ */
+router.patch('/campaigns/:id/status', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!id) {
+      res.status(400).json({ error: 'Campaign ID is required' });
+      return;
+    }
+
+    if (!status || !['active', 'paused', 'draft'].includes(status)) {
+      res.status(400).json({ error: 'Valid status is required (active, paused, draft)' });
+      return;
+    }
+
+    // Update campaign status
+    const { data: campaign, error } = await supabase
+      .from('cluster_campaigns')
+      .update({
+        campaign_status: status,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error || !campaign) {
+      console.error('[Update Status] Error:', error);
+      res.status(500).json({ error: 'Failed to update campaign status' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      campaign: campaign,
+      message: `Campaign status updated to ${status}`
+    });
+  } catch (error: any) {
+    console.error('[Update Status] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/campaigns/:id/analytics
+ * Retorna dados de analytics de uma campanha (para os gráficos)
+ */
+router.get('/campaigns/:id/analytics', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      res.status(400).json({ error: 'Campaign ID is required' });
+      return;
+    }
+
+    // Get leads history (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { data: leads, error } = await supabase
+      .from('aic_leads')
+      .select('created_at')
+      .eq('campaign_id', id)
+      .gte('created_at', thirtyDaysAgo.toISOString())
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('[Campaign Analytics] Error:', error);
+      res.status(500).json({ error: 'Failed to fetch analytics' });
+      return;
+    }
+
+    // Group by day
+    const dailyLeads: { [key: string]: number } = {};
+    (leads || []).forEach(lead => {
+      const date = new Date(lead.created_at).toLocaleDateString('pt-BR');
+      dailyLeads[date] = (dailyLeads[date] || 0) + 1;
+    });
+
+    // Get last 7 days data
+    const last7Days = Array.from({length: 7}, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - i));
+      return date.toLocaleDateString('pt-BR');
+    });
+
+    const chartData = last7Days.map(date => ({
+      date: date,
+      leads: dailyLeads[date] || 0
+    }));
+
+    res.json({
+      success: true,
+      analytics: {
+        last7Days: chartData,
+        totalLeads: leads?.length || 0
+      }
+    });
+  } catch (error: any) {
+    console.error('[Campaign Analytics] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

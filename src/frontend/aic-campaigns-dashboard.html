@@ -346,6 +346,339 @@
       font-size: 14px;
     }
 
+    /* Status Toggle */
+    .status-toggle {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .btn-toggle {
+      flex: 1;
+      padding: 6px 12px;
+      background: transparent;
+      border: 1px solid var(--aic-border);
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: var(--aic-gray);
+    }
+    .btn-toggle:hover {
+      border-color: var(--aic-green);
+      color: var(--aic-green);
+    }
+    .btn-toggle.active {
+      background: var(--aic-green);
+      border-color: var(--aic-green);
+      color: var(--aic-navy);
+    }
+    .btn-toggle.pause {
+      border-color: var(--aic-yellow);
+      color: var(--aic-yellow);
+    }
+    .btn-toggle.pause:hover {
+      background: var(--aic-yellow);
+      color: var(--aic-navy);
+    }
+
+    /* Mini Chart */
+    .mini-chart-container {
+      height: 60px;
+      margin: 16px 0;
+      position: relative;
+    }
+    .mini-chart-container canvas {
+      max-height: 60px;
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(12, 27, 51, 0.95);
+      backdrop-filter: blur(10px);
+      z-index: 1000;
+      overflow-y: auto;
+      padding: 40px 20px;
+    }
+    .modal.active {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      max-width: 700px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      animation: modalSlideIn 0.3s ease;
+    }
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .modal-header {
+      padding: 24px 32px;
+      border-bottom: 1px solid var(--aic-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header h2 {
+      font-size: 24px;
+      color: var(--aic-white);
+      margin: 0;
+    }
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--aic-gray);
+      font-size: 32px;
+      cursor: pointer;
+      padding: 0;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    .modal-close:hover {
+      background: var(--aic-navy-lighter);
+      color: var(--aic-white);
+    }
+    .modal-body {
+      padding: 32px;
+    }
+    .modal-footer {
+      padding: 24px 32px;
+      border-top: 1px solid var(--aic-border);
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    /* Wizard Steps */
+    .wizard-steps {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+    .wizard-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      opacity: 0.5;
+      transition: all 0.3s;
+    }
+    .wizard-step.active {
+      opacity: 1;
+    }
+    .wizard-step.completed {
+      opacity: 0.7;
+    }
+    .step-number {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--aic-navy-lighter);
+      border: 2px solid var(--aic-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: var(--aic-gray);
+      transition: all 0.3s;
+    }
+    .wizard-step.active .step-number {
+      background: var(--aic-green);
+      border-color: var(--aic-green);
+      color: var(--aic-navy);
+    }
+    .wizard-step.completed .step-number {
+      background: var(--aic-green-subtle);
+      border-color: var(--aic-green);
+      color: var(--aic-green);
+    }
+    .step-label {
+      font-size: 13px;
+      color: var(--aic-gray);
+      font-weight: 500;
+    }
+    .wizard-step.active .step-label {
+      color: var(--aic-white);
+    }
+
+    /* Wizard Content */
+    .wizard-content {
+      display: none;
+    }
+    .wizard-content.active {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateX(-10px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .wizard-content h3 {
+      font-size: 20px;
+      color: var(--aic-white);
+      margin-bottom: 8px;
+    }
+    .wizard-content > p {
+      color: var(--aic-gray);
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    /* Modal Input */
+    .modal-input {
+      width: 100%;
+      padding: 14px 16px;
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 8px;
+      color: var(--aic-white);
+      font-size: 15px;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s;
+    }
+    .modal-input:focus {
+      outline: none;
+      border-color: var(--aic-green);
+      box-shadow: 0 0 0 3px var(--aic-green-glow);
+    }
+    .modal-input::placeholder {
+      color: var(--aic-gray);
+    }
+    .input-helper {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--aic-gray);
+    }
+
+    /* Objective Grid */
+    .objective-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .objective-card {
+      padding: 20px;
+      background: var(--aic-navy);
+      border: 2px solid var(--aic-border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      position: relative;
+    }
+    .objective-card input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+    }
+    .objective-card:hover {
+      border-color: var(--aic-green);
+      transform: translateY(-2px);
+    }
+    .objective-card input[type="radio"]:checked + .objective-icon,
+    .objective-card:has(input[type="radio"]:checked) {
+      border-color: var(--aic-green);
+      background: var(--aic-green-subtle);
+    }
+    .objective-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+    }
+    .objective-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--aic-white);
+      margin-bottom: 6px;
+    }
+    .objective-desc {
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+
+    /* Confirmation Box */
+    .confirmation-box {
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .confirmation-item {
+      margin-bottom: 20px;
+    }
+    .confirmation-item:last-child {
+      margin-bottom: 0;
+    }
+    .confirmation-item strong {
+      color: var(--aic-green);
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+    .confirmation-item span {
+      color: var(--aic-white);
+      font-size: 16px;
+    }
+    .confirmation-item ol {
+      margin: 12px 0 0 20px;
+      color: var(--aic-gray);
+      font-size: 14px;
+    }
+    .confirmation-item li {
+      margin-bottom: 8px;
+    }
+
+    /* Modal Buttons */
+    .btn-modal {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-modal.btn-primary {
+      background: var(--aic-green);
+      color: var(--aic-navy);
+    }
+    .btn-modal.btn-primary:hover {
+      background: var(--aic-green-dark);
+      transform: translateY(-1px);
+    }
+    .btn-modal.btn-secondary {
+      background: transparent;
+      color: var(--aic-gray);
+      border: 1px solid var(--aic-border);
+    }
+    .btn-modal.btn-secondary:hover {
+      background: var(--aic-navy-lighter);
+      color: var(--aic-white);
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .campaigns-grid {
@@ -365,6 +698,22 @@
       .btn-new-campaign {
         width: 100%;
         justify-content: center;
+      }
+      .objective-grid {
+        grid-template-columns: 1fr;
+      }
+      .modal-content {
+        margin: 20px;
+      }
+      .wizard-steps {
+        gap: 12px;
+      }
+      .step-number {
+        width: 36px;
+        height: 36px;
+      }
+      .step-label {
+        font-size: 11px;
       }
     }
   </style>
@@ -416,12 +765,112 @@
     </div>
   </main>
 
+  <!-- Create Campaign Modal -->
+  <div id="create-campaign-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>✨ Criar Nova Campanha</h2>
+        <button class="modal-close" onclick="closeCreateModal()">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="wizard-steps">
+          <div class="wizard-step active" data-step="1">
+            <div class="step-number">1</div>
+            <div class="step-label">Nome</div>
+          </div>
+          <div class="wizard-step" data-step="2">
+            <div class="step-number">2</div>
+            <div class="step-label">Objetivo</div>
+          </div>
+          <div class="wizard-step" data-step="3">
+            <div class="step-number">3</div>
+            <div class="step-label">Confirmar</div>
+          </div>
+        </div>
+
+        <!-- Step 1: Nome da Campanha -->
+        <div class="wizard-content active" data-step="1">
+          <h3>Como você quer chamar sua campanha?</h3>
+          <p>Escolha um nome descritivo que identifique facilmente o objetivo</p>
+          <input type="text" id="campaign-name" class="modal-input" placeholder="Ex: Busca Leads Agendamento, Prospecção LinkedIn B2B">
+          <div class="input-helper">O nome será usado para gerar a URL amigável</div>
+        </div>
+
+        <!-- Step 2: Objetivo -->
+        <div class="wizard-content" data-step="2">
+          <h3>Qual o objetivo principal desta campanha?</h3>
+          <p>Selecione o que melhor descreve o resultado que você busca</p>
+          <div class="objective-grid">
+            <label class="objective-card">
+              <input type="radio" name="objective" value="lead_generation">
+              <div class="objective-icon">🎯</div>
+              <div class="objective-title">Geração de Leads</div>
+              <div class="objective-desc">Encontrar potenciais clientes qualificados</div>
+            </label>
+            <label class="objective-card">
+              <input type="radio" name="objective" value="brand_awareness">
+              <div class="objective-icon">📢</div>
+              <div class="objective-title">Brand Awareness</div>
+              <div class="objective-desc">Aumentar visibilidade da marca</div>
+            </label>
+            <label class="objective-card">
+              <input type="radio" name="objective" value="engagement">
+              <div class="objective-icon">💬</div>
+              <div class="objective-title">Engajamento</div>
+              <div class="objective-desc">Criar conexões e conversas</div>
+            </label>
+            <label class="objective-card">
+              <input type="radio" name="objective" value="sales">
+              <div class="objective-icon">💰</div>
+              <div class="objective-title">Vendas Diretas</div>
+              <div class="objective-desc">Converter leads em clientes</div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Step 3: Confirmação -->
+        <div class="wizard-content" data-step="3">
+          <h3>Tudo pronto para criar sua campanha!</h3>
+          <div class="confirmation-box">
+            <div class="confirmation-item">
+              <strong>Nome:</strong>
+              <span id="confirm-name">-</span>
+            </div>
+            <div class="confirmation-item">
+              <strong>Objetivo:</strong>
+              <span id="confirm-objective">-</span>
+            </div>
+            <div class="confirmation-item">
+              <strong>Próximos passos:</strong>
+              <ol>
+                <li>Configurar credenciais (Instagram/WhatsApp)</li>
+                <li>Preencher briefing da campanha</li>
+                <li>Upload de documentos de contexto</li>
+                <li>Ativar a campanha</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-modal btn-secondary" onclick="wizardPrev()" id="btn-prev" style="display: none;">Voltar</button>
+        <button class="btn-modal btn-primary" onclick="wizardNext()" id="btn-next">Próximo</button>
+        <button class="btn-modal btn-primary" onclick="createCampaign()" id="btn-create" style="display: none;">Criar Campanha</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Footer -->
   <footer class="footer">
     <div class="container">
       <p>AIC - Applied Intelligence Clustering | Suas campanhas são criptografadas e protegidas</p>
     </div>
   </footer>
+
+  <!-- Chart.js for mini charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
   <script>
     // State
@@ -482,6 +931,9 @@
         </div>
       `;
       container.innerHTML = html;
+
+      // Render charts after DOM update
+      setTimeout(() => renderCharts(), 100);
     }
 
     // Filter campaigns
@@ -499,8 +951,10 @@
         draft: 'Rascunho'
       }[statusClass] || 'Rascunho';
 
+      const chartId = `chart-${campaign.id}`;
+
       return `
-        <div class="campaign-card">
+        <div class="campaign-card" data-campaign-id="${campaign.id}">
           <div class="campaign-card-header">
             <div>
               <h3 class="campaign-name">${campaign.campaign_name}</h3>
@@ -509,6 +963,11 @@
               <span class="status-dot"></span>
               ${statusLabel}
             </span>
+          </div>
+
+          <!-- Mini Chart -->
+          <div class="mini-chart-container">
+            <canvas id="${chartId}"></canvas>
           </div>
 
           <div class="campaign-metrics">
@@ -526,6 +985,20 @@
             </div>
           </div>
 
+          <!-- Status Toggle -->
+          <div class="status-toggle">
+            <button class="btn-toggle ${statusClass === 'active' ? 'active' : ''}"
+                    onclick="toggleCampaignStatus('${campaign.id}', 'active')"
+                    ${statusClass === 'active' ? 'disabled' : ''}>
+              ▶ Ativar
+            </button>
+            <button class="btn-toggle pause ${statusClass === 'paused' ? 'active' : ''}"
+                    onclick="toggleCampaignStatus('${campaign.id}', 'paused')"
+                    ${statusClass === 'paused' ? 'disabled' : ''}>
+              ⏸ Pausar
+            </button>
+          </div>
+
           <div class="campaign-actions">
             <a href="/campaign/${campaign.slug || campaign.id}/briefing" class="btn-action primary">
               📋 Briefing
@@ -539,6 +1012,70 @@
           </div>
         </div>
       `;
+    }
+
+    // Render charts after cards are added to DOM
+    function renderCharts() {
+      campaigns.forEach(campaign => {
+        const chartId = `chart-${campaign.id}`;
+        const canvas = document.getElementById(chartId);
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+
+        // Mock data for demo - replace with real analytics data
+        const last7Days = Array.from({length: 7}, (_, i) => {
+          const date = new Date();
+          date.setDate(date.getDate() - (6 - i));
+          return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        });
+
+        const leadsData = [2, 5, 3, 8, 6, 10, 12]; // Mock data
+
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: last7Days,
+            datasets: [{
+              label: 'Leads',
+              data: leadsData,
+              borderColor: '#0ECC97',
+              backgroundColor: 'rgba(14, 204, 151, 0.1)',
+              borderWidth: 2,
+              tension: 0.4,
+              fill: true,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: '#122444',
+                borderColor: '#0ECC97',
+                borderWidth: 1,
+                titleColor: '#FDFDFD',
+                bodyColor: '#94a3b8',
+                padding: 8,
+                displayColors: false
+              }
+            },
+            scales: {
+              x: {
+                display: false,
+                grid: { display: false }
+              },
+              y: {
+                display: false,
+                grid: { display: false }
+              }
+            }
+          }
+        });
+      });
     }
 
     // Render empty state
@@ -590,9 +1127,163 @@
     }
 
     // Create new campaign
+    // ============================================================================
+    // MODAL WIZARD FUNCTIONS
+    // ============================================================================
+
+    let currentStep = 1;
+    const totalSteps = 3;
+    let campaignData = {
+      name: '',
+      objective: ''
+    };
+
     function createNewCampaign() {
-      // TODO: Implementar modal ou redirect para criação de campanha
-      window.location.href = '/aic-campaign-onboarding.html';
+      // Open modal
+      document.getElementById('create-campaign-modal').classList.add('active');
+      currentStep = 1;
+      updateWizardUI();
+    }
+
+    function closeCreateModal() {
+      document.getElementById('create-campaign-modal').classList.remove('active');
+      // Reset form
+      document.getElementById('campaign-name').value = '';
+      document.querySelectorAll('input[name="objective"]').forEach(input => input.checked = false);
+      currentStep = 1;
+      updateWizardUI();
+    }
+
+    function wizardNext() {
+      // Validate current step
+      if (currentStep === 1) {
+        const name = document.getElementById('campaign-name').value.trim();
+        if (!name) {
+          alert('Por favor, digite um nome para a campanha');
+          return;
+        }
+        campaignData.name = name;
+      }
+
+      if (currentStep === 2) {
+        const objective = document.querySelector('input[name="objective"]:checked');
+        if (!objective) {
+          alert('Por favor, selecione um objetivo');
+          return;
+        }
+        campaignData.objective = objective.value;
+
+        // Update confirmation
+        document.getElementById('confirm-name').textContent = campaignData.name;
+        const objectiveLabels = {
+          lead_generation: 'Geração de Leads',
+          brand_awareness: 'Brand Awareness',
+          engagement: 'Engajamento',
+          sales: 'Vendas Diretas'
+        };
+        document.getElementById('confirm-objective').textContent = objectiveLabels[campaignData.objective];
+      }
+
+      if (currentStep < totalSteps) {
+        currentStep++;
+        updateWizardUI();
+      }
+    }
+
+    function wizardPrev() {
+      if (currentStep > 1) {
+        currentStep--;
+        updateWizardUI();
+      }
+    }
+
+    function updateWizardUI() {
+      // Update steps indicators
+      document.querySelectorAll('.wizard-step').forEach((step, index) => {
+        const stepNum = index + 1;
+        step.classList.remove('active', 'completed');
+        if (stepNum === currentStep) {
+          step.classList.add('active');
+        } else if (stepNum < currentStep) {
+          step.classList.add('completed');
+        }
+      });
+
+      // Update content
+      document.querySelectorAll('.wizard-content').forEach((content, index) => {
+        const stepNum = index + 1;
+        content.classList.toggle('active', stepNum === currentStep);
+      });
+
+      // Update buttons
+      document.getElementById('btn-prev').style.display = currentStep > 1 ? 'block' : 'none';
+      document.getElementById('btn-next').style.display = currentStep < totalSteps ? 'block' : 'none';
+      document.getElementById('btn-create').style.display = currentStep === totalSteps ? 'block' : 'none';
+    }
+
+    async function createCampaign() {
+      try {
+        const response = await fetch('/api/campaigns/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(campaignData)
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create campaign');
+        }
+
+        const result = await response.json();
+
+        // Close modal
+        closeCreateModal();
+
+        // Reload campaigns
+        await loadCampaigns();
+
+        // Show success message
+        alert(`✅ Campanha "${campaignData.name}" criada com sucesso!\n\nPróximos passos:\n1. Configure as credenciais\n2. Preencha o briefing`);
+
+        // Redirect to credentials
+        window.location.href = `/campaign/${result.slug}/credentials`;
+      } catch (error) {
+        console.error('[Create Campaign] Error:', error);
+        alert('❌ Erro ao criar campanha. Tente novamente.');
+      }
+    }
+
+    // ============================================================================
+    // STATUS TOGGLE FUNCTION
+    // ============================================================================
+
+    async function toggleCampaignStatus(campaignId, newStatus) {
+      try {
+        const response = await fetch(`/api/campaigns/${campaignId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update status');
+        }
+
+        // Update local campaign data
+        const campaign = campaigns.find(c => c.id === campaignId);
+        if (campaign) {
+          campaign.status = newStatus;
+        }
+
+        // Re-render campaigns
+        renderCampaigns();
+
+        // Show feedback
+        const statusLabel = newStatus === 'active' ? 'ativada' : 'pausada';
+        console.log(`✅ Campanha ${statusLabel} com sucesso`);
+      } catch (error) {
+        console.error('[Toggle Status] Error:', error);
+        alert('❌ Erro ao atualizar status da campanha');
+      }
     }
   </script>
 </body>
