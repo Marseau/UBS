@@ -893,6 +893,16 @@ try {
   console.error("❌ Failed to load Outreach routes:", error);
 }
 
+// Campaign Tracking Routes - Web analytics, session tracking, event tracking, lead attribution
+try {
+  const campaignTrackingRoutes = require('./routes/campaign-tracking.routes');
+  const router = 'default' in campaignTrackingRoutes ? campaignTrackingRoutes.default : campaignTrackingRoutes;
+  app.use('/api/tracking', router);
+  console.log('✅ Campaign Tracking routes loaded - WEB ANALYTICS + LEAD ATTRIBUTION READY');
+} catch (error) {
+  console.error("❌ Failed to load Campaign Tracking routes:", error);
+}
+
 // Campaign Pipeline Routes - Execute full campaign pipeline (clustering, personas, DMs, copies)
 try {
   const campaignPipelineRoutes = require('./routes/campaign-pipeline.routes');
