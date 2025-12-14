@@ -170,90 +170,127 @@ router.delete('/whatsapp/sessions/:sessionId', async (req: Request, res: Respons
 });
 
 // ============================================================================
-// WHAPI (CANAL BACKUP)
+// WHAPI CHANNELS (CANAIS CENTRALIZADOS)
 // ============================================================================
 
 /**
- * POST /api/whapi/sessions/:sessionId/configure
- * Configura credenciais Whapi para uma sessao existente
+ * GET /api/whapi/channels
+ * Lista todos os canais Whapi disponíveis
  */
-router.post('/whapi/sessions/:sessionId/configure', async (req: Request, res: Response): Promise<void> => {
+router.get('/whapi/channels', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const sessionId = req.params.sessionId;
-    const { whapiToken, whapiChannelId } = req.body;
+    const { data: channels, error } = await supabase
+      .from('whapi_channels')
+      .select('id, name, channel_id, phone_number, status, rate_limit_hourly, rate_limit_daily, warmup_mode, last_connected_at')
+      .order('name', { ascending: true });
 
-    if (!sessionId) {
-      res.status(400).json({ error: 'sessionId is required' });
-      return;
-    }
+    if (error) throw error;
 
-    if (!whapiToken) {
-      res.status(400).json({ error: 'whapiToken is required' });
-      return;
-    }
-
-    // Atualizar sessao com credenciais Whapi
-    const { error } = await supabase
-      .from('whatsapp_sessions')
-      .update({
-        whapi_token: whapiToken,
-        whapi_channel_id: whapiChannelId || null,
-        whapi_status: 'disconnected',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', sessionId);
-
-    if (error) {
-      console.error('[Campaign Credentials] Error configuring Whapi:', error);
-      res.status(500).json({ error: 'Failed to configure Whapi' });
-      return;
-    }
-
-    res.json({ success: true, message: 'Whapi credentials configured' });
+    res.json({ success: true, data: channels || [] });
   } catch (error: any) {
-    console.error('[Campaign Credentials] Error configuring Whapi:', error);
+    console.error('[Whapi Channels] Error listing channels:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 /**
- * POST /api/whapi/sessions/:sessionId/qr
- * Gera QR Code via Whapi para canal backup
+ * POST /api/whapi/channels
+ * Cria ou atualiza um canal Whapi
  */
-router.post('/whapi/sessions/:sessionId/qr', async (req: Request, res: Response): Promise<void> => {
+router.post('/whapi/channels', async (req: Request, res: Response): Promise<void> => {
   try {
-    const sessionId = req.params.sessionId;
+    const { name, channelId, phoneNumber, apiToken, rateLimitHourly, rateLimitDaily } = req.body;
 
-    if (!sessionId) {
-      res.status(400).json({ error: 'sessionId is required' });
+    if (!apiToken) {
+      res.status(400).json({ error: 'apiToken is required' });
       return;
     }
 
-    // Buscar sessao com credenciais Whapi
-    const { data: session, error: sessionError } = await supabase
-      .from('whatsapp_sessions')
-      .select('id, campaign_id, whapi_token, whapi_channel_id, whapi_status')
-      .eq('id', sessionId)
+    // Verificar se canal já existe pelo token
+    const { data: existing } = await supabase
+      .from('whapi_channels')
+      .select('id')
+      .eq('api_token', apiToken)
       .single();
 
-    if (sessionError || !session) {
-      res.status(404).json({ error: 'Session not found' });
+    if (existing) {
+      // Atualizar existente
+      const { data: updated, error } = await supabase
+        .from('whapi_channels')
+        .update({
+          name: name || null,
+          channel_id: channelId || null,
+          phone_number: phoneNumber || null,
+          rate_limit_hourly: rateLimitHourly || 15,
+          rate_limit_daily: rateLimitDaily || 120,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      res.json({ success: true, data: updated, created: false });
+    } else {
+      // Criar novo
+      const { data: created, error } = await supabase
+        .from('whapi_channels')
+        .insert({
+          name: name || 'Canal Whapi',
+          channel_id: channelId || null,
+          phone_number: phoneNumber || null,
+          api_token: apiToken,
+          rate_limit_hourly: rateLimitHourly || 15,
+          rate_limit_daily: rateLimitDaily || 120,
+          status: 'disconnected'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      res.json({ success: true, data: created, created: true });
+    }
+  } catch (error: any) {
+    console.error('[Whapi Channels] Error creating/updating channel:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/whapi/channels/:channelId/qr
+ * Gera QR Code para conectar um canal Whapi
+ */
+router.post('/whapi/channels/:channelId/qr', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { channelId } = req.params;
+
+    if (!channelId) {
+      res.status(400).json({ error: 'channelId is required' });
       return;
     }
 
-    // Se nao tem token Whapi configurado, usar o global (da AIC)
-    const whapiToken = session.whapi_token || process.env.WHAPI_TOKEN;
+    // Buscar canal em whapi_channels
+    const { data: channel, error: channelError } = await supabase
+      .from('whapi_channels')
+      .select('id, channel_id, api_token, status')
+      .eq('id', channelId)
+      .single();
 
-    if (!whapiToken) {
-      res.status(400).json({ error: 'Whapi token not configured' });
+    if (channelError || !channel) {
+      res.status(404).json({ error: 'Channel not found' });
       return;
     }
 
-    // Criar cliente Whapi com o token
+    if (!channel.api_token) {
+      res.status(400).json({ error: 'Channel has no API token configured' });
+      return;
+    }
+
+    // Criar cliente Whapi com o token do canal
     const { default: WhapiClientService } = await import('../services/whapi-client.service');
     const whapiClient = new WhapiClientService({
-      token: whapiToken,
-      channelId: session.whapi_channel_id || undefined
+      token: channel.api_token,
+      channelId: channel.channel_id || undefined
     });
 
     // Obter QR Code
@@ -265,14 +302,15 @@ router.post('/whapi/sessions/:sessionId/qr', async (req: Request, res: Response)
       if (channelInfo?.status === 'connected') {
         // Atualizar status
         await supabase
-          .from('whatsapp_sessions')
+          .from('whapi_channels')
           .update({
-            whapi_status: 'connected',
-            whapi_last_activity_at: new Date().toISOString()
+            status: 'active',
+            last_connected_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           })
-          .eq('id', sessionId);
+          .eq('id', channelId);
 
-        res.json({ connected: true, message: 'Whapi already connected' });
+        res.json({ connected: true, message: 'Channel already connected' });
         return;
       }
 
@@ -282,52 +320,51 @@ router.post('/whapi/sessions/:sessionId/qr', async (req: Request, res: Response)
 
     // Salvar QR no banco
     await supabase
-      .from('whatsapp_sessions')
+      .from('whapi_channels')
       .update({
-        whapi_qr_code_data: qrCode,
-        whapi_qr_generated_at: new Date().toISOString(),
-        whapi_status: 'qr_pending'
+        qr_code_data: qrCode,
+        qr_code_generated_at: new Date().toISOString(),
+        status: 'disconnected', // Aguardando scan
+        updated_at: new Date().toISOString()
       })
-      .eq('id', sessionId);
+      .eq('id', channelId);
 
     res.json({
       qrCode: qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`,
       expiresIn: 60 // segundos
     });
   } catch (error: any) {
-    console.error('[Campaign Credentials] Error generating Whapi QR:', error);
+    console.error('[Whapi Channels] Error generating QR:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 /**
- * GET /api/whapi/sessions/:sessionId/status
- * Verifica status da conexao Whapi
+ * GET /api/whapi/channels/:channelId/status
+ * Verifica status da conexao de um canal Whapi
  */
-router.get('/whapi/sessions/:sessionId/status', async (req: Request, res: Response): Promise<void> => {
+router.get('/whapi/channels/:channelId/status', async (req: Request, res: Response): Promise<void> => {
   try {
-    const sessionId = req.params.sessionId;
+    const { channelId } = req.params;
 
-    if (!sessionId) {
-      res.status(400).json({ error: 'sessionId is required' });
+    if (!channelId) {
+      res.status(400).json({ error: 'channelId is required' });
       return;
     }
 
-    // Buscar sessao
-    const { data: session, error: sessionError } = await supabase
-      .from('whatsapp_sessions')
-      .select('id, whapi_token, whapi_channel_id, whapi_status')
-      .eq('id', sessionId)
+    // Buscar canal
+    const { data: channel, error: channelError } = await supabase
+      .from('whapi_channels')
+      .select('id, channel_id, api_token, status, phone_number')
+      .eq('id', channelId)
       .single();
 
-    if (sessionError || !session) {
-      res.status(404).json({ error: 'Session not found' });
+    if (channelError || !channel) {
+      res.status(404).json({ error: 'Channel not found' });
       return;
     }
 
-    const whapiToken = session.whapi_token || process.env.WHAPI_TOKEN;
-
-    if (!whapiToken) {
+    if (!channel.api_token) {
       res.json({ status: 'not_configured', connected: false });
       return;
     }
@@ -335,31 +372,33 @@ router.get('/whapi/sessions/:sessionId/status', async (req: Request, res: Respon
     // Verificar status via API Whapi
     const { default: WhapiClientService } = await import('../services/whapi-client.service');
     const whapiClient = new WhapiClientService({
-      token: whapiToken,
-      channelId: session.whapi_channel_id || undefined
+      token: channel.api_token,
+      channelId: channel.channel_id || undefined
     });
 
     const channelInfo = await whapiClient.getChannelInfo();
     const isConnected = channelInfo?.status === 'connected';
 
     // Atualizar status no banco se mudou
-    if (isConnected && session.whapi_status !== 'connected') {
+    if (isConnected && channel.status !== 'active') {
       await supabase
-        .from('whatsapp_sessions')
+        .from('whapi_channels')
         .update({
-          whapi_status: 'connected',
-          whapi_last_activity_at: new Date().toISOString()
+          status: 'active',
+          last_connected_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         })
-        .eq('id', sessionId);
+        .eq('id', channelId);
     }
 
     res.json({
-      status: isConnected ? 'connected' : session.whapi_status || 'disconnected',
+      status: isConnected ? 'active' : channel.status || 'disconnected',
       connected: isConnected,
+      phone_number: channel.phone_number,
       channelInfo: channelInfo || null
     });
   } catch (error: any) {
-    console.error('[Campaign Credentials] Error checking Whapi status:', error);
+    console.error('[Whapi Channels] Error checking status:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1286,6 +1325,158 @@ router.post('/campaigns/:campaignId/documents/:title/reprocess', async (req: Req
     });
   } catch (error: any) {
     console.error('[Campaign Documents] Error reprocessing document:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// CAMPAIGN MANAGEMENT
+// ============================================================================
+
+/**
+ * GET /api/aic/my-campaigns
+ * Lista todas as campanhas do cliente AIC (para o dashboard)
+ */
+router.get('/aic/my-campaigns', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // TODO: Implementar autenticação real para pegar o tenant_id do usuário logado
+    // Por enquanto, retorna todas as campanhas para desenvolvimento
+
+    const { data: campaigns, error } = await supabase
+      .from('cluster_campaigns')
+      .select(`
+        id,
+        campaign_name,
+        campaign_status,
+        created_at,
+        updated_at,
+        tenant_id
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[My Campaigns] Error fetching campaigns:', error);
+      res.status(500).json({ error: 'Failed to fetch campaigns' });
+      return;
+    }
+
+    // Enriquecer com métricas
+    const enrichedCampaigns = await Promise.all(
+      (campaigns || []).map(async (campaign) => {
+        // Count leads
+        const { count: leadsCount } = await supabase
+          .from('aic_leads')
+          .select('*', { count: 'exact', head: true })
+          .eq('campaign_id', campaign.id);
+
+        // Count documents
+        const { count: docsCount } = await supabase
+          .from('campaign_documents')
+          .select('*', { count: 'exact', head: true })
+          .eq('campaign_id', campaign.id);
+
+        // Calculate conversion rate (exemplo simplificado)
+        const conversionRate = leadsCount && leadsCount > 0
+          ? ((leadsCount * 0.123).toFixed(1)) // Mock calculation
+          : '0';
+
+        // Generate slug from campaign name
+        const slug = campaign.campaign_name
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '') // Remove accents
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+
+        return {
+          id: campaign.id,
+          campaign_name: campaign.campaign_name,
+          status: campaign.campaign_status || 'draft',
+          leads_count: leadsCount || 0,
+          docs_count: docsCount || 0,
+          conversion_rate: conversionRate,
+          slug: slug,
+          created_at: campaign.created_at,
+          updated_at: campaign.updated_at
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      campaigns: enrichedCampaigns
+    });
+  } catch (error: any) {
+    console.error('[My Campaigns] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/campaign/:identifier
+ * Busca campanha por slug ou UUID
+ */
+router.get('/campaign/:identifier', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { identifier } = req.params;
+
+    if (!identifier) {
+      res.status(400).json({ error: 'Campaign identifier is required' });
+      return;
+    }
+
+    // Check if identifier is UUID
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+
+    let campaign;
+
+    if (isUUID) {
+      // Search by ID
+      const { data, error } = await supabase
+        .from('cluster_campaigns')
+        .select('*')
+        .eq('id', identifier)
+        .single();
+
+      if (error || !data) {
+        res.status(404).json({ error: 'Campaign not found' });
+        return;
+      }
+      campaign = data;
+    } else {
+      // Search by slug (fuzzy match on campaign_name)
+      const { data: campaigns, error } = await supabase
+        .from('cluster_campaigns')
+        .select('*');
+
+      if (error) {
+        res.status(500).json({ error: 'Failed to search campaigns' });
+        return;
+      }
+
+      // Find campaign with matching slug
+      campaign = campaigns?.find(c => {
+        const slug = c.campaign_name
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+        return slug === identifier;
+      });
+
+      if (!campaign) {
+        res.status(404).json({ error: 'Campaign not found' });
+        return;
+      }
+    }
+
+    res.json({
+      success: true,
+      campaign: campaign
+    });
+  } catch (error: any) {
+    console.error('[Campaign Lookup] Error:', error);
     res.status(500).json({ error: error.message });
   }
 });

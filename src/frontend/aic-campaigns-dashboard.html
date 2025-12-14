@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minhas Campanhas | AIC - Applied Intelligence Clustering</title>
+  <meta name="robots" content="noindex, nofollow">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/assets/AIC/Imagens%20Vetor%20/AIC%20Icone%20Cheio.png">
+
+  <!-- Theme Color -->
+  <meta name="theme-color" content="#0C1B33">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-green-glow: rgba(14, 204, 151, 0.25);
+      --aic-green-subtle: rgba(14, 204, 151, 0.1);
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-navy-lighter: #1a3055;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-gray-light: #cbd5e1;
+      --aic-border: #1e3a5f;
+      --aic-red: #ef4444;
+      --aic-red-subtle: rgba(239, 68, 68, 0.1);
+      --aic-yellow: #f59e0b;
+      --aic-yellow-subtle: rgba(245, 158, 11, 0.1);
+      --aic-blue: #3b82f6;
+      --aic-blue-subtle: rgba(59, 130, 246, 0.1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* Container */
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+    /* Header */
+    .header {
+      background: rgba(12, 27, 51, 0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--aic-border);
+      padding: 20px 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header-logo {
+      height: 40px;
+      width: auto;
+      filter: brightness(1.1);
+    }
+    .header-user {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--aic-gray);
+      font-size: 14px;
+    }
+    .header-user-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--aic-green-subtle);
+      border: 2px solid var(--aic-green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      color: var(--aic-green);
+    }
+
+    /* Main Content */
+    .main {
+      padding: 48px 0 80px;
+    }
+
+    /* Page Title */
+    .page-header {
+      margin-bottom: 40px;
+    }
+    .page-header h1 {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--aic-white);
+      margin-bottom: 8px;
+    }
+    .page-header p {
+      font-size: 16px;
+      color: var(--aic-gray);
+    }
+
+    /* Top Actions */
+    .top-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .filter-tabs {
+      display: flex;
+      gap: 8px;
+      background: var(--aic-navy-light);
+      padding: 4px;
+      border-radius: 8px;
+    }
+    .filter-tab {
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      color: var(--aic-gray);
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .filter-tab:hover {
+      background: var(--aic-navy-lighter);
+      color: var(--aic-white);
+    }
+    .filter-tab.active {
+      background: var(--aic-green);
+      color: var(--aic-navy);
+    }
+    .btn-new-campaign {
+      padding: 12px 24px;
+      background: var(--aic-green);
+      color: var(--aic-navy);
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-new-campaign:hover {
+      background: var(--aic-green-dark);
+      transform: translateY(-1px);
+    }
+
+    /* Campaigns Grid */
+    .campaigns-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+
+    /* Campaign Card */
+    .campaign-card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 12px;
+      padding: 24px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .campaign-card:hover {
+      border-color: var(--aic-green);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(14, 204, 151, 0.15);
+    }
+    .campaign-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    .campaign-name {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--aic-white);
+      margin-bottom: 4px;
+    }
+    .campaign-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .campaign-status.active {
+      background: var(--aic-green-subtle);
+      color: var(--aic-green);
+    }
+    .campaign-status.paused {
+      background: var(--aic-yellow-subtle);
+      color: var(--aic-yellow);
+    }
+    .campaign-status.draft {
+      background: rgba(148, 163, 184, 0.1);
+      color: var(--aic-gray);
+    }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Campaign Metrics */
+    .campaign-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 20px 0;
+      padding: 16px;
+      background: var(--aic-navy);
+      border-radius: 8px;
+    }
+    .metric {
+      text-align: center;
+    }
+    .metric-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--aic-green);
+      display: block;
+      margin-bottom: 4px;
+    }
+    .metric-label {
+      font-size: 12px;
+      color: var(--aic-gray);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Campaign Actions */
+    .campaign-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn-action {
+      flex: 1;
+      padding: 10px 16px;
+      background: var(--aic-navy-lighter);
+      color: var(--aic-white);
+      border: 1px solid var(--aic-border);
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn-action:hover {
+      background: var(--aic-green);
+      color: var(--aic-navy);
+      border-color: var(--aic-green);
+    }
+    .btn-action.primary {
+      background: var(--aic-green);
+      color: var(--aic-navy);
+      border-color: var(--aic-green);
+    }
+    .btn-action.primary:hover {
+      background: var(--aic-green-dark);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      background: var(--aic-navy-light);
+      border: 2px dashed var(--aic-border);
+      border-radius: 12px;
+    }
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 24px;
+      opacity: 0.5;
+    }
+    .empty-state h3 {
+      font-size: 24px;
+      color: var(--aic-white);
+      margin-bottom: 12px;
+    }
+    .empty-state p {
+      font-size: 16px;
+      color: var(--aic-gray);
+      margin-bottom: 24px;
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--aic-gray);
+    }
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid var(--aic-navy-lighter);
+      border-top-color: var(--aic-green);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Footer */
+    .footer {
+      background: var(--aic-navy-light);
+      border-top: 1px solid var(--aic-border);
+      padding: 24px 0;
+      text-align: center;
+      margin-top: 60px;
+    }
+    .footer p {
+      color: var(--aic-gray);
+      font-size: 14px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .campaigns-grid {
+        grid-template-columns: 1fr;
+      }
+      .page-header h1 {
+        font-size: 28px;
+      }
+      .top-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .filter-tabs {
+        width: 100%;
+        justify-content: space-between;
+      }
+      .btn-new-campaign {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <img src="/assets/AIC/Imagens%20Vetor%20/LOGO%20completo%20sem%20fundo%20Icone%20cheio%20e%20nome%20cheio.png" alt="AIC Logo" class="header-logo">
+        <div class="header-user">
+          <span id="user-email">carregando...</span>
+          <div class="header-user-avatar" id="user-avatar">U</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main">
+    <div class="container">
+      <!-- Page Header -->
+      <div class="page-header">
+        <h1>🎯 Minhas Campanhas de Prospecção</h1>
+        <p>Gerencie suas campanhas AIC de prospecção inteligente com IA</p>
+      </div>
+
+      <!-- Top Actions -->
+      <div class="top-actions">
+        <div class="filter-tabs">
+          <button class="filter-tab active" data-filter="all">Todas</button>
+          <button class="filter-tab" data-filter="active">Ativas</button>
+          <button class="filter-tab" data-filter="paused">Pausadas</button>
+          <button class="filter-tab" data-filter="draft">Rascunhos</button>
+        </div>
+        <button class="btn-new-campaign" onclick="createNewCampaign()">
+          <span>+</span>
+          <span>Nova Campanha</span>
+        </button>
+      </div>
+
+      <!-- Campaigns Grid -->
+      <div id="campaigns-container">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Carregando suas campanhas...</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <p>AIC - Applied Intelligence Clustering | Suas campanhas são criptografadas e protegidas</p>
+    </div>
+  </footer>
+
+  <script>
+    // State
+    let campaigns = [];
+    let currentFilter = 'all';
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+      loadUserInfo();
+      loadCampaigns();
+      setupFilterTabs();
+    });
+
+    // Load user info
+    async function loadUserInfo() {
+      try {
+        // TODO: Implementar autenticação real
+        const userEmail = localStorage.getItem('aic_user_email') || 'usuario@exemplo.com';
+        document.getElementById('user-email').textContent = userEmail;
+        document.getElementById('user-avatar').textContent = userEmail.charAt(0).toUpperCase();
+      } catch (error) {
+        console.error('Error loading user info:', error);
+      }
+    }
+
+    // Load campaigns
+    async function loadCampaigns() {
+      try {
+        const response = await fetch('/api/aic/my-campaigns');
+
+        if (!response.ok) {
+          throw new Error('Failed to load campaigns');
+        }
+
+        const data = await response.json();
+        campaigns = data.campaigns || [];
+
+        renderCampaigns();
+      } catch (error) {
+        console.error('Error loading campaigns:', error);
+        renderError();
+      }
+    }
+
+    // Render campaigns
+    function renderCampaigns() {
+      const container = document.getElementById('campaigns-container');
+      const filtered = filterCampaigns(campaigns, currentFilter);
+
+      if (filtered.length === 0) {
+        container.innerHTML = renderEmptyState();
+        return;
+      }
+
+      const html = `
+        <div class="campaigns-grid">
+          ${filtered.map(campaign => renderCampaignCard(campaign)).join('')}
+        </div>
+      `;
+      container.innerHTML = html;
+    }
+
+    // Filter campaigns
+    function filterCampaigns(campaigns, filter) {
+      if (filter === 'all') return campaigns;
+      return campaigns.filter(c => c.status === filter);
+    }
+
+    // Render campaign card
+    function renderCampaignCard(campaign) {
+      const statusClass = campaign.status || 'draft';
+      const statusLabel = {
+        active: 'Ativa',
+        paused: 'Pausada',
+        draft: 'Rascunho'
+      }[statusClass] || 'Rascunho';
+
+      return `
+        <div class="campaign-card">
+          <div class="campaign-card-header">
+            <div>
+              <h3 class="campaign-name">${campaign.campaign_name}</h3>
+            </div>
+            <span class="campaign-status ${statusClass}">
+              <span class="status-dot"></span>
+              ${statusLabel}
+            </span>
+          </div>
+
+          <div class="campaign-metrics">
+            <div class="metric">
+              <span class="metric-value">${campaign.leads_count || 0}</span>
+              <span class="metric-label">Leads</span>
+            </div>
+            <div class="metric">
+              <span class="metric-value">${campaign.docs_count || 0}</span>
+              <span class="metric-label">Docs</span>
+            </div>
+            <div class="metric">
+              <span class="metric-value">${campaign.conversion_rate || '0'}%</span>
+              <span class="metric-label">Taxa</span>
+            </div>
+          </div>
+
+          <div class="campaign-actions">
+            <a href="/campaign/${campaign.slug || campaign.id}/briefing" class="btn-action primary">
+              📋 Briefing
+            </a>
+            <a href="/campaign/${campaign.slug || campaign.id}/credentials" class="btn-action">
+              🔑 Credenciais
+            </a>
+            <a href="/campaign/${campaign.slug || campaign.id}/analytics" class="btn-action">
+              📊 Analytics
+            </a>
+          </div>
+        </div>
+      `;
+    }
+
+    // Render empty state
+    function renderEmptyState() {
+      const message = currentFilter === 'all'
+        ? 'Você ainda não criou nenhuma campanha'
+        : `Nenhuma campanha ${currentFilter === 'active' ? 'ativa' : currentFilter === 'paused' ? 'pausada' : 'em rascunho'}`;
+
+      return `
+        <div class="empty-state">
+          <div class="empty-state-icon">🎯</div>
+          <h3>${message}</h3>
+          <p>Crie sua primeira campanha de prospecção inteligente para começar a gerar leads qualificados</p>
+          <button class="btn-new-campaign" onclick="createNewCampaign()" style="display: inline-flex;">
+            <span>+</span>
+            <span>Criar Primeira Campanha</span>
+          </button>
+        </div>
+      `;
+    }
+
+    // Render error
+    function renderError() {
+      const container = document.getElementById('campaigns-container');
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">⚠️</div>
+          <h3>Erro ao carregar campanhas</h3>
+          <p>Não foi possível carregar suas campanhas. Tente novamente.</p>
+          <button class="btn-new-campaign" onclick="loadCampaigns()" style="display: inline-flex;">
+            <span>🔄</span>
+            <span>Tentar Novamente</span>
+          </button>
+        </div>
+      `;
+    }
+
+    // Setup filter tabs
+    function setupFilterTabs() {
+      const tabs = document.querySelectorAll('.filter-tab');
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          tabs.forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          currentFilter = tab.dataset.filter;
+          renderCampaigns();
+        });
+      });
+    }
+
+    // Create new campaign
+    function createNewCampaign() {
+      // TODO: Implementar modal ou redirect para criação de campanha
+      window.location.href = '/aic-campaign-onboarding.html';
+    }
+  </script>
+</body>
+</html>

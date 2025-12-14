@@ -925,19 +925,24 @@ try {
 }
 
 // Define o caminho para a pasta frontend de forma explícita e segura
+// IMPORTANTE: Prioriza dist/frontend quando rodando de dist/ (produção)
 const candidatePaths: string[] = [
-  path.join(process.cwd(), 'src', 'frontend'),
-  path.resolve(__dirname, '..', 'src', 'frontend')
+  path.join(__dirname, 'frontend'),                 // dist/frontend (quando __dirname = dist/)
+  path.join(process.cwd(), 'dist', 'frontend'),     // Explicit dist path
+  path.join(process.cwd(), 'src', 'frontend'),      // Fallback para src (dev mode)
+  path.resolve(__dirname, '..', 'src', 'frontend')  // Legacy fallback
 ];
 function resolveFrontendPath(paths: string[]): string {
   const defaultPath: string = path.join(process.cwd(), 'src', 'frontend');
   for (const p of paths) {
     try {
       if (fs.existsSync(path.join(p, 'demo.html'))) {
+        console.log(`✅ Frontend path resolved to: ${p}`);
         return p;
       }
     } catch (_) { /* ignore */ }
   }
+  console.log(`⚠️ Using default frontend path: ${defaultPath}`);
   return defaultPath;
 }
 const frontendPath: string = resolveFrontendPath(candidatePaths);
@@ -1051,6 +1056,87 @@ app.get('/dashboard-tenant-admin', (_req, res) => {
 // Test page for tenant redirect
 app.get('/test-tenant-redirect', (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'test-tenant-redirect.html'));
+});
+
+// ============================================================================
+// AIC CAMPAIGN SLUG ROUTES
+// ============================================================================
+
+// AIC Campaigns Dashboard
+app.get('/campaigns', (_req, res) => {
+  res.sendFile(path.join(frontendPath, 'aic-campaigns-dashboard.html'));
+});
+
+// Campaign Briefing - slug-based route
+app.get('/campaign/:slug/briefing', async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    // Fetch campaign by slug via API
+    const response = await fetch(`http://localhost:${process.env.PORT || 3000}/api/campaign/${slug}`);
+
+    if (!response.ok) {
+      res.status(404).send('Campaign not found');
+      return;
+    }
+
+    const data: any = await response.json();
+    const campaignId = data.campaign.id;
+
+    // Redirect to briefing page with campaign ID
+    res.redirect(`/aic-campaign-briefing.html?campaign=${campaignId}`);
+  } catch (error) {
+    console.error('[Campaign Briefing Route] Error:', error);
+    res.status(500).send('Error loading campaign briefing');
+  }
+});
+
+// Campaign Credentials - slug-based route
+app.get('/campaign/:slug/credentials', async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    // Fetch campaign by slug via API
+    const response = await fetch(`http://localhost:${process.env.PORT || 3000}/api/campaign/${slug}`);
+
+    if (!response.ok) {
+      res.status(404).send('Campaign not found');
+      return;
+    }
+
+    const data: any = await response.json();
+    const campaignId = data.campaign.id;
+
+    // Redirect to credentials page with campaign ID
+    res.redirect(`/aic-campaign-onboarding.html?campaign=${campaignId}`);
+  } catch (error) {
+    console.error('[Campaign Credentials Route] Error:', error);
+    res.status(500).send('Error loading campaign credentials');
+  }
+});
+
+// Campaign Analytics - slug-based route
+app.get('/campaign/:slug/analytics', async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    // Fetch campaign by slug via API
+    const response = await fetch(`http://localhost:${process.env.PORT || 3000}/api/campaign/${slug}`);
+
+    if (!response.ok) {
+      res.status(404).send('Campaign not found');
+      return;
+    }
+
+    const data: any = await response.json();
+    const campaignId = data.campaign.id;
+
+    // Redirect to analytics page with campaign ID
+    res.redirect(`/aic-dashboard-prova.html?campaign=${campaignId}`);
+  } catch (error) {
+    console.error('[Campaign Analytics Route] Error:', error);
+    res.status(500).send('Error loading campaign analytics');
+  }
 });
 
 // Static files after specific routes - this ensures route handlers take precedence
