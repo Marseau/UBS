@@ -6,6 +6,14 @@ Implementei um sistema completo de boas-vindas, validação de WhatsApp e onboar
 
 ---
 
+## 🔍 SEO + Tracking para Landing/Onboarding
+- Objetivo: medir performance dos CTAs da landing/onboarding e conectar cliques de origem orgânica aos leads identificados.
+- Stack recomendada: GA4 ou Umami/Plausible + eventos por CTA + UTMs padronizadas (`utm_source`, `utm_medium`, `utm_campaign`).
+- Implementação: cada botão/CTA dispara evento único; formulário/WhatsApp “Falar com especialista” conecta o clique anterior ao prospect identificado.
+- LGPD: tracking anonimizado para métricas internas; cláusula “Coleta de dados de navegação para fins analíticos”; banner de cookies + política de privacidade (cliente publica).
+
+---
+
 ## 🏗️ **ARQUITETURA IMPLEMENTADA**
 
 ### **1. Serviço de Validação de Telefone WhatsApp**
