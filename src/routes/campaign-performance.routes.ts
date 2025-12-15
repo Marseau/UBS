@@ -41,4 +41,23 @@ router.get('/:campaignId/performance', async (req: Request, res: Response) => {
   }
 });
 
+// Listagem simples de campanhas (id, name, status)
+router.get('/', async (_req: Request, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('aic_campaigns')
+      .select('id, name, status, start_date, end_date')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return res.json({
+      campaigns: data || []
+    });
+  } catch (error: any) {
+    console.error('[campaign-performance] erro listando campanhas:', error);
+    return res.status(500).json({ error: 'Erro ao listar campanhas', details: error.message });
+  }
+});
+
 export default router;

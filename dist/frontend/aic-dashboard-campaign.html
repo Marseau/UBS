@@ -114,8 +114,8 @@ GET /api/campaigns/:id/performance
 </pre>
         <p>Esta página é estática: não há chamada API pronta.</p>
       </div>
+      </div>
     </div>
-  </div>
 
   <script>
     (function() {
@@ -163,7 +163,62 @@ GET /api/campaigns/:id/performance
       }
 
       if (!campaignId) {
-        renderError('Passe ?campaign={id} na URL.');
+        // Mostrar seletor de campanhas
+        fetch('/api/campaigns')
+          .then(async (res) => {
+            if (!res.ok) throw new Error('Falha ao carregar campanhas');
+            return res.json();
+          })
+          .then((data) => {
+            const list = data.campaigns || [];
+            if (!list.length) {
+              renderError('Nenhuma campanha encontrada. Crie uma campanha e tente novamente.');
+              return;
+            }
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = '<h2>Escolha a campanha</h2>';
+            const select = document.createElement('select');
+            select.style.padding = '10px';
+            select.style.borderRadius = '10px';
+            select.style.border = '1px solid var(--border)';
+            select.style.background = 'var(--panel)';
+            select.style.color = 'var(--text)';
+            select.style.width = '100%';
+            select.style.marginTop = '8px';
+
+            list.forEach((c) => {
+              const opt = document.createElement('option');
+              opt.value = c.id;
+              opt.textContent = `${c.name || 'Campanha'} (${c.status || '—'})`;
+              select.appendChild(opt);
+            });
+
+            const btn = document.createElement('button');
+            btn.textContent = 'Abrir dashboard';
+            btn.style.marginTop = '10px';
+            btn.style.padding = '10px 14px';
+            btn.style.borderRadius = '10px';
+            btn.style.border = '1px solid var(--border)';
+            btn.style.background = 'linear-gradient(135deg, var(--accent), var(--accent-dark))';
+            btn.style.color = '#0c1b33';
+            btn.style.fontWeight = '700';
+            btn.style.cursor = 'pointer';
+
+            btn.addEventListener('click', () => {
+              const id = select.value;
+              if (!id) return;
+              window.location.search = `?campaign=${id}`;
+            });
+
+            card.appendChild(select);
+            card.appendChild(btn);
+            container.prepend(card);
+          })
+          .catch((err) => {
+            console.error(err);
+            renderError('Erro ao listar campanhas: ' + err.message);
+          });
         return;
       }
 
