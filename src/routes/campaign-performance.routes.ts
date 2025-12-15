@@ -58,7 +58,7 @@ router.get('/', async (_req: Request, res: Response) => {
   try {
     const { data, error } = await supabase
       .from('cluster_campaigns')
-      .select('id, campaign_name, status, pipeline_status, created_at')
+      .select('id, campaign_name, cluster_status, pipeline_status, created_at')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -66,7 +66,7 @@ router.get('/', async (_req: Request, res: Response) => {
     const campaigns = (data || []).map((c: any) => ({
       id: c.id,
       name: c.campaign_name,
-      status: c.pipeline_status || c.status || 'unknown'
+      status: c.pipeline_status || c.cluster_status || 'unknown'
     }));
 
     return res.json({ campaigns });
