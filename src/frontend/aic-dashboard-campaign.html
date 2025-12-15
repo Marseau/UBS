@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIC — Dashboard de Campanha</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0c1b33;
+      --panel: #122444;
+      --card: #162c4d;
+      --accent: #0ecc97;
+      --accent-dark: #0ba578;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --border: #1e3a5f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .page { max-width: 1100px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-size: 28px; margin: 0 0 8px 0; }
+    p { color: var(--muted); margin: 0 0 16px 0; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+    }
+    .card h2 { margin: 0 0 8px 0; font-size: 18px; color: var(--text); }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: rgba(14, 204, 151, 0.12);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      border-radius: 999px;
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 12px;
+      margin-right: 8px;
+    }
+    ul { padding-left: 18px; margin: 8px 0; color: var(--muted); }
+    code { background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 6px; }
+    .cta {
+      margin-top: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      color: var(--text);
+      text-decoration: none;
+      background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+      color: #0c1b33;
+      font-weight: 700;
+      box-shadow: 0 12px 30px rgba(14, 204, 151, 0.25);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+      <div class="pill">beta</div>
+      <h1>Dashboard de Campanha AIC</h1>
+      <p>Use esta página como entrada para o painel de resultado por campanha. Os dados vêm das views SQL criadas no Supabase.</p>
+      <a class="cta" href="#como-usar">Ver como usar</a>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Links rápidos (views)</h2>
+        <ul>
+          <li><code>vw_funnel_seo</code> — funil SEO → CTA → Lead</li>
+          <li><code>vw_leads_by_source</code> — sessões, cliques e leads por origem</li>
+          <li><code>vw_cta_performance</code> — ranking de CTAs com conversão</li>
+          <li><code>vw_cost_per_source</code> — custo e CPL por origem (se preenchido)</li>
+        </ul>
+      </div>
+
+      <div class="card" id="como-usar">
+        <h2>Como usar</h2>
+        <ul>
+          <li>Conecte Metabase/Superset ao Postgres/Supabase.</li>
+          <li>Crie um dashboard filtrado por <code>campaign_id</code> usando as views acima.</li>
+          <li>Widgets sugeridos: cards de Leads/QL/Custo/CPL; funil SEO; barras por origem; tabela de CTAs; custo por origem.</li>
+          <li>Instrumente o tracking: <code>campaign_web_sessions</code>, <code>campaign_web_events</code>, <code>campaign_lead_attribution</code>.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Endpoints (a adicionar)</h2>
+        <p>Se quiser consumir via API do app, crie uma rota backend que leia as views e retorne JSON. Exemplo:</p>
+<pre style="white-space: pre-wrap; color: var(--muted); font-size: 13px;">
+GET /api/campaigns/:id/performance
+  → usa vw_funnel_seo, vw_leads_by_source, vw_cta_performance, vw_cost_per_source
+</pre>
+        <p>Esta página é estática: não há chamada API pronta.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
