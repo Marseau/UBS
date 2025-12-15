@@ -38,7 +38,7 @@ app.use(helmet({
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
     ? ['https://dev.ubs.app.br', 'https://app.ubs.saas.com.br'] 
-    : ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Demo-Token', 'X-Demo-Session']
