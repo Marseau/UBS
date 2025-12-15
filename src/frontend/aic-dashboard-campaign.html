@@ -244,12 +244,12 @@ GET /api/campaigns/:id/performance
           return res.json();
         })
         .then((data) => {
-          const listRaw = data.campaigns || [];
-          const activeList = listRaw.filter((c) => {
-            const st = (c.status || '').toLowerCase();
-            return ['active', 'outreach_in_progress', 'ready_for_outreach', 'ready', 'live'].includes(st);
-          });
-          const list = activeList.length ? activeList : listRaw;
+        const listRaw = data.campaigns || [];
+        const activeList = listRaw.filter((c) => {
+          const st = (c.status || '').toLowerCase();
+          return ['active', 'outreach_in_progress', 'ready_for_outreach', 'ready', 'live', 'outreach_completed'].includes(st);
+        });
+        const list = activeList.length ? activeList : listRaw;
 
           if (!list.length) {
             renderError('Nenhuma campanha encontrada. Crie uma campanha e tente novamente.');

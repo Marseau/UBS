@@ -53,19 +53,23 @@ router.get('/:campaignId/performance', async (req: Request, res: Response) => {
   }
 });
 
-// Listagem simples de campanhas (id, name, status)
+// Listagem simples de campanhas (id, name, status/pipeline_status) usando cluster_campaigns
 router.get('/', async (_req: Request, res: Response) => {
   try {
     const { data, error } = await supabase
-      .from('aic_campaigns')
-      .select('id, name, status, start_date, end_date')
+      .from('cluster_campaigns')
+      .select('id, campaign_name, status, pipeline_status, created_at')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    return res.json({
-      campaigns: data || []
-    });
+    const campaigns = (data || []).map((c: any) => ({
+      id: c.id,
+      name: c.campaign_name,
+      status: c.pipeline_status || c.status || 'unknown'
+    }));
+
+    return res.json({ campaigns });
   } catch (error: any) {
     console.error('[campaign-performance] erro listando campanhas:', error);
     return res.status(500).json({ error: 'Erro ao listar campanhas', details: error.message });
