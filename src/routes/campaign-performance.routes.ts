@@ -23,10 +23,16 @@ router.get('/:campaignId/performance', async (req: Request, res: Response) => {
       supabase.from('vw_cost_per_source').select('*').eq('campaign_id', campaignId)
     ]);
 
-    if (funnel.error) throw funnel.error;
-    if (leads.error) throw leads.error;
-    if (cta.error) throw cta.error;
-    if (cost.error) throw cost.error;
+    const errs = [funnel.error, leads.error, cta.error, cost.error].filter(Boolean) as any[];
+    if (errs.length) {
+      const msg = errs.map((e) => e.message || e.toString()).join(' | ');
+      const isMissingViews = msg.includes('vw_funnel_seo') || msg.includes('vw_leads_by_source') || msg.includes('vw_cta_performance') || msg.includes('vw_cost_per_source');
+      return res.status(isMissingViews ? 400 : 500).json({
+        error: 'Erro ao carregar performance',
+        details: msg,
+        code: isMissingViews ? 'views_missing' : undefined
+      });
+    }
 
     return res.json({
       campaign_id: campaignId,
@@ -37,7 +43,13 @@ router.get('/:campaignId/performance', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('[campaign-performance] erro:', error);
-    return res.status(500).json({ error: 'Erro ao carregar performance', details: error.message });
+    const msg = error?.message || String(error);
+    const isMissingViews = msg.includes('vw_funnel_seo') || msg.includes('vw_leads_by_source') || msg.includes('vw_cta_performance') || msg.includes('vw_cost_per_source');
+    return res.status(isMissingViews ? 400 : 500).json({
+      error: 'Erro ao carregar performance',
+      details: msg,
+      code: isMissingViews ? 'views_missing' : undefined
+    });
   }
 });
 

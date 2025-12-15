@@ -124,8 +124,9 @@ GET /api/campaigns/:id/performance
       const container = document.querySelector('.grid');
 
       function renderError(msg) {
+        document.querySelectorAll('.error-block').forEach(el => el.remove());
         const el = document.createElement('div');
-        el.className = 'card';
+        el.className = 'card error-block dynamic-block';
         el.innerHTML = `<h2>Erro</h2><p style="color:#fca5a5;">${msg}</p>`;
         container.prepend(el);
       }
@@ -135,6 +136,7 @@ GET /api/campaigns/:id/performance
 
         // Limpar anteriores
         document.querySelectorAll('.dynamic-block').forEach(el => el.remove());
+        document.querySelectorAll('.error-block').forEach(el => el.remove());
 
         const kpi = document.createElement('div');
         kpi.className = 'card dynamic-block';
@@ -168,6 +170,8 @@ GET /api/campaigns/:id/performance
       function buildSelector(list, selectedId) {
         // remover seletor antigo
         document.querySelectorAll('.selector-block').forEach(el => el.remove());
+        document.querySelectorAll('.dynamic-block').forEach(el => el.remove());
+        document.querySelectorAll('.error-block').forEach(el => el.remove());
 
         const card = document.createElement('div');
         card.className = 'card selector-block';
@@ -225,7 +229,12 @@ GET /api/campaigns/:id/performance
           .then(renderData)
           .catch((err) => {
             console.error(err);
-            renderError('Erro ao carregar performance: ' + err.message);
+            const msg = err?.message || 'Erro ao carregar performance';
+            if (msg.includes('views_missing') || msg.includes('vw_funnel_seo') || msg.includes('relation')) {
+              renderError('Views não encontradas. Rode os scripts de criação das views (vw_funnel_seo, vw_leads_by_source, vw_cta_performance, vw_cost_per_source) no banco.');
+            } else {
+              renderError('Erro ao carregar performance: ' + msg);
+            }
           });
       }
 
