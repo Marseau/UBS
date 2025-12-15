@@ -116,5 +116,71 @@ GET /api/campaigns/:id/performance
       </div>
     </div>
   </div>
+
+  <script>
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      const campaignId = params.get('campaign');
+      const container = document.querySelector('.grid');
+
+      function renderError(msg) {
+        const el = document.createElement('div');
+        el.className = 'card';
+        el.innerHTML = `<h2>Erro</h2><p style="color:#fca5a5;">${msg}</p>`;
+        container.prepend(el);
+      }
+
+      function renderData(data) {
+        const { funnel, leads_by_source, cta_performance, cost_per_source } = data;
+
+        const kpi = document.createElement('div');
+        kpi.className = 'card';
+        const leads = leads_by_source?.reduce((acc, cur) => acc + (cur.leads || 0), 0) || 0;
+        const qualified = leads_by_source?.reduce((acc, cur) => acc + (cur.qualified_leads || 0), 0) || 0;
+        kpi.innerHTML = `
+          <h2>KPIs</h2>
+          <p>Leads: <strong>${leads}</strong></p>
+          <p>Leads qualificados: <strong>${qualified}</strong></p>
+          <p>Funil SEO (sessões → CTA → leads qualificados): <strong>${funnel?.seo_sessions || 0}</strong> → <strong>${funnel?.seo_cta_clicks || 0}</strong> → <strong>${funnel?.seo_qualified_leads || 0}</strong></p>
+        `;
+        container.prepend(kpi);
+
+        const cta = document.createElement('div');
+        cta.className = 'card';
+        cta.innerHTML = `<h2>Top CTAs</h2>` + (cta_performance || []).slice(0, 5).map((c) => `
+          <p><strong>${c.cta_id}</strong> — cliques: ${c.cta_clicks}, leads: ${c.leads}, conv%: ${c.conv_qualified_per_click ? (c.conv_qualified_per_click * 100).toFixed(1) : '0.0'}</p>
+        `).join('') || '<p>Nenhum CTA encontrado.</p>';
+        container.append(cta);
+
+        if (cost_per_source && cost_per_source.length) {
+          const cost = document.createElement('div');
+          cost.className = 'card';
+          cost.innerHTML = '<h2>Custo por origem</h2>' + cost_per_source.map((c) =>
+            `<p>${c.source}: R$ ${Number(c.cost_total || 0).toFixed(2)} | CPL: R$ ${c.cpl ? Number(c.cpl).toFixed(2) : '—'}</p>`
+          ).join('');
+          container.append(cost);
+        }
+      }
+
+      if (!campaignId) {
+        renderError('Passe ?campaign={id} na URL.');
+        return;
+      }
+
+      fetch(`/api/campaigns/${campaignId}/performance`)
+        .then(async (res) => {
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || 'Falha ao carregar performance');
+          }
+          return res.json();
+        })
+        .then(renderData)
+        .catch((err) => {
+          console.error(err);
+          renderError('Erro ao carregar performance: ' + err.message);
+        });
+    })();
+  </script>
 </body>
 </html>

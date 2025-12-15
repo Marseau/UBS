@@ -953,6 +953,16 @@ try {
   console.error("❌ Failed to load AIC Outreach routes:", error);
 }
 
+// Campaign Performance API (dashboard)
+try {
+  const campaignPerformanceRoutes = require('./routes/campaign-performance.routes');
+  const router = 'default' in campaignPerformanceRoutes ? campaignPerformanceRoutes.default : campaignPerformanceRoutes;
+  app.use('/api/campaigns', router);
+  console.log('✅ Campaign Performance routes loaded - AIC DASHBOARD READY');
+} catch (error) {
+  console.error("❌ Failed to load Campaign Performance routes:", error);
+}
+
 // Campaign Credentials Routes - WhatsApp sessions + Instagram accounts for onboarding
 try {
   const campaignCredentialsRoutes = require('./routes/campaign-credentials.routes');
