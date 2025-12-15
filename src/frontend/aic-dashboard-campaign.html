@@ -115,7 +115,7 @@ GET /api/campaigns/:id/performance
         <p>Esta página é estática: não há chamada API pronta.</p>
       </div>
       </div>
-    </div>
+  </div>
 
   <script>
     (function() {
@@ -133,8 +133,11 @@ GET /api/campaigns/:id/performance
       function renderData(data) {
         const { funnel, leads_by_source, cta_performance, cost_per_source } = data;
 
+        // Limpar anteriores
+        document.querySelectorAll('.dynamic-block').forEach(el => el.remove());
+
         const kpi = document.createElement('div');
-        kpi.className = 'card';
+        kpi.className = 'card dynamic-block';
         const leads = leads_by_source?.reduce((acc, cur) => acc + (cur.leads || 0), 0) || 0;
         const qualified = leads_by_source?.reduce((acc, cur) => acc + (cur.qualified_leads || 0), 0) || 0;
         kpi.innerHTML = `
@@ -146,7 +149,7 @@ GET /api/campaigns/:id/performance
         container.prepend(kpi);
 
         const cta = document.createElement('div');
-        cta.className = 'card';
+        cta.className = 'card dynamic-block';
         cta.innerHTML = `<h2>Top CTAs</h2>` + (cta_performance || []).slice(0, 5).map((c) => `
           <p><strong>${c.cta_id}</strong> — cliques: ${c.cta_clicks}, leads: ${c.leads}, conv%: ${c.conv_qualified_per_click ? (c.conv_qualified_per_click * 100).toFixed(1) : '0.0'}</p>
         `).join('') || '<p>Nenhum CTA encontrado.</p>';
@@ -154,7 +157,7 @@ GET /api/campaigns/:id/performance
 
         if (cost_per_source && cost_per_source.length) {
           const cost = document.createElement('div');
-          cost.className = 'card';
+          cost.className = 'card dynamic-block';
           cost.innerHTML = '<h2>Custo por origem</h2>' + cost_per_source.map((c) =>
             `<p>${c.source}: R$ ${Number(c.cost_total || 0).toFixed(2)} | CPL: R$ ${c.cpl ? Number(c.cpl).toFixed(2) : '—'}</p>`
           ).join('');
@@ -162,78 +165,98 @@ GET /api/campaigns/:id/performance
         }
       }
 
-      if (!campaignId) {
-        // Mostrar seletor de campanhas
-        fetch('/api/campaigns')
-          .then(async (res) => {
-            if (!res.ok) throw new Error('Falha ao carregar campanhas');
-            return res.json();
-          })
-          .then((data) => {
-            const list = data.campaigns || [];
-            if (!list.length) {
-              renderError('Nenhuma campanha encontrada. Crie uma campanha e tente novamente.');
-              return;
-            }
-            const card = document.createElement('div');
-            card.className = 'card';
-            card.innerHTML = '<h2>Escolha a campanha</h2>';
-            const select = document.createElement('select');
-            select.style.padding = '10px';
-            select.style.borderRadius = '10px';
-            select.style.border = '1px solid var(--border)';
-            select.style.background = 'var(--panel)';
-            select.style.color = 'var(--text)';
-            select.style.width = '100%';
-            select.style.marginTop = '8px';
+      function buildSelector(list, selectedId) {
+        // remover seletor antigo
+        document.querySelectorAll('.selector-block').forEach(el => el.remove());
 
-            list.forEach((c) => {
-              const opt = document.createElement('option');
-              opt.value = c.id;
-              opt.textContent = `${c.name || 'Campanha'} (${c.status || '—'})`;
-              select.appendChild(opt);
-            });
+        const card = document.createElement('div');
+        card.className = 'card selector-block';
+        card.innerHTML = '<h2>Escolha a campanha</h2>';
+        const select = document.createElement('select');
+        select.style.padding = '10px';
+        select.style.borderRadius = '10px';
+        select.style.border = '1px solid var(--border)';
+        select.style.background = 'var(--panel)';
+        select.style.color = 'var(--text)';
+        select.style.width = '100%';
+        select.style.marginTop = '8px';
 
-            const btn = document.createElement('button');
-            btn.textContent = 'Abrir dashboard';
-            btn.style.marginTop = '10px';
-            btn.style.padding = '10px 14px';
-            btn.style.borderRadius = '10px';
-            btn.style.border = '1px solid var(--border)';
-            btn.style.background = 'linear-gradient(135deg, var(--accent), var(--accent-dark))';
-            btn.style.color = '#0c1b33';
-            btn.style.fontWeight = '700';
-            btn.style.cursor = 'pointer';
+        list.forEach((c) => {
+          const opt = document.createElement('option');
+          opt.value = c.id;
+          opt.textContent = `${c.name || 'Campanha'} (${c.status || '—'})`;
+          if (c.id === selectedId) opt.selected = true;
+          select.appendChild(opt);
+        });
 
-            btn.addEventListener('click', () => {
-              const id = select.value;
-              if (!id) return;
-              window.location.search = `?campaign=${id}`;
-            });
+        const btn = document.createElement('button');
+        btn.textContent = 'Abrir dashboard';
+        btn.style.marginTop = '10px';
+        btn.style.padding = '10px 14px';
+        btn.style.borderRadius = '10px';
+        btn.style.border = '1px solid var(--border)';
+        btn.style.background = 'linear-gradient(135deg, var(--accent), var(--accent-dark))';
+        btn.style.color = '#0c1b33';
+        btn.style.fontWeight = '700';
+        btn.style.cursor = 'pointer';
 
-            card.appendChild(select);
-            card.appendChild(btn);
-            container.prepend(card);
-          })
-          .catch((err) => {
-            console.error(err);
-            renderError('Erro ao listar campanhas: ' + err.message);
-          });
-        return;
+        btn.addEventListener('click', () => {
+          const id = select.value;
+          if (!id) return;
+          const url = new URL(window.location.href);
+          url.searchParams.set('campaign', id);
+          window.location.href = url.toString();
+        });
+
+        card.appendChild(select);
+        card.appendChild(btn);
+        container.prepend(card);
       }
 
-      fetch(`/api/campaigns/${campaignId}/performance`)
+      function loadPerformance(id) {
+        fetch(`/api/campaigns/${id}/performance`)
+          .then(async (res) => {
+            if (!res.ok) {
+              const text = await res.text();
+              throw new Error(text || 'Falha ao carregar performance');
+            }
+            return res.json();
+          })
+          .then(renderData)
+          .catch((err) => {
+            console.error(err);
+            renderError('Erro ao carregar performance: ' + err.message);
+          });
+      }
+
+      fetch('/api/campaigns')
         .then(async (res) => {
-          if (!res.ok) {
-            const text = await res.text();
-            throw new Error(text || 'Falha ao carregar performance');
-          }
+          if (!res.ok) throw new Error('Falha ao carregar campanhas');
           return res.json();
         })
-        .then(renderData)
+        .then((data) => {
+          const listRaw = data.campaigns || [];
+          const activeList = listRaw.filter((c) => {
+            const st = (c.status || '').toLowerCase();
+            return ['active', 'outreach_in_progress', 'ready_for_outreach', 'ready', 'live'].includes(st);
+          });
+          const list = activeList.length ? activeList : listRaw;
+
+          if (!list.length) {
+            renderError('Nenhuma campanha encontrada. Crie uma campanha e tente novamente.');
+            return;
+          }
+
+          const selected = (campaignId && list.some((c) => c.id === campaignId))
+            ? campaignId
+            : list[0].id;
+
+          buildSelector(list, selected);
+          loadPerformance(selected);
+        })
         .catch((err) => {
           console.error(err);
-          renderError('Erro ao carregar performance: ' + err.message);
+          renderError('Erro ao listar campanhas: ' + err.message);
         });
     })();
   </script>
