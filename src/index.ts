@@ -1000,10 +1000,13 @@ console.log('🖥️ Frontend path using:', frontendPath);
 // Routes - Define these BEFORE static middleware to ensure they take precedence
 app.get('/', (req, res) => {
   // 🎯 Roteamento por domínio:
+  // aic.ubs.app.br → aic-landing.html (AIC Campaign)
   // dev.ubs.app.br → landing.html (SaaS)
   // ubs.app.br → landingTM.html (Taylor Made)
   const hostname = req.hostname;
-  const landingPage = hostname === 'dev.ubs.app.br'
+  const landingPage = hostname === 'aic.ubs.app.br'
+    ? 'aic-landing.html'  // AIC Campaign landing
+    : hostname === 'dev.ubs.app.br'
     ? 'landing.html'  // SaaS landing
     : 'landingTM.html';  // Taylor Made landing (default)
 

@@ -3702,10 +3702,13 @@ export async function scrapeInstagramTag(
                 retryCount = 0;
                 continue;
               } else {
-                // Rotação falhou - encerrar loop
-                console.log(`❌ Não foi possível rotacionar - encerrando`);
-                hashtagIndex = hashtagsToScrape.length;
-                break;
+                // Rotação não necessária ainda (failureCount < 3) - continuar retry
+                const rotation = getAccountRotation();
+                const currentAccount = rotation.getCurrentAccount();
+                console.log(`⚠️ Falha ${currentAccount.failureCount}/3 registrada para @${currentAccount.instagramUsername || currentAccount.username}`);
+                console.log(`   Continuando retry (tentativa ${retryCount + 1}/${MAX_RETRIES}) com a mesma conta`);
+                // ✅ NÃO fazer break - deixar o retry loop continuar naturalmente
+                // O retryCount++ acontece no final do catch block
               }
             } catch (rotationError: any) {
               // Se for GlobalCooldownError, propagar imediatamente
