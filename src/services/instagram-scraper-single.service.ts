@@ -11,7 +11,7 @@ import {
   extractHashtagsFromPosts,
   retryWithBackoff
 } from './instagram-profile.utils';
-import { createIsolatedContext } from './instagram-context-manager.service';
+import { createIsolatedContext, forceClosePersistentPage } from './instagram-context-manager.service';
 import { discoverHashtagVariations, HashtagVariation } from './instagram-hashtag-discovery.service';
 import { getAccountRotation } from './instagram-account-rotation.service';
 import {
@@ -1309,31 +1309,24 @@ async function handleSessionError(page: Page, errorType: string): Promise<boolea
   }
   console.log(`=======================================================\n`);
 
-  // 🚨 ERRO CRÍTICO (about:blank, URL vazia, SESSION_INVALID): Registrar 3 falhas para forçar rotação
+  // 🔧 FIX: Registrar falha SEM forçar count=3 - respeitar lógica de 3 falhas consecutivas
   const currentUrl = page.url();
   const isCriticalError = currentUrl === 'about:blank' || currentUrl === '' || currentUrl === 'data:,' || errorType === 'SESSION_INVALID';
 
-  if (isCriticalError) {
-    console.log(`🚨 ERRO CRÍTICO (${errorType}) - Forçando rotação imediata...`);
-    // Usar o novo parâmetro forceFailureCount para evitar eventos duplicados
-    await rotation.recordFailure(errorType, 'Erro crítico - rotação forçada', 3);
-    const currentAccount = rotation.getCurrentAccount();
-    console.log(`   🚨 Failure count forçado para 3 em ${currentAccount.username}`);
-    console.log(`   🕐 lastFailureTime atualizado para: ${new Date().toLocaleString('pt-BR')}`);
-  } else {
-    await rotation.recordFailure(errorType);
-  }
+  // Registrar falha (incrementa +1, não força 3)
+  await rotation.recordFailure(errorType, isCriticalError ? 'Erro crítico detectado' : undefined);
+  const currentAccount = rotation.getCurrentAccount();
+  console.log(`   📊 Falha registrada: ${currentAccount.username} (failureCount: ${currentAccount.failureCount}/3)`);
 
-  // 🔍 Verificar se deve rotacionar (apenas para debug)
+  // 🔍 Verificar se deve rotacionar (após 3 falhas consecutivas)
   const shouldRotate = rotation.shouldRotate();
-  const forceRotation = isCriticalError; // SESSION_INVALID sempre força rotação
 
-  if (!shouldRotate && !forceRotation) {
-    console.log(`⚠️  Falha registrada mas ainda não atingiu limite para rotação`);
+  if (!shouldRotate) {
+    console.log(`⚠️  Falha registrada mas ainda não atingiu limite para rotação (${currentAccount.failureCount}/3)`);
     return false;
   }
 
-  console.log(`🔄 ${forceRotation ? 'FORÇANDO' : 'Iniciando'} rotação de conta...`);
+  console.log(`🔄 Iniciando rotação de conta (3 falhas atingidas)...`);
 
   // 🚪 Logout explícito antes de limpar e rotacionar
   try {
@@ -1673,6 +1666,12 @@ export async function scrapeInstagramTag(
         sessionInitialization = null;
         loggedUsername = null;
 
+        // 🔧 FIX: Fechar página anterior ANTES de criar nova
+        try {
+          await cleanup();
+          console.log('   🧹 Página anterior fechada');
+        } catch {}
+
         // Recriar contexto
         const newContext = await createIsolatedContext();
         // Reassignar página e cleanup
@@ -1681,11 +1680,9 @@ export async function scrapeInstagramTag(
 
         console.log('✅ [SESSION RECOVERY] Nova sessão criada com sucesso!');
 
-        // 🆕 CRÍTICO: Registrar recuperação no sistema de rotação
-        // Isso reseta failureCount e isBlocked para evitar estado inconsistente
-        const rotation = getAccountRotation();
-        await rotation.recordSuccess();
-        console.log('✅ [SESSION RECOVERY] Estado de rotação atualizado (contadores resetados)');
+        // ⚠️  NÃO RESETAR failureCount aqui - apenas recriamos o browser
+        // O failureCount só deve ser resetado após SUCESSO REAL no scraping
+        console.log('⚠️  [SESSION RECOVERY] Mantendo contadores de falha preservados');
 
         await waitHuman(2700, 3500); // Dar tempo para estabilizar (randomizado)
       }
@@ -1745,6 +1742,8 @@ export async function scrapeInstagramTag(
         try {
           const recovered = await handleSessionError(page, 'SESSION_INVALID: Redirected to login page');
           if (recovered) {
+            // 🔧 FIX: Fechar página anterior ANTES de criar nova
+            try { await cleanup(); } catch {}
             const newContext = await createIsolatedContext();
             page = newContext.page;
             cleanup = newContext.cleanup;
@@ -1766,6 +1765,8 @@ export async function scrapeInstagramTag(
         try {
           const recovered = await handleSessionError(page, 'CHALLENGE_REQUIRED: Instagram requires verification');
           if (recovered) {
+            // 🔧 FIX: Fechar página anterior ANTES de criar nova
+            try { await cleanup(); } catch {}
             const newContext = await createIsolatedContext();
             page = newContext.page;
             cleanup = newContext.cleanup;
@@ -1787,6 +1788,8 @@ export async function scrapeInstagramTag(
         try {
           const recovered = await handleSessionError(page, 'ACCOUNT_RESTRICTED: Account may be temporarily restricted');
           if (recovered) {
+            // 🔧 FIX: Fechar página anterior ANTES de criar nova
+            try { await cleanup(); } catch {}
             const newContext = await createIsolatedContext();
             page = newContext.page;
             cleanup = newContext.cleanup;
@@ -1825,6 +1828,8 @@ export async function scrapeInstagramTag(
           try {
             const recovered = await handleSessionError(page, 'SESSION_INVALID: Login page after recovery attempt');
             if (recovered) {
+              // 🔧 FIX: Fechar página anterior ANTES de criar nova
+              try { await cleanup(); } catch {}
               const newContext = await createIsolatedContext();
               page = newContext.page;
               cleanup = newContext.cleanup;
@@ -1873,6 +1878,8 @@ export async function scrapeInstagramTag(
 
         if (recovered) {
           console.log('✅ [RECOVERY] Rotação bem-sucedida! Continuando com nova conta...');
+          // 🔧 FIX: Fechar página anterior ANTES de criar nova
+          try { await cleanup(); } catch {}
           // Recriar contexto com nova conta
           const newContext = await createIsolatedContext();
           page = newContext.page;
@@ -1974,6 +1981,16 @@ export async function scrapeInstagramTag(
           console.log(`   🔐 Página de login detectada: ${hasLoginForm ? 'SIM' : 'NÃO'}`);
           console.log(`   ${muralLoaded ? '✅ MURAL CARREGOU (15+ posts)' : '❌ Mural não carregou'}`);
           console.log(`   ❌ Erro: ${error?.message || error}`);
+
+          // 🚨 FIX: Detectar chrome-error como 429/bloqueio
+          if (currentUrl.includes('chrome-error://') || currentUrl.includes('chromewebdata')) {
+            console.log(`\n🚨 ========================================`);
+            console.log(`🚨 ERRO 429 DETECTADO VIA CHROME-ERROR!`);
+            console.log(`🚨 URL: ${currentUrl}`);
+            console.log(`🚨 Instagram bloqueou a navegação`);
+            console.log(`🚨 ========================================\n`);
+            throw new RateLimitError('Navegação bloqueada (chrome-error detectado durante timeout)');
+          }
 
           // 🆕 Se mural carregou (15+ posts), retorna sucesso mesmo com timeout
           if (muralLoaded) {
@@ -2222,6 +2239,17 @@ export async function scrapeInstagramTag(
 
         // 🚫 DETECÇÃO DE PÁGINA SEM POSTS
         if (anchorHandles.length === 0) {
+          // 🚨 FIX: Verificar chrome-error ANTES de analisar página
+          const currentPageUrl = page.url();
+          if (currentPageUrl.includes('chrome-error://') || currentPageUrl.includes('chromewebdata')) {
+            console.log(`\n🚨 ========================================`);
+            console.log(`🚨 ERRO 429 DETECTADO VIA CHROME-ERROR!`);
+            console.log(`🚨 URL: ${currentPageUrl}`);
+            console.log(`🚨 Instagram bloqueou a navegação`);
+            console.log(`🚨 ========================================\n`);
+            throw new RateLimitError('Página chrome-error detectada no loop de scraping');
+          }
+
           const pageAnalysis = await page.evaluate(() => {
             const url = window.location.href;
             const bodyText = document.body.innerText;
@@ -2635,6 +2663,8 @@ export async function scrapeInstagramTag(
                   // Nova sessão iniciada - recriar página e continuar
                   console.log(`✅ Sessão recuperada - recriando página...`);
                   try {
+                    // ✅ Fechar page antiga para evitar múltiplas pages ativas
+                    await page.close().catch(() => {});
                     page = await createAuthenticatedPage();
                     await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
                     await waitHuman(2700, 3500);
@@ -3494,6 +3524,8 @@ export async function scrapeInstagramTag(
                 // Nova sessão iniciada - recriar página e continuar
                 console.log(`✅ Sessão recuperada - recriando página...`);
                 try {
+                  // ✅ Fechar page antiga para evitar múltiplas pages ativas
+                  await page.close().catch(() => {});
                   page = await createAuthenticatedPage();
                   await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
                   await waitHuman(2700, 3500);
@@ -3555,6 +3587,8 @@ export async function scrapeInstagramTag(
                 // Nova sessão iniciada - recriar página e continuar
                 console.log(`✅ Sessão recuperada - recriando página...`);
                 try {
+                  // ✅ Fechar page antiga para evitar múltiplas pages ativas
+                  await page.close().catch(() => {});
                   page = await createAuthenticatedPage();
                   await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
                   await waitHuman(2700, 3500);
@@ -3693,6 +3727,8 @@ export async function scrapeInstagramTag(
 
               if (recovered) {
                 console.log(`✅ Rotação bem-sucedida! Nova conta logada.`);
+                // 🔧 FIX: Fechar página anterior ANTES de criar nova
+                try { await cleanup(); } catch {}
                 // Recriar contexto com nova conta
                 const newContext = await createIsolatedContext();
                 page = newContext.page;
@@ -3883,10 +3919,10 @@ export async function scrapeInstagramTag(
         }
       }
 
-      // 🎯 PASSO 3: Registrar falha na conta CORRETA (forçar count=3 para rotação imediata)
-      await accountRotation.recordFailure('SESSION_INVALID', 'Sessão inválida detectada', 3);
+      // 🔧 FIX: Registrar falha SEM forçar count=3 - respeitar 3 falhas consecutivas
+      await accountRotation.recordFailure('SESSION_INVALID', 'Sessão inválida detectada');
       const currentAccount = accountRotation.getCurrentAccount();
-      console.log(`   🚨 Failure count forçado para 3 em ${currentAccount.username} (sessão inválida detectada)`);
+      console.log(`   📊 Falha registrada: ${currentAccount.username} (failureCount: ${currentAccount.failureCount}/3)`);
 
       // 🧹 PASSO 4: Fechar CONTEXTO LOCAL (não global!)
       console.log(`\n🧹 ========== FECHANDO CONTEXTO LOCAL ==========`);
@@ -3975,20 +4011,17 @@ export async function scrapeInstagramTag(
         }
       }
 
-      // 🎯 PASSO 3: Registrar falha na conta CORRETA (forçar count=3 para rotação imediata)
-      await accountRotation.recordFailure('RATE_LIMIT_429', 'Bloqueio HTTP 429 detectado', 3);
-      const currentAccount = accountRotation.getCurrentAccount();
-      console.log(`   🚨 Failure count forçado para 3 em ${currentAccount.username} (bloqueio confirmado por HTTP 429)`);
+      // 🔧 FIX: NÃO registrar falha aqui - handleSessionError() já faz isso
+      // Isso evita duplicação: 429 handler + handleSessionError = 2 falhas por 1 erro
+      console.log(`   ℹ️  Falha será registrada em handleSessionError() após IP cooling`);
 
-      // 🧹 PASSO 4: Fechar CONTEXTO LOCAL (não global!)
-      console.log(`\n🧹 ========== FECHANDO CONTEXTO LOCAL ==========`);
+      // 🧹 PASSO 4: Fechar página persistente (429 = precisa nova página com nova conta)
+      console.log(`\n🧹 ========== FECHANDO PÁGINA PERSISTENTE (429) ==========`);
       try {
-        if (cleanup) {
-          await cleanup();
-          console.log(`   ✅ Contexto local (page/browser) fechado`);
-        }
+        await forceClosePersistentPage();
+        console.log(`   ✅ Página persistente fechada (429 requer nova sessão)`);
       } catch (cleanupError: any) {
-        console.log(`   ⚠️  Erro ao fechar contexto: ${cleanupError.message}`);
+        console.log(`   ⚠️  Erro ao fechar página: ${cleanupError.message}`);
       }
 
       // 🗑️ PASSO 5: Deletar cookies da conta bloqueada
@@ -4005,7 +4038,23 @@ export async function scrapeInstagramTag(
       console.log(`   ✅ Variáveis de sessão resetadas`);
       console.log(`========================================\n`);
 
-      // 🔄 PASSO 6: Rotacionar e fazer login na nova conta
+      // 🔧 FIX: 429 = IP bloqueado, não apenas conta. AGUARDAR IP cooling obrigatório
+      const ipCoolingMinutes = accountRotation.getIpCoolingRemaining();
+
+      if (ipCoolingMinutes > 0) {
+        console.log(`\n⏰ ========================================`);
+        console.log(`⏰ 🧊 IP COOLING ATIVADO - AGUARDANDO ${ipCoolingMinutes}min`);
+        console.log(`⏰ Motivo: Erro 429 - IP bloqueado pelo Instagram`);
+        console.log(`⏰ Rotacionar conta NÃO resolve (mesmo IP)`);
+        console.log(`⏰ ========================================\n`);
+
+        // Aguardar o tempo necessário
+        await new Promise(resolve => setTimeout(resolve, ipCoolingMinutes * 60 * 1000));
+
+        console.log(`✅ Período de IP cooling concluído!`);
+      }
+
+      // Agora sim tentar rotacionar (após IP cooling)
       const recovered = await handleSessionError(page, 'RATE_LIMIT_429');
 
       if (!recovered) {
@@ -5452,6 +5501,17 @@ export async function scrapeInstagramExplore(
       console.log(`   🔍 Encontrados ${anchorHandles.length} posts no mural`);
 
       if (anchorHandles.length === 0) {
+        // 🚨 FIX: Verificar chrome-error ANTES de tentar scroll
+        const currentPageUrl = page.url();
+        if (currentPageUrl.includes('chrome-error://') || currentPageUrl.includes('chromewebdata')) {
+          console.log(`\n🚨 ========================================`);
+          console.log(`🚨 ERRO 429 DETECTADO VIA CHROME-ERROR!`);
+          console.log(`🚨 URL: ${currentPageUrl}`);
+          console.log(`🚨 Instagram bloqueou a navegação`);
+          console.log(`🚨 ========================================\n`);
+          throw new RateLimitError('Página chrome-error detectada no loop de explore');
+        }
+
         attemptsWithoutNewPost++;
         console.log(`   ⚠️  Nenhum post encontrado. Tentando scroll...`);
         await scrollHuman(page, 600 + Math.random() * 400);

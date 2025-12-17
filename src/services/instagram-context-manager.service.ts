@@ -36,6 +36,10 @@ interface ManagedPage {
 const activePages = new Map<string, ManagedPage>();
 let pageCounter = 0;
 
+// 🆕 PÁGINA PERSISTENTE - reutilizada entre operações
+let persistentPage: Page | null = null;
+let persistentRequestId: string | null = null;
+
 /**
  * Gera ID único para tracking de requisição
  */
@@ -44,9 +48,12 @@ function generateRequestId(): string {
 }
 
 /**
- * Cria uma página simples com cookies autenticados
+ * Cria ou reutiliza uma página com cookies autenticados
  *
- * OTIMIZAÇÃO: Usa páginas diretas sem BrowserContexts para reduzir overhead
+ * 🆕 OTIMIZAÇÃO v3: PÁGINA PERSISTENTE
+ * - Reutiliza a mesma página entre operações
+ * - Só cria nova se a página atual estiver fechada/inválida
+ * - Evita erros de "detached frame" causados por múltiplas páginas
  *
  * @returns Objeto com page, requestId e cleanup function
  */
@@ -61,6 +68,34 @@ export async function createIsolatedContext(): Promise<{
   const browser = getBrowserInstance();
   if (!browser) {
     throw new Error('Browser não inicializado.');
+  }
+
+  // 🆕 VERIFICAR SE PÁGINA PERSISTENTE EXISTE E ESTÁ VÁLIDA
+  if (persistentPage && !persistentPage.isClosed()) {
+    try {
+      // Testar se frame está válido
+      await persistentPage.evaluate(() => window.location.href);
+
+      console.log(`♻️  Reutilizando página existente: ${persistentRequestId}`);
+
+      // Retornar página existente com cleanup que NÃO fecha a página
+      return {
+        page: persistentPage,
+        requestId: persistentRequestId!,
+        cleanup: async () => {
+          // 🆕 NÃO fechar a página - apenas log
+          console.log(`   ℹ️  Página ${persistentRequestId} mantida aberta para próxima operação`);
+        }
+      };
+    } catch (frameError: any) {
+      console.log(`⚠️  Página existente inválida (${frameError.message}). Criando nova...`);
+      // Página está corrompida - fechar e criar nova
+      try {
+        await persistentPage.close();
+      } catch {}
+      persistentPage = null;
+      persistentRequestId = null;
+    }
   }
 
   const requestId = generateRequestId();
@@ -111,9 +146,15 @@ export async function createIsolatedContext(): Promise<{
   };
   activePages.set(requestId, managedPage);
 
-  // Função de cleanup para garantir limpeza
+  // 🆕 SALVAR COMO PÁGINA PERSISTENTE
+  persistentPage = page;
+  persistentRequestId = requestId;
+  console.log(`   ✅ Página ${requestId} salva como persistente (será reutilizada)`);
+
+  // Função de cleanup que NÃO fecha a página persistente
   const cleanup = async () => {
-    await cleanupPage(requestId);
+    // 🆕 NÃO fechar página persistente - apenas log
+    console.log(`   ℹ️  Página ${requestId} mantida aberta para próxima operação`);
   };
 
   return { page, requestId, cleanup };
@@ -146,10 +187,31 @@ async function cleanupPage(requestId: string): Promise<void> {
 }
 
 /**
+ * 🆕 Força fechamento da página persistente (para erros críticos como 429)
+ */
+export async function forceClosePersistentPage(): Promise<void> {
+  if (persistentPage) {
+    try {
+      if (!persistentPage.isClosed()) {
+        await persistentPage.close();
+        console.log(`🗑️  Página persistente ${persistentRequestId} fechada forçadamente`);
+      }
+    } catch (err: any) {
+      console.warn(`⚠️  Erro ao fechar página persistente: ${err.message}`);
+    }
+    persistentPage = null;
+    persistentRequestId = null;
+  }
+}
+
+/**
  * Limpa todas as páginas ativas (útil para shutdown graceful)
  */
 export async function cleanupAllContexts(): Promise<void> {
   console.log(`🧹 Limpando ${activePages.size} páginas ativas...`);
+
+  // 🆕 TAMBÉM LIMPAR PÁGINA PERSISTENTE
+  await forceClosePersistentPage();
 
   const cleanupPromises = Array.from(activePages.keys()).map(requestId =>
     cleanupPage(requestId)
