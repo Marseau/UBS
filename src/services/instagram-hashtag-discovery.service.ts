@@ -94,7 +94,7 @@ export function parseInstagramPostCount(formatted: string): number {
   // Remove "posts" e espaços
   const cleaned = lower.replace(/\s*posts?\s*/gi, '').trim();
 
-  // Detectar multiplicador (IMPORTANTE: checar "mil" ANTES de "mi")
+  // Detectar multiplicador (IMPORTANTE: checar "mil" ANTES de "mi", e "mi" ANTES de "m")
   let multiplier = 1;
   let numberPart = cleaned;
 
@@ -103,9 +103,14 @@ export function parseInstagramPostCount(formatted: string): number {
     multiplier = 1_000;
     numberPart = cleaned.replace(/mil/gi, '').trim();
   } else if (cleaned.includes('mi')) {
-    // "mi" = millions
+    // "mi" = millions (português)
     multiplier = 1_000_000;
     numberPart = cleaned.replace(/mi/gi, '').trim();
+  } else if (/\d+[.,]?\d*\s*m\b/i.test(cleaned)) {
+    // "M" = millions (inglês) - ex: "18.3M", "5M"
+    // Usar regex com \b para não confundir com "mil" ou "mi"
+    multiplier = 1_000_000;
+    numberPart = cleaned.replace(/m\b/gi, '').trim();
   } else if (cleaned.includes('k')) {
     multiplier = 1_000;
     numberPart = cleaned.replace(/k/gi, '').trim();

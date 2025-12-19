@@ -11,7 +11,7 @@ import {
   extractHashtagsFromPosts,
   retryWithBackoff
 } from './instagram-profile.utils';
-import { createIsolatedContext, forceClosePersistentPage } from './instagram-context-manager.service';
+import { createIsolatedContext, createDedicatedPage, forceClosePersistentPage } from './instagram-context-manager.service';
 import { discoverHashtagVariations, HashtagVariation } from './instagram-hashtag-discovery.service';
 import { getAccountRotation } from './instagram-account-rotation.service';
 import {
@@ -1658,13 +1658,14 @@ export async function scrapeInstagramTag(
     console.log(`   Total descobertas: ${variations.length}`);
     console.log(`   Prioritárias (score ≥ 80 OU > 50K posts): ${priorityHashtags.length}`);
 
-    if (priorityHashtags.length > 0) {
-      console.log(`\n🎯 Hashtags que serão scrapadas (ordenadas por score):`);
-      priorityHashtags.forEach((v, i) => {
-        console.log(`   ${i + 1}. #${v.hashtag} - ${v.post_count_formatted} - Score: ${v.priority_score}`);
+    // Mostrar lista completa que será scrapada (inclui original + prioritárias sem duplicata)
+    const filteredPriority = priorityHashtags.filter(h => h.hashtag !== normalizedTerm);
+    console.log(`\n🎯 Hashtags que serão scrapadas:`);
+    console.log(`   1. #${normalizedTerm} (original)`);
+    if (filteredPriority.length > 0) {
+      filteredPriority.forEach((v, i) => {
+        console.log(`   ${i + 2}. #${v.hashtag} - ${v.post_count_formatted} - Score: ${v.priority_score}`);
       });
-    } else {
-      console.log(`   ⚠️  Nenhuma hashtag prioritária encontrada. Usando hashtag original: #${normalizedTerm}`);
     }
 
     // Persistir variações descobertas no Supabase (para rastreabilidade futura)
@@ -5178,6 +5179,39 @@ export async function scrapeInstagramProfile(username: string): Promise<Instagra
     console.log(`🔓 Request ${requestId} finalizada (scrape-profile: "${username}")`);
     await cleanup();
     console.log(`🏁 SCRAPE-PROFILE ENCERRADO COMPLETAMENTE: "@${username}" - Request ${requestId}`);
+  }
+}
+
+/**
+ * 🆕 Scrape de perfil usando PÁGINA DEDICADA (isolada)
+ *
+ * Diferente de scrapeInstagramProfile:
+ * - SEMPRE cria uma nova página (não reutiliza a persistente)
+ * - Não interfere com scrape-users ou outras operações em andamento
+ * - FECHA a página após o uso
+ *
+ * Ideal para scrapes vindos do inbound (DM reply, webhooks)
+ * que podem rodar em paralelo com outras operações.
+ *
+ * @param username - Username do Instagram (sem @)
+ * @returns Dados do perfil
+ */
+export async function scrapeInstagramProfileDedicated(username: string): Promise<InstagramProfileData & { followers: string }> {
+  // Usa página dedicada que NÃO interfere com outras operações
+  const { page, requestId, cleanup } = await createDedicatedPage();
+  console.log(`🔒 [DEDICATED] Request ${requestId} iniciada para scrape-profile-dedicated: "@${username}"`);
+
+  try {
+    const result = await scrapeProfileWithExistingPage(page, username);
+    console.log(`✅ [DEDICATED] SCRAPE-PROFILE CONCLUÍDO: dados coletados para "@${username}"`);
+    return result;
+  } catch (error: any) {
+    console.error(`❌ [DEDICATED] Erro ao scrape perfil "@${username}":`, error.message);
+    throw error;
+  } finally {
+    console.log(`🔓 [DEDICATED] Request ${requestId} finalizada (scrape-profile-dedicated: "@${username}")`);
+    await cleanup(); // Cleanup SEMPRE fecha a página dedicada
+    console.log(`🏁 [DEDICATED] SCRAPE-PROFILE ENCERRADO COMPLETAMENTE: "@${username}" - Request ${requestId}`);
   }
 }
 
