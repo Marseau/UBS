@@ -184,7 +184,7 @@ class InstagramAccountRotation {
     };
   }
 
-  private async saveState(): Promise<void> {
+  async saveState(): Promise<void> {
     try {
       this.state.accounts = this.accounts.map(acc => ({
         username: acc.username,
@@ -252,13 +252,20 @@ class InstagramAccountRotation {
               console.log(`   🔄 @${account.instagramUsername}: cooldown manual do BD até ${new Date(cooldownUntilTs).toLocaleString('pt-BR')}`);
               account.cooldownUntil = cooldownUntilTs;
               account.isBlocked = true;
+              // 🔧 FIX BUG 3: Garantir consistência - se bloqueado por cooldown, ter ao menos 1 falha
+              if (account.failureCount === 0) {
+                account.failureCount = 1;
+                console.log(`   🔧 @${account.instagramUsername}: failureCount ajustado para 1 (consistência)`);
+              }
               hasChanges = true;
             }
           } else {
-            // Cooldown expirou - limpar
-            if (account.cooldownUntil) {
-              console.log(`   ✅ @${account.instagramUsername}: cooldown manual expirou`);
+            // Cooldown expirou - limpar TUDO
+            if (account.cooldownUntil || account.isBlocked) {
+              console.log(`   ✅ @${account.instagramUsername}: cooldown manual expirou - limpando estado`);
               account.cooldownUntil = undefined;
+              account.isBlocked = false;
+              account.failureCount = 0;
               hasChanges = true;
             }
           }
@@ -296,6 +303,12 @@ class InstagramAccountRotation {
 
       this.syncInitialized = true;
       console.log(`📥 [SYNC] Sincronização com BD concluída`);
+
+      // 🔧 FIX: Verificar e corrigir estados inconsistentes após sync
+      for (const account of this.accounts) {
+        this.hasAccountCooledDown(account); // Isso detecta e marca correções necessárias
+      }
+      await this.flushStateIfNeeded();
 
     } catch (error: any) {
       console.error(`❌ Erro na sincronização com BD: ${error.message}`);
@@ -443,7 +456,7 @@ class InstagramAccountRotation {
 
   /**
    * Verifica se uma conta específica esfriou (passou 2h desde última falha OU cooldown manual)
-   * 🔧 FIX: Agora verifica isBlocked ANTES de considerar disponível
+   * 🔧 FIX v3: Detecta e corrige estados inconsistentes automaticamente
    */
   private hasAccountCooledDown(account: AccountConfig): boolean {
     const now = Date.now();
@@ -455,36 +468,66 @@ class InstagramAccountRotation {
 
     // Limpar cooldown manual expirado
     if (account.cooldownUntil && account.cooldownUntil <= now) {
+      console.log(`   🔧 @${account.instagramUsername}: cooldown manual expirou, limpando...`);
       account.cooldownUntil = undefined;
       account.isBlocked = false;
+      account.failureCount = 0;
+      // Marcar para salvar (será salvo na próxima operação)
+      this._stateNeedsSave = true;
     }
 
-    // 🔧 FIX: Se conta está bloqueada, verificar se o tempo de cooldown já passou
+    // 🔧 FIX v3: Detectar estado inconsistente (bloqueada sem razão válida)
+    if (account.isBlocked && account.failureCount === 0 && !account.lastFailureTime) {
+      console.log(`   🔧 @${account.instagramUsername}: estado inconsistente detectado (bloqueada sem falhas) - corrigindo`);
+      account.isBlocked = false;
+      account.cooldownUntil = undefined;
+      this._stateNeedsSave = true;
+      return true; // Agora está disponível
+    }
+
+    // Se conta está bloqueada, verificar se o tempo de cooldown já passou
     if (account.isBlocked) {
       // Se tem lastFailureTime, verificar se já passou o tempo de cooldown
       if (account.lastFailureTime) {
         const elapsed = now - account.lastFailureTime;
         if (elapsed >= ACCOUNT_COOLDOWN_MS) {
           // Cooldown expirou - desbloquear automaticamente
+          console.log(`   ✅ @${account.instagramUsername}: cooldown de 2h expirou, desbloqueando`);
           account.isBlocked = false;
           account.failureCount = 0;
-          console.log(`   ✅ @${account.instagramUsername}: cooldown expirou, desbloqueando automaticamente`);
+          account.cooldownUntil = undefined;
+          this._stateNeedsSave = true;
           return true;
         }
         return false; // Ainda em cooldown
       }
-      // Bloqueada mas sem lastFailureTime - manter bloqueada
-      return false;
+      // Bloqueada mas sem lastFailureTime E com falhas - manter bloqueada
+      if (account.failureCount > 0) {
+        return false;
+      }
+      // Bloqueada sem lastFailureTime E sem falhas - estado inconsistente, desbloquear
+      console.log(`   🔧 @${account.instagramUsername}: bloqueada sem motivo válido - desbloqueando`);
+      account.isBlocked = false;
+      this._stateNeedsSave = true;
+      return true;
     }
 
-    // Conta não bloqueada e sem falhas
-    if (account.failureCount === 0 || !account.lastFailureTime) {
-      return true; // Conta sem falhas está sempre disponível
-    }
+    // Conta não bloqueada está sempre disponível
+    return true;
+  }
 
-    // Verificar cooldown baseado em lastFailureTime
-    const elapsed = now - account.lastFailureTime;
-    return elapsed >= ACCOUNT_COOLDOWN_MS;
+  // Flag para indicar que estado precisa ser salvo
+  private _stateNeedsSave = false;
+
+  /**
+   * Verifica e salva estado se necessário (chamado após operações de verificação)
+   */
+  async flushStateIfNeeded(): Promise<void> {
+    if (this._stateNeedsSave) {
+      await this.saveState();
+      this._stateNeedsSave = false;
+      console.log(`   💾 Estado salvo após correção automática`);
+    }
   }
 
   /**
@@ -897,6 +940,8 @@ class InstagramAccountRotation {
     if (currentAvailable) {
       console.log(`   ✅ Conta atual @${currentAccount.instagramUsername} está funcionando - USANDO`);
       console.log(`====================================================\n`);
+      // 🔧 FIX: Salvar estado se houve correções automáticas
+      await this.flushStateIfNeeded();
       return {
         success: true,
         account: currentAccount.instagramUsername || currentAccount.username,
@@ -949,6 +994,7 @@ class InstagramAccountRotation {
       const waitTime = Math.min(...allAccounts.map(a => a.cooldown));
       console.log(`   ❌ Nenhuma conta disponível. Aguarde ${waitTime}min`);
       console.log(`====================================================\n`);
+      await this.flushStateIfNeeded();
       return {
         success: false,
         account: '',
@@ -971,6 +1017,7 @@ class InstagramAccountRotation {
       console.log(`   ❌ IP cooling ativo: ${ipCoolingMinutes}min restantes`);
       console.log(`   ⏱️  Última falha há ${timeSinceFailureMinutes}min (precisa 30min para rotacionar)`);
       console.log(`====================================================\n`);
+      await this.flushStateIfNeeded();
       return {
         success: false,
         account: currentAccount.instagramUsername || currentAccount.username,

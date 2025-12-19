@@ -146,6 +146,37 @@ async function navigateWithRateLimitDetection(
     throw new RateLimitError(`Challenge de segurança detectado: ${challenge.type}`);
   }
 
+  // 🚨 DETECÇÃO 5: Página "Something went wrong" do Instagram (HTTP 200 mas com erro)
+  const bodyText = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
+  const hasSomethingWentWrong =
+    bodyText.includes('Something went wrong') ||
+    bodyText.includes('Ocorreu um erro') ||
+    bodyText.includes('não foi possível carregar') ||
+    bodyText.includes('error occurred') ||
+    bodyText.includes("couldn't load this page") ||
+    bodyText.includes('Try again');
+
+  if (hasSomethingWentWrong) {
+    console.log(`\n🚨 ========================================`);
+    console.log(`🚨 ERRO "SOMETHING WENT WRONG" DETECTADO!`);
+    console.log(`🚨 Instagram retornou página de erro (HTTP 200)`);
+    console.log(`🚨 ========================================`);
+    console.log(`⏸️  Tratando como rate limit para rotação de conta`);
+    console.log(`🔄 Sistema irá fazer IP cooling (30min) e rotacionar\n`);
+
+    // 🔧 CRÍTICO: Registrar falha ANTES de lançar erro para ativar IP cooling de 30min
+    // Isso garante que se o scrape for reiniciado, ele aguarde o IP esfriar
+    try {
+      const accountRotation = getAccountRotation();
+      await accountRotation.recordFailure('SOMETHING_WENT_WRONG', 'Instagram retornou página de erro');
+      console.log(`   ✅ Falha registrada - IP cooling de 30min ativado`);
+    } catch (recordError: any) {
+      console.log(`   ⚠️  Erro ao registrar falha: ${recordError.message}`);
+    }
+
+    throw new RateLimitError('Instagram retornou "Something went wrong"');
+  }
+
   console.log(`   ✅ Navegação bem-sucedida (${response?.status() || 'unknown'})`);
 }
 
@@ -1216,28 +1247,15 @@ async function ensureLoggedSession(): Promise<void> {
  * Cria nova página autenticada para uso isolado em cada scraping.
  */
 async function createAuthenticatedPage(): Promise<Page> {
-  await ensureLoggedSession();
-  if (!browserInstance || !sessionPage) {
-    throw new Error('Browser ou sessão não inicializada.');
-  }
+  // 🔧 FIX: Usar createIsolatedContext() para garantir página persistente única
+  // Isso evita múltiplas páginas abertas causando logs intercalados
+  console.log('🔄 createAuthenticatedPage() redirecionando para createIsolatedContext()...');
 
-  // Criar nova página
-  const page = await browserInstance.newPage();
+  // Fechar página persistente anterior para garantir página limpa
+  await forceClosePersistentPage();
 
-  // Copiar cookies da sessão logada para a nova página
-  try {
-    if (!sessionPage.isClosed()) {
-      const cookies = await sessionPage.cookies();
-      if (cookies.length > 0) {
-        await page.setCookie(...cookies);
-        console.log(`🔑 Cookies da sessão copiados para nova página (${cookies.length} cookies)`);
-      }
-    }
-  } catch (error: any) {
-    console.warn('⚠️  Não foi possível copiar cookies:', error.message);
-  }
-
-  return page;
+  const context = await createIsolatedContext();
+  return context.page;
 }
 
 /**
@@ -1342,13 +1360,46 @@ async function handleSessionError(page: Page, errorType: string): Promise<boolea
   // 📤 Fechar browser e sessão atual
   try {
     console.log(`🔒 Fechando browser e sessão atual...`);
+
+    // 1. Fechar sessionPage
     if (sessionPage && !sessionPage.isClosed()) {
       await sessionPage.close().catch(() => {});
     }
     sessionPage = null;
 
+    // 2. Fechar browser com verificação robusta
     if (browserInstance) {
-      await browserInstance.close().catch(() => {});
+      const pid = browserInstance.process()?.pid;
+      console.log(`   🔍 Browser PID: ${pid || 'unknown'}`);
+
+      try {
+        // Primeiro: fechar TODAS as páginas abertas (inclui popups)
+        const allPages = await browserInstance.pages();
+        console.log(`   📄 Fechando ${allPages.length} página(s)...`);
+        for (const page of allPages) {
+          if (!page.isClosed()) {
+            await page.close().catch(() => {});
+          }
+        }
+
+        // Segundo: fechar browser com timeout
+        await Promise.race([
+          browserInstance.close(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+        ]);
+        console.log(`   ✅ Browser fechado normalmente`);
+      } catch (closeErr: any) {
+        console.log(`   ⚠️  Erro ao fechar browser: ${closeErr.message}`);
+        // Se não fechou, tentar matar o processo
+        if (pid) {
+          try {
+            process.kill(pid, 'SIGKILL');
+            console.log(`   💀 Processo ${pid} killed forçadamente`);
+          } catch (killErr) {
+            console.log(`   ❌ Não foi possível matar processo ${pid}`);
+          }
+        }
+      }
     }
     browserInstance = null;
     sessionInitialization = null;
@@ -3919,10 +3970,9 @@ export async function scrapeInstagramTag(
         }
       }
 
-      // 🔧 FIX: Registrar falha SEM forçar count=3 - respeitar 3 falhas consecutivas
-      await accountRotation.recordFailure('SESSION_INVALID', 'Sessão inválida detectada');
-      const currentAccount = accountRotation.getCurrentAccount();
-      console.log(`   📊 Falha registrada: ${currentAccount.username} (failureCount: ${currentAccount.failureCount}/3)`);
+      // 🔧 FIX: NÃO registrar falha aqui - handleSessionError() já faz isso
+      // Isso mantém consistência com o handler de 429
+      console.log(`   ℹ️  Falha será registrada em handleSessionError()`);
 
       // 🧹 PASSO 4: Fechar CONTEXTO LOCAL (não global!)
       console.log(`\n🧹 ========== FECHANDO CONTEXTO LOCAL ==========`);
@@ -4052,6 +4102,16 @@ export async function scrapeInstagramTag(
         await new Promise(resolve => setTimeout(resolve, ipCoolingMinutes * 60 * 1000));
 
         console.log(`✅ Período de IP cooling concluído!`);
+
+        // 🔧 FIX: Após IP cooling, vida nova! Resetar TUDO da conta atual
+        // Conceito: IP cooling é o "pagamento" pelo erro, depois disso começa do zero
+        const cooledAccount = accountRotation.getCurrentAccount();
+        cooledAccount.failureCount = 0;
+        cooledAccount.isBlocked = false;
+        cooledAccount.lastFailureTime = 0;
+        cooledAccount.cooldownUntil = undefined;  // 🔧 FIX: Limpar cooldown também!
+        await accountRotation.saveState();
+        console.log(`   🔄 Conta @${cooledAccount.instagramUsername} resetada após IP cooling (vida nova)`);
       }
 
       // Agora sim tentar rotacionar (após IP cooling)

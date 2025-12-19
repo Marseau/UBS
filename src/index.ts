@@ -973,6 +973,36 @@ try {
   console.error("❌ Failed to load Campaign Credentials routes:", error);
 }
 
+// Queue Management Routes - BullMQ unified queue system
+try {
+  const queueRoutes = require('./routes/queue.routes');
+  const router = 'default' in queueRoutes ? queueRoutes.default : queueRoutes;
+  app.use('/api/queue', router);
+  console.log('✅ Queue Management routes loaded - INSTAGRAM DM + WHATSAPP MESSAGE QUEUES READY');
+} catch (error) {
+  console.error("❌ Failed to load Queue Management routes:", error);
+}
+
+// Instagram Inbound Routes - Handler for spontaneous Instagram DMs
+try {
+  const instagramInboundRoutes = require('./routes/instagram-inbound.routes');
+  const router = 'default' in instagramInboundRoutes ? instagramInboundRoutes.default : instagramInboundRoutes;
+  app.use('/api/instagram-inbound', router);
+  console.log('✅ Instagram Inbound routes loaded - SPONTANEOUS DM HANDLER READY');
+} catch (error) {
+  console.error("❌ Failed to load Instagram Inbound routes:", error);
+}
+
+// WhatsApp Inbound Routes - Handler for spontaneous WhatsApp messages
+try {
+  const whatsappInboundRoutes = require('./routes/whatsapp-inbound.routes');
+  const router = 'default' in whatsappInboundRoutes ? whatsappInboundRoutes.default : whatsappInboundRoutes;
+  app.use('/api/whatsapp-inbound', router);
+  console.log('✅ WhatsApp Inbound routes loaded - SPONTANEOUS MESSAGE HANDLER READY');
+} catch (error) {
+  console.error("❌ Failed to load WhatsApp Inbound routes:", error);
+}
+
 // Define o caminho para a pasta frontend de forma explícita e segura
 // IMPORTANTE: Prioriza dist/frontend quando rodando de dist/ (produção)
 const candidatePaths: string[] = [
@@ -1243,7 +1273,26 @@ let _calendarSyncCron: any = null;
 async function initializeServices() {
   try {
     console.log('🚀 Initializing application services...');
-    
+
+    // Initialize BullMQ Queue Workers (HIGH PRIORITY)
+    try {
+      console.log('📨 Initializing BullMQ Queue System...');
+      const { getInstagramDMWorker } = await import('./services/instagram-dm-worker.service');
+      const { getWhatsAppMessageWorker } = await import('./services/whatsapp-message-worker.service');
+
+      // Initialize workers (singleton instances)
+      getInstagramDMWorker();
+      getWhatsAppMessageWorker();
+
+      console.log('✅ BullMQ Queue System initialized successfully');
+      console.log('📨 Instagram DM Worker: Active');
+      console.log('💬 WhatsApp Message Worker: Active');
+      console.log('🎯 Queue Management API: /api/queue/*');
+
+    } catch (error) {
+      console.error('❌ Failed to initialize BullMQ Queue System:', error);
+    }
+
     // DEPLOY 3: Initialize Memory Optimizer (HIGHEST PRIORITY)
     try {
       console.log('🧠 [DEPLOY-3] Initializing Memory Optimizer...');
@@ -1546,10 +1595,10 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🌐 Server running on http://localhost:${PORT}`);
   console.log(`🌐 Network access: http://192.168.15.5:${PORT}`);
 
-// Configurar timeout para 60 minutos (scraping do Instagram com lock pode demorar + N8N timeout é 50min)
-server.setTimeout(3600000); // 60 minutos
-server.keepAliveTimeout = 3610000; // 60min + 10s
-server.headersTimeout = 3615000; // 60min + 15s
+// Configurar timeout para 6 horas (scraping pode demorar 360min com múltiplas hashtags)
+server.setTimeout(21600000); // 6 horas (6 * 60 * 60 * 1000)
+server.keepAliveTimeout = 21610000; // 6h + 10s
+server.headersTimeout = 21615000; // 6h + 15s
   
   // ENV Sanity Check
   console.log('🔎 ENV SANITY', {
@@ -1572,14 +1621,30 @@ server.headersTimeout = 3615000; // 60min + 15s
 });
 
 // ============================================================================
-// GRACEFUL SHUTDOWN - Instagram Context Manager Cleanup
+// GRACEFUL SHUTDOWN - Instagram Context Manager Cleanup + Queue Workers
 // ============================================================================
 import { cleanupAllContexts } from './services/instagram-context-manager.service';
+import { queueManager } from './services/queue-manager.service';
 
 const gracefulShutdown = async (signal: string) => {
   console.log(`\n🛑 ${signal} recebido - iniciando shutdown graceful...`);
 
   try {
+    // Fechar workers de fila (BullMQ)
+    console.log('📨 Fechando workers de fila...');
+    try {
+      const { getInstagramDMWorker } = await import('./services/instagram-dm-worker.service');
+      const { getWhatsAppMessageWorker } = await import('./services/whatsapp-message-worker.service');
+
+      await getInstagramDMWorker().close();
+      await getWhatsAppMessageWorker().close();
+      await queueManager.close();
+
+      console.log('✅ Workers de fila encerrados');
+    } catch (error: any) {
+      console.error('⚠️ Erro ao fechar workers:', error.message);
+    }
+
     // Limpar todos os browser contexts ativos
     await cleanupAllContexts();
 
