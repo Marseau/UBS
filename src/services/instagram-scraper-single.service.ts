@@ -146,8 +146,26 @@ async function navigateWithRateLimitDetection(
     throw new RateLimitError(`Challenge de segurança detectado: ${challenge.type}`);
   }
 
-  // 🚨 DETECÇÃO 5: Página "Something went wrong" do Instagram (HTTP 200 mas com erro)
+  // 🚨 DETECÇÃO 5: Página de erro do Instagram
   const bodyText = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
+
+  // 🔄 "Service Unavailable" = erro temporário do servidor → sinalizar para retry com browser restart
+  const isServiceUnavailable =
+    bodyText.includes('Service Unavailable') ||
+    bodyText.includes('Serviço Indisponível');
+
+  if (isServiceUnavailable) {
+    console.log(`\n⚠️  ========================================`);
+    console.log(`⚠️  "SERVICE UNAVAILABLE" DETECTADO`);
+    console.log(`⚠️  Erro temporário do servidor Instagram`);
+    console.log(`⚠️  Requer restart do browser (tratado no loop principal)`);
+    console.log(`⚠️  ========================================`);
+
+    // Lançar erro especial que será tratado no loop principal com browser restart
+    throw new Error('SERVICE_UNAVAILABLE');
+  }
+
+  // 🚨 Outros erros ("Something went wrong", etc.) = rotacionar imediatamente
   const hasSomethingWentWrong =
     bodyText.includes('Something went wrong') ||
     bodyText.includes('Ocorreu um erro') ||
@@ -165,7 +183,6 @@ async function navigateWithRateLimitDetection(
     console.log(`🔄 Sistema irá fazer IP cooling (30min) e rotacionar\n`);
 
     // 🔧 CRÍTICO: Registrar falha ANTES de lançar erro para ativar IP cooling de 30min
-    // Isso garante que se o scrape for reiniciado, ele aguarde o IP esfriar
     try {
       const accountRotation = getAccountRotation();
       await accountRotation.recordFailure('SOMETHING_WENT_WRONG', 'Instagram retornou página de erro');
@@ -1627,8 +1644,11 @@ export async function scrapeInstagramTag(
 
   try {
     variations = await discoverHashtagVariations(page, normalizedTerm);
-    // Filtrar por score >= 80 E post_count > 10K
-    priorityHashtags = variations.filter(v => v.priority_score >= 80 && v.post_count > 10000);
+    // 🔧 Opção B: Incluir hashtags com score alto OU volume decente (> 50K)
+    // Score serve para ordenar prioridade, não para excluir hashtags relevantes
+    priorityHashtags = variations
+      .filter(v => (v.priority_score >= 80) || (v.post_count > 50_000))
+      .sort((a, b) => b.priority_score - a.priority_score);  // Ordena por score (maior primeiro)
   } catch (discoveryError: any) {
     console.log(`❌ Erro ao descobrir variações: ${discoveryError.message}`);
   }
@@ -1636,7 +1656,7 @@ export async function scrapeInstagramTag(
   try {
     console.log(`\n📊 Análise de variações:`);
     console.log(`   Total descobertas: ${variations.length}`);
-    console.log(`   Prioritárias (score ≥ 80 e > 10K posts): ${priorityHashtags.length}`);
+    console.log(`   Prioritárias (score ≥ 80 OU > 50K posts): ${priorityHashtags.length}`);
 
     if (priorityHashtags.length > 0) {
       console.log(`\n🎯 Hashtags que serão scrapadas (ordenadas por score):`);
@@ -1675,8 +1695,11 @@ export async function scrapeInstagramTag(
     }
 
     // 🆕 DETERMINAR LISTA DE HASHTAGS A SCRAPAR (SEMPRE começa com a original + sugestões prioritárias)
+    // 🔧 FIX: Filtrar normalizedTerm das sugestões para evitar duplicatas
     hashtagsToScrape = priorityHashtags.length > 0
-      ? [normalizedTerm, ...priorityHashtags.map(h => h.hashtag)]  // Original + sugestões
+      ? [normalizedTerm, ...priorityHashtags
+          .filter(h => h.hashtag !== normalizedTerm)  // Remover duplicata da original
+          .map(h => h.hashtag)]
       : [normalizedTerm];  // Só original se não houver sugestões
 
     console.log(`\n🎯 Total de hashtags que serão scrapadas: ${hashtagsToScrape.length}`);
@@ -1910,17 +1933,68 @@ export async function scrapeInstagramTag(
       console.log(`   ⏳ Aguardando ${(postNavDelay/1000).toFixed(1)}s para renderização completa... (multiplier: ${resilienceMetrics.adaptiveDelayMultiplier.toFixed(2)}x)`);
       await new Promise(resolve => setTimeout(resolve, postNavDelay));
 
-      // 🆕 DETECÇÃO AUTOMÁTICA DE SESSÃO INVÁLIDA
-      const pageHasError = await page.evaluate(() => {
-        const bodyText = document.body?.innerText || '';
-        const hasErrorMessage = bodyText.includes('Ocorreu um erro') ||
-                                bodyText.includes('não foi possível carregar') ||
-                                bodyText.includes('Something went wrong') ||
-                                bodyText.includes('error occurred');
-        return hasErrorMessage;
-      }).catch(() => false);
+      // 🆕 DETECÇÃO AUTOMÁTICA DE ERROS NA PÁGINA
+      const pageBodyText = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
 
-      if (pageHasError) {
+      // 🔄 "Service Unavailable" = erro temporário → FECHAR BROWSER E REABRIR (até 3x)
+      const isServiceUnavailable =
+        pageBodyText.includes('Service Unavailable') ||
+        pageBodyText.includes('Serviço Indisponível');
+
+      if (isServiceUnavailable) {
+        console.log('⚠️  [SERVICE UNAVAILABLE] Erro temporário do servidor Instagram');
+
+        // Tentar até 3 vezes com browser restart completo
+        let browserRestartSuccess = false;
+        for (let restartAttempt = 1; restartAttempt <= 3; restartAttempt++) {
+          console.log(`\n🔄 Browser restart ${restartAttempt}/3...`);
+          console.log(`   🛑 Fechando browser atual...`);
+
+          // Fechar browser completamente
+          try { await cleanup(); } catch {}
+
+          console.log(`   ⏳ Aguardando 10s antes de reabrir...`);
+          await new Promise(resolve => setTimeout(resolve, 10000));
+
+          // Reabrir browser com novo contexto
+          console.log(`   🚀 Reabrindo browser...`);
+          const newContext = await createIsolatedContext();
+          page = newContext.page;
+          cleanup = newContext.cleanup;
+
+          // Navegar novamente para a hashtag
+          console.log(`   📍 Navegando para #${hashtagToScrape}...`);
+          const hashtagUrl = `https://www.instagram.com/explore/tags/${encodeURIComponent(hashtagToScrape)}/`;
+          await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+          await new Promise(resolve => setTimeout(resolve, 3000));
+
+          // Verificar se resolveu
+          const newBodyText = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
+          if (!newBodyText.includes('Service Unavailable') && !newBodyText.includes('Serviço Indisponível')) {
+            console.log(`   ✅ Instagram OK após browser restart ${restartAttempt}!`);
+            browserRestartSuccess = true;
+            break;
+          }
+          console.log(`   ❌ Ainda "Service Unavailable" após browser restart ${restartAttempt}`);
+        }
+
+        if (browserRestartSuccess) {
+          continue; // Tentar novamente o scraping com browser novo
+        }
+
+        // Após 3 browser restarts sem sucesso, aí sim rotaciona para outra conta
+        console.log('\n🚨 "Service Unavailable" persistiu após 3 browser restarts');
+        console.log('🔄 Rotacionando para outra conta...');
+      }
+
+      // 🚨 Outros erros ("Something went wrong", etc.) = rotacionar imediatamente
+      const hasOtherError =
+        pageBodyText.includes('Ocorreu um erro') ||
+        pageBodyText.includes('não foi possível carregar') ||
+        pageBodyText.includes('Something went wrong') ||
+        pageBodyText.includes('error occurred');
+
+      if (isServiceUnavailable || hasOtherError) {
         console.log('❌ [SESSION INVALID] Instagram retornou página de erro');
 
         // 🔄 USAR SISTEMA DE ROTAÇÃO EXISTENTE (handleSessionError)
@@ -3475,7 +3549,7 @@ export async function scrapeInstagramTag(
                   // Embedding será feito pelo workflow n8n após enriquecimento completo
                 }
               } else {
-                // 🆕 INSERT: Novo perfil
+                // 🆕 UPSERT: Inserir novo perfil OU atualizar se já existir (race condition)
                 const profileToSave = {
                   ...sanitizedProfile,
                   captured_at: new Date().toISOString(),
@@ -3490,16 +3564,21 @@ export async function scrapeInstagramTag(
                 };
                 // phones_normalized será preenchido pelo trigger trg_normalize_instagram_lead()
 
-                const { data: insertedLead, error: insertError } = await supabase
+                // 🔧 FIX: Usar UPSERT para evitar race condition (duplicate key)
+                // Se outro processo inseriu entre o check e o insert, atualiza ao invés de falhar
+                const { data: upsertedLead, error: upsertError } = await supabase
                   .from('instagram_leads')
-                  .insert(profileToSave)
+                  .upsert(profileToSave, {
+                    onConflict: 'username',
+                    ignoreDuplicates: false  // false = atualizar em caso de conflito
+                  })
                   .select('id')
                   .single();
 
-                if (insertError) {
-                  console.log(`   ⚠️  Erro ao salvar @${username} no banco: ${insertError.message}`);
+                if (upsertError) {
+                  console.log(`   ⚠️  Erro ao salvar @${username} no banco: ${upsertError.message}`);
                 } else {
-                  console.log(`   ✅ Perfil @${username} SALVO NO BANCO (novo)`);
+                  console.log(`   ✅ Perfil @${username} SALVO NO BANCO (upsert)`);
                   // Embedding será feito pelo workflow n8n após enriquecimento completo
                 }
               }
@@ -5889,13 +5968,13 @@ export async function scrapeInstagramExplore(
               .eq('id', existing.id);
             console.log(`   ✅ @${ownerUsername} ATUALIZADO`);
           } else {
-            // Inserir novo lead
+            // 🔧 FIX: Usar UPSERT para evitar race condition (duplicate key)
             // Calcular lead_score para INSERT
             const insertLeadScore = profileData.activity_score ? profileData.activity_score / 100 : null;
 
-            const { error: insertError } = await supabase
+            const { error: upsertError } = await supabase
               .from('instagram_leads')
-              .insert({
+              .upsert({
                 username: ownerUsername,
                 full_name: profileData.full_name,
                 bio: profileData.bio,
@@ -5916,7 +5995,7 @@ export async function scrapeInstagramExplore(
                 zip_code: profileData.zip_code,
                 activity_score: profileData.activity_score,
                 is_active: profileData.is_active,
-                language: languageDetection.language,  // ADICIONADO - estava faltando!
+                language: languageDetection.language,
                 lead_score: insertLeadScore,
                 hashtags_bio: profileData.hashtags_bio || null,
                 hashtags_posts: postHashtags && postHashtags.length > 0 ? postHashtags : null,
@@ -5926,12 +6005,15 @@ export async function scrapeInstagramExplore(
                 // Flags de enriquecimento - novo lead precisa ser processado
                 dado_enriquecido: false,
                 url_enriched: false
+              }, {
+                onConflict: 'username',
+                ignoreDuplicates: false  // false = atualizar em caso de conflito
               });
 
-            if (insertError) {
-              console.log(`   ❌ Erro ao salvar: ${insertError.message}`);
+            if (upsertError) {
+              console.log(`   ❌ Erro ao salvar: ${upsertError.message}`);
             } else {
-              console.log(`   ✅ @${ownerUsername} salvo no banco com search_term_used='${SEARCH_TERM_MARKER}'`);
+              console.log(`   ✅ @${ownerUsername} salvo no banco (upsert) com search_term_used='${SEARCH_TERM_MARKER}'`);
             }
           }
         } catch (dbError: any) {

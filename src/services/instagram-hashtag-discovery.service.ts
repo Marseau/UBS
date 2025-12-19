@@ -57,10 +57,42 @@ export function categorizeHashtagVolume(postCount: number): 'tiny' | 'small' | '
 
 /**
  * Parse volume formatado do Instagram (ex: "46,3 mi posts" → 46300000)
+ *
+ * Suporta:
+ * - "770 mil posts" → 770000
+ * - "208K posts" → 208000
+ * - "2,4 mi posts" → 2400000
+ * - "100+ posts" → 100
+ * - "Menos de 100 posts" → 50
+ * - "unknown" → 0
  */
 export function parseInstagramPostCount(formatted: string): number {
+  // Tratar casos especiais primeiro
+  if (!formatted || formatted === 'unknown') {
+    return 0;
+  }
+
+  const lower = formatted.toLowerCase();
+
+  // "Menos de X posts" ou "Less than X posts" → retorna metade do valor
+  if (lower.includes('menos de') || lower.includes('less than')) {
+    const match = lower.match(/(\d+)/);
+    if (match && match[1]) {
+      return Math.round(parseInt(match[1], 10) / 2); // Metade como estimativa
+    }
+    return 50; // Fallback
+  }
+
+  // "100+ posts" → retorna o número
+  if (lower.includes('+')) {
+    const match = lower.match(/(\d+)/);
+    if (match && match[1]) {
+      return parseInt(match[1], 10);
+    }
+  }
+
   // Remove "posts" e espaços
-  const cleaned = formatted.toLowerCase().replace(/\s*posts?\s*/gi, '').trim();
+  const cleaned = lower.replace(/\s*posts?\s*/gi, '').trim();
 
   // Detectar multiplicador (IMPORTANTE: checar "mil" ANTES de "mi")
   let multiplier = 1;
@@ -84,6 +116,9 @@ export function parseInstagramPostCount(formatted: string): number {
 
   // Parse e multiplica
   const parsed = parseFloat(numberPart);
+  if (isNaN(parsed)) {
+    return 0;
+  }
   return Math.round(parsed * multiplier);
 }
 
@@ -217,11 +252,19 @@ export async function discoverHashtagVariations(
     const variations = await page.evaluate(() => {
       const results: Array<{ hashtag: string; postCount: string }> = [];
 
-      // ESTRATÉGIA 1: Buscar links específicos de hashtag
+      // 🔧 FIX: Buscar links de hashtag e extrair contagem DENTRO de cada <a> individualmente
       // @ts-ignore
       const hashtagLinks = document.querySelectorAll('a[href*="/explore/tags/"]');
       // @ts-ignore
       console.log(`   [DEBUG] Links de hashtag encontrados: ${hashtagLinks.length}`);
+
+      // Padrões de contagem de posts
+      const countPatterns = [
+        /(\d+[.,]?\d*\s*(M|mi|mil|K|k)\s*posts?)/i,  // "770 mil posts", "208K posts"
+        /(\d+\+?\s*posts?)/i,                         // "100+ posts", "100 posts"
+        /(Menos de \d+\s*posts?)/i,                   // "Menos de 100 posts"
+        /(Less than \d+\s*posts?)/i                   // "Less than 100 posts"
+      ];
 
       // @ts-ignore
       for (const link of hashtagLinks) {
@@ -232,111 +275,36 @@ export async function discoverHashtagVariations(
         if (hashtagMatch) {
           const hashtag = decodeURIComponent(hashtagMatch[1]);
 
-          // Buscar contagem de posts no elemento ou em elementos próximos
+          // 🔧 FIX: Buscar contagem APENAS dentro do próprio <a> (não subir para parents!)
           // @ts-ignore
+          const linkText = link.textContent || '';
           let postCount = '';
 
-          // MÉTODO 1: Buscar no parent mais próximo (3 níveis)
-          // @ts-ignore
-          let currentElement = link;
-          for (let i = 0; i < 3; i++) {
-            // @ts-ignore
-            const parent = currentElement.parentElement;
-            if (parent) {
+          // Tentar cada padrão de contagem
+          for (const pattern of countPatterns) {
+            const match = linkText.match(pattern);
+            if (match) {
+              postCount = match[0];
               // @ts-ignore
-              const textContent = parent.textContent || '';
-              const postCountMatch = textContent.match(/(\d+[.,]?\d*\s*(M|mi|mil|K|k)\s*posts?)/i);
-              if (postCountMatch) {
-                postCount = postCountMatch[0];
-                // @ts-ignore
-                console.log(`   [DEBUG] PostCount encontrado no parent nível ${i + 1}: ${postCount}`);
-                break;
-              }
-              currentElement = parent;
+              console.log(`   [DEBUG] #${hashtag}: "${postCount}" (dentro do link)`);
+              break;
             }
           }
 
-          // MÉTODO 2: Buscar em TODOS os elementos filhos do container
+          // Se não encontrou, marcar como unknown
           if (!postCount) {
+            postCount = 'unknown';
             // @ts-ignore
-            const container = link.closest('div');
-            if (container) {
-              // @ts-ignore
-              const allText = container.textContent || '';
-              const postCountMatch = allText.match(/(\d+[.,]?\d*\s*(M|mi|mil|K|k)\s*posts?)/i);
-              if (postCountMatch) {
-                postCount = postCountMatch[0];
-                // @ts-ignore
-                console.log(`   [DEBUG] PostCount encontrado no container: ${postCount}`);
-              }
-            }
+            console.log(`   [DEBUG] #${hashtag}: SEM CONTAGEM (linkText: "${linkText.substring(0, 50)}")`);
           }
 
-          // MÉTODO 3: Buscar em siblings
-          if (!postCount) {
-            // @ts-ignore
-            const nextElement = link.nextElementSibling;
-            if (nextElement) {
-              // @ts-ignore
-              const textContent = nextElement.textContent || '';
-              const postCountMatch = textContent.match(/(\d+[.,]?\d*\s*(M|mi|mil|K|k)\s*posts?)/i);
-              if (postCountMatch) {
-                postCount = postCountMatch[0];
-                // @ts-ignore
-                console.log(`   [DEBUG] PostCount encontrado no sibling: ${postCount}`);
-              }
-            }
-          }
-
-          // ADICIONAR sempre, mesmo sem postCount (vamos inferir depois)
+          // Adicionar se não duplicada
           if (!results.find(r => r.hashtag === hashtag)) {
-            results.push({ hashtag, postCount: postCount || 'unknown' });
-            // @ts-ignore
-            console.log(`   [DEBUG] Hashtag adicionada: #${hashtag} - ${postCount || 'SEM CONTAGEM'}`);
+            results.push({ hashtag, postCount });
 
             // Limitar a 5 resultados
             if (results.length >= 5) break;
           }
-        }
-      }
-
-      // ESTRATÉGIA 2 (FALLBACK): Buscar por padrão de texto se strategy 1 falhou
-      if (results.length === 0) {
-        // @ts-ignore
-        console.log('   [DEBUG] Fallback: buscando por padrão de texto...');
-
-        // Buscar divs que contenham hashtags
-        // @ts-ignore
-        const allDivs = document.querySelectorAll('div, span, a');
-
-        // @ts-ignore
-        for (const element of allDivs) {
-          // @ts-ignore
-          const text = element.textContent || '';
-
-          // Procurar padrão: #hashtag + contagem de posts na mesma linha ou elemento
-          const lines = text.split('\n');
-
-          // @ts-ignore
-          for (const line of lines) {
-            const hashtagMatch = line.match(/#(\w+)/);
-            const postCountMatch = line.match(/(\d+[.,]?\d*\s*(mi|mil|k)\s*posts?)/i);
-
-            if (hashtagMatch && postCountMatch) {
-              const hashtag = hashtagMatch[1];
-              const postCount = postCountMatch[0];
-
-              if (!results.find(r => r.hashtag === hashtag)) {
-                results.push({ hashtag, postCount });
-                // @ts-ignore
-                console.log(`   [DEBUG] Hashtag encontrada (fallback): #${hashtag} - ${postCount}`);
-
-                if (results.length >= 5) break;
-              }
-            }
-          }
-
-          if (results.length >= 5) break;
         }
       }
 

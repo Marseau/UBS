@@ -189,7 +189,14 @@ const PORTUGUESE_KEYWORDS = [
 
   // Expressões PT-BR (peso alto)
   'que deus', 'deus abençoe', 'graças a deus', 'se deus quiser',
-  'tá bom', 'tudo bem', 'de boa', 'e aí', 'beleza'
+  'tá bom', 'tudo bem', 'de boa', 'e aí', 'beleza',
+
+  // Marketing/Negócios PT-BR (APENAS palavras que NÃO existem em espanhol)
+  // vendas (ES: ventas), loja (ES: tienda), frete (ES: envío), orçamento (ES: presupuesto)
+  // agendamento (ES: cita), atendimento (ES: atención), parceria (ES: asociación)
+  'vendas', 'loja', 'lojas', 'frete', 'fretes', 'orçamento', 'orçamentos',
+  'agendamento', 'agendamentos', 'atendimento', 'parceria', 'parcerias',
+  'encomenda', 'encomendas', 'ensino', 'grátis'
 ];
 
 /**
@@ -344,7 +351,7 @@ export async function detectLanguage(
 
   // Palavras com acentos que são EXCLUSIVAS ou muito mais comuns em PT-BR
   // Sem \b porque bios do Instagram frequentemente têm palavras grudadas
-  const portugueseAccentedWords = /(você|vocês|será|está|também|até|já|só|aí|país|países|negócio|negócios|saúde|atenção|coração|paixão|opinião|missão|visão|sessão|profissão|conexão|ação|direção|produção|educação|comunicação|gestão|menção|canção|posição|situação|solução|decisão|evolução|inovação|informação|organização|experiência|ciência|consciência|audiência|consultório|território|empresário|empresária|salário|horário|voluntário|aniversário|necessário|secretária|família|história|memória|vitória|glória|trajetória|carreira|maneira)/i.test(bio);
+  const portugueseAccentedWords = /(você|vocês|será|está|também|até|já|só|aí|país|países|negócio|negócios|saúde|atenção|coração|paixão|opinião|missão|visão|sessão|profissão|conexão|ação|direção|produção|educação|comunicação|gestão|menção|canção|posição|situação|solução|decisão|evolução|inovação|informação|organização|experiência|ciência|consciência|audiência|consultório|território|empresário|empresária|salário|horário|voluntário|aniversário|necessário|secretária|família|história|memória|vitória|glória|trajetória|carreira|maneira|tráfego|agência|estratégia|negócio|serviço|serviços|fotógrafo|fotógrafa|advogado|advogada|médico|médica|psicólogo|psicóloga|estética|belíssimo|belíssima|automático|automática|eletrônico|eletrônica)/i.test(bio);
 
   let detectedLang: string;
   let detectedISO3: string;
