@@ -630,6 +630,147 @@
       z-index: 1;
     }
 
+    /* Promo Banner */
+    .promo-banner {
+      background: linear-gradient(135deg, rgba(14, 204, 151, 0.15) 0%, rgba(14, 204, 151, 0.05) 100%);
+      border: 2px solid var(--aic-green);
+      border-radius: 16px;
+      padding: 24px 32px;
+      margin-bottom: 32px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+      position: relative;
+      overflow: hidden;
+      animation: promoPulse 3s ease-in-out infinite;
+    }
+    .promo-banner::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(14, 204, 151, 0.1) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    @keyframes promoPulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(14, 204, 151, 0.3); }
+      50% { box-shadow: 0 0 40px rgba(14, 204, 151, 0.5); }
+    }
+    .promo-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #ff6b35, #f7931e);
+      color: white;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 6px 16px;
+      border-radius: 999px;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      position: relative;
+      z-index: 1;
+    }
+    .promo-content {
+      position: relative;
+      z-index: 1;
+    }
+    .promo-text {
+      font-size: 18px;
+      color: var(--aic-white);
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+    .promo-highlight {
+      display: inline-block;
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      color: var(--aic-navy);
+      font-size: 24px;
+      font-weight: 800;
+      padding: 4px 12px;
+      border-radius: 8px;
+      margin-right: 8px;
+    }
+    .promo-deadline {
+      font-size: 14px;
+      color: var(--aic-gray-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .promo-deadline strong {
+      color: var(--aic-green);
+    }
+    .promo-clock {
+      font-size: 16px;
+    }
+
+    /* Lead Pricing in Pricing Card */
+    .lead-pricing {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 24px 0 32px;
+      position: relative;
+      z-index: 1;
+    }
+    .lead-price-normal {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--aic-border);
+    }
+    .price-label {
+      font-size: 14px;
+      color: var(--aic-gray);
+    }
+    .price-crossed {
+      font-size: 20px;
+      font-weight: 600;
+      color: #ef4444;
+      text-decoration: line-through;
+      opacity: 0.7;
+    }
+    .lead-price-promo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .promo-tag {
+      background: linear-gradient(135deg, #ff6b35, #f7931e);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .price-promo {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--aic-green);
+    }
+    .price-per {
+      font-size: 14px;
+      color: var(--aic-gray);
+    }
+    .lead-price-note {
+      font-size: 12px;
+      color: var(--aic-gray);
+      margin-top: 12px;
+      text-align: center;
+      font-style: italic;
+    }
+
     /* FAQ */
     .faq-section {
       background: var(--aic-navy);
@@ -985,6 +1126,14 @@
       .pricing-value { font-size: 36px; }
       .pricing-includes li { font-size: 14px; }
 
+      /* Promo Banner Mobile */
+      .promo-banner { padding: 20px; }
+      .promo-highlight { font-size: 20px; }
+      .promo-text { font-size: 16px; }
+      .lead-price-normal { flex-direction: column; gap: 8px; }
+      .lead-price-promo { flex-direction: column; gap: 8px; }
+      .price-promo { font-size: 28px; }
+
       /* CTA Section */
       .cta-section { padding: 60px 0; }
       .cta-content h2 { font-size: 24px; }
@@ -1003,8 +1152,20 @@
       .section-header h2 { font-size: 22px; }
       .pricing-value { font-size: 32px; }
       .btn-primary, .btn-secondary { padding: 14px 24px; font-size: 15px; }
+
+      /* Promo Banner Small Mobile */
+      .promo-banner { padding: 16px; }
+      .promo-badge { font-size: 10px; padding: 5px 12px; }
+      .promo-highlight { font-size: 18px; }
+      .promo-text { font-size: 14px; }
+      .promo-deadline { font-size: 12px; }
+      .price-crossed { font-size: 16px; }
+      .price-promo { font-size: 24px; }
     }
   </style>
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
   <!-- Navigation -->
@@ -1294,10 +1455,38 @@
         <h2>Investimento</h2>
         <p>Valor claro, escopo definido, acompanhamento incluído.</p>
       </div>
+
+      <!-- Promo Banner -->
+      <div class="promo-banner">
+        <div class="promo-badge">🔥 OFERTA DE LANÇAMENTO</div>
+        <div class="promo-content">
+          <div class="promo-text">
+            <span class="promo-highlight">82% OFF</span> no valor por lead qualificado na sua primeira campanha!
+          </div>
+          <div class="promo-deadline">
+            <span class="promo-clock">⏰</span> Válido para contratos até <strong>28/02/2026</strong>
+          </div>
+        </div>
+      </div>
+
       <div class="pricing-card">
         <div class="pricing-badge">CAMPANHA COMPLETA</div>
         <div class="pricing-value"><span>R$</span> 4.000</div>
-        <p class="pricing-desc">+ R$ 10,00 por lead qualificado entregue (pago ao final)</p>
+
+        <!-- Lead Pricing with Promo -->
+        <div class="lead-pricing">
+          <div class="lead-price-normal">
+            <span class="price-label">Valor por lead qualificado:</span>
+            <span class="price-crossed">R$ 55,00</span>
+          </div>
+          <div class="lead-price-promo">
+            <span class="promo-tag">1ª CAMPANHA</span>
+            <span class="price-promo">R$ 10,00</span>
+            <span class="price-per">por lead</span>
+          </div>
+          <p class="lead-price-note">* Preço promocional válido apenas para a primeira campanha (Oportunidade)</p>
+        </div>
+
         <ul class="pricing-includes">
           <h5>O que está incluso:</h5>
           <li>Diagnóstico completo do negócio e definição do cluster</li>
@@ -1309,8 +1498,8 @@
           <li>Entrega de leads qualificados em planilha</li>
         </ul>
         <div class="pricing-cta">
-          <a href="https://wa.me/5511999040605?text=Olá! Quero saber mais sobre contratar uma campanha AIC.&utm_source=organic&utm_medium=landing&utm_campaign=aic" class="btn-primary" target="_blank" data-umami-event="cta_pricing_whatsapp">
-            Falar sobre Contratação
+          <a href="https://wa.me/5511999040605?text=Olá! Quero aproveitar a promoção de lançamento da AIC (R$10/lead na primeira campanha).&utm_source=organic&utm_medium=landing&utm_campaign=aic_promo" class="btn-primary" target="_blank" data-umami-event="cta_pricing_whatsapp_promo">
+            🚀 Aproveitar Oferta de Lançamento
           </a>
         </div>
       </div>
@@ -1394,7 +1583,10 @@
       const acceptBtn = document.getElementById('cookie-accept');
       const rejectBtn = document.getElementById('cookie-reject');
       const STORAGE_KEY = 'aic-cookie-consent';
-      const UMAMI_SRC = 'https://analytics.ubs.app.br/script.js';
+      // Usar localhost em desenvolvimento, produção em ambiente real
+      const UMAMI_SRC = window.location.hostname === 'localhost'
+        ? 'http://localhost:3001/script.js'
+        : 'https://analytics.ubs.app.br/script.js';
       const UMAMI_SITE_ID = 'e139b226-0b32-4a40-a53b-cbc5e708ff83';
       let umamiLoaded = false;
 
@@ -1443,6 +1635,7 @@
       // =====================================================
       const CAMPAIGN_ID = 'e14454d3-9c58-4607-9592-a590a5c807c7'; // Social Media BOOSTER 360
       const API_ENDPOINT = '/api/aic/outreach/landing-page-click';
+      const LEAD_DATA_KEY = 'aic-lead-data';
 
       // =====================================================
       // UTILITÁRIOS
@@ -1476,23 +1669,64 @@
         return sessionId;
       }
 
-      function trackLeadClick(ctaElement) {
-        const ctaName = ctaElement.getAttribute('data-umami-event') || 'unknown_cta';
-        const ctaHref = ctaElement.getAttribute('href') || '';
-        const phone = extractPhoneFromWhatsAppLink(ctaHref);
+      // =====================================================
+      // MODAL MANAGEMENT
+      // =====================================================
+      let modal, form, cancelBtn;
+      let pendingAction = null;
+      let pendingElement = null;
 
-        if (!phone) {
-          console.warn('[AIC Lead Capture] Não foi possível extrair telefone do link:', ctaHref);
-          return;
+      function getStoredLeadData() {
+        try {
+          const data = localStorage.getItem(LEAD_DATA_KEY);
+          return data ? JSON.parse(data) : null;
+        } catch (e) {
+          return null;
         }
+      }
 
+      function storeLeadData(name, email, phone) {
+        try {
+          localStorage.setItem(LEAD_DATA_KEY, JSON.stringify({
+            name,
+            email,
+            phone,
+            timestamp: new Date().toISOString()
+          }));
+        } catch (e) {
+          console.warn('[AIC Modal] Erro ao salvar dados:', e);
+        }
+      }
+
+      function openModal() {
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeModal() {
+        modal.classList.remove('show');
+        document.body.style.overflow = '';
+        form.reset();
+
+        // Resetar estado do modal
+        document.getElementById('googleSignInContainer').style.display = 'flex';
+        form.style.display = 'none';
+
+        // Remover readonly dos campos
+        document.getElementById('leadName').readOnly = false;
+        document.getElementById('leadEmail').readOnly = false;
+      }
+
+      function sendTracking(leadData, ctaName, ctaHref) {
         const utms = getUTMParams();
         const sessionId = getSessionId();
+        const phone = extractPhoneFromWhatsAppLink(ctaHref) || leadData.phone;
 
         const payload = {
           campaign_id: CAMPAIGN_ID,
           phone: phone,
-          name: null, // Não temos nome ainda
+          name: leadData.name,
+          email: leadData.email,
           utm_source: utms.utm_source,
           utm_medium: utms.utm_medium,
           utm_campaign: utms.utm_campaign,
@@ -1504,12 +1738,10 @@
           landing_url: window.location.href
         };
 
-        // Enviar para API (fire and forget)
+        // Enviar para API
         fetch(API_ENDPOINT, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         })
         .then(response => response.json())
@@ -1520,41 +1752,167 @@
           console.error('[AIC Lead Capture] Erro ao registrar lead:', error);
         });
 
-        // Armazenar no localStorage para tracking de conversão
-        try {
-          const leadData = {
+        // Enviar para Umami
+        if (window.umami) {
+          umami.track('lead_captured', {
+            name: leadData.name,
+            email: leadData.email,
             phone: phone,
             cta: ctaName,
-            timestamp: new Date().toISOString(),
-            utms: utms
-          };
-          localStorage.setItem('aic-last-lead-click', JSON.stringify(leadData));
-        } catch (e) {
-          console.warn('[AIC Lead Capture] Erro ao salvar no localStorage:', e);
+            campaign_id: CAMPAIGN_ID,
+            utm_source: utms.utm_source,
+            utm_medium: utms.utm_medium,
+            utm_campaign: utms.utm_campaign,
+            session_id: sessionId
+          });
+          console.log('[AIC Lead Capture] Evento enviado para Umami:', ctaName);
         }
       }
+
+      function trackLeadClick(ctaElement) {
+        const ctaName = ctaElement.getAttribute('data-umami-event') || 'unknown_cta';
+        const ctaHref = ctaElement.getAttribute('href') || '';
+        const isWhatsAppLink = ctaHref.includes('wa.me');
+
+        // Verificar se já tem dados do lead
+        const storedLead = getStoredLeadData();
+
+        if (storedLead) {
+          // Já tem dados - enviar tracking direto
+          sendTracking(storedLead, ctaName, ctaHref);
+
+          // Se for link WhatsApp, deixa abrir normalmente
+          // Se for card, não faz nada (navegação continua)
+          console.log('[AIC Lead Capture] Lead já identificado:', storedLead.name);
+        } else {
+          // Primeira interação - abrir modal
+          pendingElement = ctaElement;
+          pendingAction = isWhatsAppLink ? 'redirect' : 'track';
+          openModal();
+          console.log('[AIC Lead Capture] Abrindo modal para captura');
+        }
+      }
+
+      // =====================================================
+      // GOOGLE SIGN-IN HANDLER
+      // =====================================================
+      window.handleGoogleSignIn = function(response) {
+        try {
+          // Decodificar JWT token
+          const payload = JSON.parse(atob(response.credential.split('.')[1]));
+
+          const googleData = {
+            name: payload.name,
+            email: payload.email,
+            picture: payload.picture,
+            sub: payload.sub
+          };
+
+          console.log('[Google Sign-In] Dados capturados:', googleData.name, googleData.email);
+
+          // Ocultar botão Google e mostrar apenas campo de telefone
+          const googleContainer = document.getElementById('googleSignInContainer');
+          googleContainer.style.display = 'none';
+
+          form.style.display = 'flex';
+
+          // Preencher nome e email (read-only)
+          document.getElementById('leadName').value = googleData.name;
+          document.getElementById('leadName').readOnly = true;
+          document.getElementById('leadEmail').value = googleData.email;
+          document.getElementById('leadEmail').readOnly = true;
+
+          // Focar no campo de telefone
+          document.getElementById('leadPhone').focus();
+
+        } catch (error) {
+          console.error('[Google Sign-In] Erro ao processar:', error);
+          alert('Erro ao conectar com Google. Tente preencher manualmente.');
+        }
+      };
 
       // =====================================================
       // INICIALIZAÇÃO
       // =====================================================
       function init() {
-        // Adicionar listeners em todos os CTAs com data-umami-event
-        const ctaButtons = document.querySelectorAll('[data-umami-event]');
+        // Inicializar elementos do modal
+        modal = document.getElementById('leadCaptureModal');
+        form = document.getElementById('leadCaptureForm');
+        cancelBtn = document.getElementById('modalCancelBtn');
 
-        ctaButtons.forEach(cta => {
-          // Apenas processar links do WhatsApp
-          const href = cta.getAttribute('href') || '';
-          if (href.includes('wa.me')) {
-            cta.addEventListener('click', function(e) {
-              // Não prevenir default - deixar o link abrir normalmente
-              trackLeadClick(this);
-            });
-            console.log('[AIC Lead Capture] Listener adicionado:', cta.getAttribute('data-umami-event'));
+        // Botão preencher manualmente
+        const manualFormBtn = document.getElementById('manualFormBtn');
+        manualFormBtn.addEventListener('click', function() {
+          document.getElementById('googleSignInContainer').style.display = 'none';
+          form.style.display = 'flex';
+          document.getElementById('leadName').focus();
+        });
+
+        // Event listener do formulário
+        form.addEventListener('submit', function(e) {
+          e.preventDefault();
+
+          const name = document.getElementById('leadName').value.trim();
+          const email = document.getElementById('leadEmail').value.trim();
+          const phone = document.getElementById('leadPhone').value.trim();
+
+          if (!name || !email || !phone) {
+            alert('Por favor, preencha todos os campos');
+            return;
           }
+
+          // Salvar dados
+          storeLeadData(name, email, phone);
+
+          // Enviar tracking
+          if (pendingElement) {
+            const ctaName = pendingElement.getAttribute('data-umami-event') || 'unknown_cta';
+            const ctaHref = pendingElement.getAttribute('href') || '';
+            sendTracking({ name, email, phone }, ctaName, ctaHref);
+          }
+
+          // Fechar modal
+          closeModal();
+
+          // Executar ação pendente
+          if (pendingAction === 'redirect' && pendingElement) {
+            // Redirecionar para WhatsApp
+            window.location.href = pendingElement.href;
+          }
+          // Se for 'track', não faz nada - apenas trackeia
+
+          // Limpar pendências
+          pendingAction = null;
+          pendingElement = null;
+        });
+
+        // Event listener do botão cancelar
+        cancelBtn.addEventListener('click', closeModal);
+        // Adicionar listeners em TODOS os elementos com data-umami-event
+        const trackableElements = document.querySelectorAll('[data-umami-event]');
+
+        trackableElements.forEach(element => {
+          element.addEventListener('click', function(e) {
+            const href = this.getAttribute('href') || '';
+            const storedLead = getStoredLeadData();
+
+            // Se não tem dados do lead, prevenir ação padrão e abrir modal
+            if (!storedLead) {
+              e.preventDefault();
+              trackLeadClick(this);
+            } else {
+              // Já tem dados - apenas trackear
+              trackLeadClick(this);
+              // Se for WhatsApp, deixa redirecionar normalmente
+              // Se for card/botão sem href, não faz nada
+            }
+          });
+
+          console.log('[AIC Lead Capture] Listener adicionado:', element.getAttribute('data-umami-event'));
         });
 
         console.log(`[AIC Lead Capture] Inicializado para campanha ${CAMPAIGN_ID}`);
-        console.log(`[AIC Lead Capture] ${ctaButtons.length} CTAs monitorados`);
+        console.log(`[AIC Lead Capture] ${trackableElements.length} elementos rastreáveis monitorados`);
       }
 
       // Executar quando DOM estiver pronto
@@ -1565,5 +1923,292 @@
       }
     })();
   </script>
+
+  <!-- Modal de Captura de Lead -->
+  <div id="leadCaptureModal" class="lead-modal">
+    <div class="lead-modal-content">
+      <div class="lead-modal-header">
+        <h2>Fale com um Especialista</h2>
+        <p>Identifique-se para continuar</p>
+      </div>
+
+      <!-- Botão Google Sign-In -->
+      <div id="googleSignInContainer" class="google-signin-container">
+        <div id="g_id_onload"
+             data-client_id="1082639244907-chsj9dgjp39oei8r46pab3d2o5muhpal.apps.googleusercontent.com"
+             data-callback="handleGoogleSignIn"
+             data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin"
+             data-type="standard"
+             data-size="large"
+             data-theme="filled_blue"
+             data-text="continue_with"
+             data-shape="rectangular"
+             data-logo_alignment="left"
+             data-width="400">
+        </div>
+
+        <div class="divider">
+          <span>ou</span>
+        </div>
+
+        <button type="button" id="manualFormBtn" class="btn-manual">
+          Preencher manualmente
+        </button>
+      </div>
+
+      <!-- Formulário Manual (inicialmente oculto) -->
+      <form id="leadCaptureForm" class="lead-form" style="display: none;">
+        <div class="form-group">
+          <label for="leadName">Nome Completo *</label>
+          <input
+            type="text"
+            id="leadName"
+            name="name"
+            required
+            placeholder="Seu nome completo"
+            autocomplete="name"
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="leadEmail">Email *</label>
+          <input
+            type="email"
+            id="leadEmail"
+            name="email"
+            required
+            placeholder="seu@email.com"
+            autocomplete="email"
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="leadPhone">WhatsApp *</label>
+          <input
+            type="tel"
+            id="leadPhone"
+            name="phone"
+            required
+            placeholder="(11) 99999-9999"
+            autocomplete="tel"
+          >
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn-cancel" id="modalCancelBtn">Cancelar</button>
+          <button type="submit" class="btn-submit">Continuar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <style>
+    /* Modal Styles */
+    .lead-modal {
+      display: none;
+      position: fixed;
+      z-index: 10000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(12, 27, 51, 0.9);
+      backdrop-filter: blur(5px);
+      animation: fadeIn 0.3s ease;
+    }
+
+    .lead-modal.show {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .lead-modal-content {
+      background: linear-gradient(135deg, #0C1B33 0%, #1a2942 100%);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      animation: slideUp 0.3s ease;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .lead-modal-header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .lead-modal-header h2 {
+      color: #fff;
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .lead-modal-header p {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 16px;
+    }
+
+    .google-signin-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .divider {
+      width: 100%;
+      text-align: center;
+      position: relative;
+      margin: 10px 0;
+    }
+
+    .divider::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      width: 100%;
+      height: 1px;
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .divider span {
+      position: relative;
+      background: #0C1B33;
+      padding: 0 15px;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 14px;
+    }
+
+    .btn-manual {
+      width: 100%;
+      padding: 14px 24px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+    }
+
+    .btn-manual:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .lead-form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .form-group label {
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .form-group input {
+      padding: 14px 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      font-size: 16px;
+      transition: all 0.3s ease;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #00D9FF;
+      background: rgba(255, 255, 255, 0.1);
+      box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1);
+    }
+
+    .form-group input::placeholder {
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .btn-cancel, .btn-submit {
+      flex: 1;
+      padding: 14px 24px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: none;
+    }
+
+    .btn-cancel {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .btn-cancel:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-submit {
+      background: linear-gradient(135deg, #00D9FF 0%, #00A8CC 100%);
+      color: #0C1B33;
+    }
+
+    .btn-submit:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(0, 217, 255, 0.3);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .lead-modal-content {
+        padding: 30px 20px;
+      }
+
+      .lead-modal-header h2 {
+        font-size: 24px;
+      }
+
+      .form-actions {
+        flex-direction: column;
+      }
+    }
+  </style>
+
 </body>
 </html>
