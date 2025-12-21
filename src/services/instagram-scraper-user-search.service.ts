@@ -412,29 +412,106 @@ export async function scrapeInstagramUserSearch(
             }
           }
 
-          // STATS: Extração robusta de seguidores/posts
-          const stats: string[] = [];
-          const selectors = [
-            'header section ul li span',
-            'header section ul li button span',
-            'header section ul li a span',
-            'header section ul span',
-            'header ul li span',
-            'header span[class*="x"]'
-          ];
+          // STATS: Extração ROBUSTA de posts/seguidores/seguindo
+          // Instagram mostra na ordem: Posts | Seguidores | Seguindo
+          const stats: string[] = ['', '', ''];
 
-          for (const selector of selectors) {
-            const elements = document.querySelectorAll(selector);
-            elements.forEach(el => {
-              const text = el.textContent?.trim();
-              if (text && /\d/.test(text) && text.length < 20) {
-                if (!stats.includes(text)) {
-                  stats.push(text);
+          // Estratégia 1: Buscar LIs dentro do header e extrair números
+          const headerSection = document.querySelector('header section') || document.querySelector('header');
+          if (headerSection) {
+            const listItems = headerSection.querySelectorAll('ul li');
+
+            listItems.forEach((li, index) => {
+              if (index < 3 && !stats[index]) {
+                // Pegar todo o texto do LI
+                const fullText = li.textContent?.trim() || '';
+
+                // Extrair número do início do texto (ex: "77 posts", "1,700 followers")
+                const numberMatch = fullText.match(/^([\d.,]+\s*[kKmMB]?)\s/);
+                if (numberMatch) {
+                  stats[index] = numberMatch[1].trim();
+                } else {
+                  // Tentar extrair qualquer número do texto
+                  const anyNumberMatch = fullText.match(/([\d.,]+\s*[kKmMB]?)/);
+                  if (anyNumberMatch) {
+                    stats[index] = anyNumberMatch[1].trim();
+                  }
                 }
               }
             });
-            if (stats.length >= 3) break;
           }
+
+          // Estratégia 2: Buscar spans com números dentro de LIs
+          if (!stats[0] || !stats[1] || !stats[2]) {
+            const allLis = document.querySelectorAll('header ul li, header section ul li');
+            let liIndex = 0;
+
+            allLis.forEach((li) => {
+              if (liIndex >= 3) return;
+              if (stats[liIndex]) { liIndex++; return; }
+
+              // Buscar span que contenha apenas número
+              const spans = li.querySelectorAll('span');
+              for (const span of spans) {
+                const text = span.textContent?.trim() || '';
+                // Verificar se é um número (aceita formatos: 77, 1,700, 1.700, 2K, 1M, 1.5K)
+                if (/^[\d.,]+\s*[kKmMB]?$/.test(text) && text.length < 15) {
+                  stats[liIndex] = text;
+                  liIndex++;
+                  break;
+                }
+              }
+            });
+          }
+
+          // Estratégia 3: Buscar por padrão "número + palavra-chave" no header
+          if (!stats[0] || !stats[1] || !stats[2]) {
+            const headerText = (document.querySelector('header')?.textContent || '').toLowerCase();
+
+            // Posts
+            if (!stats[0]) {
+              const postsMatch = headerText.match(/([\d.,]+\s*[kKmMB]?)\s*(posts?|publicaç|publicac)/i);
+              if (postsMatch) stats[0] = postsMatch[1].trim();
+            }
+
+            // Followers
+            if (!stats[1]) {
+              const followersMatch = headerText.match(/([\d.,]+\s*[kKmMB]?)\s*(followers?|seguidores?)/i);
+              if (followersMatch) stats[1] = followersMatch[1].trim();
+            }
+
+            // Following
+            if (!stats[2]) {
+              const followingMatch = headerText.match(/([\d.,]+\s*[kKmMB]?)\s*(following|seguindo)/i);
+              if (followingMatch) stats[2] = followingMatch[1].trim();
+            }
+          }
+
+          // Estratégia 4: Extrair da estrutura específica do Instagram (spans aninhados)
+          if (!stats[0] || !stats[1] || !stats[2]) {
+            const sections = document.querySelectorAll('header section > ul > li, header ul > li');
+            let sectionIndex = 0;
+
+            sections.forEach((section) => {
+              if (sectionIndex >= 3) return;
+              if (stats[sectionIndex]) { sectionIndex++; return; }
+
+              // Buscar o primeiro elemento com número
+              const walker = document.createTreeWalker(section, NodeFilter.SHOW_TEXT);
+              let node;
+              while ((node = walker.nextNode())) {
+                const text = node.textContent?.trim() || '';
+                if (/^[\d.,]+\s*[kKmMB]?$/.test(text) && text.length < 15) {
+                  stats[sectionIndex] = text;
+                  sectionIndex++;
+                  break;
+                }
+              }
+            });
+          }
+
+          // Log para debug
+          console.log(`   🔢 Stats extraídos: posts="${stats[0]}", followers="${stats[1]}", following="${stats[2]}"`);
 
           // PROFILE PIC
           const profilePicEl = document.querySelector('header img') as HTMLImageElement;
