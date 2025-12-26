@@ -1505,7 +1505,7 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
       // Buscar lead atual para fazer MERGE (não substituir)
       const { data: existingLead, error: fetchError } = await supabase
         .from('instagram_leads')
-        .select('email, phone, additional_emails, additional_phones')
+        .select('email, phone, additional_emails, additional_phones, whatsapp_numbers')
         .eq('id', lead_id)
         .single();
 
@@ -1528,14 +1528,58 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
       const newPhones = result.phones || [];
       const mergedPhones = [...new Set([...existingPhones, ...newPhones])];
 
+      // MERGE: combinar whatsapp_numbers existentes com novos (sem duplicatas por número)
+      const existingWhatsAppNumbers: Array<{number: string; source: string; extracted_at: string}> = existingLead?.whatsapp_numbers || [];
+      const existingWhatsAppSet = new Set(existingWhatsAppNumbers.map(w => w.number));
+      const newWhatsAppPhones = result.whatsapp_phones || [];
+      const now = new Date().toISOString();
+
+      // Adicionar novos WhatsApp phones que não existem
+      // Fonte: website_wa_me (extraído de link wa.me/api.whatsapp) = ALTA CERTEZA
+      for (const phone of newWhatsAppPhones) {
+        if (!existingWhatsAppSet.has(phone)) {
+          existingWhatsAppNumbers.push({
+            number: phone,
+            source: 'website_wa_me',  // Alta certeza: extraído de link wa.me
+            extracted_at: now
+          });
+          existingWhatsAppSet.add(phone);
+        }
+      }
+
+      // Determinar whatsapp_url_status
+      const whatsappUrlStatus = newWhatsAppPhones.length > 0 ? 'found' : 'none';
+
+      // 🎯 ALTA CERTEZA: Filtrar números verificados
+      // Fontes aceitas: website_wa_me (link wa.me), bio (com contexto WhatsApp)
+      // Só números normalizados Brasil (começam com 55, 12-13 dígitos)
+      const highCertaintySources = ['website_wa_me', 'bio'];
+      const verifiedNumbers = existingWhatsAppNumbers.filter((w: any) =>
+        highCertaintySources.includes(w.source) &&
+        w.number.startsWith('55') &&
+        w.number.length >= 12 &&
+        w.number.length <= 13
+      );
+
       // Preparar dados para update
       // NÃO setar updated_at - enriquecimento de URL não é scraping de dados do Instagram
       const updateData: any = {
         additional_emails: mergedEmails,
         additional_phones: mergedPhones,
+        whatsapp_numbers: existingWhatsAppNumbers,
+        whatsapp_url_status: whatsappUrlStatus,
         url_enriched: true,
-        website_text: result.website_text || null  // Texto do website para embedding
+        website_text: result.website_text || null,  // Texto do website para embedding
+        whatsapp_verified: verifiedNumbers  // 🆕 Apenas números de alta certeza
       };
+
+      // Popular whatsapp_number com o primeiro número verificado
+      if (verifiedNumbers.length > 0 && verifiedNumbers[0]) {
+        updateData.whatsapp_number = verifiedNumbers[0].number;
+        updateData.whatsapp_source = verifiedNumbers[0].source;
+        console.log(`   📱 WhatsApp verificados: ${verifiedNumbers.length} números`);
+        verifiedNumbers.forEach((w: any) => console.log(`      ✅ ${w.number} [${w.source}]`));
+      }
 
       // Só atualizar email/phone principal se não tiver
       if (!existingLead?.email && newEmails.length > 0) {
@@ -1560,7 +1604,7 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
         });
       }
 
-      console.log(`✅ [SCRAPE-URL] Lead ${lead_id} atualizado - Emails: ${existingEmails.length}→${mergedEmails.length}, Phones: ${existingPhones.length}→${mergedPhones.length}`);
+      console.log(`✅ [SCRAPE-URL] Lead ${lead_id} atualizado - Emails: ${existingEmails.length}→${mergedEmails.length}, Phones: ${existingPhones.length}→${mergedPhones.length}, WhatsApp: ${newWhatsAppPhones.length} novos (status: ${whatsappUrlStatus})`);
     }
 
     return res.status(200).json({
@@ -1569,9 +1613,11 @@ router.post('/scrape-url', async (req: Request, res: Response) => {
       url,
       emails: result.emails,
       phones: result.phones,
+      whatsapp_phones: result.whatsapp_phones || [],
       website_text: result.website_text ? `${result.website_text.substring(0, 500)}...` : null,  // Preview truncado
       website_text_length: result.website_text?.length || 0,
       total_contacts: result.emails.length + result.phones.length,
+      total_whatsapp: (result.whatsapp_phones || []).length,
       database_updated: update_database && lead_id ? true : false
     });
 

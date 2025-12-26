@@ -1,7 +1,13 @@
 import express, { Request, Response } from 'express';
+import { createClient } from '@supabase/supabase-js';
 import { enrichSingleLead } from '../services/instagram-lead-enrichment.service';
 
 const router = express.Router();
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 /**
  * POST /api/instagram/enrich-lead
@@ -38,6 +44,75 @@ router.post('/enrich-lead', express.text({ type: '*/*', limit: '10mb' }), async 
 
     console.log(`   ✅ Lead enriquecido: ${result.sources.length} fontes`);
 
+    // Determinar status de extração de WhatsApp da bio/website
+    const whatsappNumbers = result.enriched.whatsapp_numbers || [];
+    const whatsappBioStatus = whatsappNumbers.length > 0 ? 'found' : 'none';
+
+    console.log(`   📱 WhatsApp: ${whatsappNumbers.length} encontrados (status: ${whatsappBioStatus})`);
+
+    // PERSISTIR diretamente no banco (sem depender do N8N)
+    // Filtrar apenas WhatsApps extraídos da bio (source: 'bio')
+    const bioWhatsApps = whatsappNumbers.filter((w: any) => w.source === 'bio');
+
+    // Buscar whatsapp_numbers existentes para merge
+    const { data: existingLead } = await supabase
+      .from('instagram_leads')
+      .select('whatsapp_numbers')
+      .eq('id', lead.id)
+      .single();
+
+    const existingNumbers: Array<{number: string; source: string; extracted_at: string}> = existingLead?.whatsapp_numbers || [];
+    const existingSet = new Set(existingNumbers.map(w => w.number));
+
+    // Adicionar novos WhatsApps da bio (sem duplicatas)
+    for (const w of bioWhatsApps) {
+      if (!existingSet.has(w.number)) {
+        existingNumbers.push(w);
+        existingSet.add(w.number);
+      }
+    }
+
+    // Determinar status: 'found' se tem WhatsApp da bio, 'none' se não
+    const finalBioStatus = bioWhatsApps.length > 0 ? 'found' : 'none';
+
+    // 🎯 ALTA CERTEZA: Filtrar números verificados
+    // Fontes aceitas: website_wa_me (link wa.me), bio (com contexto WhatsApp)
+    // Só números normalizados Brasil (começam com 55, 12-13 dígitos)
+    const highCertaintySources = ['website_wa_me', 'bio'];
+    const verifiedNumbers = existingNumbers.filter((w: any) =>
+      highCertaintySources.includes(w.source) &&
+      w.number.startsWith('55') &&
+      w.number.length >= 12 &&
+      w.number.length <= 13
+    );
+
+    // Preparar dados para update
+    const updateData: any = {
+      whatsapp_numbers: existingNumbers,
+      whatsapp_bio_status: finalBioStatus,
+      whatsapp_verified: verifiedNumbers  // 🆕 Apenas números de alta certeza
+    };
+
+    // Popular whatsapp_number com o primeiro número verificado
+    if (verifiedNumbers.length > 0 && verifiedNumbers[0]) {
+      updateData.whatsapp_number = verifiedNumbers[0].number;
+      updateData.whatsapp_source = verifiedNumbers[0].source;
+      console.log(`   📱 WhatsApp verificados: ${verifiedNumbers.length} números`);
+      verifiedNumbers.forEach((w: any) => console.log(`      ✅ ${w.number} [${w.source}]`));
+    }
+
+    // Persistir no banco
+    const { error: updateError } = await supabase
+      .from('instagram_leads')
+      .update(updateData)
+      .eq('id', lead.id);
+
+    if (updateError) {
+      console.error(`   ⚠️ Erro ao persistir: ${updateError.message}`);
+    } else {
+      console.log(`   💾 Persistido: whatsapp_bio_status=${finalBioStatus}, total=${existingNumbers.length}, verificados=${verifiedNumbers.length}`);
+    }
+
     // Mesclar dados originais + enriquecidos (não sobrescrever com null)
     const mergedData = {
       id: lead.id,
@@ -48,6 +123,8 @@ router.post('/enrich-lead', express.text({ type: '*/*', limit: '10mb' }), async 
       profession: result.enriched.profession || lead.profession || null,
       email: result.enriched.email || lead.email || null,
       phone: result.enriched.phone || lead.phone || null,
+      whatsapp_numbers: whatsappNumbers, // WhatsApp numbers com fonte
+      whatsapp_bio_status: whatsappBioStatus, // Status da extração: 'found' ou 'none'
       city: result.enriched.city || lead.city || null,
       state: result.enriched.state || lead.state || null,
       address: result.enriched.address || lead.address || null,
