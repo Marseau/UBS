@@ -3,6 +3,7 @@ import {
   scrapeInstagramTag,
   scrapeInstagramExplore,
   scrapeInstagramProfile,
+  scrapeInstagramProfileDedicated,
   scrapeInstagramProfileByUrl,
   scrapeProfileWithExistingPage,
   closeBrowser,
@@ -29,6 +30,12 @@ const supabase = createClient(
 
 const router = Router();
 
+// 🔒 LOCK GLOBAL: Impede execuções simultâneas do scraper
+// Causa raiz: N8N faz retry automático em falha, causando 2 execuções paralelas
+let scrapingInProgress = false;
+let currentScrapingTerm: string | null = null;
+let scrapingStartTime: number | null = null;
+
 console.log('🔍 [DEBUG] Instagram Scraper Routes - Module loaded and router created');
 
 /**
@@ -54,8 +61,28 @@ router.post('/scrape-tag', async (req: Request, res: Response) => {
       });
     }
 
+    // 🔒 VERIFICAR LOCK: Impedir execuções simultâneas
+    if (scrapingInProgress) {
+      const elapsedMs = scrapingStartTime ? Date.now() - scrapingStartTime : 0;
+      const elapsedMin = Math.floor(elapsedMs / 60000);
+      console.log(`\n🚫 [${reqId}] BLOQUEADO: Scraping já em andamento para #${currentScrapingTerm} (${elapsedMin}min)`);
+      return res.status(409).json({
+        success: false,
+        message: `Scraping já em andamento para #${currentScrapingTerm}`,
+        current_term: currentScrapingTerm,
+        elapsed_minutes: elapsedMin,
+        error_code: 'SCRAPING_IN_PROGRESS'
+      });
+    }
+
+    // 🔒 ADQUIRIR LOCK
+    scrapingInProgress = true;
+    currentScrapingTerm = search_term;
+    scrapingStartTime = Date.now();
+
     console.log(`\n🔎 [${reqId}] ========== SCRAPE-TAG INICIADO ==========`);
     console.log(`🔎 [${reqId}] Termo: #${search_term} (max: ${max_profiles} perfis)`);
+    console.log(`🔒 [${reqId}] Lock adquirido para #${search_term}`);
     if (account_profile && account_profile !== 'default') {
       console.log(`🎯 [${reqId}] Conta manual: ${account_profile}`);
     }
@@ -68,7 +95,37 @@ router.post('/scrape-tag', async (req: Request, res: Response) => {
       console.log(`📊 [${reqId}] ANTES: ${pagesBefore.length} páginas abertas no browser`);
     }
 
-    const result = await scrapeInstagramTag(search_term, max_profiles, account_profile);
+    // 🔧 FIX v2: Loop de retry para RETRY_IMMEDIATELY
+    const MAX_RETRIES = 3;
+    let result: any;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        if (attempt > 1) {
+          console.log(`\n🔄 [${reqId}] ========================================`);
+          console.log(`🔄 [${reqId}] RETRY ${attempt}/${MAX_RETRIES}`);
+          console.log(`🔄 [${reqId}] ========================================\n`);
+        }
+
+        result = await scrapeInstagramTag(search_term, max_profiles, account_profile);
+        break; // Sucesso - sair do loop
+
+      } catch (retryError: any) {
+        if (retryError.message?.includes('RETRY_IMMEDIATELY')) {
+          console.log(`\n🔄 [${reqId}] RETRY_IMMEDIATELY capturado (tentativa ${attempt}/${MAX_RETRIES})`);
+
+          if (attempt === MAX_RETRIES) {
+            console.log(`❌ [${reqId}] Máximo de retries atingido`);
+            throw new Error(`Máximo de ${MAX_RETRIES} retries atingido após recuperação de 429`);
+          }
+
+          continue; // Próxima tentativa
+        }
+
+        // Outros erros: propagar
+        throw retryError;
+      }
+    }
 
     // DEBUG: Contar páginas DEPOIS
     if (browser) {
@@ -85,11 +142,11 @@ router.post('/scrape-tag', async (req: Request, res: Response) => {
     // Log consolidado dos perfis extraídos
     console.log(`\n📊 [${reqId}] Resumo dos ${result.profiles.length} perfis extraídos:`);
 
-    const profilesWithEmail = result.profiles.filter(p => p.email).length;
-    const profilesWithPhone = result.profiles.filter(p => p.phone).length;
-    const profilesWithWebsite = result.profiles.filter(p => p.website).length;
-    const profilesWithLocation = result.profiles.filter(p => p.city || p.state || p.address).length;
-    const businessAccounts = result.profiles.filter(p => p.is_business_account).length;
+    const profilesWithEmail = result.profiles.filter((p: any) => p.email).length;
+    const profilesWithPhone = result.profiles.filter((p: any) => p.phone).length;
+    const profilesWithWebsite = result.profiles.filter((p: any) => p.website).length;
+    const profilesWithLocation = result.profiles.filter((p: any) => p.city || p.state || p.address).length;
+    const businessAccounts = result.profiles.filter((p: any) => p.is_business_account).length;
 
     console.log(`   📧 Emails encontrados: ${profilesWithEmail}/${result.profiles.length}`);
     console.log(`   📱 Telefones encontrados: ${profilesWithPhone}/${result.profiles.length}`);
@@ -100,9 +157,9 @@ router.post('/scrape-tag', async (req: Request, res: Response) => {
     if (profilesWithLocation > 0) {
       console.log(`\n   📍 Perfis com localização:`);
       result.profiles
-        .filter(p => p.city || p.state)
+        .filter((p: any) => p.city || p.state)
         .slice(0, 5) // Mostrar apenas os primeiros 5
-        .forEach(p => {
+        .forEach((p: any) => {
           const locationParts: string[] = [];
           if (p.city) locationParts.push(p.city);
           if (p.state) locationParts.push(p.state);
@@ -210,6 +267,14 @@ router.post('/scrape-tag', async (req: Request, res: Response) => {
       }
     });
   } finally {
+    // 🔓 LIBERAR LOCK
+    const elapsedMs = scrapingStartTime ? Date.now() - scrapingStartTime : 0;
+    const elapsedMin = Math.floor(elapsedMs / 60000);
+    console.log(`🔓 [${reqId}] Lock liberado para #${currentScrapingTerm} (duração: ${elapsedMin}min)`);
+    scrapingInProgress = false;
+    currentScrapingTerm = null;
+    scrapingStartTime = null;
+
     // 🔥 FORÇAR LIMPEZA DE TODAS AS PÁGINAS AO FINAL
     const { cleanupAllContexts } = await import('../services/instagram-context-manager.service');
     await cleanupAllContexts();
@@ -264,11 +329,11 @@ router.post('/scrape-explore', async (req: Request, res: Response) => {
     // Log consolidado dos perfis extraídos
     console.log(`\n📊 [${reqId}] Resumo dos ${result.profiles.length} perfis extraídos:`);
 
-    const profilesWithEmail = result.profiles.filter(p => p.email).length;
-    const profilesWithPhone = result.profiles.filter(p => p.phone).length;
-    const profilesWithWebsite = result.profiles.filter(p => p.website).length;
-    const profilesWithLocation = result.profiles.filter(p => p.city || p.state || p.address).length;
-    const businessAccounts = result.profiles.filter(p => p.is_business_account).length;
+    const profilesWithEmail = result.profiles.filter((p: any) => p.email).length;
+    const profilesWithPhone = result.profiles.filter((p: any) => p.phone).length;
+    const profilesWithWebsite = result.profiles.filter((p: any) => p.website).length;
+    const profilesWithLocation = result.profiles.filter((p: any) => p.city || p.state || p.address).length;
+    const businessAccounts = result.profiles.filter((p: any) => p.is_business_account).length;
 
     console.log(`   📧 Emails encontrados: ${profilesWithEmail}/${result.profiles.length}`);
     console.log(`   📱 Telefones encontrados: ${profilesWithPhone}/${result.profiles.length}`);
@@ -617,6 +682,89 @@ router.post('/scrape-profile', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao scrape perfil',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/scrape-profile-dedicated
+ * 🆕 Scrape perfil usando PÁGINA DEDICADA (isolada)
+ *
+ * Diferença do /scrape-profile:
+ * - Usa página separada que NÃO interfere com scrape-users
+ * - Ideal para scrapes vindos do inbound (DM reply, webhooks)
+ * - A página é fechada após o uso
+ *
+ * Body:
+ * {
+ *   "username": "exemplo_usuario"
+ * }
+ */
+router.post('/scrape-profile-dedicated', async (req: Request, res: Response) => {
+  try {
+    const { username } = req.body;
+
+    if (!username) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo "username" é obrigatório'
+      });
+    }
+
+    console.log(`\n👤 [DEDICATED] ========== SCRAPE-PROFILE-DEDICATED INICIADO ==========`);
+    console.log(`👤 [DEDICATED] Username: @${username}`);
+    console.log(`🔒 [DEDICATED] Usando página ISOLADA (não interfere com outras operações)`);
+
+    const profileData = await scrapeInstagramProfileDedicated(username);
+
+    // Log detalhado dos dados extraídos
+    console.log(`\n📊 [DEDICATED] Dados extraídos do perfil @${username}:`);
+    console.log(`   👤 Full Name: ${profileData.full_name || 'N/A'}`);
+    console.log(`   📈 Seguidores: ${profileData.followers_count || 0}`);
+    console.log(`   📸 Posts: ${profileData.posts_count || 0}`);
+
+    if (profileData.website) {
+      console.log(`   🔗 Website (link da bio): ${profileData.website}`);
+    }
+
+    if (profileData.email) {
+      console.log(`   📧 Email: ${profileData.email}`);
+    }
+
+    if (profileData.phone) {
+      console.log(`   📱 Telefone: ${profileData.phone}`);
+    }
+
+    if (profileData.city || profileData.state || profileData.address) {
+      const locationParts: string[] = [];
+      if (profileData.city) locationParts.push(profileData.city);
+      if (profileData.state) locationParts.push(profileData.state);
+      if (profileData.neighborhood) locationParts.push(`(${profileData.neighborhood})`);
+      console.log(`   📍 Localização: ${locationParts.join(', ')}`);
+
+      if (profileData.address) {
+        console.log(`   🏠 Endereço: ${profileData.address}`);
+      }
+
+      if (profileData.zip_code) {
+        console.log(`   📮 CEP: ${profileData.zip_code}`);
+      }
+    }
+
+    console.log(`✅ [DEDICATED] ========== SCRAPE-PROFILE-DEDICATED FINALIZADO ==========\n`);
+
+    return res.status(200).json({
+      success: true,
+      dedicated_session: true,
+      data: profileData
+    });
+
+  } catch (error: any) {
+    console.error('❌ [DEDICATED] Erro ao scrape perfil:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao scrape perfil (dedicated session)',
       error: error.message
     });
   }
@@ -1020,9 +1168,10 @@ router.post('/scrape-profiles-batch', async (req: Request, res: Response) => {
 /**
  * POST /api/instagram-scraper/cleanup-pages
  * Limpa todas as páginas abertas SEM fechar o browser
- * Útil para N8N chamar entre execuções
+ * ⚠️ ATENÇÃO: Só chamar quando NÃO houver scraping ativo!
+ * O problema anterior era timeout do N8N causando chamada no meio do scrape.
  */
-router.post('/cleanup-pages', async (req: Request, res: Response) => {
+router.post('/cleanup-pages', async (_req: Request, res: Response) => {
   try {
     const { cleanupAllContexts, getContextStats } = await import('../services/instagram-context-manager.service');
     const { getBrowserInstance } = await import('../services/instagram-session.service');
@@ -1071,6 +1220,53 @@ router.post('/cleanup-pages', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/instagram-scraper/cleanup-browser-locks
+ * Limpa arquivos SingletonLock que impedem o browser de iniciar
+ * Resolve: "Failed to create SingletonLock: File exists"
+ */
+router.post('/cleanup-browser-locks', async (_req: Request, res: Response) => {
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const sessionsDir = path.join(process.env.HOME || '', '.instagram-sessions');
+    const locksRemoved: string[] = [];
+
+    console.log('🧹 [API] Limpando browser locks...');
+
+    if (fs.existsSync(sessionsDir)) {
+      const folders = fs.readdirSync(sessionsDir, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => d.name);
+
+      for (const folder of folders) {
+        const lockFiles = ['SingletonLock', 'SingletonSocket', 'SingletonCookie'];
+        for (const lockFile of lockFiles) {
+          const lockPath = path.join(sessionsDir, folder, lockFile);
+          if (fs.existsSync(lockPath)) {
+            fs.unlinkSync(lockPath);
+            locksRemoved.push(`${folder}/${lockFile}`);
+          }
+        }
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: locksRemoved.length > 0
+        ? `${locksRemoved.length} lock(s) removido(s)`
+        : 'Nenhum lock encontrado',
+      locks_removed: locksRemoved
+    });
+  } catch (error: any) {
+    console.error('❌ Erro ao limpar browser locks:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * POST /api/instagram-scraper/close-browser
  * Fecha o browser Puppeteer (libera recursos)
  */
@@ -1104,11 +1300,13 @@ router.get('/status', (req: Request, res: Response) => {
       'POST /scrape-explore': 'Scrape página Explorar do Instagram - retorna perfis com bio/contato (NEW)',
       'POST /scrape-users': 'Busca usuários validados (PT + activity >= 50) - retorna perfis com hashtags',
       'POST /scrape-profile': 'Scrape perfil específico - retorna dados do perfil',
+      'POST /scrape-profile-dedicated': 'Scrape perfil em página DEDICADA (não interfere com scrape-users)',
       'POST /scrape-followers': 'Scrape seguidores de concorrente - gera leads B2C',
       'POST /scrape-input-users': 'Scrape lista específica de usernames',
       'POST /scrape-url': 'Extrai emails/telefones de URLs',
       'GET /url-scraper-stats': 'Estatísticas do URL scraper (concorrência, fila, cache)',
       'POST /cleanup-pages': 'Limpa todas as páginas abertas SEM fechar o browser',
+      'POST /cleanup-browser-locks': 'Limpa arquivos SingletonLock (resolve erro de lock)',
       'POST /close-browser': 'Fechar browser Puppeteer',
       'GET /debug-page': 'Debug: mostra elementos da página atual',
       'GET /debug-pages': 'Debug: lista TODAS as páginas abertas no browser'

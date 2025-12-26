@@ -1635,9 +1635,8 @@ export async function scrapeInstagramTag(
 
   let variations: any[] = [];
   let priorityHashtags: any[] = [];
-  // 🆕 VARIÁVEIS DECLARADAS AQUI para estarem acessíveis no catch
   const allFoundProfiles: any[] = [];
-  let hashtagsToScrape: string[] = [normalizedTerm]; // Fallback para hashtag original
+  let hashtagsToScrape: string[] = [normalizedTerm];
 
   // 🆕 DESCOBRIR VARIAÇÕES DE HASHTAGS COM PRIORIZAÇÃO POR SCORE (mesma página)
   console.log(`\n🔍 Descobrindo variações inteligentes de #${normalizedTerm}...`);
@@ -4141,74 +4140,48 @@ export async function scrapeInstagramTag(
         }
       }
 
-      // 🔧 FIX: NÃO registrar falha aqui - handleSessionError() já faz isso
-      // Isso evita duplicação: 429 handler + handleSessionError = 2 falhas por 1 erro
-      console.log(`   ℹ️  Falha será registrada em handleSessionError() após IP cooling`);
-
-      // 🧹 PASSO 4: Fechar página persistente (429 = precisa nova página com nova conta)
-      console.log(`\n🧹 ========== FECHANDO PÁGINA PERSISTENTE (429) ==========`);
-      try {
-        await forceClosePersistentPage();
-        console.log(`   ✅ Página persistente fechada (429 requer nova sessão)`);
-      } catch (cleanupError: any) {
-        console.log(`   ⚠️  Erro ao fechar página: ${cleanupError.message}`);
-      }
-
-      // 🗑️ PASSO 5: Deletar cookies da conta bloqueada
-      const blockedAccount = accountRotation.getCurrentAccount();
-      if (fs.existsSync(blockedAccount.cookiesFile)) {
-        fs.unlinkSync(blockedAccount.cookiesFile);
-        console.log(`   🗑️  Cookies deletados: ${path.basename(blockedAccount.cookiesFile)}`);
-      }
-
-      // Resetar variáveis de sessão globais
-      loggedUsername = null;
-      sessionPage = null;
-      browserInstance = null;
-      console.log(`   ✅ Variáveis de sessão resetadas`);
-      console.log(`========================================\n`);
-
-      // 🔧 FIX: 429 = IP bloqueado, não apenas conta. AGUARDAR IP cooling obrigatório
-      const ipCoolingMinutes = accountRotation.getIpCoolingRemaining();
-
-      if (ipCoolingMinutes > 0) {
-        console.log(`\n⏰ ========================================`);
-        console.log(`⏰ 🧊 IP COOLING ATIVADO - AGUARDANDO ${ipCoolingMinutes}min`);
-        console.log(`⏰ Motivo: Erro 429 - IP bloqueado pelo Instagram`);
-        console.log(`⏰ Rotacionar conta NÃO resolve (mesmo IP)`);
-        console.log(`⏰ ========================================\n`);
-
-        // Aguardar o tempo necessário
-        await new Promise(resolve => setTimeout(resolve, ipCoolingMinutes * 60 * 1000));
-
-        console.log(`✅ Período de IP cooling concluído!`);
-
-        // 🔧 FIX: Após IP cooling, vida nova! Resetar TUDO da conta atual
-        // Conceito: IP cooling é o "pagamento" pelo erro, depois disso começa do zero
-        const cooledAccount = accountRotation.getCurrentAccount();
-        cooledAccount.failureCount = 0;
-        cooledAccount.isBlocked = false;
-        cooledAccount.lastFailureTime = 0;
-        cooledAccount.cooldownUntil = undefined;  // 🔧 FIX: Limpar cooldown também!
-        await accountRotation.saveState();
-        console.log(`   🔄 Conta @${cooledAccount.instagramUsername} resetada após IP cooling (vida nova)`);
-      }
-
-      // Agora sim tentar rotacionar (após IP cooling)
+      // 🔧 FIX v3: Primeiro registrar falha e verificar se atingiu 3 tentativas
+      // IP cooling só acontece APÓS confirmar erro com 3 falhas
       const recovered = await handleSessionError(page, 'RATE_LIMIT_429');
+      const currentAccount = accountRotation.getCurrentAccount();
 
       if (!recovered) {
-        console.log(`\n❌ ========================================`);
-        console.log(`❌ NÃO FOI POSSÍVEL RECUPERAR SESSÃO`);
-        console.log(`❌ Cooldown muito longo ou sem contas disponíveis`);
-        console.log(`❌ ========================================\n`);
-        throw new Error('RATE_LIMIT: Não foi possível rotacionar para outra conta');
+        // Ainda não atingiu 3 falhas - fazer RETRY com mesma conta (sem IP cooling)
+        console.log(`\n🔄 ========================================`);
+        console.log(`🔄 RETRY: Falha ${currentAccount.failureCount}/3 registrada`);
+        console.log(`🔄 Tentando novamente com mesma conta...`);
+        console.log(`🔄 ========================================\n`);
+
+        throw new Error('RETRY_IMMEDIATELY: Tentativa de retry após 429');
+      }
+
+      // ✅ Atingiu 3 falhas - handleSessionError() JÁ FEZ:
+      // - Logout da conta bloqueada
+      // - Fechou browser e sessão
+      // - Deletou cookies da conta bloqueada
+      // - Rotacionou para próxima conta disponível
+      // - Inicializou nova sessão
+      console.log(`\n🚨 ========================================`);
+      console.log(`🚨 3 FALHAS CONFIRMADAS - ERRO 429 VALIDADO`);
+      console.log(`🚨 Cleanup e rotação JÁ executados por handleSessionError()`);
+      console.log(`🚨 ========================================\n`);
+
+      // Resetar variáveis locais (handleSessionError já atualizou as globais)
+      loggedUsername = null;
+
+      // 🧊 IP cooling (30 min) - só após confirmar erro com 3 falhas
+      const ipCoolingMinutes = accountRotation.getIpCoolingRemaining();
+      if (ipCoolingMinutes > 0) {
+        console.log(`\n⏰ 🧊 IP COOLING: Aguardando ${ipCoolingMinutes}min...`);
+        await new Promise(resolve => setTimeout(resolve, ipCoolingMinutes * 60 * 1000));
+        console.log(`✅ IP cooling concluído!`);
       }
 
       console.log(`\n✅ ========================================`);
-      console.log(`✅ SESSÃO RECUPERADA COM NOVA CONTA`);
-      console.log(`✅ Continuando scraping normalmente...`);
+      console.log(`✅ CONTA ROTACIONADA - RETRY COM NOVA CONTA`);
       console.log(`✅ ========================================\n`);
+
+      throw new Error('RETRY_IMMEDIATELY: Conta rotacionada após 3 falhas');
     }
 
     // 🆕 NÃO PERDER OS PERFIS COLETADOS! Retornar mesmo com erro
