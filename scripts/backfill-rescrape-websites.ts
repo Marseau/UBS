@@ -16,26 +16,33 @@ const supabase = createClient(
 );
 
 const API_BASE = 'http://localhost:3000';
-const BATCH_SIZE = 200;
+const BATCH_SIZE = 50;
+const MAX_LEADS = 50; // Limite para teste
 const DELAY_BETWEEN_REQUESTS = 300; // 300ms
 
-async function scrapeUrl(url: string): Promise<{ whatsapp_phones?: string[] } | null> {
+async function scrapeUrl(leadId: string, url: string): Promise<{ whatsapp_phones?: string[], database_updated?: boolean } | null> {
   try {
     const response = await fetch(`${API_BASE}/api/instagram-scraper/scrape-url`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, deepLinks: true })
+      body: JSON.stringify({
+        lead_id: leadId,
+        url,
+        update_database: true,  // API faz persistência completa
+        deepLinks: true
+      })
     });
 
     if (!response.ok) return null;
-    return await response.json() as { whatsapp_phones?: string[] };
+    return await response.json() as { whatsapp_phones?: string[], database_updated?: boolean };
   } catch {
     return null;
   }
 }
 
-// SKIP: Pular leads já tentados que falharam (5800 processados - 2294 sucesso = ~3500 falhos)
-const SKIP_FAILED = 3500;
+// SKIP: Reiniciando do zero para incluir wa.me/message leads
+// Leads já com whatsapp_number serão ignorados automaticamente pelo filtro
+const SKIP_FAILED = 0;
 
 async function backfillRescrape() {
   // Contar quantos já foram processados (têm whatsapp_number de website_scrape)
@@ -65,7 +72,6 @@ async function backfillRescrape() {
       .eq('url_enriched', true)
       .not('website', 'is', null)
       .not('website', 'ilike', '%wa.me/qr/%')
-      .not('website', 'ilike', '%wa.me/message/%')
       .order('created_at', { ascending: true })
       .range(SKIP_FAILED - 1, SKIP_FAILED - 1);
 
@@ -75,7 +81,7 @@ async function backfillRescrape() {
     }
   }
 
-  while (hasMore) {
+  while (hasMore && totalProcessed < MAX_LEADS) {
     batchNumber++;
 
     // Buscar próximo lote
@@ -86,10 +92,9 @@ async function backfillRescrape() {
       .eq('url_enriched', true)
       .not('website', 'is', null)
       .not('website', 'ilike', '%wa.me/qr/%')
-      .not('website', 'ilike', '%wa.me/message/%')
       .gt('created_at', lastCreatedAt)
       .order('created_at', { ascending: true })
-      .limit(BATCH_SIZE);
+      .limit(Math.min(BATCH_SIZE, MAX_LEADS - totalProcessed));
 
     if (error || !leads || leads.length === 0) {
       if (error) console.error('❌ Erro:', error.message);
@@ -108,30 +113,18 @@ async function backfillRescrape() {
 
       process.stdout.write(`[${totalProcessed}] @${lead.username.substring(0, 25).padEnd(25)}... `);
 
-      const result = await scrapeUrl(lead.website);
+      const result = await scrapeUrl(lead.id, lead.website);
 
       if (result?.whatsapp_phones && result.whatsapp_phones.length > 0) {
         const phone = result.whatsapp_phones[0];
-        console.log(`✅ ${phone}`);
+        console.log(`✅ ${phone} (${result.whatsapp_phones.length} total)`);
         totalFound++;
         batchFound++;
-
-        // Atualizar no banco
-        await supabase
-          .from('instagram_leads')
-          .update({
-            whatsapp_number: phone,
-            whatsapp_source: 'website_scrape',
-            whatsapp_verified: [{
-              number: phone,
-              source: 'website_scrape',
-              extracted_at: new Date().toISOString()
-            }]
-          })
-          .eq('id', lead.id);
+        // API já fez update completo (whatsapp_number, whatsapp_numbers, whatsapp_url_status, etc)
       } else {
         console.log('❌');
         totalFailed++;
+        // API já atualizou whatsapp_url_status = 'none'
       }
 
       await new Promise(r => setTimeout(r, DELAY_BETWEEN_REQUESTS));

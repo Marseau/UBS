@@ -184,13 +184,17 @@ export class UrlScraperService {
     const waMeRegex = /wa\.me\/(\d{10,15})/g;
     let match;
     while ((match = waMeRegex.exec(html)) !== null) {
-      phones.push(match[1]);
+      // Normaliza com lógica de WhatsApp (adiciona 9 se faltar)
+      const normalized = this.normalizePhone(match[1]);
+      phones.push(normalized);
     }
 
     // api.whatsapp.com/send?phone=5548999998888 OR api.whatsapp.com/send/?phone=5548999998888
     const apiWhatsAppRegex = /api\.whatsapp\.com\/send\/?\?phone=(\d{10,15})/g;
     while ((match = apiWhatsAppRegex.exec(html)) !== null) {
-      phones.push(match[1]);
+      // Normaliza com lógica de WhatsApp (adiciona 9 se faltar)
+      const normalized = this.normalizePhone(match[1]);
+      phones.push(normalized);
     }
 
     return phones;
@@ -200,35 +204,97 @@ export class UrlScraperService {
    * Extract phones from visible text using contextual keywords
    * Only extracts phones near keywords like "telefone", "contato", "whatsapp", etc.
    * @param visibleText - Visible text from page
-   * @returns Array of phone numbers found with context
+   * @returns Object with all phones and whatsapp-context phones
    */
-  private static extractPhonesFromText(visibleText: string): string[] {
+  private static extractPhonesFromText(visibleText: string): { phones: string[]; whatsappContext: string[] } {
     const contextKeywords = [
-      'telefone', 'tel', 'whatsapp', 'wpp', 'contato', 'fone',
+      'telefone', 'tel', 'contato', 'fone',
       'celular', 'ligar', 'chamar', 'phone', 'contact', 'call', 'fale'
     ];
 
+    // Keywords que indicam WhatsApp especificamente
+    const whatsappKeywords = [
+      'whatsapp', 'wpp', 'zap', 'whats', 'whatszap', 'zapzap', 'watzap'
+    ];
+
+    // Emojis que indicam WhatsApp/celular
+    const whatsappEmojis = ['📱', '📲', '💬', '📞', '☎️', '✆', '📳'];
+
     const phoneMatches: string[] = [];
+    const whatsappContextPhones: string[] = [];
     const lines = visibleText.split('\n');
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i] ? lines[i].toLowerCase() : '';
-      const hasContext = contextKeywords.some(keyword => line.includes(keyword));
+      const originalLine = lines[i] || '';
 
-      if (hasContext && lines[i]) {
+      const hasContext = contextKeywords.some(keyword => line.includes(keyword));
+      const hasWhatsappContext = whatsappKeywords.some(keyword => line.includes(keyword));
+      const hasWhatsappEmoji = whatsappEmojis.some(emoji => originalLine.includes(emoji));
+
+      if ((hasContext || hasWhatsappContext || hasWhatsappEmoji) && lines[i]) {
         const phoneRegex = /(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)(?:9\d{4}[-\s]?\d{4}|\d{4}[-\s]?\d{4})/g;
         const matches = lines[i].match(phoneRegex);
-        if (matches) phoneMatches.push(...matches);
+        if (matches) {
+          phoneMatches.push(...matches);
+          // Se tem contexto de WhatsApp, adiciona à lista separada
+          if (hasWhatsappContext || hasWhatsappEmoji) {
+            whatsappContextPhones.push(...matches);
+            console.log(`   📱 [CONTEXT] WhatsApp detectado por contexto: "${line.substring(0, 50)}..."`);
+          }
+        }
       }
     }
 
-    return phoneMatches;
+    return { phones: phoneMatches, whatsappContext: whatsappContextPhones };
+  }
+
+  /**
+   * Extract WhatsApp phones from HTML by checking context around phone numbers
+   * Looks for WhatsApp keywords/emojis within 200 chars of phone numbers
+   * @param html - Raw HTML content
+   * @returns Array of phones found with WhatsApp context
+   */
+  private static extractWhatsAppFromHtmlContext(html: string): string[] {
+    const whatsappKeywords = [
+      'whatsapp', 'wpp', 'zap', 'whats', 'whatszap', 'zapzap', 'watzap',
+      'wa.me', 'api.whatsapp', 'fale conosco', 'fale com', 'chama no', 'chame no'
+    ];
+    const whatsappEmojis = ['📱', '📲', '💬', '📞', '☎️', '✆', '📳'];
+
+    const whatsappContextPhones: string[] = [];
+
+    // Regex para encontrar telefones brasileiros
+    const phoneRegex = /\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4}/g;
+    let match;
+
+    while ((match = phoneRegex.exec(html)) !== null) {
+      const phone = match[0];
+      const position = match.index;
+
+      // Pegar 200 caracteres antes e depois do telefone
+      const start = Math.max(0, position - 200);
+      const end = Math.min(html.length, position + phone.length + 200);
+      const context = html.substring(start, end).toLowerCase();
+
+      // Verificar se há contexto de WhatsApp
+      const hasWhatsappKeyword = whatsappKeywords.some(kw => context.includes(kw));
+      const hasWhatsappEmoji = whatsappEmojis.some(emoji => context.includes(emoji));
+
+      if (hasWhatsappKeyword || hasWhatsappEmoji) {
+        whatsappContextPhones.push(phone);
+      }
+    }
+
+    return [...new Set(whatsappContextPhones)]; // Remove duplicatas
   }
 
   /**
    * Validate Brazilian phone number format
    * @param phone - Phone number string (can contain formatting)
-   * @returns true if valid Brazilian phone (10-11 digits, valid area code)
+   * @returns true if valid Brazilian phone
+   * - 11 dígitos: celular (DDD + 9 + 8 dígitos)
+   * - 10 dígitos: fixo apenas se começa com 2,3,4,5 (rejeita 6,7,8,9 = celular sem 9)
    */
   private static isValidBrazilianPhone(phone: string): boolean {
     let cleaned = phone.replace(/[^0-9]/g, '');
@@ -245,6 +311,17 @@ export class UrlScraperService {
 
     // If 11 digits, 3rd digit must be 9 (mobile)
     if (cleaned.length === 11 && cleaned[2] !== '9') return false;
+
+    // If 10 digits, check if it's landline (2,3,4,5) or mobile without 9 (6,7,8,9)
+    if (cleaned.length === 10) {
+      const firstDigitAfterDDD = cleaned.charAt(2);
+      // Celular sem o 9 (começa com 6,7,8,9) - INVÁLIDO
+      if (['6', '7', '8', '9'].includes(firstDigitAfterDDD)) {
+        console.log(`   ⚠️ [VALIDATE] Número rejeitado (celular sem 9): 55${cleaned}`);
+        return false;
+      }
+      // Fixo (começa com 2,3,4,5) - válido
+    }
 
     // Area code must be between 11-99
     const areaCode = parseInt(cleaned.substring(0, 2));
@@ -288,6 +365,7 @@ export class UrlScraperService {
     return cleaned;
   }
 
+
   /**
    * Extrai número WhatsApp de wa.me/message/CODE via navegação
    * Navega para a URL e tenta capturar o número do redirect ou conteúdo
@@ -314,9 +392,14 @@ export class UrlScraperService {
 
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
+      // Aguardar um pouco para a página carregar completamente
+      await new Promise(r => setTimeout(r, 2000));
+
       // Verificar se houve redirect para URL com número
       const finalUrl = page.url();
       const urlToCheck = redirectedUrl || finalUrl;
+      console.log(`   🔍 [wa.me/message] URL final: ${finalUrl}`);
+      console.log(`   🔍 [wa.me/message] Redirect URL: ${redirectedUrl || 'nenhum'}`);
 
       // Tentar extrair número da URL final
       const phoneMatch = urlToCheck.match(/wa\.me\/\+?(\d{10,15})|phone=\+?(\d{10,15})/i);
@@ -336,8 +419,10 @@ export class UrlScraperService {
         }
       }
 
-      // Tentar extrair do conteúdo da página
+      // Tentar extrair do conteúdo da página - múltiplas estratégias
       const pageContent = await page.content();
+
+      // Estratégia 1: wa.me/NUMERO ou phone=NUMERO
       const contentMatch = pageContent.match(/wa\.me\/\+?(\d{10,15})|"phone":\s*"\+?(\d{10,15})"|phone=\+?(\d{10,15})/i);
       if (contentMatch) {
         const phoneNumber = contentMatch[1] || contentMatch[2] || contentMatch[3];
@@ -353,6 +438,46 @@ export class UrlScraperService {
             sources: { whatsapp_links: true }
           };
         }
+      }
+
+      // Estratégia 2: Buscar número brasileiro no HTML (55 + 10-11 dígitos)
+      const brazilPhoneRegex = /[+]?55\s?(\d{2})\s?(\d{4,5})[-\s]?(\d{4})/g;
+      let brazilMatch;
+      while ((brazilMatch = brazilPhoneRegex.exec(pageContent)) !== null) {
+        const rawNumber = `55${brazilMatch[1]}${brazilMatch[2]}${brazilMatch[3]}`;
+        const normalized = this.normalizePhone(rawNumber);
+        if (normalized && normalized.length >= 12) {
+          console.log(`   ✅ [wa.me/message] Número brasileiro encontrado: ${normalized}`);
+          await page.close().catch(() => {});
+          return {
+            emails: [],
+            phones: [normalized],
+            whatsapp_phones: [normalized],
+            success: true,
+            sources: { whatsapp_links: true }
+          };
+        }
+      }
+
+      // Estratégia 3: Número com 10-13 dígitos começando com 55 em qualquer lugar
+      const genericBrazilMatch = pageContent.match(/\b(55\d{10,11})\b/);
+      if (genericBrazilMatch) {
+        const normalized = this.normalizePhone(genericBrazilMatch[1]);
+        console.log(`   ✅ [wa.me/message] Número genérico encontrado: ${normalized}`);
+        await page.close().catch(() => {});
+        return {
+          emails: [],
+          phones: [normalized],
+          whatsapp_phones: [normalized],
+          success: true,
+          sources: { whatsapp_links: true }
+        };
+      }
+
+      // Debug: mostrar trecho do HTML para diagnóstico
+      const phoneHint = pageContent.match(/\d{10,13}/g);
+      if (phoneHint) {
+        console.log(`   🔍 [wa.me/message] Números encontrados no HTML: ${phoneHint.slice(0, 5).join(', ')}`);
       }
 
       console.log(`   ⚠️ [wa.me/message] Número não encontrado na URL: ${url}`);
@@ -394,7 +519,8 @@ export class UrlScraperService {
       const whatsappPhones = this.extractWhatsAppPhones(html);
 
       // Extract phones from text WITH context
-      const textPhones = this.extractPhonesFromText(visibleText);
+      const textResult = this.extractPhonesFromText(visibleText);
+      const textPhones = textResult.phones;
 
       // Extract phones from HTML WITHOUT context (catch phones in page data)
       const phoneRegex = /\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4}/g;
@@ -470,8 +596,19 @@ export class UrlScraperService {
         try {
           console.log(`    🔍 [LINKTR.EE] Visitando link ${i + 1}/${MAX_VISITS}: ${link}`);
 
-          // Se for WhatsApp, extrair diretamente
+          // Se for WhatsApp, extrair
           if (link.includes('wa.me') || link.includes('whatsapp')) {
+            // wa.me/message/CODE precisa navegar para descobrir o número
+            if (link.includes('wa.me/message/')) {
+              console.log(`      📱 [LINKTR.EE] Detectado wa.me/message, navegando...`);
+              const messageResult = await this.extractWhatsAppFromMessageLink(link);
+              if (messageResult?.whatsapp_phones?.length) {
+                phones.push(...messageResult.whatsapp_phones);
+                console.log(`      ✅ [LINKTR.EE] Extraído: ${messageResult.whatsapp_phones[0]}`);
+              }
+              continue;
+            }
+            // wa.me/NUMERO - extrair diretamente
             const waPhones = this.extractWhatsAppPhones(link);
             phones.push(...waPhones.map(p => p.replace(/[^0-9]/g, '')));
             continue;
@@ -510,8 +647,10 @@ export class UrlScraperService {
         }
       }
 
-      // Validar telefones
-      const validPhones = phones.filter(p => this.isValidBrazilianPhone(p));
+      // Validar e normalizar telefones
+      const validPhones = phones
+        .filter(p => this.isValidBrazilianPhone(p))
+        .map(p => this.normalizePhone(p));
       const uniquePhones = [...new Set(validPhones)];
       const uniqueEmails = [...new Set(emails)];
 
@@ -581,6 +720,17 @@ export class UrlScraperService {
           console.log(`    🔍 [BEACONS.AI] Visitando link ${i + 1}/${MAX_VISITS}: ${link}`);
 
           if (link.includes('wa.me') || link.includes('whatsapp')) {
+            // wa.me/message/CODE precisa navegar para descobrir o número
+            if (link.includes('wa.me/message/')) {
+              console.log(`      📱 [BEACONS.AI] Detectado wa.me/message, navegando...`);
+              const messageResult = await this.extractWhatsAppFromMessageLink(link);
+              if (messageResult?.whatsapp_phones?.length) {
+                phones.push(...messageResult.whatsapp_phones);
+                console.log(`      ✅ [BEACONS.AI] Extraído: ${messageResult.whatsapp_phones[0]}`);
+              }
+              continue;
+            }
+            // wa.me/NUMERO - extrair diretamente
             const waPhones = this.extractWhatsAppPhones(link);
             phones.push(...waPhones.map(p => p.replace(/[^0-9]/g, '')));
             continue;
@@ -617,7 +767,10 @@ export class UrlScraperService {
         }
       }
 
-      const validPhones = phones.filter(p => this.isValidBrazilianPhone(p));
+      // Validar e normalizar telefones
+      const validPhones = phones
+        .filter(p => this.isValidBrazilianPhone(p))
+        .map(p => this.normalizePhone(p));
       const uniquePhones = [...new Set(validPhones)];
       const uniqueEmails = [...new Set(emails)];
 
@@ -686,6 +839,17 @@ export class UrlScraperService {
           console.log(`    🔍 [LINKIN.BIO] Visitando link ${i + 1}/${MAX_VISITS}: ${link}`);
 
           if (link.includes('wa.me') || link.includes('whatsapp')) {
+            // wa.me/message/CODE precisa navegar para descobrir o número
+            if (link.includes('wa.me/message/')) {
+              console.log(`      📱 [LINKIN.BIO] Detectado wa.me/message, navegando...`);
+              const messageResult = await this.extractWhatsAppFromMessageLink(link);
+              if (messageResult?.whatsapp_phones?.length) {
+                phones.push(...messageResult.whatsapp_phones);
+                console.log(`      ✅ [LINKIN.BIO] Extraído: ${messageResult.whatsapp_phones[0]}`);
+              }
+              continue;
+            }
+            // wa.me/NUMERO - extrair diretamente
             const waPhones = this.extractWhatsAppPhones(link);
             phones.push(...waPhones.map(p => p.replace(/[^0-9]/g, '')));
             continue;
@@ -722,7 +886,10 @@ export class UrlScraperService {
         }
       }
 
-      const validPhones = phones.filter(p => this.isValidBrazilianPhone(p));
+      // Validar e normalizar telefones
+      const validPhones = phones
+        .filter(p => this.isValidBrazilianPhone(p))
+        .map(p => this.normalizePhone(p));
       const uniquePhones = [...new Set(validPhones)];
       const uniqueEmails = [...new Set(emails)];
 
@@ -769,7 +936,8 @@ export class UrlScraperService {
       const whatsappPhones = this.extractWhatsAppPhones(html);
 
       // Extract phones from description WITH context
-      const textPhones = this.extractPhonesFromText(visibleText);
+      const textResult = this.extractPhonesFromText(visibleText);
+      const textPhones = textResult.phones;
 
       // Extract phones from HTML WITHOUT context
       const phoneRegex = /\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4}/g;
@@ -1014,25 +1182,35 @@ export class UrlScraperService {
         if (whatsappPhones.length > 0) sources.whatsapp_links = true;
 
         // 3. Extract phones from visible text WITH context
-        const textPhones = this.extractPhonesFromText(visibleText);
-        console.log(`🔍 [DEBUG] Text phones: ${textPhones.length} encontrados`);
+        const textResult = this.extractPhonesFromText(visibleText);
+        const textPhones = textResult.phones;
+        const whatsappContextPhones = textResult.whatsappContext;
+        console.log(`🔍 [DEBUG] Text phones: ${textPhones.length} encontrados (${whatsappContextPhones.length} com contexto WhatsApp)`);
 
         // 4. Extract phones from HTML WITHOUT context (catch phones in page data)
         const phoneRegex = /\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4}/g;
         const htmlPhones = html.match(phoneRegex) || [];
         console.log(`🔍 [DEBUG] HTML phones extraídos: ${htmlPhones.length} encontrados`);
 
+        // 5. Extract WhatsApp phones from HTML WITH context (NEW)
+        const htmlWhatsAppContext = this.extractWhatsAppFromHtmlContext(html);
+        console.log(`🔍 [DEBUG] HTML WhatsApp com contexto: ${htmlWhatsAppContext.length} encontrados`);
+
         // Clean all phones
         const cleanedWhatsApp = whatsappPhones.map(p => p.replace(/[^0-9]/g, ''));
         const cleanedText = textPhones.map(p => p.replace(/[^0-9]/g, ''));
         const cleanedHtml = htmlPhones.map(p => p.replace(/[^0-9]/g, ''));
+        const cleanedWhatsAppContext = whatsappContextPhones.map(p => p.replace(/[^0-9]/g, ''));
+        const cleanedHtmlWhatsAppContext = htmlWhatsAppContext.map(p => p.replace(/[^0-9]/g, ''));
 
         // Remove duplicatas em cada categoria
         const uniqueWhatsApp = [...new Set(cleanedWhatsApp)];
         const uniqueText = [...new Set(cleanedText)];
         const uniqueHtml = [...new Set(cleanedHtml)];
+        const uniqueWhatsAppContext = [...new Set(cleanedWhatsAppContext)];
+        const uniqueHtmlWhatsAppContext = [...new Set(cleanedHtmlWhatsAppContext)];
 
-        // Validar com PRIORIDADE: WhatsApp > Text > HTML (sem limite)
+        // Validar com PRIORIDADE: WhatsApp links > WhatsApp contexto > Text > HTML
         const allPhonesSet = new Set<string>();
         const whatsAppPhonesValidated: string[] = [];  // WhatsApp phones separados
 
@@ -1041,18 +1219,42 @@ export class UrlScraperService {
           if (this.isValidBrazilianPhone(phone)) {
             const normalized = this.normalizePhone(phone);
             allPhonesSet.add(normalized);
-            whatsAppPhonesValidated.push(normalized);  // Guardar separado
+            whatsAppPhonesValidated.push(normalized);
           }
         }
 
-        // 2. Depois text phones com contexto
+        // 2. WhatsApp por contexto de texto visível (palavras/emojis)
+        for (const phone of uniqueWhatsAppContext) {
+          if (this.isValidBrazilianPhone(phone)) {
+            const normalized = this.normalizePhone(phone);
+            allPhonesSet.add(normalized);
+            if (!whatsAppPhonesValidated.includes(normalized)) {
+              whatsAppPhonesValidated.push(normalized);
+              console.log(`   ✅ [TEXT-CONTEXT] WhatsApp adicionado por contexto texto: ${normalized}`);
+            }
+          }
+        }
+
+        // 2.5 WhatsApp por contexto de HTML (palavras/emojis próximos ao telefone)
+        for (const phone of uniqueHtmlWhatsAppContext) {
+          if (this.isValidBrazilianPhone(phone)) {
+            const normalized = this.normalizePhone(phone);
+            allPhonesSet.add(normalized);
+            if (!whatsAppPhonesValidated.includes(normalized)) {
+              whatsAppPhonesValidated.push(normalized);
+              console.log(`   ✅ [HTML-CONTEXT] WhatsApp adicionado por contexto HTML: ${normalized}`);
+            }
+          }
+        }
+
+        // 3. Depois text phones com contexto genérico
         for (const phone of uniqueText) {
           if (this.isValidBrazilianPhone(phone)) {
             allPhonesSet.add(this.normalizePhone(phone));
           }
         }
 
-        // 3. Por último HTML phones
+        // 4. Por último HTML phones
         for (const phone of uniqueHtml) {
           if (this.isValidBrazilianPhone(phone)) {
             allPhonesSet.add(this.normalizePhone(phone));
@@ -1080,6 +1282,8 @@ export class UrlScraperService {
           const linktreeResult = await this.scrapeLinktrPage(page, url, options);
           allEmails.push(...linktreeResult.emails);
           allPhones.push(...linktreeResult.phones);
+          // Adicionar phones do linktr.ee ao whatsappPhones para incluir em whatsapp_phones
+          whatsappPhones.push(...linktreeResult.phones);
           if (linktreeResult.emails.length > 0 || linktreeResult.phones.length > 0) {
             sources.linktr = true;
             console.log(`✅ [URL-SCRAPER] Contato encontrado no Linktr.ee! Pulando redes sociais.`);
@@ -1092,6 +1296,8 @@ export class UrlScraperService {
           const beaconsResult = await this.scrapeBeaconsPage(page, url, options);
           allEmails.push(...beaconsResult.emails);
           allPhones.push(...beaconsResult.phones);
+          // Adicionar phones do beacons.ai ao whatsappPhones para incluir em whatsapp_phones
+          whatsappPhones.push(...beaconsResult.phones);
           if (beaconsResult.emails.length > 0 || beaconsResult.phones.length > 0) {
             sources.beacons = true;
             console.log(`✅ [URL-SCRAPER] Contato encontrado no Beacons.ai! Pulando redes sociais.`);
@@ -1104,6 +1310,8 @@ export class UrlScraperService {
           const linkinResult = await this.scrapeLinkinBioPage(page, url, options);
           allEmails.push(...linkinResult.emails);
           allPhones.push(...linkinResult.phones);
+          // Adicionar phones do linkin.bio ao whatsappPhones para incluir em whatsapp_phones
+          whatsappPhones.push(...linkinResult.phones);
           if (linkinResult.emails.length > 0 || linkinResult.phones.length > 0) {
             sources.linkin = true;
             console.log(`✅ [URL-SCRAPER] Contato encontrado no Linkin.bio! Pulando redes sociais.`);
