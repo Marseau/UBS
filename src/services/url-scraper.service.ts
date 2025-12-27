@@ -15,6 +15,7 @@ import puppeteer, { Browser, Page } from 'puppeteer';
 interface ScrapedContacts {
   emails: string[];
   phones: string[];
+  whatsapp_phones: string[];  // Phones extraídos de wa.me/api.whatsapp (normalizados)
   success: boolean;
   error?: string;
   website_text?: string;
@@ -264,6 +265,107 @@ export class UrlScraperService {
     if (uniqueDigits < 5) return false; // Needs at least 5 different digits
 
     return true;
+  }
+
+  /**
+   * Normaliza telefone para formato brasileiro (55 + DDD + número)
+   * @param phone - Telefone limpo (apenas dígitos)
+   * @returns Telefone normalizado com código do país
+   */
+  private static normalizePhone(phone: string): string {
+    const cleaned = phone.replace(/[^0-9]/g, '');
+
+    // Já tem código do país 55
+    if (cleaned.startsWith('55') && cleaned.length >= 12) {
+      return cleaned;
+    }
+
+    // Número brasileiro sem código do país (10-11 dígitos)
+    if (cleaned.length >= 10 && cleaned.length <= 11) {
+      return '55' + cleaned;
+    }
+
+    return cleaned;
+  }
+
+  /**
+   * Extrai número WhatsApp de wa.me/message/CODE via navegação
+   * Navega para a URL e tenta capturar o número do redirect ou conteúdo
+   */
+  private static async extractWhatsAppFromMessageLink(url: string): Promise<ScrapedContacts | null> {
+    let page: Page | null = null;
+    try {
+      const browser = await this.getBrowser();
+      page = await browser.newPage();
+      page.setDefaultNavigationTimeout(15000);
+      page.setDefaultTimeout(8000);
+
+      // Capturar redirects
+      let redirectedUrl = '';
+      page.on('response', (response) => {
+        const status = response.status();
+        if (status >= 300 && status < 400) {
+          const location = response.headers()['location'];
+          if (location) {
+            redirectedUrl = location;
+          }
+        }
+      });
+
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+
+      // Verificar se houve redirect para URL com número
+      const finalUrl = page.url();
+      const urlToCheck = redirectedUrl || finalUrl;
+
+      // Tentar extrair número da URL final
+      const phoneMatch = urlToCheck.match(/wa\.me\/\+?(\d{10,15})|phone=\+?(\d{10,15})/i);
+      if (phoneMatch) {
+        const phoneNumber = phoneMatch[1] || phoneMatch[2];
+        const normalized = this.normalizePhone(phoneNumber);
+        if (normalized && normalized.startsWith('55') && normalized.length >= 12) {
+          console.log(`   ✅ [wa.me/message] Número extraído do redirect: ${normalized}`);
+          await page.close().catch(() => {});
+          return {
+            emails: [],
+            phones: [normalized],
+            whatsapp_phones: [normalized],
+            success: true,
+            sources: { whatsapp_links: true }
+          };
+        }
+      }
+
+      // Tentar extrair do conteúdo da página
+      const pageContent = await page.content();
+      const contentMatch = pageContent.match(/wa\.me\/\+?(\d{10,15})|"phone":\s*"\+?(\d{10,15})"|phone=\+?(\d{10,15})/i);
+      if (contentMatch) {
+        const phoneNumber = contentMatch[1] || contentMatch[2] || contentMatch[3];
+        const normalized = this.normalizePhone(phoneNumber);
+        if (normalized && normalized.startsWith('55') && normalized.length >= 12) {
+          console.log(`   ✅ [wa.me/message] Número extraído do conteúdo: ${normalized}`);
+          await page.close().catch(() => {});
+          return {
+            emails: [],
+            phones: [normalized],
+            whatsapp_phones: [normalized],
+            success: true,
+            sources: { whatsapp_links: true }
+          };
+        }
+      }
+
+      console.log(`   ⚠️ [wa.me/message] Número não encontrado na URL: ${url}`);
+      await page.close().catch(() => {});
+      return null;
+
+    } catch (error: any) {
+      console.error(`   ❌ [wa.me/message] Erro: ${error.message}`);
+      if (page && !page.isClosed()) {
+        await page.close().catch(() => {});
+      }
+      return null;
+    }
   }
 
   /**
@@ -721,6 +823,20 @@ export class UrlScraperService {
     const normalizedUrl = this.normalizeUrl(url);
     const cacheKey = options.deepLinks ? `${normalizedUrl}::deep` : normalizedUrl;
 
+    // 🔍 SPECIAL CASE: wa.me/message/CODE - Precisa navegar para descobrir o número
+    const waMessageMatch = normalizedUrl.match(/wa\.me\/message\/([A-Za-z0-9]+)/i);
+    if (waMessageMatch) {
+      console.log(`📱 [URL-SCRAPER] wa.me/message detectado, tentando extrair número via navegação...`);
+      const result = await this.extractWhatsAppFromMessageLink(normalizedUrl);
+      if (result) {
+        this.setCachedResult(cacheKey, result);
+        return result;
+      }
+    }
+
+    // ⚠️ NOTA: wa.me/NUMERO é tratado no instagram-scraper-single.service.ts (extractWhatsAppForPersistence)
+    // ⚠️ NOTA: wa.me/qr/CODE é tratado pelo cron n8n às 2:15 AM (headless=false necessário)
+
     // 2. Verificar cache
     const cached = this.getCachedResult(cacheKey);
     if (cached) {
@@ -777,6 +893,7 @@ export class UrlScraperService {
         resolve({
           emails: [],
           phones: [],
+          whatsapp_phones: [],
           success: false,
           error: `Timeout global de ${GLOBAL_TIMEOUT_MS / 1000}s ao processar ${url}`,
         });
@@ -917,31 +1034,34 @@ export class UrlScraperService {
 
         // Validar com PRIORIDADE: WhatsApp > Text > HTML (sem limite)
         const allPhonesSet = new Set<string>();
+        const whatsAppPhonesValidated: string[] = [];  // WhatsApp phones separados
 
         // 1. Primeiro WhatsApp links (prioridade máxima)
         for (const phone of uniqueWhatsApp) {
           if (this.isValidBrazilianPhone(phone)) {
-            allPhonesSet.add(phone);
+            const normalized = this.normalizePhone(phone);
+            allPhonesSet.add(normalized);
+            whatsAppPhonesValidated.push(normalized);  // Guardar separado
           }
         }
 
         // 2. Depois text phones com contexto
         for (const phone of uniqueText) {
           if (this.isValidBrazilianPhone(phone)) {
-            allPhonesSet.add(phone);
+            allPhonesSet.add(this.normalizePhone(phone));
           }
         }
 
         // 3. Por último HTML phones
         for (const phone of uniqueHtml) {
           if (this.isValidBrazilianPhone(phone)) {
-            allPhonesSet.add(phone);
+            allPhonesSet.add(this.normalizePhone(phone));
           }
         }
 
         const allPhones = [...allPhonesSet];
 
-        console.log(`✅ [DEBUG] Phones validados: ${allPhones.length} (WhatsApp sempre primeiro)`);
+        console.log(`✅ [DEBUG] Phones validados: ${allPhones.length} (${whatsAppPhonesValidated.length} WhatsApp)`);
 
         let allEmails = [...validEmails];
 
@@ -1053,6 +1173,7 @@ export class UrlScraperService {
         return {
           emails: uniqueEmails,
           phones: uniquePhones,
+          whatsapp_phones: whatsAppPhonesValidated,  // WhatsApp phones normalizados separadamente
           success: true,
           sources,
           website_text: visibleText,
@@ -1073,6 +1194,7 @@ export class UrlScraperService {
         return {
           emails: [],
           phones: [],
+          whatsapp_phones: [],
           success: false,
           error: error.message,
         };
@@ -1137,6 +1259,7 @@ export class UrlScraperService {
         results.set(url, {
           emails: [],
           phones: [],
+          whatsapp_phones: [],
           success: false,
           error: error.message
         });
