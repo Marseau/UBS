@@ -1544,6 +1544,10 @@
                     <label class="input-label" style="font-size: 0.85em;">Min Leads por Cluster</label>
                     <input type="number" id="clusteringMinLeads" class="input-field" placeholder="1" min="1" max="1000" value="1">
                 </div>
+                <div style="min-width: 170px;">
+                    <label class="input-label" style="font-size: 0.85em;">Leads Desejados</label>
+                    <input type="number" id="clusteringMaxLeads" class="input-field" placeholder="2000" min="100" max="10000" value="2000" title="Limite de leads a retornar na clusterização">
+                </div>
             </div>
             <!-- Filtros de Recência e Localização -->
             <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; padding: 12px; background: rgba(14, 204, 151, 0.05); border: 1px solid rgba(14, 204, 151, 0.2); border-radius: 10px;">
@@ -4519,9 +4523,11 @@
             const kRaw = parseInt(document.getElementById('clusteringK')?.value || '0', 10);
             const similarityRaw = parseFloat(document.getElementById('clusteringSimilarity')?.value || '0');
             const minLeadsRaw = parseInt(document.getElementById('clusteringMinLeads')?.value || '1', 10);
+            const maxLeadsRaw = parseInt(document.getElementById('clusteringMaxLeads')?.value || '2000', 10);
             const kValue = Number.isFinite(kRaw) && kRaw >= 2 ? kRaw : undefined;
             const similarityThreshold = Number.isFinite(similarityRaw) && similarityRaw > 0 ? similarityRaw : undefined;
             const minLeadsPerCluster = Number.isFinite(minLeadsRaw) && minLeadsRaw > 0 ? minLeadsRaw : 1;
+            const maxLeads = Number.isFinite(maxLeadsRaw) && maxLeadsRaw >= 100 ? maxLeadsRaw : 2000;
 
             // Filtros de recência e localização
             const targetStatesRaw = document.getElementById('clusteringTargetStates')?.value || '';
@@ -4553,7 +4559,8 @@
                     target_states: targetStates,
                     lead_max_age_days: leadMaxAgeDays,
                     hashtag_max_age_days: hashtagMaxAgeDays,
-                    min_leads_per_cluster: minLeadsPerCluster
+                    min_leads_per_cluster: minLeadsPerCluster,
+                    max_leads: maxLeads
                 };
 
                 console.log('🎯 [Clustering] Payload:', {
@@ -4625,7 +4632,8 @@
             // Usar cohesion_centroid (KPI PRINCIPAL) com fallback para avg_intra_similarity
             const cohesion = Number(data.cohesion_centroid || data.avg_intra_similarity) || 0;
             const clusters = Array.isArray(data.clusters) ? data.clusters : [];
-            const totalLeads = data.total_leads || leads.length || 0;
+            // Calcular total de leads somando os clusters (número efetivo após filtros)
+            const totalLeads = clusters.reduce((sum, c) => sum + (c.total_leads || 0), 0) || data.total_leads || leads.length || 0;
             const totalHashtags = data.total_hashtags || 0;
             const method = data.method || 'kmeans_hashtag';
 

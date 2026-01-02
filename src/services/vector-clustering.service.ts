@@ -162,6 +162,7 @@ export interface ClusteringFilters {
   target_states?: string[];      // Estados brasileiros para filtrar
   lead_max_age_days?: number;    // Máximo 45 dias para leads
   hashtag_max_age_days?: number; // Máximo 90 dias para hashtags
+  max_leads?: number;            // Limite de leads desejados (default: 2000)
 }
 
 // Valores padrão para filtros de recência
@@ -382,6 +383,11 @@ export async function clusterBySimilarity(
     filters.hashtag_max_age_days ?? DEFAULT_HASHTAG_MAX_AGE_DAYS,
     1, 90, 'hashtag_max_age_days'
   );
+  // Limite de leads desejados (default: 2000)
+  const maxLeads = validateNumber(
+    filters.max_leads ?? 2000,
+    100, 10000, 'max_leads'
+  );
 
   // Validar estados (previne SQL injection)
   const safeStates = filters.target_states ? validateStates(filters.target_states) : [];
@@ -390,6 +396,7 @@ export async function clusterBySimilarity(
 
   // Log dos filtros aplicados
   console.log(`   📍 Filtros de recência: leads ≤${leadMaxAgeDays}d, hashtags ≤${hashtagMaxAgeDays}d`);
+  console.log(`   📊 Limite de leads: ${maxLeads}`);
   if (safeStates.length > 0) {
     console.log(`   🗺️  Filtro de estados: [${safeStates.join(', ')}]`);
   }
@@ -491,7 +498,7 @@ export async function clusterBySimilarity(
           OR COALESCE(il.phones_normalized, '[]'::jsonb) != '[]'::jsonb
         ) THEN 0 ELSE 1 END,
         il.followers_count DESC NULLS LAST
-      LIMIT 2000
+      LIMIT ${maxLeads}
     `
   });
 
@@ -695,10 +702,14 @@ export async function clusterBySimilarity(
     clusters.set(i, []);
   }
 
+  let leadsFilteredByThreshold = 0;
   for (const [clusterId, items] of assignments.entries()) {
     for (const item of items) {
-      // Incluir TODOS os leads atribuídos (sem filtro de similaridade)
-      // O threshold já foi aplicado na seleção do centróide mais próximo
+      // Filtrar leads cuja similaridade ao centróide seja menor que o threshold
+      if (item.similarity < similarityThreshold) {
+        leadsFilteredByThreshold++;
+        continue;
+      }
       clusters.get(clusterId)!.push({
         id: item.lead.id,
         username: item.lead.username,
@@ -715,6 +726,10 @@ export async function clusterBySimilarity(
         embedding_text: item.lead.embedding_text
       });
     }
+  }
+
+  if (leadsFilteredByThreshold > 0) {
+    console.log(`   🔻 ${leadsFilteredByThreshold} leads filtrados por similaridade < ${similarityThreshold}`);
   }
 
   // Encontrar lead mais próximo ao centróide calculado para representar cada cluster

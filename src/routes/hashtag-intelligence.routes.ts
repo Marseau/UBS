@@ -1940,7 +1940,9 @@ router.post('/execute-clustering', async (req, res) => {
       lead_max_age_days,
       hashtag_max_age_days,
       // Mínimo de leads por cluster (opcional)
-      min_leads_per_cluster
+      min_leads_per_cluster,
+      // Limite de leads desejados (default: 2000)
+      max_leads
     } = req.body;
 
     if (!seeds || !Array.isArray(seeds) || seeds.length === 0) {
@@ -1979,7 +1981,8 @@ router.post('/execute-clustering', async (req, res) => {
     const filters = {
       target_states: target_states as string[] | undefined,
       lead_max_age_days: lead_max_age_days as number | undefined,
-      hashtag_max_age_days: hashtag_max_age_days as number | undefined
+      hashtag_max_age_days: hashtag_max_age_days as number | undefined,
+      max_leads: max_leads as number | undefined
     };
 
     console.log(`\n🔬 [API] POST /execute-clustering - Nicho: ${nicho}, Seeds: [${(seeds || []).join(', ')}]`);
@@ -1987,6 +1990,7 @@ router.post('/execute-clustering', async (req, res) => {
     console.log(`   🧠 Modo: ${isGraphMode ? 'graph (HNSW connected components)' : isVectorMode ? 'vector (pgvector)' : isHashtagVectorMode ? 'vector_hashtag' : 'hashtag'}`);
     if (target_states?.length) console.log(`   🗺️  Estados: [${target_states.join(', ')}]`);
     console.log(`   📅 Recência: leads ≤${lead_max_age_days || 45}d, hashtags ≤${hashtag_max_age_days || 90}d`);
+    console.log(`   📊 Limite de leads: ${max_leads || 2000}`);
 
     let result;
     if (isGraphMode) {
