@@ -99,6 +99,66 @@ function normalizeString(s: string): string {
 }
 
 /**
+ * Enriquece hashtags com freq_bio, freq_posts e whatsapp_rate
+ * Busca dados em tempo real de instagram_leads
+ */
+async function enrichHashtagsWithStats(hashtags: string[]): Promise<Map<string, { freq_bio: number; freq_posts: number; whatsapp_rate: number }>> {
+  if (hashtags.length === 0) return new Map();
+
+  // Normalizar hashtags para busca
+  const normalizedHashtags = hashtags.map(h => h.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+  const hashtagsArray = normalizedHashtags.map(h => `'${h}'`).join(',');
+
+  const { data, error } = await supabase.rpc('execute_sql', {
+    query_text: `
+      WITH hashtag_normalized AS (
+        SELECT
+          LOWER(REPLACE(TRANSLATE(hashtag, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiioooooouuuucnAAAAAEEEEIIIIOOOOOUUUUCN'), ' ', '_')) as hashtag_clean,
+          id as lead_id,
+          'bio' as source,
+          (whatsapp_number IS NOT NULL) as has_whatsapp
+        FROM instagram_leads, jsonb_array_elements_text(hashtags_bio) as hashtag
+        WHERE hashtags_bio IS NOT NULL
+        UNION ALL
+        SELECT
+          LOWER(REPLACE(TRANSLATE(hashtag, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiioooooouuuucnAAAAAEEEEIIIIOOOOOUUUUCN'), ' ', '_')) as hashtag_clean,
+          id as lead_id,
+          'posts' as source,
+          (whatsapp_number IS NOT NULL) as has_whatsapp
+        FROM instagram_leads, jsonb_array_elements_text(hashtags_posts) as hashtag
+        WHERE hashtags_posts IS NOT NULL
+      )
+      SELECT
+        hashtag_clean as hashtag,
+        COUNT(*) FILTER (WHERE source = 'bio') as freq_bio,
+        COUNT(*) FILTER (WHERE source = 'posts') as freq_posts,
+        COUNT(DISTINCT lead_id) as unique_leads,
+        COUNT(DISTINCT lead_id) FILTER (WHERE has_whatsapp) as leads_with_whatsapp,
+        ROUND(COUNT(DISTINCT lead_id) FILTER (WHERE has_whatsapp)::numeric / NULLIF(COUNT(DISTINCT lead_id), 0)::numeric * 100, 1) as whatsapp_rate
+      FROM hashtag_normalized
+      WHERE hashtag_clean IN (${hashtagsArray})
+      GROUP BY hashtag_clean
+    `
+  });
+
+  if (error) {
+    console.error('⚠️ Erro ao enriquecer hashtags:', error.message);
+    return new Map();
+  }
+
+  const result = new Map<string, { freq_bio: number; freq_posts: number; whatsapp_rate: number }>();
+  for (const row of (data || [])) {
+    result.set(row.hashtag, {
+      freq_bio: parseInt(row.freq_bio) || 0,
+      freq_posts: parseInt(row.freq_posts) || 0,
+      whatsapp_rate: parseFloat(row.whatsapp_rate) || 0
+    });
+  }
+
+  return result;
+}
+
+/**
  * Gera embedding para um texto usando OpenAI
  */
 async function generateEmbedding(text: string): Promise<number[]> {
@@ -427,6 +487,25 @@ export async function validateNiche(
       }));
   }
 
+  // Enriquecer top 20 hashtags com freq_bio, freq_posts e whatsapp_rate
+  const top20Hashtags = hashtags.slice(0, 20);
+  const hashtagNames = top20Hashtags.map(h => h.hashtag);
+  const enrichedStats = await enrichHashtagsWithStats(hashtagNames);
+
+  // Atualizar hashtags com dados enriquecidos
+  const enrichedHashtags = top20Hashtags.map(h => {
+    const stats = enrichedStats.get(h.hashtag.toLowerCase());
+    if (stats) {
+      return {
+        ...h,
+        freq_bio: stats.freq_bio,
+        freq_posts: stats.freq_posts,
+        contact_rate: stats.whatsapp_rate // Usar whatsapp_rate como contact_rate
+      };
+    }
+    return h;
+  });
+
   const result: NicheValidationResult = {
     seeds: normalizedSeeds,
     criteria,
@@ -439,7 +518,7 @@ export async function validateNiche(
     isViable,
     passedCriteria,
     recommendations,
-    topHashtags: hashtags.slice(0, 20),
+    topHashtags: enrichedHashtags,
     clusteringFeatures
   };
 

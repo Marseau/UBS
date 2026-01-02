@@ -554,6 +554,7 @@ router.post('/cluster-analysis', async (req, res) => {
 
     // Buscar todas as hashtags com suas frequências
     // 🔧 NORMALIZAÇÃO: remove acentos, converte para minúsculas, agrupa variantes
+    // 🔧 SEPARAÇÃO: bio vs posts + WhatsApp rate (usando whatsapp_number)
     const { data: hashtagsData, error: hashtagError } = await supabase.rpc('execute_sql', {
       query_text: `
         WITH hashtag_normalized AS (
@@ -571,7 +572,8 @@ router.post('/cluster-analysis', async (req, res) => {
                 ) as hashtag_clean,
                 hashtag as hashtag_original,
                 id as lead_id,
-                (email IS NOT NULL OR phone IS NOT NULL) as has_contact
+                'bio' as source,
+                (whatsapp_number IS NOT NULL) as has_whatsapp
             FROM instagram_leads, jsonb_array_elements_text(hashtags_bio) as hashtag
             WHERE hashtags_bio IS NOT NULL
             UNION ALL
@@ -588,7 +590,8 @@ router.post('/cluster-analysis', async (req, res) => {
                 ) as hashtag_clean,
                 hashtag as hashtag_original,
                 id as lead_id,
-                (email IS NOT NULL OR phone IS NOT NULL) as has_contact
+                'posts' as source,
+                (whatsapp_number IS NOT NULL) as has_whatsapp
             FROM instagram_leads, jsonb_array_elements_text(hashtags_posts) as hashtag
             WHERE hashtags_posts IS NOT NULL
         ),
@@ -596,8 +599,10 @@ router.post('/cluster-analysis', async (req, res) => {
             SELECT
                 hashtag_clean as hashtag,
                 COUNT(*) as frequency,
+                COUNT(*) FILTER (WHERE source = 'bio') as freq_bio,
+                COUNT(*) FILTER (WHERE source = 'posts') as freq_posts,
                 COUNT(DISTINCT lead_id) as unique_leads,
-                COUNT(*) FILTER (WHERE has_contact) as leads_with_contact
+                COUNT(DISTINCT lead_id) FILTER (WHERE has_whatsapp) as leads_with_whatsapp
             FROM hashtag_normalized
             WHERE hashtag_clean IS NOT NULL
               AND hashtag_clean != ''
@@ -607,9 +612,11 @@ router.post('/cluster-analysis', async (req, res) => {
         SELECT
             hashtag,
             frequency,
+            freq_bio,
+            freq_posts,
             unique_leads,
-            leads_with_contact,
-            ROUND(leads_with_contact::numeric / NULLIF(unique_leads, 0)::numeric * 100, 1) as contact_rate
+            leads_with_whatsapp,
+            ROUND(leads_with_whatsapp::numeric / NULLIF(unique_leads, 0)::numeric * 100, 1) as contact_rate
         FROM hashtag_frequency
         ORDER BY frequency DESC
       `
@@ -922,6 +929,8 @@ router.post('/cluster-analysis', async (req, res) => {
       hashtags_raiz: hashtagsRaiz.slice(0, 10).map((h: any) => ({
         hashtag: h.hashtag,
         freq: h.frequency,
+        freq_bio: h.freq_bio || 0,
+        freq_posts: h.freq_posts || 0,
         unique_leads: h.unique_leads,
         contact_rate: h.contact_rate || 0
       })),

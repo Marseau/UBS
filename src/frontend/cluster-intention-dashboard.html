@@ -1778,8 +1778,8 @@
                 topHashtags: hashtagsRaiz.map(h => ({
                     hashtag: h.hashtag,
                     freq_total: h.freq,
-                    freq_bio: 0,
-                    freq_posts: h.freq,
+                    freq_bio: h.freq_bio || 0,
+                    freq_posts: h.freq_posts || 0,
                     unique_leads: h.unique_leads || 0,
                     leads_with_contact: Math.round((h.unique_leads || 0) * (h.contact_rate || 0) / 100),
                     contact_rate: h.contact_rate || 0
@@ -2536,9 +2536,10 @@
             // Flags agora aparecem APOS o clustering (dentro de clusteringResults)
             // Removido: flagsSection.style.display = data.isViable ? 'grid' : 'none';
 
-            // Top Hashtags Table
+            // Top Hashtags Table - ordenar por frequência (maior para menor)
             const tbody = document.getElementById('hashtagsTableBody');
-            tbody.innerHTML = data.topHashtags.map((h, i) => `
+            const sortedHashtags = [...data.topHashtags].sort((a, b) => (b.freq_total || 0) - (a.freq_total || 0));
+            tbody.innerHTML = sortedHashtags.map((h, i) => `
                 <tr>
                     <td>${i + 1}</td>
                     <td class="hashtag-name">#${h.hashtag}</td>
