@@ -14,6 +14,393 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
+ * Dicionário de palavras comuns com acentuação correta
+ * Usado para humanizar hashtags: "gestaodeleads" → "gestão de leads"
+ */
+const WORD_DICTIONARY: Record<string, string> = {
+  // Palavras de negócios/marketing
+  'gestao': 'gestão',
+  'prospeccao': 'prospecção',
+  'automacao': 'automação',
+  'integracao': 'integração',
+  'solucao': 'solução',
+  'solucoes': 'soluções',
+  'inovacao': 'inovação',
+  'transformacao': 'transformação',
+  'digitalizacao': 'digitalização',
+  'otimizacao': 'otimização',
+  'producao': 'produção',
+  'operacao': 'operação',
+  'operacoes': 'operações',
+  'comunicacao': 'comunicação',
+  'informacao': 'informação',
+  'informacoes': 'informações',
+  'estrategia': 'estratégia',
+  'estrategias': 'estratégias',
+  'negocios': 'negócios',
+  'negocio': 'negócio',
+  'comercio': 'comércio',
+  'servico': 'serviço',
+  'servicos': 'serviços',
+  'atencao': 'atenção',
+  'promocao': 'promoção',
+  'promocoes': 'promoções',
+  'aquisicao': 'aquisição',
+  'retencao': 'retenção',
+  'conversao': 'conversão',
+  'geracao': 'geração',
+  'captacao': 'captação',
+  'fidelizacao': 'fidelização',
+  'analise': 'análise',
+  'analises': 'análises',
+  'analitico': 'analítico',
+  'metricas': 'métricas',
+  'metrica': 'métrica',
+  'relatorio': 'relatório',
+  'relatorios': 'relatórios',
+  'grafico': 'gráfico',
+  'graficos': 'gráficos',
+  'estatistica': 'estatística',
+  'estatisticas': 'estatísticas',
+
+  // Tecnologia
+  'tecnologia': 'tecnologia',
+  'tecnico': 'técnico',
+  'tecnica': 'técnica',
+  'logistica': 'logística',
+  'robotica': 'robótica',
+  'eletronica': 'eletrônica',
+  'eletronico': 'eletrônico',
+  'eletronicos': 'eletrônicos',
+  'automatico': 'automático',
+  'automatica': 'automática',
+  'inteligencia': 'inteligência',
+  'artificial': 'artificial',
+  'maquina': 'máquina',
+  'maquinas': 'máquinas',
+  'codigo': 'código',
+  'codigos': 'códigos',
+  'aplicacao': 'aplicação',
+  'aplicacoes': 'aplicações',
+
+  // Profissões/Áreas
+  'medico': 'médico',
+  'medica': 'médica',
+  'medicos': 'médicos',
+  'medicina': 'medicina',
+  'odontologia': 'odontologia',
+  'odontologico': 'odontológico',
+  'dentario': 'dentário',
+  'estetica': 'estética',
+  'estetico': 'estético',
+  'cosmetico': 'cosmético',
+  'cosmeticos': 'cosméticos',
+  'nutricao': 'nutrição',
+  'nutricionista': 'nutricionista',
+  'psicologia': 'psicologia',
+  'psicologo': 'psicólogo',
+  'psicologa': 'psicóloga',
+  'terapia': 'terapia',
+  'terapeutico': 'terapêutico',
+  'terapeutica': 'terapêutica',
+  'fisioterapia': 'fisioterapia',
+  'fisioterapeuta': 'fisioterapeuta',
+  'advocacia': 'advocacia',
+  'juridico': 'jurídico',
+  'juridica': 'jurídica',
+  'advogado': 'advogado',
+  'contabil': 'contábil',
+  'contabilidade': 'contabilidade',
+  'financeiro': 'financeiro',
+  'financeira': 'financeira',
+  'financas': 'finanças',
+  'economia': 'economia',
+  'economico': 'econômico',
+  'economica': 'econômica',
+  'imobiliario': 'imobiliário',
+  'imobiliaria': 'imobiliária',
+  'arquitetura': 'arquitetura',
+  'arquitetonico': 'arquitetônico',
+  'engenharia': 'engenharia',
+  'consultoria': 'consultoria',
+  'assessoria': 'assessoria',
+  'agencia': 'agência',
+  'agencias': 'agências',
+  'industria': 'indústria',
+  'industrial': 'industrial',
+  'fabrica': 'fábrica',
+  'fabricacao': 'fabricação',
+
+  // Beleza/Saúde
+  'saude': 'saúde',
+  'saudavel': 'saudável',
+  'bem-estar': 'bem-estar',
+  'bemestar': 'bem-estar',
+  'beleza': 'beleza',
+  'cabelo': 'cabelo',
+  'cabelos': 'cabelos',
+  'capilar': 'capilar',
+  'maquiagem': 'maquiagem',
+  'unha': 'unha',
+  'unhas': 'unhas',
+  'manicure': 'manicure',
+  'pedicure': 'pedicure',
+  'corporal': 'corporal',
+  'facial': 'facial',
+  'massagem': 'massagem',
+  'tratamento': 'tratamento',
+  'tratamentos': 'tratamentos',
+  'depilacao': 'depilação',
+  'sobrancelha': 'sobrancelha',
+  'sobrancelhas': 'sobrancelhas',
+  'cilios': 'cílios',
+  'extensao': 'extensão',
+  'micropigmentacao': 'micropigmentação',
+  'microblading': 'microblading',
+  'harmonizacao': 'harmonização',
+  'botox': 'botox',
+  'preenchimento': 'preenchimento',
+
+  // Educação
+  'educacao': 'educação',
+  'educacional': 'educacional',
+  'pedagogia': 'pedagogia',
+  'pedagogico': 'pedagógico',
+  'ensino': 'ensino',
+  'aprendizado': 'aprendizado',
+  'aprendizagem': 'aprendizagem',
+  'capacitacao': 'capacitação',
+  'treinamento': 'treinamento',
+  'formacao': 'formação',
+  'curso': 'curso',
+  'cursos': 'cursos',
+  'aula': 'aula',
+  'aulas': 'aulas',
+  'professor': 'professor',
+  'professora': 'professora',
+  'mentoria': 'mentoria',
+  'coaching': 'coaching',
+
+  // Alimentação
+  'alimentacao': 'alimentação',
+  'alimentar': 'alimentar',
+  'gastronomia': 'gastronomia',
+  'gastronomico': 'gastronômico',
+  'culinaria': 'culinária',
+  'culinario': 'culinário',
+  'restaurante': 'restaurante',
+  'cafeteria': 'cafeteria',
+  'confeitaria': 'confeitaria',
+  'padaria': 'padaria',
+  'organico': 'orgânico',
+  'organica': 'orgânica',
+  'organicos': 'orgânicos',
+  'vegano': 'vegano',
+  'vegana': 'vegana',
+  'vegetariano': 'vegetariano',
+  'vegetariana': 'vegetariana',
+  'dieta': 'dieta',
+  'dietetico': 'dietético',
+  'nutricional': 'nutricional',
+
+  // Artigos/Preposições comuns
+  'de': 'de',
+  'da': 'da',
+  'do': 'do',
+  'das': 'das',
+  'dos': 'dos',
+  'para': 'para',
+  'pra': 'pra',
+  'com': 'com',
+  'sem': 'sem',
+  'em': 'em',
+  'no': 'no',
+  'na': 'na',
+  'nos': 'nos',
+  'nas': 'nas',
+  'por': 'por',
+  'pelo': 'pelo',
+  'pela': 'pela',
+  'pelos': 'pelos',
+  'pelas': 'pelas',
+  'ao': 'ao',
+  'aos': 'aos',
+  'e': 'e',
+  'ou': 'ou',
+  'um': 'um',
+  'uma': 'uma',
+  'uns': 'uns',
+  'umas': 'umas',
+  'o': 'o',
+  'a': 'a',
+  'os': 'os',
+  'as': 'as',
+  'que': 'que',
+  'como': 'como',
+  'seu': 'seu',
+  'sua': 'sua',
+  'seus': 'seus',
+  'suas': 'suas',
+  'meu': 'meu',
+  'minha': 'minha',
+
+  // Palavras comuns
+  'digital': 'digital',
+  'digitais': 'digitais',
+  'online': 'online',
+  'virtual': 'virtual',
+  'presencial': 'presencial',
+  'profissional': 'profissional',
+  'profissionais': 'profissionais',
+  'especialista': 'especialista',
+  'especialistas': 'especialistas',
+  'especializado': 'especializado',
+  'especializada': 'especializada',
+  'cliente': 'cliente',
+  'clientes': 'clientes',
+  'empresa': 'empresa',
+  'empresas': 'empresas',
+  'empresarial': 'empresarial',
+  'corporativo': 'corporativo',
+  'corporativa': 'corporativa',
+  'empreendedor': 'empreendedor',
+  'empreendedora': 'empreendedora',
+  'empreendedorismo': 'empreendedorismo',
+  'autonomo': 'autônomo',
+  'autonoma': 'autônoma',
+  'autonomos': 'autônomos',
+  'freelancer': 'freelancer',
+  'freelancers': 'freelancers',
+  'marketing': 'marketing',
+  'vendas': 'vendas',
+  'venda': 'venda',
+  'compra': 'compra',
+  'compras': 'compras',
+  'leads': 'leads',
+  'lead': 'lead',
+  'funil': 'funil',
+  'trafego': 'tráfego',
+  'conteudo': 'conteúdo',
+  'conteudos': 'conteúdos',
+  'redes': 'redes',
+  'rede': 'rede',
+  'sociais': 'sociais',
+  'social': 'social',
+  'instagram': 'Instagram',
+  'whatsapp': 'WhatsApp',
+  'facebook': 'Facebook',
+  'linkedin': 'LinkedIn',
+  'youtube': 'YouTube',
+  'tiktok': 'TikTok',
+  'sucesso': 'sucesso',
+  'resultado': 'resultado',
+  'resultados': 'resultados',
+  'crescimento': 'crescimento',
+  'lucro': 'lucro',
+  'lucros': 'lucros',
+  'receita': 'receita',
+  'receitas': 'receitas',
+  'faturamento': 'faturamento',
+  'investimento': 'investimento',
+  'investimentos': 'investimentos',
+  'dinheiro': 'dinheiro',
+  'renda': 'renda',
+  'rendimento': 'rendimento',
+  'extra': 'extra',
+  'passiva': 'passiva',
+  'ativo': 'ativo',
+  'ativa': 'ativa',
+  'ativos': 'ativos',
+  'ativas': 'ativas',
+  'qualidade': 'qualidade',
+  'excelencia': 'excelência',
+  'premium': 'premium',
+  'vip': 'VIP',
+  'exclusivo': 'exclusivo',
+  'exclusiva': 'exclusiva',
+  'personalizado': 'personalizado',
+  'personalizada': 'personalizada',
+  'sob': 'sob',
+  'medida': 'medida',
+  'brasil': 'Brasil',
+  'brasileiro': 'brasileiro',
+  'brasileira': 'brasileira',
+  'sao': 'São',
+  'paulo': 'Paulo',
+  'rio': 'Rio',
+  'janeiro': 'Janeiro',
+  'minas': 'Minas',
+  'gerais': 'Gerais'
+};
+
+/**
+ * Lista de palavras ordenadas por tamanho (maior primeiro) para matching
+ */
+const SORTED_WORDS = Object.keys(WORD_DICTIONARY).sort((a, b) => b.length - a.length);
+
+/**
+ * Humaniza uma hashtag: separa palavras e adiciona acentuação
+ * Exemplo: "gestaodeleads" → "gestão de leads"
+ */
+function humanizeHashtag(hashtag: string): string {
+  // Normalizar: lowercase, remover # se houver
+  let text = hashtag.toLowerCase().replace(/^#/, '');
+
+  // Se já tem espaços, apenas aplicar acentuação
+  if (text.includes(' ')) {
+    return text.split(' ').map(word => WORD_DICTIONARY[word] || word).join(' ');
+  }
+
+  // Algoritmo de segmentação por palavras conhecidas
+  const words: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    let matched = false;
+
+    // Tentar encontrar a maior palavra conhecida no início
+    for (const word of SORTED_WORDS) {
+      if (remaining.startsWith(word)) {
+        const dictWord = WORD_DICTIONARY[word];
+        if (dictWord) {
+          words.push(dictWord);
+          remaining = remaining.slice(word.length);
+          matched = true;
+          break;
+        }
+      }
+    }
+
+    // Se não encontrou palavra conhecida, extrair caracteres até encontrar uma
+    if (!matched) {
+      let unknownPart = '';
+      while (remaining.length > 0) {
+        // Verificar se alguma palavra conhecida começa aqui
+        const foundWord = SORTED_WORDS.find(w => remaining.startsWith(w));
+        if (foundWord && unknownPart.length > 0) {
+          break; // Encontrou palavra, parar de acumular
+        }
+        unknownPart += remaining[0];
+        remaining = remaining.slice(1);
+
+        // Se a parte desconhecida é uma palavra conhecida, usar
+        const dictMatch = WORD_DICTIONARY[unknownPart];
+        if (dictMatch) {
+          words.push(dictMatch);
+          unknownPart = '';
+          break;
+        }
+      }
+      if (unknownPart.length > 0) {
+        words.push(unknownPart);
+      }
+    }
+  }
+
+  return words.join(' ');
+}
+
+/**
  * GET /api/hashtag-intelligence/kpis
  * Retorna KPIs principais do dashboard
  * - Leads: últimos 45 dias (Zona Ativa)
@@ -5039,6 +5426,8 @@ router.post('/save-search-terms', async (req, res) => {
     const targetSegment = `${campaign_name} ${dateStr}`;
 
     // Formatar hashtags no formato JSONB esperado
+    // termo: texto humanizado com espaços e acentos (ex: "gestão de leads")
+    // hashtag: formato normalizado sem espaços (ex: "gestaodeleads")
     const searchTerms = hashtags.map((tag: string) => {
       // Normalizar hashtag (remover acentos, espaços, etc)
       const normalized = tag
@@ -5047,8 +5436,11 @@ router.post('/save-search-terms', async (req, res) => {
         .replace(/[\u0300-\u036f]/g, '')
         .replace(/[^a-z0-9]/g, '');
 
+      // Humanizar para termo legível com espaços e acentuação
+      const humanized = humanizeHashtag(normalized);
+
       return {
-        termo: tag,
+        termo: humanized,
         hashtag: normalized
       };
     });
