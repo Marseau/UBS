@@ -5,18 +5,80 @@
  * PostgreSQL → CSV → OpenAI Vector Store
  *
  * Executado via Cron (1x/dia às 3AM)
+ *
+ * PROTEÇÃO: Lock de execução para evitar duplicatas se múltiplas
+ * instâncias ou chamadas simultâneas ocorrerem.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { hashtagCsvExportService } from './hashtag-csv-export.service';
 import { hashtagVectorStoreService } from './hashtag-vector-store.service';
 
 export class HashtagSyncService {
+  private readonly lockFilePath = path.join(process.cwd(), 'data', '.hashtag-sync.lock');
+  private readonly lockTimeoutMs = 30 * 60 * 1000; // 30 minutos máximo
+
+  /**
+   * Adquire lock de execução
+   * Retorna true se conseguiu o lock, false se já está em execução
+   */
+  private acquireLock(): boolean {
+    try {
+      // Verificar se lock existe e não está expirado
+      if (fs.existsSync(this.lockFilePath)) {
+        const lockContent = fs.readFileSync(this.lockFilePath, 'utf-8');
+        const lockTime = parseInt(lockContent, 10);
+        const elapsed = Date.now() - lockTime;
+
+        if (elapsed < this.lockTimeoutMs) {
+          console.log(`⚠️  Lock ativo há ${Math.round(elapsed / 1000)}s - sincronização já em andamento`);
+          return false;
+        }
+
+        // Lock expirado - remover e continuar
+        console.log(`🔓 Lock expirado (${Math.round(elapsed / 1000)}s) - removendo...`);
+        fs.unlinkSync(this.lockFilePath);
+      }
+
+      // Garantir diretório data existe
+      const dataDir = path.dirname(this.lockFilePath);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+
+      // Criar lock
+      fs.writeFileSync(this.lockFilePath, Date.now().toString());
+      console.log('🔒 Lock adquirido com sucesso');
+      return true;
+    } catch (error) {
+      console.error('❌ Erro ao adquirir lock:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Libera lock de execução
+   */
+  private releaseLock(): void {
+    try {
+      if (fs.existsSync(this.lockFilePath)) {
+        fs.unlinkSync(this.lockFilePath);
+        console.log('🔓 Lock liberado');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao liberar lock:', error);
+    }
+  }
   /**
    * Sincronização completa
    * PostgreSQL → CSV → Vector Store
+   *
+   * PROTEÇÃO: Usa lock para evitar execuções simultâneas
    */
   async syncComplete(): Promise<{
     success: boolean;
+    skipped?: boolean;
     csvExport?: {
       filePath: string;
       totalRecords: number;
@@ -28,6 +90,16 @@ export class HashtagSyncService {
     };
     error?: string;
   }> {
+    // Tentar adquirir lock
+    if (!this.acquireLock()) {
+      console.log('⏭️  Sincronização ignorada - já em execução por outro processo');
+      return {
+        success: false,
+        skipped: true,
+        error: 'Sincronização já em execução por outro processo'
+      };
+    }
+
     console.log('\n🔄 ========================================');
     console.log('🔄 INICIANDO SINCRONIZAÇÃO COMPLETA');
     console.log('🔄 PostgreSQL → CSV → Vector Store');
@@ -85,6 +157,9 @@ export class HashtagSyncService {
       console.log(`🎉 Tempo total: ${duration}s`);
       console.log('🎉 ========================================\n');
 
+      // Liberar lock antes de retornar
+      this.releaseLock();
+
       return {
         success: true,
         csvExport: csvResult,
@@ -98,6 +173,9 @@ export class HashtagSyncService {
       console.error('❌ ERRO NA SINCRONIZAÇÃO');
       console.error('❌ ========================================');
       console.error(error);
+
+      // Liberar lock mesmo em caso de erro
+      this.releaseLock();
 
       return {
         success: false,
