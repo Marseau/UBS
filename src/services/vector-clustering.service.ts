@@ -34,14 +34,118 @@ function normalizeSeedString(value: string): string {
     .trim();
 }
 
-function normalizeCity(value?: string | null): string | null {
-  if (!value) return null;
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
+// ============================================
+// SEGURANÇA: Validação de inputs para SQL
+// ============================================
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const STATE_REGEX = /^[A-Z]{2}$/;
+const EXPECTED_EMBEDDING_DIM = 1536; // text-embedding-3-small
+
+/**
+ * Valida e sanitiza UUID para uso em SQL
+ * Previne SQL injection
+ */
+function validateUUID(id: string): string {
+  if (!id || typeof id !== 'string') {
+    throw new Error('Invalid UUID: must be a non-empty string');
+  }
+  const trimmed = id.trim();
+  if (!UUID_REGEX.test(trimmed)) {
+    throw new Error(`Invalid UUID format: ${trimmed.substring(0, 50)}`);
+  }
+  return trimmed;
+}
+
+/**
+ * Valida número para uso em SQL
+ */
+function validateNumber(value: number, min: number, max: number, name: string): number {
+  if (typeof value !== 'number' || isNaN(value)) {
+    throw new Error(`${name} must be a valid number`);
+  }
+  if (value < min || value > max) {
+    throw new Error(`${name} must be between ${min} and ${max}`);
+  }
+  return value;
+}
+
+/**
+ * Valida estado brasileiro (2 letras maiúsculas)
+ */
+function validateState(state: string): string {
+  const upper = state.toUpperCase().trim();
+  if (!STATE_REGEX.test(upper)) {
+    throw new Error(`Invalid state code: ${state}`);
+  }
+  return upper;
+}
+
+/**
+ * Valida array de estados
+ */
+function validateStates(states: string[]): string[] {
+  if (!Array.isArray(states)) return [];
+  return states.map(validateState);
+}
+
+/**
+ * Valida embedding: deve ser array de números com dimensão correta
+ */
+function validateEmbedding(embedding: number[]): number[] {
+  if (!Array.isArray(embedding)) {
+    throw new Error('Embedding must be an array');
+  }
+  if (embedding.length !== EXPECTED_EMBEDDING_DIM) {
+    throw new Error(`Embedding must have ${EXPECTED_EMBEDDING_DIM} dimensions, got ${embedding.length}`);
+  }
+  for (let i = 0; i < embedding.length; i++) {
+    if (typeof embedding[i] !== 'number' || isNaN(embedding[i]!)) {
+      throw new Error(`Embedding contains invalid value at index ${i}`);
+    }
+  }
+  return embedding;
+}
+
+/**
+ * Normaliza valor jsonb para array, cobrindo todos os formatos possíveis:
+ * - null/undefined → []
+ * - array → array
+ * - string JSON → parsed array
+ * - object (jsonb raro) → Object.values()
+ */
+function normalizeArray(value: any): any[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try { return JSON.parse(value) ?? []; } catch { return []; }
+  }
+  // jsonb pode virar objeto {0: "...", 1: "..."} raramente
+  if (typeof value === 'object') return Object.values(value);
+  return [];
+}
+
+/**
+ * Verifica se lead tem contato válido (WhatsApp, email ou phone)
+ * Usa normalizeArray para tratar todos os formatos jsonb possíveis
+ */
+function hasValidContact(lead: any): boolean {
+  // WhatsApp é string direta
+  if (typeof lead?.whatsapp_number === 'string' && lead.whatsapp_number.length > 5) {
+    return true;
+  }
+
+  // Emails (filtra strings válidas para evitar falsos positivos de jsonb estranho)
+  const emails = normalizeArray(lead?.emails_normalized)
+    .filter(v => typeof v === 'string' && v.length > 3);
+  if (emails.length > 0) return true;
+
+  // Phones (filtra strings válidas para evitar falsos positivos de jsonb estranho)
+  const phones = normalizeArray(lead?.phones_normalized)
+    .filter(v => typeof v === 'string' && v.length > 3);
+  if (phones.length > 0) return true;
+
+  return false;
 }
 
 // ============================================
@@ -89,8 +193,10 @@ export interface VectorClusteredLead {
   city: string | null;
   state: string | null;
   bio: string | null;
-  email: string | null;
-  phone: string | null;
+  whatsapp_number?: string | null;
+  // Pode ser array (do Supabase client) ou string JSON (do execute_sql)
+  emails_normalized: string[] | string | null;
+  phones_normalized: string[] | string | null;
   followers_count: number;
   similarity_to_centroid: number;
   embedding_text: string | null;
@@ -104,7 +210,8 @@ export interface VectorClusteringResult {
   total_leads_embedded: number;
   clusters: VectorClusterResult[];
   execution_time_ms: number;
-  method: 'kmeans_vector' | 'hdbscan_approx' | 'similarity_groups';
+  method: 'kmeans_vector' | 'hdbscan_approx' | 'graph_hnsw';
+  avg_intra_similarity?: number; // Média de similaridade intra-cluster (silhouette approx)
 }
 
 export interface SimilarLeadResult {
@@ -147,18 +254,24 @@ export async function findSimilarLeads(
 /**
  * Query inline para busca de similaridade (fallback)
  * Usa tabela separada lead_embeddings
+ * SEGURANÇA: Inputs validados antes de uso em SQL
  */
 async function findSimilarLeadsInline(
   referenceLeadId: string,
   limit: number,
   minSimilarity: number
 ): Promise<SimilarLeadResult[]> {
+  // Validar inputs para prevenir SQL injection
+  const safeLeadId = validateUUID(referenceLeadId);
+  const safeLimit = validateNumber(limit, 1, 1000, 'limit');
+  const safeSimilarity = validateNumber(minSimilarity, 0, 1, 'minSimilarity');
+
   const { data, error } = await supabase.rpc('execute_sql', {
     query_text: `
       WITH reference AS (
         SELECT COALESCE(embedding_final, embedding_bio) AS embedding
         FROM lead_embeddings
-        WHERE lead_id = '${referenceLeadId}'::uuid
+        WHERE lead_id = '${safeLeadId}'::uuid
       )
       SELECT
         il.id,
@@ -171,10 +284,10 @@ async function findSimilarLeadsInline(
       FROM instagram_leads il
       INNER JOIN lead_embeddings le ON le.lead_id = il.id, reference ref
       WHERE COALESCE(le.embedding_final, le.embedding_bio) IS NOT NULL
-        AND il.id != '${referenceLeadId}'::uuid
-        AND 1 - (COALESCE(le.embedding_final, le.embedding_bio) <=> ref.embedding) >= ${minSimilarity}
+        AND il.id != '${safeLeadId}'::uuid
+        AND 1 - (COALESCE(le.embedding_final, le.embedding_bio) <=> ref.embedding) >= ${safeSimilarity}
       ORDER BY COALESCE(le.embedding_final, le.embedding_bio) <=> ref.embedding
-      LIMIT ${limit}
+      LIMIT ${safeLimit}
     `
   });
 
@@ -189,13 +302,20 @@ async function findSimilarLeadsInline(
 /**
  * Busca leads similares a um texto/query usando embedding
  * Usa tabela separada lead_embeddings
+ * SEGURANÇA: Embedding validado antes de uso em SQL
  */
 export async function findLeadsByQuery(
   queryEmbedding: number[],
   limit: number = 50,
   minSimilarity: number = 0.6
 ): Promise<SimilarLeadResult[]> {
-  const embeddingStr = `[${queryEmbedding.join(',')}]`;
+  // Validar inputs
+  const safeEmbedding = validateEmbedding(queryEmbedding);
+  const safeLimit = validateNumber(limit, 1, 1000, 'limit');
+  const safeSimilarity = validateNumber(minSimilarity, 0, 1, 'minSimilarity');
+
+  // Embedding já validado - apenas números, seguro para SQL
+  const embeddingStr = `[${safeEmbedding.join(',')}]`;
 
   const { data, error } = await supabase.rpc('execute_sql', {
     query_text: `
@@ -210,9 +330,9 @@ export async function findLeadsByQuery(
       FROM instagram_leads il
       INNER JOIN lead_embeddings le ON le.lead_id = il.id
       WHERE COALESCE(le.embedding_final, le.embedding_bio) IS NOT NULL
-        AND 1 - (COALESCE(le.embedding_final, le.embedding_bio) <=> '${embeddingStr}'::vector) >= ${minSimilarity}
+        AND 1 - (COALESCE(le.embedding_final, le.embedding_bio) <=> '${embeddingStr}'::vector) >= ${safeSimilarity}
       ORDER BY COALESCE(le.embedding_final, le.embedding_bio) <=> '${embeddingStr}'::vector
-      LIMIT ${limit}
+      LIMIT ${safeLimit}
     `
   });
 
@@ -250,16 +370,25 @@ export async function clusterBySimilarity(
   console.log(`\n🔬 [VECTOR CLUSTERING] Iniciando clustering por similaridade`);
 
   // Aplicar valores padrão para filtros de recência
-  const leadMaxAgeDays = filters.lead_max_age_days ?? DEFAULT_LEAD_MAX_AGE_DAYS;
-  const hashtagMaxAgeDays = filters.hashtag_max_age_days ?? DEFAULT_HASHTAG_MAX_AGE_DAYS;
-  const targetStates = filters.target_states;
+  // Validar parâmetros numéricos (limites rígidos conforme CLAUDE.md: leads 45d, hashtags 90d)
+  const leadMaxAgeDays = validateNumber(
+    filters.lead_max_age_days ?? DEFAULT_LEAD_MAX_AGE_DAYS,
+    1, 45, 'lead_max_age_days'
+  );
+  const hashtagMaxAgeDays = validateNumber(
+    filters.hashtag_max_age_days ?? DEFAULT_HASHTAG_MAX_AGE_DAYS,
+    1, 90, 'hashtag_max_age_days'
+  );
+
+  // Validar estados (previne SQL injection)
+  const safeStates = filters.target_states ? validateStates(filters.target_states) : [];
   const normalizedSeeds = seeds.map(s => normalizeSeedString(s)).filter(s => s.length > 0);
   const hasSeeds = normalizedSeeds.length > 0;
 
   // Log dos filtros aplicados
   console.log(`   📍 Filtros de recência: leads ≤${leadMaxAgeDays}d, hashtags ≤${hashtagMaxAgeDays}d`);
-  if (targetStates && targetStates.length > 0) {
-    console.log(`   🗺️  Filtro de estados: [${targetStates.join(', ')}]`);
+  if (safeStates.length > 0) {
+    console.log(`   🗺️  Filtro de estados: [${safeStates.join(', ')}]`);
   }
   if (hasSeeds) {
     console.log(`   🎯 Filtro de seeds (hashtags): [${normalizedSeeds.join(', ')}]`);
@@ -275,33 +404,19 @@ export async function clusterBySimilarity(
     `(le.created_at >= NOW() - INTERVAL '${hashtagMaxAgeDays} days' OR le.updated_at >= NOW() - INTERVAL '${hashtagMaxAgeDays} days')`
   ];
 
-  // Filtro de estados (se especificado)
-  if (targetStates && targetStates.length > 0) {
-    const statesArray = targetStates.map(s => `'${s.toUpperCase()}'`).join(', ');
+  // Filtro de estados (já validados)
+  if (safeStates.length > 0) {
+    const statesArray = safeStates.map(s => `'${s}'`).join(', ');
     whereConditions.push(`(il.state IN (${statesArray}))`);
   }
 
-  // Filtro por seeds em hashtags (bio/posts) para aderência ao nicho
-  // Usa operadores GIN indexados (?|) nas colunas JSONB existentes
-  // Gera variações: com underscore, sem underscore, e original
+  // REMOVIDO: Filtro exato de seeds em hashtags
+  // A clusterização agora usa APENAS semântica (embeddings de perfil)
+  // Seeds são usados apenas para logging/contexto, não para filtrar leads
+  // Isso permite que o clustering encontre TODOS os leads semanticamente similares
+  // ao invés de apenas os que têm hashtags exatas
   if (hasSeeds) {
-    const seedVariations = new Set<string>();
-    for (const seed of normalizedSeeds) {
-      seedVariations.add(seed);                        // digital_creator
-      seedVariations.add(seed.replace(/_/g, ''));      // digitalcreator
-    }
-    // Adicionar seeds originais (sem normalização) também
-    for (const seed of seeds) {
-      const cleaned = seed.toLowerCase().trim();
-      seedVariations.add(cleaned);
-      seedVariations.add(cleaned.replace(/\s+/g, ''));  // sem espaços
-    }
-    const seedArraySQL = Array.from(seedVariations).map(s => `'${s}'`).join(', ');
-    whereConditions.push(`(
-      (il.hashtags_bio ?| ARRAY[${seedArraySQL}])
-      OR
-      (il.hashtags_posts ?| ARRAY[${seedArraySQL}])
-    )`);
+    console.log(`   📝 Seeds fornecidas (apenas contexto, sem filtro): [${seeds.join(', ')}]`);
   }
 
   // NOTA: Não filtrar por campaign_leads aqui.
@@ -313,10 +428,19 @@ export async function clusterBySimilarity(
   // Primeiro: contar quantos leads passam pelos filtros (para diagnósticos)
   const { data: countsData, error: countsError } = await supabase.rpc('execute_sql', {
     query_text: `
+      
       SELECT
         COUNT(*) AS total_after_filters,
-        COUNT(*) FILTER (WHERE (il.email IS NOT NULL OR il.phone IS NOT NULL)) AS total_with_contact,
-        COUNT(*) FILTER (WHERE il.email IS NULL AND il.phone IS NULL) AS total_without_contact
+        COUNT(*) FILTER (WHERE (
+          il.whatsapp_number IS NOT NULL
+          OR COALESCE(il.emails_normalized, '[]'::jsonb) != '[]'::jsonb
+          OR COALESCE(il.phones_normalized, '[]'::jsonb) != '[]'::jsonb
+        )) AS total_with_contact,
+        COUNT(*) FILTER (WHERE (
+          il.whatsapp_number IS NULL
+          AND COALESCE(il.emails_normalized, '[]'::jsonb) = '[]'::jsonb
+          AND COALESCE(il.phones_normalized, '[]'::jsonb) = '[]'::jsonb
+        )) AS total_without_contact
       FROM instagram_leads il
       INNER JOIN lead_embeddings le ON le.lead_id = il.id
       WHERE ${whereClause}
@@ -340,43 +464,29 @@ export async function clusterBySimilarity(
       total_leads_embedded: 0,
       clusters: [],
       execution_time_ms: Date.now() - startTime,
-      method: 'similarity_groups'
+      method: 'kmeans_vector'
     };
   }
 
-  // Estratégia: UNION ALL para priorizar leads com contato sem CASE WHEN (mais rápido)
+  // Busca leads com embedding (prioriza quem tem contato - incluindo WhatsApp)
   const { data: leads, error } = await supabase.rpc('execute_sql', {
     query_text: `
-      WITH leads_com_contato AS (
-        SELECT
-          il.id, il.username, il.full_name, il.profession, il.city, il.state,
-          il.bio, il.email, il.phone, il.followers_count,
-          le.embedding_bio_text as embedding_text,
-          COALESCE(le.embedding_final, le.embedding_bio)::text as embedding_str
-        FROM instagram_leads il
-        INNER JOIN lead_embeddings le ON le.lead_id = il.id
-        WHERE ${whereClause} AND (il.email IS NOT NULL OR il.phone IS NOT NULL)
-        ORDER BY il.followers_count DESC NULLS LAST
-        LIMIT 3000
-      ),
-      leads_sem_contato AS (
-        SELECT
-          il.id, il.username, il.full_name, il.profession, il.city, il.state,
-          il.bio, il.email, il.phone, il.followers_count,
-          le.embedding_bio_text as embedding_text,
-          COALESCE(le.embedding_final, le.embedding_bio)::text as embedding_str
-        FROM instagram_leads il
-        INNER JOIN lead_embeddings le ON le.lead_id = il.id
-        WHERE ${whereClause} AND il.email IS NULL AND il.phone IS NULL
-        ORDER BY il.followers_count DESC NULLS LAST
-        LIMIT 3000
-      )
-      SELECT * FROM (
-        SELECT * FROM leads_com_contato
-        UNION ALL
-        SELECT * FROM leads_sem_contato
-      ) combined
-      LIMIT 3000
+      SELECT
+        il.id, il.username, il.full_name, il.profession, il.city, il.state,
+        il.bio, il.emails_normalized, il.phones_normalized, il.whatsapp_number, il.followers_count,
+        le.embedding_bio_text as embedding_text,
+        COALESCE(le.embedding_final, le.embedding_bio)::text as embedding_str
+      FROM instagram_leads il
+      INNER JOIN lead_embeddings le ON le.lead_id = il.id
+      WHERE ${whereClause}
+      ORDER BY
+        CASE WHEN (
+          il.whatsapp_number IS NOT NULL
+          OR COALESCE(il.emails_normalized, '[]'::jsonb) != '[]'::jsonb
+          OR COALESCE(il.phones_normalized, '[]'::jsonb) != '[]'::jsonb
+        ) THEN 0 ELSE 1 END,
+        il.followers_count DESC NULLS LAST
+      LIMIT 2000
     `
   });
 
@@ -414,7 +524,7 @@ export async function clusterBySimilarity(
       total_leads_embedded: 0,
       clusters: [],
       execution_time_ms: Date.now() - startTime,
-      method: 'similarity_groups'
+      method: 'kmeans_vector'
     };
   }
 
@@ -431,6 +541,16 @@ export async function clusterBySimilarity(
     }))
     .filter(lead => lead.parsedEmbedding !== null);
 
+  // Diagnóstico de embeddings: quantos parseados com sucesso vs descartados
+  const embeddingsDiscarded = leadsWithEmbedding.length - leadsWithParsedEmbedding.length;
+  const discardRate = leadsWithEmbedding.length > 0
+    ? ((embeddingsDiscarded / leadsWithEmbedding.length) * 100).toFixed(1)
+    : '0';
+  console.log(`   📊 Embeddings: ${leadsWithParsedEmbedding.length} OK, ${embeddingsDiscarded} descartados (${discardRate}%)`);
+  if (embeddingsDiscarded > leadsWithEmbedding.length * 0.1) {
+    console.warn(`   ⚠️ Alta taxa de descarte de embeddings (>10%) - verificar formato do embedding_str`);
+  }
+
   // Inicializar centróides como embeddings
   let centroidEmbeddings: number[][] = initialCentroids
     .map(c => parseEmbedding(c.embedding_str))
@@ -439,7 +559,7 @@ export async function clusterBySimilarity(
   // 3. KMeans Iterativo - 5 iterações de refinamento
   const MAX_ITERATIONS = 5;
   let assignments: Map<number, { lead: any; embedding: number[]; similarity: number }[]> = new Map();
-  let previousAssignments: string[] = [];
+  let previousAssignmentsStr = ''; // String direta para comparação eficiente
   let silhouetteScore = 0;
 
   console.log(`   🔄 Iniciando KMeans iterativo (máx ${MAX_ITERATIONS} iterações)...`);
@@ -476,16 +596,16 @@ export async function clusterBySimilarity(
     }
 
     // Verificar convergência (mesmas atribuições)
-    const currentAssignments = Array.from(assignments.entries())
+    const currentAssignmentsStr = Array.from(assignments.entries())
       .flatMap(([clusterId, items]) => items.map(item => `${clusterId}:${item.lead.id}`))
       .sort()
       .join(',');
 
-    if (currentAssignments === previousAssignments.join(',')) {
+    if (currentAssignmentsStr === previousAssignmentsStr) {
       console.log(`   ✅ Convergiu na iteração ${iteration + 1}`);
       break;
     }
-    previousAssignments = currentAssignments.split(',');
+    previousAssignmentsStr = currentAssignmentsStr;
 
     // Recalcular centróides como média dos embeddings do cluster
     const newCentroidEmbeddings: number[][] = [];
@@ -495,8 +615,35 @@ export async function clusterBySimilarity(
         const clusterEmbeddings = clusterItems.map(item => item.embedding);
         newCentroidEmbeddings.push(computeCentroidEmbedding(clusterEmbeddings));
       } else {
-        // Manter centróide anterior se cluster vazio
-        newCentroidEmbeddings.push(centroidEmbeddings[i] || []);
+        // Cluster vazio: reseed com o lead mais distante de todos os centróides atuais
+        // Isso evita centróides vazios que causam similarity 0
+        let maxMinDistance = -1;
+        let bestReseedEmbedding: number[] | null = null;
+
+        for (const lead of leadsWithParsedEmbedding) {
+          const leadEmb = lead.parsedEmbedding!;
+          // Calcular distância mínima a qualquer centróide existente
+          let minDist = Infinity;
+          for (const ce of centroidEmbeddings) {
+            if (ce && ce.length > 0) {
+              const dist = 1 - cosineSimilarity(leadEmb, ce);
+              if (dist < minDist) minDist = dist;
+            }
+          }
+          // Escolher o lead com maior distância mínima (mais isolado)
+          if (minDist > maxMinDistance && minDist !== Infinity) {
+            maxMinDistance = minDist;
+            bestReseedEmbedding = leadEmb;
+          }
+        }
+
+        if (bestReseedEmbedding) {
+          console.log(`   ⚠️ Cluster ${i} vazio - reseed com lead mais distante (dist=${maxMinDistance.toFixed(3)})`);
+          newCentroidEmbeddings.push(bestReseedEmbedding);
+        } else {
+          // Fallback: manter anterior se nenhum candidato encontrado
+          newCentroidEmbeddings.push(centroidEmbeddings[i] || []);
+        }
       }
     }
     centroidEmbeddings = newCentroidEmbeddings;
@@ -504,7 +651,7 @@ export async function clusterBySimilarity(
     console.log(`   📍 Iteração ${iteration + 1}: ${Array.from(assignments.values()).map(a => a.length).join(', ')} leads/cluster`);
   }
 
-  // 4. Calcular Silhouette Score
+  // 4. Calcular avg_intra_similarity (aproximação simplificada do silhouette score)
   const silhouetteAssignments: Map<number, { embedding: number[]; leadId: string }[]> = new Map();
   for (const [clusterId, items] of assignments.entries()) {
     silhouetteAssignments.set(clusterId, items.map(item => ({
@@ -513,7 +660,7 @@ export async function clusterBySimilarity(
     })));
   }
   silhouetteScore = computeSilhouetteScore(silhouetteAssignments, centroidEmbeddings);
-  console.log(`   📊 Silhouette Score: ${silhouetteScore.toFixed(3)}`);
+  console.log(`   📊 Avg Intra-Similarity: ${silhouetteScore.toFixed(3)} (silhouette approx)`);
 
   // 5. Converter assignments para formato final
   const clusters: Map<number, VectorClusteredLead[]> = new Map();
@@ -523,22 +670,23 @@ export async function clusterBySimilarity(
 
   for (const [clusterId, items] of assignments.entries()) {
     for (const item of items) {
-      if (item.similarity >= similarityThreshold || clusters.get(clusterId)!.length < minLeadsPerCluster) {
-        clusters.get(clusterId)!.push({
-          id: item.lead.id,
-          username: item.lead.username,
-          full_name: item.lead.full_name,
-          profession: item.lead.profession,
-          city: item.lead.city,
-          state: item.lead.state,
-          bio: item.lead.bio,
-          email: item.lead.email,
-          phone: item.lead.phone,
-          followers_count: item.lead.followers_count || 0,
-          similarity_to_centroid: item.similarity,
-          embedding_text: item.lead.embedding_text
-        });
-      }
+      // Incluir TODOS os leads atribuídos (sem filtro de similaridade)
+      // O threshold já foi aplicado na seleção do centróide mais próximo
+      clusters.get(clusterId)!.push({
+        id: item.lead.id,
+        username: item.lead.username,
+        full_name: item.lead.full_name,
+        profession: item.lead.profession,
+        city: item.lead.city,
+        state: item.lead.state,
+        bio: item.lead.bio,
+        whatsapp_number: item.lead.whatsapp_number ?? null,
+        emails_normalized: item.lead.emails_normalized,
+        phones_normalized: item.lead.phones_normalized,
+        followers_count: item.lead.followers_count || 0,
+        similarity_to_centroid: item.similarity,
+        embedding_text: item.lead.embedding_text
+      });
     }
   }
 
@@ -583,7 +731,16 @@ export async function clusterBySimilarity(
     // Respeitar mínimo de leads por cluster antes de incluir no resultado
     if (clusterLeads.length < minLeadsPerCluster) continue;
 
-    const leadsWithContact = clusterLeads.filter(l => l.email || l.phone).length;
+    // Debug: ver raw data do primeiro lead
+    if (i === 0 && clusterLeads.length > 0) {
+      const sample = clusterLeads[0]!;
+      console.log(`   🔍 [DEBUG] Sample lead emails_normalized:`, typeof sample.emails_normalized, sample.emails_normalized);
+      console.log(`   🔍 [DEBUG] Sample lead phones_normalized:`, typeof sample.phones_normalized, sample.phones_normalized);
+    }
+    // Usar hasValidContact() para consistência (inclui WhatsApp)
+    const leadsWithContact = clusterLeads.filter(l => hasValidContact(l)).length;
+    const contactRate = clusterLeads.length > 0 ? (leadsWithContact / clusterLeads.length * 100) : 0;
+    console.log(`   📧 [DEBUG] Cluster ${i}: ${leadsWithContact}/${clusterLeads.length} = ${contactRate.toFixed(1)}% contact`);
     const avgSimilarity = clusterLeads.reduce((sum, l) => sum + l.similarity_to_centroid, 0) / clusterLeads.length;
 
     // Top profissões e cidades
@@ -625,18 +782,18 @@ export async function clusterBySimilarity(
   console.log(`\n✅ [VECTOR CLUSTERING - KMeans Iterativo] Concluído em ${executionTime}ms`);
   console.log(`   ${clusterResults.length} clusters gerados`);
   console.log(`   ${clusterResults.reduce((sum, c) => sum + c.total_leads, 0)} leads clusterizados`);
-  console.log(`   Silhouette Score: ${silhouetteScore.toFixed(3)}`);
+  console.log(`   Avg Intra-Similarity: ${silhouetteScore.toFixed(3)} (silhouette approx)`);
 
   return {
     success: true,
     campaign_id: campaignId,
     total_leads_analyzed: leadsWithEmbedding.length,
-    total_leads_embedded: leadsWithEmbedding.length,
+    total_leads_embedded: leadsWithParsedEmbedding.length,
     clusters: clusterResults,
     execution_time_ms: executionTime,
     method: 'kmeans_vector',
-    silhouette_avg: parseFloat(silhouetteScore.toFixed(3))
-  } as VectorClusteringResult & { silhouette_avg: number };
+    avg_intra_similarity: parseFloat(silhouetteScore.toFixed(3))
+  };
 }
 
 // ============================================
@@ -692,36 +849,51 @@ async function selectDiverseCentroids(
     used.add(bestFirst.lead.id);
   }
 
+  // Criar mapa de id -> embedding para evitar re-parsing (performance)
+  const embeddingCache = new Map<string, number[]>();
+  for (const item of leadsWithEmbeddings) {
+    if (item.embedding) {
+      embeddingCache.set(item.lead.id, item.embedding);
+    }
+  }
+
+  // Cache de embeddings dos centróides selecionados
+  const centroidEmbeddingsCache: number[][] = [];
+  if (bestFirst?.embedding) {
+    centroidEmbeddingsCache.push(bestFirst.embedding);
+  }
+
   // Demais centróides: maximizar distância mínima aos existentes
   while (centroids.length < numCentroids) {
     let bestLead: any = null;
     let bestMinDist = -1;
+    let bestLeadEmbedding: number[] | null = null;
 
     for (const lead of leads) {
       if (used.has(lead.id)) continue;
 
-      const leadEmbedding = parseEmbedding(lead.embedding_str);
+      // Usar cache ao invés de re-parsear
+      const leadEmbedding = embeddingCache.get(lead.id);
       if (!leadEmbedding) continue;
 
-      // Calcular distância mínima aos centróides existentes
+      // Calcular distância mínima aos centróides existentes (usando cache)
       let minDist = Infinity;
-      for (const centroid of centroids) {
-        const centroidEmbedding = parseEmbedding(centroid.embedding_str);
-        if (!centroidEmbedding) continue;
-
-        const dist = 1 - cosineSimilarity(leadEmbedding, centroidEmbedding);
+      for (const centroidEmb of centroidEmbeddingsCache) {
+        const dist = 1 - cosineSimilarity(leadEmbedding, centroidEmb);
         if (dist < minDist) minDist = dist;
       }
 
       if (minDist > bestMinDist) {
         bestMinDist = minDist;
         bestLead = lead;
+        bestLeadEmbedding = leadEmbedding;
       }
     }
 
-    if (bestLead) {
+    if (bestLead && bestLeadEmbedding) {
       centroids.push(bestLead);
       used.add(bestLead.id);
+      centroidEmbeddingsCache.push(bestLeadEmbedding); // Cachear embedding do novo centróide
     } else {
       break;
     }
@@ -732,13 +904,28 @@ async function selectDiverseCentroids(
 
 /**
  * Parse embedding string para array de números
+ * Valida dimensão (1536 para OpenAI text-embedding-ada-002/3-small)
  */
 function parseEmbedding(embeddingStr: string | null): number[] | null {
   if (!embeddingStr) return null;
   try {
     // Remove colchetes e espaços
     const cleaned = embeddingStr.replace(/[\[\]]/g, '').trim();
-    return cleaned.split(',').map(s => parseFloat(s.trim()));
+    const embedding = cleaned.split(',').map(s => parseFloat(s.trim()));
+
+    // Validar dimensão (OpenAI embeddings são 1536 dimensões)
+    if (embedding.length !== EXPECTED_EMBEDDING_DIM) {
+      console.warn(`⚠️ Embedding com dimensão inválida: ${embedding.length} (esperado: ${EXPECTED_EMBEDDING_DIM})`);
+      return null;
+    }
+
+    // Validar que não há NaN
+    if (embedding.some(v => isNaN(v))) {
+      console.warn('⚠️ Embedding contém valores NaN');
+      return null;
+    }
+
+    return embedding;
   } catch {
     return null;
   }
@@ -807,8 +994,12 @@ function computeCentroidEmbedding(embeddings: number[][]): number[] {
 }
 
 /**
- * Calcula o Silhouette Score para avaliar qualidade dos clusters
+ * Calcula uma aproximação do Silhouette Score (avg_intra_similarity)
+ * para avaliar qualidade dos clusters.
  * Retorna valor entre -1 e 1 (maior = melhor separação)
+ *
+ * NOTA: Esta é uma aproximação simplificada com amostragem para performance.
+ * O resultado é usado internamente como "silhouette approx" nos logs.
  */
 function computeSilhouetteScore(
   assignments: Map<number, { embedding: number[]; leadId: string }[]>,
@@ -835,6 +1026,7 @@ function computeSilhouetteScore(
 
   let totalScore = 0;
   let totalPoints = 0;
+  const debugStats: { clusterId: number; avgA: number; avgB: number; avgS: number; count: number }[] = [];
 
   for (const clusterId of clusterIds) {
     const clusterPoints = sampledAssignments.get(clusterId) || [];
@@ -844,6 +1036,8 @@ function computeSilhouetteScore(
     const comparePoints = clusterPoints.length <= MAX_COMPARE_POINTS
       ? clusterPoints
       : clusterPoints.slice(0, MAX_COMPARE_POINTS);
+
+    let clusterSumA = 0, clusterSumB = 0, clusterSumS = 0, clusterCount = 0;
 
     for (const point of comparePoints) {
       // a(i) = distância média intra-cluster (amostragem)
@@ -886,7 +1080,27 @@ function computeSilhouetteScore(
       const s = b === 0 && a === 0 ? 0 : (b - a) / Math.max(a, b);
       totalScore += s;
       totalPoints++;
+      clusterSumA += a;
+      clusterSumB += b;
+      clusterSumS += s;
+      clusterCount++;
     }
+
+    if (clusterCount > 0) {
+      debugStats.push({
+        clusterId,
+        avgA: clusterSumA / clusterCount,
+        avgB: clusterSumB / clusterCount,
+        avgS: clusterSumS / clusterCount,
+        count: clusterCount
+      });
+    }
+  }
+
+  // Log debug stats
+  console.log('   📊 [SILHOUETTE DEBUG] Stats por cluster:');
+  for (const stat of debugStats) {
+    console.log(`      Cluster ${stat.clusterId}: a=${stat.avgA.toFixed(3)} (intra), b=${stat.avgB.toFixed(3)} (inter), s=${stat.avgS.toFixed(3)}, n=${stat.count}`);
   }
 
   return totalPoints > 0 ? totalScore / totalPoints : 0;
@@ -946,11 +1160,13 @@ export interface ClusterResult {
   }[];
   theme_keywords: string[];
   centroid: number[];
-  silhouette_score?: number;
+  cohesion_score?: number; // Média de similaridade ao centróide (não é silhouette real)
 }
 
 export interface LeadClusterAssociation {
   lead_id: string;
+  username: string;
+  full_name: string | null;
   clusters: {
     cluster_id: number;
     hashtag_count: number;
@@ -971,9 +1187,9 @@ export interface ClusteringResult {
   total_leads: number;
   clusters: ClusterResult[];
   lead_associations: LeadClusterAssociation[];
-  silhouette_avg: number;
+  avg_intra_similarity: number;
   execution_time_ms: number;
-  method: 'kmeans_hashtag' | 'kmeans_vector' | 'similarity_groups' | 'hashtag_vector';
+  method: 'kmeans_hashtag' | 'kmeans_vector' | 'graph_hnsw' | 'hashtag_vector';
 }
 
 /**
@@ -1020,9 +1236,9 @@ export async function executeVectorClustering(
       total_leads: result.total_leads_analyzed,
       clusters: [],
       lead_associations: [],
-      silhouette_avg: 0,
+      avg_intra_similarity: 0,
       execution_time_ms: Date.now() - startTime,
-      method: 'similarity_groups'
+      method: 'kmeans_vector'
     };
   }
 
@@ -1036,7 +1252,7 @@ export async function executeVectorClustering(
     top_hashtags: [], // Não aplicável para vector clustering
     theme_keywords: vc.top_professions.slice(0, 5),
     centroid: [], // Centróide é o lead, não vetor numérico
-    silhouette_score: vc.avg_similarity
+    cohesion_score: vc.avg_similarity
   }));
 
   // Converter lead associations
@@ -1046,6 +1262,8 @@ export async function executeVectorClustering(
     for (const lead of cluster.leads) {
       lead_associations.push({
         lead_id: lead.id,
+        username: lead.username || '',
+        full_name: lead.full_name || null,
         clusters: [{
           cluster_id: cluster.cluster_id,
           hashtag_count: 0,
@@ -1053,17 +1271,15 @@ export async function executeVectorClustering(
         }],
         primary_cluster: cluster.cluster_id,
         score: lead.similarity_to_centroid,
-        has_contact: !!(lead.email || lead.phone)
+        has_contact: hasValidContact(lead)
       });
     }
   }
 
-  // Calcular média de similaridade (equivalente a silhouette)
-  const avgSimilarity = result.clusters.length > 0
-    ? result.clusters.reduce((sum, c) => sum + c.avg_similarity, 0) / result.clusters.length
-    : 0;
+  // Usar silhouette score calculado pelo clusterBySimilarity (não recalcular)
+  const silhouetteScore = result.avg_intra_similarity || 0;
 
-  console.log(`✅ [VECTOR CLUSTERING] Pipeline-ready: ${clusters.length} clusters, ${lead_associations.length} leads`);
+  console.log(`✅ [VECTOR CLUSTERING] Pipeline-ready: ${clusters.length} clusters, ${lead_associations.length} leads, silhouette=${silhouetteScore.toFixed(3)}`);
 
   return {
     success: true,
@@ -1074,9 +1290,9 @@ export async function executeVectorClustering(
     total_leads: result.total_leads_analyzed,
     clusters,
     lead_associations,
-    silhouette_avg: avgSimilarity,
+    avg_intra_similarity: silhouetteScore,
     execution_time_ms: Date.now() - startTime,
-    method: 'similarity_groups'
+    method: 'kmeans_vector'
   };
 }
 
@@ -1133,7 +1349,7 @@ export async function executeHashtagVectorClustering(
       total_leads: 0,
       clusters: [],
       lead_associations: [],
-      silhouette_avg: 0,
+      avg_intra_similarity: 0,
       execution_time_ms: Date.now() - startTime,
       method: 'hashtag_vector'
     };
@@ -1149,21 +1365,26 @@ export async function executeHashtagVectorClustering(
 
     // Buscar leads associados via lead_cluster_mapping (top N por weight/hashtag_count)
     // Nota: weight representa a força da associação lead->cluster via hashtags
-    // Construir condições de filtro
+    // Construir condições de filtro (com validação de inputs)
+    const safeClusterId = validateUUID(hc.id);
+    const safeLeadMaxAgeDays = validateNumber(leadMaxAgeDays, 1, 45, 'leadMaxAgeDays');
+
     const leadFilterConditions: string[] = [
-      `lcm.cluster_id = '${hc.id}'::uuid`,
+      `lcm.cluster_id = '${safeClusterId}'::uuid`,
       // Filtro de recência para leads
-      `(il.created_at >= NOW() - INTERVAL '${leadMaxAgeDays} days' OR il.updated_at >= NOW() - INTERVAL '${leadMaxAgeDays} days')`
+      `(il.created_at >= NOW() - INTERVAL '${safeLeadMaxAgeDays} days' OR il.updated_at >= NOW() - INTERVAL '${safeLeadMaxAgeDays} days')`
     ];
 
     // Filtro de campanha
     if (campaignId) {
-      leadFilterConditions.push(`(lcm.campaign_id IS NULL OR lcm.campaign_id = '${campaignId}'::uuid)`);
+      const safeCampaignId = validateUUID(campaignId);
+      leadFilterConditions.push(`(lcm.campaign_id IS NULL OR lcm.campaign_id = '${safeCampaignId}'::uuid)`);
     }
 
     // Filtro de estados
     if (targetStates && targetStates.length > 0) {
-      const statesArray = targetStates.map(s => `'${s.toUpperCase()}'`).join(', ');
+      const safeStates = validateStates(targetStates);
+      const statesArray = safeStates.map(s => `'${s}'`).join(', ');
       leadFilterConditions.push(`il.state IN (${statesArray})`);
     }
 
@@ -1175,8 +1396,8 @@ export async function executeHashtagVectorClustering(
         lcm.is_primary,
         il.username,
         il.full_name,
-        il.email,
-        il.phone,
+        il.emails_normalized,
+        il.phones_normalized,
         il.city,
         il.state,
         il.profession
@@ -1200,7 +1421,8 @@ export async function executeHashtagVectorClustering(
     }
 
     const leadsList = Array.isArray(leadsData) ? leadsData : [];
-    const leadsWithContact = leadsList.filter((l: any) => l.email || l.phone).length;
+    // Usar hasValidContact() para consistência (inclui WhatsApp)
+    const leadsWithContact = leadsList.filter((l: any) => hasValidContact(l)).length;
     const contactRate = leadsList.length > 0 ? (leadsWithContact / leadsList.length) * 100 : 0;
     // Usar weight como proxy de similaridade (representa força da associação via hashtags)
     const avgWeight = leadsList.length > 0
@@ -1221,12 +1443,14 @@ export async function executeHashtagVectorClustering(
       })),
       theme_keywords: (hc.hashtags || []).slice(0, 5),
       centroid: hc.centroid || [],
-      silhouette_score: typeof hc.cohesion_score === 'number' ? hc.cohesion_score : (hc.silhouette_score || avgWeight)
+      cohesion_score: typeof hc.cohesion_score === 'number' ? hc.cohesion_score : (hc.silhouette_score || avgWeight)
     });
 
     leadsList.forEach((lead: any) => {
       leadAssociations.push({
         lead_id: lead.lead_id,
+        username: lead.username || '',
+        full_name: lead.full_name || null,
         clusters: [{
           cluster_id: clusterIndex,
           hashtag_count: lead.hashtag_count || hc.hashtag_count || 0,
@@ -1234,13 +1458,13 @@ export async function executeHashtagVectorClustering(
         }],
         primary_cluster: clusterIndex,
         score: lead.weight || 0,
-        has_contact: !!(lead.email || lead.phone)
+        has_contact: hasValidContact(lead)
       });
     });
   }
 
-  const silhouette = clusters.length > 0
-    ? clusters.reduce((sum, c) => sum + (c.silhouette_score || 0), 0) / clusters.length
+  const avgCohesion = clusters.length > 0
+    ? clusters.reduce((sum, c) => sum + (c.cohesion_score || 0), 0) / clusters.length
     : 0;
 
   console.log(`✅ [VECTOR HASHTAG] ${clusters.length} clusters montados, ${leadAssociations.length} leads associados`);
@@ -1254,9 +1478,505 @@ export async function executeHashtagVectorClustering(
     total_leads: leadAssociations.length,
     clusters,
     lead_associations: leadAssociations,
-    silhouette_avg: silhouette,
+    avg_intra_similarity: avgCohesion,
     execution_time_ms: Date.now() - startTime,
     method: 'hashtag_vector'
+  };
+}
+
+// ============================================
+// CLUSTERING POR GRAFO DE SIMILARIDADE (HNSW)
+// ============================================
+
+/**
+ * Union-Find (Disjoint Set Union) para componentes conectados
+ */
+class UnionFind {
+  private parent: Map<string, string> = new Map();
+  private rank: Map<string, number> = new Map();
+
+  find(x: string): string {
+    if (!this.parent.has(x)) {
+      this.parent.set(x, x);
+      this.rank.set(x, 0);
+    }
+    if (this.parent.get(x) !== x) {
+      this.parent.set(x, this.find(this.parent.get(x)!)); // Path compression
+    }
+    return this.parent.get(x)!;
+  }
+
+  union(x: string, y: string): void {
+    const rootX = this.find(x);
+    const rootY = this.find(y);
+    if (rootX === rootY) return;
+
+    const rankX = this.rank.get(rootX) || 0;
+    const rankY = this.rank.get(rootY) || 0;
+
+    if (rankX < rankY) {
+      this.parent.set(rootX, rootY);
+    } else if (rankX > rankY) {
+      this.parent.set(rootY, rootX);
+    } else {
+      this.parent.set(rootY, rootX);
+      this.rank.set(rootX, rankX + 1);
+    }
+  }
+
+  getComponents(): Map<string, string[]> {
+    const components = new Map<string, string[]>();
+    for (const node of this.parent.keys()) {
+      const root = this.find(node);
+      if (!components.has(root)) {
+        components.set(root, []);
+      }
+      components.get(root)!.push(node);
+    }
+    return components;
+  }
+}
+
+/**
+ * Clustering por Grafo de Similaridade usando HNSW do pgvector
+ *
+ * Algoritmo:
+ * 1. Para cada lead, busca k vizinhos mais próximos via HNSW (kNN)
+ * 2. Cria arestas apenas onde similarity >= threshold
+ * 3. Agrupa por componentes conectados (Union-Find)
+ * 4. Clusters pequenos viram "noise" ou são mesclados
+ *
+ * Vantagens:
+ * - Usa HNSW index (O(log n) por busca, não O(n²))
+ * - Clusters naturais por densidade (não força K)
+ * - Outliers/noise são identificados naturalmente
+ * - Escala para milhões de leads
+ *
+ * @param filters - Filtros de localização e recência
+ * @param kNeighbors - Número de vizinhos a buscar por lead (default: 30)
+ * @param similarityThreshold - Mínimo de similaridade para criar aresta (default: 0.72)
+ * @param minClusterSize - Tamanho mínimo de cluster (menores viram noise) (default: 10)
+ */
+export async function clusterByGraph(
+  filters: ClusteringFilters = {},
+  kNeighbors: number = 30,
+  similarityThreshold: number = 0.72,
+  minClusterSize: number = 10
+): Promise<VectorClusteringResult> {
+  const startTime = Date.now();
+  console.log(`\n🔬 [GRAPH CLUSTERING] Iniciando clustering por grafo de similaridade`);
+  console.log(`   📊 Parâmetros: k=${kNeighbors}, threshold=${similarityThreshold}, minSize=${minClusterSize}`);
+
+  // Aplicar filtros de recência
+  const leadMaxAgeDays = filters.lead_max_age_days ?? DEFAULT_LEAD_MAX_AGE_DAYS;
+  const hashtagMaxAgeDays = filters.hashtag_max_age_days ?? DEFAULT_HASHTAG_MAX_AGE_DAYS;
+  const targetStates = filters.target_states;
+
+  console.log(`   📅 Filtros: leads ≤${leadMaxAgeDays}d, embeddings ≤${hashtagMaxAgeDays}d`);
+  if (targetStates?.length) {
+    console.log(`   🗺️  Estados: [${targetStates.join(', ')}]`);
+  }
+
+  // 1. Construir WHERE clause
+  const whereConditions: string[] = [
+    'COALESCE(le.embedding_final, le.embedding_bio) IS NOT NULL',
+    'il.bio IS NOT NULL',
+    `(il.created_at >= NOW() - INTERVAL '${leadMaxAgeDays} days' OR il.updated_at >= NOW() - INTERVAL '${leadMaxAgeDays} days')`,
+    `(le.created_at >= NOW() - INTERVAL '${hashtagMaxAgeDays} days' OR le.updated_at >= NOW() - INTERVAL '${hashtagMaxAgeDays} days')`
+  ];
+
+  if (targetStates && targetStates.length > 0) {
+    // Validar estados para evitar SQL injection
+    const safeStates = validateStates(targetStates);
+    const statesArray = safeStates.map(s => `'${s}'`).join(', ');
+    whereConditions.push(`il.state IN (${statesArray})`);
+  }
+
+  const whereClause = whereConditions.join(' AND ');
+
+  // 2. Buscar todos os leads elegíveis com seus embeddings
+  console.log(`\n   📥 Buscando leads com embeddings...`);
+  const { data: leads, error: leadsError } = await supabase.rpc('execute_sql', {
+    query_text: `
+      SELECT
+        il.id,
+        il.username,
+        il.full_name,
+        il.profession,
+        il.city,
+        il.state,
+        il.bio,
+        il.emails_normalized,
+        il.phones_normalized,
+        il.whatsapp_number,
+        il.followers_count,
+        le.embedding_bio_text as embedding_text
+      FROM instagram_leads il
+      INNER JOIN lead_embeddings le ON le.lead_id = il.id
+      WHERE ${whereClause}
+      ORDER BY il.followers_count DESC NULLS LAST
+    `
+  });
+
+  if (leadsError) {
+    console.error('❌ Erro ao buscar leads:', leadsError);
+    throw leadsError;
+  }
+
+  const leadsList = Array.isArray(leads) ? leads : [];
+  console.log(`   ✅ ${leadsList.length} leads encontrados`);
+
+  if (leadsList.length < minClusterSize) {
+    return {
+      success: false,
+      error: `Leads insuficientes: ${leadsList.length} (mínimo: ${minClusterSize})`,
+      total_leads_analyzed: leadsList.length,
+      total_leads_embedded: leadsList.length,
+      clusters: [],
+      execution_time_ms: Date.now() - startTime,
+      method: 'graph_hnsw'
+    };
+  }
+
+  // Criar mapa id -> lead para lookup rápido
+  const leadMap = new Map<string, any>();
+  for (const lead of leadsList) {
+    leadMap.set(lead.id, lead);
+  }
+
+  // 3. Criar tabela temporária com índice HNSW para kNN eficiente
+  console.log(`\n   🔗 Criando tabela temporária com índice HNSW...`);
+  const uf = new UnionFind();
+  let totalEdges = 0;
+  let processedLeads = 0;
+  const edgeSimilarities = new Map<string, number>(); // Armazena similaridades para cálculo de avg_similarity
+
+  const leadIds = leadsList.map(l => l.id);
+
+  // Criar tabela temporária com embeddings filtrados usando JOIN (sem ARRAY gigante)
+  // Number() garante que o nome seja sempre numérico (evita injeção)
+  const tempTableName = `temp_clustering_${Number(Date.now())}`;
+
+  // Statement 1: Criar tabela temporária via JOIN com whereClause
+  // Usa execute_admin_sql (DDL com allowlist restrita)
+  const { error: createTableError } = await supabase.rpc('execute_admin_sql', {
+    query_text: `
+      CREATE TEMP TABLE ${tempTableName} AS
+      SELECT
+        le.lead_id,
+        COALESCE(le.embedding_final, le.embedding_bio) as embedding
+      FROM lead_embeddings le
+      INNER JOIN instagram_leads il ON il.id = le.lead_id
+      WHERE ${whereClause}
+    `
+  });
+
+  if (createTableError) {
+    console.error('❌ Erro ao criar tabela temporária:', createTableError.message);
+    throw createTableError;
+  }
+
+  // Statement 2: Criar índice HNSW (separado para garantir compatibilidade)
+  // Usa execute_admin_sql (DDL com allowlist restrita)
+  const { error: createIndexError } = await supabase.rpc('execute_admin_sql', {
+    query_text: `
+      CREATE INDEX ON ${tempTableName} USING hnsw (embedding vector_cosine_ops)
+        WITH (m = 16, ef_construction = 64)
+    `
+  });
+
+  if (createIndexError) {
+    console.error('❌ Erro ao criar índice HNSW:', createIndexError.message);
+    // Limpar tabela temporária antes de falhar
+    try {
+      await supabase.rpc('execute_admin_sql', { query_text: `DROP TABLE IF EXISTS ${tempTableName}` });
+    } catch (_) { /* ignore cleanup error */ }
+    throw createIndexError;
+  }
+
+  console.log(`   ✅ Tabela ${tempTableName} criada com ${leadIds.length} embeddings e índice HNSW`);
+  console.log(`\n   🔗 Construindo grafo de similaridade...`);
+
+  // Processar em batches usando a tabela temporária indexada
+  const BATCH_SIZE = 100;
+  const safeKNeighbors = validateNumber(kNeighbors, 1, 100, 'kNeighbors');
+  const safeSimilarityThreshold = validateNumber(similarityThreshold, 0, 1, 'similarityThreshold');
+
+  for (let i = 0; i < leadIds.length; i += BATCH_SIZE) {
+    const batchIds = leadIds.slice(i, i + BATCH_SIZE);
+    const validatedBatchIds = batchIds.map(id => validateUUID(id));
+    const batchIdsArray = validatedBatchIds.map(id => `'${id}'::uuid`).join(',');
+
+    // Buscar vizinhos usando tabela temporária com HNSW
+    const { data: neighbors, error: neighborsError } = await supabase.rpc('execute_sql', {
+      query_text: `
+        SELECT
+          bl.lead_id as source_id,
+          nn.lead_id as neighbor_id,
+          1 - (bl.embedding <=> nn.embedding) as similarity
+        FROM ${tempTableName} bl
+        CROSS JOIN LATERAL (
+          SELECT t.lead_id, t.embedding
+          FROM ${tempTableName} t
+          WHERE t.lead_id != bl.lead_id
+          ORDER BY t.embedding <=> bl.embedding
+          LIMIT ${safeKNeighbors}
+        ) nn
+        WHERE bl.lead_id = ANY(ARRAY[${batchIdsArray}])
+          AND 1 - (bl.embedding <=> nn.embedding) >= ${safeSimilarityThreshold}
+      `
+    });
+
+    if (neighborsError) {
+      console.error('⚠️ Erro em batch de vizinhos:', neighborsError.message);
+      continue;
+    }
+
+    // Criar arestas no grafo (Union-Find) e armazenar similaridades
+    const neighborsList = Array.isArray(neighbors) ? neighbors : [];
+    for (const edge of neighborsList) {
+      // Só criar aresta se ambos os leads estão no nosso conjunto filtrado
+      if (leadMap.has(edge.source_id) && leadMap.has(edge.neighbor_id)) {
+        uf.union(edge.source_id, edge.neighbor_id);
+        // Armazenar similaridade da aresta para cálculo posterior
+        const edgeKey = [edge.source_id, edge.neighbor_id].sort().join('|');
+        if (!edgeSimilarities.has(edgeKey)) {
+          edgeSimilarities.set(edgeKey, edge.similarity);
+        }
+        totalEdges++;
+      }
+    }
+
+    processedLeads += batchIds.length;
+    if (processedLeads % 500 === 0) {
+      console.log(`   📊 Processados ${processedLeads}/${leadIds.length} leads, ${totalEdges} arestas`);
+    }
+  }
+
+  console.log(`   ✅ Grafo construído: ${totalEdges} arestas, ${edgeSimilarities.size} pares únicos`);
+
+  // Registrar todos os leads no UnionFind (mesmo os isolados)
+  // Isso garante que getComponents() capture todos, evitando acesso a propriedade private
+  for (const leadId of leadIds) {
+    uf.find(leadId);
+  }
+
+  // 4. Extrair componentes conectados
+  console.log(`\n   🧩 Extraindo componentes conectados...`);
+  const components = uf.getComponents();
+
+  // Separar clusters válidos (>= minClusterSize) de noise
+  const validClusters: string[][] = [];
+  const noiseLeads: string[] = [];
+
+  for (const [_root, members] of components) {
+    if (members.length >= minClusterSize) {
+      validClusters.push(members);
+    } else {
+      noiseLeads.push(...members);
+    }
+  }
+
+  console.log(`   ✅ ${validClusters.length} clusters válidos, ${noiseLeads.length} leads em noise`);
+
+  // Ordenar clusters por tamanho (maior primeiro)
+  validClusters.sort((a, b) => b.length - a.length);
+
+  // 5. Montar resultado dos clusters
+  console.log(`\n   📊 Gerando estatísticas dos clusters...`);
+  const clusterResults: VectorClusterResult[] = [];
+
+  for (let i = 0; i < validClusters.length; i++) {
+    const memberIds = validClusters[i]!;
+    const clusterLeads: VectorClusteredLead[] = [];
+
+    for (const leadId of memberIds) {
+      const lead = leadMap.get(leadId);
+      if (!lead) continue;
+
+      clusterLeads.push({
+        id: lead.id,
+        username: lead.username,
+        full_name: lead.full_name,
+        profession: lead.profession,
+        city: lead.city,
+        state: lead.state,
+        bio: lead.bio,
+        emails_normalized: lead.emails_normalized,
+        phones_normalized: lead.phones_normalized,
+        followers_count: lead.followers_count || 0,
+        similarity_to_centroid: 1.0, // Será recalculado abaixo
+        embedding_text: lead.embedding_text
+      });
+    }
+
+    // Calcular estatísticas usando hasValidContact() para consistência
+    // Usa leadMap para ter acesso ao objeto completo (inclui whatsapp_number)
+    const leadsWithContact = clusterLeads.filter(l => {
+      const fullLead = leadMap.get(l.id);
+      return fullLead ? hasValidContact(fullLead) : false;
+    }).length;
+
+    const contactRate = clusterLeads.length > 0
+      ? (leadsWithContact / clusterLeads.length * 100)
+      : 0;
+
+    // Top profissões e cidades
+    const professions = countOccurrences(clusterLeads.map(l => l.profession).filter(Boolean) as string[]);
+    const cities = countOccurrences(clusterLeads.map(l => l.city).filter(Boolean) as string[]);
+
+    // Lead representativo: maior followers ou primeiro
+    const representativeLead = clusterLeads.sort((a, b) => b.followers_count - a.followers_count)[0];
+    const clusterName = generateClusterName(representativeLead, professions, cities);
+
+    // Calcular avg_similarity REAL usando as similaridades armazenadas
+    let clusterSimilaritySum = 0;
+    let clusterEdgeCount = 0;
+    for (let m = 0; m < memberIds.length; m++) {
+      for (let n = m + 1; n < memberIds.length; n++) {
+        const edgeKey = [memberIds[m], memberIds[n]].sort().join('|');
+        const sim = edgeSimilarities.get(edgeKey);
+        if (sim !== undefined) {
+          clusterSimilaritySum += sim;
+          clusterEdgeCount++;
+        }
+      }
+    }
+    const computedAvgSimilarity = clusterEdgeCount > 0
+      ? clusterSimilaritySum / clusterEdgeCount
+      : similarityThreshold; // Fallback se não houver arestas
+
+    clusterResults.push({
+      cluster_id: i,
+      cluster_name: clusterName,
+      centroid_lead: {
+        id: representativeLead?.id || '',
+        username: representativeLead?.username || '',
+        embedding_text: representativeLead?.embedding_text || ''
+      },
+      leads: clusterLeads,
+      avg_similarity: parseFloat(computedAvgSimilarity.toFixed(4)),
+      total_leads: clusterLeads.length,
+      leads_with_contact: leadsWithContact,
+      contact_rate: parseFloat(contactRate.toFixed(1)),
+      top_professions: professions.slice(0, 5),
+      top_cities: cities.slice(0, 5)
+    });
+  }
+
+  // Limpar tabela temporária (usa execute_admin_sql)
+  try {
+    await supabase.rpc('execute_admin_sql', {
+      query_text: `DROP TABLE IF EXISTS ${tempTableName}`
+    });
+  } catch (cleanupErr: any) {
+    console.warn('⚠️ Falha ao limpar tabela temporária:', cleanupErr?.message);
+  }
+
+  const executionTime = Date.now() - startTime;
+  const totalClustered = clusterResults.reduce((sum, c) => sum + c.total_leads, 0);
+
+  console.log(`\n✅ [GRAPH CLUSTERING] Concluído em ${executionTime}ms`);
+  console.log(`   📊 ${clusterResults.length} clusters, ${totalClustered} leads clusterizados, ${noiseLeads.length} noise`);
+
+  return {
+    success: true,
+    total_leads_analyzed: leadsList.length,
+    total_leads_embedded: leadsList.length,
+    clusters: clusterResults,
+    execution_time_ms: executionTime,
+    method: 'graph_hnsw'
+  };
+}
+
+/**
+ * Executa graph clustering e retorna no formato compatível com campaign-pipeline
+ */
+export async function executeGraphClustering(
+  campaignId: string | undefined,
+  nicho: string,
+  seeds: string[],
+  filters: ClusteringFilters = {},
+  kNeighbors: number = 30,
+  similarityThreshold: number = 0.72,
+  minClusterSize: number = 10
+): Promise<ClusteringResult> {
+  const startTime = Date.now();
+  console.log(`\n🔬 [GRAPH CLUSTERING] Executando para campanha ${campaignId || 'global'}`);
+  console.log(`   🎯 Nicho: ${nicho}, Seeds: [${seeds.join(', ')}]`);
+
+  const result = await clusterByGraph(filters, kNeighbors, similarityThreshold, minClusterSize);
+
+  if (!result.success) {
+    return {
+      success: false,
+      error: result.error,
+      nicho,
+      seeds,
+      k: 0,
+      total_hashtags: 0,
+      total_leads: result.total_leads_analyzed,
+      clusters: [],
+      lead_associations: [],
+      avg_intra_similarity: 0,
+      execution_time_ms: Date.now() - startTime,
+      method: 'graph_hnsw'
+    };
+  }
+
+  // Converter para formato compatível
+  const clusters: ClusterResult[] = result.clusters.map((vc, index) => ({
+    cluster_id: index,
+    cluster_name: vc.cluster_name,
+    hashtag_count: 0,
+    total_leads: vc.total_leads,
+    avg_contact_rate: vc.contact_rate,
+    top_hashtags: [],
+    theme_keywords: vc.top_professions.slice(0, 5),
+    centroid: [],
+    cohesion_score: vc.avg_similarity
+  }));
+
+  // Converter lead associations
+  const lead_associations: LeadClusterAssociation[] = [];
+  for (const cluster of result.clusters) {
+    for (const lead of cluster.leads) {
+      lead_associations.push({
+        lead_id: lead.id,
+        username: lead.username || '',
+        full_name: lead.full_name || null,
+        clusters: [{
+          cluster_id: cluster.cluster_id,
+          hashtag_count: 0,
+          weight: lead.similarity_to_centroid
+        }],
+        primary_cluster: cluster.cluster_id,
+        score: lead.similarity_to_centroid,
+        has_contact: hasValidContact(lead)
+      });
+    }
+  }
+
+  // Calcular weighted average de avg_similarity (NÃO é silhouette real, mas é semanticamente correto)
+  const totalLeadsInClusters = result.clusters.reduce((sum, c) => sum + c.total_leads, 0);
+  const weightedAvgSimilarity = totalLeadsInClusters > 0
+    ? result.clusters.reduce((sum, c) => sum + c.avg_similarity * c.total_leads, 0) / totalLeadsInClusters
+    : 0;
+
+  console.log(`✅ [GRAPH CLUSTERING] Pipeline-ready: ${clusters.length} clusters, ${lead_associations.length} leads, avg_similarity=${weightedAvgSimilarity.toFixed(4)}`);
+
+  return {
+    success: true,
+    nicho,
+    seeds,
+    k: clusters.length, // K natural descoberto
+    total_hashtags: 0,
+    total_leads: result.total_leads_analyzed,
+    clusters,
+    lead_associations,
+    avg_intra_similarity: parseFloat(weightedAvgSimilarity.toFixed(4)), // Avg intra-cluster similarity (não silhouette real)
+    execution_time_ms: Date.now() - startTime,
+    method: 'graph_hnsw'
   };
 }
 
@@ -1268,7 +1988,9 @@ export const vectorClusteringService = {
   findSimilarLeads,
   findLeadsByQuery,
   clusterBySimilarity,
+  clusterByGraph,
   executeVectorClustering,
+  executeGraphClustering,
   executeHashtagVectorClustering,
   // Constantes de filtro
   DEFAULT_LEAD_MAX_AGE_DAYS,

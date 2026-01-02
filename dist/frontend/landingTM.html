@@ -1300,6 +1300,22 @@
                 });
 
                 if (response.ok) {
+                    // Enviar evento para Umami Analytics com identificação do lead
+                    if (window.umami) {
+                        umami.track('lead_captured_form', {
+                            name: data.name,
+                            email: data.email,
+                            whatsapp: data.whatsapp,
+                            user_type: data.user_type,
+                            business_segment: data.business_segment,
+                            main_challenge: data.main_challenge,
+                            lead_volume: data.lead_volume,
+                            modules: data.modules_interest.join(','),
+                            source: data.source
+                        });
+                        console.log('[UBS TM] Lead enviado para Umami:', data.email);
+                    }
+
                     // Show success message
                     document.getElementById('proposalForm').classList.add('d-none');
                     document.getElementById('successMessage').classList.remove('d-none');
@@ -1351,8 +1367,11 @@
             const acceptBtn = document.getElementById('cookie-accept');
             const rejectBtn = document.getElementById('cookie-reject');
             const STORAGE_KEY = 'ubs-cookie-consent';
-            const UMAMI_SRC = 'https://analytics.ubs.app.br/script.js';
-            const UMAMI_SITE_ID = 'e139b226-0b32-4a40-a53b-cbc5e708ff83';
+            // Usar localhost em desenvolvimento, produção em ambiente real
+            const UMAMI_SRC = window.location.hostname === 'localhost'
+                ? 'http://localhost:3001/script.js'
+                : 'https://analytics.ubs.app.br/script.js';
+            const UMAMI_SITE_ID = '6a2f8aed-3400-4fec-9110-f3163592a883';
             let umamiLoaded = false;
 
             function loadUmami() {

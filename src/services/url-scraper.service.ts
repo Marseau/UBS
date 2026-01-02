@@ -251,20 +251,112 @@ export class UrlScraperService {
 
   /**
    * Extract WhatsApp phones from HTML by checking context around phone numbers
-   * Looks for WhatsApp keywords/emojis within 200 chars of phone numbers
+   * Uses multiple detection strategies:
+   * 1. Keywords/emojis within 500 chars
+   * 2. Floating WhatsApp buttons (CSS classes/IDs)
+   * 3. Phone inside clickable links (href with phone number)
+   * 4. WhatsApp icons (img src/alt)
    * @param html - Raw HTML content
    * @returns Array of phones found with WhatsApp context
    */
   private static extractWhatsAppFromHtmlContext(html: string): string[] {
-    const whatsappKeywords = [
-      'whatsapp', 'wpp', 'zap', 'whats', 'whatszap', 'zapzap', 'watzap',
-      'wa.me', 'api.whatsapp', 'fale conosco', 'fale com', 'chama no', 'chame no'
-    ];
-    const whatsappEmojis = ['📱', '📲', '💬', '📞', '☎️', '✆', '📳'];
-
     const whatsappContextPhones: string[] = [];
+    const htmlLower = html.toLowerCase();
 
-    // Regex para encontrar telefones brasileiros
+    // ============================================
+    // ESTRATÉGIA 1: Botões flutuantes de WhatsApp
+    // ============================================
+    const floatingButtonPatterns = [
+      // Classes CSS comuns de botões WhatsApp
+      /class\s*=\s*["'][^"']*(?:whatsapp-float|whatsapp-fixed|wpp-float|wpp-fixed|btn-wpp|btn-whatsapp|whatsapp-btn|float-whatsapp|whatsapp-widget|whatsapp-chat)[^"']*["'][^>]*>[\s\S]{0,500}?(\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4})/gi,
+      // IDs de botões WhatsApp
+      /id\s*=\s*["'](?:whatsapp|wpp|whats|zap)[-_]?(?:button|btn|float|widget|chat)["'][^>]*>[\s\S]{0,500}?(\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4})/gi,
+    ];
+
+    for (const pattern of floatingButtonPatterns) {
+      let match;
+      while ((match = pattern.exec(html)) !== null) {
+        if (match[1]) whatsappContextPhones.push(match[1]);
+      }
+    }
+
+    // ============================================
+    // ESTRATÉGIA 2: Telefone dentro de link <a href>
+    // ============================================
+    // Links com href contendo o telefone (tel:, whatsapp:, wa.me)
+    const linkPatterns = [
+      // href="tel:..." com telefone
+      /<a[^>]*href\s*=\s*["']tel:[\s+]?(\d{10,13})["'][^>]*>/gi,
+      // href contendo wa.me com número
+      /<a[^>]*href\s*=\s*["'][^"']*wa\.me\/(\d{10,13})[^"']*["'][^>]*>/gi,
+      // href="whatsapp://send?phone=..."
+      /<a[^>]*href\s*=\s*["'][^"']*whatsapp:\/\/[^"']*phone=(\d{10,13})[^"']*["'][^>]*>/gi,
+      // href com api.whatsapp.com
+      /<a[^>]*href\s*=\s*["'][^"']*api\.whatsapp\.com\/send[^"']*phone=(\d{10,13})[^"']*["'][^>]*>/gi,
+    ];
+
+    for (const pattern of linkPatterns) {
+      let match;
+      while ((match = pattern.exec(html)) !== null) {
+        if (match[1]) {
+          // Normalizar para formato brasileiro
+          let phone = match[1];
+          if (phone.length >= 10 && phone.length <= 13) {
+            whatsappContextPhones.push(phone);
+          }
+        }
+      }
+    }
+
+    // ============================================
+    // ESTRATÉGIA 3: Ícones de WhatsApp (img src/alt)
+    // ============================================
+    // Buscar <img> com whatsapp no src ou alt, e pegar telefone próximo
+    const imgWhatsappRegex = /<img[^>]*(?:src|alt)\s*=\s*["'][^"']*whatsapp[^"']*["'][^>]*>/gi;
+    let imgMatch;
+    while ((imgMatch = imgWhatsappRegex.exec(html)) !== null) {
+      const imgPosition = imgMatch.index;
+      // Buscar telefone dentro de 500 chars após o ícone
+      const searchArea = html.substring(imgPosition, Math.min(html.length, imgPosition + 500));
+      const phoneInArea = searchArea.match(/\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4}/);
+      if (phoneInArea) {
+        whatsappContextPhones.push(phoneInArea[0]);
+      }
+    }
+
+    // Também verificar SVG com whatsapp
+    const svgWhatsappRegex = /<svg[^>]*(?:class|id)\s*=\s*["'][^"']*whatsapp[^"']*["'][^>]*>[\s\S]*?<\/svg>/gi;
+    let svgMatch;
+    while ((svgMatch = svgWhatsappRegex.exec(html)) !== null) {
+      const svgPosition = svgMatch.index;
+      const searchArea = html.substring(svgPosition, Math.min(html.length, svgPosition + 500));
+      const phoneInArea = searchArea.match(/\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4}/);
+      if (phoneInArea) {
+        whatsappContextPhones.push(phoneInArea[0]);
+      }
+    }
+
+    // ============================================
+    // ESTRATÉGIA 4: Keywords/emojis no contexto (original expandida)
+    // ============================================
+    const whatsappKeywords = [
+      // WhatsApp direto
+      'whatsapp', 'wpp', 'zap', 'whats', 'whatszap', 'zapzap', 'watzap', 'whatss',
+      'wa.me', 'api.whatsapp', 'whatsapp.com',
+      // Contexto de contato
+      'fale conosco', 'fale com', 'chama no', 'chame no', 'chamar no',
+      'entre em contato', 'entrar em contato', 'contato direto',
+      'atendimento', 'suporte', 'dúvidas', 'orçamento', 'agende', 'agendamento',
+      'envie mensagem', 'enviar mensagem', 'mande mensagem', 'mandar mensagem',
+      'clique aqui', 'clique para', 'toque para', 'toque aqui',
+      // Botões/classes CSS comuns
+      'btn-whatsapp', 'whatsapp-button', 'whats-button', 'botao-whatsapp',
+      'icon-whatsapp', 'fa-whatsapp', 'whatsapp-icon',
+      // Font Awesome e ícones
+      'fa-brands fa-whatsapp', 'fab fa-whatsapp', 'bi-whatsapp'
+    ];
+    const whatsappEmojis = ['📱', '📲', '💬', '📞', '☎️', '✆', '📳', '💭', '🗨️', '✉️', '📩', '📨'];
+
     const phoneRegex = /\(?\d{2}\)?\s?9\d{4}[-\s]?\d{4}/g;
     let match;
 
@@ -272,9 +364,9 @@ export class UrlScraperService {
       const phone = match[0];
       const position = match.index;
 
-      // Pegar 200 caracteres antes e depois do telefone
-      const start = Math.max(0, position - 200);
-      const end = Math.min(html.length, position + phone.length + 200);
+      // Pegar 500 caracteres antes e depois do telefone
+      const start = Math.max(0, position - 500);
+      const end = Math.min(html.length, position + phone.length + 500);
       const context = html.substring(start, end).toLowerCase();
 
       // Verificar se há contexto de WhatsApp
@@ -390,7 +482,7 @@ export class UrlScraperService {
         }
       });
 
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
       // Aguardar um pouco para a página carregar completamente
       await new Promise(r => setTimeout(r, 2000));
@@ -1110,22 +1202,31 @@ export class UrlScraperService {
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         );
 
-        // Navigate to main URL with manual timeout para abortar se pendurar
+        // Navigate to main URL with retry for slow sites
         console.log(`🌐 [URL-SCRAPER] Navegando para: ${url}`);
-        try {
-          const NAV_TIMEOUT_MS = 15000;
-          const navigation = page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
-          const navTimeout = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(`Timeout manual: navegação principal > ${NAV_TIMEOUT_MS}ms`)), NAV_TIMEOUT_MS)
-          );
-          await Promise.race([navigation, navTimeout]);
-          console.log(`✅ [URL-SCRAPER] Página carregada com sucesso`);
-        } catch (navError: any) {
-          console.error(`❌ [URL-SCRAPER] Erro ao navegar: ${navError.message}`);
+        const NAV_TIMEOUT_MS = 30000; // Aumentado para 30s (sites edu/gov são lentos)
+        let navSuccess = false;
+
+        for (let attempt = 1; attempt <= 2 && !navSuccess; attempt++) {
           try {
-            await page.goto('about:blank', { waitUntil: 'domcontentloaded', timeout: 3000 });
-          } catch {}
-          throw new Error(`Falha ao carregar URL: ${navError.message}`);
+            const navigation = page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
+            const navTimeout = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error(`Timeout: navegação > ${NAV_TIMEOUT_MS}ms`)), NAV_TIMEOUT_MS)
+            );
+            await Promise.race([navigation, navTimeout]);
+            navSuccess = true;
+            console.log(`✅ [URL-SCRAPER] Página carregada com sucesso (tentativa ${attempt})`);
+          } catch (navError: any) {
+            console.error(`❌ [URL-SCRAPER] Erro ao navegar (tentativa ${attempt}): ${navError.message}`);
+            if (attempt === 2) {
+              try {
+                await page.goto('about:blank', { waitUntil: 'domcontentloaded', timeout: 3000 });
+              } catch {}
+              throw new Error(`Falha ao carregar URL após 2 tentativas: ${navError.message}`);
+            }
+            // Aguardar antes de retry
+            await new Promise(r => setTimeout(r, 2000));
+          }
         }
 
         await page.waitForSelector('body', { timeout: 10000 });

@@ -143,6 +143,7 @@ function normalizePhone(phone: string): string {
   return cleaned;
 }
 
+
 /**
  * Extrai número WhatsApp da bio do Instagram
  * No Brasil, número na bio comercial = WhatsApp (cultura local)
@@ -188,10 +189,28 @@ export function extractWhatsAppFromBio(bio: string | null | undefined): string |
 }
 
 /**
- * Valida se o número está em formato Brasil válido
+ * Valida se o número está em formato Brasil válido para WhatsApp
+ * - 13 dígitos: celular (55 + DDD + 9 + 8 dígitos)
+ * - 12 dígitos: fixo apenas se começa com 2,3,4,5 após DDD
+ * - Rejeita 12 dígitos começando com 6,7,8,9 (celular sem o 9 = inválido)
  */
 export function isValidBrazilNumber(number: string): boolean {
-  return number.startsWith('55') && number.length >= 12 && number.length <= 13;
+  if (!number.startsWith('55')) return false;
+
+  // 13 dígitos = celular completo (55 + DDD + 9XXXXXXXX)
+  if (number.length === 13) return true;
+
+  // 12 dígitos = pode ser fixo ou celular incompleto
+  if (number.length === 12) {
+    const firstDigitAfterDDD = number.charAt(4);
+    // Fixo começa com 2,3,4,5 - válido
+    if (['2', '3', '4', '5'].includes(firstDigitAfterDDD)) return true;
+    // Celular começa com 6,7,8,9 mas falta o 9 - INVÁLIDO
+    console.log(`   ⚠️ [WA-VALIDATE] Número rejeitado (celular sem 9): ${number}`);
+    return false;
+  }
+
+  return false;
 }
 
 /**

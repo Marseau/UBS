@@ -1111,7 +1111,7 @@
                 const pctWithContact = totalLeads > 0 ? ((kpis.leads_with_contact / totalLeads) * 100).toFixed(1) : 0;
                 const pctWithoutContact = totalLeads > 0 ? ((kpis.leads_without_contact / totalLeads) * 100).toFixed(1) : 0;
                 const pctWithEmail = totalLeads > 0 ? ((kpis.leads_with_email / totalLeads) * 100).toFixed(1) : 0;
-                const pctWithPhone = totalLeads > 0 ? ((kpis.leads_with_phone / totalLeads) * 100).toFixed(1) : 0;
+                const pctWithWhatsApp = totalLeads > 0 ? ((kpis.leads_with_whatsapp / totalLeads) * 100).toFixed(1) : 0;
 
                 document.getElementById('stats-grid').innerHTML = `
                     <!-- ========== SECAO LEADS (45 dias) ========== -->
@@ -1138,10 +1138,10 @@
                         <div class="value">${(kpis.leads_with_email || 0).toLocaleString()}</div>
                         <div class="change">${pctWithEmail}% do total</div>
                     </div>
-                    <div class="stat-card">
-                        <div class="label">Com Phone Principal</div>
-                        <div class="value">${(kpis.leads_with_phone || 0).toLocaleString()}</div>
-                        <div class="change">${pctWithPhone}% do total</div>
+                    <div class="stat-card" style="border-left: 4px solid #25D366;">
+                        <div class="label">Com WhatsApp Verificado</div>
+                        <div class="value">${(kpis.leads_with_whatsapp || 0).toLocaleString()}</div>
+                        <div class="change" style="color: #25D366;">${pctWithWhatsApp}% do total</div>
                     </div>
                     <div class="stat-card">
                         <div class="label">Com Emails Adicionais</div>
@@ -1687,19 +1687,21 @@
                 return;
             }
 
+            // Montar descrição da campanha
+            const campaignDescription = [
+                `Nicho: ${nichoInput}`,
+                targetStates ? `Localização: ${targetStates}` : ''
+            ].filter(Boolean).join('. ');
+
             btn.disabled = true;
             btn.innerHTML = '⏳...';
 
             try {
-                const response = await fetch(`${API_BASE}/hashtag-intelligence/generate-seeds`, {
+                // Nova API: sugere seeds baseado em top 100 hashtags (freq >= 20)
+                const response = await fetch(`${API_BASE}/hashtag-intelligence/suggest-seeds`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        service_description: nichoInput,
-                        target_audience: 'Profissionais e empresas do nicho ' + nichoInput,
-                        location: targetStates || null,
-                        objective: 'prospecção'
-                    })
+                    body: JSON.stringify({ campaign_description: campaignDescription })
                 });
 
                 const result = await response.json();
@@ -1708,8 +1710,11 @@
                     // Preencher campo de seeds
                     document.getElementById('genericSeeds').value = result.data.seeds.join(', ');
 
+                    // Log das categorias
+                    console.log('🌱 Seeds:', result.data.total_seeds, result.data.seeds_por_categoria);
+
                     // Feedback visual
-                    btn.innerHTML = '✅';
+                    btn.innerHTML = `✅ ${result.data.total_seeds}`;
                     setTimeout(() => {
                         btn.innerHTML = '🤖 Gerar';
                         btn.disabled = false;
@@ -1743,9 +1748,23 @@
             }
 
             btn.disabled = true;
-            btn.innerHTML = '⏳ Validando...';
-            status.textContent = 'Validando viabilidade do nicho...';
-            status.style.color = 'var(--aic-green)';
+
+            // Timer para mostrar tempo decorrido
+            let elapsed = 0;
+            const updateTimer = () => {
+                elapsed++;
+                const mins = Math.floor(elapsed / 60);
+                const secs = elapsed % 60;
+                btn.innerHTML = `⏳ Validando... ${mins > 0 ? mins + 'm ' : ''}${secs}s`;
+            };
+            const timerInterval = setInterval(updateTimer, 1000);
+            updateTimer();
+
+            status.innerHTML = `
+                <span style="color: var(--aic-yellow);">
+                    ⚠️ Análise semântica em andamento - pode levar alguns minutos dependendo do volume de dados...
+                </span>
+            `;
 
             try {
                 // Critérios de validação (mesmos do cluster-intention-dashboard)
@@ -1771,7 +1790,9 @@
                 if (result.success && result.data) {
                     lastNicheValidation = result.data;
                     renderNicheValidation(result.data);
-                    status.textContent = result.data.isViable ? '✅ Nicho viável!' : '⚠️ Nicho com baixa viabilidade';
+                    const timeStr = elapsed >= 60 ? `${Math.floor(elapsed/60)}m ${elapsed%60}s` : `${elapsed}s`;
+                    status.textContent = (result.data.isViable ? '✅ Nicho viável!' : '⚠️ Nicho com baixa viabilidade') + ` (${timeStr})`;
+                    status.style.color = result.data.isViable ? 'var(--aic-green)' : 'var(--aic-yellow)';
                 } else {
                     throw new Error(result.message || 'Erro na validação');
                 }
@@ -1782,6 +1803,7 @@
                 lastNicheValidation = null;
                 resultDiv.style.display = 'none';
             } finally {
+                clearInterval(timerInterval);
                 btn.disabled = false;
                 btn.innerHTML = '✓ Validar Nicho';
             }
@@ -1937,7 +1959,7 @@
                     const data = result.data;
                     const clustersCount = data.clusters?.length || 0;
                     const leadsCount = data.total_leads || 0;
-                    const silhouette = data.silhouette_avg || 0;
+                    const silhouette = data.avg_intra_similarity || 0;
 
                     status.innerHTML = `✅ ${clustersCount} clusters, ${leadsCount} leads | <a href="#" onclick="loadClusters(); loadClusterDistribution(); loadContactRateByCluster(); return false;" style="color: var(--aic-green);">Atualizar gráficos</a>`;
 
@@ -2741,5 +2763,8 @@
         setInterval(loadAllData, 300000); // Auto-refresh 5 min
         setInterval(loadVectorStoreStatus, 60000); // Auto-refresh Vector Store status every 1 min
     </script>
+
+    <!-- AIC Sidebar Navigation -->
+    <script src="/components/aic-sidebar.js"></script>
 </body>
 </html>

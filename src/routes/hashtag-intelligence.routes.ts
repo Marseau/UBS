@@ -3,7 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 import { aicEngineService } from '../services/aic-engine.service';
 import { nicheValidatorService, DEFAULT_CRITERIA, ViabilityCriteria } from '../services/niche-validator.service';
 import { clusteringEngineService } from '../services/clustering-engine.service';
-import { vectorClusteringService, executeHashtagVectorClustering } from '../services/vector-clustering.service';
+import { vectorClusteringService, executeHashtagVectorClustering, executeGraphClustering } from '../services/vector-clustering.service';
+import { campaignDocumentProcessor } from '../services/campaign-document-processor.service';
+import { suggestSeeds, validateSeeds } from '../services/seed-suggester.service';
 
 const router = express.Router();
 
@@ -42,6 +44,7 @@ router.get('/kpis', async (_req, res) => {
                 END as contact_status,
                 email,
                 phone,
+                whatsapp_number,
                 additional_emails,
                 additional_phones
             FROM instagram_leads
@@ -54,7 +57,7 @@ router.get('/kpis', async (_req, res) => {
                 COUNT(*) FILTER (WHERE contact_status = 'with_contact') as leads_with_contact,
                 COUNT(*) FILTER (WHERE contact_status = 'without_contact') as leads_without_contact,
                 COUNT(*) FILTER (WHERE email IS NOT NULL) as leads_with_email,
-                COUNT(*) FILTER (WHERE phone IS NOT NULL) as leads_with_phone,
+                COUNT(*) FILTER (WHERE whatsapp_number IS NOT NULL) as leads_with_whatsapp,
                 COUNT(*) FILTER (WHERE additional_emails IS NOT NULL AND jsonb_array_length(additional_emails) > 0) as leads_with_additional_emails,
                 COUNT(*) FILTER (WHERE additional_phones IS NOT NULL AND jsonb_array_length(additional_phones) > 0) as leads_with_additional_phones,
                 ROUND(COUNT(*) FILTER (WHERE contact_status = 'with_contact')::numeric / NULLIF(COUNT(*), 0)::numeric * 100, 1) as contact_rate
@@ -144,7 +147,7 @@ router.get('/kpis', async (_req, res) => {
       leads_with_contact: 0,
       leads_without_contact: 0,
       leads_with_email: 0,
-      leads_with_phone: 0,
+      leads_with_whatsapp: 0,
       leads_with_additional_emails: 0,
       leads_with_additional_phones: 0,
       contact_rate: 0,
@@ -313,48 +316,60 @@ router.get('/premium-hashtags', async (req, res) => {
 /**
  * GET /api/hashtag-intelligence/cooccurrences
  * Retorna top co-ocorrências de hashtags
+ *
+ * OTIMIZADO: Usa apenas top 100 hashtags mais frequentes para evitar O(n²)
+ * Antes: 284k hashtags × 284k = timeout
+ * Agora: 100 hashtags × 100 = ~5000 combinações (rápido)
  */
 router.get('/cooccurrences', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit as string) || 10;
 
-    console.log(`\n🔗 [API] Buscando top ${limit} co-ocorrências`);
+    console.log(`\n🔗 [API] Buscando top ${limit} co-ocorrências (otimizado)`);
 
     const { data, error } = await supabase.rpc('execute_sql', {
       query_text: `
-        WITH hashtag_pairs AS (
+        WITH
+        -- Passo 1: Identificar top 100 hashtags mais frequentes (últimos 45 dias)
+        top_hashtags AS (
+            SELECT hashtag, COUNT(*) as freq
+            FROM (
+                SELECT jsonb_array_elements_text(hashtags_bio) as hashtag, id
+                FROM instagram_leads
+                WHERE hashtags_bio IS NOT NULL
+                  AND (captured_at >= CURRENT_DATE - INTERVAL '45 days'
+                       OR updated_at >= CURRENT_DATE - INTERVAL '45 days')
+                UNION ALL
+                SELECT jsonb_array_elements_text(hashtags_posts) as hashtag, id
+                FROM instagram_leads
+                WHERE hashtags_posts IS NOT NULL
+                  AND (captured_at >= CURRENT_DATE - INTERVAL '45 days'
+                       OR updated_at >= CURRENT_DATE - INTERVAL '45 days')
+            ) t
+            WHERE hashtag IS NOT NULL AND hashtag != ''
+            GROUP BY hashtag
+            ORDER BY freq DESC
+            LIMIT 100
+        ),
+        -- Passo 2: Pegar apenas leads que têm essas top hashtags
+        lead_hashtags AS (
+            SELECT DISTINCT l.id as lead_id, th.hashtag
+            FROM instagram_leads l,
+            LATERAL jsonb_array_elements_text(
+                COALESCE(l.hashtags_bio, '[]'::jsonb) || COALESCE(l.hashtags_posts, '[]'::jsonb)
+            ) as h(hashtag)
+            JOIN top_hashtags th ON th.hashtag = h.hashtag
+            WHERE (l.captured_at >= CURRENT_DATE - INTERVAL '45 days'
+                   OR l.updated_at >= CURRENT_DATE - INTERVAL '45 days')
+        ),
+        -- Passo 3: Calcular co-ocorrências apenas entre top hashtags
+        hashtag_pairs AS (
             SELECT
                 a.hashtag as hashtag1,
                 b.hashtag as hashtag2,
                 COUNT(*) as cooccurrence
-            FROM (
-                SELECT DISTINCT
-                    id as lead_id,
-                    hashtag
-                FROM instagram_leads, jsonb_array_elements_text(hashtags_bio) as hashtag
-                WHERE hashtags_bio IS NOT NULL
-                UNION
-                SELECT DISTINCT
-                    id as lead_id,
-                    hashtag
-                FROM instagram_leads, jsonb_array_elements_text(hashtags_posts) as hashtag
-                WHERE hashtags_posts IS NOT NULL
-            ) a
-            JOIN (
-                SELECT DISTINCT
-                    id as lead_id,
-                    hashtag
-                FROM instagram_leads, jsonb_array_elements_text(hashtags_bio) as hashtag
-                WHERE hashtags_bio IS NOT NULL
-                UNION
-                SELECT DISTINCT
-                    id as lead_id,
-                    hashtag
-                FROM instagram_leads, jsonb_array_elements_text(hashtags_posts) as hashtag
-                WHERE hashtags_posts IS NOT NULL
-            ) b ON a.lead_id = b.lead_id AND a.hashtag < b.hashtag
-            WHERE a.hashtag IS NOT NULL AND a.hashtag != ''
-              AND b.hashtag IS NOT NULL AND b.hashtag != ''
+            FROM lead_hashtags a
+            JOIN lead_hashtags b ON a.lead_id = b.lead_id AND a.hashtag < b.hashtag
             GROUP BY a.hashtag, b.hashtag
         )
         SELECT * FROM hashtag_pairs
@@ -1957,6 +1972,7 @@ router.post('/execute-clustering', async (req, res) => {
     // Determinar modo de clusterização
     const normalizedMode = String(mode).toLowerCase();
     const isVectorMode = normalizedMode === 'vector';
+    const isGraphMode = normalizedMode === 'graph';
     const isHashtagVectorMode = normalizedMode === 'vector_hashtag';
 
     // Construir objeto de filtros
@@ -1968,12 +1984,24 @@ router.post('/execute-clustering', async (req, res) => {
 
     console.log(`\n🔬 [API] POST /execute-clustering - Nicho: ${nicho}, Seeds: [${(seeds || []).join(', ')}]`);
     if (k) console.log(`   📊 K fixo: ${k}`);
-    console.log(`   🧠 Modo: ${isVectorMode ? 'vector (pgvector)' : isHashtagVectorMode ? 'vector_hashtag' : 'hashtag'}`);
+    console.log(`   🧠 Modo: ${isGraphMode ? 'graph (HNSW connected components)' : isVectorMode ? 'vector (pgvector)' : isHashtagVectorMode ? 'vector_hashtag' : 'hashtag'}`);
     if (target_states?.length) console.log(`   🗺️  Estados: [${target_states.join(', ')}]`);
     console.log(`   📅 Recência: leads ≤${lead_max_age_days || 45}d, hashtags ≤${hashtag_max_age_days || 90}d`);
 
     let result;
-    if (isVectorMode) {
+    if (isGraphMode) {
+      // NOVO: Clustering por grafo de similaridade via HNSW
+      // Descobre K automaticamente baseado em densidade
+      result = await executeGraphClustering(
+        campaign_id,
+        nicho,
+        seeds || [],
+        filters,
+        30,   // kNeighbors
+        similarity_threshold || 0.72,  // threshold mais alto para graph
+        min_leads_per_cluster || 10
+      );
+    } else if (isVectorMode) {
       result = await vectorClusteringService.executeVectorClustering(
         campaign_id,
         nicho,
@@ -2228,45 +2256,7 @@ router.get('/similar-leads/:leadId', async (req, res) => {
   }
 });
 
-/**
- * POST /api/hashtag-intelligence/suggest-seeds
- * Sugere seeds adicionais para expandir um nicho
- *
- * Body:
- * {
- *   "current_seeds": ["gestao", "trafego"]
- * }
- */
-router.post('/suggest-seeds', async (req, res) => {
-  try {
-    const { current_seeds } = req.body;
-
-    if (!current_seeds || !Array.isArray(current_seeds) || current_seeds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Campo "current_seeds" é obrigatório e deve ser um array de strings'
-      });
-    }
-
-    console.log(`\n📊 [API] POST /suggest-seeds - Seeds atuais: [${current_seeds.join(', ')}]`);
-
-    const suggestions = await nicheValidatorService.suggestSeedExpansion(current_seeds);
-
-    return res.json({
-      success: true,
-      data: {
-        current_seeds,
-        suggestions
-      }
-    });
-  } catch (error: any) {
-    console.error('❌ Erro em /suggest-seeds:', error);
-    return res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
+// NOTA: Rota /suggest-seeds movida para o final do arquivo (usa busca semântica com embeddings)
 
 // ============================================
 // GERAÇÃO DE CONTEÚDO COM GPT-4
@@ -2401,6 +2391,30 @@ Baseie-se nos dados reais para criar uma persona REALISTA e ACIONÁVEL.`;
       } else {
         persisted = true;
         console.log(`   💾 Persona persistida na campanha ${campaign_id}`);
+
+        // Auto-criar documento RAG para a persona
+        try {
+          console.log(`   📄 Criando documento RAG para persona...`);
+          const docResult = await campaignDocumentProcessor.processDocument({
+            campaignId: campaign_id,
+            title: 'Persona ICP - Gerada Automaticamente',
+            docType: 'knowledge',
+            content: persona,
+            metadata: {
+              source: 'auto-generated',
+              generatedAt: new Date().toISOString(),
+              nicho: nicho
+            }
+          });
+
+          if (docResult.success) {
+            console.log(`   ✅ Documento RAG criado: ${docResult.chunksCreated} chunks`);
+          } else {
+            console.error(`   ⚠️ Erro ao criar documento RAG:`, docResult.error);
+          }
+        } catch (docError: any) {
+          console.error(`   ⚠️ Erro ao criar documento RAG:`, docError.message);
+        }
       }
     }
 
@@ -2557,6 +2571,31 @@ Os scripts devem ser:
       } else {
         persisted = true;
         console.log(`   💾 DM scripts persistidos na campanha ${campaign_id}`);
+
+        // Auto-criar documento RAG para os DM scripts
+        try {
+          console.log(`   📄 Criando documento RAG para DM scripts...`);
+          const docResult = await campaignDocumentProcessor.processDocument({
+            campaignId: campaign_id,
+            title: 'Scripts de DM Outreach - Gerados Automaticamente',
+            docType: 'script',
+            content: dm_scripts,
+            metadata: {
+              source: 'auto-generated',
+              generatedAt: new Date().toISOString(),
+              nicho: nicho,
+              tone: tone
+            }
+          });
+
+          if (docResult.success) {
+            console.log(`   ✅ Documento RAG criado: ${docResult.chunksCreated} chunks`);
+          } else {
+            console.error(`   ⚠️ Erro ao criar documento RAG:`, docResult.error);
+          }
+        } catch (docError: any) {
+          console.error(`   ⚠️ Erro ao criar documento RAG:`, docError.message);
+        }
       }
     }
 
@@ -4795,6 +4834,149 @@ Retorne APENAS um JSON válido no formato:
 
   } catch (error: any) {
     console.error('❌ Erro em /generate-seeds:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/hashtag-intelligence/suggest-seeds
+ * Sugere seeds para campanha baseado em análise de hashtags
+ *
+ * Body: { campaign_description: string }
+ *
+ * Metodologia:
+ * 1. Busca top 100 hashtags por frequência (freq >= 20)
+ * 2. Analisa relevância com GPT
+ * 3. Seleciona 50 melhores seeds
+ * 4. Categoriza por: profissões, serviços, interesses, outros
+ */
+router.post('/suggest-seeds', async (req, res) => {
+  try {
+    const { campaign_description } = req.body;
+
+    if (!campaign_description) {
+      return res.status(400).json({
+        success: false,
+        message: 'campaign_description é obrigatório'
+      });
+    }
+
+    console.log('\n🌱 [API] POST /suggest-seeds');
+    console.log(`   📝 Descrição: ${campaign_description.substring(0, 100)}...`);
+
+    const result = await suggestSeeds(campaign_description);
+
+    return res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro em /suggest-seeds:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/hashtag-intelligence/validate-seeds
+ * Valida se seeds existem no banco com frequência adequada
+ *
+ * Body: { seeds: string[] }
+ */
+router.post('/validate-seeds', async (req, res) => {
+  try {
+    const { seeds } = req.body;
+
+    if (!seeds || !Array.isArray(seeds)) {
+      return res.status(400).json({
+        success: false,
+        message: 'seeds deve ser um array de strings'
+      });
+    }
+
+    console.log('\n✅ [API] POST /validate-seeds');
+    console.log(`   🌱 Validando ${seeds.length} seeds...`);
+
+    const result = await validateSeeds(seeds);
+
+    return res.json({
+      success: true,
+      data: {
+        total: seeds.length,
+        valid_count: result.valid.length,
+        invalid_count: result.invalid.length,
+        valid: result.valid,
+        invalid: result.invalid,
+        frequencies: result.frequencies
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro em /validate-seeds:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/hashtag-intelligence/extract-from-docs
+ * Extrai Nicho, Público Alvo e Descrição dos documentos da campanha
+ *
+ * Body: { campaign_id: string }
+ *
+ * Resposta:
+ * {
+ *   success: true,
+ *   data: {
+ *     nicho: "string",
+ *     publicoAlvo: "string",
+ *     descricaoServico: "string"
+ *   }
+ * }
+ */
+router.post('/extract-from-docs', async (req, res) => {
+  try {
+    const { campaign_id } = req.body;
+
+    if (!campaign_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'campaign_id é obrigatório'
+      });
+    }
+
+    console.log('\n📄 [API] POST /extract-from-docs');
+    console.log(`   📋 Campaign ID: ${campaign_id}`);
+
+    const { campaignDocumentProcessor } = await import('../services/campaign-document-processor.service');
+    const result = await campaignDocumentProcessor.extractCampaignFields(campaign_id);
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error || 'Erro ao extrair campos dos documentos'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        nicho: result.nicho,
+        publicoAlvo: result.publicoAlvo,
+        descricaoServico: result.descricaoServico
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro em /extract-from-docs:', error);
     return res.status(500).json({
       success: false,
       message: error.message

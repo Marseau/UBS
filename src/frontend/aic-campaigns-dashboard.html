@@ -575,6 +575,118 @@
       color: var(--aic-gray);
     }
 
+    /* Form Layout */
+    .form-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .form-group {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .form-group label {
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+    .form-group select.modal-input {
+      height: 48px;
+      padding: 12px 16px;
+    }
+    textarea.modal-input {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    /* Confirmation Edit */
+    .confirmation-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .btn-edit {
+      background: transparent;
+      border: 1px solid #0ECC97;
+      color: #0ECC97;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-edit:hover {
+      background: #0ECC97;
+      color: #0C1B33;
+    }
+
+    /* Link Cliente Button */
+    .btn-action.link-btn {
+      background: transparent;
+      border: 1px solid #0ECC97;
+      color: #0ECC97;
+      cursor: pointer;
+    }
+    .btn-action.link-btn:hover {
+      background: rgba(14, 204, 151, 0.1);
+    }
+
+    /* Client Link Modal */
+    .link-modal-content {
+      background: var(--aic-card);
+      padding: 24px;
+      border-radius: 12px;
+      max-width: 600px;
+      width: 90%;
+    }
+    .link-display {
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+      word-break: break-all;
+      font-family: monospace;
+      font-size: 14px;
+      color: #0ECC97;
+    }
+    .link-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .btn-copy-link {
+      flex: 1;
+      padding: 12px;
+      background: #0ECC97;
+      color: #0C1B33;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-copy-link:hover {
+      background: #0bb584;
+    }
+    .btn-whatsapp {
+      flex: 1;
+      padding: 12px;
+      background: #25D366;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-whatsapp:hover {
+      background: #1da851;
+    }
+
     /* Objective Grid */
     .objective-grid {
       display: grid;
@@ -842,78 +954,177 @@
         <div class="wizard-steps">
           <div class="wizard-step active" data-step="1">
             <div class="step-number">1</div>
-            <div class="step-label">Nome</div>
+            <div class="step-label">Cliente</div>
           </div>
           <div class="wizard-step" data-step="2">
             <div class="step-number">2</div>
-            <div class="step-label">Objetivo</div>
+            <div class="step-label">Negocio</div>
           </div>
           <div class="wizard-step" data-step="3">
             <div class="step-number">3</div>
+            <div class="step-label">Campanha</div>
+          </div>
+          <div class="wizard-step" data-step="4">
+            <div class="step-number">4</div>
             <div class="step-label">Confirmar</div>
           </div>
         </div>
 
-        <!-- Step 1: Nome da Campanha -->
+        <!-- Step 1: Dados do Cliente -->
         <div class="wizard-content active" data-step="1">
-          <h3>Como você quer chamar sua campanha?</h3>
-          <p>Escolha um nome descritivo que identifique facilmente o objetivo</p>
-          <input type="text" id="campaign-name" class="modal-input" placeholder="Ex: Busca Leads Agendamento, Prospecção LinkedIn B2B">
-          <div class="input-helper">O nome será usado para gerar a URL amigável</div>
+          <h3>Dados do Cliente</h3>
+          <p>Informacoes de contato do responsavel pela campanha</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Nome do Contato *</label>
+              <input type="text" id="client-contact-name" class="modal-input" placeholder="Nome completo">
+            </div>
+            <div class="form-group">
+              <label>Email *</label>
+              <input type="email" id="client-email" class="modal-input" placeholder="email@empresa.com">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>WhatsApp *</label>
+              <input type="tel" id="client-whatsapp" class="modal-input" placeholder="(11) 99999-9999">
+            </div>
+            <div class="form-group">
+              <label>CNPJ/CPF</label>
+              <input type="text" id="client-document" class="modal-input" placeholder="00.000.000/0000-00">
+            </div>
+          </div>
+          <div class="form-group" style="margin-top: 16px;">
+            <label>Qual sua principal dor/desafio hoje? *</label>
+            <textarea id="client-pain-point" class="modal-input" rows="3" placeholder="Ex: Preciso de mais clientes qualificados, meu time comercial perde muito tempo com leads frios, nao consigo escalar minhas vendas..."></textarea>
+            <div class="input-helper">Isso nos ajuda a personalizar toda a abordagem da campanha</div>
+          </div>
         </div>
 
-        <!-- Step 2: Objetivo -->
+        <!-- Step 2: Dados do Negocio -->
         <div class="wizard-content" data-step="2">
-          <h3>Qual o objetivo principal desta campanha?</h3>
-          <p>Selecione o que melhor descreve o resultado que você busca</p>
+          <h3>Dados do Negocio</h3>
+          <p>Informacoes sobre a empresa do cliente</p>
+          <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+              <label>Nome da Empresa *</label>
+              <input type="text" id="business-name" class="modal-input" placeholder="Razao social ou nome fantasia">
+            </div>
+            <div class="form-group">
+              <label>Tipo de Negocio</label>
+              <select id="business-type" class="modal-input">
+                <option value="">Selecione...</option>
+                <option value="servicos">Servicos</option>
+                <option value="comercio">Comercio</option>
+                <option value="industria">Industria</option>
+                <option value="saude">Saude</option>
+                <option value="educacao">Educacao</option>
+                <option value="tecnologia">Tecnologia</option>
+                <option value="financeiro">Financeiro</option>
+                <option value="imobiliario">Imobiliario</option>
+                <option value="alimentacao">Alimentacao</option>
+                <option value="outro">Outro</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+              <label>Cidade</label>
+              <input type="text" id="client-city" class="modal-input" placeholder="Ex: Sao Paulo">
+            </div>
+            <div class="form-group">
+              <label>Estado</label>
+              <select id="client-state" class="modal-input">
+                <option value="">UF</option>
+                <option value="AC">AC</option><option value="AL">AL</option><option value="AP">AP</option>
+                <option value="AM">AM</option><option value="BA">BA</option><option value="CE">CE</option>
+                <option value="DF">DF</option><option value="ES">ES</option><option value="GO">GO</option>
+                <option value="MA">MA</option><option value="MT">MT</option><option value="MS">MS</option>
+                <option value="MG">MG</option><option value="PA">PA</option><option value="PB">PB</option>
+                <option value="PR">PR</option><option value="PE">PE</option><option value="PI">PI</option>
+                <option value="RJ">RJ</option><option value="RN">RN</option><option value="RS">RS</option>
+                <option value="RO">RO</option><option value="RR">RR</option><option value="SC">SC</option>
+                <option value="SP">SP</option><option value="SE">SE</option><option value="TO">TO</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top: 16px;">
+            <label>Nome do Projeto *</label>
+            <input type="text" id="project-name" class="modal-input" placeholder="Ex: Lancamento 2025, Expansao Regional, Black Friday">
+            <div class="input-helper">Agrupa campanhas relacionadas do mesmo cliente</div>
+          </div>
+        </div>
+
+        <!-- Step 3: Campanha -->
+        <div class="wizard-content" data-step="3">
+          <h3>Configuracao da Campanha</h3>
+          <p>Defina nome e objetivo da campanha</p>
+          <div class="form-group" style="margin-bottom: 24px;">
+            <label>Nome da Campanha *</label>
+            <input type="text" id="campaign-name" class="modal-input" placeholder="Ex: Prospeccao Clinicas SP, Leads Advogados">
+            <div class="input-helper">Nome que identifica a campanha internamente</div>
+          </div>
+          <label style="display: block; margin-bottom: 12px; color: #94a3b8;">Objetivo Principal</label>
           <div class="objective-grid">
             <label class="objective-card">
-              <input type="radio" name="objective" value="lead_generation">
+              <input type="radio" name="objective" value="lead_generation" checked>
               <div class="objective-icon">🎯</div>
-              <div class="objective-title">Geração de Leads</div>
-              <div class="objective-desc">Encontrar potenciais clientes qualificados</div>
+              <div class="objective-title">Geracao de Leads</div>
+              <div class="objective-desc">Encontrar potenciais clientes</div>
             </label>
             <label class="objective-card">
               <input type="radio" name="objective" value="brand_awareness">
               <div class="objective-icon">📢</div>
               <div class="objective-title">Brand Awareness</div>
-              <div class="objective-desc">Aumentar visibilidade da marca</div>
+              <div class="objective-desc">Aumentar visibilidade</div>
             </label>
             <label class="objective-card">
               <input type="radio" name="objective" value="engagement">
               <div class="objective-icon">💬</div>
               <div class="objective-title">Engajamento</div>
-              <div class="objective-desc">Criar conexões e conversas</div>
+              <div class="objective-desc">Criar conexoes</div>
             </label>
             <label class="objective-card">
               <input type="radio" name="objective" value="sales">
               <div class="objective-icon">💰</div>
               <div class="objective-title">Vendas Diretas</div>
-              <div class="objective-desc">Converter leads em clientes</div>
+              <div class="objective-desc">Converter em clientes</div>
             </label>
           </div>
         </div>
 
-        <!-- Step 3: Confirmação -->
-        <div class="wizard-content" data-step="3">
-          <h3>Tudo pronto para criar sua campanha!</h3>
+        <!-- Step 4: Confirmacao -->
+        <div class="wizard-content" data-step="4">
+          <h3>Confirme os dados da campanha</h3>
           <div class="confirmation-box">
-            <div class="confirmation-item">
-              <strong>Nome:</strong>
-              <span id="confirm-name">-</span>
+            <div class="confirmation-section">
+              <div class="confirmation-header">
+                <h4 style="color: #0ECC97; margin: 0;">Cliente</h4>
+                <button class="btn-edit" onclick="goToStep(1)">Editar</button>
+              </div>
+              <div class="confirmation-item"><strong>Contato:</strong> <span id="confirm-contact">-</span></div>
+              <div class="confirmation-item"><strong>Email:</strong> <span id="confirm-email">-</span></div>
+              <div class="confirmation-item"><strong>WhatsApp:</strong> <span id="confirm-whatsapp">-</span></div>
+              <div class="confirmation-item"><strong>Documento:</strong> <span id="confirm-document">-</span></div>
+              <div class="confirmation-item"><strong>Dor/Desafio:</strong> <span id="confirm-pain-point">-</span></div>
             </div>
-            <div class="confirmation-item">
-              <strong>Objetivo:</strong>
-              <span id="confirm-objective">-</span>
+            <div class="confirmation-section" style="margin-top: 16px;">
+              <div class="confirmation-header">
+                <h4 style="color: #0ECC97; margin: 0;">Negocio</h4>
+                <button class="btn-edit" onclick="goToStep(2)">Editar</button>
+              </div>
+              <div class="confirmation-item"><strong>Empresa:</strong> <span id="confirm-business">-</span></div>
+              <div class="confirmation-item"><strong>Tipo:</strong> <span id="confirm-type">-</span></div>
+              <div class="confirmation-item"><strong>Local:</strong> <span id="confirm-location">-</span></div>
+              <div class="confirmation-item"><strong>Projeto:</strong> <span id="confirm-project">-</span></div>
             </div>
-            <div class="confirmation-item">
-              <strong>Próximos passos:</strong>
-              <ol>
-                <li>Configurar credenciais (Instagram/WhatsApp)</li>
-                <li>Preencher briefing da campanha</li>
-                <li>Upload de documentos de contexto</li>
-                <li>Ativar a campanha</li>
-              </ol>
+            <div class="confirmation-section" style="margin-top: 16px;">
+              <div class="confirmation-header">
+                <h4 style="color: #0ECC97; margin: 0;">Campanha</h4>
+                <button class="btn-edit" onclick="goToStep(3)">Editar</button>
+              </div>
+              <div class="confirmation-item"><strong>Nome:</strong> <span id="confirm-name">-</span></div>
+              <div class="confirmation-item"><strong>Objetivo:</strong> <span id="confirm-objective">-</span></div>
             </div>
           </div>
         </div>
@@ -988,27 +1199,10 @@
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
-      // Check authentication first
-      if (!checkAICTeamAuth()) {
-        window.location.href = '/aic-landing.html';
-        return;
-      }
-
       loadUserInfo();
       loadCampaigns();
       setupFilterTabs();
     });
-
-    // Check if user is part of AIC internal team
-    function checkAICTeamAuth() {
-      // Simple authentication check - can be enhanced later
-      const aicTeamToken = localStorage.getItem('aic_team_token');
-      const aicTeamEmail = localStorage.getItem('aic_team_email');
-
-      // For development, allow access if either exists OR if bypass flag is set
-      // In production, this should be a proper JWT validation
-      return !!(aicTeamToken || aicTeamEmail || localStorage.getItem('aic_dev_bypass'));
-    }
 
     // Load user info
     async function loadUserInfo() {
@@ -1129,15 +1323,18 @@
           </div>
 
           <div class="campaign-actions">
-            <a href="/campaign/${campaign.slug || campaign.id}/briefing" class="btn-action primary">
-              📋 Briefing
+            <a href="/cluster-intention-dashboard.html?campaign=${campaign.id}" class="btn-action primary">
+              🎯 Clusters
             </a>
-            <a href="/campaign/${campaign.slug || campaign.id}/credentials" class="btn-action">
-              🔑 Credenciais
+            <a href="/campaign/${campaign.slug || campaign.id}/briefing" class="btn-action">
+              📋 Briefing
             </a>
             <a href="/campaign/${campaign.slug || campaign.id}/analytics" class="btn-action">
               📊 Analytics
             </a>
+            <button class="btn-action link-btn" onclick="showClientLink('${campaign.id}', '${campaign.campaign_name}')">
+              🔗 Link Cliente
+            </button>
           </div>
         </div>
       `;
@@ -1257,18 +1454,91 @@
 
     // Create new campaign
     // ============================================================================
+    // INPUT MASKS (Telefone, CPF, CNPJ)
+    // ============================================================================
+
+    function maskPhone(value) {
+      value = value.replace(/\D/g, '');
+      if (value.length <= 10) {
+        // Telefone fixo: (11) 1234-5678
+        value = value.replace(/^(\d{2})(\d)/g, '($1) $2');
+        value = value.replace(/(\d{4})(\d)/, '$1-$2');
+      } else {
+        // Celular: (11) 91234-5678
+        value = value.replace(/^(\d{2})(\d)/g, '($1) $2');
+        value = value.replace(/(\d{5})(\d)/, '$1-$2');
+      }
+      return value.substring(0, 15);
+    }
+
+    function maskCPF(value) {
+      value = value.replace(/\D/g, '');
+      value = value.replace(/(\d{3})(\d)/, '$1.$2');
+      value = value.replace(/(\d{3})(\d)/, '$1.$2');
+      value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+      return value.substring(0, 14);
+    }
+
+    function maskCNPJ(value) {
+      value = value.replace(/\D/g, '');
+      value = value.replace(/^(\d{2})(\d)/, '$1.$2');
+      value = value.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+      value = value.replace(/\.(\d{3})(\d)/, '.$1/$2');
+      value = value.replace(/(\d{4})(\d)/, '$1-$2');
+      return value.substring(0, 18);
+    }
+
+    function maskDocument(value) {
+      const numbers = value.replace(/\D/g, '');
+      if (numbers.length <= 11) {
+        return maskCPF(value);
+      } else {
+        return maskCNPJ(value);
+      }
+    }
+
+    // Aplicar mascaras aos inputs quando DOM carregar
+    document.addEventListener('DOMContentLoaded', function() {
+      const phoneInput = document.getElementById('client-whatsapp');
+      const docInput = document.getElementById('client-document');
+
+      if (phoneInput) {
+        phoneInput.addEventListener('input', function(e) {
+          e.target.value = maskPhone(e.target.value);
+        });
+      }
+
+      if (docInput) {
+        docInput.addEventListener('input', function(e) {
+          e.target.value = maskDocument(e.target.value);
+        });
+      }
+    });
+
+    // ============================================================================
     // MODAL WIZARD FUNCTIONS
     // ============================================================================
 
     let currentStep = 1;
-    const totalSteps = 3;
+    const totalSteps = 4;
     let campaignData = {
       name: '',
-      objective: ''
+      objective: '',
+      // Cliente
+      client_contact_name: '',
+      client_email: '',
+      client_whatsapp_number: '',
+      client_document: '',
+      client_pain_point: '',
+      // Negocio
+      business_name: '',
+      business_type: '',
+      client_city: '',
+      client_state: '',
+      project_name: ''
     };
 
     function createNewCampaign() {
-      // Open modal
       document.getElementById('create-campaign-modal').classList.add('active');
       currentStep = 1;
       updateWizardUI();
@@ -1276,41 +1546,85 @@
 
     function closeCreateModal() {
       document.getElementById('create-campaign-modal').classList.remove('active');
-      // Reset form
+      // Reset all form fields
+      document.getElementById('client-contact-name').value = '';
+      document.getElementById('client-email').value = '';
+      document.getElementById('client-whatsapp').value = '';
+      document.getElementById('client-document').value = '';
+      document.getElementById('client-pain-point').value = '';
+      document.getElementById('business-name').value = '';
+      document.getElementById('business-type').value = '';
+      document.getElementById('client-city').value = '';
+      document.getElementById('client-state').value = '';
+      document.getElementById('project-name').value = '';
       document.getElementById('campaign-name').value = '';
       document.querySelectorAll('input[name="objective"]').forEach(input => input.checked = false);
+      document.querySelector('input[name="objective"][value="lead_generation"]').checked = true;
       currentStep = 1;
+      campaignData = { name: '', objective: '', client_contact_name: '', client_email: '', client_whatsapp_number: '', client_document: '', client_pain_point: '', business_name: '', business_type: '', client_city: '', client_state: '', project_name: '' };
       updateWizardUI();
     }
 
     function wizardNext() {
-      // Validate current step
+      // Step 1: Dados do Cliente
       if (currentStep === 1) {
-        const name = document.getElementById('campaign-name').value.trim();
-        if (!name) {
-          alert('Por favor, digite um nome para a campanha');
-          return;
-        }
-        campaignData.name = name;
+        const contactName = document.getElementById('client-contact-name').value.trim();
+        const email = document.getElementById('client-email').value.trim();
+        const whatsapp = document.getElementById('client-whatsapp').value.trim();
+        const painPoint = document.getElementById('client-pain-point').value.trim();
+
+        if (!contactName) { alert('Por favor, digite o nome do contato'); return; }
+        if (!email) { alert('Por favor, digite o email'); return; }
+        if (!whatsapp) { alert('Por favor, digite o WhatsApp'); return; }
+        if (!painPoint) { alert('Por favor, descreva a principal dor/desafio'); return; }
+
+        campaignData.client_contact_name = contactName;
+        campaignData.client_email = email;
+        campaignData.client_whatsapp_number = whatsapp;
+        campaignData.client_document = document.getElementById('client-document').value.trim();
+        campaignData.client_pain_point = painPoint;
       }
 
+      // Step 2: Dados do Negocio
       if (currentStep === 2) {
-        const objective = document.querySelector('input[name="objective"]:checked');
-        if (!objective) {
-          alert('Por favor, selecione um objetivo');
-          return;
-        }
-        campaignData.objective = objective.value;
+        const businessName = document.getElementById('business-name').value.trim();
+        const projectName = document.getElementById('project-name').value.trim();
+        if (!businessName) { alert('Por favor, digite o nome da empresa'); return; }
+        if (!projectName) { alert('Por favor, digite o nome do projeto'); return; }
 
-        // Update confirmation
+        campaignData.business_name = businessName;
+        campaignData.business_type = document.getElementById('business-type').value;
+        campaignData.client_city = document.getElementById('client-city').value.trim();
+        campaignData.client_state = document.getElementById('client-state').value;
+        campaignData.project_name = projectName;
+      }
+
+      // Step 3: Campanha
+      if (currentStep === 3) {
+        const name = document.getElementById('campaign-name').value.trim();
+        const objective = document.querySelector('input[name="objective"]:checked');
+
+        if (!name) { alert('Por favor, digite o nome da campanha'); return; }
+
+        campaignData.name = name;
+        campaignData.objective = objective ? objective.value : 'lead_generation';
+
+        // Update confirmation page
+        document.getElementById('confirm-contact').textContent = campaignData.client_contact_name;
+        document.getElementById('confirm-email').textContent = campaignData.client_email;
+        document.getElementById('confirm-whatsapp').textContent = campaignData.client_whatsapp_number;
+        document.getElementById('confirm-document').textContent = campaignData.client_document || '-';
+        document.getElementById('confirm-pain-point').textContent = campaignData.client_pain_point;
+        document.getElementById('confirm-business').textContent = campaignData.business_name;
+        document.getElementById('confirm-type').textContent = campaignData.business_type || '-';
+        document.getElementById('confirm-location').textContent =
+          (campaignData.client_city && campaignData.client_state)
+            ? `${campaignData.client_city} - ${campaignData.client_state}`
+            : (campaignData.client_city || campaignData.client_state || '-');
+        document.getElementById('confirm-project').textContent = campaignData.project_name;
         document.getElementById('confirm-name').textContent = campaignData.name;
-        const objectiveLabels = {
-          lead_generation: 'Geração de Leads',
-          brand_awareness: 'Brand Awareness',
-          engagement: 'Engajamento',
-          sales: 'Vendas Diretas'
-        };
-        document.getElementById('confirm-objective').textContent = objectiveLabels[campaignData.objective];
+        const objectiveLabels = { lead_generation: 'Geracao de Leads', brand_awareness: 'Brand Awareness', engagement: 'Engajamento', sales: 'Vendas Diretas' };
+        document.getElementById('confirm-objective').textContent = objectiveLabels[campaignData.objective] || campaignData.objective;
       }
 
       if (currentStep < totalSteps) {
@@ -1324,6 +1638,11 @@
         currentStep--;
         updateWizardUI();
       }
+    }
+
+    function goToStep(step) {
+      currentStep = step;
+      updateWizardUI();
     }
 
     function updateWizardUI() {
@@ -1359,7 +1678,8 @@
         });
 
         if (!response.ok) {
-          throw new Error('Failed to create campaign');
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create campaign');
         }
 
         const result = await response.json();
@@ -1367,14 +1687,12 @@
         // Close creation modal
         closeCreateModal();
 
-        // Reload campaigns
-        await loadCampaigns();
-
-        // Show link modal instead of redirecting
-        showLinkModal(result.campaign.id, campaignData.name);
+        // Redirect to cluster-intention-dashboard with campaign ID
+        // This is where we define niches, hashtags, and clustering
+        window.location.href = `/cluster-intention-dashboard.html?campaign=${result.campaign.id}&new=true`;
       } catch (error) {
         console.error('[Create Campaign] Error:', error);
-        alert('❌ Erro ao criar campanha. Tente novamente.');
+        alert('❌ Erro ao criar campanha: ' + error.message);
       }
     }
 
@@ -1472,6 +1790,55 @@
         alert('❌ Erro ao atualizar status da campanha');
       }
     }
+
+    // ============================================================================
+    // CLIENT LINK FUNCTIONS
+    // ============================================================================
+
+    let currentClientLink = '';
+
+    function showClientLink(campaignId, campaignName) {
+      // Gerar o link para o cliente
+      const baseUrl = 'https://aic.ubs.app.br';
+      currentClientLink = `${baseUrl}/aic-campaign-onboarding.html?campaign=${campaignId}`;
+
+      // Atualizar o modal existente
+      document.getElementById('success-campaign-name').textContent = campaignName;
+      document.getElementById('campaign-link-input').value = currentClientLink;
+
+      // Abrir o modal
+      document.getElementById('campaign-link-modal').classList.add('active');
+    }
+
+    function closeLinkModal() {
+      document.getElementById('campaign-link-modal').classList.remove('active');
+    }
+
+    function copyLinkToClipboard() {
+      const linkInput = document.getElementById('campaign-link-input');
+      linkInput.select();
+      document.execCommand('copy');
+
+      // Feedback visual
+      const btn = event.target;
+      const originalText = btn.textContent;
+      btn.textContent = 'Copiado!';
+      btn.style.background = '#0ECC97';
+      setTimeout(() => {
+        btn.textContent = originalText;
+        btn.style.background = '';
+      }, 2000);
+    }
+
+    function sendViaWhatsApp() {
+      const message = encodeURIComponent(
+        `Ola! Segue o link para configurar sua campanha AIC:\n\n${currentClientLink}\n\nAcesse para configurar suas credenciais e preencher o briefing.`
+      );
+      window.open(`https://wa.me/?text=${message}`, '_blank');
+    }
   </script>
+
+  <!-- AIC Sidebar Navigation -->
+  <script src="/components/aic-sidebar.js"></script>
 </body>
 </html>

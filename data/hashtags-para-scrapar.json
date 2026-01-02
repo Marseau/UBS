@@ -1,0 +1,187 @@
+{
+  "gerado_em": "2025-11-26",
+  "objetivo": "Preencher gaps de nichos com dados insuficientes para validação",
+  "criterios_validacao": {
+    "minHashtagsWithFreq5": 20,
+    "minUniqueLeads": 100,
+    "minHashtagsWithLeads3": 5,
+    "minContactRate": 20
+  },
+  "nichos": {
+    "marketingdigital": {
+      "status_atual": { "hashtags_freq5": 5, "leads": 654, "gap": 15 },
+      "prioridade": "alta",
+      "hashtags": [
+        "marketingdigital", "marketingdeconteudo", "marketingonline", "marketingderesultados",
+        "digitalmarketing", "marketingdigitalbrasil", "estrategiasdigitais", "marketingparaempreendedores",
+        "socialmediamarketing", "contentmarketing", "inboundmarketing", "marketingdeafiliados",
+        "emailmarketing", "marketingdeinfluencia", "growthmarketing", "performancemarketing",
+        "agenciadigital", "consultoriadigital", "estrategistadigital", "marketeiro",
+        "copywriting", "funil", "funildevendas", "lancamento", "lancamentodigital"
+      ]
+    },
+    "trafego": {
+      "status_atual": { "hashtags_freq5": 7, "leads": 512, "gap": 13 },
+      "prioridade": "alta",
+      "hashtags": [
+        "trafegopago", "gestordetrafego", "trafegomanager", "trafegoorganico",
+        "anunciosonline", "midiapaga", "compradetrafego", "trafegoqualificado",
+        "facebookads", "googleads", "instagramads", "tiktokads", "linkedinads",
+        "metaads", "youtubeads", "pinterestads", "spotifyads",
+        "gestordeanuncios", "anunciospatrocinados", "roi", "cpa", "cpc", "ctr",
+        "remarketing", "retargeting", "pixelfacebook", "conversao"
+      ]
+    },
+    "coach": {
+      "status_atual": { "hashtags_freq5": 5, "leads": 213, "gap": 15 },
+      "prioridade": "alta",
+      "hashtags": [
+        "coach", "coaching", "coachdevida", "lifecoach", "coachdecarreira",
+        "coachfinanceiro", "coachempresarial", "businesscoach", "executivecoach",
+        "coachdeemagrecimento", "coachderelacionamento", "coachdelideranca",
+        "mindsetcoach", "coachdesucesso", "highperformance", "coachingonline",
+        "mentoria", "mentor", "mentordevendas", "mentordenegocios", "mentoraempresarial",
+        "desenvolvimentopessoal", "transformacao", "metaseconsquistas"
+      ]
+    },
+    "unha": {
+      "status_atual": { "hashtags_freq5": 7, "leads": 191, "gap": 13 },
+      "prioridade": "media",
+      "hashtags": [
+        "unhas", "unhasdecoradas", "unhasperfeitas", "unhaslindas", "unhasdasemana",
+        "naildesigner", "nailart", "nails", "nailsofinstagram", "nailtech",
+        "unhasdegel", "unhasemgel", "gelunhas", "unhasacrigel", "fibradeidro",
+        "unhasdeporcelana", "alongamentodeunhas", "unhasposticas", "unhasemacrilico",
+        "manicure", "manicureprofissional", "manicurebrasileira", "nailartist",
+        "esmalteria", "studiodenails", "espacodeunhas", "cursomanicure"
+      ]
+    },
+    "cabelo": {
+      "status_atual": { "hashtags_freq5": 6, "leads": 163, "gap": 14 },
+      "prioridade": "media",
+      "hashtags": [
+        "cabelo", "cabelos", "cabeloperfeito", "cabelolindo", "cabelodivo",
+        "hair", "hairstyle", "haircut", "haircolor", "hairdesign",
+        "cabeleireiro", "cabeleireira", "hairsylist", "hairdresser", "colorista",
+        "visagista", "salaodebeleza", "salaobeleza", "barbearia", "barbeiro",
+        "cortefeminino", "cortemasculino", "mechas", "luzes", "balayage", "ombre",
+        "progressiva", "botox", "hidratacao", "tratamentocapilar", "reconstrucao"
+      ]
+    },
+    "maquiagem": {
+      "status_atual": { "hashtags_freq5": 3, "leads": 73, "gap": 17 },
+      "prioridade": "alta",
+      "hashtags": [
+        "maquiagem", "maquiagemprofissional", "makeup", "makeuptutorial", "makeupartist",
+        "maquiadora", "maquiadoraprofissional", "beautymakeup", "makeuplovers",
+        "makenoiva", "maquiagemdenoiva", "makeformatura", "makefesta", "makesocial",
+        "makeartistica", "makenatural", "makeclassica", "makeglam", "makeeditorial",
+        "contorno", "contouring", "sobrancelhaperfeita", "ciliosposticos", "extensaodecilios",
+        "designdesobrancelha", "micropigmentacao", "labios", "olhoesfumado"
+      ]
+    },
+    "sobrancelha": {
+      "status_atual": { "hashtags_freq5": 3, "leads": 73, "gap": 17 },
+      "prioridade": "alta",
+      "hashtags": [
+        "sobrancelha", "sobrancelhas", "sobrancelhaperfeita", "sobrancelhalinda",
+        "designdesobrancelha", "designerdesobrancelha", "sobrancelhadiva",
+        "micropigmentacao", "micropigmentacaodesobrancelha", "microblading", "nanoblading",
+        "shadowbrows", "powderbrows", "ombrebrows", "fioapio", "sobrancelhafioapio",
+        "designerdepermanente", "especialistaemsobrancelha", "browartist", "browdesigner",
+        "henna", "hennasobrancelha", "sobrancelhadehenna", "browlamination", "laminacaodesobrancelha"
+      ]
+    },
+    "personal": {
+      "status_atual": { "hashtags_freq5": 6, "leads": 293, "gap": 14 },
+      "prioridade": "media",
+      "hashtags": [
+        "personal", "personaltrainer", "personalonline", "personaloffline",
+        "treinadorpessoal", "treinopersonalizado", "consultoriaonline", "assessoriaesportiva",
+        "treinofuncional", "treinodehipertrofia", "treinofeminino", "personalgestante",
+        "treino50mais", "personalparaobeso", "treinoparaidosos", "treinoaolado",
+        "fitnessprofessional", "educadorfisico", "profissionaldeeducacaofisica", "cref",
+        "treinoonline", "planilhadetreino", "prescricaodetreino", "periodizacao"
+      ]
+    },
+    "fitness": {
+      "status_atual": { "hashtags_freq5": 10, "leads": 349, "gap": 10 },
+      "prioridade": "media",
+      "hashtags": [
+        "fitness", "fitnessbrasil", "fitnesslife", "fitnessmotivation", "fitnesslifestyle",
+        "vidasaudavel", "vidafit", "estilodevida", "bemestar", "qualidadedevida",
+        "academia", "musculacao", "treino", "treinopesado", "hipertrofia", "definicao",
+        "crossfit", "funcional", "aerobico", "cardio", "hiit", "spinning",
+        "fitgirl", "fitboy", "fitnessmodel", "bodybuilding", "shapeemconstrucao",
+        "foconofoco", "disciplina", "determinacao", "nuncadesista"
+      ]
+    },
+    "pilates": {
+      "status_atual": { "hashtags_freq5": 2, "leads": 100, "gap": 18 },
+      "prioridade": "alta",
+      "hashtags": [
+        "pilates", "pilatesbrasil", "pilateslovers", "pilateslife", "pilateseveryday",
+        "pilatesinstrutor", "instrutordepilates", "studiodepilates", "pilatestudio",
+        "pilatesreformer", "pilatesaparelho", "pilatessolo", "matpilates", "pilatesball",
+        "pilatesclinico", "pilatesparagestante", "pilatesterceiraidade", "pilatesparaidosos",
+        "metodopilates", "josephpilates", "contrology", "powerhouse", "respiracao",
+        "flexibilidade", "fortalecimento", "postura", "conscienciacorporal"
+      ]
+    },
+    "yoga": {
+      "status_atual": { "hashtags_freq5": 2, "leads": 99, "gap": 18 },
+      "prioridade": "alta",
+      "hashtags": [
+        "yoga", "yogabrasil", "yogalife", "yogalove", "yogaeveryday", "yogapractice",
+        "yogainstrutor", "professorrayoga", "aulayoga", "classedeyoga", "studiodeyoga",
+        "hathayoga", "vinyasa", "vinyasayoga", "ashtanga", "kundalini", "iyengar",
+        "yogaflow", "poweryoga", "yinyoga", "yogarestaurativa", "yoganidra",
+        "meditacao", "pranayama", "asana", "namaste", "chakras", "mantra",
+        "mindfulness", "consciencia", "autoconhecimento", "bemestarespiritual"
+      ]
+    },
+    "fisioterapia": {
+      "status_atual": { "hashtags_freq5": 8, "leads": 351, "gap": 12 },
+      "prioridade": "media",
+      "hashtags": [
+        "fisioterapia", "fisioterapeuta", "fisio", "physiotherapy", "physio",
+        "fisioterapiabrasil", "crefito", "fisioprofissional", "clinicadefisioterapia",
+        "fisioortopedica", "fisioesportiva", "fisioneurologica", "fisiorespiatoria",
+        "rpg", "pilatesclínico", "quiropraxia", "osteopatia", "acupuntura",
+        "reabilitacao", "reabilitacaofisica", "tratamentofisioterapeutico", "dor",
+        "lesao", "recuperacao", "postura", "coluna", "joelho", "ombro"
+      ]
+    },
+    "dentista": {
+      "status_atual": { "hashtags_freq5": 2, "leads": 120, "gap": 18 },
+      "prioridade": "alta",
+      "hashtags": [
+        "dentista", "odontologia", "odonto", "dentistry", "odontologo",
+        "cirurgiaodentista", "clinicaodontologica", "consultorioodontologico",
+        "ortodontia", "ortodontista", "implante", "implantedentario", "protese",
+        "endodontia", "periodontia", "odontopediatria", "harmonizacaofacial",
+        "lentesdecontato", "clareamento", "clareamentodental", "sorriso", "sorrisoperfeito",
+        "facetas", "designdosoriso", "esteticadental", "odontoporamor"
+      ]
+    },
+    "medico": {
+      "status_atual": { "hashtags_freq5": 13, "leads": 380, "gap": 7 },
+      "prioridade": "baixa",
+      "hashtags": [
+        "medico", "medicina", "medicinabrasileira", "doctor", "saude",
+        "clinicamedica", "consultoriomedico", "atendimentomedico",
+        "dermatologista", "cardiologista", "ginecologista", "pediatra", "ortopedista",
+        "psiquiatra", "neurologista", "endocrinologista", "nutricionista", "geriatra",
+        "cirurgiaplastica", "medicinaestetica", "nutrologia", "medicinaesportiva",
+        "medicinadotrabalho", "medicinarural", "medicinafamiliar", "clinicogeral"
+      ]
+    }
+  },
+  "resumo": {
+    "total_hashtags": 381,
+    "total_nichos": 14,
+    "nichos_prioridade_alta": ["marketingdigital", "trafego", "coach", "maquiagem", "sobrancelha", "pilates", "yoga", "dentista"],
+    "nichos_prioridade_media": ["unha", "cabelo", "personal", "fitness", "fisioterapia"],
+    "nichos_prioridade_baixa": ["medico"]
+  }
+}

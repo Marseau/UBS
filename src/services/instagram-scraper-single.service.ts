@@ -21,6 +21,12 @@ import {
   moveMouseHuman
 } from './instagram-stealth.service';
 import { proxyRotationService } from './proxy-rotation.service';
+import {
+  extractWhatsAppForPersistence,
+  isWaMessageLink,
+  extractWhatsAppFromMessageLink,
+  isValidBrazilNumber
+} from '../utils/whatsapp-extractor.util';
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase client para verificações de duplicatas
@@ -2194,6 +2200,7 @@ export async function scrapeInstagramTag(
       const attemptedPositionsInCycle = new Set<string>(); // 🆕 Rastrear posições tentadas no ciclo atual (reseta quando perfil aprovado)
       let attemptsWithoutNewPost = 0;
       let consecutiveDuplicates = 0; // Contador de duplicatas consecutivas
+      let languageRejections = 0; // 🆕 Contador de rejeições por idioma não-português (não precisa ser consecutivo)
       let totalHashtagFeedClicks = 0; // 🆕 Contador de clicks no MURAL (NUNCA reseta, acumulativo)
 
       // 🎯 Sistema de 6 posts por coluna
@@ -2327,8 +2334,8 @@ export async function scrapeInstagramTag(
 
         // LOOP INTERNO: SCRAPAR ATÉ maxProfiles PARA ESTA HASHTAG
         // Duplicata = mesmo username 2x na MESMA sessão (raro com lógica sequencial)
-        while (foundProfiles.length < maxProfiles && attemptsWithoutNewPost < 8 && consecutiveDuplicates < 8 && totalHashtagFeedClicks < 50) {
-          console.log(`\n📊 Status (#${hashtagToScrape}): ${foundProfiles.length}/${maxProfiles} perfis, tentativa ${attemptsWithoutNewPost}/8, duplicatas: ${consecutiveDuplicates}, clicks: ${totalHashtagFeedClicks}/50`);
+        while (foundProfiles.length < maxProfiles && attemptsWithoutNewPost < 5 && consecutiveDuplicates < 8 && languageRejections < 5 && totalHashtagFeedClicks < 50) {
+          console.log(`\n📊 Status (#${hashtagToScrape}): ${foundProfiles.length}/${maxProfiles} perfis, tentativa ${attemptsWithoutNewPost}/5, duplicatas: ${consecutiveDuplicates}, idioma: ${languageRejections}/5, clicks: ${totalHashtagFeedClicks}/50`);
           console.log(`   🔒 Posições já clicadas (${clickedGridPositions.size}): ${Array.from(clickedGridPositions).join(', ')}`);
 
           // 💾 SALVAR SCROLL POSITION NO INÍCIO DE CADA ITERAÇÃO (reflete scroll atual após scroll down)
@@ -3262,7 +3269,8 @@ export async function scrapeInstagramTag(
             console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
 
             if (languageDetection.language !== 'pt') {
-              console.log(`   ❌ Perfil REJEITADO por idioma não-português (${languageDetection.language}) - não será contabilizado`);
+              languageRejections++; // 🆕 Incrementar contador de rejeições por idioma
+              console.log(`   ❌ Perfil REJEITADO por idioma não-português (${languageDetection.language}) - rejeições: ${languageRejections}/5`);
               processedUsernames.add(username); // Marcar como processado para não tentar novamente
 
               // 🔧 RESETAR controle de colunas após rejeição
@@ -3494,6 +3502,29 @@ export async function scrapeInstagramTag(
               // Sanitizar dados (similar ao toSQL do N8N)
               const sanitizedProfile = sanitizeForDatabase(completeProfile);
 
+              // 📱 EXTRAIR WHATSAPP: website wa.me e bio
+              const waExtraction = extractWhatsAppForPersistence(
+                sanitizedProfile.website,
+                sanitizedProfile.bio,
+                sanitizedProfile.phone
+              );
+
+              // 📱 EXTRAIR WHATSAPP de wa.me/message (requer navegação)
+              if (!waExtraction.whatsapp_number && isWaMessageLink(sanitizedProfile.website)) {
+                console.log(`   📱 [WA-MESSAGE] Detectado link wa.me/message, extraindo via navegação...`);
+                const messageNumber = await extractWhatsAppFromMessageLink(page, sanitizedProfile.website);
+                if (messageNumber && isValidBrazilNumber(messageNumber)) {
+                  waExtraction.whatsapp_number = messageNumber;
+                  waExtraction.whatsapp_source = 'website_wa_me';
+                  waExtraction.whatsapp_verified.push({
+                    number: messageNumber,
+                    source: 'website_wa_me',
+                    extracted_at: new Date().toISOString()
+                  });
+                  console.log(`   ✅ [WA-MESSAGE] Número extraído: ${messageNumber}`);
+                }
+              }
+
               if (existingLeadData) {
                 // 🔄 UPDATE: Perfil já existe - atualizar dados dinâmicos, preservar históricos
                 console.log(`   🔄 Atualizando perfil existente @${username}...`);
@@ -3530,9 +3561,17 @@ export async function scrapeInstagramTag(
                   hashtags_posts: mergedHashtags.length > 0 ? mergedHashtags : null,
                   lead_score: leadScore,
                   updated_at: new Date().toISOString(),
-                  // RESETAR flags de enriquecimento para reprocessar
+                  // RESETAR flags de enriquecimento para reprocessar COMPLETO
                   url_enriched: false,
-                  dado_enriquecido: false
+                  dado_enriquecido: false,
+                  hashtags_extracted: false,
+                  hashtags_ready_for_embedding: false,
+                  // 📱 WhatsApp extraído no scrape
+                  ...(waExtraction.whatsapp_number && {
+                    whatsapp_number: waExtraction.whatsapp_number,
+                    whatsapp_source: waExtraction.whatsapp_source,
+                    whatsapp_verified: waExtraction.whatsapp_verified
+                  })
                   // NÃO ATUALIZA: search_term_id, search_term_used, captured_at,
                   //              contact_status, is_qualified, qualification_notes, contacted_at
                 };
@@ -3546,6 +3585,8 @@ export async function scrapeInstagramTag(
                   console.log(`   ⚠️  Erro ao atualizar @${username}: ${updateError.message}`);
                 } else {
                   console.log(`   ✅ Perfil @${username} ATUALIZADO NO BANCO`);
+                  // 🗑️ Deletar embedding antigo para reprocessar
+                  await supabase.from('lead_embeddings').delete().eq('lead_id', existingLeadData.id);
                   // Embedding será feito pelo workflow n8n após enriquecimento completo
                 }
               } else {
@@ -3560,7 +3601,15 @@ export async function scrapeInstagramTag(
                   search_term_id: null,
                   // Flags de enriquecimento - novo lead precisa ser processado
                   dado_enriquecido: false,
-                  url_enriched: false
+                  url_enriched: false,
+                  hashtags_extracted: false,
+                  hashtags_ready_for_embedding: false,
+                  // 📱 WhatsApp extraído no scrape
+                  ...(waExtraction.whatsapp_number && {
+                    whatsapp_number: waExtraction.whatsapp_number,
+                    whatsapp_source: waExtraction.whatsapp_source,
+                    whatsapp_verified: waExtraction.whatsapp_verified
+                  })
                 };
                 // phones_normalized será preenchido pelo trigger trg_normalize_instagram_lead()
 
@@ -3749,8 +3798,11 @@ export async function scrapeInstagramTag(
       } else if (consecutiveDuplicates >= 5) {
         console.log(`\n⏹️  Scraping interrompido: 5 duplicatas consecutivas (mesmo aguardando auto-scroll)`);
         console.log(`   💡 Esta hashtag parece esgotada - todos os perfis já foram coletados anteriormente`);
-      } else if (attemptsWithoutNewPost >= 8) {
-        console.log(`\n⏹️  Scraping interrompido: 8 tentativas sem encontrar novos posts`);
+      } else if (languageRejections >= 5) {
+        console.log(`\n⏹️  Scraping interrompido: 5 perfis rejeitados por idioma não-português`);
+        console.log(`   🌍 Esta hashtag tem predominância de conteúdo estrangeiro - pulando para próxima`);
+      } else if (attemptsWithoutNewPost >= 5) {
+        console.log(`\n⏹️  Scraping interrompido: 5 tentativas sem encontrar novos posts`);
         console.log(`   🛡️  Limite reduzido para evitar detecção de bot pelo Instagram`);
       }
 
@@ -5309,10 +5361,14 @@ export async function listPuppeteerProcesses(): Promise<string[]> {
 }
 
 /**
- * Mata todos os processos Puppeteer órfãos (exceto o atual)
+ * Lista processos Chrome/Puppeteer para análise manual
  *
- * CORREÇÃO: Agora lista todos os PIDs e mata apenas os órfãos,
- * preservando o browser ativo atual para não interromper scraping em andamento.
+ * ⚠️ IMPORTANTE: NÃO mata processos automaticamente!
+ * O kill automático foi desativado pois há múltiplos services usando Puppeteer
+ * (scraper, session, DM worker, url-scraper, etc.) e é arriscado matar processos
+ * que podem estar ativos em outro contexto.
+ *
+ * Use esta função para DIAGNÓSTICO e depois decida manualmente quais matar.
  */
 export async function killOrphanPuppeteerProcesses(): Promise<{
   killed: number;
@@ -5324,33 +5380,11 @@ export async function killOrphanPuppeteerProcesses(): Promise<{
   const { exec } = require('child_process');
   const currentPid = browserInstance?.process()?.pid || null;
 
-  // Também pegar PIDs dos processos filhos do browser atual
-  const currentChildPids: number[] = [];
-  if (currentPid) {
-    try {
-      // Pegar todos os processos filhos do browser principal
-      const childPidsResult = await new Promise<string>((resolve) => {
-        exec(`pgrep -P ${currentPid}`, (_: any, stdout: string) => {
-          resolve(stdout || '');
-        });
-      });
-      childPidsResult.trim().split('\n').forEach(pid => {
-        const parsed = parseInt(pid);
-        if (!isNaN(parsed)) currentChildPids.push(parsed);
-      });
-    } catch {
-      // Ignorar erros ao buscar filhos
-    }
-  }
-
-  const preservedPids = currentPid ? [currentPid, ...currentChildPids] : [];
-
-  console.log(`\n🔪 ========== KILL ORPHAN PROCESSES ==========`);
-  console.log(`   🔍 Browser ativo PID: ${currentPid || 'NENHUM'}`);
-  console.log(`   🔍 PIDs filhos preservados: ${currentChildPids.length > 0 ? currentChildPids.join(', ') : 'nenhum'}`);
+  console.log(`\n🔍 ========== DIAGNÓSTICO PROCESSOS CHROME ==========`);
+  console.log(`   ⚠️  MODO SEGURO: Apenas lista, NÃO mata processos`);
+  console.log(`   🔍 Browser local conhecido: ${currentPid || 'NENHUM'}`);
 
   return new Promise((resolve) => {
-    // 1. Listar todos os PIDs do Chrome for Testing
     exec('pgrep -f "Chrome for Testing"', async (error: any, stdout: string) => {
       if (error || !stdout.trim()) {
         console.log(`   ✅ Nenhum processo Chrome for Testing encontrado`);
@@ -5359,7 +5393,7 @@ export async function killOrphanPuppeteerProcesses(): Promise<{
           killed: 0,
           currentPid,
           orphanPids: [],
-          preserved: preservedPids,
+          preserved: [],
           errors: []
         });
         return;
@@ -5369,59 +5403,18 @@ export async function killOrphanPuppeteerProcesses(): Promise<{
         .map(pid => parseInt(pid.trim()))
         .filter(pid => !isNaN(pid));
 
-      console.log(`   📊 Total processos Chrome for Testing: ${allPids.length}`);
-
-      // 2. Filtrar apenas órfãos (excluir browser atual e seus filhos)
-      const orphanPids = allPids.filter(pid => !preservedPids.includes(pid));
-
-      console.log(`   🎯 Processos órfãos a matar: ${orphanPids.length}`);
-      console.log(`   🔒 Processos preservados: ${preservedPids.filter(p => allPids.includes(p)).length}`);
-
-      if (orphanPids.length === 0) {
-        console.log(`   ✅ Nenhum processo órfão encontrado`);
-        console.log(`==========================================\n`);
-        resolve({
-          killed: 0,
-          currentPid,
-          orphanPids: [],
-          preserved: preservedPids,
-          errors: []
-        });
-        return;
-      }
-
-      // 3. Matar cada órfão individualmente
-      const errors: string[] = [];
-      let killed = 0;
-
-      for (const pid of orphanPids) {
-        try {
-          process.kill(pid, 'SIGKILL');
-          killed++;
-          console.log(`   ✅ Matou PID ${pid}`);
-        } catch (killError: any) {
-          // Processo já pode ter morrido
-          if (killError.code !== 'ESRCH') {
-            errors.push(`PID ${pid}: ${killError.message}`);
-            console.log(`   ⚠️  Erro ao matar PID ${pid}: ${killError.message}`);
-          } else {
-            console.log(`   ℹ️  PID ${pid} já não existe`);
-          }
-        }
-      }
-
-      console.log(`\n   📊 Resultado:`);
-      console.log(`   ✅ Processos mortos: ${killed}`);
-      console.log(`   🔒 Processos preservados: ${preservedPids.length}`);
-      console.log(`   ❌ Erros: ${errors.length}`);
+      console.log(`   📊 Total processos Chrome: ${allPids.length}`);
+      console.log(`   📋 PIDs encontrados: ${allPids.join(', ')}`);
+      console.log(`\n   ℹ️  Para matar manualmente, use: kill -9 <PID>`);
+      console.log(`   ℹ️  Ou aguarde análise diária para decidir quais são órfãos`);
       console.log(`==========================================\n`);
 
       resolve({
-        killed,
+        killed: 0,  // Não mata nada automaticamente
         currentPid,
-        orphanPids,
-        preserved: preservedPids,
-        errors
+        orphanPids: allPids,  // Lista todos para análise
+        preserved: currentPid ? [currentPid] : [],
+        errors: []
       });
     });
   });
@@ -5930,6 +5923,29 @@ export async function scrapeInstagramExplore(
             .eq('username', ownerUsername)
             .single();
 
+          // 📱 EXTRAIR WHATSAPP: website wa.me e bio
+          const waExtraction = extractWhatsAppForPersistence(
+            profileData.website,
+            profileData.bio,
+            profileData.phone
+          );
+
+          // 📱 EXTRAIR WHATSAPP de wa.me/message (requer navegação)
+          if (!waExtraction.whatsapp_number && isWaMessageLink(profileData.website)) {
+            console.log(`   📱 [WA-MESSAGE] Detectado link wa.me/message, extraindo via navegação...`);
+            const messageNumber = await extractWhatsAppFromMessageLink(page, profileData.website);
+            if (messageNumber && isValidBrazilNumber(messageNumber)) {
+              waExtraction.whatsapp_number = messageNumber;
+              waExtraction.whatsapp_source = 'website_wa_me';
+              waExtraction.whatsapp_verified.push({
+                number: messageNumber,
+                source: 'website_wa_me',
+                extracted_at: new Date().toISOString()
+              });
+              console.log(`   ✅ [WA-MESSAGE] Número extraído: ${messageNumber}`);
+            }
+          }
+
           if (existing) {
             // 🔄 UPDATE com merge de hashtags
             const existingHashtags = existing.hashtags_posts || [];
@@ -5967,12 +5983,22 @@ export async function scrapeInstagramExplore(
                 hashtags_bio: profileData.hashtags_bio || null,
                 hashtags_posts: mergedHashtags.length > 0 ? mergedHashtags : null,
                 updated_at: new Date().toISOString(), // SCRAPING = única operação que atualiza updated_at
-                // RESETAR flags de enriquecimento para reprocessar
+                // RESETAR flags de enriquecimento para reprocessar COMPLETO
                 url_enriched: false,
-                dado_enriquecido: false
+                dado_enriquecido: false,
+                hashtags_extracted: false,
+                hashtags_ready_for_embedding: false,
+                // 📱 WhatsApp extraído no scrape
+                ...(waExtraction.whatsapp_number && {
+                  whatsapp_number: waExtraction.whatsapp_number,
+                  whatsapp_source: waExtraction.whatsapp_source,
+                  whatsapp_verified: waExtraction.whatsapp_verified
+                })
                 // NÃO ATUALIZA: search_term_used, captured_at, contact_status, etc.
               })
               .eq('id', existing.id);
+            // 🗑️ Deletar embedding antigo para reprocessar
+            await supabase.from('lead_embeddings').delete().eq('lead_id', existing.id);
             console.log(`   ✅ @${ownerUsername} ATUALIZADO`);
           } else {
             // 🔧 FIX: Usar UPSERT para evitar race condition (duplicate key)
@@ -6011,7 +6037,15 @@ export async function scrapeInstagramExplore(
                 captured_at: new Date().toISOString(),
                 // Flags de enriquecimento - novo lead precisa ser processado
                 dado_enriquecido: false,
-                url_enriched: false
+                url_enriched: false,
+                hashtags_extracted: false,
+                hashtags_ready_for_embedding: false,
+                // 📱 WhatsApp extraído no scrape
+                ...(waExtraction.whatsapp_number && {
+                  whatsapp_number: waExtraction.whatsapp_number,
+                  whatsapp_source: waExtraction.whatsapp_source,
+                  whatsapp_verified: waExtraction.whatsapp_verified
+                })
               }, {
                 onConflict: 'username',
                 ignoreDuplicates: false  // false = atualizar em caso de conflito

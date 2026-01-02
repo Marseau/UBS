@@ -24,6 +24,12 @@ interface InstagramLead {
   segment?: string | null;
 }
 
+interface WhatsAppNumber {
+  number: string;
+  source: string;
+  extracted_at: string;
+}
+
 interface EnrichedData {
   full_name?: string | null;
   first_name?: string | null;
@@ -31,6 +37,7 @@ interface EnrichedData {
   profession?: string | null;  // Qualificação profissional específica (Cardiologista, Nutricionista, etc)
   email?: string | null;
   phone?: string | null;
+  whatsapp_numbers?: WhatsAppNumber[];  // WhatsApp numbers com fonte
   city?: string | null;
   state?: string | null;
   address?: string | null;
@@ -165,6 +172,54 @@ function splitFullName(fullName: string): { first_name: string; last_name: strin
     first_name: parts[0] || '',
     last_name: parts.slice(1).join(' ') || null
   };
+}
+
+// ============================================
+// EXTRAÇÃO DE WHATSAPP DA BIO
+// ============================================
+
+/**
+ * Extrai telefone da bio APENAS se houver contexto de WhatsApp
+ * Verifica: emojis 📱📲, palavras "whatsapp", "zap", "wpp", "whats"
+ */
+function extractWhatsAppFromBio(bio: string): string | null {
+  if (!bio) return null;
+
+  const bioLower = bio.toLowerCase();
+
+  // Verificar contexto de WhatsApp
+  const whatsappContext = [
+    'whatsapp', 'whats app', 'whats:', 'wpp', 'zap', 'zapzap',
+    '📱', '📲', '💬', 'wa.me', 'chama no', 'chame no'
+  ];
+
+  const hasWhatsAppContext = whatsappContext.some(ctx => bioLower.includes(ctx));
+  if (!hasWhatsAppContext) return null;
+
+  // Extrair telefone brasileiro
+  const phonePatterns = [
+    /\((\d{2})\)\s*(\d{4,5})[-.\s]?(\d{4})/,  // (48) 99999-9999
+    /(\d{2})\s*(\d{4,5})[-.\s]?(\d{4})/,       // 48 99999-9999
+    /(\d{2})(\d{4,5})(\d{4})/                   // 48999999999
+  ];
+
+  for (const pattern of phonePatterns) {
+    const match = bio.match(pattern);
+    if (match && match[1] && match[2] && match[3]) {
+      const ddd = match[1];
+      const part1 = match[2];
+      const part2 = match[3];
+      const phone = `${ddd}${part1}${part2}`;
+
+      // Validar: DDD válido + 10-11 dígitos
+      const dddNum = parseInt(ddd);
+      if (dddNum >= 11 && dddNum <= 99 && phone.length >= 10 && phone.length <= 11) {
+        return phone;
+      }
+    }
+  }
+
+  return null;
 }
 
 // ============================================
@@ -729,7 +784,9 @@ async function scrapeWebsite(url: string): Promise<{ email: string | null; phone
  * Retorna apenas os dados enriquecidos sem fazer UPDATE no banco
  */
 export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentResponse> {
-  const enriched: EnrichedData = {};
+  const enriched: EnrichedData = {
+    whatsapp_numbers: []
+  };
   const sources: string[] = [];
 
   console.log(`\n🔍 Enriquecendo @${lead.username}`);
@@ -762,9 +819,22 @@ export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentR
 
     // Telefone da bio
     if (aiContacts.phone) {
-      enriched.phone = normalizePhone(aiContacts.phone);
+      const normalizedBioPhone = normalizePhone(aiContacts.phone);
+      enriched.phone = normalizedBioPhone;
       sources.push('bio-phone');
-      console.log(`   ✅ Telefone encontrado: ${enriched.phone}`);
+      console.log(`   ✅ Telefone encontrado: ${normalizedBioPhone}`);
+
+      // Adicionar ao array de WhatsApp numbers (fonte: bio)
+      enriched.whatsapp_numbers = enriched.whatsapp_numbers || [];
+      const alreadyExistsBio = enriched.whatsapp_numbers.some(w => w.number === normalizedBioPhone);
+      if (!alreadyExistsBio) {
+        enriched.whatsapp_numbers.push({
+          number: normalizedBioPhone,
+          source: 'bio',
+          extracted_at: new Date().toISOString()
+        });
+        console.log(`   📱 WhatsApp adicionado da bio: ${normalizedBioPhone}`);
+      }
     }
 
     // Localização da bio (prioridade sobre hashtags)
@@ -810,6 +880,26 @@ export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentR
     }
   }
 
+  // 1.1 WHATSAPP DA BIO - Extração com REGEX (independente da IA)
+  // Só adiciona ao whatsapp_numbers se houver contexto de WhatsApp na bio
+  if (lead.bio) {
+    const whatsappFromBio = extractWhatsAppFromBio(lead.bio);
+    if (whatsappFromBio) {
+      const normalizedWhatsApp = normalizePhone(whatsappFromBio);
+      enriched.whatsapp_numbers = enriched.whatsapp_numbers || [];
+      const alreadyExists = enriched.whatsapp_numbers.some(w => w.number === normalizedWhatsApp);
+      if (!alreadyExists) {
+        enriched.whatsapp_numbers.push({
+          number: normalizedWhatsApp,
+          source: 'bio',
+          extracted_at: new Date().toISOString()
+        });
+        sources.push('bio-whatsapp');
+        console.log(`   📱 WhatsApp extraído da bio (regex): ${normalizedWhatsApp}`);
+      }
+    }
+  }
+
   // 1.5 HASHTAGS - SEMPRE extrair com REGEX e combinar com IA
   if (lead.bio) {
     const hashtagsFromRegex = extractHashtagsFromText(lead.bio);
@@ -849,12 +939,28 @@ export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentR
   }
 
   // 3. TELEFONE - Tentar extrair de URL WhatsApp
-  if (!enriched.phone && lead.website) {
+  if (lead.website) {
     const phoneFromWhatsApp = extractPhoneFromWhatsAppUrl(lead.website);
     if (phoneFromWhatsApp) {
-      enriched.phone = normalizePhone(phoneFromWhatsApp);
-      sources.push('whatsapp-url');
-      console.log(`   ✅ Telefone do WhatsApp: ${enriched.phone}`);
+      const normalizedPhone = normalizePhone(phoneFromWhatsApp);
+
+      // Adicionar ao array de WhatsApp numbers (sempre)
+      enriched.whatsapp_numbers = enriched.whatsapp_numbers || [];
+      const alreadyExists = enriched.whatsapp_numbers.some(w => w.number === normalizedPhone);
+      if (!alreadyExists) {
+        enriched.whatsapp_numbers.push({
+          number: normalizedPhone,
+          source: 'website_wa_me',
+          extracted_at: new Date().toISOString()
+        });
+        console.log(`   ✅ WhatsApp extraído: ${normalizedPhone}`);
+      }
+
+      // Também setar phone principal se não tiver
+      if (!enriched.phone) {
+        enriched.phone = normalizedPhone;
+        sources.push('whatsapp-url');
+      }
     }
   }
 
@@ -943,8 +1049,27 @@ export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentR
 
   console.log(hasChanges ? '   ✅ Lead enriquecido' : '   ℹ️  Sem novos dados');
 
-  // url_enriched: true se não há website (nada a enriquecer), false se há URL pendente de scraping
-  const hasWebsite = !!(lead.website && lead.website.trim().length > 0);
+  // url_enriched: true se não há website OU website é link não-scrapeável
+  const website = lead.website?.trim() || '';
+  const hasWebsite = website.length > 0;
+
+  // Links que não podem/devem ser scrapeados (já extraímos o que precisamos)
+  const isNonScrapableLink = hasWebsite && (
+    website.includes('wa.me') ||
+    website.includes('api.whatsapp.com') ||
+    website.includes('tiktok.com') ||
+    website.includes('facebook.com/profile') ||
+    website.includes('facebook.com/share')
+  );
+
+  // url_enriched = true quando:
+  // 1. Não tem website (nada a scrape)
+  // 2. Website é link não-scrapeável (WhatsApp, TikTok, Facebook profile)
+  const urlEnriched = !hasWebsite || isNonScrapableLink;
+
+  if (isNonScrapableLink) {
+    console.log(`   ℹ️  Link não-scrapeável detectado: ${website.substring(0, 50)}...`);
+  }
 
   return {
     id: lead.id,
@@ -952,6 +1077,6 @@ export async function enrichSingleLead(lead: InstagramLead): Promise<EnrichmentR
     enriched,
     sources,
     should_mark_enriched: true, // Sempre marcar como processado, mesmo que não encontrou dados
-    url_enriched: !hasWebsite   // true = sem URL (completo), false = tem URL (pode precisar scraping)
+    url_enriched: urlEnriched   // true = completo (sem URL ou não-scrapeável), false = tem URL pendente
   };
 }

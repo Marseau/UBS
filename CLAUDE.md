@@ -1,469 +1,400 @@
 # CLAUDE.md
 
-Este arquivo contém as regras globais e diretrizes de desenvolvimento para o sistema **WhatsAppSalon-N8N / Universal Booking System**. Estas regras são obrigatórias para TODOS os desenvolvimentos e seguem os princípios de **Context Engineering**.
+Este arquivo contém as regras globais e diretrizes de desenvolvimento para o sistema **AIC - Applied Intelligence Clustering**. Estas regras sao obrigatorias para TODOS os desenvolvimentos.
 
-## 🎯 METODOLOGIA DE EXECUÇÃO OBRIGATÓRIA
+> **IMPORTANTE**: O foco do projeto e 100% AIC. O UBS (Universal Booking System) foi descontinuado, aproveitando apenas a experiencia de agendamento de reunioes.
 
-### **Execute Prompt - Contrato de Desenvolvimento Claude**
+---
 
-**IMPORTANTE: Esta metodologia deve ser seguida RIGOROSAMENTE para todas as tarefas e implementações.**
+## 1. VISAO DO PRODUTO AIC
 
-#### **1. 📋 CONTEXTO OBRIGATÓRIO - CONSULTE NESTA ORDEM:**
+### O que e AIC?
+Plataforma de prospeccao outbound inteligente que transforma dados publicos do Instagram em leads quentes qualificados, sem necessidade de trafego pago.
 
-**Primeira Consulta Obrigatória:**
-- **📄 `src/frontend/LANDING.HTML`**: Leia PRIMEIRO para entender o SaaS
-  - Proposta de valor
-  - Funcionalidades oferecidas  
-  - Público-alvo
-  - Escopo real do produto
+### Proposta de Valor
+- **Scraping inteligente** de perfis Instagram por hashtags/nichos
+- **Clusterizacao por embeddings** para segmentacao precisa
+- **Outreach personalizado** via WhatsApp (60%) + Instagram DM (40%)
+- **Agentes IA conversacionais** para qualificacao automatica
+- **Agendamento de reunioes** entre leads quentes e clientes
 
-**Recursos de Apoio MCPs Disponíveis:**
-- 🧠 **Memory MCP**: Acesso ao grafo de decisões, entidades e definições
-- 📂 **Filesystem MCP**: Leitura/escrita de arquivos do projeto
-- 🌐 **Crawled Pages**: Documentação raspada (Google Calendar, Stripe, WhatsApp, Engenharia de Contexto)
-- 🧪 **Playwright MCP**: Testes automatizados web
-- 🤖 **Puppeteer MCP**: Automação de browser real
-- 🛠️ **GitHub MCP**: Histórico de commits, branches, pull requests
-- 🗃️ **Supabase MCP**: Banco de dados do projeto e sua estrutura
-- ⚡ **N8N MCP**: Acesso direto aos workflows
+### Metricas de Sucesso
+| Metrica | Meta |
+|---------|------|
+| Leads por campanha | ~2.000 |
+| Taxa de resposta WhatsApp | +15% |
+| Taxa de resposta Instagram | +8% |
+| Leads quentes (agendamentos) | 6-15% |
+| Silhouette score clusters | >0.65 |
+| Duracao campanha | <30 dias |
 
-#### **2. 🧭 Metodologia COLEAM00 (Obrigatória)**
+---
 
-**Você deve seguir rigorosamente estas etapas:**
+## 2. ARQUITETURA TECNICA
 
-1. **C**onteúdo – Entenda completamente a tarefa descrita
-2. **O**bjetivo – Determine a entrega exata e sucesso esperado
-3. **L**ocalização – Consulte as fontes (filesystem, memory, crawled_pages)
-4. **E**vidência – Fundamente sua resposta em dados verificáveis
-5. **A**nálise – Explique sua escolha e caminho técnico
-6. **M00** – Documente o raciocínio, mantendo consistência futura
+### Stack Principal
+- **Backend**: Node.js + TypeScript + Express
+- **Banco de Dados**: Supabase PostgreSQL + pgvector
+- **Orquestracao**: N8N (workflows)
+- **IA**: OpenAI GPT-4o-mini (agentes conversacionais)
+- **WhatsApp**: Whapi (Puppeteer-based, pessoal)
+- **Instagram**: Meta Graph API (oficial) + Puppeteer (DM outbound)
+- **Cache**: Redis (rate limiting, sessoes)
 
-#### **3. 🚫 REGRAS RÍGIDAS - NUNCA VIOLE:**
+### Modelo de Campanha (1:1)
+Cada campanha possui:
+- 1 numero WhatsApp pessoal (canal Whapi)
+- 1 conta Instagram oficial
+- ~2.000 leads segmentados em clusters
+- Configuracao propria de outreach
 
-- ✅ **SEMPRE** alinhe respostas com a proposta da `landing.html`
-- ✅ **SEMPRE** siga método Coleam00 das crawled_pages
-- ❌ **NÃO** sugira funcionalidades fora do escopo da landing
-- ❌ **NÃO** invente informações não encontradas
-- ❌ **SE não souber, PERGUNTE** em vez de assumir
-- ✅ **CITE fontes** (landing.html + MCPs utilizados + crawled_pages)
-- ❌ **PROIBIDO** dar soluções rápidas/temporárias
-- ✅ **SOLUÇÃO DEFINITIVA É OBRIGATÓRIA**
+### Limites de Outreach por Campanha
+| Canal | Limite Diario | Horario | Dias |
+|-------|---------------|---------|------|
+| WhatsApp | 120 DMs | 09h-18h | Seg-Sex |
+| Instagram | 80 DMs | 09h-18h | Seg-Sex |
 
-#### **4. 📝 FORMATO DE RESPOSTA OBRIGATÓRIO:**
+---
 
-```markdown
-# 📌 Análise Inicial (COLEAM00)
-[Aplicação da metodologia COLEAM00]
+## 3. REGRAS DE NEGOCIO CRITICAS
 
-# 🗂️ Consultas Realizadas via MCPs
-[Fontes consultadas e dados coletados]
+### 3.1 Aging de Leads
+| Tipo | Janela | Regra |
+|------|--------|-------|
+| **Leads Zona Ativa** | 45 dias | `captured_at` ou `updated_at` |
+| **Hashtags Inteligencia** | 90 dias | `captured_at` ou `updated_at` |
 
-# 💡 Proposta Técnica com Justificativa
-[Solução técnica fundamentada]
+```sql
+-- Query padrao de validade de leads
+WHERE captured_at >= CURRENT_DATE - INTERVAL '45 days'
+   OR updated_at >= CURRENT_DATE - INTERVAL '45 days'
+```
 
-# ✅ Passos para Execução
-[Steps detalhados de implementação]
+**IMPORTANTE**: Apos alocacao em campanha, leads sao "congelados" - nao expiram durante a campanha.
 
-# 🧪 Testes Recomendados
-[Estratégia de validação]
+### 3.2 Ratio WhatsApp/Instagram
+- **Padrao**: 60% WhatsApp / 40% Instagram
+- **Flexivel**: Alguns clusters podem nao ter leads com WhatsApp
+- **Prioridade**: WhatsApp tem prioridade por maior taxa de conversao
 
-# 🔁 Memória Atualizada (se necessário)
-[Documentação de decisões]
+### 3.3 Validacao de WhatsApp
+- **`whatsapp_number`** e a fonte de verdade (coluna confiavel)
+- **NAO usar** `phones_normalized.valid_whatsapp` (deprecado)
+- **NAO usar** `phone` diretamente (pode nao ser WhatsApp)
+- Workflows de validacao de WhatsApp estao **DEPRECADOS**
+
+### 3.4 Clusterizacao
+- **Metodo preferido**: Embeddings + vetorizacao
+- **Hashtags**: Para definicao de personas, dores, objetivos
+- **Silhouette score minimo**: 0.65
+- **Leads por cluster**: Distribuidos uniformemente
+
+---
+
+## 4. ESTRUTURA DE BANCO DE DADOS
+
+### 4.1 Tabelas Principais (USAR)
+
+| Tabela | Proposito | Colunas Chave |
+|--------|-----------|---------------|
+| `instagram_leads` | Base de leads | `whatsapp_number`, `captured_at`, `updated_at` |
+| `cluster_campaigns` | Campanhas | `campaign_name`, `outreach_enabled`, `whapi_channel_uuid` |
+| `campaign_leads` | Leads por campanha | `campaign_id`, `lead_id`, `fit_score`, `outreach_channel` |
+| `campaign_subclusters` | Clusters/personas | `cluster_name`, `persona`, `dm_scripts` |
+| `aic_conversations` | Conversas unificadas | `channel` ('whatsapp' ou 'instagram') |
+| `aic_message_queue` | Fila de mensagens | `channel`, `status`, `priority` |
+| `instagram_accounts` | Contas IG por campanha | `instagram_username`, `campaign_id` |
+
+### 4.2 Tabelas DEPRECADAS (NAO USAR)
+
+| Tabela | Motivo | Substituida por |
+|--------|--------|-----------------|
+| `aic_campaigns` | Duplicada | `cluster_campaigns` |
+| `aic_campaign_leads` | Duplicada | `campaign_leads` + `instagram_leads` |
+| `aic_instagram_conversations` | Migrada | `aic_conversations` com `channel='instagram'` |
+| `aic_instagram_dm_queue` | Migrada | `aic_message_queue` com `channel='instagram'` |
+| `campaign_outreach_queue` | Duplicada | `aic_message_queue` |
+
+### 4.3 Funcoes SQL Criticas
+
+```sql
+-- Usar whatsapp_number (CORRETO)
+SELECT * FROM instagram_leads WHERE whatsapp_number IS NOT NULL;
+
+-- NAO usar phone (INCORRETO)
+SELECT * FROM instagram_leads WHERE phone IS NOT NULL; -- DEPRECADO
+```
+
+**Funcoes que PRECISAM ser atualizadas**:
+- `select_outreach_channel()` - Usar `whatsapp_number`
+- `distribute_outreach_channels()` - Usar `whatsapp_number`
+- `get_eligible_leads_for_outreach()` - Usar `whatsapp_number`
+
+---
+
+## 5. WORKFLOWS N8N
+
+### 5.1 Workflows Ativos (MANTER)
+
+| Workflow | ID | Funcao |
+|----------|-----|--------|
+| AIC WhatsApp AI Agent v15 | `2WRfnvReul8k7LEu` | Inbound WhatsApp |
+| AIC Instagram AI Agent v15 | `msXwN1pEc23RuZmu` | Inbound Instagram |
+| AIC - Message Queue Worker | `fqrC0gRcJs8R26Xg` | Processa fila de envio |
+| Sub WhatsApp Inbound Lead Handler | `GzjJR2TZvBYARP4z` | Cria leads inbound |
+| Sub Instagram Inbound Lead Handler v18 | `Ew4BuwfuPqgQHQxo` | Cria leads inbound IG |
+| AIC - Tool RAG | `BSUkoynjiYpjjQFT` | Busca conhecimento |
+| AIC - Generate Conversation Embedding | `GU57XIe0UKa4pkD8` | Embeddings |
+
+### 5.2 Workflows DEPRECADOS (DESATIVAR)
+
+| Workflow | ID | Motivo |
+|----------|-----|--------|
+| AIC - Validar Numeros WhatsApp | `9AsVuewEnxkrHins` | `whatsapp_number` ja e confiavel |
+| AIC - Cold Outreach WhatsApp | `9UG4OVwWQ3th4Nx3` | Substituido pelo Unified |
+| AIC - Cold Outreach Unified v1 | `H8MHjPU9AHNu1ZhF` | Usa validacao antiga |
+
+### 5.3 Workflows UBS (DEPRECADOS)
+
+Todos os workflows com prefixo UBS, WhatsAppSalon, ou relacionados a multi-tenant booking:
+- `WhatsAppSalonOriginal`
+- `WhatsAppSalon V1`
+- `WABA Inbound -> Booking E2E`
+- `Human-Escalation-Management`
+- `Appointment-Confirmation-Reminders`
+- `Business-Analytics-Metrics`
+
+---
+
+## 6. FRONTEND / UIs
+
+### 6.1 UIs Principais AIC (MANTER)
+
+| Rota | Arquivo | Proposito |
+|------|---------|-----------|
+| `/aic` | `aic-landing.html` | Landing page AIC |
+| `/aic/onboarding` | `aic-campaign-onboarding.html` | Setup de campanha |
+| `/campaigns` | `aic-campaigns-dashboard.html` | Dashboard admin |
+| `/campaign/:slug/briefing` | `aic-campaign-briefing.html` | Briefing |
+| `/campaign/:slug/analytics` | `aic-dashboard-prova.html` | Analytics |
+| `/aic-docs.html` | `aic-docs.html` | Documentacao |
+
+### 6.2 UIs de Inteligencia (MANTER)
+
+| Rota | Proposito |
+|------|-----------|
+| `/dynamic-intelligence-dashboard.html` | Dashboard de hashtags |
+| `/cluster-intention-dashboard.html` | Clusterizacao |
+| `/niche-validator.html` | Validacao de nichos |
+
+### 6.3 UIs DEPRECADAS (UBS)
+
+- `super-admin-dashboard.html` (metricas UBS)
+- `tenant-business-analytics.html` (metricas tenant)
+- `landing.html` (landing UBS)
+- `landingTM.html` (Taylor Made)
+
+---
+
+## 7. FLUXO DE DADOS COMPLETO
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           PIPELINE AIC COMPLETO                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. SCRAPING (Instagram)                                                    │
+│     ├── Busca por hashtags/nichos                                          │
+│     ├── Extrai perfis publicos                                             │
+│     ├── Captura WhatsApp de bio/website                                    │
+│     └── Salva em: instagram_leads                                          │
+│                                                                             │
+│  2. ENRIQUECIMENTO                                                          │
+│     ├── Extrai hashtags (bio + posts)                                      │
+│     ├── Gera embeddings (bio + website)                                    │
+│     ├── Classifica business_category                                       │
+│     └── Valida whatsapp_number (evidencias reais)                          │
+│                                                                             │
+│  3. CLUSTERIZACAO                                                           │
+│     ├── KMeans por embeddings                                              │
+│     ├── Silhouette score > 0.65                                            │
+│     ├── Define personas por cluster                                        │
+│     └── Gera DM scripts personalizados                                     │
+│                                                                             │
+│  4. ALOCACAO EM CAMPANHA                                                    │
+│     ├── ~2.000 leads por campanha                                          │
+│     ├── Distribui 60% WhatsApp / 40% Instagram                             │
+│     ├── Calcula fit_score                                                  │
+│     └── "Congela" leads (nao expiram)                                      │
+│                                                                             │
+│  5. OUTREACH                                                                │
+│     ├── Round-robin entre campanhas                                        │
+│     ├── 120 WA + 80 IG por dia/campanha                                    │
+│     ├── Puppeteer humanizado (todos outbound)                              │
+│     └── Minutos randomizados, horario comercial                            │
+│                                                                             │
+│  6. CONVERSACAO (Agente IA)                                                 │
+│     ├── Inbound: Whapi webhook / Meta webhook                              │
+│     ├── Contexto 3 camadas (briefing + lead + memoria)                     │
+│     ├── GPT-4o-mini gera resposta                                          │
+│     └── Enfileira reply (aic_message_queue)                                │
+│                                                                             │
+│  7. QUALIFICACAO                                                            │
+│     ├── Detecta interesse (fit_score)                                      │
+│     ├── Identifica lead quente                                             │
+│     ├── Agenda reuniao (Google Calendar)                                   │
+│     └── Meta: 6-15% agendamentos                                           │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📄 Context Engineering - Princípios Fundamentais
+## 8. METODOLOGIA DE DESENVOLVIMENTO
 
-**IMPORTANTE: Estes princípios se aplicam a TODOS os desenvolvimentos:**
+### 8.1 COLEAM00 (Obrigatorio)
 
-### Workflow de Context Engineering
-- **Sempre comece com INITIAL.md** - Defina requisitos antes de gerar PRPs
-- **Use o padrão PRP**: INITIAL.md → `/generate-prp INITIAL.md` → `/execute-prp PRPs/filename.md`
-- **Siga loops de validação** - Cada PRP deve incluir testes executáveis em 3 níveis
-- **Context is King** - Inclua TODOS os padrões necessários, exemplos e documentação
+1. **C**onteudo - Entenda completamente a tarefa
+2. **O**bjetivo - Determine a entrega exata
+3. **L**ocalizacao - Consulte as fontes (BD, N8N, docs)
+4. **E**videncia - Fundamente em dados verificaveis
+5. **A**nalise - Explique sua escolha tecnica
+6. **M00** - Documente o raciocinio
 
-### Metodologia de Pesquisa
-- **Web search extensivamente** - Sempre pesquise padrões e melhores práticas
-- **Estude documentação oficial** - APIs, bibliotecas e frameworks utilizados
-- **Extração de padrões** - Identifique arquiteturas reutilizáveis
-- **Documentação de armadilhas** - Documente async patterns, limites de modelo e problemas comuns
+### 8.2 Consulta Obrigatoria
 
-## 📚 Consciência do Projeto & Contexto
+**ANTES de qualquer desenvolvimento, consulte**:
+1. `src/frontend/aic-landing.html` - Proposta de valor
+2. `docs/AIC_UNIFIED_ARCHITECTURE.md` - Arquitetura
+3. `docs/AIC-WHATSAPP-AGENT.md` - Agente WhatsApp
+4. `docs/CARTA-OPERACAO-AIC.md` - Operacao
 
-### Arquitetura Principal
-- **Sistema SaaS Multi-Tenant** universal de agendamentos
-- **WhatsApp Business API** + **OpenAI GPT-4** para IA conversacional
-- **Supabase PostgreSQL** com Row Level Security (RLS)
-- **Agentes IA especializados** por domínio (saúde, beleza, jurídico, educação, esportes, consultoria)
-- **Dashboard de analytics** com métricas de plataforma
+### 8.3 MCPs Disponiveis
 
-### Estrutura de Diretórios Estabelecida
+- **Supabase MCP**: Banco de dados (project_id: `qsdfyffuonywmtnlycri`)
+- **N8N MCP**: Workflows
+- **Filesystem MCP**: Arquivos do projeto
+- **Memory MCP**: Grafo de decisoes
+- **Playwright/Puppeteer MCP**: Testes automatizados
+
+### 8.4 Regras Rigidas
+
+- **SEMPRE** use `whatsapp_number` (nunca `phone` ou `phones_normalized`)
+- **SEMPRE** aplique aging de 45 dias para leads
+- **SEMPRE** respeite ratio 60/40 WhatsApp/Instagram
+- **NUNCA** use tabelas deprecadas (aic_campaigns, etc.)
+- **NUNCA** crie implementacoes mock ou hardcoded
+- **NUNCA** sugira funcionalidades fora do escopo AIC
+
+---
+
+## 9. ESTRUTURA DE DIRETORIOS
+
 ```
 src/
-├── services/           # Lógica de negócio por domínio/feature
-│   ├── agents/        # Agentes IA especializados por domínio
-│   ├── adapters/      # Adaptadores para APIs externas
-│   ├── tenant-metrics/ # Sistema otimizado de métricas (NEW)
-│   │   ├── tenant-metrics-calculator.service.ts
-│   │   ├── tenant-metrics-redis-cache.service.ts
-│   │   ├── concurrency-manager.service.ts
-│   │   ├── database-pool-manager.service.ts
-│   │   └── platform-aggregation-optimized.service.ts
-│   ├── redis-cache.service.ts          # Cache Redis principal
-│   ├── redis-monitor.service.ts        # Monitoramento Redis avançado
-│   ├── tenant-metrics-cron-optimized.service.ts  # Sistema 25x mais rápido
-│   └── *.service.ts   # Serviços centrais do sistema
-├── routes/            # Endpoints da API REST
-├── types/             # Interfaces/tipos TypeScript
-├── middleware/        # Middlewares Express
-├── config/            # Configurações e conexões
-├── frontend/          # Dashboard web (HTML/JS/CSS)
-├── utils/             # Utilitários do sistema
-│   ├── structured-logger.service.ts    # Logging estruturado
-│   └── memory-optimizer.ts             # Otimização de memória
-└── tests/             # Testes automatizados
+├── services/
+│   ├── instagram-scraper-*.service.ts    # Scraping
+│   ├── instagram-lead-enrichment.service.ts  # Enriquecimento
+│   ├── clustering-engine.service.ts      # Clusterizacao
+│   ├── vector-clustering.service.ts      # Embeddings
+│   ├── niche-validator.service.ts        # Validacao nichos
+│   ├── outreach-agent.service.ts         # Outreach
+│   ├── aic-puppeteer-worker.service.ts   # Envio humanizado
+│   └── instagram-context-manager.service.ts  # Contexto IA
+├── routes/
+│   ├── hashtag-intelligence.routes.ts    # APIs de inteligencia
+│   ├── instagram-scraper.routes.ts       # APIs scraping
+│   ├── campaign-credentials.routes.ts    # Credenciais campanha
+│   └── instagram-dm-webhook.routes.ts    # Webhooks
+├── frontend/
+│   ├── aic-*.html                        # UIs AIC
+│   ├── dynamic-intelligence-dashboard.html
+│   └── cluster-intention-dashboard.html
+└── types/
+    └── *.types.ts                        # Tipos TypeScript
 ```
 
-### Padrões de Naming Consolidados
-- **Serviços**: `*.service.ts`
-- **Tipos**: `*.types.ts` ou `*.types.d.ts`
-- **Rotas**: Organizadas por recurso em `routes/`
-- **Agentes IA**: `*-agent.ts` em `services/agents/`
-- **Middlewares**: `*-middleware.ts`
+---
 
-## 🧱 Estrutura de Código & Modularidade
+## 10. COMANDOS DE DESENVOLVIMENTO
 
-### Limites de Arquivo & Organização
-- **Nunca crie arquivos com mais de 500 linhas** - Refatore dividindo em módulos
-- **Organize código em módulos separados** agrupados por feature/responsabilidade:
-  - `agent.ts` - Definição principal do agente e lógica de execução
-  - `tools.ts` - Funções de ferramenta usadas pelo agente
-  - `types.ts` - Modelos Pydantic e classes de dependência
-- **Use importações consistentes** - Prefira importações relativas dentro de pacotes
-- **Use dotenv** - Todas as variáveis de ambiente via `.env`
-
-### Padrões Multi-Tenant Obrigatórios
-- **Row Level Security (RLS)** - Todas as queries são tenant-scoped via políticas Supabase
-- **Isolamento de dados** - Tabelas incluem `tenant_id` como foreign key
-- **Autenticação por tenant** - Usuários podem interagir com múltiplos tenants
-- **Configuração por domínio** - Cada tenant opera em domínios específicos de negócio
-
-## 🤖 Padrões de Desenvolvimento de IA
-
-### Criação de Agentes IA
-- **Design agnóstico de modelo** - Suporte múltiplos providers (OpenAI, Anthropic)
-- **Injeção de dependência** - Use deps_type para serviços externos e contexto
-- **Saídas estruturadas** - Use modelos Pydantic para validação de resultado
-- **Prompts de sistema abrangentes** - Instruções estáticas e dinâmicas
-
-### Padrões de Integração de Ferramentas
-- **Context-aware tools** - Use RunContext[DepsType] para ferramentas com contexto
-- **Ferramentas simples** - Use decorators plain para ferramentas sem dependências de contexto
-- **Validação de parâmetros** - Use modelos Pydantic para parâmetros de ferramenta
-- **Tratamento de erros** - Implemente mecanismos de retry e recuperação de erro
-
-### WhatsApp Business API Integration
-- **Processamento de webhook** - Trata mensagens WhatsApp via `/api/whatsapp/webhook`
-- **Roteamento multi-tenant** - Baseado em mapeamento de número de telefone
-- **Suporte a mídia** - Imagens, áudio, documentos processados via IA multimodal
-- **Gerenciamento de templates** - Templates de mensagens WhatsApp armazenados por tenant
-
-## ✅ Gestão de Tarefas & Validação
-
-### Loops de Validação Obrigatórios
-- **Nível 1: Sintaxe & Estilo**
-  ```bash
-  npm run lint          # ESLint check
-  npm run lint:fix      # Auto-fix issues
-  npm run format        # Prettier formatting
-  npm run build         # TypeScript compilation
-  ```
-
-- **Nível 2: Testes Unitários**
-  ```bash
-  npm run test:ai              # Sistema de testes IA
-  npm run test:ai-full         # Testes abrangentes IA
-  npm run test:whatsapp        # Integração WhatsApp
-  npm run test:all             # Todos os testes IA
-  ```
-
-- **Nível 3: Testes de Integração**
-  ```bash
-  npm run test:e2e             # End-to-end Playwright
-  npm run test:security        # Testes RLS security
-  npm run analytics:health-check # Sistema de analytics
-  ```
-
-### Gestão de Tarefas Context Engineering
-- **Marque tarefas completas IMEDIATAMENTE** após finalizar implementações
-- **Atualize status de tarefa em tempo real** conforme progresso do desenvolvimento
-- **Teste comportamento** antes de marcar tarefas de implementação como completas
-- **Crie sub-tarefas** descobertas durante desenvolvimento
-
-## 🔎 Padrões de Código & Convenções
-
-### TypeScript Standards
-- **Use TypeScript strict mode** - Configuração rigorosa habilitada
-- **Path aliases configurados**: `@/` mapeia para `src/` para importações limpas
-- **Tipos explícitos** - Anotações de tipo para todos os parâmetros e retornos de função
-- **Documentação JSDoc** - Para todas as funções e classes exportadas
-- **Async/await** - Para todas as operações assíncronas
-
-### Segurança & Autenticação
-- **JWT-based authentication** - Com controle de acesso baseado em função
-- **Sistema de permissões** - Permissões granulares para diferentes features
-- **Isolamento de tenant** - Acesso automaticamente scoped por tenant para tenant admins
-- **Gerenciamento de senhas** - Hash seguro de senhas com bcrypt
-- **Gerenciamento de sessão** - Refresh de token e logout seguro
-
-### Padrões de Base de Dados
-- **Migrations obrigatórias**: Use `npm run db:migrate` para mudanças de schema
-- **RLS policies** - Testadas com `npm run test:rls-security`
-- **Seed data** - Use `npm run db:populate` para dados de desenvolvimento
-- **Connection pooling** - Com reconexão automática e limites de conexão
-
-### Otimizações de Performance & Escala (NEW)
-
-#### Redis Cache Strategy
-- **Cache principal**: `redis-cache.service.ts` para sessões WhatsApp e rate limiting
-- **Cache especializado**: `tenant-metrics-redis-cache.service.ts` para métricas com fallback
-- **TTL otimizado**: 10min para dados dinâmicos, 30min para métricas, 1h para dados estáticos
-- **Eviction policy**: LRU com limite de 1GB para produção
-- **Monitoring**: `redis-monitor.service.ts` com alertas automáticos
-
-#### Concorrência Inteligente
-- **Adaptive batching**: Lotes de 25-100 itens baseado na carga do sistema
-- **Dynamic concurrency**: 10-100 threads conforme número de tenants
-- **Circuit breaker**: Proteção contra cascata de falhas
-- **Health checks**: Monitoramento contínuo de recursos do sistema
-
-#### Database Pool Management
-- **Pool size**: 10-100 conexões baseado na demanda
-- **Connection lifecycle**: Timeout de 30s para aquisição, 5min idle
-- **Query optimization**: Prepared statements e índices otimizados
-- **Deadlock prevention**: Retry automático com backoff exponencial
-
-## 📄 Comandos de Desenvolvimento Essenciais
-
-### Core Development Workflow
 ```bash
 # Desenvolvimento
-npm run dev                    # Servidor desenvolvimento com hot reload
-npm run dev:alt               # Servidor dev na porta 3001 (alternativo)
-npm run build                 # Compilar TypeScript para dist/
-npm run start                 # Executar build de produção
+npm run dev                    # Servidor com hot reload
+npm run build                  # Compilar TypeScript
+npm run start                  # Producao
 
-# Qualidade de Código
-npm run lint                  # Verificação ESLint
-npm run lint:fix              # Auto-fix problemas de linting
-npm run format                # Formatação Prettier
+# Qualidade
+npm run lint                   # ESLint
+npm run lint:fix               # Auto-fix
+npm run format                 # Prettier
 
-# Testes & Sistema IA
-npm run test:ai               # Cenários de teste do sistema IA
-npm run test:ai-full          # Testes IA abrangentes
-npm run test:whatsapp         # Teste integração WhatsApp
-npm run test:all              # Executar todos os testes IA
+# Database
+npm run db:migrate             # Executar migracoes
 
-# Base de Dados
-npm run db:migrate            # Executar migrações de banco
-npm run db:populate           # Popular com dados de teste
-npm run db:setup              # Setup completo do banco
-
-# Analytics & Métricas (High-Scale Optimized)
-npm run analytics:aggregate      # Agregação diária de métricas
-npm run analytics:health-check   # Verificação de saúde do sistema
-npm run metrics:comprehensive    # Execução manual sistema otimizado (10k+ tenants)
-npm run metrics:risk-assessment  # Avaliação de risco semanal
-npm run metrics:platform-agg     # Agregação plataforma manual
-npm run redis:monitor            # Monitoramento Redis em tempo real
-npm run redis:optimize           # Otimização cache Redis
+# Scripts AIC
+npx ts-node scripts/backfill-whatsapp-from-bio.ts    # Backfill WhatsApp
+npx ts-node scripts/export-hashtags-csv.ts           # Exportar hashtags
 ```
 
-### Variáveis de Ambiente Requeridas
+---
+
+## 11. VARIAVEIS DE AMBIENTE
+
 ```bash
-# Base de Dados
-SUPABASE_URL=your_supabase_project_url
-SUPABASE_ANON_KEY=your_supabase_anon_key
+# Supabase
+SUPABASE_URL=https://qsdfyffuonywmtnlycri.supabase.co
+SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
-# WhatsApp Business API  
-WHATSAPP_TOKEN=your_whatsapp_access_token
-WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
-WHATSAPP_WEBHOOK_VERIFY_TOKEN=your_verify_token
+# OpenAI
+OPENAI_API_KEY=your_openai_key
 
-# Serviços IA
-OPENAI_API_KEY=your_openai_api_key
+# Whapi (WhatsApp)
+WHAPI_API_URL=https://gate.whapi.cloud
+# Tokens por canal configurados em whapi_channels
 
-# Email Service (Zoho)
-ZOHO_SMTP_HOST=smtp.zoho.com
-ZOHO_SMTP_PORT=587
-ZOHO_SMTP_USER=your_zoho_email
-ZOHO_SMTP_PASSWORD=your_zoho_password
+# Instagram (Meta)
+META_APP_ID=your_app_id
+META_APP_SECRET=your_app_secret
 
-# Redis Configuration (CRITICAL for 10k+ tenants)
+# Redis
 REDIS_HOST=localhost
 REDIS_PORT=6379
-REDIS_PASSWORD=
-REDIS_DB=0
-REDIS_MAX_MEMORY=1073741824          # 1GB memory limit
-REDIS_EVICTION_POLICY=allkeys-lru    # LRU eviction policy  
-REDIS_CONNECTION_TIMEOUT=10000       # 10s connection timeout
-REDIS_COMMAND_TIMEOUT=5000           # 5s command timeout
-ENABLE_REDIS_CACHE=true              # Enable Redis caching
 
-# High-Scale Metrics System
-ENABLE_UNIFIED_CRON=true             # Enable optimized metrics system
-ENABLE_DAILY_METRICS=true            # Daily comprehensive metrics  
-ENABLE_WEEKLY_RISK=true              # Weekly risk assessment
-ENABLE_MONTHLY_EVOLUTION=true        # Monthly evolution metrics
-DAILY_METRICS_SCHEDULE="0 2 * * *"   # 2 AM daily execution
-```
-
-## 🚫 Anti-Padrões a Sempre Evitar
-
-### Desenvolvimento IA
-- ❌ Não pule testes de agente - Sempre use TestModel/FunctionModel para validação
-- ❌ Não hardcode strings de modelo - Use configuração baseada em ambiente
-- ❌ Não ignore padrões async - IA tem considerações específicas de async/sync
-- ❌ Não crie grafos de dependência complexos - Mantenha dependências simples e testáveis
-- ❌ Não esqueça tratamento de erro de ferramenta - Implemente retry adequado e degradação graceful
-
-### Desenvolvimento Geral
-- ❌ **PROIBIDO: NUNCA criar implementações mock ou hardcoded** - Use sempre integrações reais (Supabase, APIs, etc.)
-- ❌ Não assuma contexto faltante - Faça perguntas se incerto
-- ❌ Não alucine bibliotecas ou funções - Use apenas pacotes Python conhecidos e verificados
-- ❌ Não ignore validação de entrada - Use modelos Pydantic para todas as entradas externas
-- ❌ Não delete ou sobrescreva código existente - A menos que explicitamente instruído
-- ❌ Não pule loops de validação - Cada etapa deve incluir verificação
-
-## 🔧 Padrões de Uso de Ferramentas
-
-### Pesquisa & Documentação
-- **Use web search extensivamente** para pesquisa de IA e documentação
-- **Siga padrões de comando** para comandos slash e workflows de agente
-- **Use loops de validação de agente** para garantir qualidade em cada etapa de desenvolvimento
-- **Teste com múltiplos provedores de modelo** para garantir compatibilidade de agente
-
-### Multi-Modal AI Processing
-- **Imagens**: Processadas via GPT-4 Vision para análise de conteúdo
-- **Áudio**: Transcritas via API Whisper
-- **Documentos**: Extração de texto para processamento IA
-- **Mídia storage**: Todas as mídias armazenadas na tabela `whatsapp_media` com resultados de processamento
-
-## 📊 Sistema de Analytics & Métricas
-
-### UBS Metric System (Otimizado para +10.000 Tenants)
-- **Tabela central**: `ubs_metric_system` para métricas consolidadas da plataforma
-- **Métricas por tenant**: `tenant_platform_metrics` com períodos de 7/30/90 dias
-- **Cache de dados**: `chart_data_cache` para dados de gráfico pré-computados
-- **Sistema otimizado**: `tenant-metrics-cron-optimized.service.ts` com performance 25x superior
-
-### Arquitetura de Alto Desempenho (NEW)
-**Migration Path**: `unified-cron.service` → `tenant-metrics-cron-optimized.service`
-
-#### Redis Cache System
-```bash
-# Configurações otimizadas para 10k+ tenants
-REDIS_HOST=localhost
-REDIS_PORT=6379  
-REDIS_MAX_MEMORY=1073741824        # 1GB limite
-REDIS_EVICTION_POLICY=allkeys-lru  # LRU eviction
-ENABLE_REDIS_CACHE=true
-```
-
-#### Processamento Inteligente
-- **Concorrência adaptativa**: 10-100 threads baseado no número de tenants
-- **Batching inteligente**: 25-100 tenants por lote conforme carga
-- **Circuit breaker**: Proteção contra falhas em cascata
-- **Connection pooling**: 10-100 conexões de banco otimizadas
-
-#### Performance Metrics
-- **25x mais rápido** que sistema anterior
-- **Suporte para 10.000+ tenants** simultâneos  
-- **Cache hit rate >90%** com Redis otimizado
-- **Processamento paralelo** para períodos 7d/30d/90d
-- **Tempo de execução**: <2 horas para todos os tenants
-
-### Dashboards Duplos
-1. **Super Admin Dashboard** (`/super-admin-dashboard`):
-   - 8 KPIs estratégicos da plataforma (MRR, Tenants Ativos, Ratio Receita/Uso, etc.)
-   - 4 gráficos analíticos (Revenue vs Usage scatter, Appointment Status donut, etc.)
-   - Análise de distorção e oportunidades de upsell
-   - **Monitoring Redis**: Performance, latência e health check em tempo real
-
-2. **Tenant Business Analytics** (`/tenant-business-analytics`):
-   - Métricas de performance individual do tenant
-   - Percentuais de participação nos totais da plataforma
-   - Scoring de business intelligence e avaliação de risco
-
-### Endpoints de Administração (High-Scale Operations)
-```bash
-# Health & Monitoring
-GET  /api/health                           # Health check básico
-GET  /api/health/redis                     # Health check Redis detalhado
-GET  /api/monitoring/system                # Métricas do sistema completas
-
-# Execução Manual de Métricas (Requer Auth)
-POST /api/admin/execute-comprehensive-metrics    # Executar todas as métricas
-POST /api/cron/trigger/comprehensive             # Trigger via cron management
-POST /api/cron/trigger/risk-assessment           # Trigger avaliação de risco
-POST /api/cron/trigger/platform-aggregation     # Trigger agregação plataforma
-
-# Redis Management
-GET  /api/redis/stats                      # Estatísticas Redis
-POST /api/redis/optimize                   # Otimizar cache Redis
-POST /api/redis/clear                      # Limpar cache (desenvolvimento)
-
-# Super Admin Endpoints (Bypass Auth em Development)
-GET  /api/super-admin/platform-metrics    # Métricas plataforma completas
-GET  /api/super-admin/tenant-stats         # Estatísticas por tenant
-GET  /api/super-admin/system-health        # Health check completo do sistema
+# Telegram (logs)
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_CHAT_ID=your_chat_id
 ```
 
 ---
 
-## 🎯 Implementação de Context Engineering
+## 12. PROXIMOS PASSOS (ROADMAP)
 
-### Ao Criar Novas Features
-1. **Crie INITIAL.md** descrevendo requisitos específicos
-2. **Execute `/generate-prp INITIAL.md`** para criar blueprint abrangente
-3. **Execute `/execute-prp PRPs/feature-name.md`** para implementação
-4. **Valide em 3 níveis** (sintaxe, testes, integração)
-5. **Documente padrões** descobertos durante implementação
+### Fase 1: Limpeza (Prioridade Alta)
+- [ ] Atualizar funcoes SQL para usar `whatsapp_number`
+- [ ] Desativar workflows deprecados
+- [ ] Remover referencias a tabelas deprecadas
 
-### Ao Modificar Sistemas Existentes
-1. **Estude padrões existentes** no código base
-2. **Siga convenções estabelecidas** de arquitetura e naming
-3. **Preserve funcionalidade multi-tenant** e isolamento RLS
-4. **Teste compatibilidade** com agentes IA existentes
-5. **Atualize documentação** relevante
+### Fase 2: Consolidacao
+- [ ] Unificar tabelas duplicadas
+- [ ] Criar workflow Outreach Unified v2
+- [ ] Implementar ratio 60/40 configuravel
+
+### Fase 3: Escala (10 campanhas)
+- [ ] Dashboard multi-campanha
+- [ ] Monitoramento de rate limiting
+- [ ] Alertas automaticos
 
 ---
 
-## 📋 CONTRATO DE DESENVOLVIMENTO - RESUMO EXECUTIVO
+## 13. CONTATO E SUPORTE
 
-**🎯 EXECUÇÃO OBRIGATÓRIA PARA CADA TAREFA:**
+- **Projeto**: AIC - Applied Intelligence Clustering
+- **Supabase**: `qsdfyffuonywmtnlycri` (Universal Booking System - nome legado)
+- **Documentacao**: `/docs/AIC*.md`
 
-1. **📄 Consulte `landing.html` PRIMEIRO**
-2. **🧭 Aplique metodologia COLEAM00**
-3. **🗂️ Use MCPs para coleta de dados**
-4. **📝 Responda no formato obrigatório**
-5. **✅ Implemente solução definitiva**
-6. **🧪 Valide em 3 níveis**
-7. **🔁 Documente decisões**
+---
 
-**🚫 NUNCA:**
-- Sugerir funcionalidades fora do escopo
-- Inventar informações não verificadas
-- Dar soluções temporárias
-- Violar padrões estabelecidos
-
-**✅ SEMPRE:**
-- Alinhar com proposta de valor do SaaS
-- Citar fontes consultadas
-- Implementar soluções robustas
-- Seguir arquitetura multi-tenant
-- Preservar performance e segurança
-
-Estas regras garantem desenvolvimento consistente, seguro e alinhado com os princípios de Context Engineering para o sistema WhatsAppSalon-N8N / Universal Booking System.
+**Ultima atualizacao**: 2024-12-28
+**Versao**: 2.0 (Foco AIC)

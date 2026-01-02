@@ -1,0 +1,5 @@
+2025/11/29-21:36:52.559 8442d2 Reusing MANIFEST /Users/marseau/Developer/WhatsAppSalon-N8N/whatsapp-sessions/validator-session/Default/Local Storage/leveldb/MANIFEST-000001
+2025/11/29-21:36:52.564 8442d2 Recovering log #3
+2025/11/29-21:36:52.565 8442d2 Level-0 table #3: started
+2025/11/29-21:36:52.568 8442d2 Level-0 table #3: 20255 bytes OK
+2025/11/29-21:36:52.583 8442d2 Delete type=0 #3

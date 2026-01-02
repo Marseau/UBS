@@ -275,19 +275,19 @@ REGRAS:
     });
 
     // Calcular taxa de conversão baseada em dados reais
+    // IMPORTANTE: Usar emails_normalized e phones_normalized (JSONB arrays)
     const { data: conversionData } = await supabase
       .from('instagram_leads')
-      .select('id, email, phone, additional_emails, additional_phones')
+      .select('id, emails_normalized, phones_normalized')
       .in('id', Array.from(uniqueLeads));
 
     const totalLeads = conversionData?.length || 0;
-    // Lead tem contato se tem email OU phone OU additional_emails não vazio OU additional_phones não vazio
-    const contactableLeads = conversionData?.filter(l =>
-      l.email ||
-      l.phone ||
-      (l.additional_emails && Array.isArray(l.additional_emails) && l.additional_emails.length > 0) ||
-      (l.additional_phones && Array.isArray(l.additional_phones) && l.additional_phones.length > 0)
-    ).length || 0;
+    // Lead tem contato se emails_normalized OU phones_normalized tem elementos
+    const contactableLeads = conversionData?.filter(l => {
+      const emails = typeof l.emails_normalized === 'string' ? JSON.parse(l.emails_normalized || '[]') : (l.emails_normalized || []);
+      const phones = typeof l.phones_normalized === 'string' ? JSON.parse(l.phones_normalized || '[]') : (l.phones_normalized || []);
+      return emails.length > 0 || phones.length > 0;
+    }).length || 0;
     const conversionRate = totalLeads > 0 ? (contactableLeads / totalLeads) * 100 : 0;
     const avgContactRate = totalLeads > 0 ? contactableLeads / totalLeads : 0;
 

@@ -82,7 +82,7 @@ export interface ClusteringResult {
   total_leads: number;
   clusters: ClusterResult[];
   lead_associations: LeadClusterAssociation[];
-  silhouette_avg: number;
+  avg_intra_similarity: number;
   execution_time_ms: number;
 }
 
@@ -550,6 +550,7 @@ async function fetchNicheHashtags(
 
   const { data, error } = await supabase.rpc('execute_sql', {
     query_text: `
+      
       WITH hashtag_occurrences AS (
         SELECT
           LOWER(TRANSLATE(hashtag, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiiooooouuuucnAAAAAEEEEIIIIOOOOOUUUUCN')) as hashtag_normalized,
@@ -561,7 +562,7 @@ async function fetchNicheHashtags(
             jsonb_array_elements_text(hashtags_bio) as hashtag,
             'bio' as source,
             id as lead_id,
-            (email IS NOT NULL OR phone IS NOT NULL) as has_contact
+            (whatsapp_number IS NOT NULL) as has_contact
           FROM instagram_leads
           WHERE ${leadFilterClause} AND hashtags_bio IS NOT NULL AND jsonb_array_length(hashtags_bio) > 0
 
@@ -571,7 +572,7 @@ async function fetchNicheHashtags(
             jsonb_array_elements_text(hashtags_posts) as hashtag,
             'posts' as source,
             id as lead_id,
-            (email IS NOT NULL OR phone IS NOT NULL) as has_contact
+            (whatsapp_number IS NOT NULL) as has_contact
           FROM instagram_leads
           WHERE ${leadFilterClause} AND hashtags_posts IS NOT NULL AND jsonb_array_length(hashtags_posts) > 0
         ) raw
@@ -656,8 +657,9 @@ async function fetchLeadHashtagAssociations(
 
   const { data, error } = await supabase.rpc('execute_sql', {
     query_text: `
+      
       WITH filtered_leads AS (
-        SELECT id, hashtags_bio, hashtags_posts, email, phone
+        SELECT id, hashtags_bio, hashtags_posts, whatsapp_number
         FROM instagram_leads
         WHERE ${leadFilterClause}
       ),
@@ -670,7 +672,7 @@ async function fetchLeadHashtagAssociations(
           SELECT
             jsonb_array_elements_text(hashtags_bio) as hashtag,
             id as lead_id,
-            (email IS NOT NULL OR phone IS NOT NULL) as has_contact
+            (whatsapp_number IS NOT NULL) as has_contact
           FROM filtered_leads
           WHERE hashtags_bio IS NOT NULL
 
@@ -679,7 +681,7 @@ async function fetchLeadHashtagAssociations(
           SELECT
             jsonb_array_elements_text(hashtags_posts) as hashtag,
             id as lead_id,
-            (email IS NOT NULL OR phone IS NOT NULL) as has_contact
+            (whatsapp_number IS NOT NULL) as has_contact
           FROM filtered_leads
           WHERE hashtags_posts IS NOT NULL
         ) raw
@@ -775,7 +777,7 @@ export async function executeClustering(
       total_leads: 0,
       clusters: [],
       lead_associations: [],
-      silhouette_avg: 0,
+      avg_intra_similarity: 0,
       execution_time_ms: Date.now() - startTime
     };
   }
@@ -935,7 +937,7 @@ export async function executeClustering(
     total_leads: leadClusterAssociations.length,
     clusters: clusterResults,
     lead_associations: leadClusterAssociations, // Todos os leads - limite aplicado no pipeline/outreach
-    silhouette_avg: parseFloat(silhouetteAvg.toFixed(3)),
+    avg_intra_similarity: parseFloat(silhouetteAvg.toFixed(3)),
     execution_time_ms: executionTime
   };
 }

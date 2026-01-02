@@ -10,6 +10,7 @@ import {
   extractHashtagsFromPosts
 } from './instagram-profile.utils';
 import { createIsolatedContext } from './instagram-context-manager.service';
+import { extractWhatsAppForPersistence } from '../utils/whatsapp-extractor.util';
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase client para salvar perfis imediatamente
@@ -749,6 +750,13 @@ export async function scrapeInstagramUserSearch(
           // Sanitizar dados (similar ao toSQL do N8N)
           const sanitizedProfile = sanitizeForDatabase(profileData);
 
+          // 📱 EXTRAIR WHATSAPP: website wa.me e bio
+          const waExtraction = extractWhatsAppForPersistence(
+            sanitizedProfile.website,
+            sanitizedProfile.bio,
+            sanitizedProfile.phone
+          );
+
           if (existingLeadData) {
             // 🔄 UPDATE: Perfil já existe - atualizar dados dinâmicos, preservar históricos
             console.log(`   🔄 Atualizando perfil existente @${username}...`);
@@ -785,9 +793,17 @@ export async function scrapeInstagramUserSearch(
               hashtags_posts: mergedHashtags.length > 0 ? mergedHashtags : null,
               lead_score: leadScore,
               updated_at: new Date().toISOString(),
-              // RESETAR flags de enriquecimento para reprocessar
+              // RESETAR flags de enriquecimento para reprocessar COMPLETO
               url_enriched: false,
-              dado_enriquecido: false
+              dado_enriquecido: false,
+              hashtags_extracted: false,
+              hashtags_ready_for_embedding: false,
+              // 📱 WhatsApp extraído no scrape
+              ...(waExtraction.whatsapp_number && {
+                whatsapp_number: waExtraction.whatsapp_number,
+                whatsapp_source: waExtraction.whatsapp_source,
+                whatsapp_verified: waExtraction.whatsapp_verified
+              })
               // NÃO ATUALIZA: search_term_id, search_term_used, captured_at,
               //              contact_status, is_qualified, qualification_notes, contacted_at
             };
@@ -801,6 +817,8 @@ export async function scrapeInstagramUserSearch(
               console.log(`   ⚠️  Erro ao atualizar @${username}: ${updateError.message}`);
             } else {
               console.log(`   ✅ Perfil @${username} ATUALIZADO NO BANCO`);
+              // 🗑️ Deletar embedding antigo para reprocessar
+              await supabase.from('lead_embeddings').delete().eq('lead_id', existingLeadData.id);
               // Embedding será feito pelo workflow n8n após enriquecimento completo
             }
           } else {
@@ -815,7 +833,13 @@ export async function scrapeInstagramUserSearch(
               search_term_id: null,
               // Flags de enriquecimento - novo lead precisa ser processado
               dado_enriquecido: false,
-              url_enriched: false
+              url_enriched: false,
+              // 📱 WhatsApp extraído no scrape
+              ...(waExtraction.whatsapp_number && {
+                whatsapp_number: waExtraction.whatsapp_number,
+                whatsapp_source: waExtraction.whatsapp_source,
+                whatsapp_verified: waExtraction.whatsapp_verified
+              })
             };
             // phones_normalized será preenchido pelo trigger trg_normalize_instagram_lead()
 

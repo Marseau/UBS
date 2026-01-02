@@ -60,7 +60,8 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres123}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./database/init-umami.sql:/docker-entrypoint-initdb.d/02-init-umami.sql
     networks:
       - booking-network
     healthcheck:
@@ -162,12 +163,35 @@ services:
     networks:
       - booking-network
 
+  # Umami Analytics
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    container_name: umami-analytics
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres123}@postgres:5432/umami
+      - DATABASE_TYPE=postgresql
+      - APP_SECRET=${UMAMI_APP_SECRET:-replace-with-random-secret-key}
+      - HOSTNAME=0.0.0.0
+    depends_on:
+      - postgres
+    networks:
+      - booking-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/heartbeat || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   postgres-data:
   redis-data:
   n8n-data:
   prometheus-data:
   grafana-data:
+  umami-data:
 
 networks:
   booking-network:

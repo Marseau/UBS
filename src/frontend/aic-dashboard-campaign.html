@@ -168,7 +168,7 @@ GET /api/campaigns/:id/performance
       }
 
       function buildSelector(list, selectedId) {
-        // remover seletor antigo
+        // remover seletor antigo e blocos dinâmicos
         document.querySelectorAll('.selector-block').forEach(el => el.remove());
         document.querySelectorAll('.dynamic-block').forEach(el => el.remove());
         document.querySelectorAll('.error-block').forEach(el => el.remove());
@@ -188,7 +188,9 @@ GET /api/campaigns/:id/performance
         list.forEach((c) => {
           const opt = document.createElement('option');
           opt.value = c.id;
-          opt.textContent = `${c.name || 'Campanha'} (${c.status || '—'})`;
+          const status = c.status || '—';
+          const dates = c.start_date ? ` • ${c.start_date}${c.end_date ? ' → ' + c.end_date : ''}` : '';
+          opt.textContent = `${c.name || 'Campanha'} (${status})${dates}`;
           if (c.id === selectedId) opt.selected = true;
           select.appendChild(opt);
         });
@@ -204,13 +206,17 @@ GET /api/campaigns/:id/performance
         btn.style.fontWeight = '700';
         btn.style.cursor = 'pointer';
 
-        btn.addEventListener('click', () => {
+        const applySelection = () => {
           const id = select.value;
           if (!id) return;
           const url = new URL(window.location.href);
           url.searchParams.set('campaign', id);
-          window.location.href = url.toString();
-        });
+          history.replaceState({}, '', url.toString());
+          loadPerformance(id);
+        };
+
+        select.addEventListener('change', applySelection);
+        btn.addEventListener('click', applySelection);
 
         card.appendChild(select);
         card.appendChild(btn);
@@ -218,7 +224,7 @@ GET /api/campaigns/:id/performance
       }
 
       function loadPerformance(id) {
-        fetch(`/api/campaigns/${id}/performance`)
+        fetch(`/api/campaigns/${id}/performance`, { cache: 'no-store' })
           .then(async (res) => {
             if (!res.ok) {
               const text = await res.text();
@@ -238,18 +244,19 @@ GET /api/campaigns/:id/performance
           });
       }
 
-      fetch('/api/campaigns')
+      fetch('/api/campaigns', { cache: 'no-store' })
         .then(async (res) => {
           if (!res.ok) throw new Error('Falha ao carregar campanhas');
           return res.json();
         })
         .then((data) => {
         const listRaw = data.campaigns || [];
-        const activeList = listRaw.filter((c) => {
-          const st = (c.status || '').toLowerCase();
-          return ['active', 'outreach_in_progress', 'ready_for_outreach', 'ready', 'live', 'outreach_completed'].includes(st);
+        // Priorizar campanhas aparentemente ativas, mas manter todas na lista
+        const activeStatuses = ['active', 'outreach_in_progress', 'ready_for_outreach', 'ready', 'live', 'outreach_completed'];
+        const list = [...listRaw].sort((a, b) => {
+          const score = (c) => activeStatuses.includes((c.status || '').toLowerCase()) ? 0 : 1;
+          return score(a) - score(b);
         });
-        const list = activeList.length ? activeList : listRaw;
 
           if (!list.length) {
             renderError('Nenhuma campanha encontrada. Crie uma campanha e tente novamente.');
@@ -269,5 +276,8 @@ GET /api/campaigns/:id/performance
         });
     })();
   </script>
+
+  <!-- AIC Sidebar Navigation -->
+  <script src="/components/aic-sidebar.js"></script>
 </body>
 </html>

@@ -867,7 +867,7 @@ ${lead.email ? `📧 *Email:* ${lead.email}` : ''}
 ${meetingSection}${lead.bio ? `📝 *Bio do Lead:*\n${lead.bio.substring(0, 150)}${lead.bio.length > 150 ? '...' : ''}\n\n` : ''}🎯 *Score de Interesse:* ${(conversation.interest_score * 100).toFixed(0)}%
 
 💬 *Sinais de Interesse:*
-${conversation.interest_signals?.slice(0, 3).map(s => `  • ${s}`).join('\n') || '  • Lead muito interessado'}
+${conversation.interest_signals?.slice(0, 3).map((s: string) => `  • ${s}`).join('\n') || '  • Lead muito interessado'}
 
 ${leadQuestions.length > 0 ? `❓ *Últimas perguntas do lead:*\n${leadQuestions.slice(-3).map(q => `  • "${q.substring(0, 70)}${q.length > 70 ? '...' : ''}"`).join('\n')}\n\n` : ''}🔗 *Link do perfil:* https://instagram.com/${lead.username}
 

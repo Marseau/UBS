@@ -18,7 +18,9 @@ import { scrapeInstagramUserSearch } from '../services/instagram-scraper-user-se
 import { scrapeInstagramFollowers } from '../services/instagram-followers-scraper.service';
 import { UrlScraperService } from '../services/url-scraper.service';
 import { cleanOrphanPages, monitorOrphanPages, detectOrphanPages } from '../services/instagram-page-cleaner.service';
+import { WhatsAppQrExtractorService } from '../services/whatsapp-qr-extractor.service';
 import { createClient } from '@supabase/supabase-js';
+import { extractWhatsAppForPersistence } from '../utils/whatsapp-extractor.util';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -1189,8 +1191,8 @@ router.post('/cleanup-pages', async (_req: Request, res: Response) => {
     const pagesBefore = await browser.pages();
     const statsBefore = getContextStats();
 
-    console.log(`⏳ [CLEANUP] Aguardando 60s antes de limpar páginas...`);
-    await new Promise(resolve => setTimeout(resolve, 60000)); // Wait 60s
+    console.log(`⏳ [CLEANUP] Aguardando 30s antes de limpar páginas...`);
+    await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30s
 
     console.log(`🧹 [CLEANUP] Limpando ${statsBefore.activeCount} páginas gerenciadas...`);
 
@@ -1955,6 +1957,13 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
           continue;
         }
 
+        // 📱 EXTRAIR WHATSAPP: website wa.me e bio
+        const waExtraction = extractWhatsAppForPersistence(
+          profile.website,
+          profile.bio,
+          profile.phone
+        );
+
         const { error: insertError } = await supabase
           .from('instagram_leads')
           .insert({
@@ -1991,7 +2000,13 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
             last_check_notified_at: engagement?.notification_date || null,
             // Flags de enriquecimento - novo lead precisa ser processado
             dado_enriquecido: false,
-            url_enriched: false
+            url_enriched: false,
+            // 📱 WhatsApp extraído no momento do scrape
+            ...(waExtraction.whatsapp_number && {
+              whatsapp_number: waExtraction.whatsapp_number,
+              whatsapp_source: waExtraction.whatsapp_source,
+              whatsapp_verified: waExtraction.whatsapp_verified
+            })
           });
 
         if (insertError) {
@@ -2868,6 +2883,13 @@ router.post('/process-pre-lead', async (req: Request, res: Response) => {
                   console.log(`   ⚠️  Erro ao extrair hashtags dos posts: ${hashtagError.message}`);
                 }
 
+                // 📱 EXTRAIR WHATSAPP: website wa.me e bio
+                const waExtraction = extractWhatsAppForPersistence(
+                  profileData.website,
+                  profileData.bio,
+                  profileData.phone
+                );
+
                 // 5. Salvar em instagram_leads com TODOS os campos
                 const { data: newLead, error: insertError } = await supabase
                   .from('instagram_leads')
@@ -2900,7 +2922,13 @@ router.post('/process-pre-lead', async (req: Request, res: Response) => {
                     captured_at: new Date().toISOString(),
                     // Flags de enriquecimento - novo lead precisa ser processado
                     dado_enriquecido: false,
-                    url_enriched: false
+                    url_enriched: false,
+                    // 📱 WhatsApp extraído no momento do scrape
+                    ...(waExtraction.whatsapp_number && {
+                      whatsapp_number: waExtraction.whatsapp_number,
+                      whatsapp_source: waExtraction.whatsapp_source,
+                      whatsapp_verified: waExtraction.whatsapp_verified
+                    })
                   })
                   .select()
                   .single();
@@ -3246,6 +3274,13 @@ router.post('/process-all-pre-lead', async (req: Request, res: Response) => {
             console.log(`   ⚠️  Erro ao extrair hashtags`);
           }
 
+          // 📱 EXTRAIR WHATSAPP: website wa.me e bio
+          const waExtraction = extractWhatsAppForPersistence(
+            profileData.website,
+            profileData.bio,
+            profileData.phone
+          );
+
           // Salvar no banco (UPDATE se existe, INSERT se novo)
           if (existingLeadData) {
             // 🔄 UPDATE: Perfil já existe - atualizar dados dinâmicos, merge hashtags
@@ -3291,7 +3326,13 @@ router.post('/process-all-pre-lead', async (req: Request, res: Response) => {
                 updated_at: new Date().toISOString(),
                 // RESETAR flags de enriquecimento para reprocessar
                 url_enriched: false,
-                dado_enriquecido: false
+                dado_enriquecido: false,
+                // 📱 WhatsApp extraído no scrape
+                ...(waExtraction.whatsapp_number && {
+                  whatsapp_number: waExtraction.whatsapp_number,
+                  whatsapp_source: waExtraction.whatsapp_source,
+                  whatsapp_verified: waExtraction.whatsapp_verified
+                })
                 // NÃO ATUALIZA: search_term_used, captured_at, contact_status, etc.
               })
               .eq('id', existingLeadData.id);
@@ -3347,7 +3388,13 @@ router.post('/process-all-pre-lead', async (req: Request, res: Response) => {
                 captured_at: new Date().toISOString(),
                 // Flags de enriquecimento - novo lead precisa ser processado
                 dado_enriquecido: false,
-                url_enriched: false
+                url_enriched: false,
+                // 📱 WhatsApp extraído no scrape
+                ...(waExtraction.whatsapp_number && {
+                  whatsapp_number: waExtraction.whatsapp_number,
+                  whatsapp_source: waExtraction.whatsapp_source,
+                  whatsapp_verified: waExtraction.whatsapp_verified
+                })
               })
               .select()
               .single();
@@ -3447,6 +3494,37 @@ router.post('/process-all-pre-lead', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao processar batch',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/extract-qr-whatsapp
+ *
+ * Extrai números WhatsApp de links wa.me/qr usando browser visível
+ * QR codes não renderizam em modo headless
+ *
+ * Usado pelo cron n8n às 2:15 AM
+ */
+router.post('/extract-qr-whatsapp', async (req: Request, res: Response) => {
+  try {
+    console.log('\n🔲 [QR-EXTRACT] Iniciando extração de WhatsApp via QR Code...');
+
+    const result = await WhatsAppQrExtractorService.processAllQrLinks();
+
+    console.log(`✅ [QR-EXTRACT] Concluído: ${result.updated}/${result.processed} extraídos`);
+
+    return res.status(200).json({
+      success: true,
+      message: `Extração QR concluída: ${result.updated} números extraídos`,
+      ...result
+    });
+
+  } catch (error: any) {
+    console.error('❌ [QR-EXTRACT] Erro:', error.message);
+    return res.status(500).json({
+      success: false,
       error: error.message
     });
   }

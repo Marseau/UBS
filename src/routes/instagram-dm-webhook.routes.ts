@@ -180,26 +180,81 @@ async function fetchInstagramUsername(userId: string): Promise<string | null> {
 
 // =====================================================
 // HELPER: Detectar campanha por conta Instagram
+// Com auto-registro de instagram_user_id se não encontrado
 // =====================================================
 
 async function detectCampaignByInstagramAccount(recipientId: string): Promise<any> {
   try {
-    // Buscar campanha vinculada ao Instagram account ID
-    const { data, error } = await supabase
+    // 1. Primeiro, tentar buscar por instagram_user_id (caso já esteja configurado)
+    const { data: dataById, error: errorById } = await supabase
       .from('instagram_accounts')
       .select(`
+        id,
+        instagram_username,
         instagram_user_id,
+        campaign_id,
         campaigns:cluster_campaigns(*)
       `)
       .eq('instagram_user_id', recipientId)
       .single();
 
-    if (error || !data) {
-      console.warn('[Instagram DM Webhook] No campaign found for account:', recipientId);
+    if (!errorById && dataById) {
+      console.log(`[Instagram DM Webhook] ✅ Found account by user_id: @${dataById.instagram_username}`);
+      return dataById.campaigns;
+    }
+
+    // 2. Se não encontrou por user_id, listar contas sem user_id configurado
+    // (provavelmente é a conta que está recebendo o DM)
+    const { data: accountsWithoutUserId, error: errorNoId } = await supabase
+      .from('instagram_accounts')
+      .select(`
+        id,
+        instagram_username,
+        instagram_user_id,
+        campaign_id,
+        campaigns:cluster_campaigns(*)
+      `)
+      .is('instagram_user_id', null)
+      .not('status', 'in', '("disabled","permanently_blocked")');
+
+    if (errorNoId || !accountsWithoutUserId || accountsWithoutUserId.length === 0) {
+      console.warn('[Instagram DM Webhook] No accounts without user_id found');
       return null;
     }
 
-    return data.campaigns;
+    // 3. Se tem apenas uma conta sem user_id, associar automaticamente
+    if (accountsWithoutUserId.length === 1) {
+      const account = accountsWithoutUserId[0];
+
+      // TypeScript safety check
+      if (!account) {
+        console.warn('[Instagram DM Webhook] Account not found in array');
+        return null;
+      }
+
+      // Auto-registrar o instagram_user_id
+      const { error: updateError } = await supabase
+        .from('instagram_accounts')
+        .update({
+          instagram_user_id: recipientId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', account.id);
+
+      if (updateError) {
+        console.error('[Instagram DM Webhook] Error auto-registering user_id:', updateError);
+      } else {
+        console.log(`[Instagram DM Webhook] ✅ AUTO-REGISTERED instagram_user_id for @${account.instagram_username}: ${recipientId}`);
+      }
+
+      return account.campaigns;
+    }
+
+    // 4. Se tem múltiplas contas sem user_id, não conseguimos determinar qual é
+    console.warn(`[Instagram DM Webhook] Multiple accounts (${accountsWithoutUserId.length}) without user_id. Cannot auto-register.`);
+    console.warn('[Instagram DM Webhook] Accounts without user_id:', accountsWithoutUserId.map(a => a.instagram_username).join(', '));
+
+    return null;
   } catch (error) {
     console.error('[Instagram DM Webhook] Error detecting campaign:', error);
     return null;

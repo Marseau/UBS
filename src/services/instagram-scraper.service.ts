@@ -171,9 +171,11 @@ export async function executarScrapingInstagram(
                 lead_score: 0.75,
                 is_qualified: followersCount >= 500,
                 updated_at: new Date().toISOString(), // SCRAPING = única operação que atualiza updated_at
-                // RESETAR flags de enriquecimento para reprocessar
+                // RESETAR flags de enriquecimento para reprocessar COMPLETO
                 dado_enriquecido: false,
-                url_enriched: false
+                url_enriched: false,
+                hashtags_extracted: false,
+                hashtags_ready_for_embedding: false
               }, {
                 onConflict: 'username',
                 ignoreDuplicates: false
@@ -184,6 +186,8 @@ export async function executarScrapingInstagram(
               totalLeads++;
               if (leadData && leadData.length > 0) {
                 newLeads++;
+                // 🗑️ Deletar embedding antigo para reprocessar (caso seja update)
+                await supabase.from('lead_embeddings').delete().eq('lead_id', leadData[0].id);
                 console.log(`   ✅ Lead salvo: @${username} (${followersCount} seguidores)`);
               } else {
                 duplicateLeads++;

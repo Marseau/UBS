@@ -22,7 +22,7 @@
 
 import { Page } from 'puppeteer';
 import { getBrowserInstance } from './instagram-session.service';
-import { getContextStats } from './instagram-context-manager.service';
+import { getContextStats, syncContextsWithBrowser } from './instagram-context-manager.service';
 
 export interface OrphanPage {
   index: number;
@@ -146,7 +146,10 @@ export async function cleanOrphanPages(options: {
     result.totalPages = allPages.length;
     console.log(`\n📊 Total de páginas abertas: ${allPages.length}`);
 
-    // 2. Obter páginas gerenciadas
+    // 🔧 FIX: Sincronizar Map com browser antes de obter estatísticas
+    await syncContextsWithBrowser();
+
+    // 2. Obter páginas gerenciadas (agora sincronizado)
     const contextStats = getContextStats();
     result.managedPages = contextStats.activeCount;
     console.log(`📋 Páginas gerenciadas: ${contextStats.activeCount}`);

@@ -623,6 +623,136 @@ export class CampaignDocumentProcessorService {
       options,
     );
   }
+
+  // =====================================================
+  // EXTRAÇÃO DE CAMPOS DA CAMPANHA VIA GPT
+  // =====================================================
+
+  /**
+   * Extrai Nicho, Público Alvo e Descrição dos documentos da campanha
+   */
+  async extractCampaignFields(campaignId: string): Promise<{
+    success: boolean;
+    nicho?: string;
+    publicoAlvo?: string;
+    descricaoServico?: string;
+    error?: string;
+  }> {
+    try {
+      console.log(`📄 Extraindo campos da campanha: ${campaignId}`);
+
+      // 1. Buscar todos os chunks de documentos da campanha
+      const { data: documents, error } = await this.supabase
+        .from("campaign_documents")
+        .select("title, content, doc_type, content_chunk")
+        .eq("campaign_id", campaignId)
+        .eq("is_active", true)
+        .order("title")
+        .order("content_chunk");
+
+      if (error) {
+        console.error("Erro ao buscar documentos:", error);
+        return { success: false, error: "Erro ao buscar documentos da campanha" };
+      }
+
+      if (!documents || documents.length === 0) {
+        return { success: false, error: "Nenhum documento encontrado para esta campanha" };
+      }
+
+      console.log(`📚 Encontrados ${documents.length} chunks de documentos`);
+
+      // 2. Concatenar conteúdo dos documentos (limitar a ~8000 tokens para GPT)
+      let combinedContent = "";
+      const maxChars = 32000; // ~8000 tokens
+
+      for (const doc of documents) {
+        if (combinedContent.length + doc.content.length > maxChars) {
+          break;
+        }
+        combinedContent += `\n\n--- ${doc.title} (${doc.doc_type}) ---\n${doc.content}`;
+      }
+
+      console.log(`📝 Conteúdo combinado: ${combinedContent.length} caracteres`);
+
+      // 3. Usar GPT para extrair os campos
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0.3,
+        messages: [
+          {
+            role: "system",
+            content: `Você é um especialista em análise de documentos de campanhas de marketing.
+Sua tarefa é extrair informações específicas dos documentos fornecidos.
+
+IMPORTANTE:
+- Extraia informações REAIS dos documentos, não invente
+- Se uma informação não estiver clara, use o contexto para inferir
+- Mantenha as respostas concisas e diretas
+- Se não encontrar informação suficiente, indique "Não identificado"`
+          },
+          {
+            role: "user",
+            content: `Analise os seguintes documentos de campanha e extraia:
+
+1. **NICHO ALVO**: Qual é o segmento/nicho de mercado da campanha? (ex: "Advogados", "Salões de Beleza", "Clínicas Médicas")
+
+2. **PÚBLICO ALVO**: Quem são os clientes ideais? Descreva características como profissão, localização, necessidades, comportamento.
+
+3. **DESCRIÇÃO DO SERVIÇO/PRODUTO**: O que está sendo oferecido? Descreva brevemente o serviço ou produto principal da campanha.
+
+DOCUMENTOS:
+${combinedContent}
+
+Responda EXATAMENTE neste formato JSON:
+{
+  "nicho": "string com o nicho identificado",
+  "publicoAlvo": "string descrevendo o público-alvo",
+  "descricaoServico": "string descrevendo o serviço/produto"
+}`
+          }
+        ],
+        response_format: { type: "json_object" }
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return { success: false, error: "GPT não retornou resposta" };
+      }
+
+      const extracted = JSON.parse(content);
+      console.log(`✅ Campos extraídos:`, extracted);
+
+      return {
+        success: true,
+        nicho: extracted.nicho || "Não identificado",
+        publicoAlvo: extracted.publicoAlvo || "Não identificado",
+        descricaoServico: extracted.descricaoServico || "Não identificado"
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`❌ Erro ao extrair campos:`, errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Busca conteúdo bruto dos documentos de uma campanha
+   */
+  async getDocumentsContent(campaignId: string): Promise<string> {
+    const { data: documents, error } = await this.supabase
+      .from("campaign_documents")
+      .select("title, content, doc_type")
+      .eq("campaign_id", campaignId)
+      .eq("is_active", true)
+      .order("title")
+      .order("content_chunk");
+
+    if (error || !documents || documents.length === 0) {
+      return "";
+    }
+
+    return documents.map(d => `${d.title}: ${d.content}`).join("\n\n");
+  }
 }
 
 // Export singleton

@@ -135,8 +135,10 @@ export function parseInstagramCount(value: string | null): number {
     const cleaned = numberPortion.replace(/[.,\s]/g, '');
     numeric = Number.parseInt(cleaned, 10);
   } else {
-    // Tem sufixo: vírgula é decimal, ponto é separador de milhares
-    numeric = Number.parseFloat(numberPortion.replace(/\./g, '').replace(/,/g, '.'));
+    // Tem sufixo: Instagram usa formato US (ponto é decimal)
+    // "93.2K" → 93.2 * 1000 = 93200
+    // "1,234.5K" → 1234.5 * 1000 = 1234500
+    numeric = Number.parseFloat(numberPortion.replace(/,/g, ''));
   }
 
   if (!Number.isFinite(numeric)) {

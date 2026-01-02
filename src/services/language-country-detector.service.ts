@@ -205,8 +205,9 @@ const PORTUGUESE_KEYWORDS = [
  */
 const SPANISH_KEYWORDS = [
   // Pronomes ES (peso alto - MUITO DISTINTOS)
-  'yo', 'tú', 'tu', 'mis', 'tus', 'sus', 'nuestro', 'nuestra', 'nuestros', 'nuestras',
-  'usted', 'ustedes', 'vosotros', 'conmigo', 'contigo', 'lo', 'la', 'le', 'les',
+  // REMOVIDOS: tu (existe em PT), lo/la/le/les (matcham falsamente em palavras acentuadas)
+  'yo', 'tú', 'mis', 'tus', 'sus', 'nuestro', 'nuestra', 'nuestros', 'nuestras',
+  'usted', 'ustedes', 'vosotros', 'conmigo', 'contigo',
 
   // Verbos conjugados ES (diferentes de PT) (peso alto)
   'tengo', 'tienes', 'tiene', 'tienen', 'somos', 'soy', 'eres', 'son',
@@ -221,16 +222,18 @@ const SPANISH_KEYWORDS = [
   'español', 'española', 'españoles', 'españolas',
   'cómo', 'qué', 'cuál', 'dónde', 'donde', 'cuándo', 'cuando', 'cuánto',
   'hermano', 'hermana', 'abuelo', 'abuela', 'niño', 'niña',
-  'bueno', 'buena', 'buenos', 'buenas', 'mejor', 'peor', 'feliz',
-  'centro', 'esencia', 'negocio', 'negocios', 'trabajo', 'trabajos',
+  'bueno', 'buena', 'buenos', 'buenas', 'feliz',
+  // REMOVIDOS: centro (existe em PT), negocio/negocios (similar a PT), mejor/peor (similar)
+  'esencia', 'trabajo', 'trabajos',
   'éxito', 'exito', 'exitoso', 'exitosa',
-  'grande', 'grandes', 'pequeño', 'pequeña',
+  'pequeño', 'pequeña',
 
-  // Artigos ES (diferentes de PT: "as/os" vs "las/los")
-  'las', 'los', 'una', 'unas', 'unos', 'el', 'del',
+  // Artigos ES (REMOVIDOS: el, del, la, lo, le, una - matcham falsamente em palavras PT acentuadas)
+  // PROBLEMA: \b não reconhece acentos, então \bdel\b matcha em "delícias"
+  'las', 'los', 'unos',
 
-  // Preposições/advérbios ES exclusivos
-  'hacia', 'desde', 'hasta', 'según', 'también', 'además', 'ahora', 'siempre', 'nunca',
+  // Preposições/advérbios ES exclusivos (REMOVIDOS: nunca, desde - existem em PT)
+  'hacia', 'hasta', 'según', 'además',
 
   // Expressões ES (peso alto)
   'que dios', 'dios bendiga', 'gracias a dios', 'si dios quiere',
@@ -355,15 +358,18 @@ export async function detectLanguage(
 
   let detectedLang: string;
   let detectedISO3: string;
+  let forcePortuguese = false; // Flag para não permitir correção por keywords
 
   if (hasPortugueseChars) {
-    console.log(`   🇧🇷 Características PT detectadas (ç/ã/õ/lh/nh) - forçando português`);
+    console.log(`   🇧🇷 Características PT detectadas (ç/ã/õ/lh/nh) - forçando português (FINAL)`);
     detectedLang = 'pt';
     detectedISO3 = 'por';
+    forcePortuguese = true; // ç/ã/õ são EXCLUSIVOS de PT - não permitir correção
   } else if (portugueseAccentedWords) {
-    console.log(`   🇧🇷 Palavras acentuadas PT detectadas - forçando português`);
+    console.log(`   🇧🇷 Palavras acentuadas PT detectadas - forçando português (FINAL)`);
     detectedLang = 'pt';
     detectedISO3 = 'por';
+    forcePortuguese = true; // Palavras exclusivas PT - não permitir correção
   } else {
     // ========================================
     // PASSO 2: Usar FRANC (mais preciso, baseado em n-gramas)
@@ -389,21 +395,37 @@ export async function detectLanguage(
   // PASSO 2: CORREÇÃO apenas para PT/ES (idiomas muito similares)
   // ========================================
   // Só calcula keywords se franc detectou PT ou ES (para corrigir confusões)
+  // MAS: Se forcePortuguese=true (detectou ç/ã/õ), NÃO permite correção para ES
   if (detectedLang === 'pt' || detectedLang === 'es') {
     const langScore = calculateLanguageScore(bio);
-    console.log(`   📊 Keyword Score: PT=${langScore.pt}, ES=${langScore.es}${langScore.hasBrazilianLocation ? ' 🇧🇷' : ''}`);
+    console.log(`   📊 Keyword Score: PT=${langScore.pt}, ES=${langScore.es}${langScore.hasBrazilianLocation ? ' 🇧🇷' : ''}${forcePortuguese ? ' [LOCKED PT]' : ''}`);
 
+    // Se forcePortuguese=true, NÃO permitir correção para ES
+    if (forcePortuguese) {
+      console.log(`✅ Language: pt (LOCKED - caracteres exclusivos PT detectados, ignorando keywords)`);
+      // detectedLang já é 'pt', mantém
+    }
     // CORREÇÃO 1: Localização BR + baixo score ES → força PT
-    if (langScore.hasBrazilianLocation && langScore.es < 3) {
+    else if (langScore.hasBrazilianLocation && langScore.es < 3) {
       console.log(`🎯 Language: pt (CORRECTED: Brazilian location detected, ES score low)`);
       detectedLang = 'pt';
     }
-    // CORREÇÃO 2: Score PT MUITO forte (>= 3 e pelo menos 2x ES) → força PT
+    // CORREÇÃO 2: PT > 0 e ES = 0 → força PT (se tem keyword PT e nenhuma ES, é português)
+    else if (langScore.pt > 0 && langScore.es === 0) {
+      console.log(`🎯 Language: pt (CORRECTED: PT keywords found, no ES keywords: ${langScore.pt} vs 0)`);
+      detectedLang = 'pt';
+    }
+    // CORREÇÃO 3: Score PT MUITO forte (>= 3 e pelo menos 2x ES) → força PT
     else if (langScore.pt >= 3 && langScore.pt >= langScore.es * 2) {
       console.log(`🎯 Language: pt (CORRECTED: Strong PT keywords: ${langScore.pt} >> ${langScore.es})`);
       detectedLang = 'pt';
     }
-    // CORREÇÃO 3: Score ES MUITO forte (>= 3 e pelo menos 2x PT) → força ES
+    // CORREÇÃO 4: ES > 0 e PT = 0 → força ES (se tem keyword ES e nenhuma PT, é espanhol)
+    else if (langScore.es > 0 && langScore.pt === 0) {
+      console.log(`🎯 Language: es (CORRECTED: ES keywords found, no PT keywords: ${langScore.es} vs 0)`);
+      detectedLang = 'es';
+    }
+    // CORREÇÃO 5: Score ES MUITO forte (>= 3 e pelo menos 2x PT) → força ES
     else if (langScore.es >= 3 && langScore.es >= langScore.pt * 2) {
       console.log(`🎯 Language: es (CORRECTED: Strong ES keywords: ${langScore.es} >> ${langScore.pt})`);
       detectedLang = 'es';

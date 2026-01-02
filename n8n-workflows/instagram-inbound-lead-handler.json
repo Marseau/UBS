@@ -1,0 +1,146 @@
+{
+  "name": "Instagram Inbound Lead Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram-inbound-lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrair dados do webhook\nconst body = $input.item.json.body;\n\nreturn {\n  campaign_id: body.campaign_id,\n  username: body.username,\n  message_text: body.message_text,\n  sender_id: body.sender_id\n};"
+      },
+      "id": "extract-data",
+      "name": "Extrair Dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/instagram-inbound/process",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "call-handler",
+      "name": "Chamar Handler",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.success }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-success",
+      "name": "Sucesso?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/queue/instagram-dm",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"conversationId\": \"{{ $json.lead_id }}\",\n  \"leadUsername\": \"{{ $('Extrair Dados').item.json.username }}\",\n  \"messageText\": \"{{ $json.response_text }}\",\n  \"campaignId\": \"{{ $('Extrair Dados').item.json.campaign_id }}\",\n  \"priority\": 8\n}",
+        "options": {}
+      },
+      "id": "enqueue-response",
+      "name": "Enfileirar Resposta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: true,\n  message: 'Lead inbound processado',\n  lead_id: $json.lead_id\n}) }}"
+      },
+      "id": "respond-success",
+      "name": "Responder Sucesso",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  error: $json.error || 'Unknown error'\n}) }}"
+      },
+      "id": "respond-error",
+      "name": "Responder Erro",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO aic_instagram_conversations (campaign_id, lead_id, username, status, last_message_at)\nVALUES (\n  '{{ $('Extrair Dados').item.json.campaign_id }}',\n  '{{ $json.lead_id }}',\n  '{{ $('Extrair Dados').item.json.username }}',\n  'active',\n  NOW()\n)\nON CONFLICT (campaign_id, username) DO UPDATE\nSET last_message_at = NOW(), status = 'active';",
+        "options": {}
+      },
+      "id": "update-conversation",
+      "name": "Atualizar Conversa",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1050, 100],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-connection",
+          "name": "Supabase"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{"node": "Extrair Dados", "type": "main", "index": 0}]]
+    },
+    "Extrair Dados": {
+      "main": [[{"node": "Chamar Handler", "type": "main", "index": 0}]]
+    },
+    "Chamar Handler": {
+      "main": [[{"node": "Sucesso?", "type": "main", "index": 0}]]
+    },
+    "Sucesso?": {
+      "main": [
+        [{"node": "Atualizar Conversa", "type": "main", "index": 0}],
+        [{"node": "Responder Erro", "type": "main", "index": 0}]
+      ]
+    },
+    "Atualizar Conversa": {
+      "main": [[{"node": "Enfileirar Resposta", "type": "main", "index": 0}]]
+    },
+    "Enfileirar Resposta": {
+      "main": [[{"node": "Responder Sucesso", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-12-16T00:00:00.000Z",
+  "versionId": "1"
+}

@@ -20,6 +20,19 @@ interface VectorStoreInfo {
   createdAt: Date;
 }
 
+/**
+ * Resultado estruturado da busca de hashtags
+ */
+export interface HashtagSearchResult {
+  hashtag: string;
+  freq_bio: number;
+  freq_posts: number;
+  freq_total: number;
+  unique_leads: number;
+  leads_with_contact: number;
+  contact_rate: number;
+}
+
 export class HashtagVectorStoreService {
   private vectorStoreId: string = '';
   private readonly vectorStoreName = 'hashtags-aic-system';
@@ -147,34 +160,61 @@ export class HashtagVectorStoreService {
   }
 
   /**
-   * Busca semântica no Vector Store
+   * Busca semântica no Vector Store - retorna JSON estruturado
+   * @param seeds - Array de hashtags/termos para buscar similares
+   * @param limit - Número máximo de resultados (default: 150)
+   * @returns Array de HashtagSearchResult ordenado por relevância
    */
-  async searchHashtags(query: string, limit = 100): Promise<any> {
+  async searchHashtags(seeds: string[], limit = 150): Promise<HashtagSearchResult[]> {
     if (!this.vectorStoreId) {
       await this.initialize();
     }
 
-    console.log(`\n🔍 [VECTOR STORE] Busca semântica: "${query}"`);
+    const seedsText = seeds.join(', ');
+    console.log(`\n🔍 [VECTOR STORE] Busca semântica: "${seedsText}" (limit: ${limit})`);
+
+    const startTime = Date.now();
 
     // Criar thread temporário para busca
     const thread = await openai.beta.threads.create();
 
-    // Enviar mensagem com file_search
+    // Prompt estruturado para retornar JSON
+    const prompt = `Busque no arquivo CSV de hashtags as ${limit} hashtags mais semanticamente similares aos termos: ${seedsText}
+
+IMPORTANTE: Retorne APENAS um JSON válido, sem markdown, sem explicações.
+
+O arquivo CSV tem colunas: hashtag, freq_bio, freq_posts, freq_total, unique_leads, leads_with_contact, contact_rate
+
+Retorne um array JSON com as hashtags encontradas, ordenadas por relevância semântica.
+Formato EXATO (sem texto adicional):
+[
+  {"hashtag": "exemplo", "freq_bio": 10, "freq_posts": 20, "freq_total": 30, "unique_leads": 15, "leads_with_contact": 5, "contact_rate": 33.3},
+  ...
+]
+
+Priorize hashtags com:
+1. Alta similaridade semântica com os termos buscados
+2. freq_total >= 5 (para relevância estatística)
+3. unique_leads >= 1
+
+Retorne APENAS o array JSON, nada mais.`;
+
     await openai.beta.threads.messages.create(thread.id, {
       role: 'user',
-      content: query
+      content: prompt
     });
 
     // Criar Assistant temporário com file_search
     const assistant = await openai.beta.assistants.create({
       name: 'Hashtag Search Assistant',
-      model: 'gpt-4o',
+      model: 'gpt-4o-mini',
       tools: [{ type: 'file_search' }],
       tool_resources: {
         file_search: {
           vector_store_ids: [this.vectorStoreId!]
         }
-      }
+      },
+      instructions: 'Você é um assistente que busca hashtags em arquivos CSV e retorna resultados em JSON. Sempre retorne APENAS JSON válido, sem markdown ou explicações.'
     });
 
     // Executar busca
@@ -182,18 +222,68 @@ export class HashtagVectorStoreService {
       assistant_id: assistant.id
     });
 
+    let results: HashtagSearchResult[] = [];
+
     if (run.status === 'completed') {
       const messages = await openai.beta.threads.messages.list(thread.id);
       const response = messages.data[0]?.content[0];
 
+      // Extrair texto da resposta
+      if (response && response.type === 'text') {
+        let text = response.text.value;
+
+        // Remover markdown code blocks se existirem
+        text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+        try {
+          results = JSON.parse(text);
+
+          // Validar e limpar resultados
+          results = results
+            .filter((r: any) => r.hashtag && typeof r.hashtag === 'string')
+            .map((r: any) => ({
+              hashtag: String(r.hashtag).toLowerCase().replace(/^#/, ''),
+              freq_bio: Number(r.freq_bio) || 0,
+              freq_posts: Number(r.freq_posts) || 0,
+              freq_total: Number(r.freq_total) || 0,
+              unique_leads: Number(r.unique_leads) || 0,
+              leads_with_contact: Number(r.leads_with_contact) || 0,
+              contact_rate: Number(r.contact_rate) || 0
+            }))
+            .slice(0, limit);
+
+        } catch (parseError) {
+          console.error('❌ Erro ao parsear JSON:', parseError);
+          console.error('   Resposta recebida:', text.substring(0, 500));
+        }
+      }
+
       // Cleanup
       await openai.beta.assistants.delete(assistant.id);
       await openai.beta.threads.delete(thread.id);
+    } else {
+      // Cleanup mesmo em caso de erro
+      try {
+        await openai.beta.assistants.delete(assistant.id);
+        await openai.beta.threads.delete(thread.id);
+      } catch {}
 
-      return response;
+      throw new Error(`Busca falhou: ${run.status}`);
     }
 
-    throw new Error(`Busca falhou: ${run.status}`);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`   ✅ Encontradas ${results.length} hashtags em ${elapsed}s`);
+
+    return results;
+  }
+
+  /**
+   * Busca semântica simplificada - recebe string única
+   * @deprecated Use searchHashtags(seeds: string[]) para melhor controle
+   */
+  async searchHashtagsSimple(query: string, limit = 150): Promise<HashtagSearchResult[]> {
+    const seeds = query.split(/[,\s]+/).filter(s => s.length > 0);
+    return this.searchHashtags(seeds, limit);
   }
 
   /**

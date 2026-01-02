@@ -1,6 +1,7 @@
 /**
  * Backfill: Re-scrape websites de leads já processados
- * Processa em lotes de 200 para acompanhamento
+ * Processa em lotes de 10 DIAS de created_at (do mais antigo ao mais novo)
+ * Marca leads re-verificados com flag whatsapp_reverified_at
  *
  * Uso: npx ts-node scripts/backfill-rescrape-websites.ts
  */
@@ -16,8 +17,7 @@ const supabase = createClient(
 );
 
 const API_BASE = 'http://localhost:3000';
-const BATCH_SIZE = 50;
-const MAX_LEADS = 50; // Limite para teste
+const DAYS_PER_BATCH = 10; // 10 dias por lote
 const DELAY_BETWEEN_REQUESTS = 300; // 300ms
 
 async function scrapeUrl(leadId: string, url: string): Promise<{ whatsapp_phones?: string[], database_updated?: boolean } | null> {
@@ -28,7 +28,7 @@ async function scrapeUrl(leadId: string, url: string): Promise<{ whatsapp_phones
       body: JSON.stringify({
         lead_id: leadId,
         url,
-        update_database: true,  // API faz persistência completa
+        update_database: true,
         deepLinks: true
       })
     });
@@ -40,51 +40,87 @@ async function scrapeUrl(leadId: string, url: string): Promise<{ whatsapp_phones
   }
 }
 
-// SKIP: Reiniciando do zero para incluir wa.me/message leads
-// Leads já com whatsapp_number serão ignorados automaticamente pelo filtro
-const SKIP_FAILED = 0;
+// Marcar lead como re-verificado
+async function markAsReverified(leadId: string): Promise<void> {
+  await supabase
+    .from('instagram_leads')
+    .update({ whatsapp_reverified_at: new Date().toISOString() })
+    .eq('id', leadId);
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function formatDate(date: Date): string {
+  return date.toISOString().split('T')[0] as string;
+}
 
 async function backfillRescrape() {
-  // Contar quantos já foram processados (têm whatsapp_number de website_scrape)
-  const { count: jaProcessados } = await supabase
+  console.log('🚀 Backfill: Re-scrape de websites (por lotes de 10 dias)\n');
+
+  // Buscar data mais antiga de lead não re-verificado
+  const { data: oldestLead } = await supabase
     .from('instagram_leads')
-    .select('*', { count: 'exact', head: true })
-    .eq('whatsapp_source', 'website_scrape');
+    .select('created_at')
+    .is('whatsapp_number', null)
+    .eq('url_enriched', true)
+    .not('website', 'is', null)
+    .not('website', 'ilike', '%wa.me/qr/%')
+    .is('whatsapp_reverified_at', null)
+    .order('created_at', { ascending: true })
+    .limit(1);
 
-  const previousFound = jaProcessados || 0;
-  console.log('🚀 Backfill: Re-scrape de websites');
-  console.log(`📍 Já encontrados anteriormente: ${previousFound}`);
-  console.log(`📍 Pulando ${SKIP_FAILED} leads já tentados que falharam\n`);
-
-  let totalProcessed = SKIP_FAILED;
-  let totalFound = previousFound;
-  let totalFailed = SKIP_FAILED;
-  let batchNumber = Math.floor(SKIP_FAILED / BATCH_SIZE);
-  let hasMore = true;
-  let lastCreatedAt = '1970-01-01T00:00:00Z';
-
-  // Pular para a posição correta
-  if (SKIP_FAILED > 0) {
-    const { data: skipData } = await supabase
-      .from('instagram_leads')
-      .select('created_at')
-      .is('whatsapp_number', null)
-      .eq('url_enriched', true)
-      .not('website', 'is', null)
-      .not('website', 'ilike', '%wa.me/qr/%')
-      .order('created_at', { ascending: true })
-      .range(SKIP_FAILED - 1, SKIP_FAILED - 1);
-
-    if (skipData && skipData[0]) {
-      lastCreatedAt = skipData[0].created_at;
-      console.log('📍 Retomando a partir de:', lastCreatedAt, '\n');
-    }
+  if (!oldestLead || oldestLead.length === 0) {
+    console.log('✅ Todos os leads já foram re-verificados!');
+    return;
   }
 
-  while (hasMore && totalProcessed < MAX_LEADS) {
-    batchNumber++;
+  // Buscar data mais recente para calcular o range total
+  const { data: newestLead } = await supabase
+    .from('instagram_leads')
+    .select('created_at')
+    .is('whatsapp_number', null)
+    .eq('url_enriched', true)
+    .not('website', 'is', null)
+    .not('website', 'ilike', '%wa.me/qr/%')
+    .is('whatsapp_reverified_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1);
 
-    // Buscar próximo lote
+  // Contar total pendente
+  const { count: totalPendente } = await supabase
+    .from('instagram_leads')
+    .select('*', { count: 'exact', head: true })
+    .is('whatsapp_number', null)
+    .eq('url_enriched', true)
+    .not('website', 'is', null)
+    .not('website', 'ilike', '%wa.me/qr/%')
+    .is('whatsapp_reverified_at', null);
+
+  const startDate = new Date(oldestLead[0]!.created_at);
+  const endDate = newestLead && newestLead[0] ? new Date(newestLead[0].created_at) : new Date();
+
+  const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  const totalBatches = Math.ceil(totalDays / DAYS_PER_BATCH);
+
+  console.log(`📅 Range de datas: ${formatDate(startDate)} → ${formatDate(endDate)}`);
+  console.log(`📊 Total de dias: ${totalDays} (~${totalBatches} lotes de ${DAYS_PER_BATCH} dias)`);
+  console.log(`📋 Leads pendentes: ${totalPendente || 0}\n`);
+
+  let currentStart = startDate;
+  let batchNumber = 0;
+  let totalProcessed = 0;
+  let totalFound = 0;
+  let totalFailed = 0;
+
+  while (currentStart < endDate) {
+    batchNumber++;
+    const currentEnd = addDays(currentStart, DAYS_PER_BATCH);
+
+    // Buscar leads deste período que ainda não foram re-verificados
     const { data: leads, error } = await supabase
       .from('instagram_leads')
       .select('id, username, website, created_at')
@@ -92,57 +128,72 @@ async function backfillRescrape() {
       .eq('url_enriched', true)
       .not('website', 'is', null)
       .not('website', 'ilike', '%wa.me/qr/%')
-      .gt('created_at', lastCreatedAt)
-      .order('created_at', { ascending: true })
-      .limit(Math.min(BATCH_SIZE, MAX_LEADS - totalProcessed));
+      .is('whatsapp_reverified_at', null)
+      .gte('created_at', currentStart.toISOString())
+      .lt('created_at', currentEnd.toISOString())
+      .order('created_at', { ascending: true });
 
-    if (error || !leads || leads.length === 0) {
-      if (error) console.error('❌ Erro:', error.message);
-      hasMore = false;
-      break;
+    if (error) {
+      console.error(`❌ Erro no lote ${batchNumber}:`, error.message);
+      currentStart = currentEnd;
+      continue;
     }
 
-    console.log(`\n📦 LOTE ${batchNumber} - ${leads.length} leads (total: ${totalProcessed}+)`);
-    console.log('─'.repeat(50));
+    if (!leads || leads.length === 0) {
+      console.log(`📦 LOTE ${batchNumber} [${formatDate(currentStart)} → ${formatDate(currentEnd)}]: 0 leads (já processados ou vazios)`);
+      currentStart = currentEnd;
+      continue;
+    }
+
+    console.log(`\n📦 LOTE ${batchNumber} [${formatDate(currentStart)} → ${formatDate(currentEnd)}]: ${leads.length} leads`);
+    console.log('─'.repeat(60));
 
     let batchFound = 0;
+    let batchProcessed = 0;
 
     for (const lead of leads) {
       totalProcessed++;
-      lastCreatedAt = lead.created_at;
+      batchProcessed++;
 
-      process.stdout.write(`[${totalProcessed}] @${lead.username.substring(0, 25).padEnd(25)}... `);
+      process.stdout.write(`[${batchProcessed}/${leads.length}] @${lead.username.substring(0, 25).padEnd(25)}... `);
 
       const result = await scrapeUrl(lead.id, lead.website);
+
+      // Marcar como re-verificado (independente do resultado)
+      await markAsReverified(lead.id);
 
       if (result?.whatsapp_phones && result.whatsapp_phones.length > 0) {
         const phone = result.whatsapp_phones[0];
         console.log(`✅ ${phone} (${result.whatsapp_phones.length} total)`);
         totalFound++;
         batchFound++;
-        // API já fez update completo (whatsapp_number, whatsapp_numbers, whatsapp_url_status, etc)
       } else {
         console.log('❌');
         totalFailed++;
-        // API já atualizou whatsapp_url_status = 'none'
       }
 
       await new Promise(r => setTimeout(r, DELAY_BETWEEN_REQUESTS));
     }
 
     // Resumo do lote
-    console.log('─'.repeat(50));
-    console.log(`📊 Lote ${batchNumber}: ${batchFound} encontrados | Total: ${totalFound}/${totalProcessed} (${((totalFound / totalProcessed) * 100).toFixed(1)}%)`);
+    console.log('─'.repeat(60));
+    const batchRate = batchProcessed > 0 ? ((batchFound / batchProcessed) * 100).toFixed(1) : '0';
+    const totalRate = totalProcessed > 0 ? ((totalFound / totalProcessed) * 100).toFixed(1) : '0';
+    console.log(`📊 Lote ${batchNumber}: ${batchFound}/${batchProcessed} (${batchRate}%) | Acumulado: ${totalFound}/${totalProcessed} (${totalRate}%)`);
+
+    // Próximo lote
+    currentStart = currentEnd;
   }
 
-  console.log('\n' + '═'.repeat(50));
+  console.log('\n' + '═'.repeat(60));
   console.log('📊 RESUMO FINAL');
-  console.log('═'.repeat(50));
+  console.log('═'.repeat(60));
+  console.log(`Total de lotes: ${batchNumber}`);
   console.log(`Total processados: ${totalProcessed}`);
   console.log(`WhatsApp encontrados: ${totalFound}`);
   console.log(`Sem WhatsApp: ${totalFailed}`);
-  console.log(`Taxa de sucesso: ${((totalFound / totalProcessed) * 100).toFixed(1)}%`);
-  console.log('═'.repeat(50) + '\n');
+  console.log(`Taxa de sucesso: ${totalProcessed > 0 ? ((totalFound / totalProcessed) * 100).toFixed(1) : 0}%`);
+  console.log('═'.repeat(60) + '\n');
 }
 
 backfillRescrape()

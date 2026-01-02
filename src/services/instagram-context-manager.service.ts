@@ -93,6 +93,10 @@ export async function createIsolatedContext(): Promise<{
       try {
         await persistentPage.close();
       } catch {}
+      // 🔧 FIX: Remover entrada antiga do Map para evitar dessincronização
+      if (persistentRequestId) {
+        activePages.delete(persistentRequestId);
+      }
       persistentPage = null;
       persistentRequestId = null;
     }
@@ -155,6 +159,95 @@ export async function createIsolatedContext(): Promise<{
   const cleanup = async () => {
     // 🆕 NÃO fechar página persistente - apenas log
     console.log(`   ℹ️  Página ${requestId} mantida aberta para próxima operação`);
+  };
+
+  return { page, requestId, cleanup };
+}
+
+/**
+ * 🆕 Cria uma página DEDICADA (não compartilhada)
+ *
+ * Diferente de createIsolatedContext:
+ * - SEMPRE cria uma nova página
+ * - NÃO usa a página persistente
+ * - FECHA a página após o uso
+ *
+ * Ideal para scrapes de inbound que podem rodar em paralelo
+ * sem interferir com scrape-users ou outras operações.
+ */
+export async function createDedicatedPage(): Promise<{
+  page: Page;
+  requestId: string;
+  cleanup: () => Promise<void>;
+}> {
+  // Garantir que browser principal está autenticado
+  await ensureLoggedSession();
+
+  const browser = getBrowserInstance();
+  if (!browser) {
+    throw new Error('Browser não inicializado.');
+  }
+
+  const requestId = `dedicated_${++pageCounter}_${Date.now()}`;
+
+  // SEMPRE criar nova página (não reutiliza)
+  const page = await browser.newPage();
+
+  console.log(`📄 [DEDICATED] Página dedicada criada: ${requestId}`);
+
+  // 🔐 AUTENTICAR PROXY (se configurado)
+  const proxyConfig = (browser as any)._currentProxyConfig;
+  if (proxyConfig?.username && proxyConfig?.password) {
+    await page.authenticate({
+      username: proxyConfig.username,
+      password: proxyConfig.password
+    });
+    console.log(`   🔐 Proxy autenticado: ${proxyConfig.username}@${proxyConfig.host}`);
+  }
+
+  // 🕵️ APLICAR STEALTH
+  await applyFullStealth(page);
+
+  // ✅ NAVEGAR para instagram.com
+  await page.goto('https://www.instagram.com/', {
+    waitUntil: 'domcontentloaded',
+    timeout: 30000
+  }).catch(() => {});
+
+  // Carregar cookies
+  if (fs.existsSync(COOKIES_FILE)) {
+    try {
+      const cookiesData = fs.readFileSync(COOKIES_FILE, 'utf8');
+      const cookies = JSON.parse(cookiesData);
+      if (Array.isArray(cookies) && cookies.length > 0) {
+        await page.setCookie(...cookies);
+        console.log(`   🔑 ${cookies.length} cookies aplicados à página dedicada ${requestId}`);
+      }
+    } catch (error: any) {
+      console.warn(`   ⚠️  Erro ao carregar cookies: ${error.message}`);
+    }
+  }
+
+  // Armazenar para tracking (mas NÃO como persistente)
+  const managedPage: ManagedPage = {
+    page,
+    createdAt: Date.now(),
+    requestId
+  };
+  activePages.set(requestId, managedPage);
+
+  // Função de cleanup que REALMENTE fecha a página
+  const cleanup = async () => {
+    try {
+      if (!page.isClosed()) {
+        await page.close();
+        console.log(`🗑️  [DEDICATED] Página ${requestId} fechada`);
+      }
+    } catch (err: any) {
+      console.warn(`⚠️  Erro ao fechar página dedicada: ${err.message}`);
+    } finally {
+      activePages.delete(requestId);
+    }
   };
 
   return { page, requestId, cleanup };
@@ -225,21 +318,54 @@ export async function cleanupAllContexts(): Promise<void> {
 
 /**
  * Retorna estatísticas das páginas ativas
+ * 🔧 FIX: Agora verifica se as páginas ainda estão realmente abertas
  */
 export function getContextStats(): {
   activeCount: number;
-  contexts: Array<{ requestId: string; ageSeconds: number }>;
+  contexts: Array<{ requestId: string; ageSeconds: number; isOpen: boolean }>;
 } {
   const now = Date.now();
   const contexts = Array.from(activePages.values()).map(ctx => ({
     requestId: ctx.requestId,
-    ageSeconds: (now - ctx.createdAt) / 1000
+    ageSeconds: (now - ctx.createdAt) / 1000,
+    isOpen: !ctx.page.isClosed()
   }));
 
+  // Contar apenas páginas realmente abertas
+  const openCount = contexts.filter(c => c.isOpen).length;
+
   return {
-    activeCount: activePages.size,
+    activeCount: openCount,
     contexts
   };
+}
+
+/**
+ * 🔧 FIX: Sincroniza o Map com o estado real do browser
+ * Remove entradas de páginas que foram fechadas externamente
+ */
+export async function syncContextsWithBrowser(): Promise<number> {
+  const closedIds: string[] = [];
+
+  for (const [requestId, managed] of activePages.entries()) {
+    if (managed.page.isClosed()) {
+      closedIds.push(requestId);
+    }
+  }
+
+  if (closedIds.length > 0) {
+    console.log(`🔄 Sincronizando: removendo ${closedIds.length} páginas fechadas do tracking...`);
+    for (const id of closedIds) {
+      activePages.delete(id);
+      // Se era a página persistente, limpar referência
+      if (id === persistentRequestId) {
+        persistentPage = null;
+        persistentRequestId = null;
+      }
+    }
+  }
+
+  return closedIds.length;
 }
 
 /**
