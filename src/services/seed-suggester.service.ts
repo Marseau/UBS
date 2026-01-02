@@ -481,12 +481,14 @@ async function fetchSemanticHashtags(
 /**
  * Função principal: sugere seeds DETERMINISTICAMENTE
  *
- * NOVA ABORDAGEM v4:
- * 1. Gera embedding da descrição da campanha (OpenAI)
- * 2. Busca hashtags no banco por similaridade >= threshold (100% determinístico)
- * 3. GPT sugere 20 novas hashtags para scraping (que não existem no banco)
+ * ABORDAGEM v5 (CORRIGIDA):
+ * 1. GPT normaliza descrição → 30 hashtags
+ * 2. Verificar quais das 30 existem no banco com freq>=20 → seeds diretas
+ * 3. Para cada hashtag encontrada, buscar similares no banco
+ * 4. Combinar: hashtags diretas + similares (sem duplicatas)
+ * 5. GPT sugere 20 novas hashtags para scraping (que não existem no banco)
  *
- * AUTO-ADJUST: Se > 50 seeds, aumenta minSimilarity progressivamente
+ * LIMITE: máximo 50 seeds (ordenadas por score)
  */
 export async function suggestSeeds(
   campaignDescription: string,
@@ -498,17 +500,15 @@ export async function suggestSeeds(
   } = {}
 ): Promise<SeedSuggestionResult> {
   const minFreq = options.minFreq ?? DEFAULT_MIN_FREQ;
-  const initialSimilarity = options.minSimilarity ?? DEFAULT_MIN_SIMILARITY;
-  let minSimilarity = initialSimilarity;
+  const minSimilarity = options.minSimilarity ?? 0.65; // Reduzido para capturar mais similares
   const maxResults = Math.min(
     options.maxResults ?? DEFAULT_MAX_RESULTS,
     MAX_RESULTS_HARD_LIMIT
   );
-  const autoAdjust = options.autoAdjust !== false;
 
-  console.log('\n[SEED SUGGESTER v4] 100% DETERMINÍSTICO');
+  console.log('\n[SEED SUGGESTER v5] FLUXO CORRIGIDO');
   console.log(`   Descrição: ${campaignDescription.substring(0, 80)}...`);
-  console.log(`   Params: minFreq=${minFreq}, minSim=${minSimilarity}, autoAdjust=${autoAdjust}`);
+  console.log(`   Params: minFreq=${minFreq}, minSim=${minSimilarity}`);
 
   // Validar input
   if (!campaignDescription || campaignDescription.trim().length < 10) {
@@ -516,101 +516,123 @@ export async function suggestSeeds(
   }
 
   // 1. NORMALIZAR DESCRIÇÃO → HASHTAGS via GPT (temp=0)
-  console.log('   Normalizando descrição → hashtags via GPT...');
+  console.log('   1. Normalizando descrição → hashtags via GPT...');
   const normalizedHashtags = await normalizeDescriptionToHashtags(campaignDescription);
 
   if (normalizedHashtags.length === 0) {
     throw new Error('Falha ao normalizar descrição em hashtags');
   }
+  console.log(`      GPT gerou ${normalizedHashtags.length} hashtags: ${normalizedHashtags.slice(0, 5).join(', ')}...`);
 
-  // 2. BUSCAR EMBEDDINGS DAS HASHTAGS NO BANCO
-  console.log('   Buscando embeddings das hashtags no banco...');
-  const lookupResult = await getAverageEmbeddingFromDB(normalizedHashtags);
+  // 2. VERIFICAR QUAIS DAS 30 EXISTEM NO BANCO COM FREQ>=20
+  console.log('   2. Verificando hashtags no banco (freq>=' + minFreq + ')...');
+  const { data: directSeeds, error: directError } = await supabase
+    .from('hashtag_embeddings')
+    .select('hashtag, hashtag_normalized, occurrence_count, embedding')
+    .in('hashtag_normalized', normalizedHashtags)
+    .gte('occurrence_count', minFreq)
+    .eq('is_active', true)
+    .not('embedding', 'is', null)
+    .order('occurrence_count', { ascending: false });
 
-  let queryEmbedding = lookupResult.embedding;
-
-  // Fallback: gerar embedding direto se não encontrar no banco
-  if (!queryEmbedding) {
-    console.log('   Fallback: gerando embedding direto...');
-    queryEmbedding = await generateCampaignEmbedding(normalizedHashtags.join(' '));
+  if (directError) {
+    console.error('   Erro ao buscar hashtags diretas:', directError);
   }
 
-  if (!queryEmbedding) {
-    throw new Error('Falha ao gerar embedding');
+  const directSeedsFound = directSeeds || [];
+  console.log(`      ${directSeedsFound.length}/${normalizedHashtags.length} hashtags encontradas no banco`);
+
+  // Mapear seeds diretas com score baseado em frequência
+  const seedsMap = new Map<string, HashtagSemantic>();
+
+  for (const seed of directSeedsFound) {
+    const score = Math.log(seed.occurrence_count + 1); // score = ln(freq+1)
+    seedsMap.set(seed.hashtag_normalized, {
+      hashtag: seed.hashtag,
+      hashtag_normalized: seed.hashtag_normalized,
+      occurrence_count: seed.occurrence_count,
+      similarity: 1.0, // match exato
+      score: score
+    });
   }
 
-  // 3. BUSCAR HASHTAGS POR SIMILARIDADE (100% determinístico)
-  console.log('   Buscando hashtags por similaridade...');
-  let seeds = await fetchSemanticHashtags(
-    queryEmbedding,
-    minFreq,
-    minSimilarity,
-    maxResults
-  );
+  // 3. PARA CADA HASHTAG ENCONTRADA, BUSCAR SIMILARES
+  console.log('   3. Buscando hashtags similares para cada seed...');
 
-  // Tracking do auto-adjust
+  // Usar apenas as top 5 seeds para buscar similares (evitar explosão)
+  const topSeedsForSimilarity = directSeedsFound.slice(0, 5);
+
+  for (const seed of topSeedsForSimilarity) {
+    // Parse embedding
+    let embedding: number[] | null = null;
+    if (Array.isArray(seed.embedding)) {
+      embedding = seed.embedding;
+    } else if (typeof seed.embedding === 'string') {
+      try {
+        embedding = JSON.parse(seed.embedding);
+      } catch {
+        const clean = seed.embedding.replace(/^\[|\]$/g, '');
+        embedding = clean.split(',').map(Number);
+      }
+    }
+
+    if (!embedding || embedding.length !== EMBEDDING_DIMENSIONS) continue;
+
+    // Buscar similares a esta seed
+    try {
+      const similares = await fetchSemanticHashtags(
+        embedding,
+        minFreq,
+        minSimilarity,
+        20 // máximo 20 similares por seed
+      );
+
+      for (const similar of similares) {
+        // Não duplicar
+        if (!seedsMap.has(similar.hashtag_normalized)) {
+          seedsMap.set(similar.hashtag_normalized, similar);
+        }
+      }
+    } catch (err: any) {
+      console.log(`      Erro buscando similares para ${seed.hashtag_normalized}: ${err.message}`);
+    }
+  }
+
+  console.log(`      Total após busca de similares: ${seedsMap.size} seeds`);
+
+  // 4. ORDENAR POR SCORE E LIMITAR A 50
+  let seeds = Array.from(seedsMap.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_SEEDS_TARGET);
+
+  console.log(`   4. ${seeds.length} seeds finais (ordenadas por score)`);
+  seeds.slice(0, 10).forEach((h, i) => {
+    console.log(
+      `      ${i + 1}. ${h.hashtag_normalized} ` +
+      `(sim=${(h.similarity * 100).toFixed(1)}%, freq=${h.occurrence_count}, score=${h.score.toFixed(2)})`
+    );
+  });
+
+  // Tracking info
   const autoAdjustInfo: AutoAdjustInfo = {
-    enabled: autoAdjust,
+    enabled: false,
     applied: false,
-    original_similarity: initialSimilarity,
+    original_similarity: minSimilarity,
     final_similarity: minSimilarity,
-    original_count: seeds.length,
+    original_count: seedsMap.size,
     final_count: seeds.length,
     steps: [{ similarity: minSimilarity, count: seeds.length }]
   };
 
-  // AUTO-ADJUST: reduzir para <= 50 seeds
-  if (autoAdjust && seeds.length > MAX_SEEDS_TARGET) {
-    autoAdjustInfo.applied = true;
-    const thresholds = [
-      SIMILARITY_THRESHOLDS.focused,
-      SIMILARITY_THRESHOLDS.strict,
-      SIMILARITY_THRESHOLDS.semantic
-    ];
-
-    for (const threshold of thresholds) {
-      if (threshold <= minSimilarity) continue;
-
-      minSimilarity = threshold;
-      seeds = await fetchSemanticHashtags(
-        queryEmbedding,
-        minFreq,
-        minSimilarity,
-        maxResults
-      );
-
-      autoAdjustInfo.steps.push({ similarity: minSimilarity, count: seeds.length });
-      console.log(`   Auto-adjust: sim=${minSimilarity} → ${seeds.length} seeds`);
-
-      if (seeds.length <= MAX_SEEDS_TARGET) break;
-    }
-
-    // Hard cut se ainda > 50
-    if (seeds.length > MAX_SEEDS_TARGET) {
-      console.log(`   Hard cut: ${seeds.length} → ${MAX_SEEDS_TARGET}`);
-      seeds = seeds.slice(0, MAX_SEEDS_TARGET);
-    }
-
-    autoAdjustInfo.final_similarity = minSimilarity;
-    autoAdjustInfo.final_count = seeds.length;
-  }
-
-  // Log top 10
-  console.log(`   ${seeds.length} seeds encontradas (determinístico)`);
-  seeds.slice(0, 10).forEach((h, i) => {
-    console.log(
-      `      ${i + 1}. ${h.hashtag_normalized} ` +
-      `(sim=${(h.similarity * 100).toFixed(1)}%, freq=${h.occurrence_count})`
-    );
-  });
-
-  // 4. GPT SUGERE 20 NOVAS HASHTAGS PARA SCRAPING
-  console.log('   GPT sugerindo novas hashtags para scraping...');
+  // 5. GPT SUGERE 20 NOVAS HASHTAGS PARA SCRAPING
+  console.log('   5. GPT sugerindo novas hashtags para scraping...');
   const existingHashtags = seeds.map(s => s.hashtag_normalized);
   const suggestedForScraping = await suggestNewHashtagsForScraping(
     campaignDescription,
-    existingHashtags
+    [...existingHashtags, ...normalizedHashtags] // excluir também as normalizadas
   );
+
+  console.log(`      ${suggestedForScraping.length} hashtags sugeridas para scraping`);
 
   return {
     campaign_description: campaignDescription,
@@ -620,12 +642,12 @@ export async function suggestSeeds(
     seeds_detalhadas: seeds,
     suggested_for_scraping: suggestedForScraping,
     metodologia: {
-      busca: 'pgvector cosine distance (via hashtags normalizadas)',
+      busca: 'hashtags GPT + similares por embedding (v5)',
       freq_minima: minFreq,
-      similarity_minima: autoAdjustInfo.final_similarity,
+      similarity_minima: minSimilarity,
       formula_score: 'similarity * ln(frequency + 1)',
       deterministic: true,
-      hashtag_transform: true // GPT normaliza, mas NÃO seleciona
+      hashtag_transform: true
     },
     auto_adjust: autoAdjustInfo
   };
