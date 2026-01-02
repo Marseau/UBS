@@ -211,7 +211,10 @@ export interface VectorClusteringResult {
   clusters: VectorClusterResult[];
   execution_time_ms: number;
   method: 'kmeans_vector' | 'hdbscan_approx' | 'graph_hnsw';
-  avg_intra_similarity?: number; // Média de similaridade intra-cluster (silhouette approx)
+  // Métricas de qualidade (nomes semânticos corretos)
+  cohesion_centroid: number;      // KPI PRINCIPAL: avg(sim(lead, centroid)) - o que otimizamos
+  silhouette_approx?: number;     // DIAGNÓSTICO: (b-a)/max(a,b) amostrado - instável
+  avg_intra_similarity?: number;  // @deprecated - usar cohesion_centroid
 }
 
 export interface SimilarLeadResult {
@@ -560,7 +563,8 @@ export async function clusterBySimilarity(
   const MAX_ITERATIONS = 5;
   let assignments: Map<number, { lead: any; embedding: number[]; similarity: number }[]> = new Map();
   let previousAssignmentsStr = ''; // String direta para comparação eficiente
-  let silhouetteScore = 0;
+  let cohesionCentroid = 0;    // KPI PRINCIPAL: avg(sim(lead, centroid))
+  let silhouetteApprox = 0;    // DIAGNÓSTICO: (b-a)/max(a,b) amostrado
 
   console.log(`   🔄 Iniciando KMeans iterativo (máx ${MAX_ITERATIONS} iterações)...`);
 
@@ -651,7 +655,26 @@ export async function clusterBySimilarity(
     console.log(`   📍 Iteração ${iteration + 1}: ${Array.from(assignments.values()).map(a => a.length).join(', ')} leads/cluster`);
   }
 
-  // 4. Calcular avg_intra_similarity (aproximação simplificada do silhouette score)
+  // 4. Calcular métricas de qualidade
+  // 4a. COHESION CENTROID (KPI PRINCIPAL): avg(sim(lead, centroid)) - determinístico
+  const cohesionAssignments: Map<number, { embedding: number[]; similarity: number }[]> = new Map();
+  for (const [clusterId, items] of assignments.entries()) {
+    cohesionAssignments.set(clusterId, items.map(item => ({
+      embedding: item.embedding,
+      similarity: item.similarity
+    })));
+  }
+  const cohesionResult = computeCohesionCentroid(cohesionAssignments, centroidEmbeddings);
+  cohesionCentroid = cohesionResult.global;
+
+  // Log cohesion por cluster
+  console.log(`   📊 Cohesion (centroid) - KPI PRINCIPAL:`);
+  for (const stat of cohesionResult.perCluster) {
+    console.log(`      Cluster ${stat.clusterId}: ${(stat.cohesion * 100).toFixed(1)}% (n=${stat.count})`);
+  }
+  console.log(`      → Global: ${(cohesionCentroid * 100).toFixed(1)}%`);
+
+  // 4b. SILHOUETTE APPROX (DIAGNÓSTICO): instável, apenas para referência
   const silhouetteAssignments: Map<number, { embedding: number[]; leadId: string }[]> = new Map();
   for (const [clusterId, items] of assignments.entries()) {
     silhouetteAssignments.set(clusterId, items.map(item => ({
@@ -659,8 +682,8 @@ export async function clusterBySimilarity(
       leadId: item.lead.id
     })));
   }
-  silhouetteScore = computeSilhouetteScore(silhouetteAssignments, centroidEmbeddings);
-  console.log(`   📊 Avg Intra-Similarity: ${silhouetteScore.toFixed(3)} (silhouette approx)`);
+  silhouetteApprox = computeSilhouetteScore(silhouetteAssignments, centroidEmbeddings);
+  console.log(`   📊 Silhouette approx (diagnóstico): ${silhouetteApprox.toFixed(3)}`);
 
   // 5. Converter assignments para formato final
   const clusters: Map<number, VectorClusteredLead[]> = new Map();
@@ -1104,6 +1127,63 @@ function computeSilhouetteScore(
   }
 
   return totalPoints > 0 ? totalScore / totalPoints : 0;
+}
+
+/**
+ * Calcula Cohesion Centroid: média de similaridade de cada lead ao centróide do seu cluster
+ *
+ * Esta é a métrica KPI PRINCIPAL - mede o que queremos otimizar:
+ * "Quão similar cada lead é ao perfil representativo (centróide) do cluster?"
+ *
+ * Retorna valor entre 0 e 1 (maior = clusters mais coesos)
+ *
+ * Vantagens sobre silhouette:
+ * - 100% determinístico (sem amostragem aleatória)
+ * - O(n) por cluster, não O(n²)
+ * - Semântica clara: "leads parecidos com o centróide"
+ */
+function computeCohesionCentroid(
+  assignments: Map<number, { embedding: number[]; similarity: number }[]>,
+  centroidEmbeddings: number[][]
+): { global: number; perCluster: { clusterId: number; cohesion: number; count: number }[] } {
+  const perCluster: { clusterId: number; cohesion: number; count: number }[] = [];
+  let totalSimilarity = 0;
+  let totalPoints = 0;
+
+  for (const [clusterId, items] of assignments.entries()) {
+    if (items.length === 0) continue;
+
+    const centroid = centroidEmbeddings[clusterId];
+    if (!centroid || centroid.length === 0) continue;
+
+    let clusterSum = 0;
+    for (const item of items) {
+      // Usar similaridade já calculada durante atribuição (mais eficiente)
+      // ou recalcular se necessário
+      const similarity = item.similarity > 0
+        ? item.similarity
+        : cosineSimilarity(item.embedding, centroid);
+
+      clusterSum += similarity;
+      totalSimilarity += similarity;
+      totalPoints++;
+    }
+
+    const clusterCohesion = clusterSum / items.length;
+    perCluster.push({
+      clusterId,
+      cohesion: clusterCohesion,
+      count: items.length
+    });
+  }
+
+  // Média global ponderada por tamanho do cluster
+  const globalCohesion = totalPoints > 0 ? totalSimilarity / totalPoints : 0;
+
+  return {
+    global: globalCohesion,
+    perCluster
+  };
 }
 
 /**

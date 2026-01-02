@@ -83,3 +83,24 @@ Modelo*.svg
 puppeteer-data/
 instagram-cookies.json
 instagram-official-cookies.json
+
+# SDKs e ferramentas externas (instalar localmente)
+google-cloud-sdk/
+*.tar.gz
+
+# Dados sensíveis - NUNCA versionar
+cookies/
+whatsapp-sessions/
+
+# Dados gerados/cache
+data/
+screenshots/
+
+# Documentos binários (opcional)
+*.docx
+*.pdf
+*.pptx
+
+# Arquivos temporários de scripts
+tsc
+universal-booking-system@*
