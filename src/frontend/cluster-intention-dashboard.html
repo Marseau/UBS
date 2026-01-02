@@ -4777,8 +4777,68 @@
         };
 
         // Inicializar
-        loadClients();
+        loadClients().then(() => {
+            // Verificar se há campaign_id na URL e auto-selecionar
+            handleUrlCampaignParam();
+        });
         loadWhapiChannels();
+
+        // Auto-selecionar dropdowns se campaign_id estiver na URL
+        async function handleUrlCampaignParam() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const campaignId = urlParams.get('campaign');
+
+            if (!campaignId) return;
+
+            // Buscar dados do sessionStorage (passado pelo dashboard)
+            const storedData = sessionStorage.getItem('selectedCampaign');
+            if (!storedData) {
+                console.log('[URL] Sem dados em sessionStorage, ignorando auto-seleção');
+                return;
+            }
+
+            const campaign = JSON.parse(storedData);
+            if (campaign.id !== campaignId) {
+                console.log('[URL] Campaign ID não corresponde ao sessionStorage');
+                return;
+            }
+
+            console.log('[URL] Auto-selecionando dropdowns:', campaign);
+
+            try {
+                // Auto-selecionar cliente
+                if (campaign.client_name) {
+                    const clientSelect = document.getElementById('clientSelect');
+                    const clientOption = Array.from(clientSelect.options).find(opt => opt.text === campaign.client_name);
+                    if (clientOption) {
+                        clientSelect.value = clientOption.value;
+                        await loadProjects(campaign.client_name);
+
+                        // Auto-selecionar projeto pelo project_id
+                        if (campaign.project_id) {
+                            const projectSelect = document.getElementById('projectSelect');
+                            const projectOption = Array.from(projectSelect.options).find(opt => opt.value === campaign.project_id);
+                            if (projectOption) {
+                                projectSelect.value = campaign.project_id;
+                                await loadCampaigns(campaign.project_id);
+
+                                // Auto-selecionar campanha
+                                const campaignSelect = document.getElementById('campaignSelect');
+                                campaignSelect.value = campaignId;
+                                await onCampaignChange();
+                                console.log('[URL] Dropdowns auto-selecionados com sucesso');
+                            }
+                        }
+                    }
+                }
+
+                // Limpar sessionStorage após uso
+                sessionStorage.removeItem('selectedCampaign');
+
+            } catch (error) {
+                console.error('[URL] Erro ao auto-selecionar dropdowns:', error);
+            }
+        }
     </script>
 
     <!-- AIC Sidebar Navigation -->

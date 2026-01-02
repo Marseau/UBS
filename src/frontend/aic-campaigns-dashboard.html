@@ -1274,7 +1274,7 @@
       const clientName = campaign.client_name || 'Cliente não atribuído';
 
       return `
-        <div class="campaign-card" data-campaign-id="${campaign.id}">
+        <div class="campaign-card" data-campaign-id="${campaign.id}" onclick="navigateToCampaign('${campaign.id}', event)" style="cursor: pointer;">
           <div class="campaign-card-header">
             <div>
               <h3 class="campaign-name">${campaign.campaign_name}</h3>
@@ -1796,6 +1796,27 @@
     // ============================================================================
 
     let currentClientLink = '';
+
+    // Navegar para página de clusters ao clicar no card
+    function navigateToCampaign(campaignId, event) {
+      // Não navegar se clicou em botões ou links dentro do card
+      if (event.target.closest('button') || event.target.closest('a') || event.target.closest('.btn-action') || event.target.closest('.btn-toggle')) {
+        return;
+      }
+
+      // Buscar dados da campanha para passar via sessionStorage
+      const campaign = campaigns.find(c => c.id === campaignId);
+      if (campaign) {
+        sessionStorage.setItem('selectedCampaign', JSON.stringify({
+          id: campaign.id,
+          campaign_name: campaign.campaign_name,
+          client_name: campaign.client_name,
+          project_id: campaign.project_id
+        }));
+      }
+
+      window.location.href = `/cluster-intention-dashboard.html?campaign=${campaignId}`;
+    }
 
     function showClientLink(campaignId, campaignName) {
       // Gerar o link para o cliente

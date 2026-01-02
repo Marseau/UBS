@@ -1450,11 +1450,13 @@ router.get('/aic/my-campaigns', async (req: Request, res: Response): Promise<voi
   try {
     // Buscar TODAS as campanhas (sem filtro por tenant)
     // Dashboard é apenas para equipe interna AIC
+    // Inclui project_id para buscar client_name
     const { data: campaigns, error } = await supabase
       .from('cluster_campaigns')
       .select(`
         id,
         campaign_name,
+        project_id,
         pipeline_status,
         onboarding_status,
         nicho_principal,
@@ -1470,9 +1472,20 @@ router.get('/aic/my-campaigns', async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    // Enriquecer com métricas
+    // Enriquecer com métricas e client_name
     const enrichedCampaigns = await Promise.all(
       (campaigns || []).map(async (campaign) => {
+        // Buscar client_name do cluster_projects via project_id
+        let clientName = null;
+        if (campaign.project_id) {
+          const { data: project } = await supabase
+            .from('cluster_projects')
+            .select('client_name')
+            .eq('id', campaign.project_id)
+            .single();
+          clientName = project?.client_name || null;
+        }
+
         // Count leads from campaign_leads (tabela correta AIC)
         const { count: leadsCount } = await supabase
           .from('campaign_leads')
@@ -1501,6 +1514,8 @@ router.get('/aic/my-campaigns', async (req: Request, res: Response): Promise<voi
         return {
           id: campaign.id,
           campaign_name: campaign.campaign_name,
+          client_name: clientName,
+          project_id: campaign.project_id,
           status: campaign.pipeline_status || 'draft',
           onboarding_status: campaign.onboarding_status || 'pending',
           nicho: campaign.nicho_principal || 'A definir',
