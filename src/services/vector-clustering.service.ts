@@ -467,7 +467,9 @@ export async function clusterBySimilarity(
       total_leads_embedded: 0,
       clusters: [],
       execution_time_ms: Date.now() - startTime,
-      method: 'kmeans_vector'
+      method: 'kmeans_vector',
+      cohesion_centroid: 0,
+      silhouette_approx: 0
     };
   }
 
@@ -527,7 +529,9 @@ export async function clusterBySimilarity(
       total_leads_embedded: 0,
       clusters: [],
       execution_time_ms: Date.now() - startTime,
-      method: 'kmeans_vector'
+      method: 'kmeans_vector',
+      cohesion_centroid: 0,
+      silhouette_approx: 0
     };
   }
 
@@ -805,7 +809,8 @@ export async function clusterBySimilarity(
   console.log(`\n✅ [VECTOR CLUSTERING - KMeans Iterativo] Concluído em ${executionTime}ms`);
   console.log(`   ${clusterResults.length} clusters gerados`);
   console.log(`   ${clusterResults.reduce((sum, c) => sum + c.total_leads, 0)} leads clusterizados`);
-  console.log(`   Avg Intra-Similarity: ${silhouetteScore.toFixed(3)} (silhouette approx)`);
+  console.log(`   📊 Cohesion (centroid): ${(cohesionCentroid * 100).toFixed(1)}% ← KPI PRINCIPAL`);
+  console.log(`   📊 Silhouette approx: ${silhouetteApprox.toFixed(3)} (diagnóstico)`);
 
   return {
     success: true,
@@ -815,7 +820,9 @@ export async function clusterBySimilarity(
     clusters: clusterResults,
     execution_time_ms: executionTime,
     method: 'kmeans_vector',
-    avg_intra_similarity: parseFloat(silhouetteScore.toFixed(3))
+    cohesion_centroid: parseFloat(cohesionCentroid.toFixed(4)),      // KPI PRINCIPAL
+    silhouette_approx: parseFloat(silhouetteApprox.toFixed(4)),      // DIAGNÓSTICO
+    avg_intra_similarity: parseFloat(cohesionCentroid.toFixed(4))    // @deprecated - mantido para compatibilidade
   };
 }
 
@@ -1267,7 +1274,10 @@ export interface ClusteringResult {
   total_leads: number;
   clusters: ClusterResult[];
   lead_associations: LeadClusterAssociation[];
-  avg_intra_similarity: number;
+  // Métricas de qualidade (nomes semânticos corretos)
+  cohesion_centroid?: number;        // KPI PRINCIPAL: avg(sim(lead, centroid))
+  silhouette_approx?: number;        // DIAGNÓSTICO: (b-a)/max(a,b) amostrado
+  avg_intra_similarity: number;      // @deprecated - usar cohesion_centroid
   execution_time_ms: number;
   method: 'kmeans_hashtag' | 'kmeans_vector' | 'graph_hnsw' | 'hashtag_vector';
 }
@@ -1316,6 +1326,8 @@ export async function executeVectorClustering(
       total_leads: result.total_leads_analyzed,
       clusters: [],
       lead_associations: [],
+      cohesion_centroid: 0,
+      silhouette_approx: 0,
       avg_intra_similarity: 0,
       execution_time_ms: Date.now() - startTime,
       method: 'kmeans_vector'
@@ -1356,10 +1368,13 @@ export async function executeVectorClustering(
     }
   }
 
-  // Usar silhouette score calculado pelo clusterBySimilarity (não recalcular)
-  const silhouetteScore = result.avg_intra_similarity || 0;
+  // Usar métricas calculadas pelo clusterBySimilarity (não recalcular)
+  const cohesionCentroid = result.cohesion_centroid || 0;
+  const silhouetteApprox = result.silhouette_approx || 0;
 
-  console.log(`✅ [VECTOR CLUSTERING] Pipeline-ready: ${clusters.length} clusters, ${lead_associations.length} leads, silhouette=${silhouetteScore.toFixed(3)}`);
+  console.log(`✅ [VECTOR CLUSTERING] Pipeline-ready: ${clusters.length} clusters, ${lead_associations.length} leads`);
+  console.log(`   📊 Cohesion (centroid): ${(cohesionCentroid * 100).toFixed(1)}% ← KPI PRINCIPAL`);
+  console.log(`   📊 Silhouette approx: ${silhouetteApprox.toFixed(3)} (diagnóstico)`);
 
   return {
     success: true,
@@ -1370,7 +1385,9 @@ export async function executeVectorClustering(
     total_leads: result.total_leads_analyzed,
     clusters,
     lead_associations,
-    avg_intra_similarity: silhouetteScore,
+    cohesion_centroid: cohesionCentroid,          // KPI PRINCIPAL
+    silhouette_approx: silhouetteApprox,          // DIAGNÓSTICO
+    avg_intra_similarity: cohesionCentroid,       // @deprecated - mantido para compatibilidade
     execution_time_ms: Date.now() - startTime,
     method: 'kmeans_vector'
   };
@@ -1429,6 +1446,8 @@ export async function executeHashtagVectorClustering(
       total_leads: 0,
       clusters: [],
       lead_associations: [],
+      cohesion_centroid: 0,
+      silhouette_approx: 0,
       avg_intra_similarity: 0,
       execution_time_ms: Date.now() - startTime,
       method: 'hashtag_vector'
@@ -1548,6 +1567,7 @@ export async function executeHashtagVectorClustering(
     : 0;
 
   console.log(`✅ [VECTOR HASHTAG] ${clusters.length} clusters montados, ${leadAssociations.length} leads associados`);
+  console.log(`   📊 Cohesion (centroid): ${(avgCohesion * 100).toFixed(1)}% ← KPI PRINCIPAL`);
 
   return {
     success: true,
@@ -1558,7 +1578,9 @@ export async function executeHashtagVectorClustering(
     total_leads: leadAssociations.length,
     clusters,
     lead_associations: leadAssociations,
-    avg_intra_similarity: avgCohesion,
+    cohesion_centroid: avgCohesion,           // KPI PRINCIPAL (média dos cohesion_score dos clusters)
+    silhouette_approx: 0,                      // Não calculado no hashtag clustering
+    avg_intra_similarity: avgCohesion,         // @deprecated
     execution_time_ms: Date.now() - startTime,
     method: 'hashtag_vector'
   };
@@ -1714,7 +1736,9 @@ export async function clusterByGraph(
       total_leads_embedded: leadsList.length,
       clusters: [],
       execution_time_ms: Date.now() - startTime,
-      method: 'graph_hnsw'
+      method: 'graph_hnsw',
+      cohesion_centroid: 0,
+      silhouette_approx: 0
     };
   }
 
@@ -1956,8 +1980,14 @@ export async function clusterByGraph(
   const executionTime = Date.now() - startTime;
   const totalClustered = clusterResults.reduce((sum, c) => sum + c.total_leads, 0);
 
+  // Calcular cohesion como média ponderada de avg_similarity dos clusters
+  const cohesionCentroid = totalClustered > 0
+    ? clusterResults.reduce((sum, c) => sum + c.avg_similarity * c.total_leads, 0) / totalClustered
+    : 0;
+
   console.log(`\n✅ [GRAPH CLUSTERING] Concluído em ${executionTime}ms`);
   console.log(`   📊 ${clusterResults.length} clusters, ${totalClustered} leads clusterizados, ${noiseLeads.length} noise`);
+  console.log(`   📊 Cohesion (centroid): ${(cohesionCentroid * 100).toFixed(1)}% ← KPI PRINCIPAL`);
 
   return {
     success: true,
@@ -1965,7 +1995,9 @@ export async function clusterByGraph(
     total_leads_embedded: leadsList.length,
     clusters: clusterResults,
     execution_time_ms: executionTime,
-    method: 'graph_hnsw'
+    method: 'graph_hnsw',
+    cohesion_centroid: parseFloat(cohesionCentroid.toFixed(4)),
+    silhouette_approx: 0  // Não calculado no graph clustering
   };
 }
 
@@ -1998,6 +2030,8 @@ export async function executeGraphClustering(
       total_leads: result.total_leads_analyzed,
       clusters: [],
       lead_associations: [],
+      cohesion_centroid: 0,
+      silhouette_approx: 0,
       avg_intra_similarity: 0,
       execution_time_ms: Date.now() - startTime,
       method: 'graph_hnsw'
@@ -2037,13 +2071,14 @@ export async function executeGraphClustering(
     }
   }
 
-  // Calcular weighted average de avg_similarity (NÃO é silhouette real, mas é semanticamente correto)
+  // Calcular weighted average de avg_similarity (cohesion centroid)
   const totalLeadsInClusters = result.clusters.reduce((sum, c) => sum + c.total_leads, 0);
-  const weightedAvgSimilarity = totalLeadsInClusters > 0
+  const cohesionCentroid = totalLeadsInClusters > 0
     ? result.clusters.reduce((sum, c) => sum + c.avg_similarity * c.total_leads, 0) / totalLeadsInClusters
     : 0;
 
-  console.log(`✅ [GRAPH CLUSTERING] Pipeline-ready: ${clusters.length} clusters, ${lead_associations.length} leads, avg_similarity=${weightedAvgSimilarity.toFixed(4)}`);
+  console.log(`✅ [GRAPH CLUSTERING] Pipeline-ready: ${clusters.length} clusters, ${lead_associations.length} leads`);
+  console.log(`   📊 Cohesion (centroid): ${(cohesionCentroid * 100).toFixed(1)}% ← KPI PRINCIPAL`);
 
   return {
     success: true,
@@ -2054,7 +2089,9 @@ export async function executeGraphClustering(
     total_leads: result.total_leads_analyzed,
     clusters,
     lead_associations,
-    avg_intra_similarity: parseFloat(weightedAvgSimilarity.toFixed(4)), // Avg intra-cluster similarity (não silhouette real)
+    cohesion_centroid: parseFloat(cohesionCentroid.toFixed(4)),  // KPI PRINCIPAL
+    silhouette_approx: 0,                                         // Não calculado no graph clustering
+    avg_intra_similarity: parseFloat(cohesionCentroid.toFixed(4)), // @deprecated
     execution_time_ms: Date.now() - startTime,
     method: 'graph_hnsw'
   };
