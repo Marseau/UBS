@@ -2075,6 +2075,36 @@ export async function scrapeInstagramTag(
 
           console.log(`   ✅ Mural carregado com ${postCount} posts`);
 
+          // 🆕 DETECTAR SHADOWBAN/BLOQUEIO: Hashtag com pouquíssimos posts (1-5) é suspeito
+          if (postCount > 0 && postCount <= 5) {
+            console.log(`\n⚠️  ========================================`);
+            console.log(`⚠️  POSSÍVEL SHADOWBAN/BLOQUEIO DETECTADO!`);
+            console.log(`⚠️  Apenas ${postCount} post(s) na hashtag`);
+            console.log(`⚠️  Hashtags normais têm dezenas/centenas de posts`);
+            console.log(`⚠️  ========================================\n`);
+
+            // Verificar se página também tem sinais de feed home
+            const pageText = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
+            const isHomeFeed = pageText.includes("You're all caught up") ||
+                              pageText.includes('Você está em dia') ||
+                              pageText.includes('Suggested Posts') ||
+                              pageText.includes('Sugestões para você');
+
+            if (isHomeFeed) {
+              console.log(`🏠 REDIRECIONAMENTO PARA FEED HOME DETECTADO!`);
+              console.log(`   Instagram bloqueou pesquisa de hashtag e mandou para home`);
+              throw new Error('SESSION_INVALID: Redirecionado para feed home - conta possivelmente shadowbanned para hashtags');
+            }
+
+            // Se tiver apenas 1-3 posts, considerar shadowban e rotacionar
+            if (postCount <= 3) {
+              console.log(`🚨 SHADOWBAN CONFIRMADO: Apenas ${postCount} post(s) visível(is)`);
+              console.log(`   Conta provavelmente bloqueada para pesquisa de hashtags`);
+              console.log(`   Iniciando rotação de conta...`);
+              throw new Error('SESSION_INVALID: Shadowban detectado - hashtag com apenas ' + postCount + ' post(s)');
+            }
+          }
+
           return true;
         } catch (error: any) {
           // Debug adicional em caso de erro
@@ -2384,7 +2414,7 @@ export async function scrapeInstagramTag(
 
           const pageAnalysis = await page.evaluate(() => {
             const url = window.location.href;
-            const bodyText = document.body.innerText;
+            const bodyText = document.body?.innerText || '';
             const isHashtagPage = url.includes('/explore/tags/') || url.includes('/explore/search/keyword/');
             const isProfilePage = url.match(/instagram\.com\/[^\/]+\/?$/);
 
@@ -2403,8 +2433,28 @@ export async function scrapeInstagramTag(
                            !!document.querySelector('main') ||
                            !!document.querySelector('[role="main"]');
 
-            return { isHashtagPage, isProfilePage, isPrivate, hasGrid, hasNoResults };
-          });
+            // 🆕 DETECTAR PÁGINA PRETA/TRAVADA: URL válida mas conteúdo vazio
+            // Página preta = body vazio OU menos de 50 chars de texto visível
+            const isBlankPage = !document.body ||
+                               bodyText.trim().length < 50 ||
+                               (document.body.innerHTML.length < 500 && !hasGrid);
+
+            // 🆕 DETECTAR PÁGINA NÃO RESPONSIVA: elementos existem mas não renderizaram
+            const bodyHeight = document.body?.offsetHeight || 0;
+            const bodyWidth = document.body?.offsetWidth || 0;
+            const isUnresponsive = bodyHeight < 100 || bodyWidth < 100;
+
+            return { isHashtagPage, isProfilePage, isPrivate, hasGrid, hasNoResults, isBlankPage, isUnresponsive, bodyTextLength: bodyText.length };
+          }).catch(() => ({
+            isHashtagPage: false,
+            isProfilePage: false,
+            isPrivate: false,
+            hasGrid: false,
+            hasNoResults: false,
+            isBlankPage: true,  // Se evaluate falhar, assumir página travada
+            isUnresponsive: true,
+            bodyTextLength: 0
+          }));
 
           console.log(`\n🔍 Análise da página sem posts:`);
           console.log(`   Hashtag/Search: ${pageAnalysis.isHashtagPage}`);
@@ -2412,6 +2462,23 @@ export async function scrapeInstagramTag(
           console.log(`   Privado: ${pageAnalysis.isPrivate}`);
           console.log(`   Grid existe: ${pageAnalysis.hasGrid}`);
           console.log(`   No Results: ${pageAnalysis.hasNoResults}`);
+          console.log(`   🆕 Página preta: ${pageAnalysis.isBlankPage}`);
+          console.log(`   🆕 Não responsiva: ${pageAnalysis.isUnresponsive}`);
+          console.log(`   🆕 Body text length: ${pageAnalysis.bodyTextLength}`);
+
+          // 🆕 PÁGINA PRETA/TRAVADA DETECTADA: Restart do browser necessário
+          if (pageAnalysis.isBlankPage || pageAnalysis.isUnresponsive) {
+            console.log(`\n🖤 ========================================`);
+            console.log(`🖤 PÁGINA PRETA/TRAVADA DETECTADA!`);
+            console.log(`🖤 isBlankPage: ${pageAnalysis.isBlankPage}`);
+            console.log(`🖤 isUnresponsive: ${pageAnalysis.isUnresponsive}`);
+            console.log(`🖤 bodyTextLength: ${pageAnalysis.bodyTextLength}`);
+            console.log(`🖤 Ação: RESTART DO BROWSER`);
+            console.log(`🖤 ========================================\n`);
+
+            // Lançar erro que será tratado pelo handler de protocol timeout
+            throw new Error('BLANK_PAGE_DETECTED: Página preta/travada - browser precisa restart');
+          }
 
           // 🆕 HASHTAG SEM RESULTADOS - Não é erro, apenas pular para próxima
           if (pageAnalysis.hasNoResults) {
@@ -3982,6 +4049,64 @@ export async function scrapeInstagramTag(
             } else {
               console.log(`❌ Não foi possível recuperar sessão (todas as contas falharam ou em cooldown).`);
               throw new Error(`SESSION_INVALID: Todas as contas falharam ou em cooldown`);
+            }
+          }
+
+          // 🆕 PROTOCOL TIMEOUT / BROWSER TRAVADO / PÁGINA PRETA: Restart do browser
+          // Detecta: "timed out", "Protocol error", "dispatchMouseEvent", "Target closed", "BLANK_PAGE"
+          const isProtocolTimeout = hashtagError.message.includes('timed out') ||
+                                     hashtagError.message.includes('Protocol error') ||
+                                     hashtagError.message.includes('dispatchMouseEvent') ||
+                                     hashtagError.message.includes('Target closed') ||
+                                     hashtagError.message.includes('Execution context was destroyed') ||
+                                     hashtagError.message.includes('BLANK_PAGE_DETECTED');
+
+          if (isProtocolTimeout) {
+            console.log(`\n🔧 ========================================`);
+            console.log(`🔧 BROWSER TRAVADO/TIMEOUT DETECTADO`);
+            console.log(`🔧 Erro: ${hashtagError.message.substring(0, 100)}`);
+            console.log(`🔧 Ação: RESTART DO BROWSER`);
+            console.log(`🔧 ========================================\n`);
+
+            // Acumular perfis já coletados
+            allFoundProfiles.push(...foundProfiles);
+
+            try {
+              // 1. Fechar page atual (se possível)
+              try { await cleanup(); } catch {}
+
+              // 2. Fechar browser completamente
+              console.log(`🔒 Fechando browser travado...`);
+              await closeBrowser();
+
+              // 3. Aguardar 5-10 segundos para limpeza completa
+              const cooldownMs = 5000 + Math.random() * 5000;
+              console.log(`⏳ Aguardando ${Math.round(cooldownMs/1000)}s para limpeza...`);
+              await new Promise(resolve => setTimeout(resolve, cooldownMs));
+
+              // 4. Recriar contexto com nova sessão
+              console.log(`🔄 Recriando browser e sessão...`);
+              const newContext = await createIsolatedContext();
+              page = newContext.page;
+              cleanup = newContext.cleanup;
+
+              // 5. Verificar se página está responsiva
+              const isResponsive = await page.evaluate(() => {
+                return document.body && document.body.innerText !== undefined;
+              }).catch(() => false);
+
+              if (isResponsive) {
+                console.log(`✅ Browser reiniciado com sucesso! Retomando scraping...`);
+                resilienceMetrics.consecutiveErrors = 0;
+                retryCount = 0; // Reset retries para esta hashtag
+                continue; // Tentar novamente a mesma hashtag
+              } else {
+                console.log(`❌ Browser reiniciou mas página não responde`);
+                throw new Error('BROWSER_RESTART_FAILED: Página não responsiva após restart');
+              }
+            } catch (restartError: any) {
+              console.log(`❌ Erro ao reiniciar browser: ${restartError.message}`);
+              // Continuar para o próximo retry ou encerrar
             }
           }
 
