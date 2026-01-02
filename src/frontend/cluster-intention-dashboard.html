@@ -1290,6 +1290,18 @@
                         <div style="margin-top: 8px; font-size: 0.75em; color: var(--aic-gray);">
                             💡 Scrape essas hashtags para melhorar a cobertura do nicho
                         </div>
+                        <div style="margin-top: 12px; text-align: right;">
+                            <button
+                                type="button"
+                                id="btnSaveSearchTerms"
+                                onclick="saveSearchTerms()"
+                                class="btn btn-secondary"
+                                style="padding: 8px 14px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; border-radius: 8px; color: white; cursor: pointer; font-size: 0.8em; white-space: nowrap;"
+                                title="Salva as hashtags sugeridas na tabela lead_search_terms para scraping futuro"
+                            >
+                                💾 Gerar Search Terms
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -2019,6 +2031,9 @@
                     const scrapingCount = document.getElementById('suggestedScrapingCount');
                     const suggested = result.data.suggested_for_scraping || [];
 
+                    // Armazenar para uso pelo botão Gerar Search Terms
+                    currentSuggestedHashtags = suggested;
+
                     if (suggested.length > 0) {
                         scrapingCount.textContent = `(${suggested.length} hashtags não encontradas)`;
                         scrapingList.innerHTML = suggested.map(tag => {
@@ -2049,6 +2064,63 @@
             }
         }
         // ==================== FIM GERADOR DE SEEDS ====================
+
+        // ==================== SALVAR SEARCH TERMS ====================
+        async function saveSearchTerms() {
+            const btn = document.getElementById('btnSaveSearchTerms');
+
+            // Validar se há hashtags sugeridas
+            if (!currentSuggestedHashtags || currentSuggestedHashtags.length === 0) {
+                alert('Nenhuma hashtag sugerida disponível. Gere as seeds primeiro.');
+                return;
+            }
+
+            // Obter dados da campanha
+            const campaignName = loadedCampaignName || document.getElementById('campaignNameInput')?.value || 'Campanha';
+            const clientName = loadedClientName || document.getElementById('clientNameInput')?.value || 'Cliente';
+            const nichoAlvo = document.getElementById('nichoInput')?.value || 'Nicho';
+
+            if (!nichoAlvo || nichoAlvo.trim() === '') {
+                alert('Por favor, preencha o campo Nicho Alvo antes de salvar os search terms.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Salvando...';
+
+            try {
+                const response = await fetch(`${API_BASE}/save-search-terms`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        campaign_name: campaignName,
+                        client_name: clientName,
+                        nicho_alvo: nichoAlvo,
+                        hashtags: currentSuggestedHashtags
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    console.log('✅ Search terms salvos:', result.data);
+                    btn.innerHTML = '✅ Salvo!';
+                    setTimeout(() => {
+                        btn.innerHTML = '💾 Gerar Search Terms';
+                        btn.disabled = false;
+                    }, 2000);
+                } else {
+                    throw new Error(result.message || 'Erro ao salvar search terms');
+                }
+
+            } catch (error) {
+                console.error('❌ Erro ao salvar search terms:', error);
+                alert(`Erro: ${error.message}`);
+                btn.innerHTML = '💾 Gerar Search Terms';
+                btn.disabled = false;
+            }
+        }
+        // ==================== FIM SALVAR SEARCH TERMS ====================
 
         // ==================== EXTRAÇÃO DE CAMPOS DOS DOCS ====================
         async function extractFromDocs() {
@@ -3383,6 +3455,8 @@
         let loadedClientName = null;
         let loadedProjectName = null;
         let loadedCampaignName = null;
+        // Armazenar hashtags sugeridas para scraping (usadas pelo botão Gerar Search Terms)
+        let currentSuggestedHashtags = [];
 
         // Status da campanha (pipeline lifecycle)
         let currentCampaignStatus = null;
@@ -4107,10 +4181,11 @@
                         const statusBadge = document.getElementById('clusteringStatusBadge');
                         const btn = document.getElementById('btnExecuteClustering');
                         if (statusBadge) {
-                            const silhouette = Number(campaign.clustering_result.avg_intra_similarity) || 0;
+                            // Usar cohesion_centroid (KPI PRINCIPAL) com fallback para avg_intra_similarity
+                            const cohesion = Number(campaign.clustering_result.cohesion_centroid || campaign.clustering_result.avg_intra_similarity) || 0;
                             const k = campaign.clustering_result.k || campaign.clustering_result.clusters.length;
                             statusBadge.className = 'clustering-status done';
-                            statusBadge.innerHTML = `K=${k} | Silhouette: ${silhouette.toFixed(3)}`;
+                            statusBadge.innerHTML = `K=${k} | Cohesion: ${(cohesion * 100).toFixed(1)}%`;
                         }
                         if (btn) {
                             btn.innerHTML = 'Re-executar Clustering';
@@ -4518,9 +4593,10 @@
                         }
                     }
 
-                    const silhouette = Number(result.data.avg_intra_similarity || 0);
-                    if (silhouette < 0.35) {
-                        alert('⚠️ Clustering com similaridade baixa. Considere ajustar seeds/K ou refazer antes de gerar personas/DM.');
+                    // Usar cohesion_centroid (KPI PRINCIPAL) com fallback
+                    const cohesion = Number(result.data.cohesion_centroid || result.data.avg_intra_similarity || 0);
+                    if (cohesion < 0.35) {
+                        alert('⚠️ Clustering com coesão baixa (' + (cohesion * 100).toFixed(1) + '%). Considere ajustar seeds/K ou refazer antes de gerar personas/DM.');
                     }
 
                     statusBadge.className = 'clustering-status done';
@@ -4546,14 +4622,15 @@
 
             // Guards para dados opcionais
             const leads = Array.isArray(data.lead_associations) ? data.lead_associations : [];
-            const silhouette = Number(data.avg_intra_similarity) || 0;
+            // Usar cohesion_centroid (KPI PRINCIPAL) com fallback para avg_intra_similarity
+            const cohesion = Number(data.cohesion_centroid || data.avg_intra_similarity) || 0;
             const clusters = Array.isArray(data.clusters) ? data.clusters : [];
             const totalLeads = data.total_leads || leads.length || 0;
             const totalHashtags = data.total_hashtags || 0;
             const method = data.method || 'kmeans_hashtag';
 
-            // Função helper para interpretar qualidade do Silhouette Score
-            function getSilhouetteQuality(score) {
+            // Função helper para interpretar qualidade do Cohesion Score
+            function getCohesionQuality(score) {
                 if (score >= 0.70) return { label: 'Excelente', color: '#10b981' };
                 if (score >= 0.50) return { label: 'Bom', color: '#22c55e' };
                 if (score >= 0.35) return { label: 'Razoável', color: '#f59e0b' };
@@ -4562,7 +4639,7 @@
             }
 
             const k = data.k || clusters.length;
-            const quality = getSilhouetteQuality(silhouette);
+            const quality = getCohesionQuality(cohesion);
             const methodLabel = document.getElementById('clusteringMethodLabel');
             if (methodLabel) {
                 const label = (method === 'similarity_groups' || method === 'kmeans_vector')
@@ -4581,15 +4658,15 @@
             document.getElementById('clusterK').textContent = k;
             document.getElementById('clusterHashtags').textContent = totalHashtags.toLocaleString('pt-BR');
             document.getElementById('clusterLeads').textContent = totalLeads.toLocaleString('pt-BR');
-            document.getElementById('clusterSilhouette').textContent = silhouette.toFixed(3);
+            document.getElementById('clusterSilhouette').textContent = (cohesion * 100).toFixed(1) + '%';
 
             // Contexto do K escolhido
             const kContextEl = document.getElementById('clusterKContext');
             if (kContextEl) {
-                kContextEl.textContent = `Melhor score: ${silhouette.toFixed(2)}`;
+                kContextEl.textContent = `Cohesion: ${(cohesion * 100).toFixed(1)}%`;
             }
 
-            // Qualidade do Silhouette
+            // Qualidade do Cohesion
             const qualityEl = document.getElementById('silhouetteQuality');
             if (qualityEl) {
                 qualityEl.textContent = quality.label;

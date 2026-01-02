@@ -4984,4 +4984,100 @@ router.post('/extract-from-docs', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/hashtag-intelligence/save-search-terms
+ * Salva as hashtags sugeridas para scraping na tabela lead_search_terms
+ */
+router.post('/save-search-terms', async (req, res) => {
+  try {
+    const { campaign_name, client_name, nicho_alvo, hashtags } = req.body;
+
+    // Validações
+    if (!campaign_name || !client_name || !nicho_alvo) {
+      return res.status(400).json({
+        success: false,
+        message: 'campaign_name, client_name e nicho_alvo são obrigatórios'
+      });
+    }
+
+    if (!hashtags || !Array.isArray(hashtags) || hashtags.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'hashtags deve ser um array não vazio'
+      });
+    }
+
+    console.log('\n💾 [API] POST /save-search-terms');
+    console.log(`   📋 Campanha: ${campaign_name}`);
+    console.log(`   👤 Cliente: ${client_name}`);
+    console.log(`   🎯 Nicho: ${nicho_alvo}`);
+    console.log(`   #️⃣ Hashtags: ${hashtags.length}`);
+
+    // Formatar data para target_segment (dd-mm-hh:mm)
+    const now = new Date();
+    const dateStr = now.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).replace(',', '').replace(' ', '-');
+
+    const targetSegment = `${campaign_name} ${dateStr}`;
+
+    // Formatar hashtags no formato JSONB esperado
+    const searchTerms = hashtags.map((tag: string) => {
+      // Normalizar hashtag (remover acentos, espaços, etc)
+      const normalized = tag
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '');
+
+      return {
+        termo: tag,
+        hashtag: normalized
+      };
+    });
+
+    // Inserir na tabela lead_search_terms usando insert direto do Supabase
+    // Nota: terms_count é coluna gerada automaticamente (jsonb_array_length)
+    const { data, error } = await supabase
+      .from('lead_search_terms')
+      .insert({
+        target_segment: targetSegment,
+        categoria_geral: nicho_alvo,
+        area_especifica: client_name,
+        search_terms: searchTerms,
+        generated_at: new Date().toISOString(),
+        generated_by_model: 'gpt-4o-mini'
+      })
+      .select('id, target_segment, terms_count, generated_at')
+      .single();
+
+    if (error) {
+      console.error('❌ Erro ao salvar search terms:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    console.log('✅ Search terms salvos com sucesso:', data);
+
+    return res.json({
+      success: true,
+      data: data,
+      message: `${searchTerms.length} hashtags salvas com sucesso`
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro em /save-search-terms:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 export default router;
