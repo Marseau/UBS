@@ -184,6 +184,8 @@ function calculateHashtagMatchCount(lead: any, normalizedSeeds: string[]): numbe
  *
  * Fórmula: 0.6 * similarity + 0.4 * hashtag_ratio
  * (Prioriza similaridade semântica mas valoriza hashtags específicas)
+ *
+ * V11.1: Retorna escala 0-1 (consistente com cohesion_score e similarity_to_centroid)
  */
 function calculateCompositeScore(
   similarityToCentroid: number,
@@ -193,10 +195,10 @@ function calculateCompositeScore(
   const hashtagRatio = totalSeeds > 0 ? hashtagMatchCount / totalSeeds : 0;
 
   // Pesos: 60% similaridade, 40% hashtag match
+  // V11.1: Escala 0-1 (não mais 0-10) para consistência com outras métricas
   const compositeScore = 0.6 * similarityToCentroid + 0.4 * hashtagRatio;
 
-  // Normalizar para escala 0-10 (para fit_score no banco)
-  return Math.min(10, Math.max(0, compositeScore * 10));
+  return Math.min(1, Math.max(0, compositeScore));
 }
 
 // ============================================
@@ -698,19 +700,21 @@ export async function clusterBySimilarity(
   console.log(`   📊 Silhouette approx (diagnóstico): ${silhouetteApprox.toFixed(3)}`);
 
   // 5. Converter assignments para formato final
+  // V11.1: NÃO filtrar por threshold - incluir TODOS os leads
+  // O threshold é apenas para diagnóstico/métricas, não para filtrar
   const clusters: Map<number, VectorClusteredLead[]> = new Map();
   for (let i = 0; i < k; i++) {
     clusters.set(i, []);
   }
 
-  let leadsFilteredByThreshold = 0;
+  let leadsBelowThreshold = 0;
   for (const [clusterId, items] of assignments.entries()) {
     for (const item of items) {
-      // Filtrar leads cuja similaridade ao centróide seja menor que o threshold
+      // V11.1: Apenas contar leads abaixo do threshold (não filtrar)
       if (item.similarity < similarityThreshold) {
-        leadsFilteredByThreshold++;
-        continue;
+        leadsBelowThreshold++;
       }
+      // Incluir TODOS os leads, independente do threshold
       clusters.get(clusterId)!.push({
         id: item.lead.id,
         username: item.lead.username,
@@ -731,8 +735,8 @@ export async function clusterBySimilarity(
     }
   }
 
-  if (leadsFilteredByThreshold > 0) {
-    console.log(`   🔻 ${leadsFilteredByThreshold} leads filtrados por similaridade < ${similarityThreshold}`);
+  if (leadsBelowThreshold > 0) {
+    console.log(`   ⚠️ ${leadsBelowThreshold} leads com similaridade < ${similarityThreshold} (incluídos mesmo assim)`);
   }
 
   // Encontrar lead mais próximo ao centróide calculado para representar cada cluster

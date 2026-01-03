@@ -296,7 +296,7 @@ const DEFAULT_MIN_FREQ = 20;
 const DEFAULT_MIN_SIMILARITY = 0.70;
 const DEFAULT_MAX_RESULTS = 500;
 const MAX_RESULTS_HARD_LIMIT = 2000;
-const MAX_SEEDS_TARGET = 50;
+// V11.1: Removido MAX_SEEDS_TARGET - a similaridade define naturalmente o número de seeds
 const EMBEDDING_CACHE_MAX_ENTRIES = 200;
 
 // Thresholds de similaridade para auto-adjust
@@ -488,7 +488,7 @@ async function fetchSemanticHashtags(
  * 4. Combinar: hashtags diretas + similares (sem duplicatas)
  * 5. GPT sugere 20 novas hashtags para scraping (que não existem no banco)
  *
- * LIMITE: máximo 50 seeds (ordenadas por score)
+ * V11.1: Sem limite artificial - a similaridade define naturalmente o número de seeds
  */
 export async function suggestSeeds(
   campaignDescription: string,
@@ -600,12 +600,11 @@ export async function suggestSeeds(
 
   console.log(`      Total após busca de similares: ${seedsMap.size} seeds`);
 
-  // 4. ORDENAR POR SCORE E LIMITAR A 50
+  // 4. ORDENAR POR SCORE (V11.1: sem limite artificial - similaridade define naturalmente)
   let seeds = Array.from(seedsMap.values())
-    .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_SEEDS_TARGET);
+    .sort((a, b) => b.score - a.score);
 
-  console.log(`   4. ${seeds.length} seeds finais (ordenadas por score)`);
+  console.log(`   4. ${seeds.length} seeds finais (todas que passaram no filtro de similaridade)`);
   seeds.slice(0, 10).forEach((h, i) => {
     console.log(
       `      ${i + 1}. ${h.hashtag_normalized} ` +

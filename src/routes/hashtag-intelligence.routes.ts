@@ -5307,10 +5307,11 @@ Retorne APENAS um JSON válido no formato:
  * Body: { campaign_description: string }
  *
  * Metodologia:
- * 1. Busca top 100 hashtags por frequência (freq >= 20)
- * 2. Analisa relevância com GPT
- * 3. Seleciona 50 melhores seeds
- * 4. Categoriza por: profissões, serviços, interesses, outros
+ * 1. GPT normaliza descrição → hashtags
+ * 2. Verifica quais existem no banco com freq >= 20
+ * 3. Busca hashtags similares por embedding
+ * 4. V11.1: Retorna TODAS as seeds que passam no filtro de similaridade
+ *    (sem limite artificial - a similaridade define naturalmente)
  */
 router.post('/suggest-seeds', async (req, res) => {
   try {
