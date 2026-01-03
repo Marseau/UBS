@@ -1,6 +1,6 @@
-# AI Conversacional - Componente 5 do Ecossistema AIC
+# AI Conversacional (SDR) - Componente 5 do Ecossistema AIC
 
-O AI Conversacional e o quinto componente do pipeline AIC. Ele recebe leads ja qualificados pelos componentes anteriores e conduz dialogos contextualizados que culminam em agendamentos automaticos.
+O AI Conversacional atua como **SDR (Sales Development Representative)** automatizado - o quinto componente do pipeline AIC. Ele recebe leads ja prospectados pelo componente BDR (Outreach) e conduz dialogos contextualizados que qualificam e culminam em agendamentos automaticos.
 
 ---
 
@@ -16,7 +16,8 @@ O AI Conversacional e o quinto componente do pipeline AIC. Ele recebe leads ja q
 +------------------+     +------------------+     +------------------+
 |  6. Agendamento  |<----|  5. AI           |<----|  4. Outreach     |
 |    Automatico    |     |  Conversacional  |     |   Humanizado     |
-+------------------+     +------------------+     +------------------+
++------------------+     |      (SDR)       |     |      (BDR)       |
+                         +------------------+     +------------------+
 ```
 
 ### Entradas (do Componente 4)

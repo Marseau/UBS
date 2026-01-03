@@ -14,8 +14,8 @@ Plataforma de prospeccao outbound inteligente que transforma dados publicos do I
 ### Proposta de Valor
 - **Scraping inteligente** de perfis Instagram por hashtags/nichos
 - **Clusterizacao por embeddings** para segmentacao precisa
-- **Outreach personalizado** via WhatsApp (60%) + Instagram DM (40%)
-- **Agentes IA conversacionais** para qualificacao automatica
+- **Outreach personalizado (BDR)** via WhatsApp (60%) + Instagram DM (40%)
+- **Agentes IA conversacionais (SDR)** para qualificacao automatica
 - **Agendamento de reunioes** entre leads quentes e clientes
 
 ### Metricas de Sucesso
@@ -227,13 +227,15 @@ Todos os workflows com prefixo UBS, WhatsAppSalon, ou relacionados a multi-tenan
 │     ├── Calcula fit_score                                                  │
 │     └── "Congela" leads (nao expiram)                                      │
 │                                                                             │
-│  5. OUTREACH                                                                │
+│  5. OUTREACH (BDR - Business Development Representative)                    │
+│     ├── Prospeccao ativa outbound                                          │
 │     ├── Round-robin entre campanhas                                        │
 │     ├── 120 WA + 80 IG por dia/campanha                                    │
 │     ├── Puppeteer humanizado (todos outbound)                              │
 │     └── Minutos randomizados, horario comercial                            │
 │                                                                             │
-│  6. CONVERSACAO (Agente IA)                                                 │
+│  6. CONVERSACAO (SDR - Sales Development Representative)                    │
+│     ├── Qualificacao automatica de leads                                   │
 │     ├── Inbound: Whapi webhook / Meta webhook                              │
 │     ├── Contexto 3 camadas (briefing + lead + memoria)                     │
 │     ├── GPT-4o-mini gera resposta                                          │
