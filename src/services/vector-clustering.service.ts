@@ -491,41 +491,83 @@ export async function clusterBySimilarity(
     }).slice(0, maxLeads);
 
     // Buscar leads em batches para evitar limite de query
-    const batchSize = 500;
+    // V11.2: Reduzido batch para 100 (evitar timeout) + retry
+    const batchSize = 100;
     const allLeads: any[] = [];
 
     for (let i = 0; i < validLeadIds.length; i += batchSize) {
       const batch = validLeadIds.slice(i, i + batchSize);
+      const batchNum = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(validLeadIds.length / batchSize);
 
-      const { data: batchLeads, error: batchError } = await supabase
-        .from('instagram_leads')
-        .select(`
-          id, username, full_name, profession, city, state, bio,
-          emails_normalized, phones_normalized, whatsapp_number,
-          followers_count, hashtags_bio, hashtags_posts
-        `)
-        .in('id', batch);
+      // Retry com backoff
+      let retries = 3;
+      let batchLeads: any[] | null = null;
+      let lastError: any = null;
 
-      if (batchError) {
-        console.error(`⚠️ Erro ao buscar batch ${i / batchSize + 1}:`, batchError);
+      while (retries > 0 && !batchLeads) {
+        const { data, error } = await supabase
+          .from('instagram_leads')
+          .select(`
+            id, username, full_name, profession, city, state, bio,
+            emails_normalized, phones_normalized, whatsapp_number,
+            followers_count, hashtags_bio, hashtags_posts
+          `)
+          .in('id', batch);
+
+        if (error) {
+          lastError = error;
+          retries--;
+          if (retries > 0) {
+            await new Promise(r => setTimeout(r, 500)); // 500ms delay antes de retry
+          }
+        } else {
+          batchLeads = data;
+        }
+      }
+
+      if (!batchLeads && lastError) {
+        console.error(`⚠️ Erro ao buscar batch ${batchNum}/${totalBatches} após 3 tentativas:`, lastError);
         continue;
       }
 
       if (batchLeads) {
         allLeads.push(...batchLeads);
       }
+
+      // Log progresso a cada 10 batches
+      if (batchNum % 10 === 0 || batchNum === totalBatches) {
+        console.log(`   📦 Batch ${batchNum}/${totalBatches}: ${allLeads.length} leads carregados`);
+      }
     }
 
-    // Buscar embeddings para esses leads
+    // Buscar embeddings para esses leads (também em batches)
     const leadIdsWithData = allLeads.map(l => l.id);
-    const { data: embeddings, error: embError } = await supabase
-      .from('lead_embeddings')
-      .select('lead_id, embedding_bio_text, embedding_final, embedding_bio')
-      .in('lead_id', leadIdsWithData);
+    const allEmbeddings: any[] = [];
+    const embBatchSize = 100;
 
-    if (embError) {
-      console.error('⚠️ Erro ao buscar embeddings:', embError);
+    console.log(`   🔍 Buscando embeddings para ${leadIdsWithData.length} leads...`);
+
+    for (let i = 0; i < leadIdsWithData.length; i += embBatchSize) {
+      const batch = leadIdsWithData.slice(i, i + embBatchSize);
+
+      const { data: embBatch, error: embError } = await supabase
+        .from('lead_embeddings')
+        .select('lead_id, embedding_bio_text, embedding_final, embedding_bio')
+        .in('lead_id', batch);
+
+      if (embError) {
+        console.error(`⚠️ Erro ao buscar embeddings batch ${Math.floor(i / embBatchSize) + 1}:`, embError);
+        continue;
+      }
+
+      if (embBatch) {
+        allEmbeddings.push(...embBatch);
+      }
     }
+
+    const embeddings = allEmbeddings;
+    console.log(`   ✅ ${embeddings.length} embeddings encontrados`);
 
     // Merge leads com embeddings
     const embeddingMap = new Map((embeddings || []).map(e => [e.lead_id, e]));
