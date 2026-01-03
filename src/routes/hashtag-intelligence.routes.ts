@@ -1494,11 +1494,12 @@ router.post('/save-analysis', async (req, res) => {
       const { error: updateError } = await supabase
         .from('cluster_campaigns')
         .update({
-          nicho_principal: nicho,
+          nicho_principal: nicho || '',
           nicho_secundario: nicho_secundario || null,
           keywords,
-          service_description: service_description || null,
-          target_audience: target_audience || null,
+          // Preservar valores enviados (colunas NOT NULL não aceitam null)
+          service_description: service_description ?? '',
+          target_audience: target_audience ?? '',
           target_age_range: target_age_range || null,
           target_gender: target_gender || null,
           target_location: target_location || null,
@@ -1767,6 +1768,89 @@ router.get('/projects', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Erro em /projects:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * PATCH /api/hashtag-intelligence/campaign/:campaignId/fields
+ * Atualiza campos editáveis de uma campanha em modo Rascunho
+ * Não requer validação prévia - usado para edição rápida
+ */
+router.patch('/campaign/:campaignId/fields', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const {
+      nicho_principal,
+      service_description,
+      target_audience,
+      target_age_range,
+      target_gender,
+      target_location,
+      target_income_class,
+      keywords
+    } = req.body;
+
+    console.log(`\n✏️ [API] Atualizando campos da campanha: ${campaignId}`);
+
+    // Verificar se campanha existe e está em modo draft
+    const { data: campaign, error: fetchError } = await supabase
+      .from('cluster_campaigns')
+      .select('id, campaign_name, pipeline_status')
+      .eq('id', campaignId)
+      .single();
+
+    if (fetchError || !campaign) {
+      return res.status(404).json({
+        success: false,
+        message: 'Campanha não encontrada'
+      });
+    }
+
+    // Permitir edição apenas em modo draft ou rascunho
+    if (campaign.pipeline_status && !['draft', 'pending', 'analyzing'].includes(campaign.pipeline_status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Campanha não pode ser editada no status "${campaign.pipeline_status}". Apenas campanhas em rascunho podem ser editadas.`
+      });
+    }
+
+    // Montar objeto de atualização apenas com campos fornecidos
+    const updateData: Record<string, any> = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (nicho_principal !== undefined) updateData.nicho_principal = nicho_principal || '';
+    if (service_description !== undefined) updateData.service_description = service_description ?? '';
+    if (target_audience !== undefined) updateData.target_audience = target_audience ?? '';
+    if (target_age_range !== undefined) updateData.target_age_range = target_age_range || null;
+    if (target_gender !== undefined) updateData.target_gender = target_gender || null;
+    if (target_location !== undefined) updateData.target_location = target_location || null;
+    if (target_income_class !== undefined) updateData.target_income_class = target_income_class || null;
+    if (keywords !== undefined) updateData.keywords = keywords;
+
+    const { error: updateError } = await supabase
+      .from('cluster_campaigns')
+      .update(updateData)
+      .eq('id', campaignId);
+
+    if (updateError) throw updateError;
+
+    console.log(`   ✅ Campos atualizados: ${Object.keys(updateData).join(', ')}`);
+
+    return res.json({
+      success: true,
+      message: 'Campos atualizados com sucesso',
+      data: {
+        campaign_id: campaignId,
+        updated_fields: Object.keys(updateData)
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Erro em PATCH /campaign/:campaignId/fields:', error);
     return res.status(500).json({
       success: false,
       message: error.message

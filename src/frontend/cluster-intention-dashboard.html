@@ -208,6 +208,17 @@
             box-shadow: 0 4px 15px rgba(14, 204, 151, 0.3);
         }
 
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--aic-green);
+            color: var(--aic-green);
+        }
+
+        .btn-outline:hover {
+            background: rgba(14, 204, 151, 0.1);
+            box-shadow: 0 4px 15px rgba(14, 204, 151, 0.2);
+        }
+
         .loading {
             text-align: center;
             padding: 40px;
@@ -1468,9 +1479,12 @@
                     </div>
                 </details>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
                     <button class="btn" id="analyzeBtn" onclick="validateNiche()">
                         🔍 Validar Nicho
+                    </button>
+                    <button class="btn btn-outline" id="saveDraftBtn" onclick="saveDraft()" title="Salvar campos sem precisar validar">
+                        📝 Salvar Rascunho
                     </button>
                     <button class="btn btn-success" id="saveCampaignBtn" onclick="saveAnalysis()">
                         💾 Salvar Campanha
@@ -3893,6 +3907,7 @@
             const editableButtons = [
                 'btnExecuteClustering',  // Botão de clustering
                 'saveCampaignBtn',       // Botão de salvar campanha
+                'saveDraftBtn',          // Botão de salvar rascunho
                 'analyzeBtn',            // Botão de validar nicho
                 'flagCapture',           // Botão de captura de leads
                 'flagPersona',           // Botão de gerar personas
@@ -4626,6 +4641,70 @@
             const campaign = campaignsData.find(c => c.id == select.value);
             // Usar valor encontrado ou fallback para campanha carregada
             return campaign ? campaign.campaign_name : (loadedCampaignName || '');
+        }
+
+        // Salvar rascunho (campos editáveis sem validação)
+        async function saveDraft() {
+            if (!currentCampaignId) {
+                alert('Selecione uma campanha para salvar o rascunho.');
+                return;
+            }
+
+            const nicho = document.getElementById('nichoInput').value.trim();
+            const serviceDescription = document.getElementById('serviceDescription').value.trim();
+            const targetAudience = document.getElementById('targetAudience').value.trim();
+
+            if (!nicho && !serviceDescription && !targetAudience) {
+                alert('Preencha pelo menos um campo para salvar o rascunho.');
+                return;
+            }
+
+            const btn = document.getElementById('saveDraftBtn');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Salvando...';
+
+            try {
+                const payload = {
+                    nicho_principal: nicho,
+                    service_description: serviceDescription,
+                    target_audience: targetAudience,
+                    target_age_range: document.getElementById('targetAgeRange').value.trim() || null,
+                    target_gender: document.getElementById('targetGender').value || null,
+                    target_location: document.getElementById('targetLocation').value.trim() || null,
+                    target_income_class: document.getElementById('targetIncomeClass').value || null,
+                    keywords: currentSeeds.length > 0 ? currentSeeds : undefined
+                };
+
+                const response = await fetch(`${API_BASE}/campaign/${currentCampaignId}/fields`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    btn.textContent = '✅ Salvo!';
+                    btn.style.background = '#10b981';
+                    btn.style.borderColor = '#10b981';
+                    btn.style.color = '#fff';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '';
+                        btn.style.borderColor = '';
+                        btn.style.color = '';
+                        btn.disabled = false;
+                    }, 2000);
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                console.error('Erro ao salvar rascunho:', error);
+                alert('❌ Erro ao salvar: ' + error.message);
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
         }
 
         // Salvar análise
