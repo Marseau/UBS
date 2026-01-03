@@ -1,16 +1,17 @@
 /**
- * NICHE VALIDATOR SERVICE V8
+ * NICHE VALIDATOR SERVICE V9
  *
  * Valida se um nicho tem massa crítica suficiente para clusterização.
  *
- * ATUALIZADO: Agora usa PostgreSQL pgvector para busca semântica,
- * consistente com o seed-suggester.service.ts
+ * V9: CORRIGIDO - Usa apenas as seeds fornecidas pelo usuário (SEM expansão semântica)
+ * A expansão semântica já é feita pelo seed-suggester.
+ * O validator apenas valida as seeds que o usuário selecionou/editou.
  *
  * Critérios de viabilidade:
- * - Mínimo 20-30 hashtags com freq >= 5
- * - Soma de unique_leads >= 100-200
- * - Pelo menos 5-10 hashtags com unique_leads >= 3
- * - Contact rate médio > 20-30%
+ * - Mínimo 20 hashtags com freq >= 5
+ * - Soma de unique_leads >= 100
+ * - Pelo menos 5 hashtags com unique_leads >= 3
+ * - Contact rate médio > 20%
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -171,8 +172,107 @@ async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * Busca hashtags similares usando pgvector no PostgreSQL
- * Mesmo método usado no seed-suggester para consistência
+ * Busca métricas APENAS para as seeds fornecidas (SEM expansão semântica)
+ * V9: Corrigido para usar apenas as seeds do usuário, não expandir para outras
+ */
+async function getMetricsForSeeds(seeds: string[]): Promise<HashtagMetrics[]> {
+  console.log(`   🔍 Buscando métricas para ${seeds.length} seeds (sem expansão)...`);
+
+  if (seeds.length === 0) return [];
+
+  // 1. Buscar occurrence_count da tabela hashtag_embeddings
+  const { data: embeddingData, error: embError } = await supabase
+    .from('hashtag_embeddings')
+    .select('hashtag, hashtag_normalized, occurrence_count')
+    .in('hashtag_normalized', seeds)
+    .eq('is_active', true);
+
+  if (embError) {
+    console.error('⚠️ Erro ao buscar hashtag_embeddings:', embError.message);
+  }
+
+  // Criar mapa de occurrence_count
+  const occurrenceMap = new Map<string, { hashtag: string; occurrence_count: number }>();
+  for (const row of (embeddingData || [])) {
+    occurrenceMap.set(row.hashtag_normalized, {
+      hashtag: row.hashtag,
+      occurrence_count: row.occurrence_count || 0
+    });
+  }
+
+  // 2. Buscar métricas de leads (unique_leads, whatsapp_rate) direto de instagram_leads
+  const seedsArray = seeds.map(s => `'${s}'`).join(',');
+
+  const { data: leadsData, error: leadsError } = await supabase.rpc('execute_sql', {
+    query_text: `
+      WITH hashtag_expanded AS (
+        SELECT
+          LOWER(REPLACE(TRANSLATE(hashtag, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiioooooouuuucnAAAAAEEEEIIIIOOOOOUUUUCN'), ' ', '_')) as hashtag_clean,
+          id as lead_id,
+          'bio' as source,
+          (whatsapp_number IS NOT NULL) as has_whatsapp
+        FROM instagram_leads, jsonb_array_elements_text(hashtags_bio) as hashtag
+        WHERE hashtags_bio IS NOT NULL
+        UNION ALL
+        SELECT
+          LOWER(REPLACE(TRANSLATE(hashtag, 'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ', 'aaaaaeeeeiiiioooooouuuucnAAAAAEEEEIIIIOOOOOUUUUCN'), ' ', '_')) as hashtag_clean,
+          id as lead_id,
+          'posts' as source,
+          (whatsapp_number IS NOT NULL) as has_whatsapp
+        FROM instagram_leads, jsonb_array_elements_text(hashtags_posts) as hashtag
+        WHERE hashtags_posts IS NOT NULL
+      )
+      SELECT
+        hashtag_clean as hashtag,
+        COUNT(*) FILTER (WHERE source = 'bio') as freq_bio,
+        COUNT(*) FILTER (WHERE source = 'posts') as freq_posts,
+        COUNT(*) as freq_total,
+        COUNT(DISTINCT lead_id) as unique_leads,
+        COUNT(DISTINCT lead_id) FILTER (WHERE has_whatsapp) as leads_with_whatsapp,
+        ROUND(COUNT(DISTINCT lead_id) FILTER (WHERE has_whatsapp)::numeric / NULLIF(COUNT(DISTINCT lead_id), 0)::numeric * 100, 1) as whatsapp_rate
+      FROM hashtag_expanded
+      WHERE hashtag_clean IN (${seedsArray})
+      GROUP BY hashtag_clean
+      ORDER BY unique_leads DESC
+    `
+  });
+
+  if (leadsError) {
+    console.error('⚠️ Erro ao buscar métricas de leads:', leadsError.message);
+  }
+
+  // 3. Combinar dados
+  const results: HashtagMetrics[] = [];
+
+  for (const seed of seeds) {
+    const embData = occurrenceMap.get(seed);
+    const leadRow = (leadsData || []).find((r: any) => r.hashtag === seed);
+
+    // Usar freq_total do leads (mais preciso) ou occurrence_count como fallback
+    const freq_total = leadRow?.freq_total ? parseInt(leadRow.freq_total) : (embData?.occurrence_count || 0);
+
+    results.push({
+      hashtag: embData?.hashtag || `#${seed}`,
+      freq_total,
+      freq_bio: parseInt(leadRow?.freq_bio) || 0,
+      freq_posts: parseInt(leadRow?.freq_posts) || 0,
+      unique_leads: parseInt(leadRow?.unique_leads) || 0,
+      leads_with_contact: parseInt(leadRow?.leads_with_whatsapp) || 0,
+      contact_rate: parseFloat(leadRow?.whatsapp_rate) || 0
+    });
+  }
+
+  // Ordenar por unique_leads desc
+  results.sort((a, b) => b.unique_leads - a.unique_leads);
+
+  console.log(`   ✅ ${results.length} seeds com métricas calculadas`);
+
+  return results;
+}
+
+/**
+ * @deprecated Use getMetricsForSeeds() - busca semântica removida do validator
+ * Mantido para referência/fallback
  */
 async function searchHashtagsByEmbedding(
   embedding: number[],
@@ -277,81 +377,19 @@ export async function validateNiche(
     throw new Error('Nenhuma seed válida fornecida');
   }
 
-  console.log(`   Seeds normalizadas: [${normalizedSeeds.join(', ')}] (${normalizedSeeds.length} seeds)`);
+  console.log(`   Seeds normalizadas: [${normalizedSeeds.slice(0, 5).join(', ')}${normalizedSeeds.length > 5 ? '...' : ''}] (${normalizedSeeds.length} seeds)`);
 
-  // V8: BUSCA VIA POSTGRESQL PGVECTOR
-  // 1. Primeiro, tentar encontrar embeddings das seeds no banco
-  // 2. Se não encontrar, gerar embedding médio das seeds
-  // 3. Buscar hashtags similares via pgvector
+  // V9: BUSCA DIRETA PARA AS SEEDS FORNECIDAS (SEM EXPANSÃO SEMÂNTICA)
+  // A expansão semântica já foi feita no seed-suggester
+  // O validator apenas valida as seeds que o usuário selecionou/editou
 
-  console.log('   🔍 Buscando embeddings das seeds no PostgreSQL...');
+  console.log('   🔍 Buscando métricas para as seeds fornecidas (sem expansão)...');
 
-  // Buscar embeddings existentes para as seeds (mesmo padrão do seed-suggester)
-  const { data: seedEmbeddings, error: seedError } = await supabase
-    .from('hashtag_embeddings')
-    .select('hashtag_normalized, embedding, occurrence_count')
-    .in('hashtag_normalized', normalizedSeeds)
-    .not('embedding', 'is', null)
-    .eq('is_active', true);
-
-  let searchEmbedding: number[];
-  const EMBEDDING_DIMENSIONS = 1536;
-
-  if (seedEmbeddings && seedEmbeddings.length > 0) {
-    console.log(`   ✅ ${seedEmbeddings.length}/${normalizedSeeds.length} seeds encontradas no banco`);
-
-    // Parse embeddings (mesmo padrão do seed-suggester)
-    const embeddings = seedEmbeddings
-      .map((row: any) => {
-        const emb = row.embedding;
-        if (Array.isArray(emb)) return emb;
-        if (typeof emb === 'string') {
-          try {
-            const parsed = JSON.parse(emb);
-            if (Array.isArray(parsed)) return parsed;
-          } catch {
-            // Fallback: parse string "[0.1,0.2,...]"
-            const clean = emb.replace(/^\[|\]$/g, '');
-            return clean.split(',').map(Number);
-          }
-        }
-        return null;
-      })
-      .filter((e: any) => Array.isArray(e) && e.length === EMBEDDING_DIMENSIONS);
-
-    if (embeddings.length > 0) {
-      // Calcular média dos embeddings
-      searchEmbedding = new Array(EMBEDDING_DIMENSIONS).fill(0);
-
-      for (const emb of embeddings) {
-        if (!emb) continue;
-        for (let i = 0; i < EMBEDDING_DIMENSIONS; i++) {
-          searchEmbedding[i] = (searchEmbedding[i] || 0) + (emb[i] || 0);
-        }
-      }
-      // Dividir pela quantidade para obter a média
-      for (let i = 0; i < EMBEDDING_DIMENSIONS; i++) {
-        searchEmbedding[i] = (searchEmbedding[i] || 0) / embeddings.length;
-      }
-      console.log(`   📊 Embedding médio calculado de ${embeddings.length} seeds`);
-    } else {
-      // Fallback: gerar embedding do texto das seeds
-      console.log('   🔄 Embeddings inválidos, gerando do texto...');
-      const seedsText = normalizedSeeds.join(' ');
-      searchEmbedding = await generateEmbedding(seedsText);
-    }
-  } else {
-    // Nenhuma seed encontrada no banco, gerar embedding
-    console.log('   ⚠️ Nenhuma seed no banco, gerando embedding do texto...');
-    const seedsText = normalizedSeeds.join(' ');
-    searchEmbedding = await generateEmbedding(seedsText);
-  }
-
-  // Buscar hashtags similares via pgvector
-  const hashtags = await searchHashtagsByEmbedding(searchEmbedding, 150, 5);
+  // Buscar métricas apenas para as seeds passadas
+  const hashtags = await getMetricsForSeeds(normalizedSeeds);
 
   if (hashtags.length === 0) {
-    console.log('   ⚠️ Nenhuma hashtag encontrada via pgvector');
+    console.log('   ⚠️ Nenhuma seed encontrada no banco');
     return {
       seeds: normalizedSeeds,
       criteria,
@@ -425,7 +463,9 @@ export async function validateNiche(
   // Calcular métricas
   const hashtagsWithFreq5 = hashtags.filter(h => h.freq_total >= 5).length;
   const hashtagsWithLeads3 = hashtags.filter(h => h.unique_leads >= 3).length;
-  const totalUniqueLeads = hashtags.reduce((sum, h) => sum + h.unique_leads, 0);
+  // V9: Usar contagem DISTINCT do SQL (totalLeadsInNiche) em vez de somar leads por hashtag
+  // A soma anterior contava o mesmo lead múltiplas vezes se ele tivesse múltiplas hashtags
+  const totalUniqueLeads = totalLeadsInNiche;
   const totalLeadsWithContact = realLeadsWithContact;
   const averageContactRate = realContactRate;
 

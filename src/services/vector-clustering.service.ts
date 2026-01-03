@@ -148,6 +148,57 @@ function hasValidContact(lead: any): boolean {
   return false;
 }
 
+/**
+ * V11: Calcula quantas hashtags do lead matcham com as seeds do nicho
+ * Usado para compor o fit_score junto com similarity_to_centroid
+ */
+function calculateHashtagMatchCount(lead: any, normalizedSeeds: string[]): number {
+  if (!normalizedSeeds || normalizedSeeds.length === 0) return 0;
+
+  // Combinar hashtags de bio e posts, normalizar e deduplcar
+  const bioHashtags = normalizeArray(lead?.hashtags_bio)
+    .map(h => typeof h === 'string' ? normalizeSeedString(h) : '')
+    .filter(h => h.length > 0);
+
+  const postsHashtags = normalizeArray(lead?.hashtags_posts)
+    .map(h => typeof h === 'string' ? normalizeSeedString(h) : '')
+    .filter(h => h.length > 0);
+
+  const allHashtags = new Set([...bioHashtags, ...postsHashtags]);
+
+  // Contar quantas seeds estão presentes
+  let matchCount = 0;
+  for (const seed of normalizedSeeds) {
+    if (allHashtags.has(seed)) {
+      matchCount++;
+    }
+  }
+
+  return matchCount;
+}
+
+/**
+ * V11: Calcula fit_score composto combinando:
+ * - similarity_to_centroid: quanto o lead se parece com o cluster (0-1)
+ * - hashtag_match_ratio: proporção de seeds que o lead tem (0-1)
+ *
+ * Fórmula: 0.6 * similarity + 0.4 * hashtag_ratio
+ * (Prioriza similaridade semântica mas valoriza hashtags específicas)
+ */
+function calculateCompositeScore(
+  similarityToCentroid: number,
+  hashtagMatchCount: number,
+  totalSeeds: number
+): number {
+  const hashtagRatio = totalSeeds > 0 ? hashtagMatchCount / totalSeeds : 0;
+
+  // Pesos: 60% similaridade, 40% hashtag match
+  const compositeScore = 0.6 * similarityToCentroid + 0.4 * hashtagRatio;
+
+  // Normalizar para escala 0-10 (para fit_score no banco)
+  return Math.min(10, Math.max(0, compositeScore * 10));
+}
+
 // ============================================
 // TIPOS E INTERFACES
 // ============================================
@@ -178,6 +229,12 @@ export interface VectorClusterResult {
     embedding_text: string;
   };
   leads: VectorClusteredLead[];
+  /**
+   * V11: Cohesion do cluster = média de similarity_to_centroid dos leads
+   * - KMeans: avg(cosine_sim(lead, centroid))
+   * - Graph: avg(média_arestas_do_lead_no_cluster)
+   * Semântica consistente entre métodos.
+   */
   avg_similarity: number;
   total_leads: number;
   leads_with_contact: number;
@@ -198,6 +255,9 @@ export interface VectorClusteredLead {
   // Pode ser array (do Supabase client) ou string JSON (do execute_sql)
   emails_normalized: string[] | string | null;
   phones_normalized: string[] | string | null;
+  // V11: Hashtags para cálculo de fit_score composto
+  hashtags_bio?: any[] | string | null;
+  hashtags_posts?: any[] | string | null;
   followers_count: number;
   similarity_to_centroid: number;
   embedding_text: string | null;
@@ -404,57 +464,22 @@ export async function clusterBySimilarity(
     console.log(`   🎯 Filtro de seeds (hashtags): [${normalizedSeeds.join(', ')}]`);
   }
 
-  // 1. Construir cláusula WHERE com filtros
-  const whereConditions: string[] = [
-    'COALESCE(le.embedding_final, le.embedding_bio) IS NOT NULL',
-    'il.bio IS NOT NULL',
-    // Filtro de recência: leads criados/atualizados nos últimos N dias
-    `(il.created_at >= NOW() - INTERVAL '${leadMaxAgeDays} days' OR il.updated_at >= NOW() - INTERVAL '${leadMaxAgeDays} days')`,
-    // Filtro de recência para embeddings/hashtags
-    `(le.created_at >= NOW() - INTERVAL '${hashtagMaxAgeDays} days' OR le.updated_at >= NOW() - INTERVAL '${hashtagMaxAgeDays} days')`
-  ];
+  // V11: Usar RPCs seguras ao invés de interpolação de string
+  // Preparar parâmetros para as RPCs
+  const rpcParams = {
+    p_lead_max_age_days: leadMaxAgeDays,
+    p_hashtag_max_age_days: hashtagMaxAgeDays,
+    p_max_leads: maxLeads,
+    p_target_states: safeStates.length > 0 ? safeStates : null,
+    p_seeds: hasSeeds ? normalizedSeeds : null
+  };
 
-  // Filtro de estados (já validados)
-  if (safeStates.length > 0) {
-    const statesArray = safeStates.map(s => `'${s}'`).join(', ');
-    whereConditions.push(`(il.state IN (${statesArray}))`);
-  }
-
-  // REMOVIDO: Filtro exato de seeds em hashtags
-  // A clusterização agora usa APENAS semântica (embeddings de perfil)
-  // Seeds são usados apenas para logging/contexto, não para filtrar leads
-  // Isso permite que o clustering encontre TODOS os leads semanticamente similares
-  // ao invés de apenas os que têm hashtags exatas
-  if (hasSeeds) {
-    console.log(`   📝 Seeds fornecidas (apenas contexto, sem filtro): [${seeds.join(', ')}]`);
-  }
-
-  // NOTA: Não filtrar por campaign_leads aqui.
-  // O campaignId é usado apenas para SALVAR o resultado, não para filtrar.
-  // O filtro de leads associados deve ser feito no pipeline de captura, não no clustering.
-
-  const whereClause = whereConditions.join(' AND ');
-
-  // Primeiro: contar quantos leads passam pelos filtros (para diagnósticos)
-  const { data: countsData, error: countsError } = await supabase.rpc('execute_sql', {
-    query_text: `
-      
-      SELECT
-        COUNT(*) AS total_after_filters,
-        COUNT(*) FILTER (WHERE (
-          il.whatsapp_number IS NOT NULL
-          OR COALESCE(il.emails_normalized, '[]'::jsonb) != '[]'::jsonb
-          OR COALESCE(il.phones_normalized, '[]'::jsonb) != '[]'::jsonb
-        )) AS total_with_contact,
-        COUNT(*) FILTER (WHERE (
-          il.whatsapp_number IS NULL
-          AND COALESCE(il.emails_normalized, '[]'::jsonb) = '[]'::jsonb
-          AND COALESCE(il.phones_normalized, '[]'::jsonb) = '[]'::jsonb
-        )) AS total_without_contact
-      FROM instagram_leads il
-      INNER JOIN lead_embeddings le ON le.lead_id = il.id
-      WHERE ${whereClause}
-    `
+  // 1. Contar leads elegíveis (para diagnósticos) usando RPC segura
+  const { data: countsData, error: countsError } = await supabase.rpc('count_leads_for_clustering', {
+    p_lead_max_age_days: rpcParams.p_lead_max_age_days,
+    p_hashtag_max_age_days: rpcParams.p_hashtag_max_age_days,
+    p_target_states: rpcParams.p_target_states,
+    p_seeds: rpcParams.p_seeds
   });
 
   if (countsError) {
@@ -480,36 +505,12 @@ export async function clusterBySimilarity(
     };
   }
 
-  // Busca leads com embedding (prioriza quem tem contato - incluindo WhatsApp)
-  const { data: leads, error } = await supabase.rpc('execute_sql', {
-    query_text: `
-      SELECT
-        il.id, il.username, il.full_name, il.profession, il.city, il.state,
-        il.bio, il.emails_normalized, il.phones_normalized, il.whatsapp_number, il.followers_count,
-        le.embedding_bio_text as embedding_text,
-        COALESCE(le.embedding_final, le.embedding_bio)::text as embedding_str
-      FROM instagram_leads il
-      INNER JOIN lead_embeddings le ON le.lead_id = il.id
-      WHERE ${whereClause}
-      ORDER BY
-        CASE WHEN (
-          il.whatsapp_number IS NOT NULL
-          OR COALESCE(il.emails_normalized, '[]'::jsonb) != '[]'::jsonb
-          OR COALESCE(il.phones_normalized, '[]'::jsonb) != '[]'::jsonb
-        ) THEN 0 ELSE 1 END,
-        il.followers_count DESC NULLS LAST
-      LIMIT ${maxLeads}
-    `
-  });
+  // 2. Buscar leads usando RPC segura (sem interpolação de string)
+  const { data: leads, error } = await supabase.rpc('get_leads_for_vector_clustering', rpcParams);
 
   if (error) {
     console.error('⚠️ [VECTOR CLUSTERING] Erro Supabase:', error);
     throw error;
-  }
-
-  // Verificar se resultado é erro da função SQL
-  if (leads && typeof leads === 'object' && !Array.isArray(leads) && leads.error) {
-    throw new Error(`SQL Error: ${leads.error}`);
   }
 
   const leadsWithEmbedding = Array.isArray(leads) ? leads : [];
@@ -721,6 +722,8 @@ export async function clusterBySimilarity(
         whatsapp_number: item.lead.whatsapp_number ?? null,
         emails_normalized: item.lead.emails_normalized,
         phones_normalized: item.lead.phones_normalized,
+        hashtags_bio: item.lead.hashtags_bio ?? null,      // V11: Para fit_score composto
+        hashtags_posts: item.lead.hashtags_posts ?? null,  // V11: Para fit_score composto
         followers_count: item.lead.followers_count || 0,
         similarity_to_centroid: item.similarity,
         embedding_text: item.lead.embedding_text
@@ -789,8 +792,8 @@ export async function clusterBySimilarity(
     const professions = countOccurrences(clusterLeads.map(l => l.profession).filter(Boolean) as string[]);
     const cities = countOccurrences(clusterLeads.map(l => l.city).filter(Boolean) as string[]);
 
-    // Nome do cluster baseado no lead representativo
-    const clusterName = generateClusterName(representativeLead, professions, cities);
+    // V10: Nome do cluster baseado no lead representativo (com validação de mínimo 20%)
+    const clusterName = generateClusterName(representativeLead, professions, cities, clusterLeads.length);
 
     clusterResults.push({
       cluster_id: i,
@@ -1180,11 +1183,16 @@ function computeCohesionCentroid(
 
     let clusterSum = 0;
     for (const item of items) {
-      // Usar similaridade já calculada durante atribuição (mais eficiente)
-      // ou recalcular se necessário
-      const similarity = item.similarity > 0
+      // V11: Usar Number.isFinite() ao invés de > 0 para não mascarar bugs
+      // Similarity pode ser legitimamente 0 ou até levemente negativo em alguns embeddings
+      const similarity = Number.isFinite(item.similarity)
         ? item.similarity
         : cosineSimilarity(item.embedding, centroid);
+
+      // V11: Log outliers para detectar problemas (similarity fora de [-1, 1])
+      if (similarity < -1 || similarity > 1) {
+        console.warn(`   ⚠️ Similarity outlier: ${similarity.toFixed(4)} no cluster ${clusterId}`);
+      }
 
       clusterSum += similarity;
       totalSimilarity += similarity;
@@ -1210,6 +1218,7 @@ function computeCohesionCentroid(
 
 /**
  * Conta ocorrências e retorna ordenado por frequência
+ * V10: Retorna também as contagens para validação de mínimo
  */
 function countOccurrences(items: string[]): string[] {
   const counts: Record<string, number> = {};
@@ -1225,17 +1234,59 @@ function countOccurrences(items: string[]): string[] {
 }
 
 /**
- * Gera nome do cluster baseado no centróide e características
+ * V10: Conta ocorrências com frequência para validação de percentual mínimo
+ */
+function countOccurrencesWithFreq(items: string[]): { item: string; count: number }[] {
+  const counts: Record<string, number> = {};
+  for (const item of items) {
+    const normalized = item.toLowerCase().trim();
+    if (normalized) {
+      counts[normalized] = (counts[normalized] || 0) + 1;
+    }
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([item, count]) => ({ item, count }));
+}
+
+// V10: Mínimo percentual para usar profissão/cidade no nome do cluster
+const MIN_PERCENTAGE_FOR_NAMING = 0.20; // 20% mínimo
+
+/**
+ * V10: Gera nome do cluster baseado nas características dominantes
+ * Exige mínimo de 20% para usar profissão/cidade, senão usa "Cluster Misto"
  */
 function generateClusterName(
   centroid: any,
   professions: string[],
-  cities: string[]
+  cities: string[],
+  totalLeads: number = 1
 ): string {
-  const profession = professions[0] || centroid.profession || 'Geral';
-  const city = cities[0] || centroid.city || '';
+  // Recalcular com frequências
+  const professionItems = professions.filter(Boolean);
+  const cityItems = cities.filter(Boolean);
 
-  if (city) {
+  const professionCounts = countOccurrencesWithFreq(professionItems);
+  const cityCounts = countOccurrencesWithFreq(cityItems);
+
+  // Verificar se top profissão representa pelo menos MIN_PERCENTAGE_FOR_NAMING
+  const topProfession = professionCounts[0];
+  const professionValid = topProfession &&
+    (topProfession.count / Math.max(1, totalLeads)) >= MIN_PERCENTAGE_FOR_NAMING;
+
+  // Verificar se top cidade representa pelo menos MIN_PERCENTAGE_FOR_NAMING
+  const topCity = cityCounts[0];
+  const cityValid = topCity &&
+    (topCity.count / Math.max(1, totalLeads)) >= MIN_PERCENTAGE_FOR_NAMING;
+
+  // Montar nome baseado no que é válido
+  const profession = professionValid
+    ? topProfession.item
+    : (centroid?.profession || 'Cluster Misto');
+
+  const city = cityValid ? topCity.item : '';
+
+  if (city && profession !== 'Cluster Misto') {
     return `${profession} - ${city}`;
   }
   return profession;
@@ -1362,22 +1413,34 @@ export async function executeVectorClustering(
     cohesion_score: vc.avg_similarity
   }));
 
-  // Converter lead associations
+  // V11: Normalizar seeds para cálculo de hashtag_match_count
+  const normalizedSeeds = seeds.map(s => normalizeSeedString(s)).filter(s => s.length > 0);
+  const totalSeeds = normalizedSeeds.length;
+
+  // Converter lead associations com score composto
   const lead_associations: LeadClusterAssociation[] = [];
 
   for (const cluster of result.clusters) {
     for (const lead of cluster.leads) {
+      // V11: Calcular hashtag_match_count e score composto
+      const hashtagMatchCount = calculateHashtagMatchCount(lead, normalizedSeeds);
+      const compositeScore = calculateCompositeScore(
+        lead.similarity_to_centroid,
+        hashtagMatchCount,
+        totalSeeds
+      );
+
       lead_associations.push({
         lead_id: lead.id,
         username: lead.username || '',
         full_name: lead.full_name || null,
         clusters: [{
           cluster_id: cluster.cluster_id,
-          hashtag_count: 0,
+          hashtag_count: hashtagMatchCount, // V11: Agora calculado corretamente
           weight: lead.similarity_to_centroid
         }],
         primary_cluster: cluster.cluster_id,
-        score: lead.similarity_to_centroid,
+        score: compositeScore, // V11: Score composto (similarity + hashtags)
         has_contact: hasValidContact(lead)
       });
     }
@@ -1694,45 +1757,14 @@ export async function clusterByGraph(
     console.log(`   🗺️  Estados: [${targetStates.join(', ')}]`);
   }
 
-  // 1. Construir WHERE clause
-  const whereConditions: string[] = [
-    'COALESCE(le.embedding_final, le.embedding_bio) IS NOT NULL',
-    'il.bio IS NOT NULL',
-    `(il.created_at >= NOW() - INTERVAL '${leadMaxAgeDays} days' OR il.updated_at >= NOW() - INTERVAL '${leadMaxAgeDays} days')`,
-    `(le.created_at >= NOW() - INTERVAL '${hashtagMaxAgeDays} days' OR le.updated_at >= NOW() - INTERVAL '${hashtagMaxAgeDays} days')`
-  ];
+  // V11: Usar RPC segura ao invés de interpolação de string
+  const safeStates = targetStates && targetStates.length > 0 ? validateStates(targetStates) : null;
 
-  if (targetStates && targetStates.length > 0) {
-    // Validar estados para evitar SQL injection
-    const safeStates = validateStates(targetStates);
-    const statesArray = safeStates.map(s => `'${s}'`).join(', ');
-    whereConditions.push(`il.state IN (${statesArray})`);
-  }
-
-  const whereClause = whereConditions.join(' AND ');
-
-  // 2. Buscar todos os leads elegíveis com seus embeddings
   console.log(`\n   📥 Buscando leads com embeddings...`);
-  const { data: leads, error: leadsError } = await supabase.rpc('execute_sql', {
-    query_text: `
-      SELECT
-        il.id,
-        il.username,
-        il.full_name,
-        il.profession,
-        il.city,
-        il.state,
-        il.bio,
-        il.emails_normalized,
-        il.phones_normalized,
-        il.whatsapp_number,
-        il.followers_count,
-        le.embedding_bio_text as embedding_text
-      FROM instagram_leads il
-      INNER JOIN lead_embeddings le ON le.lead_id = il.id
-      WHERE ${whereClause}
-      ORDER BY il.followers_count DESC NULLS LAST
-    `
+  const { data: leads, error: leadsError } = await supabase.rpc('get_leads_for_graph_clustering', {
+    p_lead_max_age_days: leadMaxAgeDays,
+    p_hashtag_max_age_days: hashtagMaxAgeDays,
+    p_target_states: safeStates
   });
 
   if (leadsError) {
@@ -1776,7 +1808,11 @@ export async function clusterByGraph(
   // Number() garante que o nome seja sempre numérico (evita injeção)
   const tempTableName = `temp_clustering_${Number(Date.now())}`;
 
-  // Statement 1: Criar tabela temporária via JOIN com whereClause
+  // V11: Criar tabela temporária usando IDs já filtrados pela RPC
+  // Isso evita re-aplicar a lógica de filtro e usa os leads já validados
+  const validatedLeadIds = leadIds.map(id => validateUUID(id));
+  const leadIdsArray = validatedLeadIds.map(id => `'${id}'::uuid`).join(',');
+
   // Usa execute_admin_sql (DDL com allowlist restrita)
   const { error: createTableError } = await supabase.rpc('execute_admin_sql', {
     query_text: `
@@ -1785,8 +1821,7 @@ export async function clusterByGraph(
         le.lead_id,
         COALESCE(le.embedding_final, le.embedding_bio) as embedding
       FROM lead_embeddings le
-      INNER JOIN instagram_leads il ON il.id = le.lead_id
-      WHERE ${whereClause}
+      WHERE le.lead_id IN (${leadIdsArray})
     `
   });
 
@@ -1909,6 +1944,24 @@ export async function clusterByGraph(
     const memberIds = validClusters[i]!;
     const clusterLeads: VectorClusteredLead[] = [];
 
+    // V10: Calcular similarity_to_cluster para cada lead (média das arestas do lead dentro do cluster)
+    const leadSimilarities = new Map<string, number>();
+    for (const leadId of memberIds) {
+      let sumSim = 0;
+      let countSim = 0;
+      for (const otherId of memberIds) {
+        if (leadId === otherId) continue;
+        const edgeKey = [leadId, otherId].sort().join('|');
+        const sim = edgeSimilarities.get(edgeKey);
+        if (sim !== undefined) {
+          sumSim += sim;
+          countSim++;
+        }
+      }
+      // Score = média das similaridades com vizinhos no cluster
+      leadSimilarities.set(leadId, countSim > 0 ? sumSim / countSim : similarityThreshold);
+    }
+
     for (const leadId of memberIds) {
       const lead = leadMap.get(leadId);
       if (!lead) continue;
@@ -1921,20 +1974,19 @@ export async function clusterByGraph(
         city: lead.city,
         state: lead.state,
         bio: lead.bio,
+        whatsapp_number: lead.whatsapp_number ?? null, // V11: Incluir WhatsApp para hasValidContact
         emails_normalized: lead.emails_normalized,
         phones_normalized: lead.phones_normalized,
+        hashtags_bio: lead.hashtags_bio ?? null,      // V11: Para fit_score composto
+        hashtags_posts: lead.hashtags_posts ?? null,  // V11: Para fit_score composto
         followers_count: lead.followers_count || 0,
-        similarity_to_centroid: 1.0, // Será recalculado abaixo
+        similarity_to_centroid: leadSimilarities.get(leadId) || similarityThreshold, // V10: Score real calculado
         embedding_text: lead.embedding_text
       });
     }
 
-    // Calcular estatísticas usando hasValidContact() para consistência
-    // Usa leadMap para ter acesso ao objeto completo (inclui whatsapp_number)
-    const leadsWithContact = clusterLeads.filter(l => {
-      const fullLead = leadMap.get(l.id);
-      return fullLead ? hasValidContact(fullLead) : false;
-    }).length;
+    // V11: Agora clusterLeads inclui whatsapp_number, podemos usar hasValidContact() diretamente
+    const leadsWithContact = clusterLeads.filter(l => hasValidContact(l)).length;
 
     const contactRate = clusterLeads.length > 0
       ? (leadsWithContact / clusterLeads.length * 100)
@@ -1946,24 +1998,14 @@ export async function clusterByGraph(
 
     // Lead representativo: maior followers ou primeiro
     const representativeLead = clusterLeads.sort((a, b) => b.followers_count - a.followers_count)[0];
-    const clusterName = generateClusterName(representativeLead, professions, cities);
+    // V10: Nome do cluster com validação de mínimo 20%
+    const clusterName = generateClusterName(representativeLead, professions, cities, clusterLeads.length);
 
-    // Calcular avg_similarity REAL usando as similaridades armazenadas
-    let clusterSimilaritySum = 0;
-    let clusterEdgeCount = 0;
-    for (let m = 0; m < memberIds.length; m++) {
-      for (let n = m + 1; n < memberIds.length; n++) {
-        const edgeKey = [memberIds[m], memberIds[n]].sort().join('|');
-        const sim = edgeSimilarities.get(edgeKey);
-        if (sim !== undefined) {
-          clusterSimilaritySum += sim;
-          clusterEdgeCount++;
-        }
-      }
-    }
-    const computedAvgSimilarity = clusterEdgeCount > 0
-      ? clusterSimilaritySum / clusterEdgeCount
-      : similarityThreshold; // Fallback se não houver arestas
+    // V11: Calcular avg_similarity como média de similarity_to_centroid (consistente com KMeans)
+    // Antes calculava pairwise, mas agora similarity_to_centroid já é a média das arestas
+    const avgSimilarity = clusterLeads.length > 0
+      ? clusterLeads.reduce((sum, l) => sum + l.similarity_to_centroid, 0) / clusterLeads.length
+      : similarityThreshold;
 
     clusterResults.push({
       cluster_id: i,
@@ -1974,7 +2016,7 @@ export async function clusterByGraph(
         embedding_text: representativeLead?.embedding_text || ''
       },
       leads: clusterLeads,
-      avg_similarity: parseFloat(computedAvgSimilarity.toFixed(4)),
+      avg_similarity: parseFloat(avgSimilarity.toFixed(4)),
       total_leads: clusterLeads.length,
       leads_with_contact: leadsWithContact,
       contact_rate: parseFloat(contactRate.toFixed(1)),
@@ -2066,21 +2108,33 @@ export async function executeGraphClustering(
     cohesion_score: vc.avg_similarity
   }));
 
-  // Converter lead associations
+  // V11: Normalizar seeds para cálculo de hashtag_match_count
+  const normalizedSeeds = seeds.map(s => normalizeSeedString(s)).filter(s => s.length > 0);
+  const totalSeeds = normalizedSeeds.length;
+
+  // Converter lead associations com score composto
   const lead_associations: LeadClusterAssociation[] = [];
   for (const cluster of result.clusters) {
     for (const lead of cluster.leads) {
+      // V11: Calcular hashtag_match_count e score composto
+      const hashtagMatchCount = calculateHashtagMatchCount(lead, normalizedSeeds);
+      const compositeScore = calculateCompositeScore(
+        lead.similarity_to_centroid,
+        hashtagMatchCount,
+        totalSeeds
+      );
+
       lead_associations.push({
         lead_id: lead.id,
         username: lead.username || '',
         full_name: lead.full_name || null,
         clusters: [{
           cluster_id: cluster.cluster_id,
-          hashtag_count: 0,
+          hashtag_count: hashtagMatchCount, // V11: Agora calculado corretamente
           weight: lead.similarity_to_centroid
         }],
         primary_cluster: cluster.cluster_id,
-        score: lead.similarity_to_centroid,
+        score: compositeScore, // V11: Score composto (similarity + hashtags)
         has_contact: hasValidContact(lead)
       });
     }
