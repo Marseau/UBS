@@ -86,6 +86,9 @@ export interface NicheValidationResult {
     log_leads: number;
     contact_rate: number;
   }[];
+
+  // V11.1: IDs dos leads do nicho para passar ao clustering
+  lead_ids?: string[];
 }
 
 /**
@@ -427,6 +430,7 @@ export async function validateNiche(
   const hashtagList = hashtags.map(h => h.hashtag);
   const hashtagsArray = `ARRAY['${hashtagList.join("','")}']::text[]`;
 
+  // V11.2: Query modificada para retornar também os IDs dos leads
   const { data: contactRateData } = await supabase.rpc('execute_sql', {
     query_text: `
       WITH leads_with_hashtags AS (
@@ -450,7 +454,8 @@ export async function validateNiche(
         ROUND(
           COUNT(*) FILTER (WHERE whatsapp_number IS NOT NULL)::numeric /
           NULLIF(COUNT(*), 0) * 100, 1
-        ) as whatsapp_rate
+        ) as whatsapp_rate,
+        ARRAY_AGG(id) as lead_ids
       FROM leads_with_hashtags
     `
   });
@@ -458,7 +463,10 @@ export async function validateNiche(
   const realContactRate = parseFloat(contactRateData?.[0]?.whatsapp_rate) || 0;
   const realLeadsWithContact = parseInt(contactRateData?.[0]?.leads_with_whatsapp) || 0;
   const totalLeadsInNiche = parseInt(contactRateData?.[0]?.total_leads) || 0;
+  // V11.2: Extrair lead_ids do resultado SQL
+  const leadIdsFromQuery: string[] = contactRateData?.[0]?.lead_ids || [];
   console.log(`   📱 WhatsApp rate: ${realContactRate}% (${realLeadsWithContact}/${totalLeadsInNiche} leads)`);
+  console.log(`   🆔 Lead IDs coletados: ${leadIdsFromQuery.length}`);
 
   // Calcular métricas
   const hashtagsWithFreq5 = hashtags.filter(h => h.freq_total >= 5).length;
@@ -559,7 +567,9 @@ export async function validateNiche(
     passedCriteria,
     recommendations,
     topHashtags: enrichedHashtags,
-    clusteringFeatures
+    clusteringFeatures,
+    // V11.2: Incluir IDs dos leads para passar ao clustering
+    lead_ids: leadIdsFromQuery
   };
 
   // Log resumo

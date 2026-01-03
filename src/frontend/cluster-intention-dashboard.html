@@ -4847,6 +4847,10 @@
             statusBadge.innerHTML = 'Executando KMeans...';
 
             try {
+                // V11.2: Obter lead_ids do nicho validado (se disponível)
+                const nicheLeadIds = currentValidation?.lead_ids || [];
+                const hasNicheLeadIds = nicheLeadIds.length > 0;
+
                 const payload = {
                     seeds: seeds,
                     nicho: nichoInput,
@@ -4859,14 +4863,19 @@
                     lead_max_age_days: leadMaxAgeDays,
                     hashtag_max_age_days: hashtagMaxAgeDays,
                     min_leads_per_cluster: minLeadsPerCluster,
-                    max_leads: maxLeads
+                    max_leads: maxLeads,
+                    // V11.2: Passar lead_ids do nicho validado para garantir consistência
+                    lead_ids: hasNicheLeadIds ? nicheLeadIds : undefined,
+                    filter_by_seeds: !hasNicheLeadIds  // Se temos lead_ids, não filtrar por seeds novamente
                 };
 
                 console.log('🎯 [Clustering] Payload:', {
                     mode, k: kValue, similarity: similarityThreshold,
                     target_states: targetStates,
                     lead_max_age_days: leadMaxAgeDays,
-                    hashtag_max_age_days: hashtagMaxAgeDays
+                    hashtag_max_age_days: hashtagMaxAgeDays,
+                    lead_ids_count: nicheLeadIds.length,
+                    filter_by_seeds: !hasNicheLeadIds
                 });
 
                 const response = await fetch(`${API_BASE}/execute-clustering`, {

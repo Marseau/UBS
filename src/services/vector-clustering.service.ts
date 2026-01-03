@@ -216,6 +216,8 @@ export interface ClusteringFilters {
   lead_max_age_days?: number;    // Máximo 45 dias para leads
   hashtag_max_age_days?: number; // Máximo 90 dias para hashtags
   max_leads?: number;            // Limite de leads desejados (default: 2000)
+  lead_ids?: string[];           // V11.1: IDs específicos dos leads do nicho (bypass seeds filter)
+  filter_by_seeds?: boolean;     // V11.1: Se false, não filtra por seeds (default: true)
 }
 
 // Valores padrão para filtros de recência
@@ -456,63 +458,141 @@ export async function clusterBySimilarity(
   const normalizedSeeds = seeds.map(s => normalizeSeedString(s)).filter(s => s.length > 0);
   const hasSeeds = normalizedSeeds.length > 0;
 
+  // V11.1: Verificar se temos lead_ids específicos do nicho
+  const hasLeadIds = filters.lead_ids && Array.isArray(filters.lead_ids) && filters.lead_ids.length > 0;
+  const filterBySeeds = filters.filter_by_seeds !== false; // default: true
+
   // Log dos filtros aplicados
   console.log(`   📍 Filtros de recência: leads ≤${leadMaxAgeDays}d, hashtags ≤${hashtagMaxAgeDays}d`);
   console.log(`   📊 Limite de leads: ${maxLeads}`);
   if (safeStates.length > 0) {
     console.log(`   🗺️  Filtro de estados: [${safeStates.join(', ')}]`);
   }
-  if (hasSeeds) {
+  if (hasLeadIds) {
+    console.log(`   🎯 V11.1: Usando ${filters.lead_ids!.length} lead_ids específicos do nicho (bypass seeds)`);
+  } else if (hasSeeds && filterBySeeds) {
     console.log(`   🎯 Filtro de seeds (hashtags): [${normalizedSeeds.join(', ')}]`);
   }
 
-  // V11: Usar RPCs seguras ao invés de interpolação de string
-  // Preparar parâmetros para as RPCs
-  const rpcParams = {
-    p_lead_max_age_days: leadMaxAgeDays,
-    p_hashtag_max_age_days: hashtagMaxAgeDays,
-    p_max_leads: maxLeads,
-    p_target_states: safeStates.length > 0 ? safeStates : null,
-    p_seeds: hasSeeds ? normalizedSeeds : null
-  };
+  let leads: any[] = [];
 
-  // 1. Contar leads elegíveis (para diagnósticos) usando RPC segura
-  const { data: countsData, error: countsError } = await supabase.rpc('count_leads_for_clustering', {
-    p_lead_max_age_days: rpcParams.p_lead_max_age_days,
-    p_hashtag_max_age_days: rpcParams.p_hashtag_max_age_days,
-    p_target_states: rpcParams.p_target_states,
-    p_seeds: rpcParams.p_seeds
-  });
+  // V11.1: Se temos lead_ids específicos, buscar diretamente (bypass RPC com seeds)
+  if (hasLeadIds) {
+    console.log(`   📥 Buscando ${filters.lead_ids!.length} leads por ID...`);
 
-  if (countsError) {
-    console.error('⚠️ [VECTOR CLUSTERING] Erro Supabase (counts):', countsError);
-    throw countsError;
-  }
+    // Validar UUIDs
+    const validLeadIds = filters.lead_ids!.filter(id => {
+      try {
+        validateUUID(id);
+        return true;
+      } catch {
+        return false;
+      }
+    }).slice(0, maxLeads);
 
-  const countsRow = Array.isArray(countsData) && countsData.length > 0 ? countsData[0] : { total_after_filters: 0, total_with_contact: 0, total_without_contact: 0 };
-  console.log(`   📊 Debug filtros -> total=${countsRow.total_after_filters} | contato=${countsRow.total_with_contact} | sem_contato=${countsRow.total_without_contact}`);
+    // Buscar leads em batches para evitar limite de query
+    const batchSize = 500;
+    const allLeads: any[] = [];
 
-  if ((countsRow.total_after_filters || 0) === 0) {
-    return {
-      success: false,
-      error: `Leads insuficientes após filtros (total=${countsRow.total_after_filters})`,
-      campaign_id: campaignId,
-      total_leads_analyzed: 0,
-      total_leads_embedded: 0,
-      clusters: [],
-      execution_time_ms: Date.now() - startTime,
-      method: 'kmeans_vector',
-      cohesion_centroid: 0,
-      silhouette_approx: 0
+    for (let i = 0; i < validLeadIds.length; i += batchSize) {
+      const batch = validLeadIds.slice(i, i + batchSize);
+
+      const { data: batchLeads, error: batchError } = await supabase
+        .from('instagram_leads')
+        .select(`
+          id, username, full_name, profession, city, state, bio,
+          emails_normalized, phones_normalized, whatsapp_number,
+          followers_count, hashtags_bio, hashtags_posts
+        `)
+        .in('id', batch);
+
+      if (batchError) {
+        console.error(`⚠️ Erro ao buscar batch ${i / batchSize + 1}:`, batchError);
+        continue;
+      }
+
+      if (batchLeads) {
+        allLeads.push(...batchLeads);
+      }
+    }
+
+    // Buscar embeddings para esses leads
+    const leadIdsWithData = allLeads.map(l => l.id);
+    const { data: embeddings, error: embError } = await supabase
+      .from('lead_embeddings')
+      .select('lead_id, embedding_bio_text, embedding_final, embedding_bio')
+      .in('lead_id', leadIdsWithData);
+
+    if (embError) {
+      console.error('⚠️ Erro ao buscar embeddings:', embError);
+    }
+
+    // Merge leads com embeddings
+    const embeddingMap = new Map((embeddings || []).map(e => [e.lead_id, e]));
+    leads = allLeads
+      .filter(lead => embeddingMap.has(lead.id))
+      .map(lead => {
+        const emb = embeddingMap.get(lead.id)!;
+        return {
+          ...lead,
+          embedding_text: emb.embedding_bio_text,
+          embedding_str: (emb.embedding_final || emb.embedding_bio)?.toString() || null
+        };
+      })
+      .filter(lead => lead.embedding_str);
+
+    console.log(`   📊 ${leads.length}/${validLeadIds.length} leads com embedding encontrados`);
+
+  } else {
+    // Fluxo original: usar RPCs com filtro de seeds
+    const rpcParams = {
+      p_lead_max_age_days: leadMaxAgeDays,
+      p_hashtag_max_age_days: hashtagMaxAgeDays,
+      p_max_leads: maxLeads,
+      p_target_states: safeStates.length > 0 ? safeStates : null,
+      p_seeds: (hasSeeds && filterBySeeds) ? normalizedSeeds : null
     };
-  }
 
-  // 2. Buscar leads usando RPC segura (sem interpolação de string)
-  const { data: leads, error } = await supabase.rpc('get_leads_for_vector_clustering', rpcParams);
+    // 1. Contar leads elegíveis (para diagnósticos) usando RPC segura
+    const { data: countsData, error: countsError } = await supabase.rpc('count_leads_for_clustering', {
+      p_lead_max_age_days: rpcParams.p_lead_max_age_days,
+      p_hashtag_max_age_days: rpcParams.p_hashtag_max_age_days,
+      p_target_states: rpcParams.p_target_states,
+      p_seeds: rpcParams.p_seeds
+    });
 
-  if (error) {
-    console.error('⚠️ [VECTOR CLUSTERING] Erro Supabase:', error);
-    throw error;
+    if (countsError) {
+      console.error('⚠️ [VECTOR CLUSTERING] Erro Supabase (counts):', countsError);
+      throw countsError;
+    }
+
+    const countsRow = Array.isArray(countsData) && countsData.length > 0 ? countsData[0] : { total_after_filters: 0, total_with_contact: 0, total_without_contact: 0 };
+    console.log(`   📊 Debug filtros -> total=${countsRow.total_after_filters} | contato=${countsRow.total_with_contact} | sem_contato=${countsRow.total_without_contact}`);
+
+    if ((countsRow.total_after_filters || 0) === 0) {
+      return {
+        success: false,
+        error: `Leads insuficientes após filtros (total=${countsRow.total_after_filters})`,
+        campaign_id: campaignId,
+        total_leads_analyzed: 0,
+        total_leads_embedded: 0,
+        clusters: [],
+        execution_time_ms: Date.now() - startTime,
+        method: 'kmeans_vector',
+        cohesion_centroid: 0,
+        silhouette_approx: 0
+      };
+    }
+
+    // 2. Buscar leads usando RPC segura (sem interpolação de string)
+    const { data: rpcLeads, error } = await supabase.rpc('get_leads_for_vector_clustering', rpcParams);
+
+    if (error) {
+      console.error('⚠️ [VECTOR CLUSTERING] Erro Supabase:', error);
+      throw error;
+    }
+
+    leads = rpcLeads || [];
   }
 
   const leadsWithEmbedding = Array.isArray(leads) ? leads : [];
