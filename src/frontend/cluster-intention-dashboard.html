@@ -1257,8 +1257,10 @@
 
                 <!-- Seeds/Keywords com botao Gerar Seeds -->
                 <div class="input-group">
-                    <label class="input-label" for="seedsInput">Seeds/Keywords (separadas por virgula) *</label>
-                    <div style="display: flex; gap: 10px; align-items: center;">
+                    <label class="input-label">Seeds/Keywords *</label>
+
+                    <!-- Botão Gerar Seeds -->
+                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
                         <button
                             type="button"
                             id="btnGenerateSeeds"
@@ -1269,39 +1271,84 @@
                         >
                             🤖 Gerar Seeds
                         </button>
-                        <input
-                            type="text"
-                            id="seedsInput"
-                            class="input-field"
-                            placeholder="Ex: gestao, trafego, marketing, ads"
-                            style="height: 44px; flex: 1;"
-                        >
+                        <span class="input-hint" style="margin: 0;">Preencha Nicho, Descrição e Público Alvo para habilitar.</span>
                     </div>
-                    <div class="input-hint">Preencha Nicho, Descrição e Público Alvo acima para habilitar o botão Gerar Seeds.</div>
 
-                    <!-- Sugestões de Scraping (hashtags que não existem no banco) -->
-                    <div id="suggestedScrapingContainer" style="display: none; margin-top: 12px; padding: 12px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 8px;">
-                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                            <span style="font-size: 1.1em;">🔍</span>
-                            <strong style="color: #fbbf24; font-size: 0.9em;">Sugestões para Scraping</strong>
-                            <span id="suggestedScrapingCount" style="font-size: 0.75em; color: var(--aic-gray);"></span>
-                        </div>
-                        <div id="suggestedScrapingList" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
-                        <div style="margin-top: 8px; font-size: 0.75em; color: var(--aic-gray);">
-                            💡 Scrape essas hashtags para melhorar a cobertura do nicho
-                        </div>
-                        <div style="margin-top: 12px; text-align: right;">
+                    <!-- Container colapsável de Seeds -->
+                    <details id="seedsDropdown" open style="background: var(--aic-navy-light); border: 1px solid var(--aic-gray); border-radius: 8px; padding: 10px;">
+                        <summary style="cursor: pointer; color: var(--aic-green); font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                            <span>🌱 Seeds Definidas</span>
+                            <span id="seedsCount" style="font-size: 0.8em; color: var(--aic-gray);">(0)</span>
+                        </summary>
+
+                        <!-- Lista de seeds ordenada alfabeticamente -->
+                        <div id="seedsList" style="display: flex; flex-direction: column; gap: 4px; margin-top: 10px; max-height: 200px; overflow-y: auto;"></div>
+
+                        <!-- Input para adicionar nova seed -->
+                        <div style="margin-top: 10px; display: flex; gap: 8px; align-items: center; border-top: 1px solid var(--aic-gray); padding-top: 10px;">
+                            <input
+                                type="text"
+                                id="newSeedInput"
+                                placeholder="Adicionar seed (sem #)"
+                                style="flex: 1; padding: 6px 10px; background: var(--aic-navy); border: 1px solid var(--aic-gray); border-radius: 6px; color: white; font-size: 0.85em;"
+                                onkeypress="if(event.key === 'Enter') addSeed()"
+                            >
                             <button
                                 type="button"
-                                id="btnSaveSearchTerms"
-                                onclick="saveSearchTerms()"
-                                class="btn btn-secondary"
-                                style="padding: 8px 14px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; border-radius: 8px; color: white; cursor: pointer; font-size: 0.8em; white-space: nowrap;"
-                                title="Salva as hashtags sugeridas na tabela lead_search_terms para scraping futuro"
+                                onclick="addSeed()"
+                                style="padding: 6px 12px; background: rgba(16, 185, 129, 0.3); border: 1px solid rgba(16, 185, 129, 0.5); border-radius: 6px; color: #10b981; cursor: pointer; font-size: 0.85em; white-space: nowrap;"
                             >
-                                💾 Gerar Search Terms
+                                ➕ Adicionar
                             </button>
                         </div>
+                    </details>
+
+                    <!-- Input hidden para manter compatibilidade -->
+                    <input type="hidden" id="seedsInput" value="">
+
+                    <!-- Sugestões de Scraping (hashtags que não existem no banco) -->
+                    <div id="suggestedScrapingContainer" style="display: none; margin-top: 12px;">
+                        <details id="scrapingDropdown" open style="background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 8px; padding: 10px;">
+                            <summary style="cursor: pointer; color: #fbbf24; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                                <span>🔍 Sugestões para Scraping</span>
+                                <span id="suggestedScrapingCount" style="font-size: 0.8em; color: var(--aic-gray);">(0)</span>
+                            </summary>
+
+                            <!-- Lista de hashtags ordenada alfabeticamente -->
+                            <div id="suggestedScrapingList" style="display: flex; flex-direction: column; gap: 4px; margin-top: 10px; max-height: 200px; overflow-y: auto;"></div>
+
+                            <!-- Input para adicionar novas hashtags -->
+                            <div style="margin-top: 10px; display: flex; gap: 8px; align-items: center; border-top: 1px solid rgba(251, 191, 36, 0.3); padding-top: 10px;">
+                                <input
+                                    type="text"
+                                    id="newScrapingHashtagInput"
+                                    placeholder="Adicionar hashtag (sem #)"
+                                    style="flex: 1; padding: 6px 10px; background: var(--aic-navy); border: 1px solid var(--aic-gray); border-radius: 6px; color: white; font-size: 0.85em;"
+                                    onkeypress="if(event.key === 'Enter') addScrapingHashtag()"
+                                >
+                                <button
+                                    type="button"
+                                    onclick="addScrapingHashtag()"
+                                    style="padding: 6px 12px; background: rgba(251, 191, 36, 0.3); border: 1px solid rgba(251, 191, 36, 0.5); border-radius: 6px; color: #fbbf24; cursor: pointer; font-size: 0.85em; white-space: nowrap;"
+                                >
+                                    ➕ Adicionar
+                                </button>
+                            </div>
+
+                            <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(251, 191, 36, 0.3); padding-top: 10px;">
+                                <span style="font-size: 0.75em; color: var(--aic-gray);">💡 Hashtags para scraping futuro</span>
+                                <button
+                                    type="button"
+                                    id="btnSaveSearchTerms"
+                                    onclick="saveSearchTerms()"
+                                    class="btn btn-secondary"
+                                    style="padding: 8px 14px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; border-radius: 8px; color: white; cursor: pointer; font-size: 0.8em; white-space: nowrap;"
+                                    title="Salva as hashtags sugeridas na tabela lead_search_terms para scraping futuro"
+                                >
+                                    💾 Gerar Search Terms
+                                </button>
+                            </div>
+                        </details>
                     </div>
                 </div>
 
@@ -2015,8 +2062,9 @@
                 console.log('📦 Resposta suggest-seeds:', { success: result.success, seedsCount: result.data?.seeds?.length });
 
                 if (result.success && result.data?.seeds?.length > 0) {
-                    // Preencher campo de seeds
-                    document.getElementById('seedsInput').value = result.data.seeds.join(', ');
+                    // Preencher currentSeeds e renderizar lista
+                    currentSeeds = result.data.seeds.map(s => s.toLowerCase().trim());
+                    renderSeeds();
 
                     // Log detalhado
                     console.log('🌱 Seeds sugeridas:', result.data.total_seeds);
@@ -2040,10 +2088,7 @@
 
                     if (suggested.length > 0) {
                         scrapingCount.textContent = `(${suggested.length} hashtags não encontradas)`;
-                        scrapingList.innerHTML = suggested.map(tag => {
-                            const safeTag = escapeHTML(tag);
-                            return `<span style="display: inline-block; padding: 4px 10px; background: rgba(251, 191, 36, 0.2); border: 1px solid rgba(251, 191, 36, 0.4); border-radius: 16px; font-size: 0.8em; color: #fbbf24; cursor: pointer;" onclick="navigator.clipboard.writeText('${safeTag}').then(() => this.style.background = 'rgba(16, 185, 129, 0.3)')" title="Clique para copiar">#${safeTag}</span>`;
-                        }).join('');
+                        renderScrapingHashtags(); // Usa função dedicada para renderizar
                         scrapingContainer.style.display = 'block';
                         console.log('🔍 Sugestões para scraping:', suggested);
                     } else {
@@ -2068,6 +2113,258 @@
             }
         }
         // ==================== FIM GERADOR DE SEEDS ====================
+
+        // ==================== GERENCIAMENTO DE SEEDS ====================
+
+        // Renderizar lista de seeds ordenada alfabeticamente com ícones de edição/exclusão
+        function renderSeeds() {
+            const seedsList = document.getElementById('seedsList');
+            const seedsCount = document.getElementById('seedsCount');
+            const seedsInput = document.getElementById('seedsInput');
+
+            if (!seedsList) return;
+
+            // Ordenar alfabeticamente
+            const sortedSeeds = [...currentSeeds].sort((a, b) => a.localeCompare(b));
+
+            seedsCount.textContent = `(${currentSeeds.length})`;
+
+            if (sortedSeeds.length === 0) {
+                seedsList.innerHTML = '<div style="color: var(--aic-gray); font-size: 0.85em; padding: 8px;">Nenhuma seed definida. Use "Gerar Seeds" ou adicione manualmente.</div>';
+            } else {
+                seedsList.innerHTML = sortedSeeds.map(tag => {
+                    const safeTag = escapeHTML(tag);
+                    return `<div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--aic-navy); border-radius: 6px; border: 1px solid var(--aic-gray);">
+                        <span style="color: #10b981; font-size: 0.85em;">#${safeTag}</span>
+                        <div style="display: flex; gap: 8px;">
+                            <span style="cursor: pointer; color: #3b82f6; font-size: 0.9em;" onclick="editSeed('${safeTag}')" title="Editar">✏️</span>
+                            <span style="cursor: pointer; color: #ef4444; font-size: 0.9em;" onclick="removeSeed('${safeTag}')" title="Excluir">🗑️</span>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+
+            // Atualizar input hidden para compatibilidade
+            seedsInput.value = currentSeeds.join(', ');
+        }
+
+        // Adicionar nova seed
+        function addSeed() {
+            const input = document.getElementById('newSeedInput');
+            let newTag = input.value.trim().toLowerCase();
+
+            // Remover # se o usuário incluiu
+            if (newTag.startsWith('#')) {
+                newTag = newTag.substring(1);
+            }
+
+            // Validações
+            if (!newTag) {
+                alert('Digite uma seed para adicionar.');
+                return;
+            }
+
+            if (newTag.includes(' ')) {
+                alert('Seeds não podem conter espaços.');
+                return;
+            }
+
+            // Verificar se já existe
+            if (currentSeeds.includes(newTag)) {
+                alert('Esta seed já está na lista.');
+                input.value = '';
+                return;
+            }
+
+            // Adicionar à lista
+            currentSeeds.push(newTag);
+            renderSeeds();
+            persistSeeds();
+            input.value = '';
+            console.log('➕ Seed adicionada:', newTag, '| Total:', currentSeeds.length);
+        }
+
+        // Remover seed
+        function removeSeed(tag) {
+            if (!confirm(`Remover seed "${tag}"?`)) return;
+
+            const index = currentSeeds.indexOf(tag);
+            if (index > -1) {
+                currentSeeds.splice(index, 1);
+                renderSeeds();
+                persistSeeds();
+                console.log('🗑️ Seed removida:', tag, '| Restantes:', currentSeeds.length);
+            }
+        }
+
+        // Editar seed
+        function editSeed(oldTag) {
+            const newTag = prompt(`Editar seed "${oldTag}":`, oldTag);
+            if (!newTag || newTag.trim() === '' || newTag.trim().toLowerCase() === oldTag) return;
+
+            const cleanTag = newTag.trim().toLowerCase().replace(/^#/, '');
+
+            if (cleanTag.includes(' ')) {
+                alert('Seeds não podem conter espaços.');
+                return;
+            }
+
+            if (currentSeeds.includes(cleanTag)) {
+                alert('Esta seed já existe na lista.');
+                return;
+            }
+
+            const index = currentSeeds.indexOf(oldTag);
+            if (index > -1) {
+                currentSeeds[index] = cleanTag;
+                renderSeeds();
+                persistSeeds();
+                console.log('✏️ Seed editada:', oldTag, '->', cleanTag);
+            }
+        }
+
+        // Persistir seeds no banco (campanha)
+        async function persistSeeds() {
+            if (!currentCampaignId) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/update-campaign-seeds`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        campaign_id: currentCampaignId,
+                        seeds: currentSeeds
+                    })
+                });
+
+                if (!response.ok) {
+                    console.error('Erro ao persistir seeds');
+                }
+            } catch (error) {
+                console.error('Erro ao persistir seeds:', error);
+            }
+        }
+
+        // Inicializar seeds a partir do input (compatibilidade)
+        function initSeedsFromInput() {
+            const seedsInput = document.getElementById('seedsInput');
+            if (seedsInput && seedsInput.value) {
+                currentSeeds = seedsInput.value.split(',').map(s => s.trim().toLowerCase()).filter(s => s);
+                renderSeeds();
+            }
+        }
+
+        // ==================== FIM GERENCIAMENTO DE SEEDS ====================
+
+        // ==================== GERENCIAMENTO DE HASHTAGS PARA SCRAPING ====================
+
+        // Renderizar lista de hashtags ordenada alfabeticamente com ícones de edição/exclusão
+        function renderScrapingHashtags() {
+            const scrapingList = document.getElementById('suggestedScrapingList');
+            const scrapingCount = document.getElementById('suggestedScrapingCount');
+
+            if (!scrapingList) return;
+
+            // Ordenar alfabeticamente
+            const sortedHashtags = [...currentSuggestedHashtags].sort((a, b) => a.localeCompare(b));
+
+            scrapingCount.textContent = `(${currentSuggestedHashtags.length})`;
+
+            if (sortedHashtags.length === 0) {
+                scrapingList.innerHTML = '<div style="color: var(--aic-gray); font-size: 0.85em; padding: 8px;">Nenhuma hashtag sugerida.</div>';
+            } else {
+                scrapingList.innerHTML = sortedHashtags.map(tag => {
+                    const safeTag = escapeHTML(tag);
+                    return `<div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: rgba(251, 191, 36, 0.1); border-radius: 6px; border: 1px solid rgba(251, 191, 36, 0.3);">
+                        <span style="color: #fbbf24; font-size: 0.85em;">#${safeTag}</span>
+                        <div style="display: flex; gap: 8px;">
+                            <span style="cursor: pointer; color: #3b82f6; font-size: 0.9em;" onclick="editScrapingHashtag('${safeTag}')" title="Editar">✏️</span>
+                            <span style="cursor: pointer; color: #ef4444; font-size: 0.9em;" onclick="removeScrapingHashtag('${safeTag}')" title="Excluir">🗑️</span>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+        }
+
+        // Remover hashtag da lista
+        function removeScrapingHashtag(tag) {
+            const index = currentSuggestedHashtags.indexOf(tag);
+            if (index > -1) {
+                currentSuggestedHashtags.splice(index, 1);
+                renderScrapingHashtags();
+                console.log('🗑️ Hashtag removida:', tag, '| Restantes:', currentSuggestedHashtags.length);
+
+                // Esconder container se não houver mais hashtags
+                if (currentSuggestedHashtags.length === 0) {
+                    document.getElementById('suggestedScrapingContainer').style.display = 'none';
+                }
+            }
+        }
+
+        // Editar hashtag de scraping
+        function editScrapingHashtag(oldTag) {
+            const newTag = prompt(`Editar hashtag "${oldTag}":`, oldTag);
+            if (!newTag || newTag.trim() === '' || newTag.trim().toLowerCase() === oldTag) return;
+
+            const cleanTag = newTag.trim().toLowerCase().replace(/^#/, '');
+
+            if (cleanTag.includes(' ')) {
+                alert('Hashtags não podem conter espaços.');
+                return;
+            }
+
+            if (currentSuggestedHashtags.includes(cleanTag)) {
+                alert('Esta hashtag já existe na lista.');
+                return;
+            }
+
+            const index = currentSuggestedHashtags.indexOf(oldTag);
+            if (index > -1) {
+                currentSuggestedHashtags[index] = cleanTag;
+                renderScrapingHashtags();
+                console.log('✏️ Hashtag editada:', oldTag, '->', cleanTag);
+            }
+        }
+
+        // Adicionar nova hashtag à lista
+        function addScrapingHashtag() {
+            const input = document.getElementById('newScrapingHashtagInput');
+            let newTag = input.value.trim().toLowerCase();
+
+            // Remover # se o usuário incluiu
+            if (newTag.startsWith('#')) {
+                newTag = newTag.substring(1);
+            }
+
+            // Validações
+            if (!newTag) {
+                alert('Digite uma hashtag para adicionar.');
+                return;
+            }
+
+            if (newTag.includes(' ')) {
+                alert('Hashtags não podem conter espaços.');
+                return;
+            }
+
+            // Verificar se já existe
+            if (currentSuggestedHashtags.includes(newTag)) {
+                alert('Esta hashtag já está na lista.');
+                input.value = '';
+                return;
+            }
+
+            // Adicionar à lista
+            currentSuggestedHashtags.push(newTag);
+            renderScrapingHashtags();
+            input.value = '';
+            console.log('➕ Hashtag adicionada:', newTag, '| Total:', currentSuggestedHashtags.length);
+
+            // Mostrar container se estava oculto
+            document.getElementById('suggestedScrapingContainer').style.display = 'block';
+        }
+
+        // ==================== FIM GERENCIAMENTO DE HASHTAGS PARA SCRAPING ====================
 
         // ==================== SALVAR SEARCH TERMS ====================
         async function saveSearchTerms() {
@@ -2221,7 +2518,6 @@
             const errors = [];
 
             const nichoInput = document.getElementById('nichoInput').value.trim();
-            const seedsInput = document.getElementById('seedsInput').value.trim();
 
             if (!nichoInput) {
                 showFieldError('nichoInput', 'Nicho alvo é obrigatório');
@@ -2229,17 +2525,10 @@
                 isValid = false;
             }
 
-            if (!seedsInput) {
-                showFieldError('seedsInput', 'Seeds são obrigatórias (separe por vírgula)');
+            if (!currentSeeds || currentSeeds.length === 0) {
+                showFieldError('seedsDropdown', 'Seeds são obrigatórias. Adicione manualmente ou use "Gerar Seeds".');
                 errors.push('Seeds');
                 isValid = false;
-            } else {
-                const seeds = seedsInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
-                if (seeds.length === 0) {
-                    showFieldError('seedsInput', 'Digite pelo menos uma seed válida');
-                    errors.push('Seeds válidas');
-                    isValid = false;
-                }
             }
 
             return { isValid, errors };
@@ -2265,8 +2554,7 @@
             const exportFormat = document.getElementById('exportFormat').value; // 'custom' ou 'lookalike'
 
             // Pegar seeds/hashtags do campo
-            const seedsInput = document.getElementById('seedsInput').value.trim();
-            const hashtags = seedsInput ? seedsInput.split(',').map(s => s.trim().replace('#', '')).filter(s => s) : [];
+            const hashtags = currentSeeds.length > 0 ? [...currentSeeds] : [];
 
             btn.disabled = true;
             btn.innerHTML = '⏳ Exportando...';
@@ -2355,10 +2643,9 @@
             }
 
             const nichoInput = document.getElementById('nichoInput').value.trim();
-            const seedsInput = document.getElementById('seedsInput').value.trim();
 
-            // Processar seeds (já validadas acima)
-            const seeds = seedsInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+            // Usar seeds do array global (já validadas acima)
+            const seeds = [...currentSeeds];
 
             // ========== RESET DE ESTADOS ANTERIORES ==========
             // Evita reutilização de dados de nichos anteriores
@@ -3462,6 +3749,8 @@
         let loadedCampaignName = null;
         // Armazenar hashtags sugeridas para scraping (usadas pelo botão Gerar Search Terms)
         let currentSuggestedHashtags = [];
+        // Armazenar seeds definidas
+        let currentSeeds = [];
 
         // Status da campanha (pipeline lifecycle)
         let currentCampaignStatus = null;
@@ -4144,7 +4433,17 @@
 
                     // Preencher campos principais
                     document.getElementById('nichoInput').value = campaign.nicho_principal || '';
-                    document.getElementById('seedsInput').value = Array.isArray(campaign.keywords) ? campaign.keywords.join(', ') : '';
+
+                    // Inicializar seeds e renderizar lista
+                    if (Array.isArray(campaign.keywords) && campaign.keywords.length > 0) {
+                        currentSeeds = campaign.keywords.map(s => s.toLowerCase().trim());
+                        document.getElementById('seedsInput').value = currentSeeds.join(', ');
+                        renderSeeds();
+                    } else {
+                        currentSeeds = [];
+                        document.getElementById('seedsInput').value = '';
+                        renderSeeds();
+                    }
 
                     // Preencher descricao e publico alvo
                     document.getElementById('serviceDescription').value = campaign.service_description || '';
@@ -4385,7 +4684,7 @@
                     project_name: projectName,
                     campaign_name: campaignName,
                     nicho: document.getElementById('nichoInput').value.trim(),
-                    keywords: document.getElementById('seedsInput').value.split(',').map(k => k.trim()).filter(k => k),
+                    keywords: currentSeeds.length > 0 ? currentSeeds : [],
                     service_description: serviceDescription,
                     target_audience: targetAudience,
                     target_age_range: document.getElementById('targetAgeRange').value.trim() || null,
@@ -4393,7 +4692,9 @@
                     target_location: document.getElementById('targetLocation').value.trim() || null,
                     target_income_class: document.getElementById('targetIncomeClass').value || null,
                     whapi_channel_uuid: document.getElementById('whapiChannelSelect').value || null,
-                    analysis_result: currentValidation
+                    analysis_result: currentValidation,
+                    // Extrair lead_ids do resultado do CLUSTERING (não da validação)
+                    lead_ids: currentClusteringResult?.collected_lead_ids || []
                 };
 
                 const response = await fetch(`${API_BASE}/save-analysis`, {
@@ -4503,7 +4804,6 @@
                 return;
             }
 
-            const seedsInput = document.getElementById('seedsInput').value.trim();
             const nichoInput = document.getElementById('nichoInput').value.trim();
             const mode = document.getElementById('clusteringMode')?.value || 'vector';
 
@@ -4513,9 +4813,7 @@
             }
 
             const isVectorMode = mode === 'vector' || mode === 'vector_hashtag';
-            const seeds = isVectorMode
-                ? (seedsInput ? seedsInput.split(',').map(s => s.trim()).filter(s => s.length > 0) : [])
-                : seedsInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+            const seeds = [...currentSeeds];
 
             if (!isVectorMode && seeds.length === 0) {
                 alert('Preencha seeds antes de executar clustering no modo hashtags');
@@ -4583,6 +4881,25 @@
 
                 if (result.success && result.data) {
                     currentClusteringResult = result.data;
+
+                    // Coletar todos os lead_ids de todos os clusters para persistência
+                    const allLeadIds = [];
+                    if (result.data.clusters && Array.isArray(result.data.clusters)) {
+                        result.data.clusters.forEach(cluster => {
+                            if (cluster.lead_ids && Array.isArray(cluster.lead_ids)) {
+                                allLeadIds.push(...cluster.lead_ids);
+                            } else if (cluster.leads && Array.isArray(cluster.leads)) {
+                                // Fallback: extrair IDs do array de leads
+                                cluster.leads.forEach(lead => {
+                                    if (lead.id) allLeadIds.push(lead.id);
+                                });
+                            }
+                        });
+                    }
+                    // Guardar lead_ids únicos no resultado do clustering
+                    currentClusteringResult.collected_lead_ids = [...new Set(allLeadIds)];
+                    console.log(`   📥 Coletados ${currentClusteringResult.collected_lead_ids.length} lead_ids únicos para persistência`);
+
                     renderClusteringResults(result.data);
 
                     // Salvar resultado do clustering no nicho ativo da campanha

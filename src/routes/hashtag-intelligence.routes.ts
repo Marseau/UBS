@@ -6,6 +6,7 @@ import { clusteringEngineService } from '../services/clustering-engine.service';
 import { vectorClusteringService, executeHashtagVectorClustering, executeGraphClustering } from '../services/vector-clustering.service';
 import { campaignDocumentProcessor } from '../services/campaign-document-processor.service';
 import { suggestSeeds, validateSeeds } from '../services/seed-suggester.service';
+import { leadPreFilterService, PreFilterContext, LeadToFilter } from '../services/lead-prefilter.service';
 
 const router = express.Router();
 
@@ -1428,7 +1429,8 @@ router.post('/save-analysis', async (req, res) => {
       target_location,
       target_income_class,
       whapi_channel_uuid,
-      analysis_result
+      analysis_result,
+      lead_ids  // IDs dos leads do nicho para persistir em campaign_leads
     } = req.body;
 
     // Validações
@@ -1539,7 +1541,54 @@ router.post('/save-analysis', async (req, res) => {
       console.log(`   🆕 Nova campanha criada: ${campaignId}`);
     }
 
-    // 3. Salvar insights comportamentais da IA (se houver dados de IA)
+    // === 3. PERSISTIR LEADS DO NICHO EM CAMPAIGN_LEADS ===
+    if (lead_ids && Array.isArray(lead_ids) && lead_ids.length > 0) {
+      console.log(`   👥 Persistindo ${lead_ids.length} leads do nicho em campaign_leads...`);
+
+      // Remover leads antigos da campanha (se update)
+      if (isUpdate) {
+        const { error: deleteError } = await supabase
+          .from('campaign_leads')
+          .delete()
+          .eq('campaign_id', campaignId);
+
+        if (deleteError) {
+          console.error(`   ⚠️ Erro ao remover leads antigos: ${deleteError.message}`);
+        } else {
+          console.log(`   🗑️ Leads antigos removidos`);
+        }
+      }
+
+      // Inserir novos leads em batches de 500
+      const batchSize = 500;
+      let insertedCount = 0;
+
+      for (let i = 0; i < lead_ids.length; i += batchSize) {
+        const batch = lead_ids.slice(i, i + batchSize);
+        const records = batch.map((lead_id: string) => ({
+          campaign_id: campaignId,
+          lead_id,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        }));
+
+        const { error: insertError } = await supabase
+          .from('campaign_leads')
+          .upsert(records, { onConflict: 'campaign_id,lead_id', ignoreDuplicates: true });
+
+        if (insertError) {
+          console.error(`   ⚠️ Erro ao inserir batch ${i / batchSize + 1}: ${insertError.message}`);
+        } else {
+          insertedCount += batch.length;
+        }
+      }
+
+      console.log(`   ✅ ${insertedCount} leads persistidos em campaign_leads`);
+    } else {
+      console.log(`   ⚠️ Nenhum lead_id fornecido para persistir`);
+    }
+
+    // 4. Salvar insights comportamentais da IA (se houver dados de IA)
     if (analysis_result.aic_engine) {
       // Verificar se já existe cluster dinâmico para este nicho
       let clusterId: string | null = null;
@@ -2338,7 +2387,10 @@ router.post('/execute-clustering', async (req, res) => {
       // Mínimo de leads por cluster (opcional)
       min_leads_per_cluster,
       // Limite de leads desejados (default: 2000)
-      max_leads
+      max_leads,
+      // === FILTROS DE NICHO (NOVO) ===
+      filter_by_seeds = true, // Por padrão, filtra leads que têm as seeds
+      lead_ids                // IDs específicos dos leads do nicho (alternativa)
     } = req.body;
 
     if (!seeds || !Array.isArray(seeds) || seeds.length === 0) {
@@ -2378,7 +2430,10 @@ router.post('/execute-clustering', async (req, res) => {
       target_states: target_states as string[] | undefined,
       lead_max_age_days: lead_max_age_days as number | undefined,
       hashtag_max_age_days: hashtag_max_age_days as number | undefined,
-      max_leads: max_leads as number | undefined
+      max_leads: max_leads as number | undefined,
+      // === FILTROS DE NICHO (NOVO) ===
+      filter_by_seeds: filter_by_seeds as boolean,
+      lead_ids: lead_ids as string[] | undefined
     };
 
     console.log(`\n🔬 [API] POST /execute-clustering - Nicho: ${nicho}, Seeds: [${(seeds || []).join(', ')}]`);
@@ -2387,6 +2442,7 @@ router.post('/execute-clustering', async (req, res) => {
     if (target_states?.length) console.log(`   🗺️  Estados: [${target_states.join(', ')}]`);
     console.log(`   📅 Recência: leads ≤${lead_max_age_days || 45}d, hashtags ≤${hashtag_max_age_days || 90}d`);
     console.log(`   📊 Limite de leads: ${max_leads || 2000}`);
+    console.log(`   🎯 Filtro nicho: ${lead_ids?.length ? `${lead_ids.length} lead_ids` : filter_by_seeds ? 'por seeds' : 'DESATIVADO'}`);
 
     let result;
     if (isGraphMode) {
@@ -2498,6 +2554,9 @@ router.post('/execute-clustering', async (req, res) => {
           console.log(`   ✅ ${subclustersToInsert.length} subclusters salvos em campaign_subclusters`);
         }
       }
+
+      // NOTA: A persistência de leads em campaign_leads é feita no /save-analysis
+      // O clustering apenas retorna os lead_ids em cada cluster para o frontend coletar
     }
 
     return res.json({
@@ -5478,6 +5537,259 @@ router.post('/save-search-terms', async (req, res) => {
 
   } catch (error: any) {
     console.error('❌ Erro em /save-search-terms:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/hashtag-intelligence/update-campaign-seeds
+ * Atualiza as seeds/keywords de uma campanha
+ */
+router.post('/update-campaign-seeds', async (req, res) => {
+  try {
+    const { campaign_id, seeds } = req.body;
+
+    if (!campaign_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'campaign_id é obrigatório'
+      });
+    }
+
+    if (!seeds || !Array.isArray(seeds)) {
+      return res.status(400).json({
+        success: false,
+        message: 'seeds deve ser um array'
+      });
+    }
+
+    console.log('\n🌱 [API] POST /update-campaign-seeds');
+    console.log(`   📋 Campanha: ${campaign_id}`);
+    console.log(`   #️⃣ Seeds: ${seeds.length}`);
+
+    // Atualizar campanha com as novas seeds
+    const { error } = await supabase
+      .from('cluster_campaigns')
+      .update({
+        keywords: seeds,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', campaign_id);
+
+    if (error) {
+      throw new Error(`Erro ao atualizar seeds: ${error.message}`);
+    }
+
+    console.log('   ✅ Seeds atualizadas com sucesso');
+
+    return res.json({
+      success: true,
+      message: 'Seeds atualizadas com sucesso',
+      data: {
+        campaign_id,
+        seeds_count: seeds.length
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro em /update-campaign-seeds:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/hashtag-intelligence/prefilter-leads
+ *
+ * Pré-filtra leads de um nicho usando IA (GPT-4o-mini).
+ * Analisa a bio de cada lead e classifica como POTENCIAL ou NÃO POTENCIAL
+ * baseado no contexto específico da campanha.
+ *
+ * Body:
+ * {
+ *   hashtags: string[],           // Hashtags do nicho selecionadas
+ *   campaign_target: string,      // "Agências de marketing digital"
+ *   campaign_description?: string, // "Vender plataforma AIC de prospecção"
+ *   ideal_customer?: string,      // "Agências que fazem tráfego pago para clientes"
+ *   exclude_types?: string[],     // ["dentistas", "restaurantes", "lojas"]
+ *   limit?: number,               // Limite de leads (default: sem limite)
+ *   campaign_id?: string          // ID da campanha para salvar resultado
+ * }
+ */
+router.post('/prefilter-leads', async (req, res) => {
+  try {
+    const {
+      hashtags,
+      campaign_target,
+      campaign_description,
+      ideal_customer,
+      exclude_types,
+      limit,
+      campaign_id
+    } = req.body;
+
+    // Validação
+    if (!hashtags || !Array.isArray(hashtags) || hashtags.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parâmetro "hashtags" é obrigatório (array de strings)'
+      });
+    }
+
+    if (!campaign_target || typeof campaign_target !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Parâmetro "campaign_target" é obrigatório'
+      });
+    }
+
+    console.log(`\n🎯 [API] POST /prefilter-leads`);
+    console.log(`📌 Target: ${campaign_target}`);
+    console.log(`#️⃣ Hashtags: ${hashtags.length}`);
+
+    // Construir contexto do pré-filtro
+    const context: PreFilterContext = {
+      campaign_target,
+      campaign_description,
+      ideal_customer,
+      exclude_types
+    };
+
+    // Buscar leads do nicho
+    const leads = await leadPreFilterService.getLeadsFromNiche(hashtags, limit);
+
+    if (leads.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          total_leads: 0,
+          potential_leads: 0,
+          filtered_out_leads: 0,
+          filter_rate: 0,
+          leads: [],
+          processing_time_ms: 0,
+          tokens_used: 0,
+          estimated_cost_usd: 0
+        },
+        message: 'Nenhum lead encontrado para as hashtags selecionadas'
+      });
+    }
+
+    // Aplicar pré-filtro IA
+    const result = await leadPreFilterService.filterLeads(leads, context);
+
+    // Salvar resultado se campaign_id foi fornecido
+    if (campaign_id) {
+      await leadPreFilterService.savePreFilterResult(campaign_id, result, context);
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        total_leads: result.total_leads,
+        potential_leads: result.potential_leads,
+        filtered_out_leads: result.filtered_out_leads,
+        filter_rate: Math.round(result.filter_rate * 10) / 10,
+        processing_time_ms: result.processing_time_ms,
+        tokens_used: result.tokens_used,
+        estimated_cost_usd: Math.round(result.estimated_cost_usd * 10000) / 10000,
+        // Retornar apenas leads potenciais com resumo
+        leads: result.leads.filter(l => l.is_potential).map(l => ({
+          id: l.id,
+          username: l.username,
+          bio: l.bio?.substring(0, 200) + (l.bio && l.bio.length > 200 ? '...' : ''),
+          business_category: l.business_category,
+          filter_reason: l.filter_reason,
+          confidence: l.confidence,
+          whatsapp_number: l.whatsapp_number ? 'Sim' : 'Não'
+        })),
+        // Stats dos filtrados
+        filtered_out_summary: result.leads
+          .filter(l => !l.is_potential)
+          .reduce((acc, l) => {
+            const reason = l.filter_reason || 'Outro';
+            acc[reason] = (acc[reason] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>)
+      },
+      message: `Pré-filtro aplicado: ${result.potential_leads} leads potenciais de ${result.total_leads} (${Math.round(result.filter_rate)}%)`
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro em /prefilter-leads:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/hashtag-intelligence/prefilter-leads-direct
+ *
+ * Versão direta do pré-filtro - recebe leads já carregados.
+ * Útil para integração com outros endpoints que já têm os leads.
+ *
+ * Body:
+ * {
+ *   leads: LeadToFilter[],        // Array de leads com id, username, bio, business_category
+ *   campaign_target: string,      // "Agências de marketing digital"
+ *   campaign_description?: string,
+ *   ideal_customer?: string,
+ *   exclude_types?: string[]
+ * }
+ */
+router.post('/prefilter-leads-direct', async (req, res) => {
+  try {
+    const {
+      leads,
+      campaign_target,
+      campaign_description,
+      ideal_customer,
+      exclude_types
+    } = req.body;
+
+    // Validação
+    if (!leads || !Array.isArray(leads) || leads.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parâmetro "leads" é obrigatório (array de objetos com id, username, bio)'
+      });
+    }
+
+    if (!campaign_target) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parâmetro "campaign_target" é obrigatório'
+      });
+    }
+
+    console.log(`\n🎯 [API] POST /prefilter-leads-direct`);
+    console.log(`📌 Target: ${campaign_target}`);
+    console.log(`👥 Leads: ${leads.length}`);
+
+    const context: PreFilterContext = {
+      campaign_target,
+      campaign_description,
+      ideal_customer,
+      exclude_types
+    };
+
+    const result = await leadPreFilterService.filterLeads(leads, context);
+
+    return res.json({
+      success: true,
+      data: result,
+      message: `Pré-filtro aplicado: ${result.potential_leads} leads potenciais de ${result.total_leads}`
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro em /prefilter-leads-direct:', error);
     return res.status(500).json({
       success: false,
       message: error.message

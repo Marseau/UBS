@@ -1959,7 +1959,8 @@
                     const data = result.data;
                     const clustersCount = data.clusters?.length || 0;
                     const leadsCount = data.total_leads || 0;
-                    const silhouette = data.avg_intra_similarity || 0;
+                    // Usar cohesion_centroid (KPI PRINCIPAL) com fallback para avg_intra_similarity (deprecated)
+                    const cohesion = data.cohesion_centroid || data.avg_intra_similarity || 0;
 
                     status.innerHTML = `✅ ${clustersCount} clusters, ${leadsCount} leads | <a href="#" onclick="loadClusters(); loadClusterDistribution(); loadContactRateByCluster(); return false;" style="color: var(--aic-green);">Atualizar gráficos</a>`;
 
@@ -1969,19 +1970,19 @@
                         summaryDiv.style.display = 'block';
                         document.getElementById('resultK').textContent = clustersCount;
                         document.getElementById('resultLeads').textContent = leadsCount.toLocaleString();
-                        document.getElementById('resultSilhouette').textContent = silhouette.toFixed(3);
+                        document.getElementById('resultSilhouette').textContent = (cohesion * 100).toFixed(1) + '%';
 
-                        // Qualidade do Silhouette Score
-                        let silLabel, silColor;
-                        if (silhouette >= 0.70) { silLabel = 'Excelente'; silColor = '#10b981'; }
-                        else if (silhouette >= 0.50) { silLabel = 'Bom'; silColor = '#22c55e'; }
-                        else if (silhouette >= 0.35) { silLabel = 'Razoável'; silColor = '#f59e0b'; }
-                        else if (silhouette >= 0.25) { silLabel = 'Aceitável'; silColor = '#f97316'; }
-                        else { silLabel = 'Fraco'; silColor = '#ef4444'; }
+                        // Qualidade do Cohesion Score (avg similarity to centroid)
+                        let cohLabel, cohColor;
+                        if (cohesion >= 0.70) { cohLabel = 'Excelente'; cohColor = '#10b981'; }
+                        else if (cohesion >= 0.50) { cohLabel = 'Bom'; cohColor = '#22c55e'; }
+                        else if (cohesion >= 0.35) { cohLabel = 'Razoável'; cohColor = '#f59e0b'; }
+                        else if (cohesion >= 0.25) { cohLabel = 'Aceitável'; cohColor = '#f97316'; }
+                        else { cohLabel = 'Fraco'; cohColor = '#ef4444'; }
 
-                        document.getElementById('resultSilhouette').style.color = silColor;
-                        document.getElementById('resultSilhouetteLabel').textContent = silLabel;
-                        document.getElementById('resultSilhouetteLabel').style.color = silColor;
+                        document.getElementById('resultSilhouette').style.color = cohColor;
+                        document.getElementById('resultSilhouetteLabel').textContent = cohLabel;
+                        document.getElementById('resultSilhouetteLabel').style.color = cohColor;
 
                         // Método usado
                         const methodLabel = mode === 'vector' ? 'Vector (embeddings)'
