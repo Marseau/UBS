@@ -2180,43 +2180,78 @@ router.post('/generate-search-terms', async (req, res) => {
     console.log(`   📁 Projeto: ${project_name}`);
     console.log(`   🏷️  Nicho: ${nicho_principal}${nicho_secundario ? ` / ${nicho_secundario}` : ''}`);
 
-    // Construir array de search_terms (pares termo/hashtag)
-    const searchTerms: Array<{ termo: string; hashtag: string }> = [];
+    // Coletar todas as hashtags normalizadas
+    const allHashtags: string[] = [];
 
     // 1. Adicionar hashtags raiz (≥70 freq)
     if (hashtags_raiz && Array.isArray(hashtags_raiz)) {
       for (const h of hashtags_raiz) {
-        const hashtag = h.hashtag.replace(/^#/, '').toLowerCase();
-        searchTerms.push({
-          termo: hashtag,
-          hashtag: hashtag
-        });
+        const hashtag = h.hashtag.replace(/^#/, '').toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+        if (!allHashtags.includes(hashtag)) {
+          allHashtags.push(hashtag);
+        }
       }
     }
 
     // 2. Adicionar hashtags recomendadas (20-69 freq)
     if (hashtags_recomendadas && Array.isArray(hashtags_recomendadas)) {
       for (const h of hashtags_recomendadas) {
-        // Formato pode ser "#hashtag (freq)" ou apenas "hashtag"
-        const cleanHashtag = h.replace(/^#/, '').replace(/\s*\(\d+\)\s*$/, '').toLowerCase();
-        // Evitar duplicatas
-        if (!searchTerms.some(st => st.hashtag === cleanHashtag)) {
-          searchTerms.push({
-            termo: cleanHashtag,
-            hashtag: cleanHashtag
-          });
+        const cleanHashtag = h.replace(/^#/, '').replace(/\s*\(\d+\)\s*$/, '').toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+        if (!allHashtags.includes(cleanHashtag)) {
+          allHashtags.push(cleanHashtag);
         }
       }
     }
 
-    if (searchTerms.length === 0) {
+    if (allHashtags.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Nenhum search term para gerar. Forneça hashtags_raiz ou hashtags_recomendadas.'
       });
     }
 
-    console.log(`   📊 Total de search terms: ${searchTerms.length}`);
+    console.log(`   📊 Total de hashtags: ${allHashtags.length}`);
+
+    // Humanizar via GPT (batch)
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    console.log('   🤖 Humanizando hashtags via GPT...');
+    const humanizePrompt = `Converta cada hashtag abaixo em texto legível em português (com espaços e acentos corretos).
+Retorne APENAS um JSON array com os textos humanizados, na mesma ordem.
+
+Hashtags:
+${allHashtags.map((h, i) => `${i + 1}. ${h}`).join('\n')}
+
+Exemplo:
+- gestaodeleads → gestão de leads
+- marketingdigital → marketing digital
+
+Retorne apenas o JSON array, sem markdown:`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: humanizePrompt }],
+      temperature: 0.1
+    });
+
+    let humanizedTerms: string[] = [];
+    try {
+      const responseText = completion.choices[0].message.content.trim();
+      humanizedTerms = JSON.parse(responseText);
+      console.log('   ✅ Humanização concluída');
+    } catch (parseError) {
+      console.warn('   ⚠️ Erro ao parsear resposta GPT, usando hashtags originais');
+      humanizedTerms = allHashtags;
+    }
+
+    // Montar search_terms
+    const searchTerms = allHashtags.map((hashtag, i) => ({
+      termo: humanizedTerms[i] || hashtag,
+      hashtag: hashtag
+    }));
 
     // Construir categoria_geral com nicho secundário se existir
     const categoriaGeral = nicho_secundario
@@ -3568,12 +3603,12 @@ FORMATO (JSON):
 
       console.log(`      ✅ Copy única gerada para campanha`);
 
-      // Salvar copy na tabela de campanhas (campaign_clusters ou outro campo)
+      // Salvar copy na tabela de campanhas
       const { error: copyUpdateError } = await supabase
-        .from('campaign_clusters')
+        .from('cluster_campaigns')
         .update({
-          copies: campaignCopy,
-          copies_generated_at: new Date().toISOString()
+          generated_copies: JSON.stringify(campaignCopy),
+          generated_copies_at: new Date().toISOString()
         })
         .eq('id', campaign_id);
 
@@ -5485,25 +5520,49 @@ router.post('/save-search-terms', async (req, res) => {
 
     const targetSegment = `${campaign_name} ${dateStr}`;
 
-    // Formatar hashtags no formato JSONB esperado
-    // termo: texto humanizado com espaços e acentos (ex: "gestão de leads")
-    // hashtag: formato normalizado sem espaços (ex: "gestaodeleads")
-    const searchTerms = hashtags.map((tag: string) => {
-      // Normalizar hashtag (remover acentos, espaços, etc)
-      const normalized = tag
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]/g, '');
+    // Normalizar hashtags primeiro
+    const normalizedHashtags = hashtags.map((tag: string) =>
+      tag.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
+    );
 
-      // Humanizar para termo legível com espaços e acentuação
-      const humanized = humanizeHashtag(normalized);
+    // Humanizar via GPT (batch para eficiência)
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-      return {
-        termo: humanized,
-        hashtag: normalized
-      };
+    console.log('   🤖 Humanizando hashtags via GPT...');
+    const humanizePrompt = `Converta cada hashtag abaixo em texto legível em português (com espaços e acentos corretos).
+Retorne APENAS um JSON array com os textos humanizados, na mesma ordem.
+
+Hashtags:
+${normalizedHashtags.map((h, i) => `${i + 1}. ${h}`).join('\n')}
+
+Exemplo de conversão:
+- gestaodeleads → gestão de leads
+- marketingdigital → marketing digital
+- inteligenciaartificial → inteligência artificial
+
+Retorne apenas o JSON array, sem markdown:`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: humanizePrompt }],
+      temperature: 0.1
     });
+
+    let humanizedTerms: string[] = [];
+    try {
+      const responseText = completion.choices[0].message.content.trim();
+      humanizedTerms = JSON.parse(responseText);
+    } catch (parseError) {
+      console.warn('   ⚠️ Erro ao parsear resposta GPT, usando hashtags originais');
+      humanizedTerms = normalizedHashtags;
+    }
+
+    // Montar search_terms com termo humanizado e hashtag normalizada
+    const searchTerms = normalizedHashtags.map((hashtag, i) => ({
+      termo: humanizedTerms[i] || hashtag,
+      hashtag: hashtag
+    }));
 
     // Inserir na tabela lead_search_terms usando insert direto do Supabase
     // Nota: terms_count é coluna gerada automaticamente (jsonb_array_length)
