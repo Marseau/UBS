@@ -2167,6 +2167,10 @@ export async function scrapeInstagramTag(
           }
 
           if (throwOnFail) {
+            // 🔧 FIX: Preservar erro SESSION_INVALID para acionar rotação de conta
+            if (error?.message?.includes('SESSION_INVALID')) {
+              throw error;
+            }
             throw new Error(`Mural da hashtag não carregou a tempo. URL: ${currentUrl}, Posts: ${postCount}, Login: ${hasLoginForm}`);
           }
           return false;

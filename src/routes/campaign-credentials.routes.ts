@@ -11,6 +11,13 @@ import { Router, Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { credentialsVault } from '../services/credentials-vault.service';
 import { whatsappSessionManager } from '../services/whatsapp-session-manager.service';
+import {
+  authenticateAIC,
+  optionalAuthAIC,
+  checkCampaignAccess,
+  requireCampaignAccess,
+  AuthenticatedRequest
+} from '../middleware/aic-auth.middleware';
 
 const router = Router();
 
@@ -712,11 +719,12 @@ router.patch('/instagram/accounts/:accountId/status', async (req: Request, res: 
 /**
  * GET /api/campaigns/available
  * Lista campanhas disponiveis para onboarding (sem credenciais configuradas)
+ * Filtrada por user_id para usuarios normais; admin ve todas
  */
-router.get('/campaigns/available', async (req: Request, res: Response): Promise<void> => {
+router.get('/campaigns/available', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    // Buscar todas as campanhas que nao estao com status 'approved' ou 'active'
-    const { data: campaigns, error } = await supabase
+    // Construir query base
+    let query = supabase
       .from('cluster_campaigns')
       .select(`
         id,
@@ -724,10 +732,18 @@ router.get('/campaigns/available', async (req: Request, res: Response): Promise<
         nicho_principal,
         business_name,
         cluster_status,
-        created_at
+        created_at,
+        user_id
       `)
       .order('created_at', { ascending: false })
       .limit(50);
+
+    // Filtrar por user_id se nao for admin
+    if (req.userId && !req.isAdmin) {
+      query = query.eq('user_id', req.userId);
+    }
+
+    const { data: campaigns, error } = await query;
 
     if (error) {
       throw error;
@@ -778,8 +794,9 @@ router.get('/campaigns/available', async (req: Request, res: Response): Promise<
 /**
  * GET /api/campaigns/:campaignId
  * Retorna dados da campanha
+ * Verifica acesso baseado em user_id (admin ve todas)
  */
-router.get('/campaigns/:campaignId', async (req: Request, res: Response): Promise<void> => {
+router.get('/campaigns/:campaignId', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const campaignId = req.params.campaignId;
     if (!campaignId) {
@@ -787,7 +804,8 @@ router.get('/campaigns/:campaignId', async (req: Request, res: Response): Promis
       return;
     }
 
-    const { data: campaign, error } = await supabase
+    // Construir query base
+    let query = supabase
       .from('cluster_campaigns')
       .select(`
         id,
@@ -798,10 +816,17 @@ router.get('/campaigns/:campaignId', async (req: Request, res: Response): Promis
         target_audience,
         cluster_status,
         business_name,
-        created_at
+        created_at,
+        user_id
       `)
-      .eq('id', campaignId)
-      .single();
+      .eq('id', campaignId);
+
+    // Filtrar por user_id se nao for admin
+    if (req.userId && !req.isAdmin) {
+      query = query.eq('user_id', req.userId);
+    }
+
+    const { data: campaign, error } = await query.single();
 
     if (error || !campaign) {
       console.error('[Campaign Credentials] Campaign fetch error:', error);
@@ -823,12 +848,20 @@ router.get('/campaigns/:campaignId', async (req: Request, res: Response): Promis
 /**
  * POST /api/campaigns/:campaignId/activate
  * Ativa a campanha apos configuracao usando a funcao SQL que atualiza os FKs
+ * Requer autenticacao e verifica acesso a campanha
  */
-router.post('/campaigns/:campaignId/activate', async (req: Request, res: Response): Promise<void> => {
+router.post('/campaigns/:campaignId/activate', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const campaignId = req.params.campaignId;
     if (!campaignId) {
       res.status(400).json({ error: 'campaignId is required' });
+      return;
+    }
+
+    // Verificar acesso a campanha
+    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess) {
+      res.status(404).json({ error: 'Campaign not found' });
       return;
     }
 
@@ -886,12 +919,20 @@ router.post('/campaigns/:campaignId/activate', async (req: Request, res: Respons
 /**
  * GET /api/campaigns/:campaignId/credentials-status
  * Retorna status das credenciais configuradas
+ * Verifica acesso a campanha
  */
-router.get('/campaigns/:campaignId/credentials-status', async (req: Request, res: Response): Promise<void> => {
+router.get('/campaigns/:campaignId/credentials-status', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const campaignId = req.params.campaignId;
     if (!campaignId) {
       res.status(400).json({ error: 'campaignId is required' });
+      return;
+    }
+
+    // Verificar acesso a campanha
+    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess) {
+      res.status(404).json({ error: 'Campaign not found' });
       return;
     }
 
@@ -942,12 +983,20 @@ router.get('/campaigns/:campaignId/credentials-status', async (req: Request, res
 /**
  * GET /api/campaigns/:campaignId/briefing
  * Retorna o briefing de uma campanha
+ * Verifica acesso a campanha
  */
-router.get('/campaigns/:campaignId/briefing', async (req: Request, res: Response): Promise<void> => {
+router.get('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const campaignId = req.params.campaignId;
     if (!campaignId) {
       res.status(400).json({ error: 'campaignId is required' });
+      return;
+    }
+
+    // Verificar acesso a campanha
+    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess) {
+      res.status(404).json({ error: 'Campaign not found' });
       return;
     }
 
@@ -977,8 +1026,9 @@ router.get('/campaigns/:campaignId/briefing', async (req: Request, res: Response
 /**
  * POST /api/campaigns/:campaignId/briefing
  * Cria ou atualiza o briefing de uma campanha
+ * Verifica acesso a campanha
  */
-router.post('/campaigns/:campaignId/briefing', async (req: Request, res: Response): Promise<void> => {
+router.post('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const campaignId = req.params.campaignId;
     if (!campaignId) {
@@ -988,14 +1038,9 @@ router.post('/campaigns/:campaignId/briefing', async (req: Request, res: Respons
 
     const briefingData = req.body;
 
-    // Verificar se campanha existe
-    const { data: campaign, error: campaignError } = await supabase
-      .from('cluster_campaigns')
-      .select('id, campaign_name')
-      .eq('id', campaignId)
-      .single();
-
-    if (campaignError || !campaign) {
+    // Verificar acesso a campanha
+    const { hasAccess, campaign } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess || !campaign) {
       res.status(404).json({ error: 'Campaign not found' });
       return;
     }
@@ -1085,12 +1130,20 @@ router.post('/campaigns/:campaignId/briefing', async (req: Request, res: Respons
 /**
  * GET /api/campaigns/:campaignId/briefing/context
  * Retorna o contexto formatado do briefing para uso pelo agente de IA
+ * Verifica acesso a campanha
  */
-router.get('/campaigns/:campaignId/briefing/context', async (req: Request, res: Response): Promise<void> => {
+router.get('/campaigns/:campaignId/briefing/context', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const campaignId = req.params.campaignId;
     if (!campaignId) {
       res.status(400).json({ error: 'campaignId is required' });
+      return;
+    }
+
+    // Verificar acesso a campanha
+    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess) {
+      res.status(404).json({ error: 'Campaign not found' });
       return;
     }
 
@@ -1116,14 +1169,22 @@ router.get('/campaigns/:campaignId/briefing/context', async (req: Request, res: 
 /**
  * PATCH /api/campaigns/:campaignId/briefing/approve
  * Aprova o briefing de uma campanha
+ * Verifica acesso a campanha
  */
-router.patch('/campaigns/:campaignId/briefing/approve', async (req: Request, res: Response): Promise<void> => {
+router.patch('/campaigns/:campaignId/briefing/approve', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const campaignId = req.params.campaignId;
     const { approvedBy } = req.body;
 
     if (!campaignId) {
       res.status(400).json({ error: 'campaignId is required' });
+      return;
+    }
+
+    // Verificar acesso a campanha
+    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess) {
+      res.status(404).json({ error: 'Campaign not found' });
       return;
     }
 
@@ -1184,8 +1245,9 @@ const upload = multer({
 /**
  * POST /api/campaigns/:campaignId/documents
  * Upload e processa um documento para RAG
+ * Verifica acesso a campanha
  */
-router.post('/campaigns/:campaignId/documents', upload.single('file'), async (req: Request, res: Response): Promise<void> => {
+router.post('/campaigns/:campaignId/documents', optionalAuthAIC, upload.single('file'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const campaignId = req.params.campaignId;
     const { title, docType, content, sourceUrl } = req.body;
@@ -1201,14 +1263,9 @@ router.post('/campaigns/:campaignId/documents', upload.single('file'), async (re
       return;
     }
 
-    // Verificar se campanha existe
-    const { data: campaign, error: campaignError } = await supabase
-      .from('cluster_campaigns')
-      .select('id, campaign_name')
-      .eq('id', campaignId)
-      .single();
-
-    if (campaignError || !campaign) {
+    // Verificar acesso a campanha
+    const { hasAccess, campaign } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess || !campaign) {
       res.status(404).json({ error: 'Campaign not found' });
       return;
     }
@@ -1321,13 +1378,21 @@ router.post('/documents/global', upload.single('file'), async (req: Request, res
 /**
  * GET /api/campaigns/:campaignId/documents
  * Lista documentos de uma campanha
+ * Verifica acesso a campanha
  */
-router.get('/campaigns/:campaignId/documents', async (req: Request, res: Response): Promise<void> => {
+router.get('/campaigns/:campaignId/documents', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const campaignId = req.params.campaignId;
 
     if (!campaignId) {
       res.status(400).json({ error: 'campaignId is required' });
+      return;
+    }
+
+    // Verificar acesso a campanha
+    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess) {
+      res.status(404).json({ error: 'Campaign not found' });
       return;
     }
 
@@ -1366,13 +1431,21 @@ router.get('/documents/global', async (req: Request, res: Response): Promise<voi
 /**
  * DELETE /api/campaigns/:campaignId/documents/:title
  * Desativa um documento (soft delete)
+ * Verifica acesso a campanha
  */
-router.delete('/campaigns/:campaignId/documents/:title', async (req: Request, res: Response): Promise<void> => {
+router.delete('/campaigns/:campaignId/documents/:title', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { campaignId, title } = req.params;
 
     if (!campaignId || !title) {
       res.status(400).json({ error: 'campaignId and title are required' });
+      return;
+    }
+
+    // Verificar acesso a campanha
+    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess) {
+      res.status(404).json({ error: 'Campaign not found' });
       return;
     }
 
@@ -1397,14 +1470,22 @@ router.delete('/campaigns/:campaignId/documents/:title', async (req: Request, re
 /**
  * POST /api/campaigns/:campaignId/documents/:title/reprocess
  * Reprocessa um documento existente com novos parâmetros de chunking
+ * Verifica acesso a campanha
  */
-router.post('/campaigns/:campaignId/documents/:title/reprocess', async (req: Request, res: Response): Promise<void> => {
+router.post('/campaigns/:campaignId/documents/:title/reprocess', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { campaignId, title } = req.params;
     const { maxTokens, overlapTokens } = req.body;
 
     if (!campaignId || !title) {
       res.status(400).json({ error: 'campaignId and title are required' });
+      return;
+    }
+
+    // Verificar acesso a campanha
+    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess) {
+      res.status(404).json({ error: 'Campaign not found' });
       return;
     }
 
@@ -1444,14 +1525,13 @@ router.post('/campaigns/:campaignId/documents/:title/reprocess', async (req: Req
 
 /**
  * GET /api/aic/my-campaigns
- * Lista TODAS as campanhas de TODOS os clientes (para dashboard interno AIC)
+ * Lista campanhas do usuario logado (ou todas para admin)
+ * Filtrado por user_id para usuarios normais
  */
-router.get('/aic/my-campaigns', async (req: Request, res: Response): Promise<void> => {
+router.get('/aic/my-campaigns', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    // Buscar TODAS as campanhas (sem filtro por tenant)
-    // Dashboard é apenas para equipe interna AIC
-    // Inclui project_id para buscar client_name
-    const { data: campaigns, error } = await supabase
+    // Construir query base
+    let query = supabase
       .from('cluster_campaigns')
       .select(`
         id,
@@ -1462,9 +1542,17 @@ router.get('/aic/my-campaigns', async (req: Request, res: Response): Promise<voi
         nicho_principal,
         outreach_enabled,
         created_at,
-        updated_at
+        updated_at,
+        user_id
       `)
       .order('created_at', { ascending: false });
+
+    // Filtrar por user_id se nao for admin
+    if (req.userId && !req.isAdmin) {
+      query = query.eq('user_id', req.userId);
+    }
+
+    const { data: campaigns, error } = await query;
 
     if (error) {
       console.error('[My Campaigns] Error fetching campaigns:', error);
@@ -1498,9 +1586,15 @@ router.get('/aic/my-campaigns', async (req: Request, res: Response): Promise<voi
           .select('*', { count: 'exact', head: true })
           .eq('campaign_id', campaign.id);
 
-        // Calculate conversion rate (exemplo simplificado)
-        const conversionRate = leadsCount && leadsCount > 0
-          ? ((leadsCount * 0.123).toFixed(1)) // Mock calculation
+        // Calcular taxa de WhatsApp (leads com whatsapp_number)
+        const { count: whatsappCount } = await supabase
+          .from('campaign_leads')
+          .select('id, instagram_leads!inner(whatsapp_number)', { count: 'exact', head: true })
+          .eq('campaign_id', campaign.id)
+          .not('instagram_leads.whatsapp_number', 'is', null);
+
+        const whatsappRate = leadsCount && leadsCount > 0
+          ? ((whatsappCount || 0) / leadsCount * 100).toFixed(1)
           : '0';
 
         // Generate slug from campaign name
@@ -1522,7 +1616,7 @@ router.get('/aic/my-campaigns', async (req: Request, res: Response): Promise<voi
           outreach_enabled: campaign.outreach_enabled || false,
           leads_count: leadsCount || 0,
           docs_count: docsCount || 0,
-          conversion_rate: conversionRate,
+          whatsapp_rate: whatsappRate,
           slug: slug,
           created_at: campaign.created_at,
           updated_at: campaign.updated_at
@@ -1543,8 +1637,9 @@ router.get('/aic/my-campaigns', async (req: Request, res: Response): Promise<voi
 /**
  * GET /api/campaign/:identifier
  * Busca campanha por slug ou UUID
+ * Verifica acesso baseado em user_id (admin ve todas)
  */
-router.get('/campaign/:identifier', async (req: Request, res: Response): Promise<void> => {
+router.get('/campaign/:identifier', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { identifier } = req.params;
 
@@ -1559,23 +1654,26 @@ router.get('/campaign/:identifier', async (req: Request, res: Response): Promise
     let campaign;
 
     if (isUUID) {
-      // Search by ID
-      const { data, error } = await supabase
-        .from('cluster_campaigns')
-        .select('*')
-        .eq('id', identifier)
-        .single();
+      // Search by ID - verificar acesso
+      const { hasAccess, campaign: foundCampaign } = await checkCampaignAccess(identifier, req.userId, req.isAdmin || false);
 
-      if (error || !data) {
+      if (!hasAccess || !foundCampaign) {
         res.status(404).json({ error: 'Campaign not found' });
         return;
       }
-      campaign = data;
+      campaign = foundCampaign;
     } else {
       // Search by slug (fuzzy match on campaign_name)
-      const { data: campaigns, error } = await supabase
+      let query = supabase
         .from('cluster_campaigns')
         .select('*');
+
+      // Filtrar por user_id se nao for admin
+      if (req.userId && !req.isAdmin) {
+        query = query.eq('user_id', req.userId);
+      }
+
+      const { data: campaigns, error } = await query;
 
       if (error) {
         res.status(500).json({ error: 'Failed to search campaigns' });
@@ -1599,9 +1697,23 @@ router.get('/campaign/:identifier', async (req: Request, res: Response): Promise
       }
     }
 
+    // Buscar client_name do projeto associado
+    let clientName = null;
+    if (campaign.project_id) {
+      const { data: project } = await supabase
+        .from('cluster_projects')
+        .select('client_name')
+        .eq('id', campaign.project_id)
+        .single();
+      clientName = project?.client_name || null;
+    }
+
     res.json({
       success: true,
-      campaign: campaign
+      campaign: {
+        ...campaign,
+        client_name: clientName
+      }
     });
   } catch (error: any) {
     console.error('[Campaign Lookup] Error:', error);
@@ -1613,8 +1725,9 @@ router.get('/campaign/:identifier', async (req: Request, res: Response): Promise
  * POST /api/campaigns/create
  * Cria uma nova campanha AIC
  * Integra com a hierarquia: Cliente -> Projeto (cluster_projects) -> Campanha (cluster_campaigns)
+ * Associa automaticamente ao user_id do usuario logado
  */
-router.post('/campaigns/create', async (req: Request, res: Response): Promise<void> => {
+router.post('/campaigns/create', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const {
       name,
@@ -1702,12 +1815,13 @@ router.post('/campaigns/create', async (req: Request, res: Response): Promise<vo
       }
     }
 
-    // Create campaign with correct AIC fields + client data + project_id
+    // Create campaign with correct AIC fields + client data + project_id + user_id
     const { data: campaign, error } = await supabase
       .from('cluster_campaigns')
       .insert({
         campaign_name: name,
         project_id: projectId, // Vincular ao projeto
+        user_id: req.userId || null, // Vincular ao usuario logado
         nicho_principal: 'a definir',
         keywords: [],
         service_description: objectiveMap[objective] || 'A definir durante briefing',
@@ -1745,10 +1859,30 @@ router.post('/campaigns/create', async (req: Request, res: Response): Promise<vo
 
     console.log(`[Create Campaign] Success: ${campaign.id} - ${name} (project: ${projectId})`);
 
+    // Criar briefing vazio automaticamente para a campanha
+    const { data: briefing, error: briefingError } = await supabase
+      .from('campaign_briefing')
+      .insert({
+        campaign_id: campaign.id,
+        company_name: business_name || client_contact_name || null,
+        briefing_status: 'draft',
+        completion_percentage: 0
+      })
+      .select()
+      .single();
+
+    if (briefingError) {
+      console.error('[Create Campaign] Error creating briefing:', briefingError);
+      // Não bloquear - briefing pode ser criado depois
+    } else {
+      console.log(`[Create Campaign] Briefing created: ${briefing.id}`);
+    }
+
     res.json({
       success: true,
       campaign: campaign,
       project_id: projectId,
+      briefing_id: briefing?.id || null,
       message: 'Campaign created successfully'
     });
   } catch (error: any) {

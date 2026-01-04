@@ -348,9 +348,12 @@ export async function detectLanguage(
   // ========================================
   // PASSO 1: Verificar características EXCLUSIVAS de português
   // ========================================
-  // Ç, Ã, Õ, LH, NH são exclusivos de português (não existem em espanhol)
-  // Também: palavras com acentos típicos PT-BR (é, á, í, ó, ú em contextos específicos)
-  const hasPortugueseChars = /[çãõ]|lh|nh/i.test(bio);
+  // ACENTOS EXCLUSIVOS PT: ç, ã, õ, â, ê, ô (ES e IT não usam)
+  // DÍGRAFOS EXCLUSIVOS PT: lh, nh (ES usa ll/ñ, IT usa gl/gn)
+  // TERMINAÇÕES EXCLUSIVAS PT: -ção (ES: -ción), -eiro/a (ES: -ero/a), -inho/a (ES: -ito/a)
+  // SÍMBOLOS BR: 🇧🇷, R$, PIX
+  // CONTRAÇÕES INFORMAIS: tô, tá, pra, pro, vc, tbm, blz
+  const hasPortugueseChars = /[çãõâêô]|lh|nh|ção\b|eir[oa]s?\b|inh[oa]s?\b|\u{1F1E7}\u{1F1F7}|R\$\s*\d|\bpix\b|\b(tô|tá|pra|pro|vc|tbm|blz)\b/iu.test(bio);
 
   // Palavras com acentos que são EXCLUSIVAS ou muito mais comuns em PT-BR
   // Sem \b porque bios do Instagram frequentemente têm palavras grudadas
@@ -389,6 +392,23 @@ export async function detectLanguage(
     // Mapeia ISO 639-3 para ISO 639-1
     detectedLang = ISO_639_3_TO_639_1[detectedISO3]!; // Non-null assertion - já verificado acima
     console.log(`   🤖 Franc detectou: ${detectedLang} (ISO3: ${detectedISO3})`);
+
+    // ========================================
+    // CORREÇÃO ITALIANO: Acentos agudos (í, ú, á, ó) NÃO existem em italiano
+    // Italiano usa principalmente graves (à, è, ì, ò, ù)
+    // Se Franc retornou IT mas tem acentos agudos → forçar reavaliação PT/ES
+    // ========================================
+    if (detectedLang === 'it' && /[íúáó]/i.test(bio)) {
+      console.log(`   ⚠️ Franc detectou IT mas bio tem acentos agudos (í/ú/á/ó) - reavaliando como PT/ES`);
+      const langScore = calculateLanguageScore(bio);
+      if (langScore.pt >= langScore.es) {
+        detectedLang = 'pt';
+        console.log(`   🎯 Corrigido IT → PT (score PT=${langScore.pt} >= ES=${langScore.es})`);
+      } else {
+        detectedLang = 'es';
+        console.log(`   🎯 Corrigido IT → ES (score ES=${langScore.es} > PT=${langScore.pt})`);
+      }
+    }
   }
 
   // ========================================

@@ -1712,15 +1712,16 @@
                     </div>
 
                     <!-- Conteudo Gerado por Cluster (Visualizacao) -->
-                    <div id="generatedContentSection" style="display: none; margin-top: 30px;">
+                    <div id="clusterContentSection" style="display: none; margin-top: 30px;">
                         <h3 style="color: var(--aic-green); margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
                             <span style="font-size: 1.5em;">📋</span> Conteudo Gerado por Cluster
                         </h3>
-                        <div id="generatedContentTabs" style="display: flex; gap: 10px; margin-bottom: 20px;">
+                        <div id="generatedContentTabs" style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
                             <button class="content-tab active" onclick="showContentTab('personas')" data-tab="personas">Personas</button>
                             <button class="content-tab" onclick="showContentTab('dms')" data-tab="dms">Scripts DM</button>
                             <button class="content-tab" onclick="showContentTab('copies')" data-tab="copies">Copies</button>
-                            <button class="content-tab" onclick="showContentTab('leads')" data-tab="leads">Leads</button>
+                            <!-- Botões de clusters serão inseridos dinamicamente aqui -->
+                            <span id="clusterLeadsButtons" style="display: inline-flex; gap: 8px; margin-left: 10px; padding-left: 10px; border-left: 2px solid #e2e8f0;"></span>
                         </div>
                         <div id="contentPersonas" class="content-panel" style="display: block;"></div>
                         <div id="contentDms" class="content-panel" style="display: none;"></div>
@@ -3948,6 +3949,9 @@
         let subclustersData = [];
 
         // Carregar conteúdo gerado dos subclusters
+        // Variável global para armazenar copies da campanha
+        let campaignCopiesData = null;
+
         async function loadGeneratedContent(campaignId) {
             if (!campaignId) return;
 
@@ -3958,6 +3962,9 @@
                 if (result.success && result.data && result.data.subclusters) {
                     subclustersData = result.data.subclusters;
                     currentSubclusters = result.data.subclusters; // Para verificar status nos cards
+
+                    // Armazenar copies da campanha (vem de cluster_campaigns.generated_copies)
+                    campaignCopiesData = result.data.campaign_copies || null;
 
                     // Verificar se TODOS os clusters estão bloqueados (leads já capturados)
                     const allBlocked = subclustersData.length > 0 && subclustersData.every(sc =>
@@ -3986,17 +3993,17 @@
                         renderClusteringResults(currentClusteringResult);
                     }
 
-                    // Verificar se há conteúdo gerado
-                    const hasContent = subclustersData.some(sc => sc.persona || sc.dm_scripts || sc.copies);
+                    // Verificar se há conteúdo gerado (incluindo copies da campanha)
+                    const hasContent = subclustersData.some(sc => sc.persona || sc.dm_scripts || sc.copies) || campaignCopiesData;
 
                     if (hasContent) {
-                        document.getElementById('generatedContentSection').style.display = 'block';
+                        document.getElementById('clusterContentSection').style.display = 'block';
                         renderPersonasContent();
                         renderDmsContent();
                         renderCopiesContent();
                         renderLeadsContent(campaignId);
                     } else {
-                        document.getElementById('generatedContentSection').style.display = 'none';
+                        document.getElementById('clusterContentSection').style.display = 'none';
                     }
                 }
             } catch (error) {
@@ -4103,88 +4110,209 @@
         function renderCopiesContent() {
             const container = document.getElementById('contentCopies');
 
-            // Pegar copies do primeiro cluster que tiver (geralmente são iguais para toda campanha)
-            const scWithCopies = subclustersData.find(sc => sc.copies);
+            // Usar campaignCopiesData (vem de cluster_campaigns.generated_copies)
+            // Fallback para sc.copies caso antigo (retrocompatibilidade)
+            let copies = campaignCopiesData;
+            if (!copies) {
+                const scWithCopies = subclustersData.find(sc => sc.copies);
+                copies = scWithCopies?.copies;
+            }
 
-            if (!scWithCopies || !scWithCopies.copies) {
+            if (!copies) {
                 container.innerHTML = '<p style="color: #64748b; text-align: center; padding: 40px;">Nenhuma copy gerada ainda.</p>';
                 return;
             }
 
-            const copies = scWithCopies.copies;
+            // Estrutura real: landing, ads, secoes_dor, secoes_solucao, secoes_beneficios
+            const landing = copies.landing || {};
+            const ads = copies.ads || [];
+            const dores = copies.secoes_dor || [];
+            const solucoes = copies.secoes_solucao || [];
+            const beneficios = copies.secoes_beneficios || [];
+
             container.innerHTML = `
                 <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
-                        <div style="background: rgba(245, 158, 11, 0.15); padding: 15px; border-radius: 8px;">
-                            <h5 style="color: #92400e; margin: 0 0 10px 0;">🎣 Hooks</h5>
-                            <ul style="margin: 0; padding-left: 20px; color: #78350f;">
-                                ${(copies.hooks || []).map(h => `<li style="margin: 5px 0;">${h}</li>`).join('')}
-                            </ul>
-                        </div>
-                        <div style="background: rgba(59, 130, 246, 0.15); padding: 15px; border-radius: 8px;">
-                            <h5 style="color: #1e40af; margin: 0 0 10px 0;">💎 Value Propositions</h5>
-                            <ul style="margin: 0; padding-left: 20px; color: #1e3a8a;">
-                                ${(copies.value_propositions || []).map(v => `<li style="margin: 5px 0;">${v}</li>`).join('')}
-                            </ul>
-                        </div>
-                        <div style="background: rgba(14, 204, 151, 0.15); padding: 15px; border-radius: 8px;">
-                            <h5 style="color: var(--aic-green); margin: 0 0 10px 0;">📢 CTAs</h5>
-                            <ul style="margin: 0; padding-left: 20px; color: #064e3b;">
-                                ${(copies.ctas || []).map(c => `<li style="margin: 5px 0;">${c}</li>`).join('')}
-                            </ul>
-                        </div>
-                        <div style="background: rgba(139, 92, 246, 0.15); padding: 15px; border-radius: 8px;">
-                            <h5 style="color: #5b21b6; margin: 0 0 10px 0;"># Hashtags Recomendadas</h5>
-                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                ${(copies.hashtags_recomendadas || []).map(h => `<span style="background: #c4b5fd; color: #4c1d95; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">${h}</span>`).join('')}
+                    <!-- Landing Page -->
+                    <div style="margin-bottom: 20px;">
+                        <h5 style="color: #1e40af; margin: 0 0 15px 0;">🚀 Landing Page</h5>
+                        <div style="background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 8px;">
+                            <p style="margin: 0 0 8px 0;"><strong style="color: #1e40af;">Headline:</strong> <span style="color: #334155;">${landing.headline || 'N/A'}</span></p>
+                            <p style="margin: 0 0 8px 0;"><strong style="color: #1e40af;">Subheadline:</strong> <span style="color: #64748b;">${landing.subheadline || 'N/A'}</span></p>
+                            <div style="margin: 10px 0;">
+                                <strong style="color: #1e40af;">Bullets:</strong>
+                                <ul style="margin: 5px 0 0 20px; color: #64748b;">
+                                    ${(landing.bullets || []).map(b => `<li style="margin: 3px 0;">${b}</li>`).join('')}
+                                </ul>
                             </div>
+                            <p style="margin: 10px 0 0 0;"><strong style="color: #10b981;">CTA:</strong> <span style="color: #064e3b; font-weight: 600;">${landing.cta || 'N/A'}</span></p>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                        <!-- Ads -->
+                        <div style="background: rgba(245, 158, 11, 0.15); padding: 15px; border-radius: 8px;">
+                            <h5 style="color: #92400e; margin: 0 0 10px 0;">📣 Ads</h5>
+                            ${ads.map(ad => `
+                                <div style="background: white; padding: 10px; border-radius: 6px; margin-bottom: 8px;">
+                                    <span style="background: #fcd34d; color: #78350f; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; text-transform: uppercase;">${ad.tipo}</span>
+                                    <p style="margin: 8px 0 5px 0; color: #64748b; font-size: 0.9em;">${ad.texto}</p>
+                                    <span style="color: #10b981; font-weight: 600; font-size: 0.85em;">→ ${ad.cta}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <!-- Dores -->
+                        <div style="background: rgba(239, 68, 68, 0.15); padding: 15px; border-radius: 8px;">
+                            <h5 style="color: #dc2626; margin: 0 0 10px 0;">💔 Seções de Dor</h5>
+                            <ul style="margin: 0; padding-left: 20px; color: #7f1d1d;">
+                                ${dores.map(d => `<li style="margin: 5px 0;">${d}</li>`).join('')}
+                            </ul>
+                        </div>
+
+                        <!-- Soluções -->
+                        <div style="background: rgba(14, 204, 151, 0.15); padding: 15px; border-radius: 8px;">
+                            <h5 style="color: var(--aic-green); margin: 0 0 10px 0;">✅ Seções de Solução</h5>
+                            <ul style="margin: 0; padding-left: 20px; color: #064e3b;">
+                                ${solucoes.map(s => `<li style="margin: 5px 0;">${s}</li>`).join('')}
+                            </ul>
+                        </div>
+
+                        <!-- Benefícios -->
+                        <div style="background: rgba(139, 92, 246, 0.15); padding: 15px; border-radius: 8px;">
+                            <h5 style="color: #5b21b6; margin: 0 0 10px 0;">🎁 Seções de Benefícios</h5>
+                            <ul style="margin: 0; padding-left: 20px; color: #4c1d95;">
+                                ${beneficios.map(b => `<li style="margin: 5px 0;">${b}</li>`).join('')}
+                            </ul>
                         </div>
                     </div>
                 </div>
             `;
         }
 
-        // Renderizar Leads por Cluster
-        async function renderLeadsContent(campaignId) {
+        // Gerar botões de cluster para leads
+        function renderClusterLeadsButtons(campaignId) {
+            const buttonsContainer = document.getElementById('clusterLeadsButtons');
+            if (!buttonsContainer) return;
+
+            // Usar subclustersData para gerar botões
+            if (!subclustersData || subclustersData.length === 0) {
+                buttonsContainer.innerHTML = '';
+                return;
+            }
+
+            const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            const buttonsHtml = subclustersData.map((sc, idx) => {
+                const letter = letters[idx] || idx;
+                const totalLeads = sc.total_leads || 0;
+                return `
+                    <button class="content-tab cluster-lead-btn"
+                            onclick="loadClusterLeads('${campaignId}', ${sc.cluster_index}, '${escapeHTML(sc.cluster_name || 'Cluster ' + letter)}')"
+                            data-cluster="${sc.cluster_index}"
+                            title="${sc.cluster_name}: ${totalLeads} leads">
+                        Cluster ${letter} <span style="font-size: 0.8em; opacity: 0.8;">(${totalLeads})</span>
+                    </button>
+                `;
+            }).join('');
+
+            buttonsContainer.innerHTML = buttonsHtml;
+        }
+
+        // Estado de paginação do cluster atual
+        let currentClusterPagination = { campaignId: null, clusterId: null, clusterName: '', page: 1 };
+
+        // Carregar leads de um cluster específico com paginação
+        async function loadClusterLeads(campaignId, clusterId, clusterName, page = 1) {
             const container = document.getElementById('contentLeads');
 
+            // Salvar estado de paginação
+            currentClusterPagination = { campaignId, clusterId, clusterName, page };
+
+            // Ativar botão e mostrar painel
+            document.querySelectorAll('.content-tab').forEach(btn => {
+                btn.classList.remove('active');
+                btn.style.background = 'white';
+                btn.style.color = '#667eea';
+            });
+            document.querySelectorAll('.cluster-lead-btn').forEach(btn => {
+                if (btn.dataset.cluster == clusterId) {
+                    btn.classList.add('active');
+                    btn.style.background = '#667eea';
+                    btn.style.color = 'white';
+                }
+            });
+
+            // Mostrar painel de leads
+            document.querySelectorAll('.content-panel').forEach(panel => {
+                panel.style.display = 'none';
+            });
+            container.style.display = 'block';
+
+            container.innerHTML = '<p style="color: #64748b; text-align: center; padding: 40px;">⏳ Carregando leads...</p>';
+
             try {
-                const response = await fetch(`${API_BASE}/campaign/${campaignId}/leads-by-cluster`);
+                const response = await fetch(`${API_BASE}/campaign/${campaignId}/leads-by-cluster?cluster_id=${clusterId}&page=${page}&limit=50`);
                 const result = await response.json();
 
-                if (result.success && result.data && result.data.clusters) {
-                    const clusters = result.data.clusters;
-                    const leadsHtml = clusters.map(cluster => {
-                        const clusterNameRaw = cluster.cluster_name || 'Cluster ' + (cluster.cluster_index ?? '');
-                        const clusterName = escapeHTML(clusterNameRaw);
-                        const totalLeads = Number(cluster.total_leads || 0);
-                        const leadRows = (cluster.leads || []).slice(0, 50).map(lead => {
-                            const username = escapeHTML(lead.username || '');
-                            const fullName = escapeHTML(lead.full_name || '');
-                            const score = Number(lead.fit_score || 0);
-                            const hasContact = Boolean(lead.phone || lead.email);
-                            return `
-                                            <tr>
-                                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">@${username}</td>
-                                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">${fullName}</td>
-                                                <td style="padding: 8px; text-align: center; border-bottom: 1px solid #f1f5f9;">
-                                                    ${hasContact ? '<span style="color: #10b981;">✅</span>' : '<span style="color: #94a3b8;">-</span>'}
-                                                </td>
-                                                <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f1f5f9;">${score.toFixed(0)}</td>
-                                            </tr>
-                            `;
-                        }).join('');
+                if (result.success && result.data && result.data.leads) {
+                    const leads = result.data.leads;
+                    const totalLeads = result.data.total || 0;
+                    const currentPage = result.data.page || 1;
+                    const totalPages = result.data.total_pages || 1;
+                    const hasNext = result.data.has_next;
+                    const hasPrev = result.data.has_prev;
 
+                    const leadRows = leads.map(lead => {
+                        const username = escapeHTML(lead.username || '');
+                        const fullName = escapeHTML(lead.full_name || '');
+                        const score = Number(lead.fit_score || 0);
+                        const hasContact = Boolean(lead.phone || lead.email);
                         return `
-                        <div style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <tr>
+                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; color: #334155;">@${username}</td>
+                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; color: #334155;">${fullName}</td>
+                                <td style="padding: 8px; text-align: center; border-bottom: 1px solid #f1f5f9;">
+                                    ${hasContact ? '<span style="color: #10b981;">✅</span>' : '<span style="color: #94a3b8;">-</span>'}
+                                </td>
+                                <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f1f5f9; color: #334155;">${score.toFixed(2)}</td>
+                            </tr>
+                        `;
+                    }).join('');
+
+                    // Gerar botões de paginação
+                    const paginationHtml = `
+                        <div style="display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 15px; flex-wrap: wrap;">
+                            <button onclick="goToLeadsPage(1)" ${!hasPrev ? 'disabled' : ''}
+                                style="padding: 6px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: ${!hasPrev ? '#f1f5f9' : 'white'}; color: ${!hasPrev ? '#94a3b8' : '#334155'}; cursor: ${!hasPrev ? 'not-allowed' : 'pointer'};">
+                                ⏮ Primeira
+                            </button>
+                            <button onclick="goToLeadsPage(${currentPage - 1})" ${!hasPrev ? 'disabled' : ''}
+                                style="padding: 6px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: ${!hasPrev ? '#f1f5f9' : 'white'}; color: ${!hasPrev ? '#94a3b8' : '#334155'}; cursor: ${!hasPrev ? 'not-allowed' : 'pointer'};">
+                                ◀ Anterior
+                            </button>
+                            <span style="padding: 6px 16px; background: #667eea; color: white; border-radius: 6px; font-weight: 600;">
+                                ${currentPage} / ${totalPages}
+                            </span>
+                            <button onclick="goToLeadsPage(${currentPage + 1})" ${!hasNext ? 'disabled' : ''}
+                                style="padding: 6px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: ${!hasNext ? '#f1f5f9' : 'white'}; color: ${!hasNext ? '#94a3b8' : '#334155'}; cursor: ${!hasNext ? 'not-allowed' : 'pointer'};">
+                                Próxima ▶
+                            </button>
+                            <button onclick="goToLeadsPage(${totalPages})" ${!hasNext ? 'disabled' : ''}
+                                style="padding: 6px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: ${!hasNext ? '#f1f5f9' : 'white'}; color: ${!hasNext ? '#94a3b8' : '#334155'}; cursor: ${!hasNext ? 'not-allowed' : 'pointer'};">
+                                Última ⏭
+                            </button>
+                        </div>
+                    `;
+
+                    container.innerHTML = `
+                        <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                                <h4 style="color: #10b981; margin: 0;">🎯 ${clusterName}</h4>
+                                <h4 style="color: #10b981; margin: 0;">🎯 ${escapeHTML(clusterName)}</h4>
                                 <span style="background: rgba(14, 204, 151, 0.15); color: var(--aic-green); padding: 4px 12px; border-radius: 15px; font-size: 0.85em;">${totalLeads} leads</span>
                             </div>
-                            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
                                 <table style="width: 100%; border-collapse: collapse; font-size: 0.9em; min-width: 520px;">
                                     <thead>
-                                        <tr style="background: var(--aic-navy);">
+                                        <tr style="background: var(--aic-navy); position: sticky; top: 0;">
                                             <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">Username</th>
                                             <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">Nome</th>
                                             <th style="padding: 8px; text-align: center; border-bottom: 1px solid #e2e8f0;">Contato</th>
@@ -4196,18 +4324,30 @@
                                     </tbody>
                                 </table>
                             </div>
+                            ${paginationHtml}
                         </div>
                     `;
-                    }).join('');
-
-                    container.innerHTML = leadsHtml || '<p style="color: #64748b; text-align: center; padding: 40px;">Nenhum lead capturado ainda.</p>';
                 } else {
-                    container.innerHTML = '<p style="color: #64748b; text-align: center; padding: 40px;">Nenhum lead capturado ainda.</p>';
+                    container.innerHTML = '<p style="color: #64748b; text-align: center; padding: 40px;">Nenhum lead neste cluster.</p>';
                 }
             } catch (error) {
-                console.error('Erro ao carregar leads:', error);
+                console.error('Erro ao carregar leads do cluster:', error);
                 container.innerHTML = '<p style="color: #ef4444; text-align: center; padding: 40px;">Erro ao carregar leads.</p>';
             }
+        }
+
+        // Navegar para página específica de leads
+        function goToLeadsPage(page) {
+            const { campaignId, clusterId, clusterName } = currentClusterPagination;
+            if (campaignId && clusterId !== null) {
+                loadClusterLeads(campaignId, clusterId, clusterName, page);
+            }
+        }
+
+        // Renderizar Leads por Cluster (função legacy - agora usa botões)
+        async function renderLeadsContent(campaignId) {
+            // Gerar botões de cluster
+            renderClusterLeadsButtons(campaignId);
         }
 
         // Carregar lista de clientes ao inicializar
@@ -4473,6 +4613,9 @@
                     // Preencher canal Whapi (se existir)
                     document.getElementById('whapiChannelSelect').value = campaign.whapi_channel_uuid || '';
 
+                    // IMPORTANTE: Atualizar estado do botão Gerar Seeds após preencher campos
+                    checkSeedsButtonState();
+
                     showEditMode(campaign.campaign_name);
 
                     // Se já tem resultado de análise, mostrar
@@ -4493,6 +4636,10 @@
 
                     // Se já tem resultado de clustering (subnichos), mostrar
                     if (campaign.clustering_result && campaign.clustering_result.clusters) {
+                        // IMPORTANTE: Mostrar container de resultados E clusteringSection (podem estar ocultos se analysis_result é null)
+                        document.getElementById('results').classList.add('show');
+                        document.getElementById('clusteringSection').style.display = 'block';
+
                         currentClusteringResult = campaign.clustering_result;
                         renderClusteringResults(campaign.clustering_result);
 
@@ -4511,6 +4658,46 @@
                         }
 
                         console.log(`[DEBUG] Clustering carregado: ${campaign.clustering_result.clusters.length} subnichos`);
+                    } else if (campaign.cluster_status === 'clustered' || campaign.total_subclusters > 0) {
+                        // Fallback: campanha clusterizada mas sem clustering_result detalhado
+                        // Buscar dados dos subclusters para construir visualização
+                        console.log('[DEBUG] Campanha clusterizada, buscando subclusters...');
+
+                        // IMPORTANTE: Mostrar container de resultados E clusteringSection
+                        document.getElementById('results').classList.add('show');
+                        document.getElementById('clusteringSection').style.display = 'block';
+
+                        try {
+                            const subResponse = await fetch(`${API_BASE}/campaign/${campaign.id}/subclusters`);
+                            const subResult = await subResponse.json();
+                            if (subResult.success && subResult.data?.subclusters?.length > 0) {
+                                // Construir clustering_result a partir dos subclusters
+                                currentClusteringResult = {
+                                    clusters: subResult.data.subclusters.map((sc, idx) => ({
+                                        cluster_id: idx,
+                                        cluster_name: sc.cluster_name || `Cluster ${idx + 1}`,
+                                        total_leads: sc.total_leads || 0,
+                                        top_hashtags: sc.top_hashtags || [],
+                                        theme_keywords: sc.theme_keywords || [],
+                                        subcluster_id: sc.id
+                                    })),
+                                    total_leads: subResult.data.subclusters.reduce((sum, sc) => sum + (sc.total_leads || 0), 0),
+                                    k: subResult.data.subclusters.length,
+                                    method: 'kmeans_vector',
+                                    cohesion_centroid: 0.5
+                                };
+                                renderClusteringResults(currentClusteringResult);
+
+                                const statusBadge = document.getElementById('clusteringStatusBadge');
+                                if (statusBadge) {
+                                    statusBadge.className = 'clustering-status done';
+                                    statusBadge.innerHTML = `K=${currentClusteringResult.k} | Dados Carregados`;
+                                }
+                                console.log(`[DEBUG] Subclusters carregados: ${subResult.data.subclusters.length}`);
+                            }
+                        } catch (subErr) {
+                            console.error('[DEBUG] Erro ao buscar subclusters:', subErr);
+                        }
                     }
 
                     // Se já tem conteúdo gerado, atualizar flags
@@ -5144,7 +5331,7 @@
             // Top Leads (com guard)
             const topLeadsList = document.getElementById('topLeadsList');
             if (leads.length > 0) {
-                const topLeads = leads.slice(0, 20);
+                const topLeads = [...leads].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 20);
                 topLeadsList.innerHTML = topLeads.map((lead, idx) => {
                     const clusterNameRaw = clusters.find(c => c.cluster_id === lead.primary_cluster)?.cluster_name || `Cluster ${(lead.primary_cluster || 0) + 1}`;
                     const clusterName = escapeHTML(clusterNameRaw);

@@ -894,16 +894,22 @@
       }
     }
   </style>
+
+  <!-- Supabase Auth -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/auth-guard.js"></script>
 </head>
 <body>
   <!-- Header -->
   <header class="header">
     <div class="container">
       <div class="header-content">
-        <img src="/assets/AIC/Imagens%20Vetor%20/LOGO%20completo%20sem%20fundo%20Icone%20cheio%20e%20nome%20cheio.png" alt="AIC Logo" class="header-logo">
+        <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC Logo" class="header-logo">
         <div class="header-user">
-          <span id="user-email">carregando...</span>
-          <div class="header-user-avatar" id="user-avatar">U</div>
+          <span data-user-email>carregando...</span>
+          <img data-user-avatar src="" alt="Avatar" style="width:36px;height:36px;border-radius:50%;display:none;">
+          <button data-logout style="background:transparent;border:1px solid var(--aic-border);color:var(--aic-gray);padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px;">Sair</button>
         </div>
       </div>
     </div>
@@ -1303,8 +1309,8 @@
               <span class="metric-label">Docs</span>
             </div>
             <div class="metric">
-              <span class="metric-value">${campaign.conversion_rate || '0'}%</span>
-              <span class="metric-label">Taxa</span>
+              <span class="metric-value">${campaign.whatsapp_rate || '0'}%</span>
+              <span class="metric-label">Taxa WhatsApp</span>
             </div>
           </div>
 

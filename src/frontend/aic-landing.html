@@ -1433,12 +1433,116 @@
 
   <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <!-- Supabase Auth - Pre-cadastro -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // Supabase client para pre-cadastro
+    const SUPABASE_URL_LANDING = 'https://qsdfyffuonywmtnlycri.supabase.co';
+    const SUPABASE_ANON_KEY_LANDING = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExMjY0NzgsImV4cCI6MjA2NjcwMjQ3OH0.IDJdOApiNM0FJvRe5mp28L7U89GWeHpPoPlPreexwbg';
+
+    const supabaseLanding = supabase.createClient(SUPABASE_URL_LANDING, SUPABASE_ANON_KEY_LANDING);
+
+    /**
+     * Gera senha temporaria segura
+     */
+    function generateTempPassword() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+      let password = '';
+      for (let i = 0; i < 16; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return password;
+    }
+
+    /**
+     * Cria pre-cadastro do lead no Supabase Auth
+     * @param {string} name - Nome completo
+     * @param {string} email - Email
+     * @param {string} phone - Telefone/WhatsApp
+     * @param {string} origin - Origem: 'aic' ou 'google'
+     * @returns {Promise<{success: boolean, userId?: string, error?: string}>}
+     */
+    async function createAICPreRegistration(name, email, phone, origin = 'aic') {
+      try {
+        // Verificar se usuario ja existe
+        const { data: existingUser } = await supabaseLanding
+          .from('users')
+          .select('id, email')
+          .eq('email', email)
+          .single();
+
+        if (existingUser) {
+          console.log('[AIC Pre-Cadastro] Usuario ja existe:', email);
+          return { success: true, userId: existingUser.id, alreadyExists: true };
+        }
+
+        // Gerar senha temporaria
+        const tempPassword = generateTempPassword();
+
+        // Criar usuario no Supabase Auth
+        const { data: authData, error: authError } = await supabaseLanding.auth.signUp({
+          email: email,
+          password: tempPassword,
+          options: {
+            data: {
+              name: name,
+              phone: phone,
+              source: 'aic_landing',
+              origin: origin
+            },
+            emailRedirectTo: window.location.origin + '/aic-login.html'
+          }
+        });
+
+        if (authError) {
+          // Se o erro for "User already registered", nao e um problema
+          if (authError.message.includes('already registered')) {
+            console.log('[AIC Pre-Cadastro] Usuario ja registrado no Auth:', email);
+            return { success: true, alreadyExists: true };
+          }
+          console.error('[AIC Pre-Cadastro] Erro no Auth:', authError);
+          return { success: false, error: authError.message };
+        }
+
+        // Criar perfil em public.users
+        if (authData?.user?.id) {
+          const { error: profileError } = await supabaseLanding
+            .from('users')
+            .upsert({
+              id: authData.user.id,
+              email: email,
+              name: name,
+              phone: phone,
+              tipo_user: 'normal',
+              user_origin: origin, // 'aic' ou 'google'
+              user_app: 'aic',
+              created_at: new Date().toISOString()
+            }, { onConflict: 'id' });
+
+          if (profileError) {
+            console.warn('[AIC Pre-Cadastro] Erro ao criar perfil:', profileError);
+            // Nao retornar erro - usuario foi criado no Auth
+          }
+
+          console.log('[AIC Pre-Cadastro] Usuario criado com sucesso:', authData.user.id, 'origem:', origin);
+          return { success: true, userId: authData.user.id };
+        }
+
+        return { success: true };
+
+      } catch (error) {
+        console.error('[AIC Pre-Cadastro] Erro inesperado:', error);
+        return { success: false, error: error.message };
+      }
+    }
+  </script>
 </head>
 <body>
   <!-- Navigation -->
   <nav class="nav">
     <div class="container nav-content">
-      <img src="/assets/AIC/Imagens%20Vetor%20/LOGO%20completo%20sem%20fundo%20Icone%20cheio%20e%20nome%20cheio.png" alt="AIC" class="nav-logo">
+      <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="nav-logo">
       <div class="nav-links">
         <a href="#solucoes">Soluções</a>
         <a href="#como-funciona">Ecossistema</a>
@@ -1453,7 +1557,7 @@
   <!-- Hero Section -->
   <section class="hero">
     <div class="container hero-content">
-      <img src="/assets/AIC/Imagens%20Vetor%20/LOGO%20completo%20sem%20fundo%20Icone%20cheio%20e%20nome%20cheio.png" alt="AIC - Applied Intelligence Clustering" class="hero-logo">
+      <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC - Applied Intelligence Clustering" class="hero-logo">
       <div class="hero-badge">Sem depender de tráfego pago</div>
       <h1>Transforme Dados em <span>Conversas Reais</span> e Leads Qualificados</h1>
       <p>Descubra como maximizar seu potencial de vendas usando dados públicos do Instagram para gerar oportunidades reais de negócio.</p>
@@ -1893,7 +1997,7 @@
   <!-- Footer -->
   <footer class="footer">
     <div class="container footer-content">
-      <img src="/assets/AIC/Imagens%20Vetor%20/LOGO%20completo%20sem%20fundo%20Icone%20cheio%20e%20nome%20cheio.png" alt="AIC" class="footer-logo">
+      <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="footer-logo">
       <div class="footer-links">
         <a href="/aic-docs.html">Central de Documentação</a>
         <a href="/aic-proposta-comercial.html">Proposta Comercial</a>
@@ -2002,6 +2106,7 @@
       let modal, form, cancelBtn;
       let pendingAction = null;
       let pendingElement = null;
+      let isGoogleSignIn = false; // Flag para rastrear origem Google
 
       function getStoredLeadData() {
         try {
@@ -2042,6 +2147,9 @@
         // Remover readonly dos campos
         document.getElementById('leadName').readOnly = false;
         document.getElementById('leadEmail').readOnly = false;
+
+        // Resetar flag Google
+        isGoogleSignIn = false;
       }
 
       function sendTracking(leadData, ctaName, ctaHref) {
@@ -2137,6 +2245,9 @@
 
           console.log('[Google Sign-In] Dados capturados:', googleData.name, googleData.email);
 
+          // Marcar como login via Google
+          isGoogleSignIn = true;
+
           // Ocultar botão Google e mostrar apenas campo de telefone
           const googleContainer = document.getElementById('googleSignInContainer');
           googleContainer.style.display = 'none';
@@ -2176,7 +2287,7 @@
         });
 
         // Event listener do formulário
-        form.addEventListener('submit', function(e) {
+        form.addEventListener('submit', async function(e) {
           e.preventDefault();
 
           const name = document.getElementById('leadName').value.trim();
@@ -2188,8 +2299,30 @@
             return;
           }
 
-          // Salvar dados
+          // Desabilitar botão durante processamento
+          const submitBtn = form.querySelector('.btn-submit');
+          const originalText = submitBtn.textContent;
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Aguarde...';
+
+          // Salvar dados localmente
           storeLeadData(name, email, phone);
+
+          // Determinar origem: 'google' se usou Google Sign-In, 'aic' caso contrario
+          const leadOrigin = isGoogleSignIn ? 'google' : 'aic';
+
+          // Criar pre-cadastro no Supabase Auth (nao bloqueia fluxo)
+          createAICPreRegistration(name, email, phone, leadOrigin)
+            .then(result => {
+              if (result.success) {
+                console.log('[AIC Lead Capture] Pre-cadastro realizado:', result.alreadyExists ? 'ja existia' : 'novo usuario', 'origem:', leadOrigin);
+              } else {
+                console.warn('[AIC Lead Capture] Pre-cadastro falhou (nao critico):', result.error);
+              }
+            })
+            .catch(err => {
+              console.warn('[AIC Lead Capture] Erro no pre-cadastro (nao critico):', err);
+            });
 
           // Enviar tracking
           if (pendingElement) {
@@ -2197,6 +2330,10 @@
             const ctaHref = pendingElement.getAttribute('href') || '';
             sendTracking({ name, email, phone }, ctaName, ctaHref);
           }
+
+          // Restaurar botão
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
 
           // Fechar modal
           closeModal();
@@ -2269,7 +2406,7 @@
         <div class="g_id_signin"
              data-type="standard"
              data-size="large"
-             data-theme="filled_blue"
+             data-theme="outline"
              data-text="continue_with"
              data-shape="rectangular"
              data-logo_alignment="left"

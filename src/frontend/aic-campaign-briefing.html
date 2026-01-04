@@ -438,7 +438,7 @@
   <!-- Header -->
   <header class="header">
     <div class="container header-content">
-      <img src="/assets/AIC/Imagens%20Vetor%20/LOGO%20completo%20sem%20fundo%20Icone%20cheio%20e%20nome%20cheio.png" alt="AIC" class="header-logo">
+      <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="header-logo">
       <div class="header-progress">
         <span class="header-progress-text"><span id="progress-percent">0</span>% completo</span>
         <div class="header-progress-bar">
@@ -1157,17 +1157,36 @@
       window.scrollTo({ top: 200, behavior: 'smooth' });
     }
 
-    // Next section
-    function nextSection() {
+    // Next section (with auto-save)
+    async function nextSection() {
       if (currentSection < totalSections) {
+        await autoSaveBriefing();
         showSection(currentSection + 1);
       }
     }
 
-    // Previous section
-    function prevSection() {
+    // Previous section (with auto-save)
+    async function prevSection() {
       if (currentSection > 1) {
+        await autoSaveBriefing();
         showSection(currentSection - 1);
+      }
+    }
+
+    // Auto-save briefing silently
+    async function autoSaveBriefing() {
+      try {
+        const data = collectFormData();
+        const response = await fetch(`/api/campaigns/${campaignId}/briefing`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (response.ok) {
+          console.log('Auto-save: briefing salvo');
+        }
+      } catch (error) {
+        console.error('Auto-save error:', error);
       }
     }
 
@@ -1216,12 +1235,30 @@
     // Load existing briefing
     async function loadBriefing() {
       try {
+        // 1. Carregar dados da campanha (inclui client_name)
+        const campaignResponse = await fetch(`/api/campaign/${campaignId}`);
+        let clientName = null;
+        if (campaignResponse.ok) {
+          const campaignResult = await campaignResponse.json();
+          if (campaignResult.success && campaignResult.campaign) {
+            clientName = campaignResult.campaign.client_name;
+          }
+        }
+
+        // 2. Carregar briefing existente
         const response = await fetch(`/api/campaigns/${campaignId}/briefing`);
         if (response.ok) {
           const briefing = await response.json();
           if (briefing) {
             populateForm(briefing);
           }
+        }
+
+        // 3. Se company_name não foi preenchido mas temos client_name, preencher
+        const companyNameField = document.getElementById('company_name');
+        if (companyNameField && !companyNameField.value && clientName) {
+          companyNameField.value = clientName;
+          updateProgress();
         }
       } catch (error) {
         console.error('Erro ao carregar briefing:', error);

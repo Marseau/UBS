@@ -1049,7 +1049,7 @@ app.get('/admin', (_req, res) => {
 });
 
 app.get('/login', (_req, res) => {
-  res.sendFile(path.join(frontendPath, 'login.html'));
+  res.redirect('/aic-login.html');
 });
 
 app.get('/register', (_req, res) => {

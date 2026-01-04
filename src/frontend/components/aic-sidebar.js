@@ -184,7 +184,7 @@
 
   // Header
   nav.innerHTML = '<div class="aic-sidebar-header">' +
-    '<img src="/assets/AIC/Imagens%20Vetor%20/LOGO%20completo%20sem%20fundo%20Icone%20cheio%20e%20nome%20cheio.png" alt="AIC" class="aic-sidebar-logo">' +
+    '<img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="aic-sidebar-logo">' +
     '</div>';
 
   // Campaign badge

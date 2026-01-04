@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login | AIC - Applied Intelligence Clustering</title>
+  <meta name="robots" content="noindex, nofollow">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/assets/AIC/Imagens%20Vetor%20/AIC%20Icone%20Cheio.png">
+
+  <!-- Theme Color -->
+  <meta name="theme-color" content="#0C1B33">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-green-glow: rgba(14, 204, 151, 0.25);
+      --aic-green-subtle: rgba(14, 204, 151, 0.1);
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-navy-lighter: #1a3055;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-gray-light: #cbd5e1;
+      --aic-border: #1e3a5f;
+      --aic-red: #ef4444;
+      --aic-red-subtle: rgba(239, 68, 68, 0.1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .login-container {
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .login-card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 20px;
+      padding: 48px 40px;
+      text-align: center;
+    }
+
+    .logo {
+      height: 69px;
+      margin-bottom: 32px;
+    }
+
+    .login-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .login-subtitle {
+      font-size: 14px;
+      color: var(--aic-gray);
+      margin-bottom: 32px;
+    }
+
+    /* Google Button - discreto, fundo transparente */
+    .btn-google {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: transparent;
+      color: var(--aic-white);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 12px;
+      padding: 14px 24px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-google:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    .btn-google svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      margin: 28px 0;
+      color: var(--aic-gray);
+      font-size: 13px;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--aic-border);
+    }
+
+    .divider span {
+      padding: 0 16px;
+    }
+
+    /* Form */
+    .form-group {
+      margin-bottom: 20px;
+      text-align: left;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--aic-gray-light);
+      margin-bottom: 8px;
+    }
+
+    .form-input {
+      width: 100%;
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 15px;
+      color: var(--aic-white);
+      transition: all 0.2s ease;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--aic-green);
+      box-shadow: 0 0 0 3px var(--aic-green-subtle);
+    }
+
+    .form-input::placeholder {
+      color: var(--aic-gray);
+    }
+
+    /* Password toggle */
+    .password-wrapper {
+      position: relative;
+    }
+
+    .password-wrapper .form-input {
+      padding-right: 48px;
+    }
+
+    .password-toggle {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--aic-gray);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s;
+    }
+
+    .password-toggle:hover {
+      color: var(--aic-green);
+    }
+
+    .password-toggle svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .btn-primary {
+      width: 100%;
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      color: var(--aic-navy);
+      border: none;
+      border-radius: 12px;
+      padding: 14px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-top: 8px;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px var(--aic-green-glow);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Links */
+    .login-links {
+      margin-top: 24px;
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+
+    .login-links a {
+      color: var(--aic-green);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .login-links a:hover {
+      text-decoration: underline;
+    }
+
+    /* Error/Success messages */
+    .message {
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .message.error {
+      background: var(--aic-red-subtle);
+      border: 1px solid var(--aic-red);
+      color: var(--aic-red);
+      display: block;
+    }
+
+    .message.success {
+      background: var(--aic-green-subtle);
+      border: 1px solid var(--aic-green);
+      color: var(--aic-green);
+      display: block;
+    }
+
+    /* Toggle forms */
+    .form-toggle {
+      display: none;
+    }
+
+    .form-toggle.active {
+      display: block;
+    }
+
+    /* Magic Link */
+    .btn-magic {
+      width: 100%;
+      background: transparent;
+      color: var(--aic-green);
+      border: 1px solid var(--aic-green);
+      border-radius: 12px;
+      padding: 14px 24px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-top: 12px;
+    }
+
+    .btn-magic:hover {
+      background: var(--aic-green-subtle);
+    }
+
+    /* Footer */
+    .login-footer {
+      margin-top: 32px;
+      text-align: center;
+    }
+
+    .login-footer a {
+      color: var(--aic-gray);
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    .login-footer a:hover {
+      color: var(--aic-green);
+    }
+
+    /* Loading */
+    .loading {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--aic-navy);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-card">
+      <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="logo">
+
+      <h1 class="login-title">Bem-vindo de volta</h1>
+      <p class="login-subtitle">Acesse sua conta para gerenciar suas campanhas</p>
+
+      <div id="message" class="message"></div>
+
+      <!-- Login Form (PRIMEIRO) -->
+      <div id="loginForm" class="form-toggle active">
+        <form onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label class="form-label" for="email">Email</label>
+            <input type="email" id="email" class="form-input" placeholder="seu@email.com" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="password">Senha</label>
+            <div class="password-wrapper">
+              <input type="password" id="password" class="form-input" placeholder="Sua senha" required>
+              <button type="button" class="password-toggle" onclick="togglePassword('password', this)">
+                <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primary" id="btnLogin">Entrar</button>
+
+          <button type="button" class="btn-magic" onclick="sendMagicLink()">
+            Enviar link de acesso por email
+          </button>
+        </form>
+
+        <div class="login-links">
+          <p>Nao tem conta? <a href="#" onclick="showRegister()">Criar conta</a></p>
+          <p style="margin-top: 8px;"><a href="#" onclick="showForgotPassword()">Esqueci minha senha</a></p>
+        </div>
+
+        <div class="divider"><span>ou continue com</span></div>
+
+        <!-- Google Sign In (DEPOIS) -->
+        <button type="button" class="btn-google" onclick="signInWithGoogle()">
+          <svg viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          Continuar com Google
+        </button>
+      </div>
+
+      <!-- Register Form -->
+      <div id="registerForm" class="form-toggle">
+        <form onsubmit="handleRegister(event)">
+          <div class="form-group">
+            <label class="form-label" for="regName">Nome completo</label>
+            <input type="text" id="regName" class="form-input" placeholder="Seu nome" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="regEmail">Email</label>
+            <input type="email" id="regEmail" class="form-input" placeholder="seu@email.com" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="regPhone">WhatsApp</label>
+            <input type="tel" id="regPhone" class="form-input" placeholder="(11) 99999-9999">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="regPassword">Senha</label>
+            <div class="password-wrapper">
+              <input type="password" id="regPassword" class="form-input" placeholder="Minimo 6 caracteres" required minlength="6">
+              <button type="button" class="password-toggle" onclick="togglePassword('regPassword', this)">
+                <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primary" id="btnRegister">Criar conta</button>
+        </form>
+
+        <div class="login-links">
+          <p>Ja tem conta? <a href="#" onclick="showLogin()">Fazer login</a></p>
+        </div>
+
+        <div class="divider"><span>ou cadastre-se com</span></div>
+
+        <!-- Google Sign Up -->
+        <button type="button" class="btn-google" onclick="signInWithGoogle()">
+          <svg viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          Cadastrar com Google
+        </button>
+      </div>
+
+      <!-- Forgot Password Form -->
+      <div id="forgotForm" class="form-toggle">
+        <form onsubmit="handleForgotPassword(event)">
+          <div class="form-group">
+            <label class="form-label" for="forgotEmail">Email</label>
+            <input type="email" id="forgotEmail" class="form-input" placeholder="seu@email.com" required>
+          </div>
+
+          <button type="submit" class="btn-primary" id="btnForgot">Enviar link de recuperacao</button>
+        </form>
+
+        <div class="login-links">
+          <p><a href="#" onclick="showLogin()">Voltar para login</a></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="login-footer">
+      <a href="/aic">Voltar para o site</a>
+    </div>
+  </div>
+
+  <!-- Supabase Client -->
+  <script src="/js/supabase-client.js"></script>
+
+  <script>
+    // Verificar se ja esta logado
+    (async function() {
+      const { session } = await AICAuth.getSession();
+      if (session) {
+        // Ja logado - redirecionar
+        const params = new URLSearchParams(window.location.search);
+        const redirect = params.get('redirect') || '/aic-campaigns-dashboard.html';
+        window.location.href = redirect;
+      }
+    })();
+
+    // Mostrar mensagem
+    function showMessage(text, type = 'error') {
+      const msg = document.getElementById('message');
+      msg.textContent = text;
+      msg.className = 'message ' + type;
+    }
+
+    function clearMessage() {
+      const msg = document.getElementById('message');
+      msg.className = 'message';
+      msg.textContent = '';
+    }
+
+    // Toggle forms
+    function showLogin() {
+      clearMessage();
+      document.getElementById('loginForm').classList.add('active');
+      document.getElementById('registerForm').classList.remove('active');
+      document.getElementById('forgotForm').classList.remove('active');
+    }
+
+    function showRegister() {
+      clearMessage();
+      document.getElementById('loginForm').classList.remove('active');
+      document.getElementById('registerForm').classList.add('active');
+      document.getElementById('forgotForm').classList.remove('active');
+    }
+
+    function showForgotPassword() {
+      clearMessage();
+      document.getElementById('loginForm').classList.remove('active');
+      document.getElementById('registerForm').classList.remove('active');
+      document.getElementById('forgotForm').classList.add('active');
+    }
+
+    // Toggle password visibility
+    function togglePassword(inputId, btn) {
+      const input = document.getElementById(inputId);
+      const eyeOpen = btn.querySelector('.eye-open');
+      const eyeClosed = btn.querySelector('.eye-closed');
+
+      if (input.type === 'password') {
+        input.type = 'text';
+        eyeOpen.style.display = 'none';
+        eyeClosed.style.display = 'block';
+      } else {
+        input.type = 'password';
+        eyeOpen.style.display = 'block';
+        eyeClosed.style.display = 'none';
+      }
+    }
+
+    // Google Sign In
+    async function signInWithGoogle() {
+      try {
+        const { data, error } = await AICAuth.signInWithGoogle();
+        if (error) throw error;
+        // Redirect acontece automaticamente
+      } catch (err) {
+        showMessage('Erro ao conectar com Google: ' + err.message);
+      }
+    }
+
+    // Email/Password Login
+    async function handleLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnLogin');
+      const originalText = btn.textContent;
+      btn.innerHTML = '<span class="loading"></span>';
+      btn.disabled = true;
+
+      try {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+
+        const { data, error } = await AICAuth.signInWithEmail(email, password);
+        if (error) throw error;
+
+        // Redirecionar
+        const params = new URLSearchParams(window.location.search);
+        const redirect = params.get('redirect') || '/aic-campaigns-dashboard.html';
+        window.location.href = redirect;
+
+      } catch (err) {
+        showMessage(err.message === 'Invalid login credentials'
+          ? 'Email ou senha incorretos'
+          : 'Erro ao fazer login: ' + err.message);
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    // Magic Link
+    async function sendMagicLink() {
+      const email = document.getElementById('email').value;
+      if (!email) {
+        showMessage('Digite seu email primeiro');
+        return;
+      }
+
+      try {
+        const { data, error } = await AICAuth.sendMagicLink(email);
+        if (error) throw error;
+        showMessage('Link enviado! Verifique seu email.', 'success');
+      } catch (err) {
+        showMessage('Erro ao enviar link: ' + err.message);
+      }
+    }
+
+    // Register
+    async function handleRegister(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnRegister');
+      const originalText = btn.textContent;
+      btn.innerHTML = '<span class="loading"></span>';
+      btn.disabled = true;
+
+      try {
+        const name = document.getElementById('regName').value;
+        const email = document.getElementById('regEmail').value;
+        const phone = document.getElementById('regPhone').value;
+        const password = document.getElementById('regPassword').value;
+
+        // Criar usuario no Supabase Auth
+        const { data, error } = await AICAuth.signUp(email, password, {
+          name: name,
+          phone: phone
+        });
+
+        if (error) throw error;
+
+        // Criar perfil na tabela public.users
+        if (data.user) {
+          await supabaseClient.from('users').upsert({
+            id: data.user.id,
+            name: name,
+            email: email,
+            phone: phone,
+            tipo_user: 'normal',
+            user_origin: 'aic',
+            user_app: 'aic'
+          });
+        }
+
+        showMessage('Conta criada! Verifique seu email para confirmar.', 'success');
+
+        // Se nao precisar confirmar email, redirecionar
+        if (data.session) {
+          setTimeout(() => {
+            window.location.href = '/aic-campaigns-dashboard.html';
+          }, 1500);
+        }
+
+      } catch (err) {
+        showMessage(err.message === 'User already registered'
+          ? 'Este email ja esta cadastrado'
+          : 'Erro ao criar conta: ' + err.message);
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    // Forgot Password
+    async function handleForgotPassword(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnForgot');
+      const originalText = btn.textContent;
+      btn.innerHTML = '<span class="loading"></span>';
+      btn.disabled = true;
+
+      try {
+        const email = document.getElementById('forgotEmail').value;
+        const { data, error } = await AICAuth.resetPassword(email);
+        if (error) throw error;
+
+        showMessage('Email enviado! Verifique sua caixa de entrada.', 'success');
+
+      } catch (err) {
+        showMessage('Erro ao enviar email: ' + err.message);
+      } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

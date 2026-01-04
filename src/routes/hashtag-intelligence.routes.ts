@@ -3737,6 +3737,7 @@ router.get('/campaign/:campaignId/subclusters', async (req, res) => {
   try {
     const { campaignId } = req.params;
 
+    // Buscar subclusters
     const { data: subclusters, error } = await supabase
       .from('campaign_subclusters')
       .select('*')
@@ -3750,12 +3751,35 @@ router.get('/campaign/:campaignId/subclusters', async (req, res) => {
       });
     }
 
+    // Buscar generated_copies da campanha (armazenado em cluster_campaigns)
+    console.log(`[API] Buscando generated_copies para campanha ${campaignId}`);
+    const { data: campaign, error: campaignError } = await supabase
+      .from('cluster_campaigns')
+      .select('generated_copies')
+      .eq('id', campaignId)
+      .single();
+
+    console.log(`[API] campaign_copies encontrado:`, campaign?.generated_copies ? 'SIM' : 'NAO', campaignError?.message || '');
+
+    // Parse generated_copies se for string JSON
+    let campaignCopies = null;
+    if (campaign?.generated_copies) {
+      try {
+        campaignCopies = typeof campaign.generated_copies === 'string'
+          ? JSON.parse(campaign.generated_copies)
+          : campaign.generated_copies;
+      } catch (e) {
+        campaignCopies = campaign.generated_copies;
+      }
+    }
+
     return res.json({
       success: true,
       data: {
         campaign_id: campaignId,
         total_subclusters: subclusters?.length || 0,
-        subclusters: subclusters || []
+        subclusters: subclusters || [],
+        campaign_copies: campaignCopies // Copies da campanha (não dos subclusters)
       }
     });
   } catch (error: any) {
@@ -4095,9 +4119,89 @@ router.get('/campaign/:campaignId/leads-by-cluster', async (req, res) => {
   try {
     const { campaignId } = req.params;
     const only_pending = req.query.only_pending === 'true';
+    const cluster_id = req.query.cluster_id !== undefined ? parseInt(req.query.cluster_id as string, 10) : null;
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(100, Math.max(10, parseInt(req.query.limit as string, 10) || 50));
+    const offset = (page - 1) * limit;
 
-    console.log(`\n👥 [API] GET /campaign/${campaignId}/leads-by-cluster`);
+    console.log(`\n👥 [API] GET /campaign/${campaignId}/leads-by-cluster`, cluster_id !== null ? `(cluster ${cluster_id}, page ${page})` : '');
 
+    // Se cluster_id especificado, retornar leads desse cluster apenas
+    if (cluster_id !== null) {
+      // Contar total de leads no cluster primeiro
+      const { count } = await supabase
+        .from('campaign_leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('campaign_id', campaignId)
+        .eq('cluster_id', cluster_id);
+
+      const total = count || 0;
+      const totalPages = Math.ceil(total / limit);
+
+      let query = supabase
+        .from('campaign_leads')
+        .select(`
+          id,
+          lead_id,
+          cluster_id,
+          cluster_name,
+          match_hashtags,
+          fit_score,
+          status,
+          instagram_leads (
+            id,
+            username,
+            full_name,
+            email,
+            phone,
+            bio
+          )
+        `)
+        .eq('campaign_id', campaignId)
+        .eq('cluster_id', cluster_id)
+        .order('fit_score', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (only_pending) {
+        query = query.eq('status', 'pending');
+      }
+
+      const { data: leads, error: leadsError } = await query;
+      if (leadsError) throw leadsError;
+
+      const formattedLeads = (leads || []).map(lead => {
+        const il = Array.isArray(lead.instagram_leads) ? lead.instagram_leads[0] : lead.instagram_leads;
+        return {
+          id: lead.id,
+          lead_id: lead.lead_id,
+          username: il?.username,
+          full_name: il?.full_name,
+          email: il?.email,
+          phone: il?.phone,
+          bio: il?.bio,
+          fit_score: lead.fit_score,
+          match_hashtags: lead.match_hashtags,
+          status: lead.status
+        };
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          campaign_id: campaignId,
+          cluster_id: cluster_id,
+          total: total,
+          page: page,
+          limit: limit,
+          total_pages: totalPages,
+          has_next: page < totalPages,
+          has_prev: page > 1,
+          leads: formattedLeads
+        }
+      });
+    }
+
+    // Caso sem cluster_id - comportamento original (agrupado)
     // Buscar campanha para pegar info dos clusters
     const { data: campaign, error: campaignError } = await supabase
       .from('cluster_campaigns')
@@ -4129,7 +4233,8 @@ router.get('/campaign/:campaignId/leads-by-cluster', async (req, res) => {
       `)
       .eq('campaign_id', campaignId)
       .order('cluster_id', { ascending: true })
-      .order('fit_score', { ascending: false });
+      .order('fit_score', { ascending: false })
+      .limit(3000);
 
     if (only_pending) {
       query = query.eq('status', 'pending');
