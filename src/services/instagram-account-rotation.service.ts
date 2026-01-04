@@ -34,6 +34,7 @@ interface AccountState {
   lastFailureTime: number;
   isBlocked: boolean;
   cooldownUntil?: number;            // Timestamp explícito para cooldown manual
+  usageCount?: number;               // Contador de uso para round-robin equilibrado
 }
 
 interface RotationState {
@@ -709,11 +710,26 @@ class InstagramAccountRotation {
 
     const currentAccount = this.getCurrentAccount();
 
-    // 🆕 Encontrar a conta MAIS FRIA (menor cooldown restante) excluindo a atual
+    // 🔄 ROUND-ROBIN EQUILIBRADO: Ordenar por usageCount, depois por cooldown
     const otherAccounts = this.accounts
-      .map((acc, idx) => ({ account: acc, index: idx, cooldownRemaining: this.getAccountCooldownRemaining(acc) }))
+      .map((acc, idx) => ({
+        account: acc,
+        index: idx,
+        usageCount: this.state.accounts[idx]?.usageCount || 0,
+        cooldownRemaining: this.getAccountCooldownRemaining(acc)
+      }))
       .filter(item => item.account.username !== currentAccount.username)
-      .sort((a, b) => a.cooldownRemaining - b.cooldownRemaining);
+      .sort((a, b) => {
+        // Primeiro: só considerar contas disponíveis (cooldown = 0)
+        if (a.cooldownRemaining === 0 && b.cooldownRemaining > 0) return -1;
+        if (b.cooldownRemaining === 0 && a.cooldownRemaining > 0) return 1;
+        // Entre disponíveis: menor usageCount primeiro
+        if (a.cooldownRemaining === 0 && b.cooldownRemaining === 0) {
+          return a.usageCount - b.usageCount;
+        }
+        // Entre indisponíveis: menor cooldown primeiro
+        return a.cooldownRemaining - b.cooldownRemaining;
+      });
 
     if (otherAccounts.length === 0) {
       return {
@@ -724,20 +740,20 @@ class InstagramAccountRotation {
       };
     }
 
-    // Pegar a conta com menor cooldown (mais fria)
+    // Pegar a melhor opção (menos usada entre as disponíveis, ou menor cooldown)
     const bestOption = otherAccounts[0]!;
     const nextAccount = bestOption.account;
     const nextIndex = bestOption.index;
 
-    console.log(`\n🔄 ========== ROTAÇÃO DE CONTAS ==========`);
+    console.log(`\n🔄 ========== ROTAÇÃO DE CONTAS (ROUND-ROBIN) ==========`);
     console.log(`   Conta atual: ${currentAccount.username} (bloqueada)`);
-    console.log(`   🎯 Conta MAIS FRIA: ${nextAccount.username} (${nextAccount.instagramUsername})`);
+    console.log(`   🎯 Próxima conta: ${nextAccount.username} (@${nextAccount.instagramUsername})`);
 
     // Listar todas as opções para debug
-    console.log(`   📊 Ranking de contas por cooldown:`);
+    console.log(`   📊 Ranking de contas (ROUND-ROBIN):`);
     for (const opt of otherAccounts) {
       const status = opt.cooldownRemaining === 0 ? '✅ DISPONÍVEL' : `⏳ ${opt.cooldownRemaining}min`;
-      console.log(`      - @${opt.account.instagramUsername}: ${status}`);
+      console.log(`      - @${opt.account.instagramUsername}: ${status} (uso: ${opt.usageCount}x)`);
     }
 
     // Verificar se a conta mais fria já esfriou
@@ -938,7 +954,15 @@ class InstagramAccountRotation {
 
     // 🔧 FIX: Se conta atual está funcionando, USE ELA - não tente otimizar
     if (currentAvailable) {
-      console.log(`   ✅ Conta atual @${currentAccount.instagramUsername} está funcionando - USANDO`);
+      // 🔄 ROUND-ROBIN: Incrementar usageCount da conta atual
+      const currentIdx = this.state.currentAccountIndex;
+      if (this.state.accounts[currentIdx]) {
+        this.state.accounts[currentIdx].usageCount =
+          (this.state.accounts[currentIdx].usageCount || 0) + 1;
+      }
+
+      const usageCount = this.state.accounts[currentIdx]?.usageCount || 1;
+      console.log(`   ✅ Conta atual @${currentAccount.instagramUsername} está funcionando - USANDO (uso: ${usageCount}x)`);
       console.log(`====================================================\n`);
       // 🔧 FIX: Salvar estado se houve correções automáticas
       await this.flushStateIfNeeded();
@@ -952,19 +976,28 @@ class InstagramAccountRotation {
     // Conta atual BLOQUEADA - precisa rotacionar
     console.log(`   ⚠️  Conta atual BLOQUEADA - buscando alternativa...`);
 
-    // Rankear outras contas por lastFailureTime (menor = mais fria)
+    // 🔄 ROUND-ROBIN EQUILIBRADO: Rankear por usageCount (menor = menos usada)
+    // Se usageCount igual, desempata por lastFailureTime (menor = mais fria)
     const otherAccounts = this.accounts
       .map((acc, idx) => ({
         account: acc,
         index: idx,
+        usageCount: this.state.accounts[idx]?.usageCount || 0,
         lastFailureTime: acc.lastFailureTime || 0,
         available: this.hasAccountCooledDown(acc),
         isCurrent: idx === this.state.currentAccountIndex
       }))
       .filter(item => !item.isCurrent)
-      .sort((a, b) => a.lastFailureTime - b.lastFailureTime);
+      .sort((a, b) => {
+        // Primeiro: menor usageCount (menos usada tem prioridade)
+        if (a.usageCount !== b.usageCount) {
+          return a.usageCount - b.usageCount;
+        }
+        // Desempate: menor lastFailureTime (mais fria)
+        return a.lastFailureTime - b.lastFailureTime;
+      });
 
-    console.log(`   📊 Outras contas (por ordem de preferência):`);
+    console.log(`   📊 Outras contas (por ordem de preferência - ROUND-ROBIN):`);
     for (const item of otherAccounts) {
       let statusText: string;
       if (item.available) {
@@ -979,7 +1012,7 @@ class InstagramAccountRotation {
         const remaining = this.getAccountCooldownRemaining(item.account);
         statusText = `⏳ ESFRIANDO (${remaining}min)`;
       }
-      console.log(`      - @${item.account.instagramUsername}: ${statusText}`);
+      console.log(`      - @${item.account.instagramUsername}: ${statusText} (uso: ${item.usageCount}x)`);
     }
 
     // Encontrar próxima conta disponível
@@ -1032,9 +1065,17 @@ class InstagramAccountRotation {
 
     this.state.currentAccountIndex = nextAvailable.index;
     this.state.lastRotationTime = Date.now();
+
+    // 🔄 ROUND-ROBIN: Incrementar usageCount da nova conta
+    const accountState = this.state.accounts[nextAvailable.index];
+    if (accountState) {
+      accountState.usageCount = (accountState.usageCount || 0) + 1;
+    }
+
     await this.saveState();
 
-    console.log(`   ✅ Rotacionado para @${nextAvailable.account.instagramUsername}`);
+    const newUsageCount = this.state.accounts[nextAvailable.index]?.usageCount || 1;
+    console.log(`   ✅ Rotacionado para @${nextAvailable.account.instagramUsername} (uso: ${newUsageCount}x)`);
     console.log(`====================================================\n`);
     return {
       success: true,
