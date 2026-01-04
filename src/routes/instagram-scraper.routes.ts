@@ -614,6 +614,332 @@ router.post('/scrape-users', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/instagram-scraper/scrape-users-rescue
+ * Refresh de leads expirados - USA CONTA DEDICADA (isolada do pool)
+ *
+ * DIFERENÇA DO scrape-users:
+ * - Usa conta marciofranco03 (INSTAGRAM_REFRESH_*)
+ * - Browser isolado do pool de rotação
+ * - Navega DIRETO para o perfil (não usa search)
+ * - Ideal para refresh de leads expirados (noturno)
+ * - Faz UPSERT: INSERT se novo, UPDATE se já existe
+ * - MESMA lógica de extração e persistência do scrape-users
+ *
+ * Body:
+ * {
+ *   "usernames": ["usuario1", "usuario2", ...],
+ *   "max_profiles": 100,
+ *   "delay_ms": 3000
+ * }
+ */
+router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
+  const reqId = `RESCUE_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+  try {
+    const { usernames, max_profiles = 100, delay_ms = 3000 } = req.body;
+
+    if (!usernames || !Array.isArray(usernames) || usernames.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo "usernames" é obrigatório e deve ser um array de usernames'
+      });
+    }
+
+    console.log(`\n🔧 [${reqId}] ========== SCRAPE-USERS-RESCUE INICIADO ==========`);
+    console.log(`🔧 [${reqId}] Conta dedicada: @${process.env.INSTAGRAM_REFRESH_USERNAME_HANDLE || 'marciofranco03'}`);
+    console.log(`🔧 [${reqId}] Usernames recebidos: ${usernames.length} (max: ${max_profiles})`);
+
+    // Importar funções necessárias (MESMAS do scrape-users)
+    const { createRefreshContext } = await import('../services/instagram-context-manager.service');
+    const { scrapeProfileWithExistingPage } = await import('../services/instagram-scraper-single.service');
+    const { calculateActivityScore, extractHashtagsFromPosts, retryWithBackoff } = await import('../services/instagram-profile.utils');
+    const { detectLanguage } = await import('../services/language-country-detector.service');
+
+    // Criar contexto com conta de refresh (isolada)
+    const { page, requestId, cleanup } = await createRefreshContext();
+    console.log(`🔧 [${reqId}] Contexto de refresh criado: ${requestId}`);
+
+    // Limitar ao máximo configurado
+    const usernamesToProcess = usernames.slice(0, max_profiles);
+    const results: { username: string; action: 'inserted' | 'updated' | 'skipped' | 'error'; lead_id?: string; reason?: string }[] = [];
+
+    try {
+      // Processar cada username
+      for (let i = 0; i < usernamesToProcess.length; i++) {
+        const username = usernamesToProcess[i].replace('@', '').trim();
+
+        if (!username) continue;
+
+        console.log(`\n[${i + 1}/${usernamesToProcess.length}] Processando @${username}...`);
+
+        try {
+          // Verificar se já existe - buscar hashtags_posts para merge
+          let existingLeadData: { id: string; hashtags_posts: string[] | null } | null = null;
+          const { data: existingLead } = await supabase
+            .from('instagram_leads')
+            .select('id, hashtags_posts')
+            .eq('username', username)
+            .single();
+
+          if (existingLead) {
+            existingLeadData = existingLead;
+            console.log(`   🔄 @${username} já existe - vamos ATUALIZAR (${existingLead.hashtags_posts?.length || 0} hashtags existentes)`);
+          }
+
+          // Navegar DIRETO para o perfil (não usa search)
+          console.log(`   🌐 Navegando para https://www.instagram.com/${username}/`);
+          await page.goto(`https://www.instagram.com/${username}/`, {
+            waitUntil: 'networkidle2',
+            timeout: 30000
+          });
+          await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+
+          // Scrape do perfil (MESMA função do scrape-users)
+          const profileData = await scrapeProfileWithExistingPage(page, username, true);
+
+          if (!profileData || !profileData.username) {
+            console.log(`   ❌ Perfil não encontrado ou privado`);
+            results.push({ username, action: 'error', reason: 'Perfil não encontrado ou privado' });
+            continue;
+          }
+
+          // VALIDAÇÃO 1: FOLLOWERS < 250 (MESMA do scrape-users)
+          const followersCount = profileData.followers_count || 0;
+          if (followersCount < 250) {
+            console.log(`   🚫 REJEITADO: ${followersCount} seguidores < 250`);
+            results.push({ username, action: 'skipped', reason: `Followers ${followersCount} < 250` });
+            continue;
+          }
+
+          // VALIDAÇÃO 2: ACTIVITY SCORE (MESMA do scrape-users)
+          const activityScore = calculateActivityScore(profileData);
+          console.log(`   📊 Activity Score: ${activityScore.score}/100`);
+          if (!activityScore.isActive) {
+            console.log(`   🚫 REJEITADO: Activity score ${activityScore.score} < 50`);
+            results.push({ username, action: 'skipped', reason: `Activity score ${activityScore.score} < 50` });
+            continue;
+          }
+
+          // VALIDAÇÃO 3: IDIOMA (MESMA do scrape-users)
+          const languageDetection = await detectLanguage(profileData.bio || '', username);
+          console.log(`   🌍 Idioma: ${languageDetection.language}`);
+          if (languageDetection.language !== 'pt') {
+            console.log(`   🚫 REJEITADO: Idioma ${languageDetection.language} != pt`);
+            results.push({ username, action: 'skipped', reason: `Idioma ${languageDetection.language} != pt` });
+            continue;
+          }
+
+          // APROVADO - Extrair hashtags dos posts (MESMA lógica do scrape-users)
+          console.log(`   ✅ APROVADO - Extraindo hashtags...`);
+          let hashtagsPosts: string[] | null = null;
+          try {
+            hashtagsPosts = await retryWithBackoff(
+              () => extractHashtagsFromPosts(page, 2),
+              2, 3000
+            );
+            if (hashtagsPosts && hashtagsPosts.length > 0) {
+              console.log(`   🏷️  ${hashtagsPosts.length} hashtags extraídas dos posts`);
+            }
+          } catch (e) {
+            console.log(`   ⚠️  Erro ao extrair hashtags dos posts`);
+          }
+
+          // 📱 EXTRAIR WHATSAPP (MESMA lógica do scrape-users)
+          const waExtraction = extractWhatsAppForPersistence(
+            profileData.website,
+            profileData.bio,
+            profileData.phone
+          );
+          if (waExtraction.whatsapp_number) {
+            console.log(`   📱 WhatsApp encontrado: ${waExtraction.whatsapp_number} (${waExtraction.whatsapp_source})`);
+          }
+
+          // Salvar no banco (UPDATE se existe, INSERT se novo)
+          if (existingLeadData) {
+            // 🔄 UPDATE: Perfil já existe - atualizar dados dinâmicos, merge hashtags
+            const existingHashtags = existingLeadData.hashtags_posts || [];
+            const newHashtags = hashtagsPosts || [];
+            const mergedHashtags = [...new Set([...existingHashtags, ...newHashtags])];
+            console.log(`   🏷️  Hashtags: ${existingHashtags.length} existentes + ${newHashtags.length} novas = ${mergedHashtags.length} únicas`);
+
+            // Calcular lead_score (activity_score 0-100 → lead_score 0-1)
+            const leadScore = activityScore.score ? activityScore.score / 100 : null;
+
+            // Extrair hashtags_bio
+            const hashtagsBio = profileData.bio
+              ? (profileData.bio.match(/#\w+/g) || []).map((h: string) => h.toLowerCase())
+              : null;
+
+            const { error: updateError } = await supabase
+              .from('instagram_leads')
+              .update({
+                full_name: profileData.full_name,
+                bio: profileData.bio,
+                website: profileData.website,
+                email: profileData.email,
+                phone: profileData.phone,
+                followers_count: profileData.followers_count,
+                following_count: profileData.following_count,
+                posts_count: profileData.posts_count,
+                profile_pic_url: profileData.profile_pic_url,
+                is_business_account: profileData.is_business_account,
+                is_verified: profileData.is_verified,
+                business_category: profileData.business_category,
+                city: profileData.city,
+                state: profileData.state,
+                neighborhood: profileData.neighborhood,
+                address: profileData.address,
+                zip_code: profileData.zip_code,
+                activity_score: activityScore.score,
+                is_active: activityScore.isActive,
+                language: languageDetection.language,
+                hashtags_bio: hashtagsBio && hashtagsBio.length > 0 ? hashtagsBio : null,
+                hashtags_posts: mergedHashtags.length > 0 ? mergedHashtags : null,
+                lead_score: leadScore,
+                updated_at: new Date().toISOString(),
+                // RESETAR flags de enriquecimento para reprocessar
+                url_enriched: false,
+                dado_enriquecido: false,
+                website_text: null,
+                hashtags_ready_for_embedding: false,
+                // RESETAR embeddings para re-gerar
+                embedding: null,
+                embedding_at: null,
+                embedding_text: null,
+                // 📱 WhatsApp extraído no scrape
+                ...(waExtraction.whatsapp_number && {
+                  whatsapp_number: waExtraction.whatsapp_number,
+                  whatsapp_source: waExtraction.whatsapp_source,
+                  whatsapp_verified: waExtraction.whatsapp_verified
+                })
+              })
+              .eq('id', existingLeadData.id);
+
+            if (updateError) {
+              console.log(`   ❌ Erro ao atualizar: ${updateError.message}`);
+              results.push({ username, action: 'error', reason: `Erro DB: ${updateError.message}` });
+            } else {
+              console.log(`   ✅ Atualizado ID: ${existingLeadData.id}`);
+              results.push({ username, action: 'updated', lead_id: existingLeadData.id });
+            }
+          } else {
+            // 🆕 INSERT: Novo perfil
+            const insertLeadScore = activityScore.score ? activityScore.score / 100 : null;
+            const insertHashtagsBio = profileData.bio
+              ? (profileData.bio.match(/#\w+/g) || []).map((h: string) => h.toLowerCase())
+              : null;
+
+            const { data: newLead, error: insertError } = await supabase
+              .from('instagram_leads')
+              .insert({
+                username: profileData.username,
+                full_name: profileData.full_name,
+                bio: profileData.bio,
+                website: profileData.website,
+                email: profileData.email,
+                phone: profileData.phone,
+                followers_count: profileData.followers_count,
+                following_count: profileData.following_count,
+                posts_count: profileData.posts_count,
+                profile_pic_url: profileData.profile_pic_url,
+                is_business_account: profileData.is_business_account,
+                is_verified: profileData.is_verified,
+                business_category: profileData.business_category,
+                city: profileData.city,
+                state: profileData.state,
+                neighborhood: profileData.neighborhood,
+                address: profileData.address,
+                zip_code: profileData.zip_code,
+                activity_score: activityScore.score,
+                is_active: activityScore.isActive,
+                language: languageDetection.language,
+                hashtags_bio: insertHashtagsBio && insertHashtagsBio.length > 0 ? insertHashtagsBio : null,
+                hashtags_posts: hashtagsPosts,
+                lead_score: insertLeadScore,
+                lead_source: 'rescue_refresh',
+                captured_at: new Date().toISOString(),
+                dado_enriquecido: false,
+                url_enriched: false,
+                // 📱 WhatsApp extraído no scrape
+                ...(waExtraction.whatsapp_number && {
+                  whatsapp_number: waExtraction.whatsapp_number,
+                  whatsapp_source: waExtraction.whatsapp_source,
+                  whatsapp_verified: waExtraction.whatsapp_verified
+                })
+              })
+              .select()
+              .single();
+
+            if (insertError) {
+              console.log(`   ❌ Erro ao salvar: ${insertError.message}`);
+              results.push({ username, action: 'error', reason: `Erro DB: ${insertError.message}` });
+            } else {
+              console.log(`   ✅ Salvo com ID: ${newLead?.id}`);
+              results.push({ username, action: 'inserted', lead_id: newLead?.id });
+            }
+          }
+
+        } catch (profileError: any) {
+          console.log(`   ❌ Erro: ${profileError.message}`);
+          results.push({ username, action: 'error', reason: `Erro: ${profileError.message}` });
+        }
+
+        // Delay entre perfis
+        if (i < usernamesToProcess.length - 1) {
+          console.log(`   ⏳ Aguardando ${delay_ms}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay_ms));
+        }
+      }
+
+    } finally {
+      // Fechar sessão
+      await cleanup();
+      console.log(`   🧹 Sessão de browser encerrada`);
+    }
+
+    const inserted = results.filter(r => r.action === 'inserted').length;
+    const updated = results.filter(r => r.action === 'updated').length;
+    const skipped = results.filter(r => r.action === 'skipped').length;
+    const errorsCount = results.filter(r => r.action === 'error').length;
+
+    console.log(`\n📊 [${reqId}] Resumo:`);
+    console.log(`   🆕 Inseridos: ${inserted}`);
+    console.log(`   🔄 Atualizados: ${updated}`);
+    console.log(`   ⏭️  Ignorados: ${skipped}`);
+    console.log(`   ❌ Erros: ${errorsCount}`);
+    console.log(`🔧 [${reqId}] ========== SCRAPE-USERS-RESCUE FINALIZADO ==========\n`);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        results,
+        total_requested: usernames.length,
+        total_processed: usernamesToProcess.length,
+        total_inserted: inserted,
+        total_updated: updated,
+        total_skipped: skipped,
+        total_errors: errorsCount,
+        account_used: process.env.INSTAGRAM_REFRESH_USERNAME_HANDLE || 'marciofranco03'
+      }
+    });
+
+  } catch (error: any) {
+    console.error(`❌ [${reqId}] Erro no scrape-users-rescue:`, error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao executar scrape-users-rescue',
+      error: error.message,
+      error_details: {
+        endpoint: 'scrape-users-rescue',
+        request_id: reqId,
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+});
+
+/**
  * POST /api/instagram-scraper/scrape-profile
  * Scrape um perfil específico - retorna dados do perfil (Opção B - Integração N8N)
  *
@@ -3327,6 +3653,12 @@ router.post('/process-all-pre-lead', async (req: Request, res: Response) => {
                 // RESETAR flags de enriquecimento para reprocessar
                 url_enriched: false,
                 dado_enriquecido: false,
+                website_text: null,
+                hashtags_ready_for_embedding: false,
+                // RESETAR embeddings para re-gerar
+                embedding: null,
+                embedding_at: null,
+                embedding_text: null,
                 // 📱 WhatsApp extraído no scrape
                 ...(waExtraction.whatsapp_number && {
                   whatsapp_number: waExtraction.whatsapp_number,

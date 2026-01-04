@@ -389,4 +389,305 @@ export async function cleanupStaleContexts(maxAgeMs: number = 600000): Promise<n
   return staleIds.length;
 }
 
+// ============================================
+// REFRESH ACCOUNT - CONTA DEDICADA ISOLADA
+// ============================================
+
+/**
+ * Browser e página dedicados para a conta de refresh
+ * Completamente isolados do pool de rotação
+ */
+let refreshBrowser: Browser | null = null;
+let refreshPage: Page | null = null;
+let refreshRequestId: string | null = null;
+
+const REFRESH_COOKIES_FILE = path.join(process.cwd(), 'cookies', 'refresh', 'instagram-cookies.json');
+const REFRESH_USER_DATA_DIR = path.join(process.cwd(), 'cookies', 'refresh', 'user-data');
+
+/**
+ * 🆕 Cria contexto DEDICADO para conta de REFRESH
+ *
+ * ISOLAMENTO TOTAL:
+ * - Browser separado do pool de rotação
+ * - Cookies em pasta separada (cookies/refresh/)
+ * - Credenciais fixas (INSTAGRAM_REFRESH_*)
+ * - Não interfere com scrape-tag ou scrape-users normal
+ *
+ * Ideal para:
+ * - Refresh noturno de leads expirados
+ * - Scrapes que não devem competir com o pool principal
+ */
+export async function createRefreshContext(): Promise<{
+  page: Page;
+  requestId: string;
+  cleanup: () => Promise<void>;
+}> {
+  const puppeteer = await import('puppeteer');
+
+  // Verificar se já existe browser de refresh válido
+  if (refreshBrowser && refreshBrowser.isConnected()) {
+    // Verificar se página está válida
+    if (refreshPage && !refreshPage.isClosed()) {
+      try {
+        await refreshPage.evaluate(() => window.location.href);
+        console.log(`♻️  [REFRESH] Reutilizando sessão existente: ${refreshRequestId}`);
+        return {
+          page: refreshPage,
+          requestId: refreshRequestId!,
+          cleanup: async () => {
+            try {
+              // Salvar cookies antes de fechar
+              if (refreshPage && !refreshPage.isClosed()) {
+                const cookies = await refreshPage.cookies();
+                const cookiesDir = path.dirname(REFRESH_COOKIES_FILE);
+                if (!fs.existsSync(cookiesDir)) {
+                  fs.mkdirSync(cookiesDir, { recursive: true });
+                }
+                fs.writeFileSync(REFRESH_COOKIES_FILE, JSON.stringify(cookies, null, 2));
+                console.log(`   💾 [REFRESH] ${cookies.length} cookies salvos`);
+              }
+            } catch (e: any) {
+              console.warn(`   ⚠️  [REFRESH] Erro ao salvar cookies: ${e.message}`);
+            }
+            // Fechar browser
+            await closeRefreshBrowser();
+          }
+        };
+      } catch {
+        console.log(`⚠️  [REFRESH] Página inválida, recriando...`);
+        try { await refreshPage.close(); } catch {}
+        refreshPage = null;
+      }
+    }
+  } else {
+    // Browser não existe ou desconectado - criar novo
+    if (refreshBrowser) {
+      try { await refreshBrowser.close(); } catch {}
+    }
+    refreshBrowser = null;
+    refreshPage = null;
+    refreshRequestId = null;
+  }
+
+  // Criar diretório de user-data se não existir
+  if (!fs.existsSync(REFRESH_USER_DATA_DIR)) {
+    fs.mkdirSync(REFRESH_USER_DATA_DIR, { recursive: true });
+    console.log(`📁 [REFRESH] Criado diretório: ${REFRESH_USER_DATA_DIR}`);
+  }
+
+  // Criar novo browser dedicado para refresh
+  if (!refreshBrowser || !refreshBrowser.isConnected()) {
+    console.log(`🚀 [REFRESH] Iniciando browser dedicado para conta de refresh...`);
+
+    refreshBrowser = await puppeteer.default.launch({
+      headless: false,
+      userDataDir: REFRESH_USER_DATA_DIR,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+        '--window-size=1280,720'
+      ],
+      defaultViewport: { width: 1280, height: 720 }
+    });
+
+    console.log(`✅ [REFRESH] Browser dedicado iniciado`);
+  }
+
+  // Criar página
+  const pages = await refreshBrowser.pages();
+  refreshPage = pages[0] || await refreshBrowser.newPage();
+  refreshRequestId = `refresh_${++pageCounter}_${Date.now()}`;
+
+  console.log(`📄 [REFRESH] Página criada: ${refreshRequestId}`);
+
+  // Aplicar stealth
+  await applyFullStealth(refreshPage);
+
+  // Navegar para Instagram
+  await refreshPage.goto('https://www.instagram.com/', {
+    waitUntil: 'domcontentloaded',
+    timeout: 30000
+  }).catch(() => {});
+
+  // Carregar cookies se existirem
+  if (fs.existsSync(REFRESH_COOKIES_FILE)) {
+    try {
+      const cookiesData = fs.readFileSync(REFRESH_COOKIES_FILE, 'utf8');
+      const cookies = JSON.parse(cookiesData);
+      if (Array.isArray(cookies) && cookies.length > 0) {
+        await refreshPage.setCookie(...cookies);
+        console.log(`   🔑 [REFRESH] ${cookies.length} cookies aplicados`);
+      }
+    } catch (error: any) {
+      console.warn(`   ⚠️  [REFRESH] Erro ao carregar cookies: ${error.message}`);
+    }
+  }
+
+  // Verificar se está logado (via cookies - igual sistema principal)
+  await refreshPage.goto('https://www.instagram.com/', {
+    waitUntil: 'networkidle2',
+    timeout: 60000
+  });
+
+  const cookies = await refreshPage.cookies();
+  const hasSessionId = cookies.some(cookie => cookie.name === 'sessionid' && cookie.value);
+  const hasDsUserId = cookies.some(cookie => cookie.name === 'ds_user_id' && cookie.value);
+  const isLogged = hasSessionId && hasDsUserId;
+
+  if (!isLogged) {
+    console.log(`🔐 [REFRESH] Não logado - iniciando login com conta de refresh...`);
+
+    const username = process.env.INSTAGRAM_REFRESH_USERNAME;
+    const password = process.env.INSTAGRAM_REFRESH_PASSWORD;
+
+    if (!username || !password) {
+      throw new Error('[REFRESH] Credenciais INSTAGRAM_REFRESH_* não configuradas no .env');
+    }
+
+    // Navegar para login
+    await refreshPage.goto('https://www.instagram.com/accounts/login/', {
+      waitUntil: 'networkidle2',
+      timeout: 120000
+    }).catch(() => {});
+
+    // ⚠️ Instagram usa seletores dinâmicos - usar múltiplas estratégias (igual performAutoLogin)
+    const usernameSelector = 'input[type="text"], input[name="username"], input[autocomplete="username"]';
+    const passwordSelector = 'input[type="password"], input[name="password"], input[autocomplete="current-password"]';
+
+    // Aguardar campos de login com timeout maior
+    await refreshPage.waitForSelector(usernameSelector, { timeout: 20000 });
+    await refreshPage.waitForSelector(passwordSelector, { timeout: 20000 });
+
+    // Limpar campos antes de preencher
+    await refreshPage.evaluate((userSel: string, passSel: string) => {
+      const userInput = document.querySelector(userSel) as HTMLInputElement;
+      const passInput = document.querySelector(passSel) as HTMLInputElement;
+      if (userInput) userInput.value = '';
+      if (passInput) passInput.value = '';
+    }, usernameSelector, passwordSelector);
+
+    // 🕵️ STEALTH: Digitar como humano (delay entre caracteres)
+    const humanDelay = () => new Promise(r => setTimeout(r, 400 + Math.random() * 200));
+    await humanDelay();
+
+    // Digitar username caractere por caractere
+    await refreshPage.click(usernameSelector);
+    for (const char of username) {
+      await refreshPage.keyboard.type(char);
+      await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
+    }
+
+    await humanDelay();
+
+    // Digitar password caractere por caractere
+    await refreshPage.click(passwordSelector);
+    for (const char of password) {
+      await refreshPage.keyboard.type(char);
+      await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
+    }
+
+    // ⚠️ Botão agora é div com texto "Log in" - usar múltiplas estratégias
+    await humanDelay();
+    const clicked = await refreshPage.evaluate(() => {
+      // Tentar encontrar botão por texto "Log in" ou "Entrar"
+      const buttons = Array.from(document.querySelectorAll('button, div[role="button"]'));
+      const loginBtn = buttons.find(btn => {
+        const text = btn.textContent?.trim().toLowerCase() || '';
+        return text === 'log in' || text === 'entrar';
+      }) as HTMLElement;
+
+      if (loginBtn) {
+        loginBtn.click();
+        return true;
+      }
+
+      // Fallback: tentar button[type="submit"]
+      const submitBtn = document.querySelector('button[type="submit"]') as HTMLElement;
+      if (submitBtn) {
+        submitBtn.click();
+        return true;
+      }
+
+      return false;
+    });
+
+    if (!clicked) {
+      console.log('   ⚠️  [REFRESH] Botão de login não encontrado - tentando Enter');
+      await refreshPage.keyboard.press('Enter');
+    }
+
+    console.log(`   ⏳ [REFRESH] Aguardando login... (pode precisar verificação manual)`);
+
+    // Aguardar login (até 90 segundos com polling via cookies)
+    const deadline = Date.now() + 90000;
+    let loggedAfterLogin = false;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 2000 + Math.random() * 1000));
+      const cookiesAfter = await refreshPage.cookies();
+      const hasSession = cookiesAfter.some(c => c.name === 'sessionid' && c.value);
+      const hasUserId = cookiesAfter.some(c => c.name === 'ds_user_id' && c.value);
+      loggedAfterLogin = hasSession && hasUserId;
+      if (loggedAfterLogin) break;
+    }
+
+    if (loggedAfterLogin) {
+      console.log(`   ✅ [REFRESH] Login bem-sucedido!`);
+
+      // Salvar cookies
+      const cookies = await refreshPage.cookies();
+      const cookiesDir = path.dirname(REFRESH_COOKIES_FILE);
+      if (!fs.existsSync(cookiesDir)) {
+        fs.mkdirSync(cookiesDir, { recursive: true });
+      }
+      fs.writeFileSync(REFRESH_COOKIES_FILE, JSON.stringify(cookies, null, 2));
+      console.log(`   💾 [REFRESH] ${cookies.length} cookies salvos`);
+    } else {
+      throw new Error('[REFRESH] Falha no login - verifique credenciais ou faça login manual');
+    }
+  } else {
+    console.log(`✅ [REFRESH] Sessão válida encontrada`);
+  }
+
+  // Cleanup function - salva cookies e fecha browser
+  const cleanup = async () => {
+    try {
+      // Salvar cookies antes de fechar
+      if (refreshPage && !refreshPage.isClosed()) {
+        const cookies = await refreshPage.cookies();
+        const cookiesDir = path.dirname(REFRESH_COOKIES_FILE);
+        if (!fs.existsSync(cookiesDir)) {
+          fs.mkdirSync(cookiesDir, { recursive: true });
+        }
+        fs.writeFileSync(REFRESH_COOKIES_FILE, JSON.stringify(cookies, null, 2));
+        console.log(`   💾 [REFRESH] ${cookies.length} cookies salvos`);
+      }
+    } catch (e: any) {
+      console.warn(`   ⚠️  [REFRESH] Erro ao salvar cookies: ${e.message}`);
+    }
+
+    // Fechar browser
+    await closeRefreshBrowser();
+  };
+
+  return { page: refreshPage, requestId: refreshRequestId, cleanup };
+}
+
+/**
+ * Fecha o browser de refresh completamente
+ */
+export async function closeRefreshBrowser(): Promise<void> {
+  if (refreshPage && !refreshPage.isClosed()) {
+    try { await refreshPage.close(); } catch {}
+  }
+  if (refreshBrowser && refreshBrowser.isConnected()) {
+    try { await refreshBrowser.close(); } catch {}
+  }
+  refreshBrowser = null;
+  refreshPage = null;
+  refreshRequestId = null;
+  console.log(`🛑 [REFRESH] Browser de refresh fechado`);
+}
+
 
