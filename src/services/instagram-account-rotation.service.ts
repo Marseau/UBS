@@ -194,7 +194,7 @@ class InstagramAccountRotation {
         lastFailureTime: acc.lastFailureTime,
         isBlocked: acc.isBlocked,
         cooldownUntil: acc.cooldownUntil,
-        usageCount: this.state.accounts[idx]?.usageCount || 0
+        usageCount: this.state.accounts.find(s => s.username === acc.username)?.usageCount || 0
       }));
 
       fs.writeFileSync(STATE_FILE, JSON.stringify(this.state, null, 2));
@@ -716,7 +716,7 @@ class InstagramAccountRotation {
       .map((acc, idx) => ({
         account: acc,
         index: idx,
-        usageCount: this.state.accounts[idx]?.usageCount || 0,
+        usageCount: this.state.accounts.find(s => s.username === acc.username)?.usageCount || 0,
         cooldownRemaining: this.getAccountCooldownRemaining(acc)
       }))
       .filter(item => item.account.username !== currentAccount.username)
@@ -896,6 +896,7 @@ class InstagramAccountRotation {
       cooldownRemaining: number;
       cooldownUntil: string | null;
       isCurrent: boolean;
+      usageCount: number;
     }>;
   } {
     const timeSinceLastRotation = Date.now() - this.state.lastRotationTime;
@@ -909,7 +910,7 @@ class InstagramAccountRotation {
       rotationDelayMinutes: Math.ceil(rotationDelayRemaining / 60000),
       canRotateNow: rotationDelayRemaining === 0,
       lastSyncWithDb: this.syncInitialized,
-      accounts: this.accounts.map(acc => ({
+      accounts: this.accounts.map((acc, idx) => ({
         username: acc.username,
         instagramUsername: acc.instagramUsername || '',
         failureCount: acc.failureCount,
@@ -917,7 +918,8 @@ class InstagramAccountRotation {
         cooledDown: this.hasAccountCooledDown(acc),
         cooldownRemaining: this.getAccountCooldownRemaining(acc),
         cooldownUntil: acc.cooldownUntil ? new Date(acc.cooldownUntil).toISOString() : null,
-        isCurrent: acc.username === currentAcc.username
+        isCurrent: acc.username === currentAcc.username,
+        usageCount: this.state.accounts.find(s => s.username === acc.username)?.usageCount || 0
       }))
     };
   }
@@ -983,7 +985,7 @@ class InstagramAccountRotation {
       .map((acc, idx) => ({
         account: acc,
         index: idx,
-        usageCount: this.state.accounts[idx]?.usageCount || 0,
+        usageCount: this.state.accounts.find(s => s.username === acc.username)?.usageCount || 0,
         lastFailureTime: acc.lastFailureTime || 0,
         available: this.hasAccountCooledDown(acc),
         isCurrent: idx === this.state.currentAccountIndex
