@@ -2864,6 +2864,35 @@ router.post('/rotation-sync', async (_req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/instagram-scraper/rotation-test
+ * 🧪 TESTE: Simula ensureAvailableAccount() para testar incremento de usageCount
+ */
+router.post('/rotation-test', async (_req: Request, res: Response) => {
+  try {
+    const { getAccountRotation } = await import('../services/instagram-account-rotation.service');
+    const rotation = getAccountRotation();
+
+    const statsBefore = rotation.getStats();
+    const result = await rotation.ensureAvailableAccount();
+    const statsAfter = rotation.getStats();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Teste de rotação executado',
+      result,
+      usageCountBefore: statsBefore.accounts.map(a => ({ ig: a.instagramUsername, usage: a.usageCount })),
+      usageCountAfter: statsAfter.accounts.map(a => ({ ig: a.instagramUsername, usage: a.usageCount }))
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Erro no teste de rotação',
+      error: error.message
+    });
+  }
+});
+
 // ============================================================================
 // PRE-LEADS: Sistema de coleta rápida de seguidores
 // ============================================================================

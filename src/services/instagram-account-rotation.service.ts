@@ -70,6 +70,19 @@ class InstagramAccountRotation {
     this.initializeAccounts();
     this.state = this.loadState();
 
+    // 🔧 FIX: Inicializar state.accounts se estiver vazio (primeira execução)
+    if (!this.state.accounts || this.state.accounts.length === 0) {
+      this.state.accounts = this.accounts.map(acc => ({
+        username: acc.username,
+        instagramUsername: acc.instagramUsername,
+        failureCount: 0,
+        lastFailureTime: 0,
+        isBlocked: false,
+        usageCount: 0
+      }));
+      console.log(`📝 Inicializado state.accounts com ${this.state.accounts.length} contas`);
+    }
+
     // Sincronizar com BD de forma assíncrona após inicialização
     this.syncFromDatabase().catch(err => {
       console.warn(`⚠️  Erro na sincronização inicial com BD: ${err.message}`);
@@ -277,6 +290,19 @@ class InstagramAccountRotation {
         if (dbAccount.is_current_account) {
           currentAccountFromDb = dbAccount.account_email;
         }
+
+        // 📱 Sincronizar usage_count do BD
+        if (typeof dbAccount.usage_count === 'number') {
+          const stateAccount = this.state.accounts.find(s => s.username === account.username);
+          if (stateAccount) {
+            const currentUsage = stateAccount.usageCount || 0;
+            if (dbAccount.usage_count !== currentUsage) {
+              console.log(`   📊 @${account.instagramUsername}: usage_count ${currentUsage} → ${dbAccount.usage_count} (do BD)`);
+              stateAccount.usageCount = dbAccount.usage_count;
+              hasChanges = true;
+            }
+          }
+        }
       }
 
       // Sincronizar conta ativa do BD
@@ -291,14 +317,18 @@ class InstagramAccountRotation {
 
       if (hasChanges) {
         // Salvar mudanças no JSON (sem re-sincronizar para BD)
-        this.state.accounts = this.accounts.map(acc => ({
-          username: acc.username,
-          instagramUsername: acc.instagramUsername,
-          failureCount: acc.failureCount,
-          lastFailureTime: acc.lastFailureTime,
-          isBlocked: acc.isBlocked,
-          cooldownUntil: acc.cooldownUntil
-        }));
+        this.state.accounts = this.accounts.map(acc => {
+          const stateAcc = this.state.accounts.find(s => s.username === acc.username);
+          return {
+            username: acc.username,
+            instagramUsername: acc.instagramUsername,
+            failureCount: acc.failureCount,
+            lastFailureTime: acc.lastFailureTime,
+            isBlocked: acc.isBlocked,
+            cooldownUntil: acc.cooldownUntil,
+            usageCount: stateAcc?.usageCount || 0
+          };
+        });
         fs.writeFileSync(STATE_FILE, JSON.stringify(this.state, null, 2));
         console.log(`   ✅ JSON atualizado com dados do BD`);
       }
@@ -335,6 +365,10 @@ class InstagramAccountRotation {
           cooldownUntil = new Date(account.lastFailureTime + ACCOUNT_COOLDOWN_MS).toISOString();
         }
 
+        // Buscar usageCount do state
+        const accountState = this.state.accounts.find(s => s.username === account.username);
+        const usageCount = accountState?.usageCount || 0;
+
         const { error } = await supabase
           .from('instagram_account_rotation_state')
           .upsert({
@@ -346,6 +380,7 @@ class InstagramAccountRotation {
             is_current_account: isCurrent,
             cooldown_until: cooldownUntil,
             last_rotation_time: this.state.lastRotationTime ? new Date(this.state.lastRotationTime).toISOString() : null,
+            usage_count: usageCount,
             updated_at: new Date().toISOString()
           }, {
             onConflict: 'account_email'
@@ -957,18 +992,19 @@ class InstagramAccountRotation {
 
     // 🔧 FIX: Se conta atual está funcionando, USE ELA - não tente otimizar
     if (currentAvailable) {
-      // 🔄 ROUND-ROBIN: Incrementar usageCount da conta atual
-      const currentIdx = this.state.currentAccountIndex;
-      if (this.state.accounts[currentIdx]) {
-        this.state.accounts[currentIdx].usageCount =
-          (this.state.accounts[currentIdx].usageCount || 0) + 1;
+      // 🔄 ROUND-ROBIN: Incrementar usageCount da conta atual (por username, não índice)
+      const accountState = this.state.accounts.find(s => s.username === currentAccount.username);
+      if (accountState) {
+        accountState.usageCount = (accountState.usageCount || 0) + 1;
       }
 
-      const usageCount = this.state.accounts[currentIdx]?.usageCount || 1;
+      const usageCount = accountState?.usageCount || 1;
       console.log(`   ✅ Conta atual @${currentAccount.instagramUsername} está funcionando - USANDO (uso: ${usageCount}x)`);
       console.log(`====================================================\n`);
-      // 🔧 FIX: Salvar estado se houve correções automáticas
-      await this.flushStateIfNeeded();
+
+      // 🔧 FIX: SEMPRE salvar estado após incrementar usageCount
+      await this.saveState();
+
       return {
         success: true,
         account: currentAccount.instagramUsername || currentAccount.username,
@@ -1069,15 +1105,15 @@ class InstagramAccountRotation {
     this.state.currentAccountIndex = nextAvailable.index;
     this.state.lastRotationTime = Date.now();
 
-    // 🔄 ROUND-ROBIN: Incrementar usageCount da nova conta
-    const accountState = this.state.accounts[nextAvailable.index];
+    // 🔄 ROUND-ROBIN: Incrementar usageCount da nova conta (por username, não índice)
+    const accountState = this.state.accounts.find(s => s.username === nextAvailable.account.username);
     if (accountState) {
       accountState.usageCount = (accountState.usageCount || 0) + 1;
     }
 
     await this.saveState();
 
-    const newUsageCount = this.state.accounts[nextAvailable.index]?.usageCount || 1;
+    const newUsageCount = accountState?.usageCount || 1;
     console.log(`   ✅ Rotacionado para @${nextAvailable.account.instagramUsername} (uso: ${newUsageCount}x)`);
     console.log(`====================================================\n`);
     return {
