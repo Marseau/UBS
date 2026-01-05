@@ -650,18 +650,39 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
     console.log(`🔧 [${reqId}] Usernames recebidos: ${usernames.length} (max: ${max_profiles})`);
 
     // Importar funções necessárias (MESMAS do scrape-users)
-    const { createRefreshContext } = await import('../services/instagram-context-manager.service');
+    const { createRefreshContext, closeRefreshBrowser } = await import('../services/instagram-context-manager.service');
     const { scrapeProfileWithExistingPage } = await import('../services/instagram-scraper-single.service');
     const { calculateActivityScore, extractHashtagsFromPosts, retryWithBackoff } = await import('../services/instagram-profile.utils');
     const { detectLanguage } = await import('../services/language-country-detector.service');
 
     // Criar contexto com conta de refresh (isolada)
-    const { page, requestId, cleanup } = await createRefreshContext();
-    console.log(`🔧 [${reqId}] Contexto de refresh criado: ${requestId}`);
+    let currentContext = await createRefreshContext();
+    let page = currentContext.page;
+    let cleanup = currentContext.cleanup;
+    console.log(`🔧 [${reqId}] Contexto de refresh criado: ${currentContext.requestId}`);
+
+    // Função para recriar contexto se desconectado
+    const ensureValidPage = async (): Promise<boolean> => {
+      try {
+        // Testar se a página ainda está conectada
+        await page.evaluate('1+1');
+        return true;
+      } catch {
+        console.log(`   ⚠️  Página desconectada, recriando contexto...`);
+        try {
+          await closeRefreshBrowser();
+        } catch {}
+        currentContext = await createRefreshContext();
+        page = currentContext.page;
+        cleanup = currentContext.cleanup;
+        console.log(`   ✅ Novo contexto criado: ${currentContext.requestId}`);
+        return true;
+      }
+    };
 
     // Limitar ao máximo configurado
     const usernamesToProcess = usernames.slice(0, max_profiles);
-    const results: { username: string; action: 'inserted' | 'updated' | 'skipped' | 'error'; lead_id?: string; reason?: string }[] = [];
+    const results: { username: string; action: 'inserted' | 'updated' | 'skipped' | 'error' | 'deleted'; lead_id?: string; reason?: string }[] = [];
 
     try {
       // Processar cada username
@@ -671,6 +692,9 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
         if (!username) continue;
 
         console.log(`\n[${i + 1}/${usernamesToProcess.length}] Processando @${username}...`);
+
+        // Verificar se página ainda é válida antes de cada perfil
+        await ensureValidPage();
 
         try {
           // Verificar se já existe - buscar hashtags_posts para merge
@@ -699,33 +723,54 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
 
           if (!profileData || !profileData.username) {
             console.log(`   ❌ Perfil não encontrado ou privado`);
-            results.push({ username, action: 'error', reason: 'Perfil não encontrado ou privado' });
+            // DELETAR lead do banco (rescue = limpeza de leads que não existem mais)
+            try {
+              console.log(`   🗑️  Removendo lead do banco (perfil inexistente)...`);
+              await supabase.from('instagram_leads').delete().eq('username', username);
+              console.log(`   ✅ Lead removido`);
+            } catch (delErr: any) {
+              console.log(`   ⚠️  Erro ao remover: ${delErr.message}`);
+            }
+            results.push({ username, action: 'deleted', reason: 'Perfil não encontrado ou privado' });
             continue;
           }
 
-          // VALIDAÇÃO 1: FOLLOWERS < 250 (MESMA do scrape-users)
-          const followersCount = profileData.followers_count || 0;
-          if (followersCount < 250) {
-            console.log(`   🚫 REJEITADO: ${followersCount} seguidores < 250`);
-            results.push({ username, action: 'skipped', reason: `Followers ${followersCount} < 250` });
-            continue;
-          }
+          // ========================================
+          // 🚫 VALIDAÇÕES (2 FILTROS) - Mesmas regras de scrape-users/scrape-tag
+          // Se falhar: DELETA o lead do banco (rescue = limpeza)
+          // ========================================
 
-          // VALIDAÇÃO 2: ACTIVITY SCORE (MESMA do scrape-users)
+          // VALIDAÇÃO 1: ACTIVITY SCORE (com auto-approve para website/bio>=100)
           const activityScore = calculateActivityScore(profileData);
           console.log(`   📊 Activity Score: ${activityScore.score}/100`);
           if (!activityScore.isActive) {
             console.log(`   🚫 REJEITADO: Activity score ${activityScore.score} < 50`);
-            results.push({ username, action: 'skipped', reason: `Activity score ${activityScore.score} < 50` });
+            // DELETAR lead do banco (rescue = limpeza de leads inválidos)
+            try {
+              console.log(`   🗑️  Removendo lead do banco...`);
+              await supabase.from('instagram_leads').delete().eq('username', username);
+              console.log(`   ✅ Lead removido`);
+            } catch (delErr: any) {
+              console.log(`   ⚠️  Erro ao remover: ${delErr.message}`);
+            }
+            results.push({ username, action: 'deleted', reason: `Activity score ${activityScore.score} < 50` });
             continue;
           }
 
-          // VALIDAÇÃO 3: IDIOMA (MESMA do scrape-users)
+          // VALIDAÇÃO 2: IDIOMA (MESMA do scrape-users)
           const languageDetection = await detectLanguage(profileData.bio || '', username);
           console.log(`   🌍 Idioma: ${languageDetection.language}`);
           if (languageDetection.language !== 'pt') {
             console.log(`   🚫 REJEITADO: Idioma ${languageDetection.language} != pt`);
-            results.push({ username, action: 'skipped', reason: `Idioma ${languageDetection.language} != pt` });
+            // DELETAR lead do banco (rescue = limpeza de leads inválidos)
+            try {
+              console.log(`   🗑️  Removendo lead do banco...`);
+              await supabase.from('instagram_leads').delete().eq('username', username);
+              console.log(`   ✅ Lead removido`);
+            } catch (delErr: any) {
+              console.log(`   ⚠️  Erro ao remover: ${delErr.message}`);
+            }
+            results.push({ username, action: 'deleted', reason: `Idioma ${languageDetection.language} != pt` });
             continue;
           }
 
@@ -881,7 +926,47 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
 
         } catch (profileError: any) {
           console.log(`   ❌ Erro: ${profileError.message}`);
-          results.push({ username, action: 'error', reason: `Erro: ${profileError.message}` });
+
+          // Se frame desconectou, recriar contexto para próximos perfis
+          const isDetachedFrame = profileError.message?.includes('detached Frame') ||
+                                  profileError.message?.includes('Target closed') ||
+                                  profileError.message?.includes('Session closed');
+
+          if (isDetachedFrame) {
+            console.log(`   🔄 Recriando contexto do browser...`);
+            try {
+              await closeRefreshBrowser();
+            } catch {}
+            try {
+              currentContext = await createRefreshContext();
+              page = currentContext.page;
+              cleanup = currentContext.cleanup;
+              console.log(`   ✅ Contexto recriado: ${currentContext.requestId}`);
+            } catch (recreateErr: any) {
+              console.log(`   ❌ Falha ao recriar contexto: ${recreateErr.message}`);
+            }
+            results.push({ username, action: 'error', reason: `Browser desconectou (retry necessário)` });
+            continue;
+          }
+
+          // Se o perfil não existe ou está privado, DELETAR do banco (rescue = limpeza)
+          const isProfileGone = profileError.message?.includes('not found') ||
+                                profileError.message?.includes('não encontrado') ||
+                                profileError.message?.includes('privado');
+
+          if (isProfileGone) {
+            try {
+              console.log(`   🗑️  Removendo lead do banco (perfil inexistente)...`);
+              await supabase.from('instagram_leads').delete().eq('username', username);
+              console.log(`   ✅ Lead removido`);
+              results.push({ username, action: 'deleted', reason: `Erro: ${profileError.message}` });
+            } catch (delErr: any) {
+              console.log(`   ⚠️  Erro ao remover: ${delErr.message}`);
+              results.push({ username, action: 'error', reason: `Erro: ${profileError.message}` });
+            }
+          } else {
+            results.push({ username, action: 'error', reason: `Erro: ${profileError.message}` });
+          }
         }
 
         // Delay entre perfis
@@ -900,12 +985,14 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
     const inserted = results.filter(r => r.action === 'inserted').length;
     const updated = results.filter(r => r.action === 'updated').length;
     const skipped = results.filter(r => r.action === 'skipped').length;
+    const deleted = results.filter(r => r.action === 'deleted').length;
     const errorsCount = results.filter(r => r.action === 'error').length;
 
     console.log(`\n📊 [${reqId}] Resumo:`);
     console.log(`   🆕 Inseridos: ${inserted}`);
     console.log(`   🔄 Atualizados: ${updated}`);
     console.log(`   ⏭️  Ignorados: ${skipped}`);
+    console.log(`   🗑️  Deletados: ${deleted}`);
     console.log(`   ❌ Erros: ${errorsCount}`);
     console.log(`🔧 [${reqId}] ========== SCRAPE-USERS-RESCUE FINALIZADO ==========\n`);
 
@@ -918,6 +1005,7 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
         total_inserted: inserted,
         total_updated: updated,
         total_skipped: skipped,
+        total_deleted: deleted,
         total_errors: errorsCount,
         account_used: process.env.INSTAGRAM_REFRESH_USERNAME_HANDLE || 'marciofranco03'
       }
@@ -1161,38 +1249,11 @@ router.post('/scrape-profiles-batch', async (req: Request, res: Response) => {
           console.log(`   ✅ @${username}: ${profileData.followers_count || 0} seguidores, ${profileData.posts_count || 0} posts`);
 
           // ========================================
-          // 🚫 VALIDAÇÕES EARLY-EXIT (3 FILTROS)
+          // 🚫 VALIDAÇÕES EARLY-EXIT (2 FILTROS)
+          // Mesmas regras de scrape-users e scrape-tag
           // ========================================
 
-          // VALIDAÇÃO 1: FOLLOWERS < 250
-          const currentFollowersCount = profileData.followers_count || 0;
-          if (currentFollowersCount < 250) {
-            console.log(`   🚫 REJEITADO (Validação 1/3): @${username} tem apenas ${currentFollowersCount} seguidores (mínimo: 250)`);
-
-            // Delay humano: analisando decisão de rejeitar
-            await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 1200)); // 0.8-2s
-
-            try {
-              console.log(`   🗑️  Removendo do banco...`);
-              await supabase.from('instagram_leads').delete().eq('username', username);
-              await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 800)); // 0.5-1.3s após deleção
-              console.log(`   ✅ Removido`);
-            } catch {}
-
-            errors.push({
-              username,
-              success: false,
-              error: `Rejeitado: ${currentFollowersCount} seguidores < 250 (mínimo)`
-            });
-
-            // Pausa antes de ir para o próximo (pensando/descansando)
-            const pauseDelay = 1200 + Math.random() * 1800; // 1.2-3s
-            console.log(`   ⏭️  Pulando para próximo perfil (aguardando ${(pauseDelay/1000).toFixed(1)}s)...\n`);
-            await new Promise(resolve => setTimeout(resolve, pauseDelay));
-            continue;
-          }
-
-          // VALIDAÇÃO 2: ACTIVITY SCORE < 50
+          // VALIDAÇÃO 1: ACTIVITY SCORE < 50 (com auto-approve para website/bio>=100)
           const { calculateActivityScore } = await import('../services/instagram-profile.utils');
           const activityScore = calculateActivityScore(profileData);
           (profileData as any).activity_score = activityScore.score;
@@ -1201,7 +1262,7 @@ router.post('/scrape-profiles-batch', async (req: Request, res: Response) => {
           console.log(`   📊 Activity Score: ${activityScore.score}/100 (${activityScore.isActive ? 'ATIVA ✅' : 'INATIVA ❌'})`);
 
           if (!activityScore.isActive) {
-            console.log(`   🚫 REJEITADO (Validação 2/3): Activity score muito baixo (score: ${activityScore.score})`);
+            console.log(`   🚫 REJEITADO (Validação 1/2): Activity score muito baixo (score: ${activityScore.score})`);
 
             // Delay humano: analisando decisão de rejeitar
             await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 1200)); // 0.8-2s
@@ -1226,7 +1287,7 @@ router.post('/scrape-profiles-batch', async (req: Request, res: Response) => {
             continue;
           }
 
-          // VALIDAÇÃO 3: IDIOMA != PT
+          // VALIDAÇÃO 2: IDIOMA != PT
           const { detectLanguage } = await import('../services/language-country-detector.service');
           console.log(`   🌍 Detectando idioma da bio...`);
           const languageDetection = await detectLanguage(profileData.bio || '', username);
@@ -1234,7 +1295,7 @@ router.post('/scrape-profiles-batch', async (req: Request, res: Response) => {
           console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
 
           if (languageDetection.language !== 'pt') {
-            console.log(`   🚫 REJEITADO (Validação 3/3): Idioma não-português (${languageDetection.language})`);
+            console.log(`   🚫 REJEITADO (Validação 2/2): Idioma não-português (${languageDetection.language})`);
 
             // Delay humano: analisando decisão de rejeitar
             await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 1200)); // 0.8-2s
@@ -1259,7 +1320,7 @@ router.post('/scrape-profiles-batch', async (req: Request, res: Response) => {
             continue;
           }
 
-          console.log(`   ✅ PERFIL APROVADO NAS 3 VALIDAÇÕES - Prosseguindo com scraping completo...\n`);
+          console.log(`   ✅ PERFIL APROVADO NAS 2 VALIDAÇÕES - Prosseguindo com scraping completo...\n`);
 
           // ========================================
           // 🆕 EXTRAÇÃO DE HASHTAGS DOS POSTS (2 posts)
@@ -3151,39 +3212,32 @@ router.post('/process-pre-lead', async (req: Request, res: Response) => {
           console.log(`   ✅ @${username}: ${profileData.followers_count || 0} seguidores, ${profileData.posts_count || 0} posts`);
 
           // ========================================
-          // 🚫 VALIDAÇÕES EARLY-EXIT (3 FILTROS) - IGUAL SCRAPE-TAG
+          // 🚫 VALIDAÇÕES EARLY-EXIT (2 FILTROS) - Mesmas regras de scrape-users/scrape-tag
           // ========================================
 
-          // VALIDAÇÃO 1: FOLLOWERS < 250
-          const currentFollowersCount = profileData.followers_count || 0;
-          if (currentFollowersCount < 250) {
-            console.log(`   🚫 REJEITADO (Validação 1/3): @${username} tem apenas ${currentFollowersCount} seguidores (mínimo: 250)`);
+          // VALIDAÇÃO 1: ACTIVITY SCORE < 50 (com auto-approve para website/bio>=100)
+          const { calculateActivityScore } = await import('../services/instagram-profile.utils');
+          const activityScore = calculateActivityScore(profileData);
+          console.log(`   📊 Activity Score: ${activityScore.score}/100 (${activityScore.isActive ? 'ATIVA ✅' : 'INATIVA ❌'})`);
+
+          if (!activityScore.isActive) {
+            console.log(`   🚫 REJEITADO (Validação 1/2): Activity score muito baixo (score: ${activityScore.score})`);
             isValid = false;
-            rejectionReason = `Followers ${currentFollowersCount} < 250`;
+            rejectionReason = `Activity score ${activityScore.score} < 50`;
           } else {
-            // VALIDAÇÃO 2: ACTIVITY SCORE < 50
-            const { calculateActivityScore } = await import('../services/instagram-profile.utils');
-            const activityScore = calculateActivityScore(profileData);
-            console.log(`   📊 Activity Score: ${activityScore.score}/100 (${activityScore.isActive ? 'ATIVA ✅' : 'INATIVA ❌'})`);
+            // VALIDAÇÃO 2: IDIOMA != PT
+            const { detectLanguage } = await import('../services/language-country-detector.service');
+            console.log(`   🌍 Detectando idioma da bio...`);
+            const languageDetection = await detectLanguage(profileData.bio || '', username);
+            console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
 
-            if (!activityScore.isActive) {
-              console.log(`   🚫 REJEITADO (Validação 2/3): Activity score muito baixo (score: ${activityScore.score})`);
+            if (languageDetection.language !== 'pt') {
+              console.log(`   🚫 REJEITADO (Validação 2/2): Idioma não-português (${languageDetection.language})`);
               isValid = false;
-              rejectionReason = `Activity score ${activityScore.score} < 50`;
+              rejectionReason = `Idioma ${languageDetection.language} != pt`;
             } else {
-              // VALIDAÇÃO 3: IDIOMA != PT
-              const { detectLanguage } = await import('../services/language-country-detector.service');
-              console.log(`   🌍 Detectando idioma da bio...`);
-              const languageDetection = await detectLanguage(profileData.bio || '', username);
-              console.log(`   🎯 Idioma detectado: ${languageDetection.language} (${languageDetection.confidence})`);
-
-              if (languageDetection.language !== 'pt') {
-                console.log(`   🚫 REJEITADO (Validação 3/3): Idioma não-português (${languageDetection.language})`);
-                isValid = false;
-                rejectionReason = `Idioma ${languageDetection.language} != pt`;
-              } else {
-                // ✅ PERFIL APROVADO NAS 3 VALIDAÇÕES
-                console.log(`   ✅ PERFIL APROVADO NAS 3 VALIDAÇÕES - Extraindo hashtags dos posts...\n`);
+              // ✅ PERFIL APROVADO NAS 2 VALIDAÇÕES
+              console.log(`   ✅ PERFIL APROVADO NAS 2 VALIDAÇÕES - Extraindo hashtags dos posts...\n`);
 
                 // ========================================
                 // 🆕 EXTRAÇÃO DE HASHTAGS DOS POSTS (2 posts)
@@ -3271,7 +3325,6 @@ router.post('/process-pre-lead', async (req: Request, res: Response) => {
               }
             }
           }
-        }
       } catch (scrapeError: any) {
         console.error(`   ❌ Erro ao scrapear @${username}:`, scrapeError.message);
         isValid = false;
@@ -3556,16 +3609,11 @@ router.post('/process-all-pre-lead', async (req: Request, res: Response) => {
             continue;
           }
 
-          // VALIDAÇÃO 1: FOLLOWERS < 250
-          const followersCount = profileData.followers_count || 0;
-          if (followersCount < 250) {
-            console.log(`   🚫 REJEITADO: ${followersCount} seguidores < 250`);
-            results.push({ username, valid: false, reason: `Followers ${followersCount} < 250`, source_username });
-            updateUsernameStatus(itemPreLeadId, username, false);
-            continue;
-          }
+          // ========================================
+          // 🚫 VALIDAÇÕES (2 FILTROS) - Mesmas regras de scrape-users/scrape-tag
+          // ========================================
 
-          // VALIDAÇÃO 2: ACTIVITY SCORE
+          // VALIDAÇÃO 1: ACTIVITY SCORE (com auto-approve para website/bio>=100)
           const activityScore = calculateActivityScore(profileData);
           console.log(`   📊 Activity Score: ${activityScore.score}/100`);
           if (!activityScore.isActive) {
@@ -3575,7 +3623,7 @@ router.post('/process-all-pre-lead', async (req: Request, res: Response) => {
             continue;
           }
 
-          // VALIDAÇÃO 3: IDIOMA
+          // VALIDAÇÃO 2: IDIOMA
           const languageDetection = await detectLanguage(profileData.bio || '', username);
           console.log(`   🌍 Idioma: ${languageDetection.language}`);
           if (languageDetection.language !== 'pt') {
