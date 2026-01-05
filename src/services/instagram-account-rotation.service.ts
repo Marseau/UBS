@@ -187,13 +187,14 @@ class InstagramAccountRotation {
 
   async saveState(): Promise<void> {
     try {
-      this.state.accounts = this.accounts.map(acc => ({
+      this.state.accounts = this.accounts.map((acc, idx) => ({
         username: acc.username,
         instagramUsername: acc.instagramUsername,
         failureCount: acc.failureCount,
         lastFailureTime: acc.lastFailureTime,
         isBlocked: acc.isBlocked,
-        cooldownUntil: acc.cooldownUntil
+        cooldownUntil: acc.cooldownUntil,
+        usageCount: this.state.accounts[idx]?.usageCount || 0
       }));
 
       fs.writeFileSync(STATE_FILE, JSON.stringify(this.state, null, 2));
