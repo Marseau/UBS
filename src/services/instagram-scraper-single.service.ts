@@ -1544,6 +1544,10 @@ export interface InstagramProfileData {
     is_private: boolean;
   }>; // Seguidores do perfil (se tem audiência relevante)
   followers_scraped_count?: number; // Quantidade de seguidores scrapados
+  // 📱 Campos de WhatsApp extraído
+  whatsapp_number?: string | null;
+  whatsapp_source?: string | null;
+  whatsapp_verified?: Array<{ number: string; source: string; extracted_at: string }>;
 }
 
 /**
@@ -4855,6 +4859,45 @@ export async function scrapeProfileWithExistingPage(page: any, username: string,
       console.log(`   ⏩ Navegação pulada - página já está no perfil`);
     }
 
+    // CRÍTICO: Verificar se há login wall ou erro antes de extrair
+    const pageState = await page.evaluate(() => {
+      const loginForm = document.querySelector('input[name="username"]');
+      const errorText = document.body.innerText;
+      const hasRateLimit = errorText.includes('Aguarde alguns minutos') ||
+                          errorText.includes('Tente novamente mais tarde') ||
+                          errorText.includes('Por favor, aguarde');
+      const hasLoginWall = !!loginForm || errorText.includes('Entre para ver');
+      const hasNotFound = errorText.includes('página não está disponível') ||
+                          errorText.includes('não foi encontrada');
+      return { hasLoginWall, hasRateLimit, hasNotFound, url: window.location.href };
+    });
+
+    if (pageState.hasLoginWall) {
+      console.log(`   ⚠️  Login wall detectado na página - sessão pode ter expirado`);
+      throw new Error('Login wall detected - session expired');
+    }
+
+    if (pageState.hasRateLimit) {
+      console.log(`   ⚠️  Rate limit detectado - Instagram pediu para aguardar`);
+      throw new Error('Rate limit detected');
+    }
+
+    if (pageState.hasNotFound) {
+      console.log(`   ⚠️  Perfil não encontrado ou não existe`);
+      throw new Error('Profile not found');
+    }
+
+    // CRÍTICO: Aguardar elementos do perfil carregarem (header section + ul com stats)
+    console.log(`   ⏳ Aguardando elementos do perfil carregarem...`);
+    try {
+      await page.waitForSelector('header section', { timeout: 10000 });
+      await page.waitForSelector('header section ul', { timeout: 5000 });
+      console.log(`   ✅ Elementos do perfil carregados`);
+    } catch (waitError: any) {
+      console.log(`   ⚠️  Timeout aguardando elementos do perfil: ${waitError.message}`);
+      // Continuar mesmo assim, pode ser perfil privado ou estrutura diferente
+    }
+
     // Delay humano após carregar página (variável)
     const initialDelay = 800 + Math.random() * 700; // 0.8-1.5s
     await new Promise(resolve => setTimeout(resolve, initialDelay));
@@ -5056,6 +5099,46 @@ export async function scrapeProfileWithExistingPage(page: any, username: string,
     // 🔥 EXTRAÇÃO CORRETA: Filtrar stats por palavra-chave
     // DOM retorna duplicatas: ["991 posts", "991", "207 mil seguidores", "207 mil", "138 seguindo", "138"]
     console.log(`\n🔍 DEBUG - Stats extraídos do DOM: [${domData.stats.join(', ')}]`);
+
+    // RETRY: Se stats estiver vazio, aguardar mais e tentar novamente (1 retry)
+    if (domData.stats.length === 0) {
+      console.log(`   ⚠️  Stats vazio - aguardando 3s e tentando novamente...`);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Retry da extração de stats
+      const retryStats = await page.evaluate(() => {
+        const stats: string[] = [];
+        const selectors = [
+          'header section ul li span',
+          'header section ul li button span',
+          'header section ul li a span',
+          'header section ul span',
+          'header ul li span',
+          'header span[class*="x"]'
+        ];
+
+        for (const selector of selectors) {
+          const elements = document.querySelectorAll(selector);
+          elements.forEach(el => {
+            const text = el.textContent?.trim();
+            if (text && /\d/.test(text) && text.length < 20) {
+              if (!stats.includes(text)) {
+                stats.push(text);
+              }
+            }
+          });
+          if (stats.length >= 6) break;
+        }
+        return stats;
+      });
+
+      if (retryStats.length > 0) {
+        console.log(`   ✅ Retry bem-sucedido! Stats: [${retryStats.join(', ')}]`);
+        domData.stats = retryStats;
+      } else {
+        console.log(`   ❌ Retry também retornou vazio - página pode não ter carregado corretamente`);
+      }
+    }
 
     const postsText = domData.stats.find((s: string) =>
       s.toLowerCase().includes('post') || s.toLowerCase().includes('publicaç')
@@ -5281,6 +5364,17 @@ export async function scrapeProfileWithExistingPage(page: any, username: string,
     console.log(`   📮 CEP: ${profileData.zip_code || 'N/A'}`);
     console.log(`   💼 Categoria: ${profileData.business_category || 'N/A'}`)
 
+    // 📱 EXTRAIR WHATSAPP: website wa.me e bio
+    const waExtraction = extractWhatsAppForPersistence(
+      profileData.website,
+      profileData.bio,
+      profileData.phone
+    );
+
+    if (waExtraction.whatsapp_number) {
+      console.log(`   📱 WhatsApp: ${waExtraction.whatsapp_number} (fonte: ${waExtraction.whatsapp_source})`);
+    }
+
     return {
       username: profileData.username ?? username,
       full_name: profileData.full_name,
@@ -5301,7 +5395,11 @@ export async function scrapeProfileWithExistingPage(page: any, username: string,
       state: profileData.state,
       neighborhood: profileData.neighborhood,
       address: profileData.address,
-      zip_code: profileData.zip_code
+      zip_code: profileData.zip_code,
+      // 📱 Campos de WhatsApp extraído
+      whatsapp_number: waExtraction.whatsapp_number,
+      whatsapp_source: waExtraction.whatsapp_source,
+      whatsapp_verified: waExtraction.whatsapp_verified
     };
 
     console.log(`✅ SCRAPE-PROFILE CONCLUÍDO: dados coletados para "@${username}"`);
