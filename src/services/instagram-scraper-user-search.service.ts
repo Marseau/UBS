@@ -872,11 +872,12 @@ export async function scrapeInstagramUserSearch(
       } catch (profileError: any) {
         console.log(`   ⚠️  Erro ao processar @${username}: ${profileError.message}`);
 
-        // Se for detached frame, Instagram detectou scraping → ENCERRAR IMEDIATAMENTE
+        // Se for detached frame, é CRASH DO BROWSER (não detecção do Instagram) → ENCERRAR
+        // 🔧 FIX: Detached Frame = browser crash (servidor caiu, memória, etc), não Instagram
         if (profileError.message.includes('detached Frame')) {
-          console.log(`\n🚨 DETACHED FRAME DETECTADO - Instagram detectou scraping`);
-          console.log(`   💾 Perfis já salvos no banco: ${validatedProfiles.length}`);
-          console.log(`   🛑 ENCERRANDO SESSÃO IMEDIATAMENTE (sem retry)`);
+          console.log(`\n🔧 DETACHED FRAME DETECTADO - CRASH DO BROWSER (não detecção)`);
+          console.log(`   💾 Perfis já salvos: ${validatedProfiles.length}`);
+          console.log(`   🛑 Browser caiu - encerrando sessão e retornando perfis salvos`);
           break; // Sai do loop, retorna perfis salvos
         }
 

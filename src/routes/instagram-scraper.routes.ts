@@ -871,6 +871,7 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
                 url_enriched: false,
                 dado_enriquecido: false,
                 website_text: null,
+                hashtags_extracted: false,
                 hashtags_ready_for_embedding: false,
                 // RESETAR embeddings para re-gerar
                 embedding: null,
@@ -930,6 +931,8 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
                 captured_at: new Date().toISOString(),
                 dado_enriquecido: false,
                 url_enriched: false,
+                hashtags_extracted: false,
+                hashtags_ready_for_embedding: false,
                 // 📱 WhatsApp extraído no scrape
                 ...(waExtraction.whatsapp_number && {
                   whatsapp_number: waExtraction.whatsapp_number,
@@ -3770,6 +3773,7 @@ router.post('/process-all-pre-lead', async (req: Request, res: Response) => {
                 url_enriched: false,
                 dado_enriquecido: false,
                 website_text: null,
+                hashtags_extracted: false,
                 hashtags_ready_for_embedding: false,
                 // RESETAR embeddings para re-gerar
                 embedding: null,

@@ -3969,51 +3969,9 @@ export async function scrapeInstagramTag(
             break; // Sai do while de retry, vai para próxima hashtag
           }
 
-          // Se for detached frame, Instagram detectou scraping → ROTACIONAR CONTA
-          if (hashtagError.message.includes('detached Frame')) {
-            console.log(`\n🚨 DETACHED FRAME DETECTADO - Instagram detectou scraping`);
-            console.log(`   💾 Perfis já coletados: ${foundProfiles.length}`);
-            console.log(`   🔄 Chamando handleSessionError() para rotação de conta...`);
-
-            // Acumular perfis desta hashtag
-            allFoundProfiles.push(...foundProfiles);
-
-            // 🔄 ROTACIONAR CONTA (limpa cookies, registra falha, troca conta)
-            try {
-              const recovered = await handleSessionError(page, 'DETACHED_FRAME: Instagram detected automation');
-
-              if (recovered) {
-                console.log(`✅ Rotação bem-sucedida! Nova conta logada.`);
-                // 🔧 FIX: Fechar página anterior ANTES de criar nova
-                try { await cleanup(); } catch {}
-                // Recriar contexto com nova conta
-                const newContext = await createIsolatedContext();
-                page = newContext.page;
-                cleanup = newContext.cleanup;
-                // Resetar contadores e tentar novamente a MESMA hashtag com a nova conta
-                resilienceMetrics.consecutiveErrors = 0;
-                retryCount = 0;
-                continue;
-              } else {
-                // Rotação não necessária ainda (failureCount < 3) - continuar retry
-                const rotation = getAccountRotation();
-                const currentAccount = rotation.getCurrentAccount();
-                console.log(`⚠️ Falha ${currentAccount.failureCount}/3 registrada para @${currentAccount.instagramUsername || currentAccount.username}`);
-                console.log(`   Continuando retry (tentativa ${retryCount + 1}/${MAX_RETRIES}) com a mesma conta`);
-                // ✅ NÃO fazer break - deixar o retry loop continuar naturalmente
-                // O retryCount++ acontece no final do catch block
-              }
-            } catch (rotationError: any) {
-              // Se for GlobalCooldownError, propagar imediatamente
-              if (rotationError.name === 'GlobalCooldownError') {
-                throw rotationError;
-              }
-              // Outros erros de rotação - encerrar
-              console.log(`❌ Erro durante rotação: ${rotationError.message}`);
-              hashtagIndex = hashtagsToScrape.length;
-              break;
-            }
-          }
+          // 🔧 REMOVIDO: Bloco que tratava "detached Frame" como detecção do Instagram
+          // Detached Frame é CRASH DO BROWSER (servidor caiu, memória, etc), não detecção!
+          // Agora é tratado no bloco isProtocolTimeout (linha ~4066) junto com outros erros técnicos
 
           // 🆕 SESSION_INVALID: Chamar handleSessionError() que faz logout + cleanup + rotação + login
           if (hashtagError.message.includes('SESSION_INVALID')) {
@@ -4061,13 +4019,15 @@ export async function scrapeInstagramTag(
           }
 
           // 🆕 PROTOCOL TIMEOUT / BROWSER TRAVADO / PÁGINA PRETA: Restart do browser
-          // Detecta: "timed out", "Protocol error", "dispatchMouseEvent", "Target closed", "BLANK_PAGE"
+          // Detecta: "timed out", "Protocol error", "dispatchMouseEvent", "Target closed", "BLANK_PAGE", "detached Frame"
+          // 🔧 FIX: "detached Frame" é CRASH DO BROWSER, não detecção do Instagram!
           const isProtocolTimeout = hashtagError.message.includes('timed out') ||
                                      hashtagError.message.includes('Protocol error') ||
                                      hashtagError.message.includes('dispatchMouseEvent') ||
                                      hashtagError.message.includes('Target closed') ||
                                      hashtagError.message.includes('Execution context was destroyed') ||
-                                     hashtagError.message.includes('BLANK_PAGE_DETECTED');
+                                     hashtagError.message.includes('BLANK_PAGE_DETECTED') ||
+                                     hashtagError.message.includes('detached Frame');
 
           if (isProtocolTimeout) {
             console.log(`\n🔧 ========================================`);
@@ -4857,34 +4817,6 @@ export async function scrapeProfileWithExistingPage(page: any, username: string,
       await searchProfileHumanLike(page, username);
     } else {
       console.log(`   ⏩ Navegação pulada - página já está no perfil`);
-    }
-
-    // CRÍTICO: Verificar se há login wall ou erro antes de extrair
-    const pageState = await page.evaluate(() => {
-      const loginForm = document.querySelector('input[name="username"]');
-      const errorText = document.body.innerText;
-      const hasRateLimit = errorText.includes('Aguarde alguns minutos') ||
-                          errorText.includes('Tente novamente mais tarde') ||
-                          errorText.includes('Por favor, aguarde');
-      const hasLoginWall = !!loginForm || errorText.includes('Entre para ver');
-      const hasNotFound = errorText.includes('página não está disponível') ||
-                          errorText.includes('não foi encontrada');
-      return { hasLoginWall, hasRateLimit, hasNotFound, url: window.location.href };
-    });
-
-    if (pageState.hasLoginWall) {
-      console.log(`   ⚠️  Login wall detectado na página - sessão pode ter expirado`);
-      throw new Error('Login wall detected - session expired');
-    }
-
-    if (pageState.hasRateLimit) {
-      console.log(`   ⚠️  Rate limit detectado - Instagram pediu para aguardar`);
-      throw new Error('Rate limit detected');
-    }
-
-    if (pageState.hasNotFound) {
-      console.log(`   ⚠️  Perfil não encontrado ou não existe`);
-      throw new Error('Profile not found');
     }
 
     // CRÍTICO: Aguardar elementos do perfil carregarem (header section + ul com stats)
