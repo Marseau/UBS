@@ -98,7 +98,14 @@ export interface ProfileForScoring {
 }
 
 /**
- * Converte contadores do Instagram (ex: "6 mil") em número inteiro
+ * Converte contadores do Instagram (ex: "6 mil", "1.187 seguidores") em número inteiro
+ *
+ * Formatos suportados:
+ * - "1.187 seguidores" → 1187 (BR: ponto como separador de milhar)
+ * - "7.522 seguidores" → 7522
+ * - "6 mil" → 6000
+ * - "93.2K" → 93200 (US: ponto como decimal + multiplicador)
+ * - "1,5 mi" → 1500000
  */
 export function parseInstagramCount(value: string | null): number {
   if (!value) return 0;
@@ -108,6 +115,7 @@ export function parseInstagramCount(value: string | null): number {
     return 0;
   }
 
+  // Multiplicadores conhecidos do Instagram
   const multiplierMap: Record<string, number> = {
     'mil': 1_000,
     'k': 1_000,
@@ -125,20 +133,26 @@ export function parseInstagramCount(value: string | null): number {
 
   const [, numberPortion, suffixRaw] = match;
   const suffix = suffixRaw?.toLowerCase() ?? '';
+
+  // Verificar se o sufixo é um multiplicador CONHECIDO
+  const isKnownMultiplier = suffix in multiplierMap;
   const multiplier = multiplierMap[suffix] ?? 1;
 
   let numeric: number;
 
-  // Se não tem sufixo (mil, k, etc), pontos/vírgulas são separadores de milhares - remover
-  if (!suffix || suffix.length === 0) {
-    // Remover todos os separadores de milhares (pontos e vírgulas)
+  // Se NÃO tem multiplicador conhecido (posts, seguidores, seguindo, etc)
+  // → tratar pontos/vírgulas como separadores de milhares (formato BR)
+  if (!isKnownMultiplier) {
+    // "1.187 seguidores" → "1187" → 1187
+    // "7.522" → "7522" → 7522
     const cleaned = numberPortion.replace(/[.,\s]/g, '');
     numeric = Number.parseInt(cleaned, 10);
   } else {
-    // Tem sufixo: Instagram usa formato US (ponto é decimal)
+    // Tem multiplicador (k, mil, m, etc): Instagram usa formato US (ponto é decimal)
     // "93.2K" → 93.2 * 1000 = 93200
-    // "1,234.5K" → 1234.5 * 1000 = 1234500
-    numeric = Number.parseFloat(numberPortion.replace(/,/g, ''));
+    // "1,5 mil" → 1.5 * 1000 = 1500
+    // Substituir vírgula por ponto para parseFloat funcionar
+    numeric = Number.parseFloat(numberPortion.replace(/,/g, '.').replace(/\s/g, ''));
   }
 
   if (!Number.isFinite(numeric)) {

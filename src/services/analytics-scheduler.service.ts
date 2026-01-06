@@ -382,7 +382,7 @@ export class AnalyticsSchedulerService {
       const checks = await Promise.all([
         this.checkTableHealth(),
         this.checkDataFreshness(),
-        this.checkMaterializedViewHealth(),
+        // DEPRECATED: checkMaterializedViewHealth removido - view UBS não existe mais
       ]);
 
       const allHealthy = checks.every((check) => check.healthy);

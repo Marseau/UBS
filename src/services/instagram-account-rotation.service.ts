@@ -522,6 +522,16 @@ class InstagramAccountRotation {
       return true; // Agora está disponível
     }
 
+    // 🔧 FIX v4: Detectar isBlocked=true com failureCount < 3 (sem cooldown manual)
+    // Isso corrige estados inconsistentes de versões anteriores do código
+    const FAILURE_THRESHOLD = 3;
+    if (account.isBlocked && account.failureCount < FAILURE_THRESHOLD && !account.cooldownUntil) {
+      console.log(`   🔧 @${account.instagramUsername}: estado inconsistente (${account.failureCount} falhas < ${FAILURE_THRESHOLD} mas bloqueada) - desbloqueando`);
+      account.isBlocked = false;
+      this._stateNeedsSave = true;
+      return true; // Agora está disponível
+    }
+
     // Se conta está bloqueada, verificar se o tempo de cooldown já passou
     if (account.isBlocked) {
       // Se tem lastFailureTime, verificar se já passou o tempo de cooldown

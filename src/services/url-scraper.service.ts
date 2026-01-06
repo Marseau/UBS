@@ -56,6 +56,10 @@ export class UrlScraperService {
   private static urlCache: Map<string, { result: ScrapedContacts; timestamp: number }> = new Map();
   private static readonly CACHE_TTL_MS = 3600000; // 1 hora de cache
 
+  // 🔐 DEDUPLICAÇÃO: Mapa de requests em andamento (evita processamento duplicado por retry)
+  // Se uma URL já está sendo processada, novas requisições aguardam o mesmo resultado
+  private static inFlightRequests: Map<string, Promise<ScrapedContacts>> = new Map();
+
   /**
    * Verifica se URL está no cache e ainda é válida
    */
@@ -1103,7 +1107,36 @@ export class UrlScraperService {
       return cached;
     }
 
-    // 3. Se abaixo do limite, processar imediatamente
+    // 2.5 🔐 DEDUPLICAÇÃO: Se já há uma requisição em andamento para esta URL, aguardar o resultado
+    // Isso evita processamento duplicado quando N8N faz retry antes da primeira requisição terminar
+    const inFlight = this.inFlightRequests.get(cacheKey);
+    if (inFlight) {
+      console.log(`🔄 [URL-SCRAPER] Request já em andamento para: ${normalizedUrl.substring(0, 50)}... (aguardando)`);
+      return inFlight;
+    }
+
+    // 3. Criar Promise para esta requisição e registrar como "em andamento"
+    const scrapePromise = this.executeWithConcurrencyControl(normalizedUrl, cacheKey, options);
+    this.inFlightRequests.set(cacheKey, scrapePromise);
+
+    try {
+      const result = await scrapePromise;
+      return result;
+    } finally {
+      // Remover do mapa de requests em andamento após conclusão
+      this.inFlightRequests.delete(cacheKey);
+    }
+  }
+
+  /**
+   * Executa scraping com controle de concorrência (método auxiliar)
+   */
+  private static async executeWithConcurrencyControl(
+    normalizedUrl: string,
+    cacheKey: string,
+    options: ScrapeOptions
+  ): Promise<ScrapedContacts> {
+    // Se abaixo do limite, processar imediatamente
     if (this.activeScrapers < this.MAX_CONCURRENT_SCRAPERS) {
       this.activeScrapers++;
       console.log(`🔍 [URL-SCRAPER] Processando direto (${this.activeScrapers}/${this.MAX_CONCURRENT_SCRAPERS} ativos)`);
@@ -1118,7 +1151,7 @@ export class UrlScraperService {
       }
     }
 
-    // 4. Se no limite, adicionar à fila
+    // Se no limite, adicionar à fila
     console.log(`⏳ [URL-SCRAPER] Limite atingido, adicionando à fila (${this.scrapeQueue.length + 1} na fila)`);
 
     return new Promise((resolve, reject) => {

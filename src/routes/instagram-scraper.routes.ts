@@ -38,6 +38,11 @@ let scrapingInProgress = false;
 let currentScrapingTerm: string | null = null;
 let scrapingStartTime: number | null = null;
 
+// 🔒 LOCK RESCUE: Impede execuções simultâneas do scrape-users-rescue
+let rescueInProgress = false;
+let rescueStartTime: number | null = null;
+let rescueUsernameCount: number | null = null;
+
 console.log('🔍 [DEBUG] Instagram Scraper Routes - Module loaded and router created');
 
 /**
@@ -645,7 +650,27 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
       });
     }
 
+    // 🔒 VERIFICAR LOCK: Impedir execuções simultâneas
+    if (rescueInProgress) {
+      const elapsedMs = rescueStartTime ? Date.now() - rescueStartTime : 0;
+      const elapsedMin = Math.floor(elapsedMs / 60000);
+      console.log(`\n🚫 [${reqId}] BLOQUEADO: Rescue já em andamento (${rescueUsernameCount} usernames, ${elapsedMin}min)`);
+      return res.status(409).json({
+        success: false,
+        message: `Rescue já em andamento`,
+        current_usernames: rescueUsernameCount,
+        elapsed_minutes: elapsedMin,
+        error_code: 'RESCUE_IN_PROGRESS'
+      });
+    }
+
+    // 🔒 ADQUIRIR LOCK
+    rescueInProgress = true;
+    rescueStartTime = Date.now();
+    rescueUsernameCount = usernames.length;
+
     console.log(`\n🔧 [${reqId}] ========== SCRAPE-USERS-RESCUE INICIADO ==========`);
+    console.log(`🔒 [${reqId}] Lock adquirido para ${usernames.length} usernames`);
     console.log(`🔧 [${reqId}] Conta dedicada: @${process.env.INSTAGRAM_REFRESH_USERNAME_HANDLE || 'marciofranco03'}`);
     console.log(`🔧 [${reqId}] Usernames recebidos: ${usernames.length} (max: ${max_profiles})`);
 
@@ -996,6 +1021,14 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
     console.log(`   ❌ Erros: ${errorsCount}`);
     console.log(`🔧 [${reqId}] ========== SCRAPE-USERS-RESCUE FINALIZADO ==========\n`);
 
+    // 🔓 LIBERAR LOCK
+    const elapsedMs = rescueStartTime ? Date.now() - rescueStartTime : 0;
+    const elapsedMin = Math.floor(elapsedMs / 60000);
+    console.log(`🔓 [${reqId}] Lock liberado (duração: ${elapsedMin}min)`);
+    rescueInProgress = false;
+    rescueStartTime = null;
+    rescueUsernameCount = null;
+
     return res.status(200).json({
       success: true,
       data: {
@@ -1013,6 +1046,12 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error(`❌ [${reqId}] Erro no scrape-users-rescue:`, error.message);
+
+    // 🔓 LIBERAR LOCK (mesmo em caso de erro)
+    console.log(`🔓 [${reqId}] Lock liberado (erro)`);
+    rescueInProgress = false;
+    rescueStartTime = null;
+    rescueUsernameCount = null;
 
     return res.status(500).json({
       success: false,

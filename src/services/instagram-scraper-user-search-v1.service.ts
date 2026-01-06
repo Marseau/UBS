@@ -561,31 +561,52 @@ function extractEmailFromBio(bio: string | null): string | null {
 
 /**
  * Converte strings do Instagram (k, mil, m) para números
+ * Suporta formatos BR (ponto como milhar) e US (ponto como decimal)
+ *
+ * Exemplos:
+ * - "1.187 seguidores" → 1187
+ * - "7.522 posts" → 7522
+ * - "6 mil" → 6000
+ * - "93.2K" → 93200
  */
 function parseInstagramCount(value: string | null): number {
   if (!value) return 0;
   const normalized = value.toLowerCase().replace(/\u202f|\s/g, '');
-  const suffixMatch = normalized.match(/(mil|kk|k|m)$/);
+
+  // Multiplicadores conhecidos
+  const multiplierMap: Record<string, number> = {
+    'mil': 1_000,
+    'k': 1_000,
+    'm': 1_000_000,
+    'mi': 1_000_000,
+    'kk': 1_000_000,
+    'b': 1_000_000_000
+  };
+
+  const suffixMatch = normalized.match(/(mil|kk|k|mi|m|b)$/);
   let multiplier = 1;
   let numberPortion = normalized;
 
   if (suffixMatch) {
     const suffix = suffixMatch[1];
     numberPortion = normalized.slice(0, -suffix.length);
-    if (suffix === 'm') {
-      multiplier = 1_000_000;
-    } else {
-      multiplier = 1_000;
-    }
+    multiplier = multiplierMap[suffix] || 1;
   }
 
+  // Remover labels não-numéricos (posts, seguidores, seguindo, etc)
   numberPortion = numberPortion.replace(/[^\d.,]/g, '');
 
-  if (!suffixMatch && /^\d{1,3}([.,]\d{3})+$/.test(numberPortion)) {
-    const digitsOnly = numberPortion.replace(/\D/g, '');
+  // Se NÃO tem multiplicador conhecido, tratar pontos/vírgulas como separadores de milhar
+  if (!suffixMatch) {
+    // "1.187" → "1187" (formato BR)
+    // "7.522" → "7522"
+    const digitsOnly = numberPortion.replace(/[.,]/g, '');
     return parseInt(digitsOnly, 10) || 0;
   }
 
+  // Tem multiplicador: tratar como formato US (ponto = decimal, vírgula = milhar)
+  // "93.2" com K → 93.2 * 1000 = 93200
+  // "1,5" com mil → 1.5 * 1000 = 1500
   let numeric = Number.parseFloat(numberPortion.replace(/,/g, '.'));
 
   if (!Number.isFinite(numeric)) {

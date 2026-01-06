@@ -37,7 +37,7 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
-      max_memory_restart: '512M',
+      max_memory_restart: '1G',
       env: {
         NODE_ENV: 'production',
         PORT: 3000
@@ -62,7 +62,7 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
-      max_memory_restart: '384M',
+      max_memory_restart: '512M',
       env: {
         NODE_ENV: 'production',
         PORT: 3002
@@ -87,7 +87,7 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
-      max_memory_restart: '256M',
+      max_memory_restart: '512M',
       env: {
         NODE_ENV: 'production',
         PORT: 3003

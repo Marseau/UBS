@@ -915,7 +915,7 @@ async function ensureLoggedSession(): Promise<void> {
   sessionInitialization = (async () => {
     // 🆕 VERIFICAR COOLDOWNS ANTES DE INICIAR BROWSER
     // Se a conta atual estiver bloqueada, encontrar a melhor e aguardar se necessário
-    const rotation = InstagramAccountRotationService.getInstance();
+    const rotation = getAccountRotation();
     const currentAccount = rotation.getCurrentAccount();
 
     console.log(`\n🔍 ========== VERIFICAÇÃO PRÉ-INICIALIZAÇÃO ==========`);
