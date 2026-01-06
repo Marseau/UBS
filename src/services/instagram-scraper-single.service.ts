@@ -2079,35 +2079,9 @@ export async function scrapeInstagramTag(
 
           console.log(`   ✅ Mural carregado com ${postCount} posts`);
 
-          // 🆕 DETECTAR SHADOWBAN/BLOQUEIO: Hashtag com pouquíssimos posts (1-5) é suspeito
-          if (postCount > 0 && postCount <= 5) {
-            console.log(`\n⚠️  ========================================`);
-            console.log(`⚠️  POSSÍVEL SHADOWBAN/BLOQUEIO DETECTADO!`);
-            console.log(`⚠️  Apenas ${postCount} post(s) na hashtag`);
-            console.log(`⚠️  Hashtags normais têm dezenas/centenas de posts`);
-            console.log(`⚠️  ========================================\n`);
-
-            // Verificar se página também tem sinais de feed home
-            const pageText = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
-            const isHomeFeed = pageText.includes("You're all caught up") ||
-                              pageText.includes('Você está em dia') ||
-                              pageText.includes('Suggested Posts') ||
-                              pageText.includes('Sugestões para você');
-
-            if (isHomeFeed) {
-              console.log(`🏠 REDIRECIONAMENTO PARA FEED HOME DETECTADO!`);
-              console.log(`   Instagram bloqueou pesquisa de hashtag e mandou para home`);
-              throw new Error('SESSION_INVALID: Redirecionado para feed home - conta possivelmente shadowbanned para hashtags');
-            }
-
-            // Se tiver apenas 1-3 posts, considerar shadowban e rotacionar
-            if (postCount <= 3) {
-              console.log(`🚨 SHADOWBAN CONFIRMADO: Apenas ${postCount} post(s) visível(is)`);
-              console.log(`   Conta provavelmente bloqueada para pesquisa de hashtags`);
-              console.log(`   Iniciando rotação de conta...`);
-              throw new Error('SESSION_INVALID: Shadowban detectado - hashtag com apenas ' + postCount + ' post(s)');
-            }
-          }
+          // 🔧 REMOVIDO: Detecção de shadowban por poucos posts (1-5)
+          // Motivo: Muitos falsos positivos - pode ser perfil privado, lazy loading, etc.
+          // O scraping continua normalmente e encontra mais posts após scroll
 
           return true;
         } catch (error: any) {
