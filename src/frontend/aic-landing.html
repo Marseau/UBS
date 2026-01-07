@@ -1518,7 +1518,7 @@
           return { success: false, error: authError.message };
         }
 
-        // Criar perfil em public.users
+        // Criar perfil em public.users (cliente AIC)
         if (authData?.user?.id) {
           const { error: profileError } = await supabaseLanding
             .from('users')
@@ -1527,7 +1527,8 @@
               email: email,
               name: name,
               phone: phone,
-              tipo_user: 'normal',
+              tipo_user: 'client',
+              account_type: 'real',
               user_origin: origin, // 'aic' ou 'google'
               user_app: 'aic',
               created_at: new Date().toISOString()

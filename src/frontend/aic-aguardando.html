@@ -284,6 +284,10 @@
           <span class="user-info-label">Email</span>
           <span class="user-info-value" id="user-email">Carregando...</span>
         </div>
+        <div class="user-info-row" id="phone-row" style="display: none;">
+          <span class="user-info-label">Telefone</span>
+          <span class="user-info-value" id="user-phone">-</span>
+        </div>
         <div class="user-info-row">
           <span class="user-info-label">Status</span>
           <span class="user-info-value" style="color: var(--aic-green);">Aguardando contato</span>
@@ -366,6 +370,13 @@
       // Update user info
       document.getElementById('user-name').textContent = user.user_metadata?.name || user.email?.split('@')[0] || 'Usuario';
       document.getElementById('user-email').textContent = user.email;
+
+      // Show phone if available
+      const phone = user.user_metadata?.phone;
+      if (phone) {
+        document.getElementById('user-phone').textContent = phone;
+        document.getElementById('phone-row').style.display = 'flex';
+      }
 
       // Check if user now has a campaign
       checkForCampaign(user.email);
