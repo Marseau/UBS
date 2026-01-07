@@ -73,15 +73,64 @@
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 12px;
     }
+    .nav-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .nav-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .nav-action:hover {
+      border-color: var(--accent);
+      background: rgba(14, 204, 151, 0.1);
+    }
+    .nav-action.primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+      color: #0c1b33;
+      font-weight: 700;
+      border: none;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    .back-link:hover { color: var(--accent); }
   </style>
 </head>
 <body>
   <div class="page">
+    <a href="/aic-campaigns-dashboard.html" class="back-link">← Voltar para Campanhas</a>
+
     <div class="card">
       <div class="pill">beta</div>
-      <h1>Dashboard de Campanha AIC</h1>
-      <p>Use esta página como entrada para o painel de resultado por campanha. Os dados vêm das views SQL criadas no Supabase.</p>
-      <a class="cta" href="#como-usar">Ver como usar</a>
+      <h1 id="campaign-title">Dashboard de Campanha AIC</h1>
+      <p id="campaign-subtitle">Carregando informações da campanha...</p>
+    </div>
+
+    <!-- Navigation Actions -->
+    <div class="nav-actions" id="nav-actions">
+      <a href="#" class="nav-action" id="link-onboarding">⚙️ Configuração</a>
+      <a href="#" class="nav-action" id="link-briefing">📋 Briefing</a>
+      <a href="#" class="nav-action" id="link-analytics">📊 Analytics</a>
+      <a href="#" class="nav-action primary" id="link-leads">👥 Ver Leads</a>
     </div>
 
     <div class="grid">
@@ -120,8 +169,40 @@ GET /api/campaigns/:id/performance
   <script>
     (function() {
       const params = new URLSearchParams(window.location.search);
-      const campaignId = params.get('campaign');
+      let campaignId = params.get('campaign');
       const container = document.querySelector('.grid');
+      let campaignsList = [];
+
+      // Setup navigation links
+      function setupNavLinks(id) {
+        if (!id) {
+          document.getElementById('nav-actions').style.display = 'none';
+          return;
+        }
+        document.getElementById('nav-actions').style.display = 'flex';
+        document.getElementById('link-onboarding').href = `/aic-campaign-onboarding.html?campaign=${id}`;
+        document.getElementById('link-briefing').href = `/aic-campaign-briefing.html?campaign=${id}`;
+        document.getElementById('link-analytics').href = `/aic-dashboard-prova.html?campaign=${id}`;
+        document.getElementById('link-leads').href = `/aic-campaigns-dashboard.html?campaign=${id}#leads`;
+      }
+
+      // Update header with campaign info
+      function updateHeader(campaign) {
+        const title = document.getElementById('campaign-title');
+        const subtitle = document.getElementById('campaign-subtitle');
+        if (campaign) {
+          title.textContent = campaign.name || campaign.campaign_name || 'Campanha';
+          const status = campaign.status ? `Status: ${campaign.status}` : '';
+          const dates = campaign.start_date ? ` | ${campaign.start_date}${campaign.end_date ? ' → ' + campaign.end_date : ''}` : '';
+          subtitle.textContent = status + dates || 'Dashboard de métricas da campanha';
+        } else {
+          title.textContent = 'Dashboard de Campanha AIC';
+          subtitle.textContent = 'Selecione uma campanha para visualizar métricas';
+        }
+      }
+
+      // Initialize nav links
+      setupNavLinks(campaignId);
 
       function renderError(msg) {
         document.querySelectorAll('.error-block').forEach(el => el.remove());
@@ -212,6 +293,11 @@ GET /api/campaigns/:id/performance
           const url = new URL(window.location.href);
           url.searchParams.set('campaign', id);
           history.replaceState({}, '', url.toString());
+          campaignId = id;
+          setupNavLinks(id);
+          // Update header with selected campaign
+          const selectedCampaign = campaignsList.find(c => c.id === id);
+          updateHeader(selectedCampaign);
           loadPerformance(id);
         };
 
@@ -257,6 +343,8 @@ GET /api/campaigns/:id/performance
           const score = (c) => activeStatuses.includes((c.status || '').toLowerCase()) ? 0 : 1;
           return score(a) - score(b);
         });
+        // Store globally for applySelection
+        campaignsList = list;
 
           if (!list.length) {
             renderError('Nenhuma campanha encontrada. Crie uma campanha e tente novamente.');
@@ -266,6 +354,11 @@ GET /api/campaigns/:id/performance
           const selected = (campaignId && list.some((c) => c.id === campaignId))
             ? campaignId
             : list[0].id;
+
+          // Update header and nav with selected campaign
+          const selectedCampaign = list.find(c => c.id === selected);
+          updateHeader(selectedCampaign);
+          setupNavLinks(selected);
 
           buildSelector(list, selected);
           loadPerformance(selected);
