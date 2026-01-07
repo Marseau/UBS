@@ -634,6 +634,16 @@
       background: rgba(14, 204, 151, 0.1);
     }
 
+    /* Config Button */
+    .btn-action.config-btn {
+      background: rgba(255, 193, 7, 0.15);
+      border: 1px solid #FFC107;
+      color: #FFC107;
+    }
+    .btn-action.config-btn:hover {
+      background: rgba(255, 193, 7, 0.25);
+    }
+
     /* Client Link Modal */
     .link-modal-content {
       background: var(--aic-card);
@@ -1329,6 +1339,9 @@
           </div>
 
           <div class="campaign-actions">
+            <a href="/aic-campaign-onboarding.html?campaign=${campaign.id}" class="btn-action config-btn">
+              ⚙️ Configurar
+            </a>
             <a href="/cluster-intention-dashboard.html?campaign=${campaign.id}" class="btn-action primary">
               🎯 Clusters
             </a>
