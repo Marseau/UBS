@@ -455,12 +455,10 @@
   <script>
     // Verificar se ja esta logado
     (async function() {
-      const { session } = await AICAuth.getSession();
-      if (session) {
-        // Ja logado - redirecionar
-        const params = new URLSearchParams(window.location.search);
-        const redirect = params.get('redirect') || '/aic-campaigns-dashboard.html';
-        window.location.href = redirect;
+      const { data: { user } } = await AICAuth.getUser();
+      if (user) {
+        // Ja logado - smart redirect based on role
+        await smartRedirect(user);
       }
     })();
 
@@ -475,6 +473,54 @@
       const msg = document.getElementById('message');
       msg.className = 'message';
       msg.textContent = '';
+    }
+
+    // Smart routing based on user type and campaigns
+    async function smartRedirect(user) {
+      // Check if there's a specific redirect requested
+      const params = new URLSearchParams(window.location.search);
+      const explicitRedirect = params.get('redirect');
+      if (explicitRedirect) {
+        window.location.href = explicitRedirect;
+        return;
+      }
+
+      const email = user?.email;
+      if (!email) {
+        window.location.href = '/aic-aguardando.html';
+        return;
+      }
+
+      try {
+        // Check if admin
+        const adminEmails = ['marseaufranco@gmail.com']; // Add admin emails here
+        const userMeta = user?.user_metadata || {};
+        const isAdmin = adminEmails.includes(email) || userMeta.tipo_user === 'super_admin' || userMeta.role === 'admin';
+
+        if (isAdmin) {
+          window.location.href = '/aic-campaigns-dashboard.html';
+          return;
+        }
+
+        // Check if client has campaigns
+        const response = await fetch(`/api/campaigns?client_email=${encodeURIComponent(email)}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.campaigns && data.campaigns.length > 0) {
+            // Client has campaign(s)
+            window.location.href = '/aic-minha-campanha.html';
+            return;
+          }
+        }
+
+        // No campaigns - waiting page
+        window.location.href = '/aic-aguardando.html';
+
+      } catch (err) {
+        console.error('Routing error:', err);
+        // Fallback to waiting page
+        window.location.href = '/aic-aguardando.html';
+      }
     }
 
     // Toggle forms
@@ -542,10 +588,8 @@
         const { data, error } = await AICAuth.signInWithEmail(email, password);
         if (error) throw error;
 
-        // Redirecionar
-        const params = new URLSearchParams(window.location.search);
-        const redirect = params.get('redirect') || '/aic-campaigns-dashboard.html';
-        window.location.href = redirect;
+        // Smart redirect based on user role
+        await smartRedirect(data.user);
 
       } catch (err) {
         showMessage(err.message === 'Invalid login credentials'
@@ -595,14 +639,15 @@
 
         if (error) throw error;
 
-        // Criar perfil na tabela public.users
+        // Criar perfil na tabela public.users (cliente AIC)
         if (data.user) {
           await supabaseClient.from('users').upsert({
             id: data.user.id,
             name: name,
             email: email,
             phone: phone,
-            tipo_user: 'normal',
+            tipo_user: 'client',
+            account_type: 'real',
             user_origin: 'aic',
             user_app: 'aic'
           });
@@ -612,8 +657,8 @@
 
         // Se nao precisar confirmar email, redirecionar
         if (data.session) {
-          setTimeout(() => {
-            window.location.href = '/aic-campaigns-dashboard.html';
+          setTimeout(async () => {
+            await smartRedirect(data.user);
           }, 1500);
         }
 
