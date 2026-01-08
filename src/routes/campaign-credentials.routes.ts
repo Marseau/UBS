@@ -18,6 +18,7 @@ import {
   requireCampaignAccess,
   AuthenticatedRequest
 } from '../middleware/aic-auth.middleware';
+import { clientJourneyService } from '../services/client-journey.service';
 
 const router = Router();
 
@@ -988,7 +989,7 @@ router.get('/campaigns/:campaignId/credentials-status', optionalAuthAIC, async (
 /**
  * GET /api/campaigns/:campaignId/briefing
  * Retorna o briefing de uma campanha
- * Verifica acesso a campanha
+ * Permite acesso sem autenticacao para fluxo de onboarding do cliente
  */
 router.get('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -998,9 +999,14 @@ router.get('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: Authe
       return;
     }
 
-    // Verificar acesso a campanha
-    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
-    if (!hasAccess) {
+    // Verificar se campanha existe (permitir acesso sem auth para onboarding)
+    const { data: campaign, error: campaignError } = await supabase
+      .from('cluster_campaigns')
+      .select('id')
+      .eq('id', campaignId)
+      .single();
+
+    if (campaignError || !campaign) {
       res.status(404).json({ error: 'Campaign not found' });
       return;
     }
@@ -1031,7 +1037,7 @@ router.get('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: Authe
 /**
  * POST /api/campaigns/:campaignId/briefing
  * Cria ou atualiza o briefing de uma campanha
- * Verifica acesso a campanha
+ * Permite acesso sem autenticacao para fluxo de onboarding do cliente
  */
 router.post('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -1043,9 +1049,14 @@ router.post('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: Auth
 
     const briefingData = req.body;
 
-    // Verificar acesso a campanha
-    const { hasAccess, campaign } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
-    if (!hasAccess || !campaign) {
+    // Verificar se campanha existe (permitir acesso sem auth para onboarding)
+    const { data: campaign, error: campaignError } = await supabase
+      .from('cluster_campaigns')
+      .select('id')
+      .eq('id', campaignId)
+      .single();
+
+    if (campaignError || !campaign) {
       res.status(404).json({ error: 'Campaign not found' });
       return;
     }
@@ -1119,6 +1130,20 @@ router.post('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: Auth
 
       result.completion_percentage = completion || 0;
       result.briefing_status = newStatus;
+
+      // Se briefing >= 80%, atualizar jornada do cliente para briefing_completo
+      if (completion >= 80) {
+        const { data: journey } = await supabase
+          .from('aic_client_journeys')
+          .select('id, current_step')
+          .eq('campaign_id', campaignId)
+          .single();
+
+        if (journey && journey.current_step === 'briefing_pendente') {
+          await clientJourneyService.markBriefingComplete(journey.id);
+          console.log(`[Campaign Credentials] Journey ${journey.id} updated to briefing_completo`);
+        }
+      }
     }
 
     res.json({
