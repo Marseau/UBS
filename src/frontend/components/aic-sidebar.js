@@ -236,8 +236,8 @@
   navContent += '<div class="aic-sidebar-section">';
   navContent += '<div class="aic-sidebar-section-title">Financeiro</div>';
   navContent += '<a href="/aic-financial-dashboard.html" class="aic-sidebar-link' + (isActive('financial-dashboard') ? ' active' : '') + '">Dashboard Financeiro</a>';
-  navContent += '<a href="/aic-lead-deliveries.html" class="aic-sidebar-link' + (isActive('lead-deliveries') ? ' active' : '') + '">Entregas de Leads</a>';
-  navContent += '<a href="/aic-reunioes-fechamento.html" class="aic-sidebar-link' + (isActive('reunioes-fechamento') ? ' active' : '') + '">Reunioes Fechamento</a>';
+  navContent += '<a href="/aic/leads-entregues" class="aic-sidebar-link' + (isActive('leads-entregues') ? ' active' : '') + '">Entregas de Leads</a>';
+  navContent += '<a href="/aic/reunioes-fechamento" class="aic-sidebar-link' + (isActive('reunioes-fechamento') ? ' active' : '') + '">Reunioes Fechamento</a>';
   navContent += '</div>';
 
   // Secao Documentacao

@@ -911,14 +911,11 @@
   <script src="/js/auth-guard.js"></script>
 </head>
 <body>
-  <!-- Header -->
-  <header class="header">
+  <!-- Header (minimal - user info only) -->
+  <header class="header" style="justify-content:flex-end;">
     <div class="container">
-      <div class="header-content">
-        <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC Logo" class="header-logo">
+      <div class="header-content" style="justify-content:flex-end;">
         <div class="header-user">
-          <a href="/aic/leads-entregues" style="color:var(--aic-green);text-decoration:none;font-size:14px;font-weight:500;padding:8px 12px;border:1px solid var(--aic-green);border-radius:8px;margin-right:8px;">💰 Leads Entregues</a>
-          <a href="/aic/reunioes-fechamento" style="color:#f59e0b;text-decoration:none;font-size:14px;font-weight:500;padding:8px 12px;border:1px solid #f59e0b;border-radius:8px;margin-right:8px;">📅 Reunioes Fechamento</a>
           <span data-user-email>carregando...</span>
           <img data-user-avatar src="" alt="Avatar" style="width:36px;height:36px;border-radius:50%;display:none;">
           <button data-logout style="background:transparent;border:1px solid var(--aic-border);color:var(--aic-gray);padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px;">Sair</button>
@@ -1220,7 +1217,26 @@
       loadUserInfo();
       loadCampaigns();
       setupFilterTabs();
+      loadUnseenReunioesCount();
     });
+
+    // Load unseen reunioes count for badge
+    async function loadUnseenReunioesCount() {
+      try {
+        const response = await fetch('/api/aic/lead-deliveries/unseen-reunioes');
+        const data = await response.json();
+
+        if (data.success && data.unseen_count > 0) {
+          const badge = document.getElementById('badge-reunioes');
+          if (badge) {
+            badge.textContent = data.unseen_count > 99 ? '99+' : data.unseen_count;
+            badge.style.display = 'flex';
+          }
+        }
+      } catch (error) {
+        console.error('Error loading unseen reunioes count:', error);
+      }
+    }
 
     // Load user info
     async function loadUserInfo() {
