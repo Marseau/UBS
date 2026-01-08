@@ -848,7 +848,7 @@ router.get('/campaigns/:campaignId', optionalAuthAIC, async (req: AuthenticatedR
 /**
  * POST /api/campaigns/:campaignId/activate
  * Ativa a campanha apos configuracao usando a funcao SQL que atualiza os FKs
- * Requer autenticacao e verifica acesso a campanha
+ * Permite acesso sem autenticacao para fluxo de onboarding do cliente
  */
 router.post('/campaigns/:campaignId/activate', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -858,9 +858,14 @@ router.post('/campaigns/:campaignId/activate', optionalAuthAIC, async (req: Auth
       return;
     }
 
-    // Verificar acesso a campanha
-    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
-    if (!hasAccess) {
+    // Verificar se campanha existe (permitir acesso sem auth para onboarding)
+    const { data: campaign, error: campaignError } = await supabase
+      .from('cluster_campaigns')
+      .select('id')
+      .eq('id', campaignId)
+      .single();
+
+    if (campaignError || !campaign) {
       res.status(404).json({ error: 'Campaign not found' });
       return;
     }

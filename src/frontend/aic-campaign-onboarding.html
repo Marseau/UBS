@@ -1646,7 +1646,7 @@
         // Redirect after delay - go to briefing if journey exists
         setTimeout(() => {
           if (journeyId) {
-            window.location.href = `/campaign/${campaignId}/briefing?journey=${journeyId}`;
+            window.location.href = `/aic-campaign-briefing.html?campaign=${campaignId}&journey=${journeyId}`;
           } else {
             window.location.href = `/aic-dashboard-campaign.html?campaign=${campaignId}`;
           }
