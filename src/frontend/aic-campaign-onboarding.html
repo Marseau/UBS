@@ -1621,6 +1621,20 @@
           throw new Error('Erro ao finalizar configuração');
         }
 
+        // Integrar com Journey: marcar credenciais como completas
+        const journeyId = urlParams.get('journey');
+        if (journeyId) {
+          try {
+            await fetch(`/api/aic/journey/${journeyId}/credentials-complete`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+            console.log('Journey updated: credentials complete');
+          } catch (journeyError) {
+            console.warn('Could not update journey:', journeyError);
+          }
+        }
+
         showStatus('final-status', 'Configuração finalizada com sucesso! Sua campanha está pronta para iniciar.', 'success');
         btn.textContent = 'Configuração Concluída';
 
@@ -1629,9 +1643,13 @@
         document.getElementById('progress-4').classList.add('completed');
         document.getElementById('progress-4').innerHTML = '&#10003;';
 
-        // Redirect after delay
+        // Redirect after delay - go to briefing if journey exists
         setTimeout(() => {
-          window.location.href = `/aic-dashboard-campaign.html?campaign=${campaignId}`;
+          if (journeyId) {
+            window.location.href = `/campaign/${campaignId}/briefing?journey=${journeyId}`;
+          } else {
+            window.location.href = `/aic-dashboard-campaign.html?campaign=${campaignId}`;
+          }
         }, 3000);
 
       } catch (error) {

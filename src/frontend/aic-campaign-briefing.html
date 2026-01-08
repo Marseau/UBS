@@ -1374,14 +1374,38 @@
 
         showStatus('save-status', 'Briefing salvo com sucesso! Voce pode continuar editando a qualquer momento.', 'success');
 
-        // Check if should redirect to onboarding
+        // Check completion percentage
         const percent = parseInt(document.getElementById('progress-percent').textContent);
-        if (percent >= 50) {
+
+        // Integrar com Journey: marcar briefing completo se >= 80%
+        const urlParams = new URLSearchParams(window.location.search);
+        const journeyId = urlParams.get('journey');
+        if (journeyId && percent >= 80) {
+          try {
+            await fetch(`/api/aic/journey/${journeyId}/briefing-complete`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+            console.log('Journey updated: briefing complete');
+
+            // Mostrar mensagem de sucesso e redirecionar para dashboard
+            setTimeout(() => {
+              if (confirm('Briefing completo! Sua campanha esta pronta para ser ativada. Deseja ir para o dashboard?')) {
+                window.location.href = `/aic-dashboard-campaign.html?campaign=${campaignId}`;
+              }
+            }, 1500);
+          } catch (journeyError) {
+            console.warn('Could not update journey:', journeyError);
+          }
+        } else if (percent >= 50 && !journeyId) {
+          // Fluxo antigo sem journey
           setTimeout(() => {
             if (confirm('Briefing salvo! Deseja continuar para a configuracao tecnica (WhatsApp/Instagram)?')) {
               window.location.href = `/aic-campaign-onboarding.html?campaign=${campaignId}`;
             }
           }, 1500);
+        } else if (journeyId && percent < 80) {
+          showStatus('save-status', `Briefing em ${percent}%. Complete pelo menos 80% para ativar sua campanha.`, 'warning');
         }
 
       } catch (error) {

@@ -993,6 +993,16 @@ try {
   console.error("❌ Failed to load AIC Lead Deliveries routes:", error);
 }
 
+// AIC Client Journey Routes - State machine para jornada do cliente
+try {
+  const clientJourneyRoutes = require('./routes/client-journey.routes');
+  const router = 'default' in clientJourneyRoutes ? clientJourneyRoutes.default : clientJourneyRoutes;
+  app.use('/api/aic/journey', router);
+  console.log('✅ AIC Client Journey routes loaded - CLIENT JOURNEY STATE MACHINE READY');
+} catch (error) {
+  console.error("❌ Failed to load AIC Client Journey routes:", error);
+}
+
 // AIC Calendar Routes - Tools para AI Agent (buscar slots + agendar reuniao)
 try {
   const aicCalendarRoutes = require('./routes/aic-calendar.routes');
@@ -1198,6 +1208,22 @@ app.get('/aic/reunioes-fechamento', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.sendFile(path.join(frontendPath, 'aic-reunioes-fechamento.html'));
+});
+
+// AIC Minha Jornada - Dashboard do cliente com progresso
+app.get('/aic/minha-jornada', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(frontendPath, 'aic-minha-jornada.html'));
+});
+
+// AIC Pagamento - Pagina de pagamento
+app.get('/aic/pagamento/:journeyId', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(frontendPath, 'aic-pagamento.html'));
 });
 
 // Campaign Briefing - slug-based route
