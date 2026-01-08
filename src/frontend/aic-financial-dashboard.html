@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Financeiro | AIC - Applied Intelligence Clustering</title>
+  <meta name="robots" content="noindex, nofollow">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/assets/AIC/Imagens%20Vetor%20/AIC%20Icone%20Cheio.png">
+
+  <!-- Theme Color -->
+  <meta name="theme-color" content="#0C1B33">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-green-glow: rgba(14, 204, 151, 0.25);
+      --aic-green-subtle: rgba(14, 204, 151, 0.1);
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-navy-lighter: #1a3055;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-gray-light: #cbd5e1;
+      --aic-border: #1e3a5f;
+      --aic-red: #ef4444;
+      --aic-red-subtle: rgba(239, 68, 68, 0.1);
+      --aic-yellow: #f59e0b;
+      --aic-yellow-dark: #d97706;
+      --aic-yellow-subtle: rgba(245, 158, 11, 0.1);
+      --aic-blue: #3b82f6;
+      --aic-blue-subtle: rgba(59, 130, 246, 0.1);
+      --aic-purple: #8b5cf6;
+      --aic-purple-subtle: rgba(139, 92, 246, 0.1);
+      --aic-orange: #f97316;
+      --aic-orange-subtle: rgba(249, 115, 22, 0.1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* Container */
+    .container { max-width: 1400px; margin: 0 auto; padding: 0 24px; }
+
+    /* Header */
+    .header {
+      background: rgba(12, 27, 51, 0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--aic-border);
+      padding: 20px 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header-logo {
+      height: 40px;
+      width: auto;
+      filter: brightness(1.1);
+    }
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-nav a {
+      color: var(--aic-gray);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    .header-nav a:hover {
+      background: var(--aic-navy-lighter);
+      color: var(--aic-white);
+    }
+    .header-nav a.active {
+      background: var(--aic-green);
+      color: var(--aic-navy);
+    }
+
+    /* Main Content */
+    .main { padding: 48px 0 80px; }
+
+    /* Page Title */
+    .page-header {
+      margin-bottom: 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .page-header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aic-white);
+      margin-bottom: 8px;
+    }
+    .page-header h1 span {
+      color: var(--aic-green);
+    }
+    .page-header p {
+      font-size: 16px;
+      color: var(--aic-gray);
+    }
+
+    /* Campaign Selector */
+    .campaign-selector {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .campaign-selector select {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      color: var(--aic-white);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      min-width: 250px;
+      cursor: pointer;
+    }
+    .campaign-selector select:focus {
+      outline: none;
+      border-color: var(--aic-green);
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .stat-card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 12px;
+      padding: 20px;
+      transition: all 0.3s;
+    }
+    .stat-card:hover {
+      border-color: var(--aic-green);
+      transform: translateY(-2px);
+    }
+    .stat-card.green { border-left: 4px solid var(--aic-green); }
+    .stat-card.yellow { border-left: 4px solid var(--aic-yellow); }
+    .stat-card.red { border-left: 4px solid var(--aic-red); }
+    .stat-card.blue { border-left: 4px solid var(--aic-blue); }
+    .stat-card.purple { border-left: 4px solid var(--aic-purple); }
+    .stat-label {
+      font-size: 12px;
+      color: var(--aic-gray);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aic-white);
+    }
+    .stat-value.green { color: var(--aic-green); }
+    .stat-value.yellow { color: var(--aic-yellow); }
+    .stat-value.red { color: var(--aic-red); }
+    .stat-count {
+      font-size: 13px;
+      color: var(--aic-gray);
+      margin-top: 4px;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--aic-border);
+      padding-bottom: 12px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--aic-gray);
+      font-size: 14px;
+      font-weight: 500;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover {
+      background: var(--aic-navy-lighter);
+      color: var(--aic-white);
+    }
+    .tab-btn.active {
+      background: var(--aic-green);
+      color: var(--aic-navy);
+    }
+
+    /* Tab Content */
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Section */
+    .section {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--aic-white);
+    }
+
+    /* Table */
+    .table-container {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 14px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--aic-border);
+    }
+    th {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--aic-gray);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: rgba(0,0,0,0.2);
+    }
+    td {
+      font-size: 14px;
+      color: var(--aic-white);
+    }
+    tr:hover td {
+      background: rgba(14, 204, 151, 0.05);
+    }
+
+    /* Status Badge */
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .status-pending { background: var(--aic-yellow-subtle); color: var(--aic-yellow); }
+    .status-paid { background: var(--aic-green-subtle); color: var(--aic-green); }
+    .status-overdue { background: var(--aic-red-subtle); color: var(--aic-red); }
+    .status-draft { background: var(--aic-blue-subtle); color: var(--aic-blue); }
+    .status-sent { background: var(--aic-purple-subtle); color: var(--aic-purple); }
+    .status-cancelled { background: rgba(100,100,100,0.2); color: var(--aic-gray); }
+
+    /* Delivery Type Badge */
+    .delivery-type {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .delivery-type-reuniao_marcada { background: var(--aic-green-subtle); color: var(--aic-green); }
+    .delivery-type-whatsapp_capturado { background: var(--aic-blue-subtle); color: var(--aic-blue); }
+    .delivery-type-interesse_confirmado { background: var(--aic-yellow-subtle); color: var(--aic-yellow); }
+    .delivery-type-proposta_enviada { background: var(--aic-purple-subtle); color: var(--aic-purple); }
+    .delivery-type-negociacao { background: var(--aic-orange-subtle); color: var(--aic-orange); }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      border: none;
+    }
+    .btn-primary {
+      background: var(--aic-green);
+      color: var(--aic-navy);
+    }
+    .btn-primary:hover {
+      background: var(--aic-green-dark);
+    }
+    .btn-secondary {
+      background: var(--aic-navy-lighter);
+      color: var(--aic-white);
+      border: 1px solid var(--aic-border);
+    }
+    .btn-secondary:hover {
+      border-color: var(--aic-green);
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    /* Actions */
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--aic-gray);
+    }
+    .empty-state svg {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    .empty-state h3 {
+      font-size: 18px;
+      color: var(--aic-white);
+      margin-bottom: 8px;
+    }
+
+    /* Loading */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      color: var(--aic-gray);
+    }
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid var(--aic-border);
+      border-top-color: var(--aic-green);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 12px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal.active {
+      display: flex;
+    }
+    .modal-content {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .modal-title {
+      font-size: 20px;
+      font-weight: 600;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--aic-gray);
+      font-size: 24px;
+      cursor: pointer;
+    }
+    .modal-close:hover {
+      color: var(--aic-white);
+    }
+
+    /* Form */
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--aic-gray-light);
+      margin-bottom: 8px;
+    }
+    .form-input {
+      width: 100%;
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      color: var(--aic-white);
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--aic-green);
+    }
+
+    /* Money Format */
+    .money { font-family: 'Inter', monospace; }
+    .money.positive { color: var(--aic-green); }
+    .money.negative { color: var(--aic-red); }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .page-header { flex-direction: column; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .tabs { overflow-x: auto; }
+      .header-nav { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="container header-content">
+      <a href="/aic">
+        <img src="/assets/AIC/Imagens%20Vetor%20/AIC%20Logo%20Completo.png" alt="AIC" class="header-logo">
+      </a>
+      <nav class="header-nav">
+        <a href="/aic-campaigns-dashboard.html">Campanhas</a>
+        <a href="/aic-reunioes-fechamento.html">Reunioes</a>
+        <a href="/aic-lead-deliveries.html">Jornadas</a>
+        <a href="/aic-financial-dashboard.html" class="active">Financeiro</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main">
+    <div class="container">
+      <!-- Page Header -->
+      <div class="page-header">
+        <div>
+          <h1>Dashboard <span>Financeiro</span></h1>
+          <p>Pagamentos, entregas de leads quentes e faturas</p>
+        </div>
+        <div class="campaign-selector">
+          <select id="campaignSelect">
+            <option value="">Todas as campanhas</option>
+          </select>
+          <button class="btn btn-primary" onclick="openNewDeliveryModal()">
+            + Nova Entrega
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card green">
+          <div class="stat-label">Pagamentos Recebidos</div>
+          <div class="stat-value green" id="statPagamentosRecebidos">R$ 0</div>
+          <div class="stat-count" id="statPagamentosRecebidosCount">0 pagamentos</div>
+        </div>
+        <div class="stat-card yellow">
+          <div class="stat-label">Pagamentos Pendentes</div>
+          <div class="stat-value yellow" id="statPagamentosPendentes">R$ 0</div>
+          <div class="stat-count" id="statPagamentosPendentesCount">0 pagamentos</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-label">Leads Quentes Entregues</div>
+          <div class="stat-value" id="statLeadsEntregues">0</div>
+          <div class="stat-count" id="statLeadsEntreguesValue">R$ 0 em valor</div>
+        </div>
+        <div class="stat-card purple">
+          <div class="stat-label">Faturas Pendentes</div>
+          <div class="stat-value" id="statFaturasPendentes">R$ 0</div>
+          <div class="stat-count" id="statFaturasPendentesCount">0 faturas</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-label">Faturas Pagas</div>
+          <div class="stat-value green" id="statFaturasPagas">R$ 0</div>
+          <div class="stat-count" id="statFaturasPagasCount">0 faturas</div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="deliveries">Entregas de Leads</button>
+        <button class="tab-btn" data-tab="invoices">Faturas</button>
+        <button class="tab-btn" data-tab="payments">Pagamentos</button>
+        <button class="tab-btn" data-tab="audit">Relatorio de Auditoria</button>
+      </div>
+
+      <!-- Tab: Deliveries -->
+      <div class="tab-content active" id="tab-deliveries">
+        <div class="section">
+          <div class="section-header">
+            <h2 class="section-title">Entregas de Leads Quentes</h2>
+            <button class="btn btn-secondary btn-sm" onclick="loadDeliveries()">Atualizar</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Lead</th>
+                  <th>Tipo</th>
+                  <th>Reuniao</th>
+                  <th>Score</th>
+                  <th>Valor</th>
+                  <th>Fatura</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody id="deliveriesTable">
+                <tr>
+                  <td colspan="8" class="loading">
+                    <div class="spinner"></div> Carregando...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Invoices -->
+      <div class="tab-content" id="tab-invoices">
+        <div class="section">
+          <div class="section-header">
+            <h2 class="section-title">Faturas</h2>
+            <button class="btn btn-primary btn-sm" onclick="openNewInvoiceModal()">+ Nova Fatura</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Numero</th>
+                  <th>Periodo</th>
+                  <th>Leads</th>
+                  <th>Subtotal</th>
+                  <th>Desconto</th>
+                  <th>Total</th>
+                  <th>Vencimento</th>
+                  <th>Status</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody id="invoicesTable">
+                <tr>
+                  <td colspan="9" class="loading">
+                    <div class="spinner"></div> Carregando...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Payments -->
+      <div class="tab-content" id="tab-payments">
+        <div class="section">
+          <div class="section-header">
+            <h2 class="section-title">Pagamentos do Contrato</h2>
+            <button class="btn btn-secondary btn-sm" onclick="loadPayments()">Atualizar</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Valor</th>
+                  <th>Vencimento</th>
+                  <th>Status</th>
+                  <th>Pago em</th>
+                  <th>Metodo</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody id="paymentsTable">
+                <tr>
+                  <td colspan="7" class="loading">
+                    <div class="spinner"></div> Carregando...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Audit -->
+      <div class="tab-content" id="tab-audit">
+        <div class="section">
+          <div class="section-header">
+            <h2 class="section-title">Relatorio de Auditoria</h2>
+            <div class="actions">
+              <input type="date" id="auditStartDate" class="form-input" style="width: auto;">
+              <input type="date" id="auditEndDate" class="form-input" style="width: auto;">
+              <button class="btn btn-secondary btn-sm" onclick="loadAuditReport()">Filtrar</button>
+              <button class="btn btn-primary btn-sm" onclick="exportAuditCSV()">Exportar CSV</button>
+            </div>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Data Entrega</th>
+                  <th>Lead</th>
+                  <th>Instagram</th>
+                  <th>Telefone</th>
+                  <th>Tipo</th>
+                  <th>Reuniao</th>
+                  <th>Score</th>
+                  <th>Valor</th>
+                  <th>Fatura</th>
+                </tr>
+              </thead>
+              <tbody id="auditTable">
+                <tr>
+                  <td colspan="10" class="loading">
+                    <div class="spinner"></div> Carregando...
+                  </td>
+                </tr>
+              </tbody>
+              <tfoot id="auditFooter">
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal: Nova Entrega -->
+  <div class="modal" id="deliveryModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">Nova Entrega de Lead Quente</h3>
+        <button class="modal-close" onclick="closeModal('deliveryModal')">&times;</button>
+      </div>
+      <form id="deliveryForm" onsubmit="submitDelivery(event)">
+        <div class="form-group">
+          <label class="form-label">Campanha *</label>
+          <select id="deliveryCampaign" class="form-input" required>
+            <option value="">Selecione...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tipo de Conversao *</label>
+          <select id="deliveryType" class="form-input" required>
+            <option value="reuniao_marcada">Reuniao Marcada</option>
+            <option value="whatsapp_capturado">WhatsApp Capturado</option>
+            <option value="interesse_confirmado">Interesse Confirmado</option>
+            <option value="proposta_enviada">Proposta Enviada</option>
+            <option value="negociacao">Em Negociacao</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nome do Lead *</label>
+          <input type="text" id="deliveryLeadName" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Telefone</label>
+          <input type="text" id="deliveryLeadPhone" class="form-input" placeholder="+55 11 99999-9999">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Instagram</label>
+          <input type="text" id="deliveryLeadInstagram" class="form-input" placeholder="@usuario">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" id="deliveryLeadEmail" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data/Hora da Reuniao (se aplicavel)</label>
+          <input type="datetime-local" id="deliveryMeetingDate" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Score de Qualificacao (1-10)</label>
+          <input type="number" id="deliveryScore" class="form-input" min="1" max="10" value="7">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Resumo da Conversa</label>
+          <textarea id="deliverySummary" class="form-input" rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor Unitario (R$)</label>
+          <input type="number" id="deliveryValue" class="form-input" step="0.01" value="150.00">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%;">Registrar Entrega</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Nova Fatura -->
+  <div class="modal" id="invoiceModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">Criar Nova Fatura</h3>
+        <button class="modal-close" onclick="closeModal('invoiceModal')">&times;</button>
+      </div>
+      <form id="invoiceForm" onsubmit="submitInvoice(event)">
+        <div class="form-group">
+          <label class="form-label">Campanha *</label>
+          <select id="invoiceCampaign" class="form-input" required>
+            <option value="">Selecione...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Periodo Inicio *</label>
+          <input type="date" id="invoicePeriodStart" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Periodo Fim *</label>
+          <input type="date" id="invoicePeriodEnd" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor por Lead (R$)</label>
+          <input type="number" id="invoiceUnitPrice" class="form-input" step="0.01" value="150.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dias para Vencimento</label>
+          <input type="number" id="invoiceDueDays" class="form-input" value="5">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%;">Criar Fatura</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let selectedCampaignId = '';
+    let campaigns = [];
+
+    // API Base
+    const API_BASE = '/api/aic';
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      loadCampaigns();
+      setupTabs();
+      setupCampaignSelector();
+      setDefaultDates();
+    });
+
+    // Setup Tabs
+    function setupTabs() {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        });
+      });
+    }
+
+    // Setup Campaign Selector
+    function setupCampaignSelector() {
+      document.getElementById('campaignSelect').addEventListener('change', (e) => {
+        selectedCampaignId = e.target.value;
+        loadAllData();
+      });
+    }
+
+    // Set Default Dates
+    function setDefaultDates() {
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+
+      document.getElementById('auditStartDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+      document.getElementById('auditEndDate').value = today.toISOString().split('T')[0];
+    }
+
+    // Load Campaigns
+    async function loadCampaigns() {
+      try {
+        const response = await fetch('/api/campaigns');
+        campaigns = await response.json();
+
+        const selects = ['campaignSelect', 'deliveryCampaign', 'invoiceCampaign'];
+        selects.forEach(selectId => {
+          const select = document.getElementById(selectId);
+          if (selectId === 'campaignSelect') {
+            select.innerHTML = '<option value="">Todas as campanhas</option>';
+          } else {
+            select.innerHTML = '<option value="">Selecione...</option>';
+          }
+          campaigns.forEach(c => {
+            select.innerHTML += `<option value="${c.id}">${c.campaign_name}</option>`;
+          });
+        });
+
+        loadAllData();
+      } catch (error) {
+        console.error('Error loading campaigns:', error);
+      }
+    }
+
+    // Load All Data
+    function loadAllData() {
+      loadDashboard();
+      loadDeliveries();
+      loadInvoices();
+      loadPayments();
+      loadAuditReport();
+    }
+
+    // Load Dashboard
+    async function loadDashboard() {
+      try {
+        const url = selectedCampaignId
+          ? `${API_BASE}/financial/dashboard?campaign_id=${selectedCampaignId}`
+          : `${API_BASE}/financial/dashboard`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        document.getElementById('statPagamentosRecebidos').textContent = formatMoney(data.pagamentos_recebidos?.value || 0);
+        document.getElementById('statPagamentosRecebidosCount').textContent = `${data.pagamentos_recebidos?.count || 0} pagamentos`;
+
+        document.getElementById('statPagamentosPendentes').textContent = formatMoney(data.pagamentos_pendentes?.value || 0);
+        document.getElementById('statPagamentosPendentesCount').textContent = `${data.pagamentos_pendentes?.count || 0} pagamentos`;
+
+        document.getElementById('statLeadsEntregues').textContent = data.leads_quentes_entregues?.count || 0;
+        document.getElementById('statLeadsEntreguesValue').textContent = formatMoney(data.leads_quentes_entregues?.value || 0) + ' em valor';
+
+        document.getElementById('statFaturasPendentes').textContent = formatMoney(data.faturas_pendentes?.value || 0);
+        document.getElementById('statFaturasPendentesCount').textContent = `${data.faturas_pendentes?.count || 0} faturas`;
+
+        document.getElementById('statFaturasPagas').textContent = formatMoney(data.faturas_pagas?.value || 0);
+        document.getElementById('statFaturasPagasCount').textContent = `${data.faturas_pagas?.count || 0} faturas`;
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+      }
+    }
+
+    // Load Deliveries
+    async function loadDeliveries() {
+      const tbody = document.getElementById('deliveriesTable');
+      tbody.innerHTML = '<tr><td colspan="8" class="loading"><div class="spinner"></div> Carregando...</td></tr>';
+
+      try {
+        let url = selectedCampaignId
+          ? `${API_BASE}/deliveries/campaign/${selectedCampaignId}`
+          : null;
+
+        if (!url && campaigns.length > 0) {
+          // Load from first campaign if none selected
+          url = `${API_BASE}/deliveries/campaign/${campaigns[0].id}`;
+        }
+
+        if (!url) {
+          tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><h3>Selecione uma campanha</h3></td></tr>';
+          return;
+        }
+
+        const response = await fetch(url);
+        const deliveries = await response.json();
+
+        if (deliveries.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><h3>Nenhuma entrega encontrada</h3><p>Registre a primeira entrega de lead quente</p></td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = deliveries.map(d => `
+          <tr>
+            <td>${formatDate(d.delivered_at)}</td>
+            <td>
+              <strong>${d.lead_name}</strong>
+              ${d.lead_instagram ? `<br><small style="color: var(--aic-gray);">${d.lead_instagram}</small>` : ''}
+            </td>
+            <td><span class="delivery-type delivery-type-${d.delivery_type}">${formatDeliveryType(d.delivery_type)}</span></td>
+            <td>${d.meeting_scheduled_at ? formatDateTime(d.meeting_scheduled_at) : '-'}</td>
+            <td>${d.qualification_score || '-'}</td>
+            <td class="money">${d.unit_value ? formatMoney(d.unit_value) : '-'}</td>
+            <td>${d.invoice_id ? '<span class="status status-paid">Faturado</span>' : '<span class="status status-pending">Pendente</span>'}</td>
+            <td>
+              <div class="actions">
+                ${!d.invoice_id ? `<button class="btn btn-secondary btn-sm" onclick="markNotBillable('${d.id}')">Nao Cobravel</button>` : ''}
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading deliveries:', error);
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><h3>Erro ao carregar</h3></td></tr>';
+      }
+    }
+
+    // Load Invoices
+    async function loadInvoices() {
+      const tbody = document.getElementById('invoicesTable');
+      tbody.innerHTML = '<tr><td colspan="9" class="loading"><div class="spinner"></div> Carregando...</td></tr>';
+
+      try {
+        let url = selectedCampaignId
+          ? `${API_BASE}/invoices/campaign/${selectedCampaignId}`
+          : null;
+
+        if (!url && campaigns.length > 0) {
+          url = `${API_BASE}/invoices/campaign/${campaigns[0].id}`;
+        }
+
+        if (!url) {
+          tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><h3>Selecione uma campanha</h3></td></tr>';
+          return;
+        }
+
+        const response = await fetch(url);
+        const invoices = await response.json();
+
+        if (invoices.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><h3>Nenhuma fatura encontrada</h3><p>Crie a primeira fatura para esta campanha</p></td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = invoices.map(inv => `
+          <tr>
+            <td><strong>${inv.invoice_number}</strong></td>
+            <td>${formatDate(inv.period_start)} - ${formatDate(inv.period_end)}</td>
+            <td>${inv.hot_leads_count} leads</td>
+            <td class="money">${formatMoney(inv.subtotal)}</td>
+            <td class="money ${inv.discount > 0 ? 'negative' : ''}">${inv.discount > 0 ? '-' + formatMoney(inv.discount) : '-'}</td>
+            <td class="money positive"><strong>${formatMoney(inv.total)}</strong></td>
+            <td>${formatDate(inv.due_date)}</td>
+            <td><span class="status status-${inv.status}">${formatInvoiceStatus(inv.status)}</span></td>
+            <td>
+              <div class="actions">
+                ${inv.status === 'draft' ? `<button class="btn btn-primary btn-sm" onclick="sendInvoice('${inv.id}')">Enviar</button>` : ''}
+                ${inv.status === 'sent' || inv.status === 'pending' ? `<button class="btn btn-primary btn-sm" onclick="markInvoicePaid('${inv.id}')">Pago</button>` : ''}
+                <button class="btn btn-secondary btn-sm" onclick="viewInvoiceAudit('${inv.id}')">Auditoria</button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading invoices:', error);
+        tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><h3>Erro ao carregar</h3></td></tr>';
+      }
+    }
+
+    // Load Payments
+    async function loadPayments() {
+      const tbody = document.getElementById('paymentsTable');
+      tbody.innerHTML = '<tr><td colspan="7" class="loading"><div class="spinner"></div> Carregando...</td></tr>';
+
+      try {
+        // For now, show overdue payments
+        const response = await fetch(`${API_BASE}/payments/overdue`);
+        const payments = await response.json();
+
+        if (payments.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><h3>Nenhum pagamento vencido</h3><p>Todos os pagamentos estao em dia</p></td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = payments.map(p => `
+          <tr>
+            <td><strong>${formatPaymentType(p.payment_type)}</strong></td>
+            <td class="money">${formatMoney(p.amount)}</td>
+            <td>${formatDate(p.due_date)}</td>
+            <td><span class="status status-overdue">Vencido ha ${p.days_overdue} dias</span></td>
+            <td>-</td>
+            <td>-</td>
+            <td>
+              <div class="actions">
+                <button class="btn btn-primary btn-sm" onclick="markPaymentPaid('${p.payment_id}')">Marcar Pago</button>
+                <button class="btn btn-secondary btn-sm" onclick="sendReminder('${p.payment_id}')">Lembrete</button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading payments:', error);
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><h3>Erro ao carregar</h3></td></tr>';
+      }
+    }
+
+    // Load Audit Report
+    async function loadAuditReport() {
+      const tbody = document.getElementById('auditTable');
+      const tfoot = document.getElementById('auditFooter');
+      tbody.innerHTML = '<tr><td colspan="10" class="loading"><div class="spinner"></div> Carregando...</td></tr>';
+      tfoot.innerHTML = '';
+
+      try {
+        const campaignId = selectedCampaignId || (campaigns.length > 0 ? campaigns[0].id : null);
+        if (!campaignId) {
+          tbody.innerHTML = '<tr><td colspan="10" class="empty-state"><h3>Selecione uma campanha</h3></td></tr>';
+          return;
+        }
+
+        const startDate = document.getElementById('auditStartDate').value;
+        const endDate = document.getElementById('auditEndDate').value;
+
+        let url = `${API_BASE}/audit/campaign/${campaignId}`;
+        if (startDate) url += `?start_date=${startDate}`;
+        if (endDate) url += `${startDate ? '&' : '?'}end_date=${endDate}`;
+
+        const response = await fetch(url);
+        const report = await response.json();
+
+        if (report.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="10" class="empty-state"><h3>Nenhuma entrega no periodo</h3></td></tr>';
+          return;
+        }
+
+        let totalValue = 0;
+        tbody.innerHTML = report.map((r, i) => {
+          totalValue += r.unit_value || 0;
+          return `
+            <tr>
+              <td>${i + 1}</td>
+              <td>${formatDateTime(r.delivered_at)}</td>
+              <td><strong>${r.lead_name}</strong></td>
+              <td>${r.lead_instagram || '-'}</td>
+              <td>${r.lead_phone || '-'}</td>
+              <td><span class="delivery-type delivery-type-${r.delivery_type}">${formatDeliveryType(r.delivery_type)}</span></td>
+              <td>${r.meeting_scheduled_at ? formatDateTime(r.meeting_scheduled_at) : '-'}</td>
+              <td>${r.qualification_score || '-'}</td>
+              <td class="money">${formatMoney(r.unit_value || 0)}</td>
+              <td>${r.invoice_number || '-'}</td>
+            </tr>
+          `;
+        }).join('');
+
+        tfoot.innerHTML = `
+          <tr style="background: rgba(14, 204, 151, 0.1);">
+            <td colspan="8" style="text-align: right; font-weight: 600;">TOTAL (${report.length} leads)</td>
+            <td class="money positive" style="font-weight: 700; font-size: 16px;">${formatMoney(totalValue)}</td>
+            <td></td>
+          </tr>
+        `;
+      } catch (error) {
+        console.error('Error loading audit report:', error);
+        tbody.innerHTML = '<tr><td colspan="10" class="empty-state"><h3>Erro ao carregar</h3></td></tr>';
+      }
+    }
+
+    // Export Audit CSV
+    function exportAuditCSV() {
+      const table = document.querySelector('#tab-audit table');
+      const rows = table.querySelectorAll('tr');
+      let csv = [];
+
+      rows.forEach(row => {
+        const cols = row.querySelectorAll('th, td');
+        const rowData = [];
+        cols.forEach(col => {
+          rowData.push('"' + col.textContent.replace(/"/g, '""').trim() + '"');
+        });
+        csv.push(rowData.join(','));
+      });
+
+      const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio-auditoria-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+    }
+
+    // Modal Functions
+    function openNewDeliveryModal() {
+      document.getElementById('deliveryModal').classList.add('active');
+    }
+
+    function openNewInvoiceModal() {
+      document.getElementById('invoiceModal').classList.add('active');
+      // Set default dates
+      const today = new Date();
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      document.getElementById('invoicePeriodStart').value = firstDay.toISOString().split('T')[0];
+      document.getElementById('invoicePeriodEnd').value = today.toISOString().split('T')[0];
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+    }
+
+    // Submit Delivery
+    async function submitDelivery(e) {
+      e.preventDefault();
+
+      const data = {
+        campaign_id: document.getElementById('deliveryCampaign').value,
+        delivery_type: document.getElementById('deliveryType').value,
+        lead_name: document.getElementById('deliveryLeadName').value,
+        lead_phone: document.getElementById('deliveryLeadPhone').value || undefined,
+        lead_instagram: document.getElementById('deliveryLeadInstagram').value || undefined,
+        lead_email: document.getElementById('deliveryLeadEmail').value || undefined,
+        meeting_scheduled_at: document.getElementById('deliveryMeetingDate').value || undefined,
+        qualification_score: parseInt(document.getElementById('deliveryScore').value) || undefined,
+        conversation_summary: document.getElementById('deliverySummary').value || undefined,
+        unit_value: parseFloat(document.getElementById('deliveryValue').value) || 150
+      };
+
+      try {
+        const response = await fetch(`${API_BASE}/deliveries`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+          closeModal('deliveryModal');
+          document.getElementById('deliveryForm').reset();
+          loadAllData();
+          alert('Entrega registrada com sucesso!');
+        } else {
+          const error = await response.json();
+          alert('Erro: ' + error.error);
+        }
+      } catch (error) {
+        alert('Erro ao registrar entrega');
+      }
+    }
+
+    // Submit Invoice
+    async function submitInvoice(e) {
+      e.preventDefault();
+
+      const data = {
+        campaign_id: document.getElementById('invoiceCampaign').value,
+        period_start: document.getElementById('invoicePeriodStart').value,
+        period_end: document.getElementById('invoicePeriodEnd').value,
+        unit_price: parseFloat(document.getElementById('invoiceUnitPrice').value) || 150,
+        due_days: parseInt(document.getElementById('invoiceDueDays').value) || 5
+      };
+
+      try {
+        const response = await fetch(`${API_BASE}/invoices`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+          closeModal('invoiceModal');
+          document.getElementById('invoiceForm').reset();
+          loadAllData();
+          alert('Fatura criada com sucesso!');
+        } else {
+          const error = await response.json();
+          alert('Erro: ' + error.error);
+        }
+      } catch (error) {
+        alert('Erro ao criar fatura');
+      }
+    }
+
+    // Action Functions
+    async function markNotBillable(deliveryId) {
+      const reason = prompt('Motivo para nao cobrar este lead:');
+      if (!reason) return;
+
+      try {
+        await fetch(`${API_BASE}/deliveries/${deliveryId}/not-billable`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason })
+        });
+        loadDeliveries();
+      } catch (error) {
+        alert('Erro ao atualizar');
+      }
+    }
+
+    async function sendInvoice(invoiceId) {
+      const email = prompt('Email para enviar a fatura:');
+      if (!email) return;
+
+      try {
+        await fetch(`${API_BASE}/invoices/${invoiceId}/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        loadInvoices();
+        alert('Fatura marcada como enviada!');
+      } catch (error) {
+        alert('Erro ao enviar');
+      }
+    }
+
+    async function markInvoicePaid(invoiceId) {
+      const method = prompt('Metodo de pagamento (pix, boleto, transferencia):');
+      if (!method) return;
+
+      try {
+        await fetch(`${API_BASE}/invoices/${invoiceId}/pay`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payment_method: method })
+        });
+        loadAllData();
+        alert('Fatura marcada como paga!');
+      } catch (error) {
+        alert('Erro ao atualizar');
+      }
+    }
+
+    async function markPaymentPaid(paymentId) {
+      const method = prompt('Metodo de pagamento (pix, boleto, transferencia):');
+      if (!method) return;
+
+      try {
+        await fetch(`${API_BASE}/payments/${paymentId}/pay`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payment_method: method })
+        });
+        loadAllData();
+        alert('Pagamento confirmado!');
+      } catch (error) {
+        alert('Erro ao atualizar');
+      }
+    }
+
+    async function sendReminder(paymentId) {
+      try {
+        await fetch(`${API_BASE}/payments/${paymentId}/reminder`, {
+          method: 'POST'
+        });
+        alert('Lembrete registrado!');
+      } catch (error) {
+        alert('Erro ao enviar lembrete');
+      }
+    }
+
+    function viewInvoiceAudit(invoiceId) {
+      // Switch to audit tab and filter by invoice
+      document.querySelector('[data-tab="audit"]').click();
+      // TODO: Filter audit report by invoice
+    }
+
+    // Format Functions
+    function formatMoney(value) {
+      return 'R$ ' + parseFloat(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      return new Date(dateStr).toLocaleDateString('pt-BR');
+    }
+
+    function formatDateTime(dateStr) {
+      if (!dateStr) return '-';
+      return new Date(dateStr).toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function formatDeliveryType(type) {
+      const types = {
+        'reuniao_marcada': 'Reuniao',
+        'whatsapp_capturado': 'WhatsApp',
+        'interesse_confirmado': 'Interesse',
+        'proposta_enviada': 'Proposta',
+        'negociacao': 'Negociacao'
+      };
+      return types[type] || type;
+    }
+
+    function formatInvoiceStatus(status) {
+      const statuses = {
+        'draft': 'Rascunho',
+        'pending': 'Pendente',
+        'sent': 'Enviada',
+        'paid': 'Paga',
+        'overdue': 'Vencida',
+        'cancelled': 'Cancelada',
+        'disputed': 'Disputada'
+      };
+      return statuses[status] || status;
+    }
+
+    function formatPaymentType(type) {
+      const types = {
+        'entrada': '50% Entrada',
+        'final': '50% Final',
+        'adicional': 'Adicional'
+      };
+      return types[type] || type;
+    }
+  </script>
+  <script src="/components/aic-sidebar.js"></script>
+</body>
+</html>

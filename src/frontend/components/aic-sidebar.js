@@ -232,6 +232,14 @@
   navContent += '<a href="/dynamic-intelligence-dashboard.html" class="aic-sidebar-link' + (isActive('dynamic-intelligence') ? ' active' : '') + '">Dynamic Intelligence</a>';
   navContent += '</div>';
 
+  // Secao Financeiro
+  navContent += '<div class="aic-sidebar-section">';
+  navContent += '<div class="aic-sidebar-section-title">Financeiro</div>';
+  navContent += '<a href="/aic-financial-dashboard.html" class="aic-sidebar-link' + (isActive('financial-dashboard') ? ' active' : '') + '">Dashboard Financeiro</a>';
+  navContent += '<a href="/aic-lead-deliveries.html" class="aic-sidebar-link' + (isActive('lead-deliveries') ? ' active' : '') + '">Entregas de Leads</a>';
+  navContent += '<a href="/aic-reunioes-fechamento.html" class="aic-sidebar-link' + (isActive('reunioes-fechamento') ? ' active' : '') + '">Reunioes Fechamento</a>';
+  navContent += '</div>';
+
   // Secao Documentacao
   navContent += '<div class="aic-sidebar-section">';
   navContent += '<div class="aic-sidebar-section-title">Documentacao</div>';

@@ -1013,6 +1013,16 @@ try {
   console.error("❌ Failed to load AIC Calendar routes:", error);
 }
 
+// AIC Financial Routes - Pagamentos, entregas de leads quentes e faturas
+try {
+  const aicFinancialRoutes = require('./routes/aic-financial.routes');
+  const router = 'default' in aicFinancialRoutes ? aicFinancialRoutes.default : aicFinancialRoutes;
+  app.use('/api/aic', router);
+  console.log('✅ AIC Financial routes loaded - PAYMENTS, DELIVERIES & INVOICES READY');
+} catch (error) {
+  console.error("❌ Failed to load AIC Financial routes:", error);
+}
+
 // Queue Management Routes - BullMQ unified queue system
 try {
   const queueRoutes = require('./routes/queue.routes');
