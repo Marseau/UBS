@@ -1566,7 +1566,7 @@
         <a href="/aic-campaigns-dashboard.html">Campanhas</a>
         <a href="/aic-campaign-onboarding.html">Nova Campanha</a>
         <a href="/aic-login.html" class="nav-btn-secondary">Entrar</a>
-        <a href="https://wa.me/5511999040605?text=Olá! Vim pela landing da AIC e quero saber mais.&utm_source=organic&utm_medium=landing&utm_campaign=aic" class="nav-cta" target="_blank" data-umami-event="cta_nav_whatsapp">Falar com Especialista</a>
+        <a href="#" class="nav-cta" data-umami-event="cta_nav_cadastro">Falar com Especialista</a>
       </div>
     </div>
   </nav>
@@ -1584,7 +1584,7 @@
         <li>Expanda seus negócios de forma previsível e escalável</li>
       </ul>
       <div class="hero-ctas">
-        <a href="https://wa.me/5511999040605?text=Olá! Quero começar minha jornada para leads qualificados com a AIC.&utm_source=organic&utm_medium=landing&utm_campaign=aic" class="btn-primary" target="_blank" data-umami-event="cta_hero_whatsapp">
+        <a href="#" class="btn-primary" data-umami-event="cta_hero_cadastro">
           Comece sua Jornada Agora
         </a>
         <a href="/aic-docs.html" class="btn-secondary">
@@ -1946,8 +1946,8 @@
           <li>Entrega de leads qualificados em planilha</li>
         </ul>
         <div class="pricing-cta">
-          <a href="https://wa.me/5511999040605?text=Olá! Quero aproveitar a promoção de lançamento da AIC (R$10/lead na primeira campanha).&utm_source=organic&utm_medium=landing&utm_campaign=aic_promo" class="btn-primary" target="_blank" data-umami-event="cta_pricing_whatsapp_promo">
-            🚀 Aproveitar Oferta de Lançamento
+          <a href="#" class="btn-primary" data-umami-event="cta_pricing_cadastro">
+            Aproveitar Oferta de Lançamento
           </a>
         </div>
       </div>
@@ -1994,7 +1994,7 @@
     <div class="container cta-content">
       <h2>Quer saber se a AIC funciona para o seu negócio?</h2>
       <p>Converse com nossa equipe para entender se o seu nicho e oferta têm fit com a metodologia de clusters de intenção.</p>
-      <a href="https://wa.me/5511999040605?text=Olá! Vim pela landing da AIC e quero entender se funciona para o meu negócio.&utm_source=organic&utm_medium=landing&utm_campaign=aic" class="btn-primary" target="_blank" data-umami-event="cta_bottom_whatsapp">
+      <a href="#" class="btn-primary" data-umami-event="cta_bottom_cadastro">
         Falar com Especialista
       </a>
     </div>
@@ -2224,7 +2224,7 @@
       function trackLeadClick(ctaElement) {
         const ctaName = ctaElement.getAttribute('data-umami-event') || 'unknown_cta';
         const ctaHref = ctaElement.getAttribute('href') || '';
-        const isWhatsAppLink = ctaHref.includes('wa.me');
+        const isRedirectLink = ctaHref.includes('wa.me') || ctaHref.includes('mailto:');
 
         // Verificar se já tem dados do lead
         const storedLead = getStoredLeadData();
@@ -2233,13 +2233,13 @@
           // Já tem dados - enviar tracking direto
           sendTracking(storedLead, ctaName, ctaHref);
 
-          // Se for link WhatsApp, deixa abrir normalmente
+          // Se for link de redirecionamento (WhatsApp ou email), deixa abrir normalmente
           // Se for card, não faz nada (navegação continua)
           console.log('[AIC Lead Capture] Lead já identificado:', storedLead.name);
         } else {
           // Primeira interação - abrir modal
           pendingElement = ctaElement;
-          pendingAction = isWhatsAppLink ? 'redirect' : 'track';
+          pendingAction = isRedirectLink ? 'redirect' : 'track';
           openModal();
           console.log('[AIC Lead Capture] Abrindo modal para captura');
         }
@@ -2348,6 +2348,13 @@
             sendTracking({ name, email, phone }, ctaName, ctaHref);
           }
 
+          // Enviar email de follow-up via N8N (não bloqueia fluxo)
+          fetch('https://n8n.ubs.app.br/webhook/aic-lead-followup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, phone })
+          }).catch(err => console.warn('[AIC] Erro ao enviar email follow-up:', err));
+
           // Restaurar botão
           submitBtn.disabled = false;
           submitBtn.textContent = originalText;
@@ -2355,16 +2362,14 @@
           // Fechar modal
           closeModal();
 
-          // Executar ação pendente
-          if (pendingAction === 'redirect' && pendingElement) {
-            // Redirecionar para WhatsApp
-            window.location.href = pendingElement.href;
-          }
-          // Se for 'track', não faz nada - apenas trackeia
-
           // Limpar pendências
           pendingAction = null;
           pendingElement = null;
+
+          // Redirecionar para WhatsApp com AI Agent
+          const whatsappNumber = '5511921947727';
+          const whatsappMessage = encodeURIComponent(`Olá! Sou ${name} e gostaria de saber mais sobre a AIC.`);
+          window.location.href = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
         });
 
         // Event listener do botão cancelar
@@ -2384,7 +2389,7 @@
             } else {
               // Já tem dados - apenas trackear
               trackLeadClick(this);
-              // Se for WhatsApp, deixa redirecionar normalmente
+              // Se for link de redirecionamento (WhatsApp ou email), deixa seguir
               // Se for card/botão sem href, não faz nada
             }
           });
@@ -2507,14 +2512,14 @@
     }
 
     .lead-modal-content {
-      background: linear-gradient(135deg, #0C1B33 0%, #1a2942 100%);
-      border-radius: 20px;
-      padding: 40px;
+      background: linear-gradient(135deg, var(--aic-navy) 0%, var(--aic-navy-light) 100%);
+      border-radius: 24px;
+      padding: 48px;
       max-width: 500px;
       width: 90%;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
       animation: slideUp 0.3s ease;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--aic-border);
     }
 
     .lead-modal-header {
@@ -2523,14 +2528,14 @@
     }
 
     .lead-modal-header h2 {
-      color: #fff;
+      color: var(--aic-white);
       font-size: 28px;
       font-weight: 700;
       margin-bottom: 10px;
     }
 
     .lead-modal-header p {
-      color: rgba(255, 255, 255, 0.7);
+      color: var(--aic-gray);
       font-size: 16px;
     }
 
@@ -2555,33 +2560,33 @@
       top: 50%;
       width: 100%;
       height: 1px;
-      background: rgba(255, 255, 255, 0.2);
+      background: var(--aic-border);
     }
 
     .divider span {
       position: relative;
-      background: #0C1B33;
+      background: var(--aic-navy);
       padding: 0 15px;
-      color: rgba(255, 255, 255, 0.6);
+      color: var(--aic-gray);
       font-size: 14px;
     }
 
     .btn-manual {
       width: 100%;
-      padding: 14px 24px;
-      border-radius: 10px;
+      padding: 16px 32px;
+      border-radius: 12px;
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.3s ease;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      background: rgba(255, 255, 255, 0.05);
-      color: #fff;
+      transition: all 0.2s ease;
+      border: 1px solid var(--aic-border);
+      background: transparent;
+      color: var(--aic-white);
     }
 
     .btn-manual:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: rgba(255, 255, 255, 0.3);
+      border-color: var(--aic-green);
+      background: var(--aic-green-subtle);
     }
 
     .lead-form {
@@ -2597,30 +2602,30 @@
     }
 
     .form-group label {
-      color: #fff;
+      color: var(--aic-white);
       font-size: 14px;
       font-weight: 600;
     }
 
     .form-group input {
-      padding: 14px 16px;
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      background: rgba(255, 255, 255, 0.05);
-      color: #fff;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid var(--aic-border);
+      background: var(--aic-navy);
+      color: var(--aic-white);
       font-size: 16px;
-      transition: all 0.3s ease;
+      transition: all 0.2s ease;
     }
 
     .form-group input:focus {
       outline: none;
-      border-color: #00D9FF;
-      background: rgba(255, 255, 255, 0.1);
-      box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1);
+      border-color: var(--aic-green);
+      background: var(--aic-navy-light);
+      box-shadow: 0 0 0 3px var(--aic-green-glow);
     }
 
     .form-group input::placeholder {
-      color: rgba(255, 255, 255, 0.4);
+      color: var(--aic-gray);
     }
 
     .form-actions {
@@ -2631,32 +2636,34 @@
 
     .btn-cancel, .btn-submit {
       flex: 1;
-      padding: 14px 24px;
-      border-radius: 10px;
+      padding: 16px 32px;
+      border-radius: 12px;
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.3s ease;
-      border: none;
+      transition: all 0.2s ease;
     }
 
     .btn-cancel {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
+      background: transparent;
+      color: var(--aic-white);
+      border: 1px solid var(--aic-border);
     }
 
     .btn-cancel:hover {
-      background: rgba(255, 255, 255, 0.15);
+      border-color: var(--aic-green);
+      background: var(--aic-green-subtle);
     }
 
     .btn-submit {
-      background: linear-gradient(135deg, #00D9FF 0%, #00A8CC 100%);
-      color: #0C1B33;
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      color: var(--aic-navy);
+      border: none;
     }
 
     .btn-submit:hover {
       transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(0, 217, 255, 0.3);
+      box-shadow: 0 8px 30px var(--aic-green-glow);
     }
 
     @keyframes fadeIn {

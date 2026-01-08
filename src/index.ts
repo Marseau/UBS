@@ -18,7 +18,7 @@ dotenv.config();
 validateProductionModel();
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3000', 10);
+const PORT = parseInt(process.env.PORT || '3004', 10);
 
 // Confiar no proxy (dev.ubs.app.br → localhost)
 app.set('trust proxy', 1);
@@ -973,6 +973,36 @@ try {
   console.error("❌ Failed to load Campaign Credentials routes:", error);
 }
 
+// AIC Contracts Routes - Digital contract signing and management
+try {
+  const aicContractsRoutes = require('./routes/aic-contracts.routes');
+  const router = 'default' in aicContractsRoutes ? aicContractsRoutes.default : aicContractsRoutes;
+  app.use('/api/aic/contracts', router);
+  console.log('✅ AIC Contracts routes loaded - DIGITAL CONTRACT SIGNING READY');
+} catch (error) {
+  console.error("❌ Failed to load AIC Contracts routes:", error);
+}
+
+// AIC Lead Deliveries Routes - Lead quente tracking e faturamento variavel
+try {
+  const aicLeadDeliveriesRoutes = require('./routes/aic-lead-deliveries.routes');
+  const router = 'default' in aicLeadDeliveriesRoutes ? aicLeadDeliveriesRoutes.default : aicLeadDeliveriesRoutes;
+  app.use('/api/aic/lead-deliveries', router);
+  console.log('✅ AIC Lead Deliveries routes loaded - LEAD TRACKING + BILLING READY');
+} catch (error) {
+  console.error("❌ Failed to load AIC Lead Deliveries routes:", error);
+}
+
+// AIC Calendar Routes - Tools para AI Agent (buscar slots + agendar reuniao)
+try {
+  const aicCalendarRoutes = require('./routes/aic-calendar.routes');
+  const router = 'default' in aicCalendarRoutes ? aicCalendarRoutes.default : aicCalendarRoutes;
+  app.use('/api/aic/calendar', router);
+  console.log('✅ AIC Calendar routes loaded - AI AGENT SCHEDULING TOOLS READY');
+} catch (error) {
+  console.error("❌ Failed to load AIC Calendar routes:", error);
+}
+
 // Queue Management Routes - BullMQ unified queue system
 try {
   const queueRoutes = require('./routes/queue.routes');
@@ -1147,6 +1177,27 @@ app.get('/test-tenant-redirect', (_req, res) => {
 // AIC Campaigns Dashboard
 app.get('/campaigns', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'aic-campaigns-dashboard.html'));
+});
+
+// AIC Lead Deliveries - Admin para gerenciar leads entregues
+app.get('/aic/lead-deliveries', (_req, res) => {
+  res.sendFile(path.join(frontendPath, 'aic-lead-deliveries.html'));
+});
+
+// AIC Leads Entregues - Leads entregues para clientes (campaign_id NOT NULL)
+app.get('/aic/leads-entregues', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(frontendPath, 'aic-leads-entregues.html'));
+});
+
+// AIC Reunioes Fechamento - Prospects da AIC (campaign_id IS NULL)
+app.get('/aic/reunioes-fechamento', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(frontendPath, 'aic-reunioes-fechamento.html'));
 });
 
 // Campaign Briefing - slug-based route

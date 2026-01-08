@@ -455,7 +455,7 @@
   <script>
     // Verificar se ja esta logado
     (async function() {
-      const { data: { user } } = await AICAuth.getUser();
+      const { user } = await AICAuth.getUser();
       if (user) {
         // Ja logado - smart redirect based on role
         await smartRedirect(user);
@@ -475,7 +475,7 @@
       msg.textContent = '';
     }
 
-    // Smart routing based on user type and campaigns
+    // Smart routing based on lead delivery status
     async function smartRedirect(user) {
       // Check if there's a specific redirect requested
       const params = new URLSearchParams(window.location.search);
@@ -487,13 +487,13 @@
 
       const email = user?.email;
       if (!email) {
-        window.location.href = '/aic-aguardando.html';
+        window.location.href = '/aic-aguardando.html?msg=sem_email';
         return;
       }
 
       try {
         // Check if admin
-        const adminEmails = ['marseaufranco@gmail.com']; // Add admin emails here
+        const adminEmails = ['marseaufranco@gmail.com'];
         const userMeta = user?.user_metadata || {};
         const isAdmin = adminEmails.includes(email) || userMeta.tipo_user === 'super_admin' || userMeta.role === 'admin';
 
@@ -502,24 +502,101 @@
           return;
         }
 
-        // Check if client has campaigns
-        const response = await fetch(`/api/campaigns?client_email=${encodeURIComponent(email)}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.campaigns && data.campaigns.length > 0) {
-            // Client has campaign(s)
-            window.location.href = '/aic-minha-campanha.html';
-            return;
+        // Buscar lead na tabela de entregas (por email)
+        const deliveryRes = await fetch(`/api/aic/lead-deliveries/by-email/${encodeURIComponent(email)}`);
+        let delivery = null;
+        if (deliveryRes.ok) {
+          const data = await deliveryRes.json();
+          if (data.found) {
+            delivery = data.delivery;
           }
         }
 
-        // No campaigns - waiting page
-        window.location.href = '/aic-aguardando.html';
+        // Se nao encontrou por email, tentar por whatsapp do metadata
+        if (!delivery && userMeta.phone) {
+          const phone = userMeta.phone.replace(/\D/g, '');
+          const whatsappRes = await fetch(`/api/aic/lead-deliveries/by-whatsapp/${encodeURIComponent(phone)}`);
+          if (whatsappRes.ok) {
+            const data = await whatsappRes.json();
+            if (data.found) {
+              delivery = data.delivery;
+              // Vincular auth_user_id ao lead
+              await fetch(`/api/aic/lead-deliveries/${delivery.id}/link-user`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ auth_user_id: user.id })
+              });
+            }
+          }
+        }
+
+        // Nao e um lead entregue - nao pode seguir
+        if (!delivery) {
+          window.location.href = '/aic-aguardando.html?msg=nao_qualificado';
+          return;
+        }
+
+        // Redirecionar baseado no status do lead
+        const status = delivery.status;
+
+        switch (status) {
+          case 'entregue':
+          case 'reuniao_agendada':
+          case 'reuniao_realizada':
+          case 'negociando':
+            // Aguardando representante/admin liberar
+            window.location.href = '/aic-aguardando.html?msg=em_negociacao';
+            break;
+
+          case 'contrato_enviado':
+            // Pode assinar contrato
+            window.location.href = `/aic-execution-agreement.html#contratar`;
+            break;
+
+          case 'contrato_assinado':
+          case 'briefing_pendente':
+            // Vai para briefing
+            if (delivery.contract_id) {
+              window.location.href = `/aic-campaign-briefing.html?contract=${delivery.contract_id}`;
+            } else {
+              window.location.href = '/aic-campaign-briefing.html';
+            }
+            break;
+
+          case 'briefing_completo':
+          case 'onboarding_pendente':
+            // Vai para onboarding
+            if (delivery.contract_id) {
+              window.location.href = `/aic-campaign-onboarding.html?contract=${delivery.contract_id}`;
+            } else {
+              window.location.href = '/aic-campaign-onboarding.html';
+            }
+            break;
+
+          case 'onboarding_completo':
+          case 'aguardando_campanha':
+            // Tudo pronto, aguardando admin criar campanha
+            window.location.href = '/aic-aguardando.html?msg=aguardando_campanha';
+            break;
+
+          case 'campanha_ativa':
+          case 'convertido':
+            // Tem campanha - vai para dashboard
+            window.location.href = '/aic-minha-campanha.html';
+            break;
+
+          case 'perdido':
+            // Lead perdido
+            window.location.href = '/aic-aguardando.html?msg=contato_encerrado';
+            break;
+
+          default:
+            window.location.href = '/aic-aguardando.html';
+        }
 
       } catch (err) {
         console.error('Routing error:', err);
-        // Fallback to waiting page
-        window.location.href = '/aic-aguardando.html';
+        window.location.href = '/aic-aguardando.html?msg=erro';
       }
     }
 

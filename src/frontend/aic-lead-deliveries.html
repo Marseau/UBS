@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIC - Gestao de Leads</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    .status-entregue { background: #fef3c7; color: #92400e; }
+    .status-reuniao_agendada { background: #dbeafe; color: #1e40af; }
+    .status-reuniao_realizada { background: #e0e7ff; color: #3730a3; }
+    .status-negociando { background: #fce7f3; color: #9d174d; }
+    .status-contrato_enviado { background: #fed7aa; color: #c2410c; }
+    .status-contrato_assinado { background: #bbf7d0; color: #166534; }
+    .status-convertido { background: #86efac; color: #14532d; }
+    .status-perdido { background: #fecaca; color: #991b1b; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!-- Header -->
+  <header id="pageHeader" class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-4 shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 flex justify-between items-center">
+      <div>
+        <h1 id="pageTitle" class="text-2xl font-bold">Carregando...</h1>
+        <p id="pageSubtitle" class="text-purple-200 text-sm">Gestao de leads</p>
+      </div>
+      <div class="flex items-center gap-4">
+        <select id="campaignFilter" class="bg-white/20 text-white rounded px-3 py-2 text-sm">
+          <option value="">Todas as campanhas</option>
+        </select>
+        <a href="/campaigns" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded text-sm">
+          Voltar
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Stats -->
+  <div class="max-w-7xl mx-auto px-4 py-6">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+      <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-gray-500 text-xs">Total Entregues</p>
+        <p class="text-2xl font-bold text-gray-900" id="statTotal">0</p>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-gray-500 text-xs">Reunioes Agendadas</p>
+        <p class="text-2xl font-bold text-blue-600" id="statAgendadas">0</p>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-gray-500 text-xs">Contratos Assinados</p>
+        <p class="text-2xl font-bold text-green-600" id="statContratos">0</p>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-gray-500 text-xs">Convertidos</p>
+        <p class="text-2xl font-bold text-emerald-600" id="statConvertidos">0</p>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-gray-500 text-xs">Faturamento</p>
+        <p class="text-2xl font-bold text-purple-600" id="statFaturamento">R$ 0</p>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow p-4 mb-6">
+      <div class="flex flex-wrap gap-2">
+        <button onclick="filterByStatus('')" class="px-3 py-1 rounded text-sm bg-gray-100 hover:bg-gray-200" data-status="">
+          Todos
+        </button>
+        <button onclick="filterByStatus('entregue')" class="px-3 py-1 rounded text-sm status-entregue" data-status="entregue">
+          Entregue
+        </button>
+        <button onclick="filterByStatus('reuniao_agendada')" class="px-3 py-1 rounded text-sm status-reuniao_agendada" data-status="reuniao_agendada">
+          Reuniao Agendada
+        </button>
+        <button onclick="filterByStatus('reuniao_realizada')" class="px-3 py-1 rounded text-sm status-reuniao_realizada" data-status="reuniao_realizada">
+          Reuniao Realizada
+        </button>
+        <button onclick="filterByStatus('negociando')" class="px-3 py-1 rounded text-sm status-negociando" data-status="negociando">
+          Negociando
+        </button>
+        <button onclick="filterByStatus('contrato_enviado')" class="px-3 py-1 rounded text-sm status-contrato_enviado" data-status="contrato_enviado">
+          Contrato Enviado
+        </button>
+        <button onclick="filterByStatus('contrato_assinado')" class="px-3 py-1 rounded text-sm status-contrato_assinado" data-status="contrato_assinado">
+          Contrato Assinado
+        </button>
+        <button onclick="filterByStatus('convertido')" class="px-3 py-1 rounded text-sm status-convertido" data-status="convertido">
+          Convertido
+        </button>
+        <button onclick="filterByStatus('perdido')" class="px-3 py-1 rounded text-sm status-perdido" data-status="perdido">
+          Perdido
+        </button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lead</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Campanha</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reuniao</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valor</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Entregue em</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="leadsTable" class="bg-white divide-y divide-gray-200">
+          <tr>
+            <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+              Carregando leads...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Modal Update Status -->
+  <div id="statusModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+      <h3 class="text-lg font-bold mb-4">Atualizar Status</h3>
+      <input type="hidden" id="modalLeadId">
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Novo Status</label>
+        <select id="modalStatus" class="w-full border rounded px-3 py-2">
+          <option value="entregue">Entregue</option>
+          <option value="reuniao_agendada">Reuniao Agendada</option>
+          <option value="reuniao_realizada">Reuniao Realizada</option>
+          <option value="negociando">Negociando</option>
+          <option value="contrato_enviado">Contrato Enviado</option>
+          <option value="contrato_assinado">Contrato Assinado</option>
+          <option value="briefing_pendente">Briefing Pendente</option>
+          <option value="briefing_completo">Briefing Completo</option>
+          <option value="onboarding_pendente">Onboarding Pendente</option>
+          <option value="onboarding_completo">Onboarding Completo</option>
+          <option value="aguardando_campanha">Aguardando Campanha</option>
+          <option value="campanha_ativa">Campanha Ativa</option>
+          <option value="convertido">Convertido</option>
+          <option value="perdido">Perdido</option>
+        </select>
+      </div>
+
+      <div class="mb-4" id="meetingFields" style="display:none;">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Data/Hora da Reuniao</label>
+        <input type="datetime-local" id="modalMeetingAt" class="w-full border rounded px-3 py-2">
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Observacoes</label>
+        <textarea id="modalNotes" rows="3" class="w-full border rounded px-3 py-2" placeholder="Anotacoes sobre o lead..."></textarea>
+      </div>
+
+      <div class="flex gap-2 justify-end">
+        <button onclick="closeModal()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">
+          Cancelar
+        </button>
+        <button onclick="saveStatus()" class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
+          Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://qsdfyffuonywmtnlycri.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTM5NjMwMzIsImV4cCI6MjAyOTUzOTAzMn0.szp1X8vTNhe5FEyzPkSqvSuMCBwQfbRp5qCBno3EJxI';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Detect page type from URL
+    const isReunioesPage = window.location.pathname.includes('reunioes-fechamento');
+    const isLeadsPage = window.location.pathname.includes('leads-entregues');
+
+    // Configure page based on type
+    function configurePage() {
+      const header = document.getElementById('pageHeader');
+      const title = document.getElementById('pageTitle');
+      const subtitle = document.getElementById('pageSubtitle');
+      const campaignFilter = document.getElementById('campaignFilter');
+
+      if (isReunioesPage) {
+        // Reunioes Fechamento - prospects da AIC (campaign_id IS NULL)
+        header.className = 'bg-gradient-to-r from-amber-500 to-orange-500 text-white py-4 shadow-lg';
+        title.textContent = '📅 Reunioes de Fechamento';
+        subtitle.textContent = 'Prospects interessados em contratar AIC';
+        document.title = 'AIC - Reunioes de Fechamento';
+        // Hide campaign filter for prospects (they don't have campaigns)
+        campaignFilter.style.display = 'none';
+      } else {
+        // Leads Entregues - leads de clientes (campaign_id IS NOT NULL)
+        header.className = 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-4 shadow-lg';
+        title.textContent = '💰 Leads Entregues';
+        subtitle.textContent = 'Leads quentes entregues para clientes AIC (R$10/lead)';
+        document.title = 'AIC - Leads Entregues';
+      }
+    }
+
+    let allDeliveries = [];
+    let currentFilter = '';
+
+    async function loadDeliveries() {
+      try {
+        const response = await fetch('/api/aic/lead-deliveries?limit=500');
+        const data = await response.json();
+
+        if (data.success) {
+          // Filter based on page type
+          let deliveries = data.deliveries || [];
+
+          if (isReunioesPage) {
+            // Only show prospects (campaign_id is NULL)
+            deliveries = deliveries.filter(d => d.campaign_id === null);
+          } else if (isLeadsPage) {
+            // Only show client leads (campaign_id is NOT NULL)
+            deliveries = deliveries.filter(d => d.campaign_id !== null);
+          }
+          // If neither specific page, show all (fallback)
+
+          allDeliveries = deliveries;
+          updateStats();
+          renderTable();
+          if (!isReunioesPage) {
+            loadCampaigns();
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao carregar leads:', error);
+      }
+    }
+
+    async function loadCampaigns() {
+      try {
+        const { data: campaigns } = await supabase
+          .from('cluster_campaigns')
+          .select('id, campaign_name')
+          .order('campaign_name');
+
+        const select = document.getElementById('campaignFilter');
+        campaigns?.forEach(c => {
+          const option = document.createElement('option');
+          option.value = c.id;
+          option.textContent = c.campaign_name;
+          select.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Erro ao carregar campanhas:', error);
+      }
+    }
+
+    function updateStats() {
+      const filtered = currentFilter
+        ? allDeliveries.filter(d => d.status === currentFilter)
+        : allDeliveries;
+
+      document.getElementById('statTotal').textContent = allDeliveries.length;
+      document.getElementById('statAgendadas').textContent = allDeliveries.filter(d => d.status === 'reuniao_agendada').length;
+      document.getElementById('statContratos').textContent = allDeliveries.filter(d => d.status === 'contrato_assinado').length;
+      document.getElementById('statConvertidos').textContent = allDeliveries.filter(d => d.status === 'convertido').length;
+
+      const faturamento = allDeliveries.reduce((sum, d) => sum + (d.delivery_value || 10), 0);
+      document.getElementById('statFaturamento').textContent = `R$ ${faturamento.toFixed(2)}`;
+    }
+
+    function renderTable() {
+      const campaignId = document.getElementById('campaignFilter').value;
+      let filtered = allDeliveries;
+
+      if (currentFilter) {
+        filtered = filtered.filter(d => d.status === currentFilter);
+      }
+      if (campaignId) {
+        filtered = filtered.filter(d => d.campaign_id === campaignId);
+      }
+
+      const tbody = document.getElementById('leadsTable');
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+              Nenhum lead encontrado
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(d => `
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-3">
+            <div class="font-medium text-gray-900">${d.lead_name || 'Lead'}</div>
+            <div class="text-sm text-gray-500">${d.lead_whatsapp}</div>
+            ${d.lead_email ? `<div class="text-xs text-gray-400">${d.lead_email}</div>` : ''}
+            ${d.lead_instagram ? `<div class="text-xs text-purple-500">@${d.lead_instagram}</div>` : ''}
+          </td>
+          <td class="px-4 py-3 text-sm text-gray-600">
+            ${d.campaign_id ? (d.cluster_campaigns?.campaign_name || 'Campanha') : '<span class="text-amber-600 font-medium">🎯 Prospect AIC</span>'}
+          </td>
+          <td class="px-4 py-3">
+            <span class="px-2 py-1 rounded text-xs font-medium status-${d.status}">
+              ${formatStatus(d.status)}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-sm text-gray-600">
+            ${d.meeting_scheduled_at ? formatDate(d.meeting_scheduled_at) : '-'}
+          </td>
+          <td class="px-4 py-3 text-sm font-medium text-purple-600">
+            R$ ${(d.delivery_value || 10).toFixed(2)}
+          </td>
+          <td class="px-4 py-3 text-sm text-gray-500">
+            ${formatDate(d.delivered_at)}
+          </td>
+          <td class="px-4 py-3">
+            <button onclick="openModal('${d.id}', '${d.status}')"
+                    class="text-purple-600 hover:text-purple-800 text-sm font-medium">
+              Atualizar
+            </button>
+            <a href="https://wa.me/${d.lead_whatsapp?.replace(/\D/g, '')}"
+               target="_blank"
+               class="ml-2 text-green-600 hover:text-green-800 text-sm">
+              WhatsApp
+            </a>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function formatStatus(status) {
+      const labels = {
+        'entregue': 'Entregue',
+        'reuniao_agendada': 'Reuniao Agendada',
+        'reuniao_realizada': 'Reuniao Realizada',
+        'negociando': 'Negociando',
+        'contrato_enviado': 'Contrato Enviado',
+        'contrato_assinado': 'Contrato Assinado',
+        'briefing_pendente': 'Briefing Pendente',
+        'briefing_completo': 'Briefing Completo',
+        'onboarding_pendente': 'Onboarding Pendente',
+        'onboarding_completo': 'Onboarding Completo',
+        'aguardando_campanha': 'Aguardando Campanha',
+        'campanha_ativa': 'Campanha Ativa',
+        'convertido': 'Convertido',
+        'perdido': 'Perdido'
+      };
+      return labels[status] || status;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function filterByStatus(status) {
+      currentFilter = status;
+      renderTable();
+
+      // Highlight active filter
+      document.querySelectorAll('[data-status]').forEach(btn => {
+        btn.classList.toggle('ring-2', btn.dataset.status === status);
+        btn.classList.toggle('ring-purple-500', btn.dataset.status === status);
+      });
+    }
+
+    function openModal(id, currentStatus) {
+      document.getElementById('modalLeadId').value = id;
+      document.getElementById('modalStatus').value = currentStatus;
+      document.getElementById('modalNotes').value = '';
+      document.getElementById('statusModal').classList.remove('hidden');
+      document.getElementById('statusModal').classList.add('flex');
+
+      // Show/hide meeting fields
+      toggleMeetingFields();
+    }
+
+    function closeModal() {
+      document.getElementById('statusModal').classList.add('hidden');
+      document.getElementById('statusModal').classList.remove('flex');
+    }
+
+    function toggleMeetingFields() {
+      const status = document.getElementById('modalStatus').value;
+      const showMeeting = ['reuniao_agendada', 'reuniao_realizada'].includes(status);
+      document.getElementById('meetingFields').style.display = showMeeting ? 'block' : 'none';
+    }
+
+    document.getElementById('modalStatus').addEventListener('change', toggleMeetingFields);
+
+    async function saveStatus() {
+      const id = document.getElementById('modalLeadId').value;
+      const status = document.getElementById('modalStatus').value;
+      const notes = document.getElementById('modalNotes').value;
+      const meetingAt = document.getElementById('modalMeetingAt').value;
+
+      const body = { status, notes };
+      if (meetingAt && status === 'reuniao_agendada') {
+        body.meeting_scheduled_at = meetingAt;
+      }
+      if (meetingAt && status === 'reuniao_realizada') {
+        body.meeting_happened_at = meetingAt;
+      }
+
+      try {
+        const response = await fetch(`/api/aic/lead-deliveries/${id}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          closeModal();
+          loadDeliveries();
+        } else {
+          alert('Erro ao atualizar: ' + data.message);
+        }
+      } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao atualizar status');
+      }
+    }
+
+    // Campaign filter change
+    document.getElementById('campaignFilter').addEventListener('change', renderTable);
+
+    // Configure page based on URL and load data
+    configurePage();
+    loadDeliveries();
+  </script>
+</body>
+</html>

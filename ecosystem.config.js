@@ -101,7 +101,7 @@ module.exports = {
     },
 
     // ========================================
-    // WORKER DM - Porta 3004
+    // WORKER DM - Porta 3005
     // Puppeteer DMs outbound (Instagram + WhatsApp)
     // ========================================
     {
@@ -115,7 +115,7 @@ module.exports = {
       max_memory_restart: '384M',
       env: {
         NODE_ENV: 'production',
-        PORT: 3004
+        PORT: 3005
       },
       error_file: './logs/pm2-dm-error.log',
       out_file: './logs/pm2-dm-out.log',
@@ -126,8 +126,9 @@ module.exports = {
     },
 
     // ========================================
-    // WORKER DEV - Porta 3005
+    // WORKER DEV - Porta 3004
     // Testes e desenvolvimento (não reinicia auto)
+    // Cloudflared aponta aic.ubs.app.br para 3004
     // ========================================
     {
       name: 'ubs-dev',
@@ -140,7 +141,7 @@ module.exports = {
       max_memory_restart: '512M',
       env: {
         NODE_ENV: 'development',
-        PORT: 3005
+        PORT: 3004
       },
       error_file: './logs/pm2-dev-error.log',
       out_file: './logs/pm2-dev-out.log',

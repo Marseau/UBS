@@ -2337,6 +2337,24 @@ export async function scrapeInstagramTag(
           return true;
 
         } catch (clickError: any) {
+          // 🆕 DETECTAR ERROS DE BROWSER TRAVADO/PROTOCOLO E RE-THROW
+          // Esses erros indicam que o browser precisa ser reiniciado
+          const isBrowserCrash = clickError.message.includes('dispatchMouseEvent') ||
+                                 clickError.message.includes('Protocol error') ||
+                                 clickError.message.includes('Target closed') ||
+                                 clickError.message.includes('Execution context was destroyed') ||
+                                 clickError.message.includes('detached Frame') ||
+                                 clickError.message.includes('Session closed');
+
+          if (isBrowserCrash) {
+            console.log(`\n🔧 ========================================`);
+            console.log(`🔧 ERRO DE BROWSER/PROTOCOLO DETECTADO NO CLIQUE`);
+            console.log(`🔧 Erro: ${clickError.message}`);
+            console.log(`🔧 Ação: RE-THROW para acionar restart do browser`);
+            console.log(`🔧 ========================================\n`);
+            throw clickError; // Re-lançar para acionar handler de restart
+          }
+
           console.log(`   ⚠️  Clique no post falhou (${clickError.message}). Não usando goto para evitar 429.`);
           // NÃO fazer goto direto - causa 429 (Too Many Requests)
           await waitHuman(3000, 5000); // Anti-detecção: 3-5s

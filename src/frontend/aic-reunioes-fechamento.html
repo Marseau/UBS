@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reunioes de Fechamento | AIC - Applied Intelligence Clustering</title>
+  <meta name="robots" content="noindex, nofollow">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/assets/AIC/Imagens%20Vetor%20/AIC%20Icone%20Cheio.png">
+
+  <!-- Theme Color -->
+  <meta name="theme-color" content="#0C1B33">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-green-glow: rgba(14, 204, 151, 0.25);
+      --aic-green-subtle: rgba(14, 204, 151, 0.1);
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-navy-lighter: #1a3055;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-gray-light: #cbd5e1;
+      --aic-border: #1e3a5f;
+      --aic-red: #ef4444;
+      --aic-red-subtle: rgba(239, 68, 68, 0.1);
+      --aic-yellow: #f59e0b;
+      --aic-yellow-dark: #d97706;
+      --aic-yellow-subtle: rgba(245, 158, 11, 0.1);
+      --aic-blue: #3b82f6;
+      --aic-blue-subtle: rgba(59, 130, 246, 0.1);
+      --aic-purple: #8b5cf6;
+      --aic-purple-subtle: rgba(139, 92, 246, 0.1);
+      --aic-orange: #f97316;
+      --aic-orange-subtle: rgba(249, 115, 22, 0.1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* Container */
+    .container { max-width: 1400px; margin: 0 auto; padding: 0 24px; }
+
+    /* Header */
+    .header {
+      background: rgba(12, 27, 51, 0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--aic-border);
+      padding: 20px 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header-logo {
+      height: 40px;
+      width: auto;
+      filter: brightness(1.1);
+    }
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-nav a {
+      color: var(--aic-gray);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    .header-nav a:hover {
+      background: var(--aic-navy-lighter);
+      color: var(--aic-white);
+    }
+    .header-nav a.active {
+      background: var(--aic-yellow);
+      color: var(--aic-navy);
+    }
+    .header-user {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--aic-gray);
+      font-size: 14px;
+    }
+
+    /* Main Content */
+    .main { padding: 48px 0 80px; }
+
+    /* Page Title */
+    .page-header {
+      margin-bottom: 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .page-header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--aic-white);
+      margin-bottom: 8px;
+    }
+    .page-header h1 span {
+      color: var(--aic-yellow);
+    }
+    .page-header p {
+      font-size: 16px;
+      color: var(--aic-gray);
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .stat-card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 12px;
+      padding: 20px;
+      transition: all 0.3s;
+    }
+    .stat-card:hover {
+      border-color: var(--aic-yellow);
+      transform: translateY(-2px);
+    }
+    .stat-label {
+      font-size: 13px;
+      color: var(--aic-gray);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--aic-yellow);
+    }
+    .stat-value.blue { color: var(--aic-blue); }
+    .stat-value.green { color: var(--aic-green); }
+    .stat-value.purple { color: var(--aic-purple); }
+
+    /* Filters */
+    .filters-section {
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .filter-tabs {
+      display: flex;
+      gap: 6px;
+      background: var(--aic-navy-light);
+      padding: 4px;
+      border-radius: 8px;
+      flex-wrap: wrap;
+    }
+    .filter-tab {
+      padding: 8px 12px;
+      border: none;
+      background: transparent;
+      color: var(--aic-gray);
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .filter-tab:hover {
+      background: var(--aic-navy-lighter);
+      color: var(--aic-white);
+    }
+    .filter-tab.active {
+      background: var(--aic-yellow);
+      color: var(--aic-navy);
+    }
+
+    /* Table */
+    .table-container {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .table-wrapper {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    thead {
+      background: var(--aic-navy-lighter);
+    }
+    th {
+      padding: 14px 16px;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--aic-gray);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--aic-border);
+    }
+    td {
+      padding: 16px;
+      border-bottom: 1px solid var(--aic-border);
+      font-size: 14px;
+    }
+    tbody tr {
+      transition: background 0.2s;
+    }
+    tbody tr:hover {
+      background: var(--aic-navy-lighter);
+    }
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Lead Info */
+    .lead-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .lead-name {
+      font-weight: 600;
+      color: var(--aic-white);
+    }
+    .lead-phone {
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+    .lead-email {
+      font-size: 12px;
+      color: var(--aic-gray);
+    }
+    .lead-instagram {
+      font-size: 12px;
+      color: var(--aic-purple);
+    }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .status-entregue { background: var(--aic-yellow-subtle); color: var(--aic-yellow); }
+    .status-reuniao_agendada { background: var(--aic-blue-subtle); color: var(--aic-blue); }
+    .status-reuniao_realizada { background: var(--aic-purple-subtle); color: var(--aic-purple); }
+    .status-negociando { background: rgba(236, 72, 153, 0.1); color: #ec4899; }
+    .status-contrato_enviado { background: var(--aic-orange-subtle); color: var(--aic-orange); }
+    .status-contrato_assinado { background: var(--aic-green-subtle); color: var(--aic-green); }
+    .status-briefing_pendente { background: rgba(99, 102, 241, 0.1); color: #6366f1; }
+    .status-briefing_completo { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
+    .status-onboarding_pendente { background: rgba(14, 165, 233, 0.1); color: #0ea5e9; }
+    .status-onboarding_completo { background: rgba(14, 165, 233, 0.15); color: #38bdf8; }
+    .status-aguardando_campanha { background: rgba(168, 85, 247, 0.1); color: #a855f7; }
+    .status-campanha_ativa { background: var(--aic-green-subtle); color: var(--aic-green); border: 1px solid var(--aic-green); }
+    .status-convertido { background: var(--aic-green-subtle); color: var(--aic-green-dark); border: 1px solid var(--aic-green); }
+    .status-perdido { background: var(--aic-red-subtle); color: var(--aic-red); }
+
+    /* Action Buttons */
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-action {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .btn-action.primary {
+      background: var(--aic-yellow-subtle);
+      color: var(--aic-yellow);
+    }
+    .btn-action.primary:hover {
+      background: var(--aic-yellow);
+      color: var(--aic-navy);
+    }
+    .btn-action.whatsapp {
+      background: rgba(37, 211, 102, 0.1);
+      color: #25d366;
+    }
+    .btn-action.whatsapp:hover {
+      background: #25d366;
+      color: white;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--aic-gray);
+    }
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    .empty-state h3 {
+      color: var(--aic-white);
+      margin-bottom: 8px;
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal.active {
+      display: flex;
+    }
+    .modal-content {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 480px;
+      margin: 20px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--aic-border);
+    }
+    .modal-header h3 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--aic-gray);
+      font-size: 24px;
+      cursor: pointer;
+    }
+    .modal-body {
+      padding: 24px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--aic-gray-light);
+      margin-bottom: 8px;
+    }
+    .form-group select,
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 8px;
+      color: var(--aic-white);
+      font-size: 14px;
+    }
+    .form-group select:focus,
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: var(--aic-yellow);
+    }
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 20px 24px;
+      border-top: 1px solid var(--aic-border);
+    }
+    .btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-cancel {
+      background: transparent;
+      border: 1px solid var(--aic-border);
+      color: var(--aic-gray);
+    }
+    .btn-cancel:hover {
+      background: var(--aic-navy-lighter);
+      color: var(--aic-white);
+    }
+    .btn-save {
+      background: var(--aic-yellow);
+      border: none;
+      color: var(--aic-navy);
+    }
+    .btn-save:hover {
+      background: var(--aic-yellow-dark);
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 60px 20px;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--aic-border);
+      border-top-color: var(--aic-yellow);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .page-header h1 { font-size: 24px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .filters-section { flex-direction: column; align-items: stretch; }
+      .filter-tabs { justify-content: center; }
+      th, td { padding: 12px 8px; font-size: 12px; }
+      .action-buttons { flex-direction: column; gap: 4px; }
+    }
+  </style>
+
+  <!-- Supabase Auth -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/supabase-client.js"></script>
+  <script src="/js/auth-guard.js"></script>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="/campaigns">
+          <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC Logo" class="header-logo">
+        </a>
+        <nav class="header-nav">
+          <a href="/campaigns">Campanhas</a>
+          <a href="/aic/leads-entregues">Leads Entregues</a>
+          <a href="/aic/reunioes-fechamento" class="active">Reunioes</a>
+        </nav>
+        <div class="header-user">
+          <span data-user-email>carregando...</span>
+          <button data-logout style="background:transparent;border:1px solid var(--aic-border);color:var(--aic-gray);padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px;">Sair</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main">
+    <div class="container">
+      <!-- Page Header -->
+      <div class="page-header">
+        <div>
+          <h1><span>Reunioes</span> de Fechamento</h1>
+          <p>Prospects interessados em contratar os servicos AIC</p>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Prospects</div>
+          <div class="stat-value" id="statTotal">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Reunioes Agendadas</div>
+          <div class="stat-value blue" id="statAgendadas">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Em Negociacao</div>
+          <div class="stat-value purple" id="statNegociando">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Contratos Assinados</div>
+          <div class="stat-value green" id="statContratos">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Campanhas Ativas</div>
+          <div class="stat-value green" id="statAtivas">0</div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filters-section">
+        <div class="filter-tabs">
+          <button class="filter-tab active" data-status="">Todos</button>
+          <button class="filter-tab" data-status="entregue">Novo</button>
+          <button class="filter-tab" data-status="reuniao_agendada">Reuniao Agendada</button>
+          <button class="filter-tab" data-status="reuniao_realizada">Reuniao Realizada</button>
+          <button class="filter-tab" data-status="negociando">Negociando</button>
+          <button class="filter-tab" data-status="contrato_assinado">Contrato Assinado</button>
+          <button class="filter-tab" data-status="briefing_pendente">Briefing</button>
+          <button class="filter-tab" data-status="onboarding_pendente">Onboarding</button>
+          <button class="filter-tab" data-status="campanha_ativa">Campanha Ativa</button>
+          <button class="filter-tab" data-status="perdido">Perdido</button>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="table-container">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Prospect</th>
+                <th>Status</th>
+                <th>Reuniao</th>
+                <th>Observacoes</th>
+                <th>Cadastrado em</th>
+                <th>Acoes</th>
+              </tr>
+            </thead>
+            <tbody id="leadsTable">
+              <tr>
+                <td colspan="6">
+                  <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Carregando prospects...</p>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal Update Status -->
+  <div id="statusModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Atualizar Status do Prospect</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="modalLeadId">
+        <div class="form-group">
+          <label>Novo Status</label>
+          <select id="modalStatus">
+            <option value="entregue">Novo Prospect</option>
+            <option value="reuniao_agendada">Reuniao Agendada</option>
+            <option value="reuniao_realizada">Reuniao Realizada</option>
+            <option value="negociando">Negociando</option>
+            <option value="contrato_enviado">Contrato Enviado</option>
+            <option value="contrato_assinado">Contrato Assinado</option>
+            <option value="briefing_pendente">Briefing Pendente</option>
+            <option value="briefing_completo">Briefing Completo</option>
+            <option value="onboarding_pendente">Onboarding Pendente</option>
+            <option value="onboarding_completo">Onboarding Completo</option>
+            <option value="aguardando_campanha">Aguardando Campanha</option>
+            <option value="campanha_ativa">Campanha Ativa</option>
+            <option value="convertido">Convertido</option>
+            <option value="perdido">Perdido</option>
+          </select>
+        </div>
+        <div class="form-group" id="meetingFields" style="display:none;">
+          <label>Data/Hora da Reuniao</label>
+          <input type="datetime-local" id="modalMeetingAt">
+        </div>
+        <div class="form-group">
+          <label>Observacoes</label>
+          <textarea id="modalNotes" rows="3" placeholder="Anotacoes sobre o prospect..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-cancel" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-save" onclick="saveStatus()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://qsdfyffuonywmtnlycri.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTM5NjMwMzIsImV4cCI6MjAyOTUzOTAzMn0.szp1X8vTNhe5FEyzPkSqvSuMCBwQfbRp5qCBno3EJxI';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let allDeliveries = [];
+    let currentFilter = '';
+
+    async function loadDeliveries() {
+      try {
+        const response = await fetch('/api/aic/lead-deliveries?limit=500');
+        const data = await response.json();
+
+        if (data.success) {
+          // Only show prospects (campaign_id is NULL)
+          allDeliveries = (data.deliveries || []).filter(d => d.campaign_id === null);
+          updateStats();
+          renderTable();
+        }
+      } catch (error) {
+        console.error('Erro ao carregar prospects:', error);
+        document.getElementById('leadsTable').innerHTML = `
+          <tr><td colspan="6" class="empty-state">
+            <div class="empty-state-icon">!</div>
+            <h3>Erro ao carregar dados</h3>
+            <p>Tente novamente mais tarde</p>
+          </td></tr>
+        `;
+      }
+    }
+
+    function updateStats() {
+      document.getElementById('statTotal').textContent = allDeliveries.length;
+      document.getElementById('statAgendadas').textContent = allDeliveries.filter(d => d.status === 'reuniao_agendada').length;
+      document.getElementById('statNegociando').textContent = allDeliveries.filter(d => d.status === 'negociando').length;
+      document.getElementById('statContratos').textContent = allDeliveries.filter(d => d.status === 'contrato_assinado').length;
+      document.getElementById('statAtivas').textContent = allDeliveries.filter(d => d.status === 'campanha_ativa').length;
+    }
+
+    function renderTable() {
+      let filtered = allDeliveries;
+
+      if (currentFilter) {
+        // Handle grouped filters
+        if (currentFilter === 'briefing_pendente') {
+          filtered = filtered.filter(d => d.status.includes('briefing'));
+        } else if (currentFilter === 'onboarding_pendente') {
+          filtered = filtered.filter(d => d.status.includes('onboarding'));
+        } else {
+          filtered = filtered.filter(d => d.status === currentFilter);
+        }
+      }
+
+      const tbody = document.getElementById('leadsTable');
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr><td colspan="6">
+            <div class="empty-state">
+              <div class="empty-state-icon">🎯</div>
+              <h3>Nenhum prospect encontrado</h3>
+              <p>Prospects interessados em AIC aparecerao aqui</p>
+            </div>
+          </td></tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(d => `
+        <tr>
+          <td>
+            <div class="lead-info">
+              <span class="lead-name">${d.lead_name || 'Prospect'}</span>
+              <span class="lead-phone">${d.lead_whatsapp}</span>
+              ${d.lead_email ? `<span class="lead-email">${d.lead_email}</span>` : ''}
+              ${d.lead_instagram ? `<span class="lead-instagram">@${d.lead_instagram}</span>` : ''}
+            </div>
+          </td>
+          <td><span class="status-badge status-${d.status}">${formatStatus(d.status)}</span></td>
+          <td>${d.meeting_scheduled_at ? formatDate(d.meeting_scheduled_at) : '-'}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${d.notes || ''}">${d.notes || '-'}</td>
+          <td>${formatDate(d.delivered_at)}</td>
+          <td>
+            <div class="action-buttons">
+              <button class="btn-action primary" onclick="openModal('${d.id}', '${d.status}')">Atualizar</button>
+              <a href="https://wa.me/${d.lead_whatsapp?.replace(/\D/g, '')}" target="_blank" class="btn-action whatsapp">WhatsApp</a>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function formatStatus(status) {
+      const labels = {
+        'entregue': 'Novo',
+        'reuniao_agendada': 'Reuniao Agendada',
+        'reuniao_realizada': 'Reuniao Realizada',
+        'negociando': 'Negociando',
+        'contrato_enviado': 'Contrato Enviado',
+        'contrato_assinado': 'Contrato Assinado',
+        'briefing_pendente': 'Briefing Pendente',
+        'briefing_completo': 'Briefing Completo',
+        'onboarding_pendente': 'Onboarding Pendente',
+        'onboarding_completo': 'Onboarding Completo',
+        'aguardando_campanha': 'Aguardando Campanha',
+        'campanha_ativa': 'Campanha Ativa',
+        'convertido': 'Convertido',
+        'perdido': 'Perdido'
+      };
+      return labels[status] || status;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // Filter tabs
+    document.querySelectorAll('.filter-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.status;
+        renderTable();
+      });
+    });
+
+    // Modal functions
+    function openModal(id, currentStatus) {
+      document.getElementById('modalLeadId').value = id;
+      document.getElementById('modalStatus').value = currentStatus;
+      document.getElementById('modalNotes').value = '';
+      document.getElementById('statusModal').classList.add('active');
+      toggleMeetingFields();
+    }
+
+    function closeModal() {
+      document.getElementById('statusModal').classList.remove('active');
+    }
+
+    function toggleMeetingFields() {
+      const status = document.getElementById('modalStatus').value;
+      const showMeeting = ['reuniao_agendada', 'reuniao_realizada'].includes(status);
+      document.getElementById('meetingFields').style.display = showMeeting ? 'block' : 'none';
+    }
+
+    document.getElementById('modalStatus').addEventListener('change', toggleMeetingFields);
+
+    async function saveStatus() {
+      const id = document.getElementById('modalLeadId').value;
+      const status = document.getElementById('modalStatus').value;
+      const notes = document.getElementById('modalNotes').value;
+      const meetingAt = document.getElementById('modalMeetingAt').value;
+
+      const body = { status, notes };
+      if (meetingAt && status === 'reuniao_agendada') {
+        body.meeting_scheduled_at = meetingAt;
+      }
+      if (meetingAt && status === 'reuniao_realizada') {
+        body.meeting_happened_at = meetingAt;
+      }
+
+      try {
+        const response = await fetch(`/api/aic/lead-deliveries/${id}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          closeModal();
+          loadDeliveries();
+        } else {
+          alert('Erro ao atualizar: ' + data.message);
+        }
+      } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao atualizar status');
+      }
+    }
+
+    // Load data on page load
+    loadDeliveries();
+  </script>
+</body>
+</html>
