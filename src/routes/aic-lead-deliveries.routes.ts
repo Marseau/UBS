@@ -5,6 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import { supabase } from '../config/database';
+import { clientJourneyService } from '../services/client-journey.service';
 
 const router = Router();
 
@@ -319,6 +320,374 @@ router.get('/by-whatsapp/:whatsapp', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/aic/lead-deliveries/unseen-reunioes
+ * Retorna contagem de reunioes de fechamento nao vistas (prospects AIC)
+ */
+router.get('/unseen-reunioes', async (_req: Request, res: Response) => {
+  try {
+    const { count, error } = await supabase
+      .from('aic_lead_deliveries')
+      .select('*', { count: 'exact', head: true })
+      .is('campaign_id', null)  // Prospects AIC (reunioes de fechamento)
+      .is('seen_at', null);     // Nao vistas
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao contar reunioes',
+        error: error.message
+      });
+    }
+
+    return res.json({
+      success: true,
+      unseen_count: count || 0
+    });
+
+  } catch (error) {
+    console.error('[Lead Deliveries] Erro ao contar reunioes:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+/**
+ * PATCH /api/aic/lead-deliveries/:id/mark-seen
+ * Marca uma reuniao como vista
+ */
+router.patch('/:id/mark-seen', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const { data: delivery, error } = await supabase
+      .from('aic_lead_deliveries')
+      .update({
+        seen_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao marcar como visto',
+        error: error.message
+      });
+    }
+
+    return res.json({ success: true, delivery });
+
+  } catch (error) {
+    console.error('[Lead Deliveries] Erro:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+/**
+ * PATCH /api/aic/lead-deliveries/mark-all-seen
+ * Marca todas as reunioes de fechamento como vistas
+ */
+router.patch('/mark-all-seen', async (_req: Request, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('aic_lead_deliveries')
+      .update({
+        seen_at: new Date().toISOString()
+      })
+      .is('campaign_id', null)
+      .is('seen_at', null)
+      .select();
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao marcar como vistas',
+        error: error.message
+      });
+    }
+
+    return res.json({
+      success: true,
+      marked_count: data?.length || 0
+    });
+
+  } catch (error) {
+    console.error('[Lead Deliveries] Erro:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+/**
+ * GET /api/aic/lead-deliveries/by-token/:token
+ * Busca lead por contract_token (para pagina de contrato)
+ */
+router.get('/by-token/:token', async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+
+    const { data: delivery, error } = await supabase
+      .from('aic_lead_deliveries')
+      .select('*')
+      .eq('contract_token', token)
+      .single();
+
+    if (error || !delivery) {
+      return res.status(404).json({
+        success: false,
+        message: 'Link invalido ou expirado'
+      });
+    }
+
+    // Se ja tem contrato assinado, nao permitir assinar novamente
+    if (delivery.contract_id) {
+      return res.json({
+        success: true,
+        found: true,
+        already_signed: true,
+        delivery: {
+          id: delivery.id,
+          lead_name: delivery.lead_name,
+          lead_email: delivery.lead_email,
+          contract_id: delivery.contract_id,
+          status: delivery.status
+        }
+      });
+    }
+
+    return res.json({
+      success: true,
+      found: true,
+      already_signed: false,
+      delivery: {
+        id: delivery.id,
+        lead_name: delivery.lead_name,
+        lead_email: delivery.lead_email,
+        lead_whatsapp: delivery.lead_whatsapp,
+        lead_instagram: delivery.lead_instagram,
+        notes: delivery.notes,
+        status: delivery.status
+      }
+    });
+
+  } catch (error) {
+    console.error('[Lead Deliveries] Erro ao buscar por token:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+/**
+ * POST /api/aic/lead-deliveries/:id/generate-contract-link
+ * Gera/regenera link de contrato e atualiza status para contrato_enviado
+ */
+router.post('/:id/generate-contract-link', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { regenerate } = req.body;
+
+    // Buscar delivery atual
+    const { data: delivery, error: fetchError } = await supabase
+      .from('aic_lead_deliveries')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !delivery) {
+      return res.status(404).json({
+        success: false,
+        message: 'Delivery nao encontrado'
+      });
+    }
+
+    // Se ja tem contrato assinado, nao permitir gerar novo link
+    if (delivery.contract_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Este prospect ja assinou contrato'
+      });
+    }
+
+    // Gerar novo token se necessario ou se solicitado regeneracao
+    let token = delivery.contract_token;
+    if (!token || regenerate) {
+      const { data: updated, error: updateError } = await supabase
+        .from('aic_lead_deliveries')
+        .update({
+          contract_token: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substring(7)}`,
+          contract_link_sent_at: new Date().toISOString(),
+          status: 'contrato_enviado',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (updateError) {
+        return res.status(500).json({
+          success: false,
+          message: 'Erro ao gerar link',
+          error: updateError.message
+        });
+      }
+
+      token = updated.contract_token;
+    }
+
+    // Construir URL completa - usa o novo contrato formal
+    const baseUrl = process.env.AIC_BASE_URL || 'https://aic.ubs.app.br';
+    const contractUrl = `${baseUrl}/aic-contrato-prestacao-servicos.html?token=${token}`;
+
+    console.log(`[Lead Deliveries] Link de contrato gerado para ${delivery.lead_name}: ${contractUrl}`);
+
+    return res.json({
+      success: true,
+      message: 'Link de contrato gerado',
+      contract_url: contractUrl,
+      token
+    });
+
+  } catch (error) {
+    console.error('[Lead Deliveries] Erro ao gerar link:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+/**
+ * POST /api/aic/lead-deliveries/:id/sign-contract
+ * Cria contrato e vincula ao delivery (chamado pela pagina de contrato)
+ */
+router.post('/:id/sign-contract', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      client_name,
+      client_document,
+      client_email,
+      client_phone,
+      client_company,
+      project_name,
+      target_niche,
+      service_description,
+      target_audience,
+      terms_accepted,
+      user_agent,
+      auth_user_id
+    } = req.body;
+
+    // Buscar delivery
+    const { data: delivery, error: fetchError } = await supabase
+      .from('aic_lead_deliveries')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !delivery) {
+      return res.status(404).json({
+        success: false,
+        message: 'Delivery nao encontrado'
+      });
+    }
+
+    // Se ja tem contrato, retornar erro
+    if (delivery.contract_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Este prospect ja possui contrato assinado',
+        contract_id: delivery.contract_id
+      });
+    }
+
+    // Capturar IP
+    const ip_address = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    // Criar contrato
+    const { data: contract, error: contractError } = await supabase
+      .from('aic_contracts')
+      .insert({
+        client_name,
+        client_document,
+        client_email,
+        client_phone,
+        client_company,
+        project_name,
+        target_niche,
+        service_description,
+        target_audience,
+        terms_accepted: terms_accepted || true,
+        terms_accepted_at: new Date().toISOString(),
+        ip_address: typeof ip_address === 'string' ? ip_address : ip_address?.[0],
+        user_agent,
+        auth_user_id,
+        status: 'signed'
+      })
+      .select()
+      .single();
+
+    if (contractError) {
+      console.error('[Lead Deliveries] Erro ao criar contrato:', contractError);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao criar contrato',
+        error: contractError.message
+      });
+    }
+
+    // Vincular contrato ao delivery e atualizar status
+    const { error: linkError } = await supabase
+      .from('aic_lead_deliveries')
+      .update({
+        contract_id: contract.id,
+        status: 'contrato_assinado',
+        auth_user_id,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (linkError) {
+      console.error('[Lead Deliveries] Erro ao vincular contrato:', linkError);
+    }
+
+    console.log(`[Lead Deliveries] Contrato ${contract.id} assinado para delivery ${id}`);
+
+    // Enviar notificacao Telegram
+    try {
+      if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+        const telegramMessage = `🎉 *CONTRATO ASSINADO*\n\n` +
+          `👤 ${client_name}\n` +
+          `📧 ${client_email}\n` +
+          `📱 ${client_phone || 'N/A'}\n\n` +
+          `📋 Projeto: ${project_name}\n` +
+          `🎯 Nicho: ${target_niche}\n\n` +
+          `✅ Origem: Reunião de Fechamento\n` +
+          `📝 Contrato ID: ${contract.id}`;
+
+        await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: process.env.TELEGRAM_CHAT_ID,
+            text: telegramMessage,
+            parse_mode: 'Markdown'
+          })
+        });
+      }
+    } catch (telegramError) {
+      console.warn('[Lead Deliveries] Erro ao enviar Telegram:', telegramError);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Contrato assinado com sucesso',
+      contract,
+      delivery_id: id
+    });
+
+  } catch (error) {
+    console.error('[Lead Deliveries] Erro ao assinar contrato:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+/**
  * GET /api/aic/lead-deliveries/billing/:campaign_id
  * Relatorio de faturamento por campanha
  */
@@ -352,6 +721,147 @@ router.get('/billing/:campaign_id', async (req: Request, res: Response) => {
       converted,
       conversion_rate: total_leads > 0 ? ((converted / total_leads) * 100).toFixed(1) : 0,
       deliveries
+    });
+
+  } catch (error) {
+    console.error('[Lead Deliveries] Erro:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+/**
+ * POST /api/aic/lead-deliveries/proposal
+ * Cria nova proposta para prospect (reuniao de fechamento) + cria jornada automaticamente
+ * Este e o ponto de entrada para novos clientes AIC
+ */
+router.post('/proposal', async (req: Request, res: Response) => {
+  try {
+    const {
+      lead_name,
+      lead_email,
+      lead_whatsapp,
+      lead_instagram,
+      lead_company,
+      contract_value = 4000,
+      lead_value = 10,
+      project_name,
+      target_niche,
+      service_description,
+      target_audience,
+      notes,
+      created_by
+    } = req.body;
+
+    if (!lead_name || !lead_email) {
+      return res.status(400).json({
+        success: false,
+        message: 'lead_name e lead_email sao obrigatorios'
+      });
+    }
+
+    // 1. Criar delivery (proposta) sem campaign_id
+    const { data: delivery, error: deliveryError } = await supabase
+      .from('aic_lead_deliveries')
+      .insert({
+        campaign_id: null, // Prospect, sem campanha ainda
+        lead_whatsapp: lead_whatsapp || null,
+        lead_name,
+        lead_email: lead_email.toLowerCase(),
+        lead_instagram,
+        delivery_value: contract_value, // Valor do contrato vai para delivery_value
+        status: 'entregue', // Status inicial
+        delivered_at: new Date().toISOString(),
+        notes
+      })
+      .select()
+      .single();
+
+    if (deliveryError) {
+      console.error('[Lead Deliveries] Erro ao criar proposta:', deliveryError);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao criar proposta',
+        error: deliveryError.message
+      });
+    }
+
+    console.log(`[Lead Deliveries] Proposta criada: ${delivery.id} para ${lead_email}`);
+
+    // 2. Criar jornada do cliente automaticamente
+    const journeyResult = await clientJourneyService.createJourney({
+      delivery_id: delivery.id,
+      client_name: lead_name,
+      client_email: lead_email.toLowerCase(),
+      client_phone: lead_whatsapp,
+      client_company: lead_company,
+      proposal_data: {
+        project_name: project_name || `Campanha ${lead_name}`,
+        target_niche,
+        service_description,
+        target_audience,
+        contract_value,
+        lead_value,
+        campaign_duration_days: 30,
+        target_leads: 2000
+      },
+      created_by
+    });
+
+    if (journeyResult.success) {
+      console.log(`[Lead Deliveries] Jornada criada: ${journeyResult.journey?.id}`);
+    } else {
+      console.error(`[Lead Deliveries] Erro ao criar jornada: ${journeyResult.message}`);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Proposta criada com sucesso',
+      delivery,
+      journey: journeyResult.journey,
+      journey_url: journeyResult.journey
+        ? `/aic/minha-jornada?token=${journeyResult.journey.access_token}`
+        : null
+    });
+
+  } catch (error) {
+    console.error('[Lead Deliveries] Erro:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+/**
+ * GET /api/aic/lead-deliveries/:id/journey
+ * Retorna a jornada associada a este delivery
+ */
+router.get('/:id/journey', async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID da entrega e obrigatorio'
+      });
+    }
+
+    const journey = await clientJourneyService.getJourneyByDeliveryId(id);
+
+    if (!journey) {
+      return res.status(404).json({
+        success: false,
+        message: 'Jornada nao encontrada para esta entrega'
+      });
+    }
+
+    const progress = clientJourneyService.getProgress(journey.current_step as any);
+    const steps = clientJourneyService.getStepsWithStatus(journey.current_step as any);
+
+    return res.json({
+      success: true,
+      journey: {
+        ...journey,
+        progress,
+        steps
+      }
     });
 
   } catch (error) {

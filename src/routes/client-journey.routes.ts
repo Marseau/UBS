@@ -5,6 +5,8 @@
 
 import { Router, Request, Response } from 'express';
 import { clientJourneyService, JourneyStep } from '../services/client-journey.service';
+import { authenticateClient, ClientRequest } from '../middleware/client-auth.middleware';
+import { clientInviteService } from '../services/client-invite.service';
 
 const router = Router();
 
@@ -64,6 +66,99 @@ router.get('/by-token/:token', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/aic/journey/me
+ * Obter jornada do cliente autenticado (via Supabase Auth)
+ */
+router.get('/me', authenticateClient, async (req: ClientRequest, res: Response) => {
+  try {
+    const userId = req.clientUser?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Usuario nao autenticado'
+      });
+    }
+
+    const journey = await clientJourneyService.getJourneyByUserId(userId);
+
+    if (!journey) {
+      return res.status(404).json({
+        success: false,
+        message: 'Nenhuma jornada encontrada para este usuario'
+      });
+    }
+
+    // Calcular progresso e etapas
+    const progress = clientJourneyService.getProgress(journey.current_step as JourneyStep);
+    const steps = clientJourneyService.getStepsWithStatus(journey.current_step as JourneyStep);
+
+    return res.json({
+      success: true,
+      journey: {
+        ...journey,
+        progress,
+        steps
+      }
+    });
+  } catch (error) {
+    console.error('[Journey Routes] Error fetching user journey:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar jornada'
+    });
+  }
+});
+
+/**
+ * POST /api/aic/journey/link-user
+ * Vincular jornada ao usuario autenticado via access_token
+ * Usado apos o cliente criar conta ou fazer login com convite
+ */
+router.post('/link-user', async (req: Request, res: Response) => {
+  try {
+    const { user_id, token } = req.body;
+
+    if (!user_id || !token) {
+      return res.status(400).json({
+        success: false,
+        message: 'user_id e token sao obrigatorios'
+      });
+    }
+
+    const result = await clientJourneyService.linkUserToJourney(token, user_id);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    // Calcular progresso para retornar
+    if (result.journey) {
+      const progress = clientJourneyService.getProgress(result.journey.current_step as JourneyStep);
+      const steps = clientJourneyService.getStepsWithStatus(result.journey.current_step as JourneyStep);
+
+      return res.json({
+        success: true,
+        message: result.message,
+        journey: {
+          ...result.journey,
+          progress,
+          steps
+        }
+      });
+    }
+
+    return res.json(result);
+  } catch (error) {
+    console.error('[Journey Routes] Error linking user:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao vincular usuario'
+    });
+  }
+});
+
 // ============================================
 // ROTAS AUTENTICADAS (admin)
 // ============================================
@@ -71,6 +166,7 @@ router.get('/by-token/:token', async (req: Request, res: Response) => {
 /**
  * POST /api/aic/journey
  * Criar nova jornada do cliente
+ * Body pode incluir send_invite: true para enviar email automaticamente
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
@@ -82,7 +178,8 @@ router.post('/', async (req: Request, res: Response) => {
       client_document,
       client_company,
       proposal_data,
-      created_by
+      created_by,
+      send_invite = false // Enviar convite por email
     } = req.body;
 
     if (!client_name || !client_email) {
@@ -103,16 +200,65 @@ router.post('/', async (req: Request, res: Response) => {
       created_by
     });
 
-    if (!result.success) {
+    if (!result.success || !result.journey) {
       return res.status(400).json(result);
     }
 
-    return res.status(201).json(result);
+    // Gerar link de convite
+    const invite_link = clientJourneyService.generateInviteLink(result.journey.access_token);
+
+    // Enviar email de convite se solicitado
+    let email_sent = false;
+    let email_message = '';
+
+    if (send_invite) {
+      const inviteResult = await clientInviteService.sendInviteEmail({
+        client_name,
+        client_email: client_email.toLowerCase(),
+        access_token: result.journey.access_token,
+        journey_id: result.journey.id,
+        project_name: proposal_data?.project_name,
+        company_name: client_company
+      });
+      email_sent = inviteResult.email_sent || false;
+      email_message = inviteResult.message;
+    }
+
+    return res.status(201).json({
+      ...result,
+      invite_link,
+      email_sent,
+      email_message: send_invite ? email_message : undefined
+    });
   } catch (error) {
     console.error('[Journey Routes] Error creating journey:', error);
     return res.status(500).json({
       success: false,
       message: 'Erro ao criar jornada'
+    });
+  }
+});
+
+/**
+ * POST /api/aic/journey/:id/resend-invite
+ * Reenviar email de convite para uma jornada existente
+ */
+router.post('/:id/resend-invite', async (req: Request, res: Response) => {
+  try {
+    const id = getParam(req, 'id');
+
+    const result = await clientInviteService.resendInvite(id);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
+  } catch (error) {
+    console.error('[Journey Routes] Error resending invite:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao reenviar convite'
     });
   }
 });

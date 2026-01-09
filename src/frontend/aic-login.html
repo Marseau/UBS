@@ -453,6 +453,13 @@
   <script src="/js/supabase-client.js"></script>
 
   <script>
+    // Salvar redirect no localStorage para usar após login
+    const urlParams = new URLSearchParams(window.location.search);
+    const savedRedirect = urlParams.get('redirect');
+    if (savedRedirect) {
+      localStorage.setItem('aic_login_redirect', savedRedirect);
+    }
+
     // Verificar se ja esta logado
     (async function() {
       const { user } = await AICAuth.getUser();
@@ -477,10 +484,11 @@
 
     // Smart routing based on lead delivery status
     async function smartRedirect(user) {
-      // Check if there's a specific redirect requested
+      // Check if there's a specific redirect requested (URL ou localStorage)
       const params = new URLSearchParams(window.location.search);
-      const explicitRedirect = params.get('redirect');
+      const explicitRedirect = params.get('redirect') || localStorage.getItem('aic_login_redirect');
       if (explicitRedirect) {
+        localStorage.removeItem('aic_login_redirect'); // Limpar após usar
         window.location.href = explicitRedirect;
         return;
       }
@@ -497,8 +505,11 @@
         const userMeta = user?.user_metadata || {};
         const isAdmin = adminEmails.includes(email) || userMeta.tipo_user === 'super_admin' || userMeta.role === 'admin';
 
+        // Salvar role no localStorage para o sidebar usar
+        localStorage.setItem('aic_user_role', isAdmin ? 'admin' : 'client');
+
         if (isAdmin) {
-          window.location.href = '/aic-campaigns-dashboard.html';
+          window.location.href = '/aic/campanhas';
           return;
         }
 
@@ -669,9 +680,21 @@
         await smartRedirect(data.user);
 
       } catch (err) {
-        showMessage(err.message === 'Invalid login credentials'
-          ? 'Email ou senha incorretos'
-          : 'Erro ao fazer login: ' + err.message);
+        let message = 'Erro ao fazer login';
+
+        if (err.message) {
+          if (err.message.includes('Email not confirmed') || err.message.includes('email_not_confirmed')) {
+            message = 'Email nao confirmado. Verifique sua caixa de entrada e clique no link de confirmacao.';
+          } else if (err.message.includes('Invalid login credentials')) {
+            message = 'Email ou senha incorretos';
+          } else if (err.message.includes('Too many requests')) {
+            message = 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+          } else {
+            message = err.message;
+          }
+        }
+
+        showMessage(message);
         btn.textContent = originalText;
         btn.disabled = false;
       }

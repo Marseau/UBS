@@ -1,12 +1,18 @@
 /**
  * AIC Sidebar Component
- * Menu lateral de navegacao para paginas admin AIC
+ * Menu lateral de navegacao unificado - Admin e Cliente
+ * Modelo multi-campanha: Cliente/Admin veem campanhas, nao jornada linear
  */
 
 (function() {
   const urlParams = new URLSearchParams(window.location.search);
   const campaignId = urlParams.get('campaign');
   const currentPath = window.location.pathname;
+
+  // Role do usuario - definido no login e salvo no localStorage
+  function getUserRole() {
+    return localStorage.getItem('aic_user_role') || 'client';
+  }
 
   // CSS do Sidebar
   const styles = `
@@ -76,6 +82,10 @@
       border-left-color: #0ECC97;
       pointer-events: none;
     }
+    .aic-sidebar-link.disabled {
+      opacity: 0.4;
+      pointer-events: none;
+    }
     .aic-sidebar-submenu-toggle {
       display: flex;
       align-items: center;
@@ -100,29 +110,34 @@
       transition: max-height 0.3s ease;
       background: rgba(0, 0, 0, 0.15);
     }
-    .aic-sidebar-submenu.open { max-height: 200px; }
+    .aic-sidebar-submenu.open { max-height: 300px; }
     .aic-sidebar-submenu .aic-sidebar-link { padding-left: 40px; font-size: 13px; }
     .aic-sidebar-campaign-badge {
-      margin: 0 20px 16px;
-      padding: 12px;
-      background: rgba(14, 204, 151, 0.1);
-      border: 1px solid rgba(14, 204, 151, 0.2);
-      border-radius: 8px;
+      margin: 0 12px 16px;
+      padding: 14px;
+      background: linear-gradient(135deg, rgba(14, 204, 151, 0.15) 0%, rgba(11, 165, 120, 0.1) 100%);
+      border: 1px solid rgba(14, 204, 151, 0.25);
+      border-radius: 10px;
     }
     .aic-sidebar-campaign-badge-label {
       font-size: 10px;
       color: #0ECC97;
       text-transform: uppercase;
       letter-spacing: 1px;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
     }
     .aic-sidebar-campaign-badge-name {
-      font-size: 13px;
+      font-size: 14px;
       color: #FDFDFD;
       font-weight: 600;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+    .aic-sidebar-campaign-badge-client {
+      font-size: 12px;
+      color: #94a3b8;
     }
     .aic-sidebar-footer { padding: 16px 20px; border-top: 1px solid #1e3a5f; }
     .aic-sidebar-footer-link {
@@ -137,6 +152,32 @@
     .aic-sidebar-footer-link:hover { color: #94a3b8; }
     body.aic-sidebar-open { margin-left: 260px; }
     body.aic-sidebar-open .header { margin-left: 260px; width: calc(100% - 260px); }
+
+    /* Back to campaigns link */
+    .aic-sidebar-back {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      margin: 0 12px 12px;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 8px;
+      color: #3b82f6;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .aic-sidebar-back:hover {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+    }
+    .aic-sidebar-back svg {
+      width: 16px;
+      height: 16px;
+    }
+
     @media (max-width: 1024px) {
       .aic-sidebar { transform: translateX(-260px); }
       .aic-sidebar.open { transform: translateX(0); }
@@ -153,141 +194,244 @@
 
   // Funcao para verificar pagina ativa
   function isActive(page) {
+    const routeMap = {
+      'campanhas': ['campanhas', 'campaigns-dashboard'],
+      'visao-geral': ['visao-geral', 'dashboard-campaign'],
+      'analytics': ['analytics', 'dashboard-prova'],
+      'briefing': ['briefing', 'campaign-briefing'],
+      'onboarding': ['onboarding', 'campaign-onboarding'],
+      'credenciais': ['credenciais'],
+      'financeiro': ['financeiro', 'financial-dashboard'],
+      'entregas': ['entregas', 'lead-deliveries'],
+      'leads-entregues': ['leads-entregues'],
+      'reunioes-fechamento': ['reunioes-fechamento'],
+      'clusters': ['clusters', 'cluster-intention'],
+      'inteligencia': ['inteligencia', 'dynamic-intelligence'],
+      'docs': ['docs', 'aic-docs'],
+      'proposta': ['proposta']
+    };
+
+    for (const [key, aliases] of Object.entries(routeMap)) {
+      if (aliases.includes(page)) {
+        return aliases.some(alias => currentPath.includes(alias));
+      }
+    }
     return currentPath.includes(page);
   }
 
-  // Funcao para verificar secao dashboard
   function isDashboardSection() {
-    return isActive('campaigns-dashboard') || isActive('dashboard-campaign') || isActive('dashboard-prova');
+    return isActive('campanhas') || isActive('visao-geral') || isActive('analytics');
   }
 
-  // Carregar nome da campanha
-  async function loadCampaignName() {
+  // Info da campanha atual
+  let currentCampaign = null;
+
+  async function loadCampaignInfo() {
     if (!campaignId) return;
     try {
       const response = await fetch('/api/campaigns/' + campaignId);
       if (response.ok) {
-        const data = await response.json();
-        const name = data.campaign_name || data.name || 'Campanha';
-        const badge = document.querySelector('.aic-sidebar-campaign-badge-name');
-        if (badge) badge.textContent = name;
+        currentCampaign = await response.json();
+        updateCampaignBadge();
       }
     } catch (e) {
-      console.error('Erro ao carregar nome da campanha:', e);
+      console.error('Erro ao carregar campanha:', e);
     }
   }
 
-  // Criar elemento do sidebar
-  const nav = document.createElement('nav');
-  nav.className = 'aic-sidebar';
-  nav.id = 'aic-sidebar';
+  function updateCampaignBadge() {
+    const nameEl = document.querySelector('.aic-sidebar-campaign-badge-name');
+    const clientEl = document.querySelector('.aic-sidebar-campaign-badge-client');
+    if (nameEl && currentCampaign) {
+      nameEl.textContent = currentCampaign.campaign_name || currentCampaign.name || 'Campanha';
+    }
+    if (clientEl && currentCampaign) {
+      clientEl.textContent = currentCampaign.client_name || '';
+    }
+  }
 
-  // Header
-  nav.innerHTML = '<div class="aic-sidebar-header">' +
-    '<img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="aic-sidebar-logo">' +
-    '</div>';
+  function buildSidebar() {
+    const role = getUserRole();
+    const isAdmin = role === 'admin';
+    const isInCampaign = !!campaignId;
+    const isClientPortal = currentPath.startsWith('/cliente');
 
-  // Campaign badge
-  if (campaignId) {
-    nav.innerHTML += '<div class="aic-sidebar-campaign-badge">' +
-      '<div class="aic-sidebar-campaign-badge-label">Campanha Ativa</div>' +
-      '<div class="aic-sidebar-campaign-badge-name">Carregando...</div>' +
+    const nav = document.createElement('nav');
+    nav.className = 'aic-sidebar';
+    nav.id = 'aic-sidebar';
+
+    // Header
+    nav.innerHTML = '<div class="aic-sidebar-header">' +
+      '<img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="aic-sidebar-logo">' +
       '</div>';
-  }
 
-  // Nav content
-  var navContent = '<div class="aic-sidebar-nav">';
+    var navContent = '<div class="aic-sidebar-nav">';
 
-  // Secao Principal
-  navContent += '<div class="aic-sidebar-section">';
-  navContent += '<div class="aic-sidebar-section-title">Principal</div>';
+    // === SE ESTA DENTRO DE UMA CAMPANHA (com ?campaign=) ===
+    if (isInCampaign) {
+      // Back to campaigns
+      const backUrl = isAdmin ? '/aic/campanhas' : '/cliente';
+      navContent += '<a href="' + backUrl + '" class="aic-sidebar-back">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>' +
+        'Voltar para Campanhas' +
+        '</a>';
 
-  // Dashboard toggle
-  navContent += '<div class="aic-sidebar-submenu-toggle' + (isDashboardSection() ? ' active open' : '') + '" id="dashboard-toggle">';
-  navContent += '<div class="aic-sidebar-submenu-toggle-left">Dashboard</div>';
-  navContent += '<span class="aic-sidebar-submenu-arrow">&#9654;</span>';
-  navContent += '</div>';
+      // Campaign badge
+      navContent += '<div class="aic-sidebar-campaign-badge">' +
+        '<div class="aic-sidebar-campaign-badge-label">Campanha</div>' +
+        '<div class="aic-sidebar-campaign-badge-name">Carregando...</div>' +
+        '<div class="aic-sidebar-campaign-badge-client"></div>' +
+        '</div>';
 
-  // Dashboard submenu
-  navContent += '<div class="aic-sidebar-submenu' + (isDashboardSection() ? ' open' : '') + '" id="dashboard-submenu">';
-  navContent += '<a href="/aic-campaigns-dashboard.html" class="aic-sidebar-link' + (isActive('campaigns-dashboard') ? ' active' : '') + '">Campanhas</a>';
-  navContent += '<a href="/aic-dashboard-campaign.html" class="aic-sidebar-link' + (isActive('dashboard-campaign') && !isActive('campaigns-dashboard') ? ' active' : '') + '">Visao Geral</a>';
-  navContent += '</div>';
-  navContent += '</div>';
+      // Jornada da campanha
+      navContent += '<div class="aic-sidebar-section">';
+      navContent += '<div class="aic-sidebar-section-title">Jornada da Campanha</div>';
 
-  // Secao Campanha Atual (se tiver campaign ID)
-  if (campaignId) {
-    navContent += '<div class="aic-sidebar-section">';
-    navContent += '<div class="aic-sidebar-section-title">Campanha Atual</div>';
-    navContent += '<a href="/aic-campaign-briefing.html?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('briefing') ? ' active' : '') + '">Briefing</a>';
-    navContent += '<a href="/aic-dashboard-prova.html?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('dashboard-prova') ? ' active' : '') + '">Analytics</a>';
-    navContent += '<a href="/aic-campaign-onboarding.html?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('onboarding') ? ' active' : '') + '">Credenciais</a>';
+      const baseUrl = isAdmin ? '/aic' : '/cliente';
+      navContent += '<a href="' + baseUrl + '/proposta?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('proposta') && !isActive('proposta-comercial') ? ' active' : '') + '">Proposta</a>';
+      navContent += '<a href="' + baseUrl + '/contrato?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('contrato') ? ' active' : '') + '">Contrato</a>';
+      navContent += '<a href="' + baseUrl + '/pagamento?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('pagamento') ? ' active' : '') + '">Pagamento</a>';
+      navContent += '<a href="' + baseUrl + '/briefing?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('briefing') ? ' active' : '') + '">Briefing</a>';
+      navContent += '<a href="' + baseUrl + '/onboarding?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('onboarding') ? ' active' : '') + '">Onboarding</a>';
+      navContent += '<a href="' + baseUrl + '/dashboard?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('dashboard') && !isActive('financeiro') ? ' active' : '') + '">Dashboard</a>';
+      navContent += '</div>';
+
+      // Admin extras dentro da campanha
+      if (isAdmin) {
+        navContent += '<div class="aic-sidebar-section">';
+        navContent += '<div class="aic-sidebar-section-title">Gestao</div>';
+        navContent += '<a href="/aic/analytics?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('analytics') ? ' active' : '') + '">Analytics</a>';
+        navContent += '<a href="/aic/leads-entregues?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('leads-entregues') ? ' active' : '') + '">Leads Entregues</a>';
+        navContent += '</div>';
+      }
+
+    } else {
+      // === VISAO GERAL (SEM CAMPANHA SELECIONADA) ===
+
+      if (isAdmin) {
+        // Admin - Secao Principal
+        navContent += '<div class="aic-sidebar-section">';
+        navContent += '<div class="aic-sidebar-section-title">Principal</div>';
+
+        // Dashboard toggle
+        navContent += '<div class="aic-sidebar-submenu-toggle' + (isDashboardSection() ? ' active open' : '') + '" id="dashboard-toggle">';
+        navContent += '<div class="aic-sidebar-submenu-toggle-left">Dashboard</div>';
+        navContent += '<span class="aic-sidebar-submenu-arrow">&#9654;</span>';
+        navContent += '</div>';
+
+        navContent += '<div class="aic-sidebar-submenu' + (isDashboardSection() ? ' open' : '') + '" id="dashboard-submenu">';
+        navContent += '<a href="/aic/campanhas" class="aic-sidebar-link' + (isActive('campanhas') ? ' active' : '') + '">Todas Campanhas</a>';
+        navContent += '<a href="/aic/visao-geral" class="aic-sidebar-link' + (isActive('visao-geral') && !isActive('campanhas') ? ' active' : '') + '">Visao Geral</a>';
+        navContent += '</div>';
+        navContent += '</div>';
+
+        // Inteligencia
+        navContent += '<div class="aic-sidebar-section">';
+        navContent += '<div class="aic-sidebar-section-title">Inteligencia</div>';
+        navContent += '<a href="/aic/clusters" class="aic-sidebar-link' + (isActive('clusters') ? ' active' : '') + '">Clusters</a>';
+        navContent += '<a href="/aic/inteligencia" class="aic-sidebar-link' + (isActive('inteligencia') ? ' active' : '') + '">Dynamic Intelligence</a>';
+        navContent += '</div>';
+
+        // Financeiro
+        navContent += '<div class="aic-sidebar-section">';
+        navContent += '<div class="aic-sidebar-section-title">Financeiro</div>';
+        navContent += '<a href="/aic/financeiro" class="aic-sidebar-link' + (isActive('financeiro') ? ' active' : '') + '">Dashboard Financeiro</a>';
+        navContent += '<a href="/aic/reunioes-fechamento" class="aic-sidebar-link' + (isActive('reunioes-fechamento') ? ' active' : '') + '">Reunioes Fechamento</a>';
+        navContent += '</div>';
+
+        // Documentacao
+        navContent += '<div class="aic-sidebar-section">';
+        navContent += '<div class="aic-sidebar-section-title">Documentacao</div>';
+        navContent += '<a href="/aic/docs" class="aic-sidebar-link' + (isActive('docs') ? ' active' : '') + '">Central de Docs</a>';
+        navContent += '<a href="/aic/proposta-comercial" class="aic-sidebar-link' + (currentPath.includes('proposta-comercial') ? ' active' : '') + '">Proposta Comercial</a>';
+        navContent += '</div>';
+
+        // Portal do Cliente (para admin navegar)
+        navContent += '<div class="aic-sidebar-section">';
+        navContent += '<div class="aic-sidebar-section-title">Portal do Cliente</div>';
+        navContent += '<a href="/cliente" class="aic-sidebar-link' + (currentPath === '/cliente' || currentPath === '/cliente/' ? ' active' : '') + '">Gestao de Campanhas</a>';
+        navContent += '</div>';
+
+      } else {
+        // Cliente - Visao simplificada
+        navContent += '<div class="aic-sidebar-section">';
+        navContent += '<div class="aic-sidebar-section-title">Minhas Campanhas</div>';
+        navContent += '<a href="/cliente" class="aic-sidebar-link' + (currentPath === '/cliente' || currentPath === '/cliente/' ? ' active' : '') + '">Todas as Campanhas</a>';
+        navContent += '</div>';
+
+        // Info
+        navContent += '<div class="aic-sidebar-section">';
+        navContent += '<div class="aic-sidebar-section-title">Ajuda</div>';
+        navContent += '<a href="https://wa.me/5511999999999" target="_blank" class="aic-sidebar-link">Falar com Suporte</a>';
+        navContent += '</div>';
+      }
+    }
+
     navContent += '</div>';
-  }
 
-  // Secao Inteligencia
-  navContent += '<div class="aic-sidebar-section">';
-  navContent += '<div class="aic-sidebar-section-title">Inteligencia</div>';
-  navContent += '<a href="/cluster-intention-dashboard.html" class="aic-sidebar-link' + (isActive('cluster-intention') ? ' active' : '') + '">Clusters</a>';
-  navContent += '<a href="/dynamic-intelligence-dashboard.html" class="aic-sidebar-link' + (isActive('dynamic-intelligence') ? ' active' : '') + '">Dynamic Intelligence</a>';
-  navContent += '</div>';
+    // Footer
+    navContent += '<div class="aic-sidebar-footer">';
+    if (isAdmin) {
+      navContent += '<a href="/aic" class="aic-sidebar-footer-link">← Voltar para Landing</a>';
+    } else {
+      navContent += '<a href="#" class="aic-sidebar-footer-link" onclick="window.aicLogout(); return false;">← Sair</a>';
+    }
+    navContent += '</div>';
 
-  // Secao Financeiro
-  navContent += '<div class="aic-sidebar-section">';
-  navContent += '<div class="aic-sidebar-section-title">Financeiro</div>';
-  navContent += '<a href="/aic-financial-dashboard.html" class="aic-sidebar-link' + (isActive('financial-dashboard') ? ' active' : '') + '">Dashboard Financeiro</a>';
-  navContent += '<a href="/aic/leads-entregues" class="aic-sidebar-link' + (isActive('leads-entregues') ? ' active' : '') + '">Entregas de Leads</a>';
-  navContent += '<a href="/aic/reunioes-fechamento" class="aic-sidebar-link' + (isActive('reunioes-fechamento') ? ' active' : '') + '">Reunioes Fechamento</a>';
-  navContent += '</div>';
+    nav.innerHTML += navContent;
 
-  // Secao Documentacao
-  navContent += '<div class="aic-sidebar-section">';
-  navContent += '<div class="aic-sidebar-section-title">Documentacao</div>';
-  navContent += '<a href="/aic-docs.html" class="aic-sidebar-link' + (isActive('aic-docs') ? ' active' : '') + '">Central de Docs</a>';
-  navContent += '<a href="/aic-proposta-comercial.html" class="aic-sidebar-link' + (isActive('proposta') ? ' active' : '') + '">Proposta Comercial</a>';
-  navContent += '</div>';
+    // Toggle button
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'aic-sidebar-toggle';
+    toggleBtn.id = 'aic-sidebar-toggle';
+    toggleBtn.title = 'Toggle Menu';
+    toggleBtn.innerHTML = '<span id="toggle-icon">&#9776;</span>';
 
-  navContent += '</div>';
+    document.body.insertBefore(nav, document.body.firstChild);
+    document.body.insertBefore(toggleBtn, nav.nextSibling);
+    document.body.classList.add('aic-sidebar-open');
 
-  // Footer
-  navContent += '<div class="aic-sidebar-footer">';
-  navContent += '<a href="/aic" class="aic-sidebar-footer-link">← Voltar para Landing</a>';
-  navContent += '</div>';
-
-  nav.innerHTML += navContent;
-
-  // Toggle button
-  const toggleBtn = document.createElement('button');
-  toggleBtn.className = 'aic-sidebar-toggle';
-  toggleBtn.id = 'aic-sidebar-toggle';
-  toggleBtn.title = 'Toggle Menu';
-  toggleBtn.innerHTML = '<span id="toggle-icon">&#9776;</span>';
-
-  // Inserir no DOM
-  document.body.insertBefore(nav, document.body.firstChild);
-  document.body.insertBefore(toggleBtn, nav.nextSibling);
-  document.body.classList.add('aic-sidebar-open');
-
-  // Event listeners
-  toggleBtn.addEventListener('click', function() {
-    nav.classList.toggle('collapsed');
-    document.body.classList.toggle('aic-sidebar-open');
-    document.getElementById('toggle-icon').innerHTML = nav.classList.contains('collapsed') ? '&#9776;' : '&#10005;';
-  });
-
-  var dashboardToggle = document.getElementById('dashboard-toggle');
-  var dashboardSubmenu = document.getElementById('dashboard-submenu');
-  if (dashboardToggle && dashboardSubmenu) {
-    dashboardToggle.addEventListener('click', function() {
-      dashboardToggle.classList.toggle('open');
-      dashboardSubmenu.classList.toggle('open');
+    // Event listeners
+    toggleBtn.addEventListener('click', function() {
+      nav.classList.toggle('collapsed');
+      document.body.classList.toggle('aic-sidebar-open');
+      document.getElementById('toggle-icon').innerHTML = nav.classList.contains('collapsed') ? '&#9776;' : '&#10005;';
     });
+
+    var dashboardToggle = document.getElementById('dashboard-toggle');
+    var dashboardSubmenu = document.getElementById('dashboard-submenu');
+    if (dashboardToggle && dashboardSubmenu) {
+      dashboardToggle.addEventListener('click', function() {
+        dashboardToggle.classList.toggle('open');
+        dashboardSubmenu.classList.toggle('open');
+      });
+    }
+
+    if (isInCampaign) {
+      loadCampaignInfo();
+    }
+
+    if (window.innerWidth <= 1024) {
+      nav.classList.add('collapsed');
+      document.body.classList.remove('aic-sidebar-open');
+    }
   }
 
-  loadCampaignName();
+  // Funcao de logout global
+  window.aicLogout = async function() {
+    try {
+      if (window.supabase) {
+        await window.supabase.auth.signOut();
+      }
+      localStorage.removeItem('aic_user_role');
+      localStorage.removeItem('aic_client_token');
+      window.location.href = '/aic/login';
+    } catch (e) {
+      console.error('Erro ao fazer logout:', e);
+      window.location.href = '/aic/login';
+    }
+  };
 
-  if (window.innerWidth <= 1024) {
-    nav.classList.add('collapsed');
-    document.body.classList.remove('aic-sidebar-open');
-  }
+  // Inicializar
+  buildSidebar();
 })();

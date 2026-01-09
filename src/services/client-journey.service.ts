@@ -637,6 +637,88 @@ class ClientJourneyService {
 
     return data as JourneyData[];
   }
+
+  /**
+   * Obter jornada pelo auth_user_id (usuario Supabase logado)
+   */
+  async getJourneyByUserId(userId: string): Promise<JourneyData | null> {
+    const { data, error } = await supabaseAdmin
+      .from('aic_client_journeys')
+      .select('*')
+      .eq('auth_user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('[ClientJourney] Error fetching journey by user_id:', error);
+    }
+
+    return data as JourneyData | null;
+  }
+
+  /**
+   * Vincular usuario autenticado a uma jornada via access_token
+   */
+  async linkUserToJourney(accessToken: string, userId: string): Promise<StepTransitionResult> {
+    try {
+      // Primeiro, buscar a jornada pelo token
+      const journey = await this.getJourneyByAccessToken(accessToken);
+
+      if (!journey) {
+        return { success: false, message: 'Jornada nao encontrada ou token expirado' };
+      }
+
+      // Verificar se ja esta vinculada a outro usuario
+      if (journey.auth_user_id && journey.auth_user_id !== userId) {
+        return { success: false, message: 'Esta jornada ja esta vinculada a outro usuario' };
+      }
+
+      // Se ja esta vinculada ao mesmo usuario, sucesso
+      if (journey.auth_user_id === userId) {
+        return {
+          success: true,
+          journey: journey,
+          message: 'Jornada ja vinculada a este usuario'
+        };
+      }
+
+      // Vincular o usuario
+      const { data: updated, error } = await supabaseAdmin
+        .from('aic_client_journeys')
+        .update({
+          auth_user_id: userId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', journey.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[ClientJourney] Error linking user to journey:', error);
+        return { success: false, message: 'Erro ao vincular usuario', error: error.message };
+      }
+
+      console.log(`[ClientJourney] User ${userId} linked to journey ${journey.id}`);
+
+      return {
+        success: true,
+        journey: updated as JourneyData,
+        message: 'Usuario vinculado com sucesso'
+      };
+    } catch (error) {
+      console.error('[ClientJourney] Exception linking user:', error);
+      return { success: false, message: 'Erro interno', error: String(error) };
+    }
+  }
+
+  /**
+   * Gerar link de convite para o cliente
+   */
+  generateInviteLink(accessToken: string, baseUrl?: string): string {
+    const base = baseUrl || process.env.APP_URL || 'https://dev.ubs.app.br';
+    return `${base}/cliente/login?invite=${accessToken}`;
+  }
 }
 
 export const clientJourneyService = new ClientJourneyService();

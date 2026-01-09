@@ -1003,6 +1003,16 @@ try {
   console.error("❌ Failed to load AIC Client Journey routes:", error);
 }
 
+// AIC Client Campaigns Routes - Multi-campanha model (client dashboard)
+try {
+  const clientCampaignsRoutes = require('./routes/client-campaigns.routes');
+  const router = 'default' in clientCampaignsRoutes ? clientCampaignsRoutes.default : clientCampaignsRoutes;
+  app.use('/api/aic/campaigns', router);
+  console.log('✅ AIC Client Campaigns routes loaded - MULTI-CAMPAIGN MODEL READY');
+} catch (error) {
+  console.error("❌ Failed to load AIC Client Campaigns routes:", error);
+}
+
 // AIC Calendar Routes - Tools para AI Agent (buscar slots + agendar reuniao)
 try {
   const aicCalendarRoutes = require('./routes/aic-calendar.routes');
@@ -1235,6 +1245,151 @@ app.get('/aic/pagamento/:journeyId', (_req, res) => {
   res.setHeader('Expires', '0');
   res.sendFile(path.join(frontendPath, 'aic-pagamento.html'));
 });
+
+// ============================================
+// PORTAL DO CLIENTE AIC - Rotas /cliente/*
+// ============================================
+
+// Helper para servir paginas do portal do cliente com headers de no-cache
+const serveClientPage = (filename: string) => (_req: express.Request, res: express.Response) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(frontendPath, filename));
+};
+
+// Portal do Cliente - Home/Dashboard
+app.get('/cliente', serveClientPage('cliente-home.html'));
+app.get('/cliente/', serveClientPage('cliente-home.html'));
+
+// Portal do Cliente - Login
+// Redirecionar /cliente/login para /aic/login (login unificado)
+app.get('/cliente/login', (_req, res) => {
+  const redirect = _req.query.redirect || '/cliente';
+  res.redirect(`/aic/login?redirect=${redirect}`);
+});
+
+// Portal do Cliente - Proposta
+app.get('/cliente/proposta', serveClientPage('cliente-proposta.html'));
+
+// Portal do Cliente - Contrato
+app.get('/cliente/contrato', serveClientPage('cliente-contrato.html'));
+
+// Portal do Cliente - Pagamento
+app.get('/cliente/pagamento', serveClientPage('cliente-pagamento.html'));
+
+// Portal do Cliente - Credenciais (WhatsApp/Instagram setup)
+app.get('/cliente/credenciais', serveClientPage('cliente-credenciais.html'));
+
+// Portal do Cliente - Briefing
+app.get('/cliente/briefing', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(frontendPath, 'aic-campaign-briefing.html'));
+});
+
+// Portal do Cliente - Onboarding (configuracao da campanha)
+app.get('/cliente/onboarding', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(frontendPath, 'aic-campaign-onboarding.html'));
+});
+
+// Portal do Cliente - Dashboard da Campanha
+app.get('/cliente/dashboard', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(frontendPath, 'aic-dashboard-prova.html'));
+});
+
+// Portal do Cliente - Leads entregues
+app.get('/cliente/leads', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(frontendPath, 'aic-leads-entregues.html'));
+});
+
+// Portal do Cliente - Faturas
+app.get('/cliente/faturas', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(frontendPath, 'aic-lead-deliveries.html'));
+});
+
+// Servir componentes do portal do cliente
+app.use('/components', express.static(path.join(frontendPath, 'components')));
+
+console.log('✅ Portal do Cliente AIC routes loaded: /cliente/*');
+
+// ============================================
+// PORTAL ADMIN AIC - Rotas limpas /aic/*
+// ============================================
+
+// Helper para servir paginas do portal AIC admin com headers de no-cache
+const serveAICPage = (filename: string) => (_req: express.Request, res: express.Response) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(frontendPath, filename));
+};
+
+// AIC Admin - Dashboard de Campanhas
+app.get('/aic/campanhas', serveAICPage('aic-campaigns-dashboard.html'));
+
+// AIC Admin - Visao Geral da Campanha
+app.get('/aic/visao-geral', serveAICPage('aic-dashboard-campaign.html'));
+
+// AIC Admin - Analytics/Metricas
+app.get('/aic/analytics', serveAICPage('aic-dashboard-prova.html'));
+
+// AIC Admin - Briefing
+app.get('/aic/briefing', serveAICPage('aic-campaign-briefing.html'));
+
+// AIC Admin - Credenciais/Onboarding
+app.get('/aic/credenciais', serveAICPage('aic-campaign-onboarding.html'));
+app.get('/aic/onboarding', serveAICPage('aic-campaign-onboarding.html'));
+
+// AIC Admin - Financeiro
+app.get('/aic/financeiro', serveAICPage('aic-financial-dashboard.html'));
+
+// AIC Admin - Entregas de Leads
+app.get('/aic/entregas', serveAICPage('aic-lead-deliveries.html'));
+
+// AIC Admin - Inteligencia (Clusters)
+app.get('/aic/clusters', serveAICPage('cluster-intention-dashboard.html'));
+
+// AIC Admin - Dynamic Intelligence
+app.get('/aic/inteligencia', serveAICPage('dynamic-intelligence-dashboard.html'));
+
+// AIC Admin - Documentacao
+app.get('/aic/docs', serveAICPage('aic-docs.html'));
+
+// AIC Admin - Proposta Comercial
+app.get('/aic/proposta', serveAICPage('aic-proposta-comercial.html'));
+
+// AIC Admin - Contrato
+app.get('/aic/contrato', serveAICPage('aic-contrato-prestacao-servicos.html'));
+
+// AIC Admin - Login
+app.get('/aic/login', serveAICPage('aic-login.html'));
+
+// AIC Admin - Reset Password
+app.get('/aic/reset-password', serveAICPage('aic-reset-password.html'));
+
+// AIC Admin - FAQ/Compliance
+app.get('/aic/faq', serveAICPage('aic-faq-compliance.html'));
+
+// AIC Admin - Minha Campanha (visao cliente)
+app.get('/aic/minha-campanha', serveAICPage('aic-minha-campanha.html'));
+
+// AIC Admin - Aguardando
+app.get('/aic/aguardando', serveAICPage('aic-aguardando.html'));
+
+// AIC Admin - Acordo de Execucao
+app.get('/aic/acordo-execucao', serveAICPage('aic-execution-agreement.html'));
+
+// AIC Admin - PDF Viewer
+app.get('/aic/pdf', serveAICPage('aic-pdf-viewer.html'));
+
+// AIC Admin - Links
+app.get('/aic/links', serveAICPage('aic-links.html'));
+
+console.log('✅ Portal Admin AIC routes loaded: /aic/*');
 
 // Campaign Briefing - slug-based route
 app.get('/campaign/:slug/briefing', async (req, res) => {

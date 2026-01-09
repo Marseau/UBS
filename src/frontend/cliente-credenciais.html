@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Credenciais | Portal AIC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-green-glow: rgba(14, 204, 151, 0.15);
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-navy-lighter: #1a3055;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-gray-light: #cbd5e1;
+      --aic-border: #1e3a5f;
+      --aic-yellow: #F59E0B;
+      --aic-danger: #ef4444;
+      --sidebar-width: 280px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      line-height: 1.7;
+    }
+    body.has-sidebar { margin-left: var(--sidebar-width); }
+
+    .main-content {
+      padding: 40px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    /* Status Banner */
+    .status-banner {
+      border-radius: 12px;
+      padding: 16px 24px;
+      margin-bottom: 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .status-banner.pending {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .status-banner.complete {
+      background: var(--aic-green-glow);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+    }
+    .status-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+    .status-banner.pending .status-icon {
+      background: rgba(245, 158, 11, 0.2);
+    }
+    .status-banner.complete .status-icon {
+      background: rgba(14, 204, 151, 0.2);
+    }
+    .status-text h3 {
+      margin: 0 0 4px 0;
+      font-size: 16px;
+      color: var(--aic-white);
+    }
+    .status-text p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--aic-gray);
+    }
+
+    /* Page Header */
+    .page-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .page-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+    }
+    .page-header p {
+      color: var(--aic-gray);
+      margin: 0;
+      font-size: 15px;
+    }
+
+    /* Progress */
+    .progress-section {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 32px;
+    }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .progress-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--aic-gray);
+    }
+    .progress-count {
+      font-size: 14px;
+      color: var(--aic-green);
+      font-weight: 600;
+    }
+    .progress-bar {
+      height: 8px;
+      background: var(--aic-navy);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--aic-green), var(--aic-green-dark));
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+    .card h2 {
+      margin: 0 0 8px 0;
+      font-size: 18px;
+      color: var(--aic-white);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .card h2 .icon {
+      width: 40px;
+      height: 40px;
+      background: var(--aic-navy);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    .card .subtitle {
+      color: var(--aic-gray);
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+    .card.complete {
+      border-color: rgba(14, 204, 151, 0.3);
+    }
+    .card.complete h2 .icon {
+      background: rgba(14, 204, 151, 0.2);
+    }
+
+    /* Form Styles */
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--aic-white);
+      margin-bottom: 8px;
+    }
+    .form-input {
+      width: 100%;
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 15px;
+      color: var(--aic-white);
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--aic-green);
+    }
+    .form-input::placeholder {
+      color: var(--aic-gray);
+    }
+    .form-input:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .form-hint {
+      font-size: 12px;
+      color: var(--aic-gray);
+      margin-top: 6px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* Warning Box */
+    .warning-box {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+    .warning-box h4 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: var(--aic-danger);
+    }
+    .warning-box p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--aic-gray-light);
+    }
+
+    /* Info Box */
+    .info-box {
+      background: rgba(14, 204, 151, 0.1);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+    .info-box h4 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: var(--aic-green);
+    }
+    .info-box p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--aic-gray-light);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 24px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      color: var(--aic-navy);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px var(--aic-green-glow);
+    }
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--aic-border);
+      color: var(--aic-gray);
+    }
+    .btn-secondary:hover {
+      border-color: var(--aic-green);
+      color: var(--aic-green);
+    }
+    .btn-full {
+      width: 100%;
+    }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .status-badge.pending {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--aic-yellow);
+    }
+    .status-badge.complete {
+      background: rgba(14, 204, 151, 0.2);
+      color: var(--aic-green);
+    }
+
+    /* Success section */
+    .success-section {
+      text-align: center;
+      padding: 40px;
+      background: var(--aic-green-glow);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      border-radius: 16px;
+    }
+    .success-icon {
+      width: 80px;
+      height: 80px;
+      background: rgba(14, 204, 151, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      margin: 0 auto 24px;
+    }
+    .success-section h2 {
+      margin: 0 0 12px 0;
+      font-size: 24px;
+      color: var(--aic-green);
+    }
+    .success-section p {
+      margin: 0 0 24px 0;
+      color: var(--aic-gray-light);
+    }
+
+    /* Status Message */
+    .status-message {
+      padding: 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      margin-top: 16px;
+      display: none;
+    }
+    .status-message.show {
+      display: block;
+    }
+    .status-message.success {
+      background: rgba(14, 204, 151, 0.1);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      color: var(--aic-green);
+    }
+    .status-message.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+    }
+
+    /* Loading */
+    .loading-state {
+      text-align: center;
+      padding: 60px 20px;
+    }
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid var(--aic-border);
+      border-top-color: var(--aic-green);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      body.has-sidebar { margin-left: 0; }
+      .main-content { padding: 20px; }
+      .form-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body class="has-sidebar">
+  <div class="main-content" id="main-content">
+    <div class="loading-state">
+      <div class="loading-spinner"></div>
+      <p style="color: var(--aic-gray);">Carregando credenciais...</p>
+    </div>
+  </div>
+
+  <!-- Client Sidebar -->
+  <script src="/components/aic-sidebar.js"></script>
+
+  <script>
+    let journeyData = null;
+    let credentialsData = { whatsapp: null, instagram: null };
+
+    async function init() {
+      try {
+        const isAdmin = localStorage.getItem('aic_user_role') === 'admin';
+
+        // Admin usa cliente selecionado
+        if (isAdmin) {
+          await new Promise(r => setTimeout(r, 150));
+          const selectedClient = window.getSelectedClient ? window.getSelectedClient() : null;
+          if (selectedClient) {
+            journeyData = selectedClient;
+            renderPage();
+            return;
+          }
+          document.getElementById('main-content').innerHTML = `
+            <div style="text-align: center; padding: 60px; color: #94a3b8;">
+              <p>Selecione um cliente no menu lateral para visualizar.</p>
+            </div>
+          `;
+          return;
+        }
+
+        // Cliente normal
+        const token = localStorage.getItem('aic_client_token');
+        if (!token) {
+          window.location.href = '/aic/login?redirect=/cliente';
+          return;
+        }
+
+        const response = await fetch('/api/aic/journey/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            localStorage.removeItem('aic_client_token');
+            window.location.href = '/aic/login?redirect=/cliente';
+            return;
+          }
+          throw new Error('Erro ao carregar dados');
+        }
+
+        journeyData = await response.json();
+
+        // Check if can access this step
+        const STEP_ORDER = [
+          'proposta_enviada', 'proposta_visualizada', 'contrato_enviado', 'contrato_assinado',
+          'pagamento_pendente', 'pagamento_confirmado', 'credenciais_pendente', 'credenciais_ok',
+          'briefing_pendente', 'briefing_completo', 'campanha_ativa', 'campanha_concluida'
+        ];
+        const currentIndex = STEP_ORDER.indexOf(journeyData.current_step);
+        if (currentIndex < 5) { // Need at least pagamento_confirmado
+          window.location.href = '/cliente/pagamento';
+          return;
+        }
+
+        // Load existing credentials if available
+        if (journeyData.campaign_id) {
+          await loadCredentials();
+        }
+
+        renderPage();
+
+      } catch (error) {
+        console.error('Erro:', error);
+        document.getElementById('main-content').innerHTML = `
+          <div class="loading-state">
+            <p style="color: #ef4444;">Erro ao carregar dados. Por favor, tente novamente.</p>
+            <button onclick="location.reload()" class="btn btn-secondary" style="margin-top: 16px;">Tentar Novamente</button>
+          </div>
+        `;
+      }
+    }
+
+    async function loadCredentials() {
+      try {
+        const token = localStorage.getItem('aic_client_token');
+        const response = await fetch(`/api/aic/journey/credentials`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          credentialsData = data.credentials || { whatsapp: null, instagram: null };
+        }
+      } catch (err) {
+        console.warn('Could not load credentials:', err);
+      }
+    }
+
+    function renderPage() {
+      const isComplete = ['credenciais_ok', 'briefing_pendente', 'briefing_completo',
+        'campanha_ativa', 'campanha_concluida'
+      ].includes(journeyData.current_step);
+
+      const hasWhatsapp = credentialsData.whatsapp && credentialsData.whatsapp.phone;
+      const hasInstagram = credentialsData.instagram && credentialsData.instagram.username;
+      const progress = (hasWhatsapp ? 1 : 0) + (hasInstagram ? 1 : 0);
+
+      document.getElementById('main-content').innerHTML = `
+        <!-- Status Banner -->
+        <div class="status-banner ${isComplete ? 'complete' : 'pending'}">
+          <div class="status-icon">${isComplete ? '&#10003;' : '&#128274;'}</div>
+          <div class="status-text">
+            <h3>${isComplete ? 'Credenciais Configuradas' : 'Configure suas Credenciais'}</h3>
+            <p>${isComplete ? 'Tudo pronto! Continue para o briefing.' : 'Conecte WhatsApp e Instagram para iniciar a campanha.'}</p>
+          </div>
+        </div>
+
+        <!-- Page Header -->
+        <div class="page-header">
+          <h1>Credenciais</h1>
+          <p>Configure as contas que serao usadas na campanha</p>
+        </div>
+
+        ${isComplete ? `
+          <!-- Success Section -->
+          <div class="success-section">
+            <div class="success-icon">&#10003;</div>
+            <h2>Credenciais Configuradas!</h2>
+            <p>Suas contas estao prontas. Agora vamos para o briefing para entender melhor seu negocio.</p>
+            <a href="/cliente/briefing" class="btn btn-primary">Ir para Briefing</a>
+          </div>
+        ` : `
+          <!-- Progress -->
+          <div class="progress-section">
+            <div class="progress-header">
+              <span class="progress-title">Progresso da Configuracao</span>
+              <span class="progress-count">${progress}/2 concluido</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: ${progress * 50}%"></div>
+            </div>
+          </div>
+
+          <!-- WhatsApp Card -->
+          <div class="card ${hasWhatsapp ? 'complete' : ''}">
+            <h2>
+              <div class="icon">&#128241;</div>
+              WhatsApp Business
+              <span class="status-badge ${hasWhatsapp ? 'complete' : 'pending'}">${hasWhatsapp ? 'Configurado' : 'Pendente'}</span>
+            </h2>
+            <p class="subtitle">Numero WhatsApp que sera usado para enviar mensagens aos leads.</p>
+
+            <div class="warning-box">
+              <h4>Importante</h4>
+              <p>Use uma linha WhatsApp exclusiva para a campanha. Nao use seu numero pessoal. Recomendamos criar uma conta WhatsApp Business.</p>
+            </div>
+
+            <form id="whatsapp-form" onsubmit="return saveWhatsapp(event)">
+              <div class="form-group">
+                <label class="form-label">Numero WhatsApp *</label>
+                <input type="tel" id="wa_phone" class="form-input" placeholder="+55 11 99999-9999" value="${credentialsData.whatsapp?.phone || ''}" required>
+                <p class="form-hint">Formato: +55 DDD NUMERO (somente numeros)</p>
+              </div>
+
+              <button type="submit" class="btn btn-primary btn-full" id="wa-btn">
+                ${hasWhatsapp ? 'Atualizar WhatsApp' : 'Salvar WhatsApp'}
+              </button>
+              <div id="wa-status" class="status-message"></div>
+            </form>
+          </div>
+
+          <!-- Instagram Card -->
+          <div class="card ${hasInstagram ? 'complete' : ''}">
+            <h2>
+              <div class="icon">&#128247;</div>
+              Instagram
+              <span class="status-badge ${hasInstagram ? 'complete' : 'pending'}">${hasInstagram ? 'Configurado' : 'Pendente'}</span>
+            </h2>
+            <p class="subtitle">Conta Instagram que sera usada para enviar DMs aos leads.</p>
+
+            <div class="info-box">
+              <h4>Dica</h4>
+              <p>Recomendamos usar uma conta Instagram Business ou Creator com pelo menos 30 dias de uso e algum conteudo publicado.</p>
+            </div>
+
+            <form id="instagram-form" onsubmit="return saveInstagram(event)">
+              <div class="form-group">
+                <label class="form-label">Username Instagram *</label>
+                <input type="text" id="ig_username" class="form-input" placeholder="@seuusername" value="${credentialsData.instagram?.username || ''}" required>
+                <p class="form-hint">Sem o @ no inicio</p>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Senha *</label>
+                <input type="password" id="ig_password" class="form-input" placeholder="Sua senha do Instagram" ${hasInstagram ? 'value="********"' : ''}>
+                <p class="form-hint">Usada apenas para login automatizado. Armazenada de forma segura.</p>
+              </div>
+
+              <button type="submit" class="btn btn-primary btn-full" id="ig-btn">
+                ${hasInstagram ? 'Atualizar Instagram' : 'Salvar Instagram'}
+              </button>
+              <div id="ig-status" class="status-message"></div>
+            </form>
+          </div>
+
+          <!-- Continue Button -->
+          ${progress === 2 ? `
+            <button class="btn btn-primary btn-full" onclick="completeCredentials()" id="complete-btn" style="margin-top: 16px;">
+              Concluir e Ir para Briefing
+            </button>
+            <div id="complete-status" class="status-message"></div>
+          ` : `
+            <p style="text-align: center; color: var(--aic-gray); margin-top: 24px;">
+              Configure ambas as contas para prosseguir para o briefing.
+            </p>
+          `}
+        `}
+      `;
+    }
+
+    function showStatus(elementId, message, type) {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      el.textContent = message;
+      el.className = `status-message show ${type}`;
+    }
+
+    async function saveWhatsapp(event) {
+      event.preventDefault();
+      const btn = document.getElementById('wa-btn');
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+
+      try {
+        const token = localStorage.getItem('aic_client_token');
+        const response = await fetch('/api/aic/journey/credentials/whatsapp', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            phone: document.getElementById('wa_phone').value.trim().replace(/\D/g, '')
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Erro ao salvar');
+        }
+
+        showStatus('wa-status', 'WhatsApp salvo com sucesso!', 'success');
+        credentialsData.whatsapp = { phone: document.getElementById('wa_phone').value };
+
+        setTimeout(() => {
+          renderPage();
+        }, 1000);
+
+      } catch (error) {
+        showStatus('wa-status', error.message || 'Erro ao salvar. Tente novamente.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Salvar WhatsApp';
+      }
+    }
+
+    async function saveInstagram(event) {
+      event.preventDefault();
+      const btn = document.getElementById('ig-btn');
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+
+      try {
+        const token = localStorage.getItem('aic_client_token');
+        const response = await fetch('/api/aic/journey/credentials/instagram', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            username: document.getElementById('ig_username').value.trim().replace('@', ''),
+            password: document.getElementById('ig_password').value
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Erro ao salvar');
+        }
+
+        showStatus('ig-status', 'Instagram salvo com sucesso!', 'success');
+        credentialsData.instagram = { username: document.getElementById('ig_username').value };
+
+        setTimeout(() => {
+          renderPage();
+        }, 1000);
+
+      } catch (error) {
+        showStatus('ig-status', error.message || 'Erro ao salvar. Tente novamente.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Salvar Instagram';
+      }
+    }
+
+    async function completeCredentials() {
+      const btn = document.getElementById('complete-btn');
+      btn.disabled = true;
+      btn.textContent = 'Finalizando...';
+
+      try {
+        const token = localStorage.getItem('aic_client_token');
+        const response = await fetch('/api/aic/journey/complete-credentials', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Erro ao finalizar');
+        }
+
+        window.location.href = '/cliente/briefing';
+
+      } catch (error) {
+        showStatus('complete-status', error.message || 'Erro. Tente novamente.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Concluir e Ir para Briefing';
+      }
+    }
+
+    // Initialize
+    init();
+  </script>
+</body>
+</html>
