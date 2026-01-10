@@ -1,11 +1,21 @@
 /**
  * AIC Client Sidebar Component
- * Menu lateral de navegacao para o Portal do Cliente
+ * Menu lateral para Portal do Cliente - Padrao visual AIC unificado
  * Controla acesso baseado na etapa atual da jornada
  */
 
 (function() {
   const currentPath = window.location.pathname;
+  const urlParams = new URLSearchParams(window.location.search);
+  const campaignParam = urlParams.get('campaign');
+
+  // Funcao para construir URL com campaign param
+  function buildUrl(path) {
+    if (campaignParam) {
+      return path + '?campaign=' + campaignParam;
+    }
+    return path;
+  }
 
   // Ordem das etapas da jornada
   const STEP_ORDER = [
@@ -28,7 +38,6 @@
     {
       id: 'jornada',
       label: 'Minha Jornada',
-      icon: '&#x1F3E0;',
       path: '/cliente',
       alwaysVisible: true,
       requiredSteps: []
@@ -36,97 +45,82 @@
     {
       id: 'proposta',
       label: 'Proposta',
-      icon: '&#x1F4E7;',
       path: '/cliente/proposta',
       requiredSteps: ['proposta_enviada'],
-      completedAt: 'proposta_visualizada',
-      tip: 'Analise a proposta e aceite para continuar'
+      completedAt: 'proposta_visualizada'
     },
     {
       id: 'contrato',
       label: 'Contrato',
-      icon: '&#x1F4DD;',
       path: '/cliente/contrato',
       requiredSteps: ['proposta_visualizada'],
-      completedAt: 'contrato_assinado',
-      tip: 'Leia e assine o contrato de prestacao de servicos'
+      completedAt: 'contrato_assinado'
     },
     {
       id: 'pagamento',
       label: 'Pagamento',
-      icon: '&#x1F4B3;',
       path: '/cliente/pagamento',
       requiredSteps: ['contrato_assinado'],
-      completedAt: 'pagamento_confirmado',
-      tip: 'Realize o pagamento de 50% para iniciar'
+      completedAt: 'pagamento_confirmado'
     },
     {
       id: 'credenciais',
       label: 'Credenciais',
-      icon: '&#x1F511;',
       path: '/cliente/credenciais',
       requiredSteps: ['pagamento_confirmado'],
-      completedAt: 'credenciais_ok',
-      tip: 'Conecte seu WhatsApp e Instagram'
+      completedAt: 'credenciais_ok'
     },
     {
       id: 'briefing',
       label: 'Briefing',
-      icon: '&#x1F4CB;',
       path: '/cliente/briefing',
       requiredSteps: ['credenciais_ok'],
-      completedAt: 'briefing_completo',
-      tip: 'Preencha as informacoes do seu negocio'
+      completedAt: 'briefing_completo'
     },
     {
       id: 'dashboard',
       label: 'Dashboard',
-      icon: '&#x1F4CA;',
       path: '/cliente/dashboard',
-      requiredSteps: ['briefing_completo'],
-      tip: 'Acompanhe as metricas da sua campanha'
+      requiredSteps: ['briefing_completo']
     },
     {
       id: 'leads',
       label: 'Leads Entregues',
-      icon: '&#x1F4B0;',
       path: '/cliente/leads',
-      requiredSteps: ['campanha_ativa'],
-      tip: 'Veja os leads quentes gerados'
+      requiredSteps: ['campanha_ativa']
     },
     {
       id: 'faturas',
       label: 'Faturas',
-      icon: '&#x1F9FE;',
       path: '/cliente/faturas',
-      requiredSteps: ['contrato_assinado'],
-      tip: 'Acompanhe suas faturas e pagamentos'
+      requiredSteps: ['contrato_assinado']
     }
   ];
 
-  // CSS do Sidebar
+  // CSS do Sidebar - Padrao AIC unificado (igual ao admin)
   const styles = `
-    .aic-client-sidebar {
+    .aic-sidebar {
       position: fixed;
       left: 0;
       top: 0;
-      width: 280px;
+      width: 260px;
       height: 100vh;
       background: linear-gradient(180deg, #0C1B33 0%, #091525 100%);
       border-right: 1px solid #1e3a5f;
       z-index: 1000;
       display: flex;
       flex-direction: column;
+      transform: translateX(0);
       transition: transform 0.3s ease;
     }
-    .aic-client-sidebar.collapsed { transform: translateX(-280px); }
+    .aic-sidebar.collapsed { transform: translateX(-260px); }
 
-    .aic-client-sidebar-toggle {
+    .aic-sidebar-toggle {
       position: fixed;
-      left: 280px;
+      left: 260px;
       top: 20px;
-      width: 36px;
-      height: 36px;
+      width: 32px;
+      height: 32px;
       background: #122444;
       border: 1px solid #1e3a5f;
       border-radius: 0 8px 8px 0;
@@ -137,209 +131,186 @@
       justify-content: center;
       z-index: 1001;
       transition: all 0.3s ease;
-      font-size: 18px;
     }
-    .aic-client-sidebar.collapsed + .aic-client-sidebar-toggle { left: 0; }
-    .aic-client-sidebar-toggle:hover { background: #1a3055; color: #0ECC97; }
+    .aic-sidebar.collapsed + .aic-sidebar-toggle { left: 0; }
+    .aic-sidebar-toggle:hover { background: #1a3055; color: #0ECC97; }
 
-    .aic-client-sidebar-header {
-      padding: 24px 20px;
+    .aic-sidebar-header {
+      padding: 20px;
       border-bottom: 1px solid #1e3a5f;
     }
-    .aic-client-sidebar-logo {
-      height: 36px;
+    .aic-sidebar-logo {
+      height: 32px;
       width: auto;
-      margin-bottom: 16px;
     }
-    .aic-client-sidebar-user {
+
+    .aic-sidebar-user {
       display: flex;
       align-items: center;
       gap: 12px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #1e3a5f;
     }
-    .aic-client-sidebar-avatar {
-      width: 44px;
-      height: 44px;
+    .aic-sidebar-avatar {
+      width: 36px;
+      height: 36px;
       background: linear-gradient(135deg, #0ECC97 0%, #0BA578 100%);
-      border-radius: 12px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 18px;
+      font-size: 14px;
       font-weight: 700;
       color: #0C1B33;
     }
-    .aic-client-sidebar-user-info h3 {
+    .aic-sidebar-user-info h3 {
       color: #FDFDFD;
-      font-size: 15px;
+      font-size: 13px;
       font-weight: 600;
       margin: 0;
       line-height: 1.3;
     }
-    .aic-client-sidebar-user-info p {
+    .aic-sidebar-user-info p {
       color: #64748b;
-      font-size: 12px;
+      font-size: 11px;
       margin: 0;
     }
 
-    .aic-client-sidebar-progress {
-      padding: 20px;
+    .aic-sidebar-progress {
+      padding: 16px 20px;
       border-bottom: 1px solid #1e3a5f;
     }
-    .aic-client-sidebar-progress-label {
+    .aic-sidebar-progress-label {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 8px;
     }
-    .aic-client-sidebar-progress-label span {
+    .aic-sidebar-progress-label span {
       color: #94a3b8;
+      font-size: 11px;
+    }
+    .aic-sidebar-progress-label strong {
+      color: #0ECC97;
       font-size: 12px;
     }
-    .aic-client-sidebar-progress-label strong {
-      color: #0ECC97;
-      font-size: 14px;
-    }
-    .aic-client-sidebar-progress-bar {
-      height: 6px;
+    .aic-sidebar-progress-bar {
+      height: 4px;
       background: #1a3055;
-      border-radius: 3px;
+      border-radius: 2px;
       overflow: hidden;
     }
-    .aic-client-sidebar-progress-fill {
+    .aic-sidebar-progress-fill {
       height: 100%;
       background: linear-gradient(90deg, #0ECC97 0%, #0BA578 100%);
-      border-radius: 3px;
+      border-radius: 2px;
       transition: width 0.5s ease;
     }
 
-    .aic-client-sidebar-nav {
+    .aic-sidebar-nav {
       flex: 1;
       padding: 16px 0;
       overflow-y: auto;
     }
 
-    .aic-client-sidebar-item {
+    .aic-sidebar-section {
+      margin-bottom: 24px;
+    }
+    .aic-sidebar-section-title {
+      padding: 0 20px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .aic-sidebar-link {
       display: flex;
       align-items: center;
-      gap: 14px;
-      padding: 14px 20px;
+      justify-content: space-between;
+      padding: 12px 20px;
       color: #94a3b8;
       text-decoration: none;
       font-size: 14px;
       font-weight: 500;
       transition: all 0.2s;
       border-left: 3px solid transparent;
-      position: relative;
     }
-    .aic-client-sidebar-item:hover:not(.locked) {
+    .aic-sidebar-link:hover:not(.disabled) {
       background: rgba(14, 204, 151, 0.05);
       color: #FDFDFD;
     }
-    .aic-client-sidebar-item.active {
+    .aic-sidebar-link.active {
       background: rgba(14, 204, 151, 0.1);
       color: #0ECC97;
       border-left-color: #0ECC97;
     }
-    .aic-client-sidebar-item.completed {
+    .aic-sidebar-link.completed {
       color: #FDFDFD;
     }
-    .aic-client-sidebar-item.locked {
+    .aic-sidebar-link.disabled {
       opacity: 0.4;
       cursor: not-allowed;
+      pointer-events: none;
     }
-    .aic-client-sidebar-item.current {
+    .aic-sidebar-link.current {
       background: rgba(59, 130, 246, 0.1);
       color: #60a5fa;
       border-left-color: #60a5fa;
     }
 
-    .aic-client-sidebar-item-icon {
-      font-size: 18px;
-      width: 24px;
-      text-align: center;
+    .aic-sidebar-link-status {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
     }
-    .aic-client-sidebar-item-label { flex: 1; }
-
-    .aic-client-sidebar-item-status {
-      font-size: 14px;
+    .aic-sidebar-link-status.completed {
+      background: rgba(14, 204, 151, 0.15);
+      color: #0ECC97;
     }
-    .aic-client-sidebar-item-status.completed { color: #0ECC97; }
-    .aic-client-sidebar-item-status.current { color: #60a5fa; }
-    .aic-client-sidebar-item-status.locked { color: #475569; }
-
-    .aic-client-sidebar-tip {
-      margin: 0 12px 16px;
-      padding: 14px 16px;
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
-      border: 1px solid rgba(59, 130, 246, 0.3);
-      border-radius: 12px;
-    }
-    .aic-client-sidebar-tip-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    .aic-sidebar-link-status.current {
+      background: rgba(59, 130, 246, 0.15);
       color: #60a5fa;
-      font-size: 12px;
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-    .aic-client-sidebar-tip-text {
-      color: #94a3b8;
-      font-size: 13px;
-      line-height: 1.5;
     }
 
-    .aic-client-sidebar-footer {
+    .aic-sidebar-footer {
       padding: 16px 20px;
       border-top: 1px solid #1e3a5f;
     }
-    .aic-client-sidebar-logout {
+    .aic-sidebar-footer-link {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       color: #64748b;
       text-decoration: none;
-      font-size: 13px;
-      padding: 10px 12px;
-      border-radius: 8px;
-      transition: all 0.2s;
+      font-size: 12px;
+      padding: 8px 0;
+      transition: color 0.2s;
       cursor: pointer;
       background: none;
       border: none;
       width: 100%;
     }
-    .aic-client-sidebar-logout:hover {
-      background: rgba(239, 68, 68, 0.1);
+    .aic-sidebar-footer-link:hover {
+      color: #94a3b8;
+    }
+    .aic-sidebar-footer-link.logout:hover {
       color: #ef4444;
     }
 
-    .aic-client-sidebar-help {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: #64748b;
-      text-decoration: none;
-      font-size: 13px;
-      padding: 10px 12px;
-      border-radius: 8px;
-      transition: all 0.2s;
-      margin-bottom: 8px;
-    }
-    .aic-client-sidebar-help:hover {
-      background: rgba(14, 204, 151, 0.1);
-      color: #0ECC97;
-    }
-
-    body.aic-client-sidebar-open { margin-left: 280px; }
-    body.aic-client-sidebar-open .header { margin-left: 280px; width: calc(100% - 280px); }
+    body.aic-sidebar-open { margin-left: 260px; }
+    body.aic-sidebar-open .header { margin-left: 260px; width: calc(100% - 260px); }
 
     @media (max-width: 1024px) {
-      .aic-client-sidebar { transform: translateX(-280px); }
-      .aic-client-sidebar.open { transform: translateX(0); }
-      .aic-client-sidebar-toggle { left: 0; }
-      .aic-client-sidebar.open + .aic-client-sidebar-toggle { left: 280px; }
-      body.aic-client-sidebar-open { margin-left: 0; }
-      body.aic-client-sidebar-open .header { margin-left: 0; width: 100%; }
+      .aic-sidebar { transform: translateX(-260px); }
+      .aic-sidebar.open { transform: translateX(0); }
+      .aic-sidebar-toggle { left: 0; }
+      .aic-sidebar.open + .aic-sidebar-toggle { left: 260px; }
+      body.aic-sidebar-open { margin-left: 0; }
+      body.aic-sidebar-open .header { margin-left: 0; width: 100%; }
     }
   `;
 
@@ -348,7 +319,7 @@
   styleSheet.textContent = styles;
   document.head.appendChild(styleSheet);
 
-  // Estado da jornada (será carregado da API)
+  // Estado da jornada
   let journeyState = {
     clientName: 'Carregando...',
     currentStep: 'proposta_enviada',
@@ -357,17 +328,17 @@
     journeyId: null
   };
 
-  // Verificar se etapa está acessível
+  // Verificar se etapa esta acessivel
   function isStepAccessible(requiredSteps) {
     if (!requiredSteps || requiredSteps.length === 0) return true;
     const currentIndex = STEP_ORDER.indexOf(journeyState.currentStep);
-    return requiredSteps.some(step => {
+    return requiredSteps.some(function(step) {
       const requiredIndex = STEP_ORDER.indexOf(step);
       return currentIndex >= requiredIndex;
     });
   }
 
-  // Verificar se etapa está completa
+  // Verificar se etapa esta completa
   function isStepCompleted(completedAt) {
     if (!completedAt) return false;
     const currentIndex = STEP_ORDER.indexOf(journeyState.currentStep);
@@ -375,7 +346,7 @@
     return currentIndex > completedIndex;
   }
 
-  // Verificar se é etapa atual
+  // Verificar se e etapa atual
   function isCurrentStep(item) {
     if (!item.completedAt) return false;
     const accessible = isStepAccessible(item.requiredSteps);
@@ -383,7 +354,7 @@
     return accessible && !completed;
   }
 
-  // Verificar página ativa
+  // Verificar pagina ativa
   function isActivePage(path) {
     if (path === '/cliente' && currentPath === '/cliente') return true;
     if (path !== '/cliente' && currentPath.startsWith(path)) return true;
@@ -393,118 +364,113 @@
   // Obter iniciais do nome
   function getInitials(name) {
     if (!name) return '?';
-    const parts = name.trim().split(' ');
+    var parts = name.trim().split(' ');
     if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
     return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
   }
 
-  // Encontrar dica atual
-  function getCurrentTip() {
-    for (const item of MENU_ITEMS) {
-      if (isCurrentStep(item) && item.tip) {
-        return { label: item.label, tip: item.tip };
-      }
-    }
-    return null;
-  }
-
   // Criar elemento do sidebar
   function renderSidebar() {
-    const nav = document.createElement('nav');
-    nav.className = 'aic-client-sidebar';
-    nav.id = 'aic-client-sidebar';
+    var nav = document.createElement('nav');
+    nav.className = 'aic-sidebar';
+    nav.id = 'aic-sidebar';
 
-    // Header
-    let html = `
-      <div class="aic-client-sidebar-header">
-        <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="aic-client-sidebar-logo">
-        <div class="aic-client-sidebar-user">
-          <div class="aic-client-sidebar-avatar">${getInitials(journeyState.clientName)}</div>
-          <div class="aic-client-sidebar-user-info">
-            <h3>${journeyState.clientName}</h3>
-            <p>Portal do Cliente</p>
-          </div>
-        </div>
-      </div>
-    `;
+    // Header com logo e user
+    var html = '<div class="aic-sidebar-header">' +
+      '<img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="aic-sidebar-logo">' +
+      '<div class="aic-sidebar-user">' +
+        '<div class="aic-sidebar-avatar">' + getInitials(journeyState.clientName) + '</div>' +
+        '<div class="aic-sidebar-user-info">' +
+          '<h3>' + journeyState.clientName + '</h3>' +
+          '<p>Portal do Cliente</p>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
 
-    // Progress
-    html += `
-      <div class="aic-client-sidebar-progress">
-        <div class="aic-client-sidebar-progress-label">
-          <span>Progresso da Jornada</span>
-          <strong>${journeyState.progress}%</strong>
-        </div>
-        <div class="aic-client-sidebar-progress-bar">
-          <div class="aic-client-sidebar-progress-fill" style="width: ${journeyState.progress}%"></div>
-        </div>
-      </div>
-    `;
+    // Progress bar
+    html += '<div class="aic-sidebar-progress">' +
+      '<div class="aic-sidebar-progress-label">' +
+        '<span>Progresso</span>' +
+        '<strong>' + journeyState.progress + '%</strong>' +
+      '</div>' +
+      '<div class="aic-sidebar-progress-bar">' +
+        '<div class="aic-sidebar-progress-fill" style="width: ' + journeyState.progress + '%"></div>' +
+      '</div>' +
+    '</div>';
 
-    // Nav items
-    html += '<div class="aic-client-sidebar-nav">';
+    // Nav
+    html += '<div class="aic-sidebar-nav">';
 
-    for (const item of MENU_ITEMS) {
-      const accessible = item.alwaysVisible || isStepAccessible(item.requiredSteps);
-      const completed = isStepCompleted(item.completedAt);
-      const current = isCurrentStep(item);
-      const active = isActivePage(item.path);
+    // Secao Jornada
+    html += '<div class="aic-sidebar-section">';
+    html += '<div class="aic-sidebar-section-title">Jornada</div>';
 
-      let statusIcon = '';
-      let className = 'aic-client-sidebar-item';
+    for (var i = 0; i < MENU_ITEMS.length; i++) {
+      var item = MENU_ITEMS[i];
+      if (item.id === 'faturas' || item.id === 'leads') continue; // Separar em outra secao
+
+      var accessible = item.alwaysVisible || isStepAccessible(item.requiredSteps);
+      var completed = isStepCompleted(item.completedAt);
+      var current = isCurrentStep(item);
+      var active = isActivePage(item.path);
+
+      var className = 'aic-sidebar-link';
+      var statusHtml = '';
 
       if (active) {
         className += ' active';
-        statusIcon = '';
       } else if (completed) {
         className += ' completed';
-        statusIcon = '<span class="aic-client-sidebar-item-status completed">&#x2713;</span>';
+        statusHtml = '<span class="aic-sidebar-link-status completed">OK</span>';
       } else if (current) {
         className += ' current';
-        statusIcon = '<span class="aic-client-sidebar-item-status current">&#x25CF;</span>';
+        statusHtml = '<span class="aic-sidebar-link-status current">Atual</span>';
       } else if (!accessible) {
-        className += ' locked';
-        statusIcon = '<span class="aic-client-sidebar-item-status locked">&#x1F512;</span>';
+        className += ' disabled';
       }
 
-      const href = accessible ? item.path : '#';
-      const onclick = accessible ? '' : 'onclick="event.preventDefault(); alert(\'Complete as etapas anteriores primeiro.\');"';
+      var href = accessible ? buildUrl(item.path) : '#';
 
-      html += `
-        <a href="${href}" class="${className}" ${onclick}>
-          <span class="aic-client-sidebar-item-icon">${item.icon}</span>
-          <span class="aic-client-sidebar-item-label">${item.label}</span>
-          ${statusIcon}
-        </a>
-      `;
+      html += '<a href="' + href + '" class="' + className + '">' +
+        '<span>' + item.label + '</span>' +
+        statusHtml +
+      '</a>';
     }
 
     html += '</div>';
 
-    // Tip
-    const currentTip = getCurrentTip();
-    if (currentTip) {
-      html += `
-        <div class="aic-client-sidebar-tip">
-          <div class="aic-client-sidebar-tip-title">
-            <span>&#x1F4A1;</span> Proximo Passo: ${currentTip.label}
-          </div>
-          <p class="aic-client-sidebar-tip-text">${currentTip.tip}</p>
-        </div>
-      `;
+    // Secao Financeiro
+    html += '<div class="aic-sidebar-section">';
+    html += '<div class="aic-sidebar-section-title">Financeiro</div>';
+
+    var financeItems = MENU_ITEMS.filter(function(item) {
+      return item.id === 'faturas' || item.id === 'leads';
+    });
+
+    for (var j = 0; j < financeItems.length; j++) {
+      var fitem = financeItems[j];
+      var faccessible = isStepAccessible(fitem.requiredSteps);
+      var factive = isActivePage(fitem.path);
+
+      var fclassName = 'aic-sidebar-link';
+      if (factive) fclassName += ' active';
+      else if (!faccessible) fclassName += ' disabled';
+
+      var fhref = faccessible ? buildUrl(fitem.path) : '#';
+
+      html += '<a href="' + fhref + '" class="' + fclassName + '">' +
+        '<span>' + fitem.label + '</span>' +
+      '</a>';
     }
 
+    html += '</div>';
+    html += '</div>';
+
     // Footer
-    html += `
-      <div class="aic-client-sidebar-footer">
-        <a href="https://wa.me/5511999999999" target="_blank" class="aic-client-sidebar-help">
-          <span>&#x1F4AC;</span> Precisa de ajuda?
-        </a>
-        <button class="aic-client-sidebar-logout" onclick="window.aicClientLogout()">
-          <span>&#x1F6AA;</span> Sair
-        </button>
-      </div>
-    `;
+    html += '<div class="aic-sidebar-footer">' +
+      '<a href="https://wa.me/5511999999999" target="_blank" class="aic-sidebar-footer-link">Precisa de ajuda?</a>' +
+      '<button class="aic-sidebar-footer-link logout" onclick="window.aicClientLogout()">Sair</button>' +
+    '</div>';
 
     nav.innerHTML = html;
     return nav;
@@ -512,25 +478,23 @@
 
   // Toggle button
   function renderToggle() {
-    const btn = document.createElement('button');
-    btn.className = 'aic-client-sidebar-toggle';
-    btn.id = 'aic-client-sidebar-toggle';
+    var btn = document.createElement('button');
+    btn.className = 'aic-sidebar-toggle';
+    btn.id = 'aic-sidebar-toggle';
     btn.title = 'Toggle Menu';
-    btn.innerHTML = '<span id="client-toggle-icon">&#9776;</span>';
+    btn.innerHTML = '<span id="toggle-icon">&#9776;</span>';
     return btn;
   }
 
   // Logout function
   window.aicClientLogout = async function() {
     try {
-      // Clear Supabase session if available
-      if (window.supabase) {
-        await window.supabase.auth.signOut();
+      if (window.supabaseClient) {
+        await window.supabaseClient.auth.signOut();
       }
-      // Clear local storage
       localStorage.removeItem('aic_client_journey');
-      localStorage.removeItem('aic_client_token');
-      // Redirect to login
+      localStorage.removeItem('aic_access_token');
+      localStorage.removeItem('aic_refresh_token');
       window.location.href = '/cliente/login';
     } catch (e) {
       console.error('Erro ao fazer logout:', e);
@@ -542,23 +506,24 @@
   async function loadJourney() {
     try {
       // Tentar obter do localStorage primeiro
-      const cached = localStorage.getItem('aic_client_journey');
+      var cached = localStorage.getItem('aic_client_journey');
       if (cached) {
-        const data = JSON.parse(cached);
+        var data = JSON.parse(cached);
         if (data && data.currentStep) {
-          journeyState = { ...journeyState, ...data };
+          journeyState = Object.assign({}, journeyState, data);
         }
       }
 
       // Buscar dados atualizados da API
-      const response = await fetch('/api/aic/journey/me', {
+      var token = localStorage.getItem('aic_access_token') || localStorage.getItem('aic_client_token') || '';
+      var response = await fetch('/api/aic/journey/me', {
         headers: {
-          'Authorization': 'Bearer ' + (localStorage.getItem('aic_client_token') || '')
+          'Authorization': 'Bearer ' + token
         }
       });
 
       if (response.ok) {
-        const data = await response.json();
+        var data = await response.json();
         if (data.success && data.journey) {
           journeyState = {
             clientName: data.journey.client_name || 'Cliente',
@@ -567,11 +532,9 @@
             campaignId: data.journey.campaign_id,
             journeyId: data.journey.id
           };
-          // Cachear para acesso rápido
           localStorage.setItem('aic_client_journey', JSON.stringify(journeyState));
         }
       } else if (response.status === 401) {
-        // Não autenticado - redirecionar para login
         window.location.href = '/cliente/login';
         return;
       }
@@ -580,30 +543,30 @@
     }
 
     // Renderizar sidebar
-    const sidebar = renderSidebar();
-    const toggle = renderToggle();
+    var sidebar = renderSidebar();
+    var toggle = renderToggle();
 
     document.body.insertBefore(sidebar, document.body.firstChild);
     document.body.insertBefore(toggle, sidebar.nextSibling);
-    document.body.classList.add('aic-client-sidebar-open');
+    document.body.classList.add('aic-sidebar-open');
 
     // Event listeners
     toggle.addEventListener('click', function() {
       sidebar.classList.toggle('collapsed');
-      document.body.classList.toggle('aic-client-sidebar-open');
-      document.getElementById('client-toggle-icon').innerHTML =
+      sidebar.classList.toggle('open');
+      document.body.classList.toggle('aic-sidebar-open');
+      document.getElementById('toggle-icon').innerHTML =
         sidebar.classList.contains('collapsed') ? '&#9776;' : '&#10005;';
     });
 
     // Mobile handling
     if (window.innerWidth <= 1024) {
       sidebar.classList.add('collapsed');
-      document.body.classList.remove('aic-client-sidebar-open');
+      document.body.classList.remove('aic-sidebar-open');
     }
   }
 
   // Verificar se deve carregar o sidebar
-  // Só carrega em páginas do portal do cliente, exceto login
   if (currentPath.startsWith('/cliente') && !currentPath.includes('/login')) {
     loadJourney();
   }

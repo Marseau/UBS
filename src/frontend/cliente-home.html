@@ -527,6 +527,9 @@
       .mobile-header {
         display: flex;
       }
+      .main-content {
+        padding-top: 80px; /* Espaço para header mobile */
+      }
     }
 
     /* Sidebar overlay for mobile */
@@ -545,9 +548,9 @@
       display: block;
     }
 
-    /* Hide toggle button from aic-client-sidebar.js on mobile (we use our own) */
+    /* Hide toggle button from sidebar on mobile (we use our own) */
     @media (max-width: 1024px) {
-      .aic-client-sidebar-toggle {
+      .aic-sidebar-toggle {
         display: none !important;
       }
     }
@@ -653,7 +656,7 @@
 
   <script>
     const SUPABASE_URL = 'https://qsdfyffuonywmtnlycri.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTM5NjMwMzIsImV4cCI6MjAyOTUzOTAzMn0.szp1X8vTNhe5FEyzPkSqvSuMCBwQfbRp5qCBno3EJxI';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExMjY0NzgsImV4cCI6MjA2NjcwMjQ3OH0.IDJdOApiNM0FJvRe5mp28L7U89GWeHpPoPlPreexwbg';
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // Icons
@@ -709,11 +712,22 @@
 
     async function loadCampaigns() {
       try {
-        // Obter token da sessão Supabase
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        const token = session?.access_token || localStorage.getItem('aic_client_token');
+        // Obter token - tentar Supabase primeiro, depois localStorage
+        let token = null;
+
+        // Tentar pegar do localStorage primeiro (mais confiavel)
+        token = localStorage.getItem('aic_access_token');
+
+        // Se nao tiver no localStorage, tentar do Supabase
+        if (!token) {
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          token = session?.access_token;
+        }
+
+        console.log('[ClientHome] Token:', token ? 'found' : 'not found', 'isAdmin:', isAdmin);
 
         if (!token && !isAdmin) {
+          console.log('[ClientHome] No token and not admin, redirecting to login');
           window.location.href = '/aic/login?redirect=/cliente';
           return;
         }
@@ -935,12 +949,17 @@
       document.getElementById('statPending').textContent = pending;
     }
 
-    // Initialize
-    init();
+    // Initialize - aguardar Supabase carregar sessão do localStorage
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      console.log('[ClientHome] Auth state change:', event, session ? 'has session' : 'no session');
+      if (event === 'INITIAL_SESSION') {
+        init();
+      }
+    });
 
     // Mobile sidebar toggle
     function toggleMobileSidebar() {
-      const sidebar = document.getElementById('aic-client-sidebar');
+      const sidebar = document.getElementById('aic-sidebar');
       const overlay = document.getElementById('sidebarOverlay');
       const btn = document.getElementById('mobileMenuBtn');
       if (sidebar) {

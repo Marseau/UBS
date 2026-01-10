@@ -7,6 +7,7 @@ import { Router, Request, Response } from 'express';
 import { clientJourneyService, JourneyStep } from '../services/client-journey.service';
 import { authenticateClient, ClientRequest } from '../middleware/client-auth.middleware';
 import { clientInviteService } from '../services/client-invite.service';
+import { proposalPDFService } from '../services/proposal-pdf.service';
 
 const router = Router();
 
@@ -73,6 +74,7 @@ router.get('/by-token/:token', async (req: Request, res: Response) => {
 router.get('/me', authenticateClient, async (req: ClientRequest, res: Response) => {
   try {
     const userId = req.clientUser?.id;
+    const journeyId = req.query.journey as string || req.query.campaign as string;
 
     if (!userId) {
       return res.status(401).json({
@@ -81,7 +83,14 @@ router.get('/me', authenticateClient, async (req: ClientRequest, res: Response) 
       });
     }
 
-    const journey = await clientJourneyService.getJourneyByUserId(userId);
+    let journey;
+    if (journeyId) {
+      // Buscar jornada especifica (verificando que pertence ao usuario)
+      journey = await clientJourneyService.getJourneyByIdAndUser(journeyId, userId);
+    } else {
+      // Buscar jornada padrao do usuario
+      journey = await clientJourneyService.getJourneyByUserId(userId);
+    }
 
     if (!journey) {
       return res.status(404).json({
@@ -107,6 +116,118 @@ router.get('/me', authenticateClient, async (req: ClientRequest, res: Response) 
     return res.status(500).json({
       success: false,
       message: 'Erro ao buscar jornada'
+    });
+  }
+});
+
+/**
+ * POST /api/aic/journey/advance
+ * Avancar jornada do cliente autenticado (aceitar proposta, etc.)
+ * Usado pelo frontend do cliente para acoes como accept_proposal
+ */
+router.post('/advance', authenticateClient, async (req: ClientRequest, res: Response) => {
+  try {
+    const userId = req.clientUser?.id;
+    const { action, ip } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Usuario nao autenticado'
+      });
+    }
+
+    // Buscar jornada do usuario
+    const journey = await clientJourneyService.getJourneyByUserId(userId);
+
+    if (!journey) {
+      return res.status(404).json({
+        success: false,
+        message: 'Jornada nao encontrada'
+      });
+    }
+
+    // Processar acao
+    if (action === 'accept_proposal') {
+      // Verificar se esta no step correto
+      if (journey.current_step !== 'proposta_enviada' && journey.current_step !== 'proposta_visualizada') {
+        return res.status(400).json({
+          success: false,
+          message: 'Proposta ja foi aceita ou etapa invalida'
+        });
+      }
+
+      // Gerar PDF da proposta aceita e fazer upload para B2
+      const clientIp = ip || req.ip || req.headers['x-forwarded-for'] || 'unknown';
+      const acceptedAt = new Date().toISOString();
+
+      try {
+        const proposalId = `PROPOSTA-${journey.id.slice(0, 8).toUpperCase()}-${Date.now()}`;
+
+        console.log(`[Journey] Generating proposal PDF for: ${proposalId}`);
+
+        const pdf = await proposalPDFService.generateAndUpload({
+          client_name: journey.client_name,
+          client_email: journey.client_email,
+          client_company: journey.client_company,
+          proposal_id: proposalId,
+          contract_value: (journey as unknown as { contract_value?: number }).contract_value || journey.proposal_data?.contract_value || 4000,
+          lead_value: (journey as unknown as { lead_value?: number }).lead_value || journey.proposal_data?.lead_value || 10,
+          accepted_at: acceptedAt,
+          accepted_ip: String(clientIp)
+        });
+
+        // Atualizar jornada com URL do PDF e avancar step
+        const { supabaseAdmin } = await import('../config/database');
+        const { error: updateError } = await supabaseAdmin
+          .from('aic_client_journeys')
+          .update({
+            proposal_pdf_url: pdf.url || null,
+            proposta_aceita_at: acceptedAt,
+            current_step: 'proposta_visualizada',
+            next_action_message: 'Proposta aceita! Aguarde o envio do contrato.',
+            updated_at: acceptedAt
+          })
+          .eq('id', journey.id);
+
+        if (updateError) {
+          console.error('[Journey] Error updating journey after proposal accept:', updateError);
+        } else {
+          console.log(`[Journey] Proposal accepted for journey ${journey.id}, PDF URL: ${pdf.url}`);
+        }
+
+      } catch (pdfError) {
+        console.error('[Journey] Error generating proposal PDF:', pdfError);
+        // Continua mesmo sem PDF - aceite ainda e valido
+      }
+
+      // Buscar jornada atualizada
+      const updatedJourney = await clientJourneyService.getJourneyById(journey.id);
+      const progress = clientJourneyService.getProgress(updatedJourney?.current_step as JourneyStep || journey.current_step);
+      const steps = clientJourneyService.getStepsWithStatus(updatedJourney?.current_step as JourneyStep || journey.current_step);
+
+      return res.json({
+        success: true,
+        message: 'Proposta aceita com sucesso',
+        journey: {
+          ...(updatedJourney || journey),
+          progress,
+          steps
+        }
+      });
+    }
+
+    // Acao desconhecida
+    return res.status(400).json({
+      success: false,
+      message: `Acao desconhecida: ${action}`
+    });
+
+  } catch (error) {
+    console.error('[Journey Routes] Error in advance action:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao processar acao'
     });
   }
 });

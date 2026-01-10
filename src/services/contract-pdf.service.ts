@@ -4,7 +4,21 @@
  */
 
 import puppeteer, { Browser } from 'puppeteer';
-import { supabase } from '../config/database';
+import { b2StorageService } from './b2-storage.service';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Logo AIC carregado dinamicamente
+const getLogoBase64 = (): string => {
+  try {
+    const logoPath = path.join(__dirname, '../frontend/assets/AIC/Imagens Vetor /LOGO completo sem fundo Icone cheio e nome cheio.png');
+    const logoBuffer = fs.readFileSync(logoPath);
+    return `data:image/png;base64,${logoBuffer.toString('base64')}`;
+  } catch (err) {
+    console.error('[ContractPDF] Error loading logo:', err);
+    return '';
+  }
+};
 
 interface ContractData {
   // Contratante
@@ -71,21 +85,17 @@ class ContractPDFService {
       const pdfBuffer = await page.pdf({
         format: 'A4',
         margin: {
-          top: '20mm',
-          bottom: '20mm',
+          top: '15mm',
+          bottom: '15mm',
           left: '20mm',
           right: '20mm'
         },
         printBackground: true,
         displayHeaderFooter: true,
-        headerTemplate: `
-          <div style="font-size: 10px; color: #666; width: 100%; text-align: center; padding: 10px 20mm;">
-            AIC - Applied Intelligence Clustering | Contrato de Prestação de Serviços
-          </div>
-        `,
+        headerTemplate: '<div></div>',
         footerTemplate: `
-          <div style="font-size: 10px; color: #666; width: 100%; text-align: center; padding: 10px 20mm;">
-            Página <span class="pageNumber"></span> de <span class="totalPages"></span> | Documento gerado eletronicamente em ${new Date().toLocaleDateString('pt-BR')}
+          <div style="font-size: 9px; color: #999; width: 100%; text-align: center; padding: 5px 20mm;">
+            Página <span class="pageNumber"></span> de <span class="totalPages"></span>
           </div>
         `
       });
@@ -102,33 +112,23 @@ class ContractPDFService {
   }
 
   /**
-   * Generate and upload PDF to Supabase Storage
+   * Generate and upload PDF to Backblaze B2 Storage
    */
   async generateAndUpload(data: ContractData): Promise<GeneratedPDF> {
     const pdf = await this.generateContractPDF(data);
 
     try {
-      // Upload to Supabase Storage
-      const { data: uploadData, error } = await supabase.storage
-        .from('contracts')
-        .upload(`signed/${pdf.filename}`, pdf.buffer, {
-          contentType: 'application/pdf',
-          upsert: true
-        });
+      // Upload to Backblaze B2 via N8N workflow
+      const uploadResult = await b2StorageService.uploadContract(pdf.buffer, data.contract_id);
 
-      if (error) {
-        console.error('[ContractPDF] Error uploading to storage:', error);
+      if (uploadResult.success && uploadResult.url) {
+        pdf.url = uploadResult.url;
+        console.log(`[ContractPDF] PDF uploaded to B2: ${pdf.url}`);
       } else {
-        // Get public URL
-        const { data: urlData } = supabase.storage
-          .from('contracts')
-          .getPublicUrl(`signed/${pdf.filename}`);
-
-        pdf.url = urlData.publicUrl;
-        console.log(`[ContractPDF] PDF uploaded: ${pdf.url}`);
+        console.error('[ContractPDF] Error uploading to B2:', uploadResult.error);
       }
     } catch (err) {
-      console.error('[ContractPDF] Storage error:', err);
+      console.error('[ContractPDF] B2 Storage error:', err);
     }
 
     return pdf;
@@ -138,6 +138,8 @@ class ContractPDFService {
    * Generate contract HTML with all clauses
    */
   private generateContractHTML(data: ContractData): string {
+    const logoBase64 = getLogoBase64();
+
     const formatCurrency = (value: number) =>
       value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -280,6 +282,7 @@ class ContractPDFService {
       border-collapse: collapse;
       margin: 15px 0;
       font-size: 10pt;
+      page-break-inside: avoid;
     }
 
     th, td {
@@ -390,8 +393,7 @@ class ContractPDFService {
   <div class="page">
     <!-- Header -->
     <div class="header">
-      <div class="logo">AIC</div>
-      <div class="logo-sub">Applied Intelligence Clustering</div>
+      <img src="${logoBase64}" alt="AIC" style="height: 60px; margin-bottom: 10px;">
     </div>
 
     <h1>CONTRATO DE PRESTAÇÃO DE SERVIÇOS</h1>
@@ -473,8 +475,6 @@ class ContractPDFService {
         <td>Dias 26-30</td>
       </tr>
     </table>
-
-    <div class="page-break"></div>
 
     <!-- Cláusula 4 -->
     <h2>CLÁUSULA QUARTA - DO INVESTIMENTO</h2>
@@ -590,8 +590,6 @@ class ContractPDFService {
 
     <p><span class="clause-number">7.4.</span> Solicitações de opt-out serão atendidas imediatamente, e o prospecto não será mais contatado em nenhuma hipótese.</p>
 
-    <div class="page-break"></div>
-
     <!-- Cláusula 8 -->
     <h2>CLÁUSULA OITAVA - DOS RISCOS E MITIGAÇÕES</h2>
     <p><span class="clause-number">8.1.</span> A CONTRATANTE declara estar ciente dos seguintes riscos inerentes à atividade de prospecção ativa em redes sociais:</p>
@@ -667,8 +665,6 @@ class ContractPDFService {
       <li>Suporte técnico para ferramentas externas;</li>
       <li>Alterações de escopo sem aprovação prévia e ajuste de valores.</li>
     </ul>
-
-    <div class="page-break"></div>
 
     <!-- Cláusula 12 -->
     <h2>CLÁUSULA DÉCIMA SEGUNDA - DA PROTEÇÃO DE DADOS</h2>

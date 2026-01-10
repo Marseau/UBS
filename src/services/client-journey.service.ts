@@ -640,11 +640,27 @@ class ClientJourneyService {
 
   /**
    * Obter jornada pelo auth_user_id (usuario Supabase logado)
+   * Inclui dados da campanha vinculada
    */
   async getJourneyByUserId(userId: string): Promise<JourneyData | null> {
     const { data, error } = await supabaseAdmin
       .from('aic_client_journeys')
-      .select('*')
+      .select(`
+        *,
+        campaign:cluster_campaigns (
+          id,
+          campaign_name,
+          project_name,
+          nicho_principal,
+          service_description,
+          target_audience,
+          client_contact_name,
+          client_email,
+          client_document,
+          client_whatsapp_number,
+          client_address
+        )
+      `)
       .eq('auth_user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -652,6 +668,39 @@ class ClientJourneyService {
 
     if (error && error.code !== 'PGRST116') {
       console.error('[ClientJourney] Error fetching journey by user_id:', error);
+    }
+
+    return data as JourneyData | null;
+  }
+
+  /**
+   * Buscar jornada especifica por ID, verificando que pertence ao usuario
+   */
+  async getJourneyByIdAndUser(journeyId: string, userId: string): Promise<JourneyData | null> {
+    const { data, error } = await supabaseAdmin
+      .from('aic_client_journeys')
+      .select(`
+        *,
+        campaign:cluster_campaigns (
+          id,
+          campaign_name,
+          project_name,
+          nicho_principal,
+          service_description,
+          target_audience,
+          client_contact_name,
+          client_email,
+          client_document,
+          client_whatsapp_number,
+          client_address
+        )
+      `)
+      .eq('id', journeyId)
+      .eq('auth_user_id', userId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('[ClientJourney] Error fetching journey by id and user:', error);
     }
 
     return data as JourneyData | null;

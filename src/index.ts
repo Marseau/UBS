@@ -983,6 +983,16 @@ try {
   console.error("❌ Failed to load AIC Contracts routes:", error);
 }
 
+// E-Signature Webhook Routes - Callbacks from D4Sign, Clicksign, etc.
+try {
+  const esignatureWebhookRoutes = require('./routes/esignature-webhook.routes');
+  const router = 'default' in esignatureWebhookRoutes ? esignatureWebhookRoutes.default : esignatureWebhookRoutes;
+  app.use('/api/aic/esignature', router);
+  console.log('✅ E-Signature Webhook routes loaded - D4SIGN/CLICKSIGN INTEGRATION READY');
+} catch (error) {
+  console.error("❌ Failed to load E-Signature Webhook routes:", error);
+}
+
 // AIC Lead Deliveries Routes - Lead quente tracking e faturamento variavel
 try {
   const aicLeadDeliveriesRoutes = require('./routes/aic-lead-deliveries.routes');

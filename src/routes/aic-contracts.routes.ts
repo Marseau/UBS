@@ -122,6 +122,177 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/aic/contracts/sign-contract
+ * Simple internal contract signing (without D4Sign)
+ * For testing and cases where external e-signature is not needed
+ * IMPORTANTE: Esta rota deve ficar ANTES das rotas com /:id
+ */
+router.post('/sign-contract', async (req: Request, res: Response) => {
+  try {
+    const {
+      journey_id,
+      client_name,
+      client_document,
+      client_address,
+      client_email,
+      client_phone,
+      client_representative,
+      project_name,
+      campaign_whatsapp,
+      target_niche,
+      service_description,
+      target_audience,
+      contract_value,
+      lead_value,
+    } = req.body;
+
+    if (!journey_id) {
+      return res.status(400).json({ success: false, message: 'journey_id é obrigatório' });
+    }
+    if (!client_name || !client_email) {
+      return res.status(400).json({ success: false, message: 'Nome e email são obrigatórios' });
+    }
+
+    console.log(`[AIC Contracts] Simple signature for journey: ${journey_id}`);
+
+    // 1. Get journey
+    const { data: journey, error: journeyError } = await supabase
+      .from('aic_client_journeys')
+      .select('*')
+      .eq('id', journey_id)
+      .single();
+
+    if (journeyError || !journey) {
+      return res.status(404).json({ success: false, message: 'Jornada não encontrada' });
+    }
+
+    // 2. Generate contract PDF
+    const contractId = `AIC-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const signatureDate = new Date().toISOString();
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || '';
+    const userAgent = req.headers['user-agent'] || '';
+
+    const pdfResult = await contractPDFService.generateAndUpload({
+      client_name,
+      client_document: client_document || '',
+      client_address: client_address || '',
+      client_representative: client_representative || '',
+      contract_id: contractId,
+      contract_date: signatureDate,
+      contract_value: contract_value || journey.contract_value || 4000,
+      lead_value: lead_value || journey.lead_value || 10,
+      signature_name: client_name,
+      signature_ip: clientIp,
+      signature_date: signatureDate,
+      signature_user_agent: userAgent,
+    });
+
+    if (!pdfResult.buffer) {
+      return res.status(500).json({ success: false, message: 'Erro ao gerar PDF do contrato' });
+    }
+
+    // 3. Create or update campaign with contract data
+    let campaignId = journey.campaign_id;
+
+    const campaignData = {
+      campaign_name: project_name || `Campanha ${client_name}`,
+      project_name: project_name || `Campanha ${client_name}`,
+      nicho_principal: target_niche || 'A definir',
+      keywords: [],
+      service_description: service_description || 'A definir no briefing',
+      target_audience: target_audience || 'A definir no briefing',
+      client_contact_name: client_name,
+      client_email: client_email,
+      client_document: client_document || null,
+      client_whatsapp_number: campaign_whatsapp || client_phone || null,
+      client_address: client_address ? { full_address: client_address } : null,
+      onboarding_status: 'contract_signed',
+      terms_accepted_at: signatureDate,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (campaignId) {
+      // Update existing campaign
+      const { error: campaignError } = await supabaseAdmin
+        .from('cluster_campaigns')
+        .update(campaignData)
+        .eq('id', campaignId);
+
+      if (campaignError) {
+        console.error('[AIC Contracts] Error updating campaign:', campaignError);
+      }
+    } else {
+      // Create new campaign
+      const { data: newCampaign, error: campaignError } = await supabaseAdmin
+        .from('cluster_campaigns')
+        .insert({
+          ...campaignData,
+          cluster_status: 'pending',
+          pipeline_status: 'draft',
+          created_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+
+      if (campaignError) {
+        console.error('[AIC Contracts] Error creating campaign:', campaignError);
+      } else if (newCampaign) {
+        campaignId = newCampaign.id;
+        console.log(`[AIC Contracts] Created new campaign: ${campaignId}`);
+      }
+    }
+
+    // 4. Update journey with contract info (only tracking data)
+    const { error: updateError } = await supabaseAdmin
+      .from('aic_client_journeys')
+      .update({
+        current_step: 'contrato_assinado',
+        campaign_id: campaignId,
+        contract_pdf_url: pdfResult.url,
+        contract_value: contract_value || journey.contract_value || 4000,
+        lead_value: lead_value || journey.lead_value || 10,
+        client_document: client_document || journey.client_document,
+        client_phone: client_phone || journey.client_phone,
+        contrato_assinado_at: signatureDate,
+        next_action_message: 'Contrato assinado! Próximo: pagamento.',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', journey_id);
+
+    if (updateError) {
+      console.error('[AIC Contracts] Error updating journey:', updateError);
+      return res.status(500).json({ success: false, message: 'Erro ao atualizar jornada' });
+    }
+
+    // 5. Log access
+    await contractSecurityService.logAccess({
+      contract_id: contractId,
+      action: 'sign',
+      ip_address: clientIp,
+      user_agent: userAgent,
+      success: true,
+    });
+
+    console.log(`[AIC Contracts] Simple signature completed: ${contractId}`);
+    console.log(`[AIC Contracts] PDF URL: ${pdfResult.url}`);
+
+    return res.json({
+      success: true,
+      contract_id: contractId,
+      pdf_url: pdfResult.url,
+      signed_at: signatureDate,
+    });
+
+  } catch (error) {
+    console.error('[AIC Contracts] Simple signature error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno ao processar assinatura',
+    });
+  }
+});
+
+/**
  * GET /api/aic/contracts/:id
  * Busca um contrato específico
  */
@@ -753,6 +924,186 @@ router.post('/:deliveryId/send-link', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao enviar link do contrato'
+    });
+  }
+});
+
+/**
+ * POST /api/aic/contracts/sign-external
+ * Initiate external e-signature flow (D4Sign, Clicksign)
+ * Creates document in provider and returns signing URL
+ */
+router.post('/sign-external', async (req: Request, res: Response) => {
+  try {
+    const {
+      journey_id,
+      // Dados do Contratante
+      client_name,
+      client_document,
+      client_address,
+      client_email,
+      client_phone,
+      client_representative,
+      // Dados da Campanha
+      project_name,
+      campaign_whatsapp,
+      target_niche,
+      service_description,
+      target_audience,
+      // Valores
+      contract_value,
+      lead_value,
+    } = req.body;
+
+    // Validações
+    if (!journey_id) {
+      return res.status(400).json({ success: false, message: 'journey_id é obrigatório' });
+    }
+    if (!client_name || !client_email) {
+      return res.status(400).json({ success: false, message: 'Nome e email do cliente são obrigatórios' });
+    }
+
+    console.log(`[AIC Contracts] Starting external signature for journey: ${journey_id}`);
+
+    // 1. Get journey data
+    const { data: journey, error: journeyError } = await supabase
+      .from('aic_client_journeys')
+      .select('*')
+      .eq('id', journey_id)
+      .single();
+
+    if (journeyError || !journey) {
+      return res.status(404).json({ success: false, message: 'Jornada não encontrada' });
+    }
+
+    // 2. Generate contract PDF
+    const contractId = `AIC-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const contractDate = new Date().toISOString();
+
+    const pdfResult = await contractPDFService.generateAndUpload({
+      client_name,
+      client_document: client_document || '',
+      client_address: client_address || '',
+      client_representative: client_representative || '',
+      contract_id: contractId,
+      contract_date: contractDate,
+      contract_value: contract_value || journey.contract_value || 4000,
+      lead_value: lead_value || journey.lead_value || 10,
+      signature_name: '', // Will be filled by e-signature provider
+      signature_ip: '',
+      signature_date: '',
+      signature_user_agent: '',
+    });
+
+    if (!pdfResult.buffer) {
+      return res.status(500).json({ success: false, message: 'Erro ao gerar PDF do contrato' });
+    }
+
+    // 3. Import e-signature service (dynamic import to avoid circular deps)
+    const { esignatureService } = await import('../services/esignature.service');
+
+    // 4. Create signing session
+    const pdfBase64 = pdfResult.buffer.toString('base64');
+    const filename = `Contrato-AIC-${client_name.replace(/\s+/g, '-')}.pdf`;
+
+    const signingResult = await esignatureService.createSigningSession(
+      pdfBase64,
+      filename,
+      {
+        email: client_email,
+        name: client_name,
+        cpf: client_document?.replace(/\D/g, ''),
+        phone: client_phone,
+        authMethod: 1, // Email
+      }
+    );
+
+    if (!signingResult.success) {
+      console.error('[AIC Contracts] E-signature error:', signingResult.error);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao criar sessão de assinatura: ' + signingResult.error,
+      });
+    }
+
+    // 5. Save contract record
+    const { data: contract, error: contractError } = await supabaseAdmin
+      .from('aic_contracts')
+      .insert({
+        contract_id: contractId,
+        journey_id,
+        campaign_id: journey.campaign_id,
+        // Dados do Contratante
+        client_name,
+        client_document,
+        client_address,
+        client_email,
+        client_phone,
+        client_representative,
+        // Dados da Campanha
+        project_name,
+        campaign_whatsapp,
+        target_niche,
+        service_description,
+        target_audience,
+        // Valores
+        contract_value: contract_value || journey.contract_value || 4000,
+        lead_value: lead_value || journey.lead_value || 10,
+        // E-signature data
+        esignature_provider: esignatureService.getProvider().providerName,
+        esignature_document_id: signingResult.documentId,
+        esignature_signer_id: signingResult.signerId,
+        esignature_status: 'waiting',
+        // PDF
+        pdf_url: pdfResult.url,
+        status: 'pending_signature',
+      })
+      .select()
+      .single();
+
+    if (contractError) {
+      console.error('[AIC Contracts] Error saving contract:', contractError);
+      return res.status(500).json({ success: false, message: 'Erro ao salvar contrato' });
+    }
+
+    // 6. Update journey
+    await supabaseAdmin
+      .from('aic_client_journeys')
+      .update({
+        contract_id: contract.id,
+        current_step: 'contrato_enviado',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', journey_id);
+
+    // 7. Log access
+    await contractSecurityService.logAccess({
+      contract_id: contract.id,
+      action: 'sign',
+      ip_address: (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress,
+      user_agent: req.headers['user-agent'],
+      success: true,
+      metadata: {
+        provider: esignatureService.getProvider().providerName,
+        document_id: signingResult.documentId,
+      },
+    });
+
+    console.log(`[AIC Contracts] External signature initiated: ${contractId}`);
+
+    return res.json({
+      success: true,
+      contract_id: contractId,
+      signing_url: signingResult.signingUrl,
+      document_id: signingResult.documentId,
+      provider: esignatureService.getProvider().providerName,
+    });
+
+  } catch (error) {
+    console.error('[AIC Contracts] External signature error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno ao processar assinatura',
     });
   }
 });

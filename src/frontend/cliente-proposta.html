@@ -20,7 +20,6 @@
       --aic-gray-light: #cbd5e1;
       --aic-border: #1e3a5f;
       --aic-yellow: #F59E0B;
-      --sidebar-width: 280px;
     }
 
     * { box-sizing: border-box; }
@@ -32,7 +31,7 @@
       color: var(--aic-white);
       line-height: 1.7;
     }
-    body.has-sidebar { margin-left: var(--sidebar-width); }
+    /* Sidebar margin is handled by aic-client-sidebar.js via body.aic-sidebar-open */
 
     .main-content {
       padding: 40px;
@@ -40,50 +39,65 @@
       margin: 0 auto;
     }
 
-    /* Status Banner */
-    .status-banner {
-      background: var(--aic-green-glow);
-      border: 1px solid rgba(14, 204, 151, 0.3);
-      border-radius: 12px;
-      padding: 16px 24px;
+    /* Quando sidebar está aberto, centralizar no espaço restante */
+    body.aic-sidebar-open .main-content {
+      margin-left: 40px;
+      margin-right: auto;
+    }
+
+    /* Status Checklist */
+    .status-checklist {
+      display: flex;
+      gap: 20px;
       margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+    .status-item {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 12px;
+      padding: 16px 24px;
+      flex: 1;
+      min-width: 200px;
     }
-    .status-banner.pending {
-      background: rgba(245, 158, 11, 0.1);
-      border-color: rgba(245, 158, 11, 0.3);
-    }
-    .status-banner.accepted {
+    .status-item.ok {
+      border-color: rgba(14, 204, 151, 0.4);
       background: var(--aic-green-glow);
-      border-color: rgba(14, 204, 151, 0.3);
     }
-    .status-icon {
-      width: 48px;
-      height: 48px;
+    .status-item.pending {
+      border-color: rgba(245, 158, 11, 0.4);
+      background: rgba(245, 158, 11, 0.1);
+    }
+    .status-check {
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
+      font-size: 16px;
       flex-shrink: 0;
     }
-    .status-banner.pending .status-icon {
-      background: rgba(245, 158, 11, 0.2);
+    .status-item.ok .status-check {
+      background: var(--aic-green);
+      color: var(--aic-navy);
     }
-    .status-banner.accepted .status-icon {
-      background: rgba(14, 204, 151, 0.2);
+    .status-item.pending .status-check {
+      background: var(--aic-yellow);
+      color: var(--aic-navy);
     }
-    .status-text h3 {
-      margin: 0 0 4px 0;
-      font-size: 16px;
-      color: var(--aic-white);
-    }
-    .status-text p {
-      margin: 0;
+    .status-label {
       font-size: 14px;
-      color: var(--aic-gray);
+      font-weight: 500;
+    }
+    .status-item.ok .status-label {
+      color: var(--aic-green);
+    }
+    .status-item.pending .status-label {
+      color: var(--aic-yellow);
     }
 
     /* Header */
@@ -257,6 +271,65 @@
       color: var(--aic-green);
     }
 
+    /* Lead Pricing Promo - igual landing page */
+    .lead-pricing {
+      margin: 24px 0;
+      padding: 20px;
+      background: var(--aic-navy);
+      border-radius: 12px;
+    }
+    .lead-price-normal {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .price-label {
+      font-size: 14px;
+      color: var(--aic-gray);
+    }
+    .price-crossed {
+      font-size: 18px;
+      color: var(--aic-gray);
+      text-decoration: line-through;
+      opacity: 0.7;
+    }
+    .lead-price-promo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .promo-tag {
+      background: linear-gradient(135deg, #ff6b35, #f7931e);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .price-promo {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--aic-green);
+    }
+    .price-per {
+      font-size: 14px;
+      color: var(--aic-gray);
+    }
+    .lead-price-note {
+      font-size: 12px;
+      color: var(--aic-gray);
+      text-align: center;
+      margin: 0;
+    }
+
     /* Steps */
     .steps {
       counter-reset: step;
@@ -392,14 +465,13 @@
 
     /* Responsive */
     @media (max-width: 768px) {
-      body.has-sidebar { margin-left: 0; }
       .main-content { padding: 20px; }
       .stats-grid { grid-template-columns: 1fr 1fr; }
       .benefits-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
-<body class="has-sidebar">
+<body>
   <div class="main-content" id="main-content">
     <div class="loading-state">
       <div class="loading-spinner"></div>
@@ -408,14 +480,222 @@
   </div>
 
   <!-- Client Sidebar -->
-  <script src="/components/aic-sidebar.js"></script>
+  <script src="/components/aic-client-sidebar.js"></script>
+
+  <!-- PDF Generator - pdfmake -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
 
   <script>
     // Configuration
     const SUPABASE_URL = 'https://qsdfyffuonywmtnlycri.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTk4NTk1MjcsImV4cCI6MjAzNTQzNTUyN30.xTo8k9KqlywTLqLNdNBbXRF2xvBlsYAVzfzNk0u0XWY';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExMjY0NzgsImV4cCI6MjA2NjcwMjQ3OH0.IDJdOApiNM0FJvRe5mp28L7U89GWeHpPoPlPreexwbg';
 
     let journeyData = null;
+
+    // Funcao para baixar PDF - documento estruturado com pdfmake
+    async function downloadPDF() {
+      if (!journeyData) {
+        alert('Dados da proposta nao carregados');
+        return;
+      }
+
+      const clientName = journeyData.client_name || 'Cliente';
+      const contractValue = journeyData.contract_value || 4000;
+
+      // Carregar logo como base64
+      let logoBase64 = null;
+      try {
+        const response = await fetch('/assets/AIC/Imagens%20Vetor%20/LOGO%20completo%20sem%20fundo%20Icone%20cheio%20e%20nome%20cheio.png');
+        const blob = await response.blob();
+        logoBase64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        console.warn('Nao foi possivel carregar o logo:', e);
+      }
+
+      // Definicao do documento - MESMO TEXTO DA PAGINA HTML
+      const docDefinition = {
+        pageSize: 'A4',
+        pageMargins: [40, 40, 40, 50],
+
+        footer: function(currentPage, pageCount) {
+          return {
+            columns: [
+              { text: 'AIC - Transformando dados em resultados', style: 'footerText', margin: [40, 0, 0, 0] },
+              { text: 'Pagina ' + currentPage + ' de ' + pageCount, alignment: 'right', style: 'footerText', margin: [0, 0, 40, 0] }
+            ]
+          };
+        },
+
+        content: [
+          // Logo e Titulo
+          logoBase64 ? { image: logoBase64, width: 120, alignment: 'center', margin: [0, 0, 0, 15] } : {},
+          { text: 'PROPOSTA COMERCIAL', style: 'title', margin: [0, 0, 0, 25] },
+
+          // Seção 1: O que é AIC
+          { text: 'O que é a AIC?', style: 'sectionTitle' },
+          { text: 'A AIC (Audience Intelligence Cluster) é uma plataforma inovadora desenvolvida para transformar dados públicos em agrupamentos inteligentes e acionáveis.', style: 'paragraph' },
+          { text: 'Utilizando algoritmos avançados de análise de dados e machine learning, a AIC identifica grupos de indivíduos com comportamentos e características semelhantes, permitindo que empresas obtenham insights estratégicos para suas ações de marketing e negócios.', style: 'paragraph' },
+          {
+            text: 'Diferencial: Enquanto o público-alvo representa um segmento amplo e a persona detalha um perfil semificcional, o cluster AIC agrupa indivíduos reais que compartilham padrões de comportamento e atributos.',
+            style: 'highlight',
+            margin: [0, 5, 0, 15]
+          },
+
+          // Seção 2: Benefícios
+          { text: 'Benefícios da AIC', style: 'sectionTitle' },
+          {
+            table: {
+              widths: ['*', '*'],
+              body: [
+                [
+                  { stack: [{ text: '01 - Personalização Eficaz', style: 'benefitTitle' }, { text: 'Campanhas personalizadas para cada grupo.', style: 'benefitText' }], margin: [0, 3, 0, 3] },
+                  { stack: [{ text: '02 - Decisão Baseada em Dados', style: 'benefitTitle' }, { text: 'Padrões e relações para decisão estratégica.', style: 'benefitText' }], margin: [0, 3, 0, 3] }
+                ],
+                [
+                  { stack: [{ text: '03 - Otimização de Recursos', style: 'benefitTitle' }, { text: 'Esforços para segmentos com maior potencial.', style: 'benefitText' }], margin: [0, 3, 0, 3] },
+                  { stack: [{ text: '04 - Escalabilidade Inteligente', style: 'benefitTitle' }, { text: 'Validação e expansão eficiente.', style: 'benefitText' }], margin: [0, 3, 0, 3] }
+                ]
+              ]
+            },
+            layout: 'lightHorizontalLines',
+            margin: [0, 0, 0, 15]
+          },
+
+          // Seção 3: Objetivo da Campanha
+          { text: 'Objetivo da Campanha', style: 'sectionTitle' },
+          { text: 'Campanha estruturada de prospecção ativa com até 2.000 potenciais clientes ao longo de 30 dias.', style: 'paragraph' },
+          {
+            columns: [
+              { stack: [{ text: '2.000', style: 'statNumber' }, { text: 'Contatos', style: 'statLabel' }], alignment: 'center' },
+              { stack: [{ text: '30', style: 'statNumber' }, { text: 'Dias', style: 'statLabel' }], alignment: 'center' },
+              { stack: [{ text: '1 a 5', style: 'statNumber' }, { text: 'Clusters', style: 'statLabel' }], alignment: 'center' }
+            ],
+            margin: [0, 8, 0, 10]
+          },
+          { text: 'Foco:', style: 'sectionSubtitle' },
+          {
+            ul: [
+              { text: [{ text: 'Gerar conversas reais', bold: true }, ' - não apenas números'] },
+              { text: [{ text: 'Identificar interesse genuíno', bold: true }, ' - sinais de intenção'] },
+              { text: [{ text: 'Transformar conversas em leads qualificados', bold: true }, ' - prontos para seu funil'] }
+            ],
+            style: 'list',
+            margin: [0, 0, 0, 10]
+          },
+
+          // Seção 4: Metodologia
+          { text: 'Metodologia AIC', style: 'sectionTitle' },
+          { text: 'Nossa metodologia é estruturada em 6 etapas para garantir resultados consistentes:', style: 'paragraph' },
+          {
+            ol: [
+              { text: [{ text: 'Diagnóstico Estruturado: ', bold: true, color: '#0ECC97' }, 'Entendemos seu negócio, produto, problema que resolve, dores do cliente ideal e posicionamento.'] },
+              { text: [{ text: 'Seleção dos 2.000 Perfis: ', bold: true, color: '#0ECC97' }, 'Analisamos comportamento, sinais de intenção e perfis ativos para filtrar prospects qualificados.'] },
+              { text: [{ text: 'Avaliação da Landing Page: ', bold: true, color: '#0ECC97' }, 'Revisamos sua landing page com foco em clareza, narrativa e consistência com a campanha.'] },
+              { text: [{ text: 'Coleta de Materiais: ', bold: true, color: '#0ECC97' }, 'Solicitamos fotos, vídeos, depoimentos e referências como insumo para a linha editorial.'] },
+              { text: [{ text: 'Criação da Linha Editorial: ', bold: true, color: '#0ECC97' }, 'Desenvolvemos conteúdo estratégico alinhado ao cluster, com DMs personalizados.'] },
+              { text: [{ text: 'Acompanhamento Contínuo: ', bold: true, color: '#0ECC97' }, 'Análise de comportamento, ajustes de estratégia e métricas em tempo real.'] }
+            ],
+            style: 'list',
+            margin: [0, 0, 0, 15]
+          },
+
+          // Seção 5: Expectativa de Resultados
+          { text: 'Expectativa de Resultados', style: 'sectionTitle' },
+          {
+            columns: [
+              { stack: [{ text: '2.000', style: 'statNumber' }, { text: 'Contatos enviados', style: 'statLabel' }], alignment: 'center' },
+              { stack: [{ text: '300-500', style: 'statNumber' }, { text: 'Respostas', style: 'statLabel' }], alignment: 'center' },
+              { stack: [{ text: '120-200', style: 'statNumber' }, { text: 'Leads qualificados', style: 'statLabel' }], alignment: 'center' }
+            ],
+            margin: [0, 8, 0, 10]
+          },
+          {
+            text: 'Importante: Projeções baseadas em histórico, não garantias. Resultados variam conforme nicho e oferta.',
+            style: 'note',
+            margin: [0, 0, 0, 15]
+          },
+
+          // Seção 6: Investimento
+          { text: 'Investimento', style: 'sectionTitle' },
+          {
+            table: {
+              widths: ['*'],
+              body: [
+                [{ text: 'CAMPANHA COMPLETA', style: 'pricingHeader', fillColor: '#0ECC97', color: 'white', alignment: 'center' }],
+                [{ text: 'R$ ' + contractValue.toLocaleString('pt-BR') + ',00', style: 'pricingValue', alignment: 'center', margin: [0, 10, 0, 10] }],
+                [{
+                  stack: [
+                    { text: 'Valor por lead: De R$ 55,00 por R$ 10,00 (1ª CAMPANHA)', style: 'pricingDetail', alignment: 'center' },
+                    { text: '* Promoção válida até 28/02/2026', style: 'promoNote', alignment: 'center', margin: [0, 3, 0, 0] }
+                  ],
+                  margin: [0, 0, 0, 8]
+                }],
+                [{ text: 'Pagamento: 50% no início + 50% após 15 dias', style: 'pricingBonus', alignment: 'center', fillColor: '#f0f9f6' }]
+              ]
+            },
+            margin: [0, 0, 0, 15]
+          },
+
+          { text: 'O que está incluso:', style: 'sectionSubtitle' },
+          {
+            ul: [
+              'Diagnóstico completo e definição de cluster',
+              'Seleção e validação de até 2.000 perfis',
+              'Avaliação da landing page',
+              'Linha editorial e scripts personalizados',
+              'Execução por 30 dias + relatórios',
+              'Entrega de leads qualificados'
+            ],
+            style: 'list',
+            margin: [0, 0, 0, 12]
+          },
+
+          { text: 'Lead qualificado = Resposta com intenção + contato válido ou agendamento. Exclui spam e curiosidade sem fit.', style: 'note', margin: [0, 0, 0, 15] },
+
+          // Próximos passos
+          { text: 'Próximos Passos', style: 'sectionTitle' },
+          {
+            ol: [
+              'Aceite desta proposta',
+              'Assinatura do contrato',
+              'Pagamento (50%)',
+              'Briefing',
+              'Inicio da campanha'
+            ],
+            style: 'list'
+          }
+        ],
+
+        styles: {
+          footerText: { fontSize: 8, color: '#999' },
+          title: { fontSize: 22, bold: true, color: '#0ECC97', alignment: 'center' },
+          sectionTitle: { fontSize: 14, bold: true, color: '#0ECC97', margin: [0, 12, 0, 6] },
+          sectionSubtitle: { fontSize: 11, bold: true, color: '#333', margin: [0, 8, 0, 4] },
+          paragraph: { fontSize: 10, color: '#333', lineHeight: 1.4, margin: [0, 0, 0, 6] },
+          highlight: { fontSize: 10, color: '#333', fillColor: '#f0f9f6', margin: [8, 8, 8, 8], lineHeight: 1.3 },
+          note: { fontSize: 9, color: '#666', italics: true },
+          list: { fontSize: 10, color: '#333', lineHeight: 1.4 },
+          benefitTitle: { fontSize: 10, bold: true, color: '#0ECC97' },
+          benefitText: { fontSize: 9, color: '#444' },
+          methodItem: { fontSize: 10, color: '#333', margin: [0, 2, 0, 2] },
+          statNumber: { fontSize: 20, bold: true, color: '#0ECC97' },
+          statLabel: { fontSize: 9, color: '#666' },
+          pricingHeader: { fontSize: 11, bold: true },
+          pricingValue: { fontSize: 26, bold: true, color: '#0ECC97' },
+          pricingDetail: { fontSize: 10, color: '#333' },
+          promoNote: { fontSize: 8, color: '#666' },
+          pricingBonus: { fontSize: 10, color: '#0ECC97' }
+        }
+      };
+
+      const fileName = 'Proposta-AIC-' + clientName.replace(/\s+/g, '-') + '.pdf';
+      pdfMake.createPdf(docDefinition).download(fileName);
+    }
 
     async function init() {
       try {
@@ -441,9 +721,9 @@
         }
 
         // Cliente normal - verificar token
-        const token = localStorage.getItem('aic_client_token');
+        const token = localStorage.getItem('aic_access_token') || localStorage.getItem('aic_client_token');
         if (!token) {
-          window.location.href = '/aic/login?redirect=/cliente';
+          window.location.href = '/cliente/login';
           return;
         }
 
@@ -454,14 +734,20 @@
 
         if (!response.ok) {
           if (response.status === 401) {
+            localStorage.removeItem('aic_access_token');
             localStorage.removeItem('aic_client_token');
-            window.location.href = '/aic/login?redirect=/cliente';
+            window.location.href = '/cliente/login';
             return;
           }
           throw new Error('Erro ao carregar dados');
         }
 
-        journeyData = await response.json();
+        const result = await response.json();
+        if (result.success && result.journey) {
+          journeyData = result.journey;
+        } else {
+          throw new Error('Jornada nao encontrada');
+        }
         renderPage();
 
       } catch (error) {
@@ -486,12 +772,15 @@
       const clientName = journeyData.client_name || 'Cliente';
 
       document.getElementById('main-content').innerHTML = `
-        <!-- Status Banner -->
-        <div class="status-banner ${isAccepted ? 'accepted' : 'pending'}">
-          <div class="status-icon">${isAccepted ? '&#10003;' : '&#128196;'}</div>
-          <div class="status-text">
-            <h3>${isAccepted ? 'Proposta Aceita' : 'Proposta Pendente'}</h3>
-            <p>${isAccepted ? 'Voce ja aceitou esta proposta. Prossiga para o contrato.' : 'Revise os detalhes abaixo e aceite para continuar.'}</p>
+        <!-- Status Checklist -->
+        <div class="status-checklist">
+          <div class="status-item ok">
+            <div class="status-check">&#10003;</div>
+            <span class="status-label">OK da AIC</span>
+          </div>
+          <div class="status-item ${isAccepted ? 'ok' : 'pending'}">
+            <div class="status-check">${isAccepted ? '&#10003;' : '&#8226;'}</div>
+            <span class="status-label">${isAccepted ? 'OK do Cliente' : 'Aguardando Cliente'}</span>
           </div>
         </div>
 
@@ -499,46 +788,45 @@
         <div class="page-header">
           <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="logo">
           <h1>Proposta Comercial</h1>
-          <p class="subtitle">Preparada especialmente para <span class="client-name">${clientName}</span></p>
         </div>
 
-        <!-- O que e AIC -->
+        <!-- O que é AIC -->
         <div class="card">
-          <h2>O que e a AIC?</h2>
+          <h2>O que é a AIC?</h2>
           <p>
-            A <strong style="color: var(--aic-green);">AIC (Audience Intelligence Cluster)</strong> e uma plataforma inovadora desenvolvida para transformar dados publicos em agrupamentos inteligentes e acionaveis.
+            A <strong style="color: var(--aic-green);">AIC (Audience Intelligence Cluster)</strong> é uma plataforma inovadora desenvolvida para transformar dados públicos em agrupamentos inteligentes e acionáveis.
           </p>
           <p>
-            Utilizando algoritmos avancados de analise de dados e machine learning, a AIC identifica grupos de individuos com comportamentos e caracteristicas semelhantes, permitindo que empresas obtenham insights estrategicos para suas acoes de marketing e negocios.
+            Utilizando algoritmos avançados de análise de dados e machine learning, a AIC identifica grupos de indivíduos com comportamentos e características semelhantes, permitindo que empresas obtenham insights estratégicos para suas ações de marketing e negócios.
           </p>
           <div class="highlight-box">
-            <p><strong>Diferencial:</strong> Enquanto o publico-alvo representa um segmento amplo e a persona detalha um perfil semificcional, o <strong>cluster AIC agrupa individuos reais</strong> que compartilham padroes de comportamento e atributos.</p>
+            <p><strong>Diferencial:</strong> Enquanto o público-alvo representa um segmento amplo e a persona detalha um perfil semificcional, o <strong>cluster AIC agrupa indivíduos reais</strong> que compartilham padrões de comportamento e atributos.</p>
           </div>
         </div>
 
-        <!-- Beneficios -->
+        <!-- Benefícios -->
         <div class="card">
-          <h2>Beneficios da AIC</h2>
+          <h2>Benefícios da AIC</h2>
           <div class="benefits-grid">
             <div class="benefit">
               <div class="benefit-icon">01</div>
-              <h4>Personalizacao Eficaz</h4>
+              <h4>Personalização Eficaz</h4>
               <p>Campanhas e mensagens altamente personalizadas para cada grupo identificado.</p>
             </div>
             <div class="benefit">
               <div class="benefit-icon">02</div>
-              <h4>Decisao Baseada em Dados</h4>
-              <p>Identificacao de padroes e relacoes para tomada de decisao estrategica.</p>
+              <h4>Decisão Baseada em Dados</h4>
+              <p>Identificação de padrões e relações para tomada de decisão estratégica.</p>
             </div>
             <div class="benefit">
               <div class="benefit-icon">03</div>
-              <h4>Otimizacao de Recursos</h4>
-              <p>Esforcos direcionados para segmentos com maior potencial de conversao.</p>
+              <h4>Otimização de Recursos</h4>
+              <p>Esforços direcionados para segmentos com maior potencial de conversão.</p>
             </div>
             <div class="benefit">
               <div class="benefit-icon">04</div>
               <h4>Escalabilidade Inteligente</h4>
-              <p>Validacao de perfis no mercado e expansao eficiente das estrategias.</p>
+              <p>Validação de perfis no mercado e expansão eficiente das estratégias.</p>
             </div>
           </div>
         </div>
@@ -547,7 +835,7 @@
         <div class="card">
           <h2>Objetivo da Campanha</h2>
           <p>
-            Realizar uma campanha estruturada de prospeccao ativa, enviando mensagens personalizadas a ate <strong style="color: var(--aic-green);">2.000 potenciais clientes</strong> pertencentes ao seu segmento, ao longo de 30 dias.
+            Realizar uma campanha estruturada de prospecção ativa, enviando mensagens personalizadas a até <strong style="color: var(--aic-green);">2.000 potenciais clientes</strong> pertencentes ao seu segmento, ao longo de 30 dias.
           </p>
           <div class="stats-grid">
             <div class="stat-card">
@@ -559,14 +847,14 @@
               <div class="stat-label">Dias de campanha</div>
             </div>
             <div class="stat-card">
-              <div class="stat-number">1</div>
-              <div class="stat-label">Cluster focado</div>
+              <div class="stat-number">1 a 5</div>
+              <div class="stat-label">Clusters focados</div>
             </div>
           </div>
           <h3>Foco:</h3>
           <ul>
-            <li><strong>Gerar conversas reais</strong> - nao apenas numeros</li>
-            <li><strong>Identificar interesse genuino</strong> - sinais de intencao</li>
+            <li><strong>Gerar conversas reais</strong> - não apenas números</li>
+            <li><strong>Identificar interesse genuíno</strong> - sinais de intenção</li>
             <li><strong>Transformar conversas em leads qualificados</strong> - prontos para seu funil</li>
           </ul>
         </div>
@@ -574,31 +862,31 @@
         <!-- Metodologia -->
         <div class="card">
           <h2>Metodologia AIC</h2>
-          <p>Nossa metodologia e estruturada em 6 etapas para garantir resultados consistentes:</p>
+          <p>Nossa metodologia é estruturada em 6 etapas para garantir resultados consistentes:</p>
           <div class="steps">
             <div class="step">
-              <h4>Diagnostico Estruturado</h4>
-              <p>Entendemos seu negocio, produto, problema que resolve, dores do cliente ideal e posicionamento.</p>
+              <h4>Diagnóstico Estruturado</h4>
+              <p>Entendemos seu negócio, produto, problema que resolve, dores do cliente ideal e posicionamento.</p>
             </div>
             <div class="step">
-              <h4>Selecao dos 2.000 Perfis</h4>
-              <p>Analisamos comportamento, sinais de intencao e perfis ativos para filtrar prospects qualificados.</p>
+              <h4>Seleção dos 2.000 Perfis</h4>
+              <p>Analisamos comportamento, sinais de intenção e perfis ativos para filtrar prospects qualificados.</p>
             </div>
             <div class="step">
-              <h4>Avaliacao da Landing Page</h4>
-              <p>Revisamos sua landing page com foco em clareza, narrativa e consistencia com a campanha.</p>
+              <h4>Avaliação da Landing Page</h4>
+              <p>Revisamos sua landing page com foco em clareza, narrativa e consistência com a campanha.</p>
             </div>
             <div class="step">
               <h4>Coleta de Materiais</h4>
-              <p>Solicitamos fotos, videos, depoimentos e referencias como insumo para a linha editorial.</p>
+              <p>Solicitamos fotos, vídeos, depoimentos e referências como insumo para a linha editorial.</p>
             </div>
             <div class="step">
-              <h4>Criacao da Linha Editorial</h4>
-              <p>Desenvolvemos conteudo estrategico alinhado ao cluster, com DMs personalizados.</p>
+              <h4>Criação da Linha Editorial</h4>
+              <p>Desenvolvemos conteúdo estratégico alinhado ao cluster, com DMs personalizados.</p>
             </div>
             <div class="step">
-              <h4>Acompanhamento Continuo</h4>
-              <p>Analise de comportamento, ajustes de estrategia e metricas em tempo real.</p>
+              <h4>Acompanhamento Contínuo</h4>
+              <p>Análise de comportamento, ajustes de estratégia e métricas em tempo real.</p>
             </div>
           </div>
         </div>
@@ -622,7 +910,7 @@
             </div>
           </div>
           <div class="highlight-box">
-            <p><strong>Importante:</strong> Esses numeros sao projecoes realistas baseadas em historico, nao garantias. Os resultados variam conforme nicho, oferta e maturidade do mercado.</p>
+            <p><strong>Importante:</strong> Esses números são projeções realistas baseadas em histórico, não garantias. Os resultados variam conforme nicho, oferta e maturidade do mercado.</p>
           </div>
         </div>
 
@@ -631,23 +919,37 @@
           <h2>Investimento</h2>
           <div class="pricing-card">
             <div class="pricing-value">R$ ${contractValue.toLocaleString('pt-BR')}</div>
-            <div class="pricing-detail">+ R$ ${leadValue},00 por lead qualificado (pago ao final)</div>
-            <div class="pricing-bonus">Pagamento: 50% no inicio + 50% apos 15 dias</div>
+
+            <!-- Lead Pricing com Promo - igual landing page -->
+            <div class="lead-pricing">
+              <div class="lead-price-normal">
+                <span class="price-label">Valor por lead qualificado:</span>
+                <span class="price-crossed">R$ 55,00</span>
+              </div>
+              <div class="lead-price-promo">
+                <span class="promo-tag">1ª CAMPANHA</span>
+                <span class="price-promo">R$ 10,00</span>
+                <span class="price-per">por lead</span>
+              </div>
+              <p class="lead-price-note">* Preço promocional válido apenas para a primeira campanha (até 28/02/2026)</p>
+            </div>
+
+            <div class="pricing-bonus">Pagamento: 50% no início + 50% após 15 dias</div>
           </div>
-          <h3>O que esta incluso:</h3>
+          <h3>O que está incluso:</h3>
           <ul>
-            <li>Diagnostico completo do negocio e cluster</li>
-            <li>Selecao e validacao de ate 2.000 perfis</li>
-            <li>Avaliacao e sugestoes para landing page</li>
-            <li>Criacao de linha editorial completa</li>
-            <li>Execucao da campanha por 30 dias</li>
-            <li>Acompanhamento e relatorios</li>
+            <li>Diagnóstico completo do negócio e cluster</li>
+            <li>Seleção e validação de até 2.000 perfis</li>
+            <li>Avaliação e sugestões para landing page</li>
+            <li>Criação de linha editorial completa</li>
+            <li>Execução da campanha por 30 dias</li>
+            <li>Acompanhamento e relatórios</li>
             <li>Entrega de leads qualificados</li>
           </ul>
           <h3>Lead qualificado = </h3>
           <p>
-            Quem responde com intencao aderente + contato valido (email/telefone/WA) ou agenda conversa.
-            Exclui spam, concorrente ou curiosidade sem fit. Contestacao em ate 5 dias.
+            Quem responde com intenção aderente + contato válido (email/telefone/WA) ou agenda conversa.
+            Exclui spam, concorrente ou curiosidade sem fit. Contestação em até 5 dias.
           </p>
         </div>
 
@@ -655,23 +957,29 @@
         ${isAccepted ? `
           <div class="accepted-section">
             <h3>Proposta Aceita!</h3>
-            <p>Voce aceitou esta proposta. O proximo passo e revisar e assinar o contrato.</p>
-            <a href="/cliente/contrato" class="cta-button">Ir para o Contrato</a>
+            <p>Você aceitou esta proposta. O próximo passo é revisar e assinar o contrato.</p>
+            <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+              <button onclick="downloadPDF()" class="cta-button secondary">Baixar PDF</button>
+              <a href="/cliente/contrato" class="cta-button">Ir para o Contrato</a>
+            </div>
           </div>
         ` : `
           <div class="cta-section">
-            <h3>Pronto para comecar?</h3>
-            <p>Ao aceitar a proposta, voce sera direcionado para revisar o contrato.</p>
-            <button id="accept-btn" class="cta-button" onclick="acceptProposal()">
-              Aceitar Proposta e Continuar
-            </button>
+            <h3>Pronto para começar?</h3>
+            <p>Ao aceitar a proposta, você será direcionado para revisar o contrato.</p>
+            <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+              <button onclick="downloadPDF()" class="cta-button secondary" disabled title="Disponível após aceitar a proposta">Baixar PDF</button>
+              <button id="accept-btn" class="cta-button" onclick="acceptProposal()">
+                Aceitar Proposta e Continuar
+              </button>
+            </div>
           </div>
         `}
 
         <!-- Disclaimer -->
         <div class="disclaimer">
           <p>Documento confidencial AIC. &copy; 2025 Audience Intelligence Cluster.</p>
-          <p>Faixas de resultado sao tipicas e variam por nicho/copy/maturidade.</p>
+          <p>Faixas de resultado são típicas e variam por nicho/copy/maturidade.</p>
         </div>
       `;
     }
@@ -682,7 +990,7 @@
       btn.textContent = 'Processando...';
 
       try {
-        const token = localStorage.getItem('aic_client_token');
+        const token = localStorage.getItem('aic_access_token') || localStorage.getItem('aic_client_token');
         const response = await fetch('/api/aic/journey/advance', {
           method: 'POST',
           headers: {
