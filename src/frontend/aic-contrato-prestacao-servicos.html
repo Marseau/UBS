@@ -62,6 +62,10 @@
       position: relative;
       z-index: 1;
     }
+    /* Hide logo and nav bar when sidebar is visible */
+    body.aic-sidebar-open .logo { display: none; }
+    body.aic-sidebar-open .contract-nav { display: none; }
+    body.aic-sidebar-open .header { padding-top: 20px; }
     .header h1 {
       font-size: 26px;
       font-weight: 700;
@@ -521,6 +525,7 @@
       <span>Contrato de Prestacao de Servicos</span>
     </div>
     <div class="contract-nav-actions">
+      <button class="nav-btn nav-btn-secondary" onclick="downloadPDF()">Baixar PDF</button>
       <button class="nav-btn nav-btn-secondary" onclick="window.print()">Imprimir</button>
       <button class="nav-btn nav-btn-primary" onclick="scrollToSignature()">Ir para Assinatura</button>
     </div>
@@ -947,6 +952,16 @@
       </form>
     </div>
 
+    <!-- Admin Actions (visible when sidebar is open) -->
+    <div class="admin-actions" id="admin-actions" style="display: none;">
+      <button class="cta-button" onclick="downloadPDF()" style="margin-right: 12px;">
+        Baixar PDF
+      </button>
+      <button class="secondary-button" onclick="window.print()">
+        Imprimir
+      </button>
+    </div>
+
     <!-- Footer -->
     <div class="footer">
       <p>Documento confidencial AIC. © 2025 Applied Intelligence Clustering.</p>
@@ -1004,8 +1019,13 @@
       const token = urlParams.get('token');
 
       if (!token) {
-        showStatus('contract-status', 'Link invalido. Acesse atraves do link enviado por email ou WhatsApp.', 'error');
-        document.getElementById('btn-sign').disabled = true;
+        // Modo admin - visualizacao do modelo
+        document.getElementById('campaign-pill').textContent = 'Modelo de Contrato';
+        document.getElementById('signature-section').style.display = 'none';
+        document.getElementById('admin-actions').style.display = 'flex';
+        document.getElementById('admin-actions').style.justifyContent = 'center';
+        document.getElementById('admin-actions').style.gap = '12px';
+        document.getElementById('admin-actions').style.marginTop = '30px';
         return;
       }
 
@@ -1215,5 +1235,81 @@
       });
     });
   </script>
+
+  <!-- PDF Generator - pdfmake -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+
+  <script>
+    function downloadPDF() {
+      const docDefinition = {
+        pageSize: 'A4',
+        pageMargins: [40, 60, 40, 60],
+        content: [
+          { text: 'CONTRATO DE PRESTACAO DE SERVICOS', style: 'header', alignment: 'center' },
+          { text: 'AIC - Applied Intelligence Clustering', style: 'subheader', alignment: 'center' },
+          { text: 'Campanha de Prospeccao Ativa e Qualificacao de Leads', style: 'subheader', alignment: 'center', margin: [0, 0, 0, 30] },
+
+          { text: 'PREAMBULO', style: 'sectionTitle' },
+          { text: 'Pelo presente instrumento particular de contrato de prestacao de servicos, e na melhor forma de direito, as partes abaixo qualificadas:', margin: [0, 0, 0, 10] },
+          { text: 'CONTRATADA: AIC - APPLIED INTELLIGENCE CLUSTERING, plataforma de prospeccao inteligente e qualificacao de leads, com sede em Sao Paulo/SP.', margin: [0, 0, 0, 5] },
+          { text: 'CONTRATANTE: Conforme dados preenchidos no formulario de assinatura eletronica.', margin: [0, 0, 0, 15] },
+
+          { text: 'CLAUSULA PRIMEIRA - DO OBJETO', style: 'sectionTitle' },
+          { text: '1.1. O presente contrato tem por objeto a prestacao de servicos de prospeccao ativa, segmentacao inteligente e qualificacao de leads pela CONTRATADA em favor da CONTRATANTE, utilizando a metodologia proprietaria AIC.', margin: [0, 0, 0, 5] },
+          { text: '1.2. A campanha objeto deste contrato tera como objetivo a prospeccao de ate 2.000 (dois mil) perfis publicos pertencentes ao mesmo segmento de mercado ("cluster"), ao longo de um periodo de 30 (trinta) dias corridos.', margin: [0, 0, 0, 15] },
+
+          { text: 'CLAUSULA SEGUNDA - DA METODOLOGIA', style: 'sectionTitle' },
+          { text: 'A CONTRATADA executara os servicos seguindo a metodologia AIC:', margin: [0, 0, 0, 5] },
+          {
+            ol: [
+              'Diagnostico Estruturado',
+              'Selecao e Validacao de Perfis (AIC Filtering)',
+              'Avaliacao da Landing Page',
+              'Coleta de Materiais de Apoio',
+              'Criacao da Linha Editorial',
+              'Execucao da Campanha',
+              'Qualificacao e Agendamento'
+            ],
+            margin: [0, 0, 0, 15]
+          },
+
+          { text: 'CLAUSULA TERCEIRA - DOS PRAZOS', style: 'sectionTitle' },
+          { text: 'O presente contrato vigorara pelo prazo de 30 (trinta) dias corridos, contados a partir da data de assinatura.', margin: [0, 0, 0, 15] },
+
+          { text: 'CLAUSULA QUARTA - DO INVESTIMENTO', style: 'sectionTitle' },
+          { text: 'Valor Base da Campanha: R$ 4.000,00 (50% no inicio + 50% apos 15 dias)', margin: [0, 0, 0, 5] },
+          { text: 'Valor por Lead Qualificado: R$ 10,00 por lead (pago ao final)', margin: [0, 0, 0, 15] },
+
+          { text: 'CLAUSULA QUINTA - DA DEFINICAO DE LEAD QUALIFICADO', style: 'sectionTitle' },
+          { text: 'Considera-se "Lead Qualificado" o prospecto que: (I) Responder demonstrando interesse genuino; (II) Fornecer contato valido ou agendar conversa; (III) Apresentar fit com a oferta.', margin: [0, 0, 0, 15] },
+
+          { text: 'CLAUSULA SEXTA - DAS EXPECTATIVAS DE RESULTADOS', style: 'sectionTitle' },
+          { text: 'Projecoes baseadas em historico (nao garantias): Ate 2.000 contatos enviados, 200-500 respostas iniciais, 25-120 leads qualificados Jean variam conforme nicho e oferta.', margin: [0, 0, 0, 15] },
+
+          { text: 'CLAUSULA SETIMA - DOS LIMITES OPERACIONAIS', style: 'sectionTitle' },
+          { text: 'Instagram: 80 mensagens/dia | WhatsApp: 120 mensagens/dia | Horario: Seg-Sex, 9h-18h', margin: [0, 0, 0, 15] },
+
+          { text: 'DEMAIS CLAUSULAS', style: 'sectionTitle' },
+          { text: 'O contrato completo inclui clausulas sobre: Riscos e Mitigacoes (8a), Obrigacoes das Partes (9a e 10a), Escopo (11a), Protecao de Dados/LGPD (12a), Confidencialidade (13a), Rescisao (14a), Disposicoes Gerais (15a) e Foro (16a - Comarca de Sao Paulo/SP).', margin: [0, 0, 0, 20] },
+
+          { text: 'Documento confidencial AIC. (c) 2025 Applied Intelligence Clustering.', style: 'footer', alignment: 'center' },
+          { text: 'Para assinatura eletronica, acesse o link enviado por email.', style: 'footer', alignment: 'center' }
+        ],
+        styles: {
+          header: { fontSize: 18, bold: true, color: '#0ECC97' },
+          subheader: { fontSize: 11, color: '#666666' },
+          sectionTitle: { fontSize: 12, bold: true, color: '#0C1B33', margin: [0, 15, 0, 8] },
+          footer: { fontSize: 9, color: '#999999', margin: [0, 5, 0, 0] }
+        },
+        defaultStyle: { fontSize: 10, lineHeight: 1.4 }
+      };
+
+      pdfMake.createPdf(docDefinition).download('AIC-Contrato-Prestacao-Servicos.pdf');
+    }
+  </script>
+
+  <!-- AIC Sidebar Navigation -->
+  <script src="/components/aic-sidebar.js"></script>
 </body>
 </html>

@@ -196,7 +196,6 @@
   function isActive(page) {
     const routeMap = {
       'campanhas': ['campanhas', 'campaigns-dashboard'],
-      'visao-geral': ['visao-geral', 'dashboard-campaign'],
       'analytics': ['analytics', 'dashboard-prova'],
       'briefing': ['briefing', 'campaign-briefing'],
       'onboarding': ['onboarding', 'campaign-onboarding'],
@@ -219,9 +218,6 @@
     return currentPath.includes(page);
   }
 
-  function isDashboardSection() {
-    return isActive('campanhas') || isActive('visao-geral') || isActive('analytics');
-  }
 
   // Info da campanha atual
   let currentCampaign = null;
@@ -312,17 +308,7 @@
         // Admin - Secao Principal
         navContent += '<div class="aic-sidebar-section">';
         navContent += '<div class="aic-sidebar-section-title">Principal</div>';
-
-        // Dashboard toggle
-        navContent += '<div class="aic-sidebar-submenu-toggle' + (isDashboardSection() ? ' active open' : '') + '" id="dashboard-toggle">';
-        navContent += '<div class="aic-sidebar-submenu-toggle-left">Dashboard</div>';
-        navContent += '<span class="aic-sidebar-submenu-arrow">&#9654;</span>';
-        navContent += '</div>';
-
-        navContent += '<div class="aic-sidebar-submenu' + (isDashboardSection() ? ' open' : '') + '" id="dashboard-submenu">';
         navContent += '<a href="/aic/campanhas" class="aic-sidebar-link' + (isActive('campanhas') ? ' active' : '') + '">Todas Campanhas</a>';
-        navContent += '<a href="/aic/visao-geral" class="aic-sidebar-link' + (isActive('visao-geral') && !isActive('campanhas') ? ' active' : '') + '">Visao Geral</a>';
-        navContent += '</div>';
         navContent += '</div>';
 
         // Inteligencia
@@ -339,17 +325,12 @@
         navContent += '<a href="/aic/reunioes-fechamento" class="aic-sidebar-link' + (isActive('reunioes-fechamento') ? ' active' : '') + '">Reunioes Fechamento</a>';
         navContent += '</div>';
 
-        // Documentacao
+        // Documentos
         navContent += '<div class="aic-sidebar-section">';
-        navContent += '<div class="aic-sidebar-section-title">Documentacao</div>';
+        navContent += '<div class="aic-sidebar-section-title">Documentos</div>';
+        navContent += '<a href="/aic/proposta-comercial" class="aic-sidebar-link' + (currentPath.includes('proposta-comercial') ? ' active' : '') + '">Proposta</a>';
+        navContent += '<a href="/aic/contrato" class="aic-sidebar-link' + (currentPath.includes('contrato') && !currentPath.includes('cliente') ? ' active' : '') + '">Contrato</a>';
         navContent += '<a href="/aic/docs" class="aic-sidebar-link' + (isActive('docs') ? ' active' : '') + '">Central de Docs</a>';
-        navContent += '<a href="/aic/proposta-comercial" class="aic-sidebar-link' + (currentPath.includes('proposta-comercial') ? ' active' : '') + '">Proposta Comercial</a>';
-        navContent += '</div>';
-
-        // Portal do Cliente (para admin navegar)
-        navContent += '<div class="aic-sidebar-section">';
-        navContent += '<div class="aic-sidebar-section-title">Portal do Cliente</div>';
-        navContent += '<a href="/cliente" class="aic-sidebar-link' + (currentPath === '/cliente' || currentPath === '/cliente/' ? ' active' : '') + '">Gestao de Campanhas</a>';
         navContent += '</div>';
 
       } else {
@@ -371,11 +352,7 @@
 
     // Footer
     navContent += '<div class="aic-sidebar-footer">';
-    if (isAdmin) {
-      navContent += '<a href="/aic" class="aic-sidebar-footer-link">← Voltar para Landing</a>';
-    } else {
-      navContent += '<a href="#" class="aic-sidebar-footer-link" onclick="window.aicLogout(); return false;">← Sair</a>';
-    }
+    navContent += '<a href="#" class="aic-sidebar-footer-link" onclick="window.aicLogout(); return false;">Sair</a>';
     navContent += '</div>';
 
     nav.innerHTML += navContent;
@@ -398,14 +375,6 @@
       document.getElementById('toggle-icon').innerHTML = nav.classList.contains('collapsed') ? '&#9776;' : '&#10005;';
     });
 
-    var dashboardToggle = document.getElementById('dashboard-toggle');
-    var dashboardSubmenu = document.getElementById('dashboard-submenu');
-    if (dashboardToggle && dashboardSubmenu) {
-      dashboardToggle.addEventListener('click', function() {
-        dashboardToggle.classList.toggle('open');
-        dashboardSubmenu.classList.toggle('open');
-      });
-    }
 
     if (isInCampaign) {
       loadCampaignInfo();

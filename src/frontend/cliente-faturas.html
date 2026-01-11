@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Faturas | Portal AIC</title>
+  <link rel="icon" type="image/png" href="/assets/AIC/Imagens%20Vetor%20/AIC%20Icone%20Cheio.png">
+  <meta name="theme-color" content="#0C1B33">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-green-glow: rgba(14, 204, 151, 0.15);
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-navy-lighter: #1a3055;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-gray-light: #cbd5e1;
+      --aic-border: #1e3a5f;
+      --aic-blue: #3b82f6;
+      --aic-purple: #8b5cf6;
+      --aic-yellow: #f59e0b;
+      --aic-red: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      min-height: 100vh;
+    }
+
+    .main-content {
+      padding: 32px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .page-header {
+      margin-bottom: 32px;
+    }
+
+    .page-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .page-header p {
+      color: var(--aic-gray);
+      font-size: 15px;
+    }
+
+    /* Summary Cards */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .summary-card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .summary-card-label {
+      font-size: 13px;
+      color: var(--aic-gray);
+      margin-bottom: 8px;
+    }
+
+    .summary-card-value {
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .summary-card-value.green { color: var(--aic-green); }
+    .summary-card-value.yellow { color: var(--aic-yellow); }
+    .summary-card-value.red { color: var(--aic-red); }
+
+    /* Section */
+    .section {
+      margin-bottom: 32px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .section-header h2 {
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Table */
+    .table-container {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--aic-border);
+    }
+
+    th {
+      background: var(--aic-navy);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--aic-gray);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(14, 204, 151, 0.03);
+    }
+
+    td {
+      font-size: 14px;
+    }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status-badge.paid {
+      background: rgba(14, 204, 151, 0.15);
+      color: var(--aic-green);
+    }
+
+    .status-badge.pending {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--aic-yellow);
+    }
+
+    .status-badge.overdue {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--aic-red);
+    }
+
+    .status-badge.draft {
+      background: rgba(148, 163, 184, 0.15);
+      color: var(--aic-gray);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .empty-icon {
+      width: 64px;
+      height: 64px;
+      background: var(--aic-navy);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      color: var(--aic-gray);
+    }
+
+    .empty-state h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .empty-state p {
+      color: var(--aic-gray);
+      font-size: 14px;
+    }
+
+    /* Loading */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px;
+      color: var(--aic-gray);
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--aic-navy-lighter);
+      border-top-color: var(--aic-green);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Mobile Header */
+    .mobile-header {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: var(--aic-navy-light);
+      border-bottom: 1px solid var(--aic-border);
+      z-index: 999;
+      padding: 0 16px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .mobile-header-logo { height: 28px; }
+
+    .mobile-menu-btn {
+      width: 40px;
+      height: 40px;
+      background: transparent;
+      border: none;
+      color: var(--aic-white);
+      font-size: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+    }
+
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 998;
+    }
+
+    .sidebar-overlay.active { display: block; }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      body { margin-left: 0 !important; }
+      .main-content { padding: 24px 20px; }
+      .mobile-header { display: flex; }
+      .main-content { padding-top: 80px; }
+    }
+
+    @media (max-width: 768px) {
+      .main-content {
+        padding: 16px;
+        padding-top: 70px;
+      }
+
+      .page-header h1 { font-size: 22px; }
+
+      .summary-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+
+      .table-container {
+        overflow-x: auto;
+      }
+
+      table {
+        min-width: 600px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Mobile Header -->
+  <header class="mobile-header">
+    <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="mobile-header-logo">
+    <button class="mobile-menu-btn" onclick="toggleMobileSidebar()">&#9776;</button>
+  </header>
+
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileSidebar()"></div>
+
+  <div class="main-content">
+    <!-- Loading -->
+    <div class="loading" id="loadingState">
+      <div class="spinner"></div>
+      <p>Carregando faturas...</p>
+    </div>
+
+    <!-- Content -->
+    <div id="contentArea" style="display: none;">
+      <!-- Page Header -->
+      <div class="page-header">
+        <h1>Faturas</h1>
+        <p>Acompanhe seus pagamentos e faturas</p>
+      </div>
+
+      <!-- Summary -->
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="summary-card-label">Total Pago</div>
+          <div class="summary-card-value green" id="totalPaid">R$ 0</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-label">Pendente</div>
+          <div class="summary-card-value yellow" id="totalPending">R$ 0</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-label">Faturas</div>
+          <div class="summary-card-value" id="totalInvoices">0</div>
+        </div>
+      </div>
+
+      <!-- Contract Payments -->
+      <div class="section">
+        <div class="section-header">
+          <h2>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--aic-green)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Pagamentos do Contrato
+          </h2>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Parcela</th>
+                <th>Valor</th>
+                <th>Vencimento</th>
+                <th>Status</th>
+                <th>Pago em</th>
+              </tr>
+            </thead>
+            <tbody id="paymentsTableBody">
+              <tr>
+                <td colspan="5">
+                  <div class="empty-state">
+                    <div class="empty-icon">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+                    </div>
+                    <h3>Nenhum pagamento</h3>
+                    <p>Os pagamentos aparecerao aqui apos a assinatura do contrato.</p>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Lead Deliveries -->
+      <div class="section">
+        <div class="section-header">
+          <h2>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--aic-green)" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Leads Entregues
+          </h2>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Lead</th>
+                <th>Data Entrega</th>
+                <th>Status</th>
+                <th>Valor</th>
+                <th>Reuniao</th>
+              </tr>
+            </thead>
+            <tbody id="invoicesTableBody">
+              <tr>
+                <td colspan="5">
+                  <div class="empty-state">
+                    <div class="empty-icon">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                    </div>
+                    <h3>Nenhum lead entregue</h3>
+                    <p>Os leads aparecerao aqui quando sua campanha estiver ativa.</p>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://qsdfyffuonywmtnlycri.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExMjY0NzgsImV4cCI6MjA2NjcwMjQ3OH0.IDJdOApiNM0FJvRe5mp28L7U89GWeHpPoPlPreexwbg';
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.supabaseClient = supabaseClient;
+
+    let journeyId = null;
+    let campaignId = null;
+    let journeyData = null;
+
+    async function init() {
+      const urlParams = new URLSearchParams(window.location.search);
+      campaignId = urlParams.get('campaign');
+
+      // Load journey to get IDs
+      await loadJourney();
+
+      if (!journeyId && !campaignId) {
+        showEmpty();
+        return;
+      }
+
+      await loadFinancialData();
+    }
+
+    async function loadJourney() {
+      try {
+        let token = localStorage.getItem('aic_access_token');
+        if (!token) {
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          token = session?.access_token;
+        }
+
+        if (!token) {
+          window.location.href = '/cliente/login?redirect=/cliente/faturas';
+          return;
+        }
+
+        const response = await fetch('/api/aic/journey/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.journey) {
+            journeyId = data.journey.id;
+            campaignId = campaignId || data.journey.campaign_id;
+            journeyData = data.journey; // Store full journey data
+          }
+        }
+      } catch (error) {
+        console.error('Error loading journey:', error);
+      }
+    }
+
+    async function loadFinancialData() {
+      try {
+        let totalPaid = 0;
+        let totalPending = 0;
+        let payments = [];
+        let leadDeliveries = [];
+
+        // 1. Build payment info from journey data
+        if (journeyData) {
+          const contractValue = journeyData.proposal_data?.contract_value || 0;
+          const entradaValue = contractValue * 0.5;
+          const finalValue = contractValue * 0.5;
+
+          // Entrada payment
+          if (contractValue > 0) {
+            const entradaPaid = !!journeyData.pagamento_confirmado_at;
+            payments.push({
+              payment_type: 'entrada',
+              installment_number: 1,
+              amount: entradaValue,
+              due_date: journeyData.contrato_assinado_at || journeyData.created_at,
+              status: entradaPaid ? 'paid' : 'pending',
+              paid_at: journeyData.pagamento_confirmado_at
+            });
+
+            if (entradaPaid) {
+              totalPaid += entradaValue;
+            } else {
+              totalPending += entradaValue;
+            }
+
+            // Final payment (after campaign)
+            const finalPaid = journeyData.current_step === 'campanha_concluida';
+            payments.push({
+              payment_type: 'final',
+              installment_number: 2,
+              amount: finalValue,
+              due_date: null, // TBD after campaign
+              status: finalPaid ? 'paid' : (journeyData.current_step === 'campanha_ativa' ? 'pending' : 'draft'),
+              paid_at: finalPaid ? journeyData.campanha_concluida_at : null
+            });
+
+            if (finalPaid) {
+              totalPaid += finalValue;
+            } else if (journeyData.current_step === 'campanha_ativa') {
+              totalPending += finalValue;
+            }
+          }
+        }
+
+        // 2. Load lead deliveries from aic_lead_deliveries
+        if (campaignId) {
+          const { data: deliveries, error } = await supabaseClient
+            .from('aic_lead_deliveries')
+            .select('*')
+            .eq('campaign_id', campaignId)
+            .order('delivered_at', { ascending: false });
+
+          if (deliveries && deliveries.length > 0) {
+            leadDeliveries = deliveries;
+
+            // Calculate lead costs
+            const leadValue = journeyData?.proposal_data?.lead_value || 10;
+            const totalLeadsCost = deliveries.length * leadValue;
+
+            // For now, leads are pending payment until invoiced
+            // We could check invoice_id but the invoice table is empty
+          }
+        }
+
+        // Update UI
+        document.getElementById('totalPaid').textContent = formatCurrency(totalPaid);
+        document.getElementById('totalPending').textContent = formatCurrency(totalPending);
+        document.getElementById('totalInvoices').textContent = payments.filter(p => p.status !== 'draft').length;
+
+        renderPayments(payments);
+        renderLeadDeliveries(leadDeliveries);
+
+        // Show content
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('contentArea').style.display = 'block';
+
+      } catch (error) {
+        console.error('Error loading financial data:', error);
+        showEmpty();
+      }
+    }
+
+    function renderPayments(payments) {
+      const tbody = document.getElementById('paymentsTableBody');
+
+      if (!payments || payments.length === 0) {
+        return; // Keep default empty state
+      }
+
+      tbody.innerHTML = payments.map(p => `
+        <tr>
+          <td>
+            <strong>${getPaymentTypeLabel(p.payment_type)}</strong>
+            ${p.installment_number > 1 ? ` - Parcela ${p.installment_number}` : ''}
+          </td>
+          <td><strong>${formatCurrency(p.amount)}</strong></td>
+          <td>${formatDate(p.due_date)}</td>
+          <td>${getStatusBadge(p.status)}</td>
+          <td>${p.paid_at ? formatDate(p.paid_at) : '-'}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderLeadDeliveries(deliveries) {
+      const tbody = document.getElementById('invoicesTableBody');
+
+      if (!deliveries || deliveries.length === 0) {
+        return; // Keep default empty state
+      }
+
+      const leadValue = journeyData?.proposal_data?.lead_value || 10;
+
+      tbody.innerHTML = deliveries.map(d => `
+        <tr>
+          <td>
+            <strong>${d.lead_name || 'Lead'}</strong>
+            <br><span style="color: var(--aic-gray); font-size: 12px;">${d.lead_instagram ? '@' + d.lead_instagram : d.lead_whatsapp || '-'}</span>
+          </td>
+          <td>${formatDate(d.delivered_at)}</td>
+          <td>${getDeliveryStatusBadge(d.status)}</td>
+          <td><strong>${formatCurrency(parseFloat(d.delivery_value) || leadValue)}</strong></td>
+          <td>${d.meeting_scheduled_at ? formatDate(d.meeting_scheduled_at) : '-'}</td>
+        </tr>
+      `).join('');
+    }
+
+    function getDeliveryStatusBadge(status) {
+      const badges = {
+        'reuniao_agendada': '<span class="status-badge paid">Reuniao Agendada</span>',
+        'reuniao_realizada': '<span class="status-badge paid">Reuniao Realizada</span>',
+        'interesse_confirmado': '<span class="status-badge pending">Interesse</span>',
+        'em_negociacao': '<span class="status-badge pending">Negociacao</span>',
+        'convertido': '<span class="status-badge paid">Convertido</span>',
+        'perdido': '<span class="status-badge overdue">Perdido</span>'
+      };
+      return badges[status] || `<span class="status-badge draft">${status}</span>`;
+    }
+
+    function getPaymentTypeLabel(type) {
+      const labels = {
+        'entrada': 'Entrada (50%)',
+        'final': 'Final (50%)',
+        'adicional': 'Adicional'
+      };
+      return labels[type] || type;
+    }
+
+    function getInvoiceTypeLabel(type) {
+      const labels = {
+        'leads_quentes': 'Leads Quentes',
+        'reunioes': 'Reunioes',
+        'mensal': 'Mensal',
+        'avulsa': 'Avulsa'
+      };
+      return labels[type] || type;
+    }
+
+    function getStatusBadge(status) {
+      const badges = {
+        'paid': '<span class="status-badge paid">Pago</span>',
+        'pending': '<span class="status-badge pending">Pendente</span>',
+        'sent': '<span class="status-badge pending">Enviada</span>',
+        'overdue': '<span class="status-badge overdue">Atrasado</span>',
+        'draft': '<span class="status-badge draft">Rascunho</span>',
+        'cancelled': '<span class="status-badge draft">Cancelado</span>'
+      };
+      return badges[status] || `<span class="status-badge draft">${status}</span>`;
+    }
+
+    function formatCurrency(value) {
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+      }).format(value || 0);
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      return new Date(dateStr).toLocaleDateString('pt-BR');
+    }
+
+    function showEmpty() {
+      document.getElementById('loadingState').style.display = 'none';
+      document.getElementById('contentArea').style.display = 'block';
+    }
+
+    // Initialize
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') {
+        init();
+      }
+    });
+
+    // Mobile sidebar toggle
+    function toggleMobileSidebar() {
+      const sidebar = document.getElementById('aic-sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      if (sidebar) {
+        const isOpen = sidebar.classList.contains('open');
+        if (isOpen) {
+          sidebar.classList.remove('open');
+          sidebar.classList.add('collapsed');
+          overlay.classList.remove('active');
+        } else {
+          sidebar.classList.add('open');
+          sidebar.classList.remove('collapsed');
+          overlay.classList.add('active');
+        }
+      }
+    }
+    window.toggleMobileSidebar = toggleMobileSidebar;
+  </script>
+  <script src="/components/aic-client-sidebar.js"></script>
+</body>
+</html>

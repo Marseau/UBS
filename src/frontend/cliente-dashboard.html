@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard da Campanha | Portal AIC</title>
+  <link rel="icon" type="image/png" href="/assets/AIC/Imagens%20Vetor%20/AIC%20Icone%20Cheio.png">
+  <meta name="theme-color" content="#0C1B33">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-green-glow: rgba(14, 204, 151, 0.15);
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-navy-lighter: #1a3055;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-gray-light: #cbd5e1;
+      --aic-border: #1e3a5f;
+      --aic-blue: #3b82f6;
+      --aic-purple: #8b5cf6;
+      --aic-yellow: #f59e0b;
+      --aic-red: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      min-height: 100vh;
+    }
+
+    .main-content {
+      padding: 32px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* Page Header */
+    .page-header {
+      margin-bottom: 32px;
+    }
+
+    .page-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .page-header p {
+      color: var(--aic-gray);
+      font-size: 15px;
+    }
+
+    /* Campaign Info Card */
+    .campaign-info {
+      background: linear-gradient(135deg, var(--aic-navy-light) 0%, var(--aic-navy) 100%);
+      border: 1px solid var(--aic-border);
+      border-radius: 20px;
+      padding: 28px;
+      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .campaign-info::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -50%;
+      width: 100%;
+      height: 200%;
+      background: radial-gradient(circle, var(--aic-green-glow) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .campaign-info-content {
+      position: relative;
+      z-index: 1;
+    }
+
+    .campaign-name {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .campaign-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      color: var(--aic-gray);
+      font-size: 14px;
+    }
+
+    .campaign-meta span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .status-badge.active {
+      background: rgba(14, 204, 151, 0.15);
+      color: var(--aic-green);
+    }
+
+    .status-badge.setup {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--aic-blue);
+    }
+
+    .status-badge.completed {
+      background: rgba(148, 163, 184, 0.15);
+      color: var(--aic-gray);
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 24px;
+    }
+
+    .stat-card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .stat-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stat-icon.green { background: rgba(14, 204, 151, 0.15); color: var(--aic-green); }
+    .stat-icon.blue { background: rgba(59, 130, 246, 0.15); color: var(--aic-blue); }
+    .stat-icon.yellow { background: rgba(245, 158, 11, 0.15); color: var(--aic-yellow); }
+    .stat-icon.purple { background: rgba(139, 92, 246, 0.15); color: var(--aic-purple); }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .stat-change {
+      font-size: 12px;
+      color: var(--aic-green);
+    }
+
+    .stat-change.negative {
+      color: var(--aic-red);
+    }
+
+    /* Section */
+    .section {
+      margin-bottom: 32px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .section-header h2 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    /* Grid 2 columns */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 20px;
+    }
+
+    /* Card */
+    .card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 24px;
+    }
+
+    .card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Progress bar */
+    .progress-item {
+      margin-bottom: 16px;
+    }
+
+    .progress-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+
+    .progress-label {
+      color: var(--aic-gray-light);
+    }
+
+    .progress-value {
+      font-weight: 600;
+    }
+
+    .progress-bar {
+      height: 8px;
+      background: var(--aic-navy);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    .progress-fill.green { background: linear-gradient(90deg, var(--aic-green), var(--aic-green-dark)); }
+    .progress-fill.blue { background: linear-gradient(90deg, var(--aic-blue), #2563eb); }
+    .progress-fill.yellow { background: linear-gradient(90deg, var(--aic-yellow), #d97706); }
+    .progress-fill.purple { background: linear-gradient(90deg, var(--aic-purple), #7c3aed); }
+
+    /* Metric list */
+    .metric-list {
+      list-style: none;
+    }
+
+    .metric-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--aic-border);
+    }
+
+    .metric-item:last-child {
+      border-bottom: none;
+    }
+
+    .metric-name {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--aic-gray-light);
+      font-size: 14px;
+    }
+
+    .metric-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .metric-dot.green { background: var(--aic-green); }
+    .metric-dot.blue { background: var(--aic-blue); }
+    .metric-dot.yellow { background: var(--aic-yellow); }
+    .metric-dot.purple { background: var(--aic-purple); }
+
+    .metric-value {
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    /* Quick Actions */
+    .quick-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 10px;
+      color: var(--aic-white);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .action-btn:hover {
+      border-color: var(--aic-green);
+      background: rgba(14, 204, 151, 0.1);
+    }
+
+    .action-btn.primary {
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      color: var(--aic-navy);
+      font-weight: 600;
+      border: none;
+    }
+
+    .action-btn.primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(14, 204, 151, 0.3);
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .empty-icon {
+      width: 64px;
+      height: 64px;
+      background: var(--aic-navy);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      color: var(--aic-gray);
+    }
+
+    .empty-state h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .empty-state p {
+      color: var(--aic-gray);
+      font-size: 14px;
+    }
+
+    /* Loading State */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px;
+      color: var(--aic-gray);
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--aic-navy-lighter);
+      border-top-color: var(--aic-green);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Mobile Header */
+    .mobile-header {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: var(--aic-navy-light);
+      border-bottom: 1px solid var(--aic-border);
+      z-index: 999;
+      padding: 0 16px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .mobile-header-logo {
+      height: 28px;
+    }
+
+    .mobile-menu-btn {
+      width: 40px;
+      height: 40px;
+      background: transparent;
+      border: none;
+      color: var(--aic-white);
+      font-size: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+    }
+
+    .mobile-menu-btn:hover {
+      background: var(--aic-navy-lighter);
+    }
+
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 998;
+    }
+
+    .sidebar-overlay.active {
+      display: block;
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      body { margin-left: 0 !important; }
+      .main-content { padding: 24px 20px; }
+      .mobile-header { display: flex; }
+      .main-content { padding-top: 80px; }
+      .aic-sidebar-toggle { display: none !important; }
+    }
+
+    @media (max-width: 768px) {
+      .main-content {
+        padding: 16px;
+        padding-top: 70px;
+      }
+      .page-header h1 {
+        font-size: 22px;
+      }
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+      .stat-card {
+        padding: 16px;
+      }
+      .stat-value {
+        font-size: 24px;
+      }
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+      .campaign-info {
+        padding: 20px;
+      }
+      .campaign-name {
+        font-size: 18px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .main-content {
+        padding: 12px;
+        padding-top: 70px;
+      }
+      .stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .stat-card {
+        padding: 14px;
+      }
+      .stat-value {
+        font-size: 22px;
+      }
+      .stat-icon {
+        width: 36px;
+        height: 36px;
+      }
+      .quick-actions {
+        flex-direction: column;
+      }
+      .action-btn {
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Mobile Header -->
+  <header class="mobile-header" id="mobileHeader">
+    <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="mobile-header-logo">
+    <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileSidebar()">
+      &#9776;
+    </button>
+  </header>
+
+  <!-- Sidebar overlay for mobile -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileSidebar()"></div>
+
+  <div class="main-content">
+    <!-- Loading State -->
+    <div class="loading" id="loadingState">
+      <div class="spinner"></div>
+      <p>Carregando dashboard...</p>
+    </div>
+
+    <!-- Content -->
+    <div id="contentArea" style="display: none;">
+      <!-- Page Header -->
+      <div class="page-header">
+        <h1>Dashboard da Campanha</h1>
+        <p>Acompanhe as metricas e resultados da sua campanha em tempo real</p>
+      </div>
+
+      <!-- Campaign Info -->
+      <div class="campaign-info">
+        <div class="campaign-info-content">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+            <div>
+              <div class="campaign-name" id="campaignName">Carregando...</div>
+              <div class="campaign-meta">
+                <span id="campaignNiche">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  -
+                </span>
+                <span id="campaignCreated">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  -
+                </span>
+              </div>
+            </div>
+            <span class="status-badge setup" id="campaignStatus">Carregando</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <div class="stat-icon blue">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <span class="stat-label">Leads na Campanha</span>
+          </div>
+          <div class="stat-value" id="statLeads">0</div>
+          <div class="stat-change" id="statLeadsChange">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <div class="stat-icon green">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <span class="stat-label">Conversas Iniciadas</span>
+          </div>
+          <div class="stat-value" id="statConversations">0</div>
+          <div class="stat-change" id="statConversationsChange">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <div class="stat-icon yellow">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <span class="stat-label">Respostas</span>
+          </div>
+          <div class="stat-value" id="statResponses">0</div>
+          <div class="stat-change" id="statResponsesChange">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <div class="stat-icon purple">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/></svg>
+            </div>
+            <span class="stat-label">Reunioes Agendadas</span>
+          </div>
+          <div class="stat-value" id="statMeetings">0</div>
+          <div class="stat-change" id="statMeetingsChange">-</div>
+        </div>
+      </div>
+
+      <!-- Grid 2 columns -->
+      <div class="grid-2">
+        <!-- Funnel Card -->
+        <div class="card">
+          <h3>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--aic-green)" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            Funil de Conversao
+          </h3>
+          <div id="funnelContent">
+            <div class="progress-item">
+              <div class="progress-header">
+                <span class="progress-label">Leads Alocados</span>
+                <span class="progress-value" id="funnelLeads">0</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill blue" id="funnelLeadsBar" style="width: 100%"></div>
+              </div>
+            </div>
+            <div class="progress-item">
+              <div class="progress-header">
+                <span class="progress-label">Abordados</span>
+                <span class="progress-value" id="funnelContacted">0</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill green" id="funnelContactedBar" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="progress-item">
+              <div class="progress-header">
+                <span class="progress-label">Responderam</span>
+                <span class="progress-value" id="funnelResponded">0</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill yellow" id="funnelRespondedBar" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="progress-item">
+              <div class="progress-header">
+                <span class="progress-label">Qualificados</span>
+                <span class="progress-value" id="funnelQualified">0</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill purple" id="funnelQualifiedBar" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Channel Performance -->
+        <div class="card">
+          <h3>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--aic-green)" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            Desempenho por Canal
+          </h3>
+          <ul class="metric-list" id="channelMetrics">
+            <li class="metric-item">
+              <span class="metric-name">
+                <span class="metric-dot green"></span>
+                WhatsApp
+              </span>
+              <span class="metric-value" id="channelWhatsapp">0 msgs</span>
+            </li>
+            <li class="metric-item">
+              <span class="metric-name">
+                <span class="metric-dot purple"></span>
+                Instagram DM
+              </span>
+              <span class="metric-value" id="channelInstagram">0 msgs</span>
+            </li>
+            <li class="metric-item">
+              <span class="metric-name">
+                <span class="metric-dot blue"></span>
+                Taxa de Resposta WA
+              </span>
+              <span class="metric-value" id="rateWhatsapp">0%</span>
+            </li>
+            <li class="metric-item">
+              <span class="metric-name">
+                <span class="metric-dot yellow"></span>
+                Taxa de Resposta IG
+              </span>
+              <span class="metric-value" id="rateInstagram">0%</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="section" style="margin-top: 32px;">
+        <div class="section-header">
+          <h2>Acoes Rapidas</h2>
+        </div>
+        <div class="quick-actions">
+          <a href="#" class="action-btn primary" id="btnLeads">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            Ver Leads Entregues
+          </a>
+          <a href="#" class="action-btn" id="btnBriefing">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Editar Briefing
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://qsdfyffuonywmtnlycri.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExMjY0NzgsImV4cCI6MjA2NjcwMjQ3OH0.IDJdOApiNM0FJvRe5mp28L7U89GWeHpPoPlPreexwbg';
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.supabaseClient = supabaseClient;
+
+    let campaignId = null;
+    let campaignData = null;
+
+    async function init() {
+      // Get campaign ID from URL
+      const urlParams = new URLSearchParams(window.location.search);
+      campaignId = urlParams.get('campaign');
+
+      if (!campaignId) {
+        // Try to get from journey
+        await loadFromJourney();
+      }
+
+      if (!campaignId) {
+        showError('Campanha nao encontrada');
+        return;
+      }
+
+      // Setup action buttons
+      setupActionButtons();
+
+      // Load dashboard data
+      await loadDashboardData();
+    }
+
+    async function loadFromJourney() {
+      try {
+        let token = localStorage.getItem('aic_access_token');
+        if (!token) {
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          token = session?.access_token;
+        }
+
+        if (!token) {
+          window.location.href = '/cliente/login?redirect=/cliente/dashboard';
+          return;
+        }
+
+        const response = await fetch('/api/aic/journey/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.journey?.campaign_id) {
+            campaignId = data.journey.campaign_id;
+          }
+        }
+      } catch (error) {
+        console.error('Error loading journey:', error);
+      }
+    }
+
+    function setupActionButtons() {
+      document.getElementById('btnLeads').href = `/cliente/leads?campaign=${campaignId}`;
+      document.getElementById('btnBriefing').href = `/cliente/briefing?campaign=${campaignId}`;
+    }
+
+    async function loadDashboardData() {
+      try {
+        let token = localStorage.getItem('aic_access_token');
+        if (!token) {
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          token = session?.access_token;
+        }
+
+        // Load campaign stats from API
+        const response = await fetch(`/api/aic/campaigns/${campaignId}/stats`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+
+        if (!response.ok) {
+          // If API not available, load directly from Supabase
+          await loadDirectFromSupabase();
+          return;
+        }
+
+        const data = await response.json();
+        updateUI(data);
+
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+        // Fallback to direct Supabase query
+        await loadDirectFromSupabase();
+      }
+    }
+
+    async function loadDirectFromSupabase() {
+      try {
+        // Load campaign info
+        const { data: campaign, error: campaignError } = await supabaseClient
+          .from('cluster_campaigns')
+          .select('*')
+          .eq('id', campaignId)
+          .single();
+
+        if (campaignError) throw campaignError;
+        campaignData = campaign;
+
+        // Load campaign leads count
+        const { count: leadsCount } = await supabaseClient
+          .from('campaign_leads')
+          .select('*', { count: 'exact', head: true })
+          .eq('campaign_id', campaignId);
+
+        // Load conversations
+        const { data: conversations } = await supabaseClient
+          .from('aic_conversations')
+          .select('id, status, qualification_status, lead_messages_count, channel')
+          .eq('campaign_id', campaignId);
+
+        // Load lead deliveries (meetings)
+        const { data: deliveries } = await supabaseClient
+          .from('aic_lead_deliveries')
+          .select('id, meeting_scheduled_at, status')
+          .eq('campaign_id', campaignId);
+
+        // Load message queue stats
+        const { data: messages } = await supabaseClient
+          .from('aic_message_queue')
+          .select('id, channel, status')
+          .eq('campaign_id', campaignId);
+
+        // Calculate stats
+        const totalConversations = conversations?.length || 0;
+        const respondedConversations = conversations?.filter(c => c.lead_messages_count > 0)?.length || 0;
+        const qualifiedConversations = conversations?.filter(c =>
+          c.qualification_status === 'qualified' || c.qualification_status === 'hot'
+        )?.length || 0;
+
+        const meetings = deliveries?.filter(d => d.meeting_scheduled_at)?.length || 0;
+
+        const whatsappMessages = messages?.filter(m => m.channel === 'whatsapp' && m.status === 'sent')?.length || 0;
+        const instagramMessages = messages?.filter(m => m.channel === 'instagram' && m.status === 'sent')?.length || 0;
+
+        const whatsappConversations = conversations?.filter(c => c.channel === 'whatsapp')?.length || 0;
+        const instagramConversations = conversations?.filter(c => c.channel === 'instagram')?.length || 0;
+
+        const whatsappResponses = conversations?.filter(c => c.channel === 'whatsapp' && c.lead_messages_count > 0)?.length || 0;
+        const instagramResponses = conversations?.filter(c => c.channel === 'instagram' && c.lead_messages_count > 0)?.length || 0;
+
+        const stats = {
+          campaign: {
+            name: campaign.campaign_name || campaign.project_name || 'Campanha',
+            niche: campaign.nicho_principal,
+            created_at: campaign.created_at,
+            status: campaign.pipeline_status || campaign.cluster_status || 'setup'
+          },
+          leads: leadsCount || 0,
+          conversations: totalConversations,
+          responses: respondedConversations,
+          meetings: meetings,
+          funnel: {
+            leads: leadsCount || 0,
+            contacted: totalConversations,
+            responded: respondedConversations,
+            qualified: qualifiedConversations
+          },
+          channels: {
+            whatsapp: whatsappMessages,
+            instagram: instagramMessages,
+            whatsapp_rate: whatsappConversations > 0 ? Math.round((whatsappResponses / whatsappConversations) * 100) : 0,
+            instagram_rate: instagramConversations > 0 ? Math.round((instagramResponses / instagramConversations) * 100) : 0
+          }
+        };
+
+        updateUI(stats);
+
+      } catch (error) {
+        console.error('Error loading from Supabase:', error);
+        showError('Erro ao carregar dados da campanha');
+      }
+    }
+
+    function updateUI(stats) {
+      // Hide loading, show content
+      document.getElementById('loadingState').style.display = 'none';
+      document.getElementById('contentArea').style.display = 'block';
+
+      // Campaign info
+      document.getElementById('campaignName').textContent = stats.campaign?.name || 'Campanha';
+      document.getElementById('campaignNiche').innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        ${stats.campaign?.niche || 'Nicho nao definido'}
+      `;
+
+      if (stats.campaign?.created_at) {
+        const date = new Date(stats.campaign.created_at);
+        document.getElementById('campaignCreated').innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Criada em ${date.toLocaleDateString('pt-BR')}
+        `;
+      }
+
+      // Status badge
+      const statusEl = document.getElementById('campaignStatus');
+      const status = stats.campaign?.status?.toLowerCase() || 'setup';
+      if (status.includes('active') || status.includes('outreach')) {
+        statusEl.className = 'status-badge active';
+        statusEl.textContent = 'Ativa';
+      } else if (status.includes('completed') || status.includes('done')) {
+        statusEl.className = 'status-badge completed';
+        statusEl.textContent = 'Concluida';
+      } else {
+        statusEl.className = 'status-badge setup';
+        statusEl.textContent = 'Em Configuracao';
+      }
+
+      // Stats cards
+      document.getElementById('statLeads').textContent = formatNumber(stats.leads);
+      document.getElementById('statConversations').textContent = formatNumber(stats.conversations);
+      document.getElementById('statResponses').textContent = formatNumber(stats.responses);
+      document.getElementById('statMeetings').textContent = formatNumber(stats.meetings);
+
+      // Response rate
+      if (stats.conversations > 0) {
+        const responseRate = Math.round((stats.responses / stats.conversations) * 100);
+        document.getElementById('statResponsesChange').textContent = `${responseRate}% taxa de resposta`;
+      }
+
+      // Funnel
+      const funnel = stats.funnel || {};
+      document.getElementById('funnelLeads').textContent = formatNumber(funnel.leads);
+      document.getElementById('funnelContacted').textContent = formatNumber(funnel.contacted);
+      document.getElementById('funnelResponded').textContent = formatNumber(funnel.responded);
+      document.getElementById('funnelQualified').textContent = formatNumber(funnel.qualified);
+
+      // Funnel bars
+      const maxFunnel = Math.max(funnel.leads || 1, 1);
+      document.getElementById('funnelContactedBar').style.width = `${(funnel.contacted / maxFunnel) * 100}%`;
+      document.getElementById('funnelRespondedBar').style.width = `${(funnel.responded / maxFunnel) * 100}%`;
+      document.getElementById('funnelQualifiedBar').style.width = `${(funnel.qualified / maxFunnel) * 100}%`;
+
+      // Channels
+      const channels = stats.channels || {};
+      document.getElementById('channelWhatsapp').textContent = `${formatNumber(channels.whatsapp)} msgs`;
+      document.getElementById('channelInstagram').textContent = `${formatNumber(channels.instagram)} msgs`;
+      document.getElementById('rateWhatsapp').textContent = `${channels.whatsapp_rate || 0}%`;
+      document.getElementById('rateInstagram').textContent = `${channels.instagram_rate || 0}%`;
+    }
+
+    function formatNumber(num) {
+      if (num === null || num === undefined) return '0';
+      return num.toLocaleString('pt-BR');
+    }
+
+    function showError(message) {
+      document.getElementById('loadingState').innerHTML = `
+        <div class="empty-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <h3 style="margin-bottom: 8px;">${message}</h3>
+        <p style="color: var(--aic-gray); margin-bottom: 20px;">Verifique se voce tem acesso a esta campanha.</p>
+        <a href="/cliente" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; background: var(--aic-green); color: var(--aic-navy); border-radius: 10px; text-decoration: none; font-weight: 600;">
+          Voltar para Campanhas
+        </a>
+      `;
+    }
+
+    // Initialize
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') {
+        init();
+      }
+    });
+
+    // Mobile sidebar toggle
+    function toggleMobileSidebar() {
+      const sidebar = document.getElementById('aic-sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      const btn = document.getElementById('mobileMenuBtn');
+      if (sidebar) {
+        const isOpen = sidebar.classList.contains('open');
+        if (isOpen) {
+          sidebar.classList.remove('open');
+          sidebar.classList.add('collapsed');
+          overlay.classList.remove('active');
+          btn.innerHTML = '&#9776;';
+        } else {
+          sidebar.classList.add('open');
+          sidebar.classList.remove('collapsed');
+          overlay.classList.add('active');
+          btn.innerHTML = '&#10005;';
+        }
+      }
+    }
+    window.toggleMobileSidebar = toggleMobileSidebar;
+  </script>
+  <script src="/components/aic-client-sidebar.js"></script>
+</body>
+</html>

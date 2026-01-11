@@ -960,7 +960,7 @@
     <div class="container">
       <!-- Page Header -->
       <div class="page-header">
-        <h1>🎯 Minhas Campanhas de Prospecção</h1>
+        <h1>Minhas Campanhas de Prospecção</h1>
         <p>Gerencie suas campanhas AIC de prospecção inteligente com IA</p>
       </div>
 
@@ -1120,25 +1120,21 @@
           <div class="objective-grid">
             <label class="objective-card">
               <input type="radio" name="objective" value="lead_generation" checked>
-              <div class="objective-icon">🎯</div>
               <div class="objective-title">Geracao de Leads</div>
               <div class="objective-desc">Encontrar potenciais clientes</div>
             </label>
             <label class="objective-card">
               <input type="radio" name="objective" value="brand_awareness">
-              <div class="objective-icon">📢</div>
               <div class="objective-title">Brand Awareness</div>
               <div class="objective-desc">Aumentar visibilidade</div>
             </label>
             <label class="objective-card">
               <input type="radio" name="objective" value="engagement">
-              <div class="objective-icon">💬</div>
               <div class="objective-title">Engajamento</div>
               <div class="objective-desc">Criar conexoes</div>
             </label>
             <label class="objective-card">
               <input type="radio" name="objective" value="sales">
-              <div class="objective-icon">💰</div>
               <div class="objective-title">Vendas Diretas</div>
               <div class="objective-desc">Converter em clientes</div>
             </label>
@@ -1194,19 +1190,18 @@
   <div id="campaign-link-modal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>✅ Campanha Criada com Sucesso!</h2>
+        <h2>Campanha Criada com Sucesso!</h2>
         <button class="modal-close" onclick="closeLinkModal()">&times;</button>
       </div>
 
       <div class="modal-body">
-        <div class="success-icon">🎉</div>
         <div class="success-message">
           <h3 id="success-campaign-name"></h3>
           <p>Copie o link abaixo e envie para o cliente configurar a campanha</p>
         </div>
 
         <div class="link-copy-box">
-          <label class="link-copy-label">🔗 Link de Configuração do Cliente</label>
+          <label class="link-copy-label">Link de Configuracao do Cliente</label>
           <div class="link-input-group">
             <input type="text" id="campaign-link-input" class="link-input" readonly>
             <button class="btn-copy" onclick="copyLinkToClipboard()">Copiar Link</button>
@@ -1370,7 +1365,7 @@
             <div>
               <h3 class="campaign-name">${campaign.campaign_name}</h3>
               <div style="font-size: 12px; color: var(--aic-gray); margin-top: 4px;">
-                👤 ${clientName}
+                ${clientName}
               </div>
             </div>
             <span class="campaign-status ${statusClass}">
@@ -1415,19 +1410,19 @@
 
           <div class="campaign-actions">
             <a href="/aic-campaign-onboarding.html?campaign=${campaign.id}" class="btn-action config-btn">
-              ⚙️ Configurar
+              Configurar
             </a>
             <a href="/cluster-intention-dashboard.html?campaign=${campaign.id}" class="btn-action primary">
-              🎯 Clusters
+              Clusters
             </a>
             <a href="/campaign/${campaign.slug || campaign.id}/briefing" class="btn-action">
-              📋 Briefing
+              Briefing
             </a>
             <a href="/campaign/${campaign.slug || campaign.id}/analytics" class="btn-action">
-              📊 Analytics
+              Analytics
             </a>
             <button class="btn-action link-btn" onclick="showClientLink('${campaign.id}', '${campaign.campaign_name}')">
-              🔗 Link Cliente
+              Link Cliente
             </button>
           </div>
         </div>
@@ -1506,7 +1501,6 @@
 
       return `
         <div class="empty-state">
-          <div class="empty-state-icon">🎯</div>
           <h3>${message}</h3>
           <p>Crie sua primeira campanha de prospecção inteligente para começar a gerar leads qualificados</p>
           <button class="btn-new-campaign" onclick="createNewCampaign()" style="display: inline-flex;">
@@ -1522,11 +1516,9 @@
       const container = document.getElementById('campaigns-container');
       container.innerHTML = `
         <div class="empty-state">
-          <div class="empty-state-icon">⚠️</div>
           <h3>Erro ao carregar campanhas</h3>
-          <p>Não foi possível carregar suas campanhas. Tente novamente.</p>
+          <p>Nao foi possivel carregar suas campanhas. Tente novamente.</p>
           <button class="btn-new-campaign" onclick="loadCampaigns()" style="display: inline-flex;">
-            <span>🔄</span>
             <span>Tentar Novamente</span>
           </button>
         </div>
@@ -1789,7 +1781,7 @@
         window.location.href = `/cluster-intention-dashboard.html?campaign=${result.campaign.id}&new=true`;
       } catch (error) {
         console.error('[Create Campaign] Error:', error);
-        alert('❌ Erro ao criar campanha: ' + error.message);
+        alert('Erro ao criar campanha: ' + error.message);
       }
     }
 
@@ -1881,10 +1873,10 @@
 
         // Show feedback
         const statusLabel = newStatus === 'active' ? 'ativada' : 'pausada';
-        console.log(`✅ Campanha ${statusLabel} com sucesso`);
+        console.log(`Campanha ${statusLabel} com sucesso`);
       } catch (error) {
         console.error('[Toggle Status] Error:', error);
-        alert('❌ Erro ao atualizar status da campanha');
+        alert('Erro ao atualizar status da campanha');
       }
     }
 

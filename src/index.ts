@@ -1316,7 +1316,7 @@ app.get('/cliente/onboarding', (_req, res) => {
 // Portal do Cliente - Dashboard da Campanha
 app.get('/cliente/dashboard', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.sendFile(path.join(frontendPath, 'aic-dashboard-prova.html'));
+  res.sendFile(path.join(frontendPath, 'cliente-dashboard.html'));
 });
 
 // Portal do Cliente - Leads entregues
@@ -1325,7 +1325,7 @@ app.get('/cliente/leads', serveClientPage('cliente-leads.html'));
 // Portal do Cliente - Faturas
 app.get('/cliente/faturas', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.sendFile(path.join(frontendPath, 'aic-lead-deliveries.html'));
+  res.sendFile(path.join(frontendPath, 'cliente-faturas.html'));
 });
 
 // Servir componentes do portal do cliente
@@ -1378,6 +1378,7 @@ app.get('/aic/docs', serveAICPage('aic-docs.html'));
 
 // AIC Admin - Proposta Comercial
 app.get('/aic/proposta', serveAICPage('aic-proposta-comercial.html'));
+app.get('/aic/proposta-comercial', serveAICPage('aic-proposta-comercial.html'));
 
 // AIC Admin - Contrato
 app.get('/aic/contrato', serveAICPage('aic-contrato-prestacao-servicos.html'));
