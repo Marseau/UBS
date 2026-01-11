@@ -124,6 +124,7 @@ router.get('/payments/overdue', optionalAuthAIC, async (_req: AuthenticatedReque
 /**
  * POST /api/aic/deliveries
  * Registrar entrega de lead quente
+ * Cria fatura automaticamente (auto_invoice: true por padrao)
  */
 router.post('/deliveries', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -144,7 +145,8 @@ router.post('/deliveries', optionalAuthAIC, async (req: AuthenticatedRequest, re
       qualification_notes,
       conversation_summary,
       billable,
-      unit_value
+      unit_value,
+      auto_invoice = true  // Criar fatura automaticamente (padrao: true)
     } = req.body;
 
     if (!campaign_id || !delivery_type || !lead_name) {
@@ -152,7 +154,7 @@ router.post('/deliveries', optionalAuthAIC, async (req: AuthenticatedRequest, re
       return;
     }
 
-    const delivery = await aicFinancialService.createDelivery({
+    const result = await aicFinancialService.createDelivery({
       campaign_id,
       journey_id,
       lead_id,
@@ -169,10 +171,19 @@ router.post('/deliveries', optionalAuthAIC, async (req: AuthenticatedRequest, re
       qualification_notes,
       conversation_summary,
       billable,
-      unit_value
+      unit_value,
+      auto_invoice
     });
 
-    res.json({ success: true, delivery });
+    // Separar delivery e invoice do resultado
+    const { invoice, ...delivery } = result as any;
+
+    res.json({
+      success: true,
+      delivery,
+      invoice: invoice || null,
+      message: invoice ? 'Lead entregue e fatura criada' : 'Lead entregue registrado'
+    });
   } catch (error: any) {
     console.error('[AIC Financial Routes] Error creating delivery:', error);
     res.status(500).json({ error: error.message });

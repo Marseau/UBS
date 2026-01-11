@@ -66,6 +66,8 @@ export interface CreateJourneyInput {
   client_company?: string;
   proposal_data?: ProposalData;
   created_by?: string;
+  current_step?: JourneyStep;  // Etapa inicial (default: proposta_enviada)
+  auth_user_id?: string;       // Vincular ao usuário autenticado
 }
 
 export interface StepTransitionResult {
@@ -168,7 +170,9 @@ class ClientJourneyService {
    */
   async createJourney(input: CreateJourneyInput): Promise<StepTransitionResult> {
     try {
-      const stepInfo = STEP_MESSAGES['proposta_enviada'];
+      // Usar etapa inicial do input ou default 'proposta_enviada'
+      const initialStep = input.current_step || 'proposta_enviada';
+      const stepInfo = STEP_MESSAGES[initialStep];
 
       const { data: journey, error } = await supabaseAdmin
         .from('aic_client_journeys')
@@ -179,11 +183,12 @@ class ClientJourneyService {
           client_phone: input.client_phone,
           client_document: input.client_document,
           client_company: input.client_company,
-          current_step: 'proposta_enviada',
+          current_step: initialStep,
           next_action_message: stepInfo.message,
           next_action_url: stepInfo.urlPath,
           proposal_data: input.proposal_data || {},
-          created_by: input.created_by
+          created_by: input.created_by,
+          auth_user_id: input.auth_user_id  // Vincular ao usuário autenticado
         })
         .select()
         .single();
@@ -609,7 +614,7 @@ class ClientJourneyService {
   }): Promise<JourneyData[]> {
     let query = supabaseAdmin
       .from('aic_client_journeys')
-      .select('*')
+      .select('*, campaign:cluster_campaigns(id, campaign_name)')
       .order('created_at', { ascending: false });
 
     if (filters?.current_step) {

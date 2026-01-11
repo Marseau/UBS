@@ -1043,6 +1043,16 @@ try {
   console.error("❌ Failed to load AIC Financial routes:", error);
 }
 
+// Weekly Invoice Routes - Faturas semanais consolidadas com PDF
+try {
+  const weeklyInvoiceRoutes = require('./routes/weekly-invoice.routes');
+  const router = 'default' in weeklyInvoiceRoutes ? weeklyInvoiceRoutes.default : weeklyInvoiceRoutes;
+  app.use('/api/aic/invoices', router);
+  console.log('✅ Weekly Invoice routes loaded - CONSOLIDATED WEEKLY INVOICES WITH PDF READY');
+} catch (error) {
+  console.error("❌ Failed to load Weekly Invoice routes:", error);
+}
+
 // Queue Management Routes - BullMQ unified queue system
 try {
   const queueRoutes = require('./routes/queue.routes');
@@ -1310,10 +1320,7 @@ app.get('/cliente/dashboard', (_req, res) => {
 });
 
 // Portal do Cliente - Leads entregues
-app.get('/cliente/leads', (_req, res) => {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.sendFile(path.join(frontendPath, 'aic-leads-entregues.html'));
-});
+app.get('/cliente/leads', serveClientPage('cliente-leads.html'));
 
 // Portal do Cliente - Faturas
 app.get('/cliente/faturas', (_req, res) => {

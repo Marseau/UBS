@@ -137,6 +137,7 @@ router.post('/sign-contract', async (req: Request, res: Response) => {
       client_email,
       client_phone,
       client_representative,
+      campaign_name,
       project_name,
       campaign_whatsapp,
       target_niche,
@@ -146,24 +147,79 @@ router.post('/sign-contract', async (req: Request, res: Response) => {
       lead_value,
     } = req.body;
 
-    if (!journey_id) {
-      return res.status(400).json({ success: false, message: 'journey_id é obrigatório' });
-    }
     if (!client_name || !client_email) {
       return res.status(400).json({ success: false, message: 'Nome e email são obrigatórios' });
     }
 
-    console.log(`[AIC Contracts] Simple signature for journey: ${journey_id}`);
+    // Get auth user from token
+    const authHeader = req.headers.authorization;
+    let authUserId: string | null = null;
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const { data: { user } } = await supabase.auth.getUser(token);
+      authUserId = user?.id || null;
+    }
 
-    // 1. Get journey
-    const { data: journey, error: journeyError } = await supabase
-      .from('aic_client_journeys')
-      .select('*')
-      .eq('id', journey_id)
-      .single();
+    let journey: any = null;
+    let isNewJourney = false;
 
-    if (journeyError || !journey) {
-      return res.status(404).json({ success: false, message: 'Jornada não encontrada' });
+    // 1. Get or create journey
+    if (journey_id && journey_id !== 'new') {
+      console.log(`[AIC Contracts] Simple signature for existing journey: ${journey_id}`);
+      const { data: existingJourney, error: journeyError } = await supabase
+        .from('aic_client_journeys')
+        .select('*')
+        .eq('id', journey_id)
+        .single();
+
+      if (journeyError || !existingJourney) {
+        return res.status(404).json({ success: false, message: 'Jornada não encontrada' });
+      }
+      journey = existingJourney;
+    } else {
+      // Create new journey (modo nova campanha)
+      console.log(`[AIC Contracts] Creating new journey for: ${client_email}`);
+      isNewJourney = true;
+
+      const { data: newJourney, error: createError } = await supabaseAdmin
+        .from('aic_client_journeys')
+        .insert({
+          client_name,
+          client_email: client_email.toLowerCase(),
+          client_phone: client_phone || null,
+          client_document: client_document || null,
+          auth_user_id: authUserId,
+          current_step: 'contrato_assinado',
+          proposal_data: {
+            campaign_name: campaign_name || project_name || `Campanha ${client_name}`,
+            project_name: project_name || campaign_name || `Campanha ${client_name}`,
+            target_niche: target_niche || 'A definir',
+            service_description: service_description || 'A definir no briefing',
+            target_audience: target_audience || 'A definir no briefing',
+            contract_value: contract_value || 4000,
+            lead_value: lead_value || 10,
+          },
+          contract_value: contract_value || 4000,
+          lead_value: lead_value || 10,
+          proposta_enviada_at: new Date().toISOString(),
+          proposta_visualizada_at: new Date().toISOString(),
+          proposta_aceita_at: new Date().toISOString(),
+          contrato_enviado_at: new Date().toISOString(),
+          contrato_assinado_at: new Date().toISOString(),
+          next_action_message: 'Efetue o pagamento para dar continuidade',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (createError || !newJourney) {
+        console.error('[AIC Contracts] Error creating journey:', createError);
+        return res.status(500).json({ success: false, message: 'Erro ao criar jornada' });
+      }
+
+      journey = newJourney;
+      console.log(`[AIC Contracts] New journey created: ${journey.id}`);
     }
 
     // 2. Generate contract PDF
@@ -177,6 +233,7 @@ router.post('/sign-contract', async (req: Request, res: Response) => {
       client_document: client_document || '',
       client_address: client_address || '',
       client_representative: client_representative || '',
+      campaign_name: campaign_name || project_name || `Campanha ${client_name}`,
       contract_id: contractId,
       contract_date: signatureDate,
       contract_value: contract_value || journey.contract_value || 4000,
@@ -195,8 +252,8 @@ router.post('/sign-contract', async (req: Request, res: Response) => {
     let campaignId = journey.campaign_id;
 
     const campaignData = {
-      campaign_name: project_name || `Campanha ${client_name}`,
-      project_name: project_name || `Campanha ${client_name}`,
+      campaign_name: campaign_name || project_name || `Campanha ${client_name}`,
+      project_name: project_name || campaign_name || `Campanha ${client_name}`,
       nicho_principal: target_niche || 'A definir',
       keywords: [],
       service_description: service_description || 'A definir no briefing',
@@ -697,6 +754,7 @@ router.post('/:deliveryId/sign', async (req: Request, res: Response) => {
         client_document: signatureData.client_document,
         client_address: signatureData.client_address,
         client_representative: signatureData.client_representative,
+        campaign_name: delivery.cluster_campaigns?.campaign_name || `Campanha ${signatureData.client_name}`,
         contract_id: contractId,
         contract_date: signatureDate,
         contract_value: delivery.contract_value || 4000,
@@ -945,6 +1003,7 @@ router.post('/sign-external', async (req: Request, res: Response) => {
       client_phone,
       client_representative,
       // Dados da Campanha
+      campaign_name,
       project_name,
       campaign_whatsapp,
       target_niche,
@@ -985,6 +1044,7 @@ router.post('/sign-external', async (req: Request, res: Response) => {
       client_document: client_document || '',
       client_address: client_address || '',
       client_representative: client_representative || '',
+      campaign_name: campaign_name || project_name || `Campanha ${client_name}`,
       contract_id: contractId,
       contract_date: contractDate,
       contract_value: contract_value || journey.contract_value || 4000,

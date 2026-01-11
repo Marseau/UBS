@@ -380,6 +380,31 @@
       color: #ef4444;
     }
 
+    /* CTA Button */
+    .cta-button {
+      display: inline-block;
+      padding: 16px 32px;
+      background: linear-gradient(135deg, var(--aic-green) 0%, var(--aic-green-dark) 100%);
+      color: var(--aic-navy);
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.3s;
+      box-shadow: 0 4px 20px var(--aic-green-glow);
+    }
+    .cta-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 30px var(--aic-green-glow);
+    }
+    .cta-button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+
     @media (max-width: 768px) {
       .form-row {
         grid-template-columns: 1fr;
@@ -697,6 +722,65 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExMjY0NzgsImV4cCI6MjA2NjcwMjQ3OH0.IDJdOApiNM0FJvRe5mp28L7U89GWeHpPoPlPreexwbg';
     const supabase = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // Estado global para delivery vinculado
+    let currentDeliveryId = null;
+    let currentToken = null;
+
+    // Verificar token na URL e carregar dados do delivery
+    async function checkTokenAndPrefill() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token');
+
+      if (token) {
+        currentToken = token;
+        try {
+          const response = await fetch(`/api/aic/lead-deliveries/by-token/${token}`);
+          const data = await response.json();
+
+          if (!data.success) {
+            showStatus('contract-status', 'Link invalido ou expirado. Entre em contato com o time AIC.', 'error');
+            document.getElementById('btn-sign').disabled = true;
+            return;
+          }
+
+          if (data.already_signed) {
+            showStatus('contract-status', 'Voce ja assinou o contrato! Redirecionando para o briefing...', 'success');
+            document.getElementById('btn-sign').disabled = true;
+            setTimeout(() => {
+              window.location.href = `/aic-campaign-briefing.html?contract=${data.delivery.contract_id}`;
+            }, 2000);
+            return;
+          }
+
+          // Pre-fill com dados do delivery
+          currentDeliveryId = data.delivery.id;
+          if (data.delivery.lead_name) {
+            document.getElementById('client_name').value = data.delivery.lead_name;
+          }
+          if (data.delivery.lead_email) {
+            document.getElementById('client_email').value = data.delivery.lead_email;
+          }
+          if (data.delivery.lead_whatsapp) {
+            document.getElementById('client_phone').value = data.delivery.lead_whatsapp;
+          }
+
+          // Atualizar header com nome do prospect
+          if (data.delivery.lead_name) {
+            document.querySelector('.header .subtitle').innerHTML =
+              `Ola <strong>${data.delivery.lead_name}</strong>! Abaixo estao os termos do Execution Agreement.`;
+          }
+
+          // Scroll para o formulario
+          setTimeout(() => {
+            document.getElementById('contract-form-section').scrollIntoView({ behavior: 'smooth' });
+          }, 500);
+
+        } catch (err) {
+          console.error('Erro ao carregar delivery:', err);
+        }
+      }
+    }
+
     // Check if user is logged in and pre-fill data
     async function checkAuthAndPrefill() {
       if (!supabase) return;
@@ -704,17 +788,22 @@
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          // Pre-fill email
-          document.getElementById('client_email').value = user.email || '';
-
-          // Pre-fill name from metadata
-          if (user.user_metadata?.name) {
-            document.getElementById('client_name').value = user.user_metadata.name;
+          // Pre-fill email (se nao ja preenchido pelo token)
+          const emailField = document.getElementById('client_email');
+          if (!emailField.value) {
+            emailField.value = user.email || '';
           }
 
-          // Pre-fill phone from metadata
-          if (user.user_metadata?.phone) {
-            document.getElementById('client_phone').value = user.user_metadata.phone;
+          // Pre-fill name from metadata (se nao ja preenchido pelo token)
+          const nameField = document.getElementById('client_name');
+          if (!nameField.value && user.user_metadata?.name) {
+            nameField.value = user.user_metadata.name;
+          }
+
+          // Pre-fill phone from metadata (se nao ja preenchido pelo token)
+          const phoneField = document.getElementById('client_phone');
+          if (!phoneField.value && user.user_metadata?.phone) {
+            phoneField.value = user.user_metadata.phone;
           }
         }
       } catch (err) {
@@ -758,19 +847,31 @@
           }
         }
 
-        // Submit to API
-        const response = await fetch('/api/aic/contracts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(contractData)
-        });
+        let response;
+        let result;
+
+        // Se temos um deliveryId (veio de link de contrato), usar endpoint especifico
+        if (currentDeliveryId) {
+          response = await fetch(`/api/aic/lead-deliveries/${currentDeliveryId}/sign-contract`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(contractData)
+          });
+        } else {
+          // Fluxo normal (sem token)
+          response = await fetch('/api/aic/contracts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(contractData)
+          });
+        }
 
         if (!response.ok) {
           const error = await response.json();
           throw new Error(error.message || 'Erro ao salvar contrato');
         }
 
-        const result = await response.json();
+        result = await response.json();
 
         // Show success
         showStatus('contract-status', 'Contrato assinado com sucesso! Redirecionando para o briefing...', 'success');
@@ -801,8 +902,10 @@
     }
 
     // Initialize
-    document.addEventListener('DOMContentLoaded', function() {
-      checkAuthAndPrefill();
+    document.addEventListener('DOMContentLoaded', async function() {
+      // Primeiro verificar token, depois auth
+      await checkTokenAndPrefill();
+      await checkAuthAndPrefill();
 
       // Scroll to form if hash is #contratar
       if (window.location.hash === '#contratar') {

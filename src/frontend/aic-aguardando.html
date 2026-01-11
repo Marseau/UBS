@@ -356,16 +356,50 @@
     </div>
   </div>
 
-  <script src="/components/aic-auth.js"></script>
+  <!-- Supabase Client com AICAuth -->
+  <script src="/js/supabase-client.js"></script>
   <script>
+    // Protecao anti-loop: detectar redirects excessivos
+    const REDIRECT_KEY = 'aic_aguardando_redirects';
+    const MAX_REDIRECTS = 3;
+    const REDIRECT_WINDOW = 10000; // 10 segundos
+
+    function checkRedirectLoop() {
+      const now = Date.now();
+      const stored = sessionStorage.getItem(REDIRECT_KEY);
+      let redirects = stored ? JSON.parse(stored) : [];
+
+      // Filtrar redirects antigos (fora da janela)
+      redirects = redirects.filter(t => now - t < REDIRECT_WINDOW);
+
+      if (redirects.length >= MAX_REDIRECTS) {
+        console.error('Loop de redirect detectado! Parando para evitar rate limiting.');
+        return true; // Esta em loop
+      }
+
+      // Registrar este redirect
+      redirects.push(now);
+      sessionStorage.setItem(REDIRECT_KEY, JSON.stringify(redirects));
+      return false;
+    }
+
     // Check auth and load user info
     (async function() {
       const { data: { user }, error } = await AICAuth.getUser();
 
       if (!user) {
+        // Verificar se esta em loop antes de redirecionar
+        if (checkRedirectLoop()) {
+          document.getElementById('user-name').textContent = 'Sessao expirada';
+          document.getElementById('user-email').textContent = 'Atualize a pagina ou faca login novamente';
+          return; // Nao redirecionar, parar o loop
+        }
         window.location.href = '/aic-login.html';
         return;
       }
+
+      // Limpar contador de redirects se chegou com sucesso
+      sessionStorage.removeItem(REDIRECT_KEY);
 
       // Update user info
       document.getElementById('user-name').textContent = user.user_metadata?.name || user.email?.split('@')[0] || 'Usuario';

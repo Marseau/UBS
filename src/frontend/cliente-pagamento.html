@@ -424,10 +424,25 @@
   </div>
 
   <!-- Client Sidebar -->
-  <script src="/components/aic-sidebar.js"></script>
+  <script src="/components/aic-client-sidebar.js"></script>
+
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/supabase-client.js"></script>
 
   <script>
     let journeyData = null;
+
+    // Get campaign parameter from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const campaignParam = urlParams.get('campaign');
+
+    function buildUrl(path) {
+      if (campaignParam) {
+        return path + '?campaign=' + campaignParam;
+      }
+      return path;
+    }
 
     function formatCurrency(value) {
       return parseFloat(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -435,46 +450,35 @@
 
     async function init() {
       try {
-        const isAdmin = localStorage.getItem('aic_user_role') === 'admin';
+        // Verificar sessao Supabase
+        const { data: { session } } = await supabase.auth.getSession();
 
-        // Admin usa cliente selecionado
-        if (isAdmin) {
-          await new Promise(r => setTimeout(r, 150));
-          const selectedClient = window.getSelectedClient ? window.getSelectedClient() : null;
-          if (selectedClient) {
-            journeyData = selectedClient;
-            renderPage();
-            return;
-          }
-          document.getElementById('main-content').innerHTML = `
-            <div style="text-align: center; padding: 60px; color: #94a3b8;">
-              <p>Selecione um cliente no menu lateral para visualizar.</p>
-            </div>
-          `;
+        if (!session) {
+          window.location.href = buildUrl('/cliente/login');
           return;
         }
 
-        // Cliente normal
-        const token = localStorage.getItem('aic_client_token');
-        if (!token) {
-          window.location.href = '/aic/login?redirect=/cliente';
-          return;
+        // Build API URL with campaign parameter
+        let apiUrl = '/api/aic/journey/me';
+        if (campaignParam) {
+          apiUrl += '?campaign=' + campaignParam;
         }
 
-        const response = await fetch('/api/aic/journey/me', {
-          headers: { 'Authorization': `Bearer ${token}` }
+        const response = await fetch(apiUrl, {
+          headers: { 'Authorization': `Bearer ${session.access_token}` }
         });
 
         if (!response.ok) {
           if (response.status === 401) {
-            localStorage.removeItem('aic_client_token');
-            window.location.href = '/aic/login?redirect=/cliente';
+            await supabase.auth.signOut();
+            window.location.href = buildUrl('/cliente/login');
             return;
           }
           throw new Error('Erro ao carregar dados');
         }
 
-        journeyData = await response.json();
+        const result = await response.json();
+        journeyData = result.journey || result;
 
         // Check if can access this step
         const STEP_ORDER = [
@@ -484,7 +488,7 @@
         ];
         const currentIndex = STEP_ORDER.indexOf(journeyData.current_step);
         if (currentIndex < 3) { // Need at least contrato_assinado
-          window.location.href = '/cliente/contrato';
+          window.location.href = buildUrl('/cliente/contrato');
           return;
         }
 
@@ -526,7 +530,7 @@
         <!-- Page Header -->
         <div class="page-header">
           <h1>Pagamento</h1>
-          <p>Primeira parcela para inicio da campanha</p>
+          <p>Primeira parcela para início da campanha</p>
         </div>
 
         ${isPaid ? `
@@ -534,7 +538,7 @@
           <div class="success-section">
             <div class="success-icon">&#10003;</div>
             <h2>Pagamento Confirmado!</h2>
-            <p>Seu pagamento foi recebido e confirmado. Agora voce pode configurar suas credenciais para iniciarmos a campanha.</p>
+            <p>Seu pagamento foi recebido e confirmado. Agora você pode configurar suas credenciais para iniciarmos a campanha.</p>
             <a href="/cliente/credenciais" class="cta-button" style="display: inline-block; max-width: 300px;">Configurar Credenciais</a>
           </div>
         ` : `
@@ -560,7 +564,7 @@
           <!-- PIX Payment Card -->
           <div class="card">
             <h2>Pagamento via PIX</h2>
-            <p>Escaneie o QR Code ou copie o codigo PIX para realizar o pagamento.</p>
+            <p>Escaneie o QR Code ou copie o código PIX para realizar o pagamento.</p>
 
             <div class="pix-section">
               <div class="pix-qr" id="pix-qr">
@@ -569,14 +573,14 @@
               <div class="pix-code" id="pix-code">
                 00020126580014br.gov.bcb.pix0136${journeyData.pix_key || 'chave-pix-aic@empresa.com'}5204000053039865802BR5925AIC APPLIED INTELLIGENCE6009SAO PAULO62070503***6304
               </div>
-              <button class="copy-btn" onclick="copyPixCode()">Copiar Codigo PIX</button>
+              <button class="copy-btn" onclick="copyPixCode()">Copiar Código PIX</button>
             </div>
           </div>
 
           <!-- Bank Transfer Card -->
           <div class="card">
-            <h2>Transferencia Bancaria</h2>
-            <p>Voce tambem pode realizar o pagamento via TED ou DOC para a conta abaixo.</p>
+            <h2>Transferência Bancária</h2>
+            <p>Você também pode realizar o pagamento via TED ou DOC para a conta abaixo.</p>
 
             <div class="bank-details">
               <div class="bank-item">
@@ -584,7 +588,7 @@
                 <div class="bank-item-value">Banco Inter (077)</div>
               </div>
               <div class="bank-item">
-                <div class="bank-item-label">Agencia</div>
+                <div class="bank-item-label">Agência</div>
                 <div class="bank-item-value">0001</div>
               </div>
               <div class="bank-item">
@@ -610,14 +614,14 @@
             <!-- Awaiting Confirmation -->
             <div class="awaiting-section">
               <h3>Comprovante Enviado</h3>
-              <p>Seu comprovante foi enviado e esta sendo analisado. Voce sera notificado assim que o pagamento for confirmado.</p>
+              <p>Seu comprovante foi enviado e está sendo analisado. Você será notificado assim que o pagamento for confirmado.</p>
               <p style="margin-top: 12px; font-size: 12px; color: var(--aic-gray);">Enviado em: ${new Date(journeyData.payment_submitted_at).toLocaleString('pt-BR')}</p>
             </div>
           ` : `
             <!-- Confirmation Form -->
             <div class="confirmation-form">
               <h3>Confirmar Pagamento</h3>
-              <p style="font-size: 14px; color: var(--aic-gray-light); margin-bottom: 20px;">Apos realizar o pagamento, envie o comprovante para agilizar a confirmacao.</p>
+              <p style="font-size: 14px; color: var(--aic-gray-light); margin-bottom: 20px;">Após realizar o pagamento, envie o comprovante para agilizar a confirmação.</p>
 
               <form id="payment-form" onsubmit="return submitPayment(event)">
                 <div class="form-group">
@@ -627,8 +631,8 @@
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label" for="payment_notes">Observacoes (opcional)</label>
-                  <input type="text" id="payment_notes" class="form-input" placeholder="Ex: Pago via PIX, ID da transacao...">
+                  <label class="form-label" for="payment_notes">Observações (opcional)</label>
+                  <input type="text" id="payment_notes" class="form-input" placeholder="Ex: Pago via PIX, ID da transação...">
                 </div>
 
                 <button type="submit" class="cta-button" id="submit-btn">Informar Pagamento Realizado</button>
@@ -646,7 +650,7 @@
       navigator.clipboard.writeText(code).then(() => {
         const btn = document.querySelector('.copy-btn');
         btn.textContent = 'Copiado!';
-        setTimeout(() => btn.textContent = 'Copiar Codigo PIX', 2000);
+        setTimeout(() => btn.textContent = 'Copiar Código PIX', 2000);
       });
     }
 
@@ -665,14 +669,25 @@
       btn.textContent = 'Enviando...';
 
       try {
-        const token = localStorage.getItem('aic_client_token');
-        const response = await fetch('/api/aic/journey/submit-payment', {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          window.location.href = buildUrl('/cliente/login');
+          return;
+        }
+
+        let submitUrl = '/api/aic/journey/submit-payment';
+        if (campaignParam) {
+          submitUrl += '?journey=' + campaignParam;
+        }
+
+        const response = await fetch(submitUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${session.access_token}`
           },
           body: JSON.stringify({
+            journey_id: campaignParam || journeyData?.id,
             payment_proof_url: document.getElementById('payment_proof').value.trim(),
             payment_notes: document.getElementById('payment_notes').value.trim()
           })
@@ -683,7 +698,7 @@
           throw new Error(error.message || 'Erro ao enviar comprovante');
         }
 
-        showStatus('payment-status', 'Comprovante enviado! Aguarde a confirmacao.', 'success');
+        showStatus('payment-status', 'Comprovante enviado! Aguarde a confirmação.', 'success');
 
         setTimeout(() => {
           location.reload();

@@ -557,16 +557,23 @@
         <p>Estas informações serão utilizadas para configurar sua campanha de prospecção.</p>
 
         <div class="form-section">
-          <h3>Configuração do Projeto</h3>
+          <h3>Configuração da Campanha</h3>
           <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="campaign_name">Nome da Campanha *</label>
+              <input type="text" id="campaign_name" class="form-input" placeholder="Ex: Campanha Clínicas SP Janeiro 2026" required>
+              <p class="form-hint">Nome desta campanha de prospecção.</p>
+            </div>
             <div class="form-group">
               <label class="form-label" for="project_name">Nome do Projeto *</label>
               <input type="text" id="project_name" class="form-input" placeholder="Ex: Expansão Clínica Estética 2026" required>
-              <p class="form-hint">Identificador do seu projeto na plataforma AIC.</p>
+              <p class="form-hint">Projeto ao qual esta campanha pertence.</p>
             </div>
+          </div>
+          <div class="form-row">
             <div class="form-group">
               <label class="form-label" for="campaign_whatsapp">Linha WhatsApp da Campanha *</label>
-              <input type="tel" id="campaign_whatsapp" class="form-input" placeholder="+55 11 99999-9999" required>
+              <input type="tel" id="campaign_whatsapp" class="form-input" placeholder="(11) 99999-9999" required>
               <p class="form-hint">Número que será usado para enviar mensagens aos leads.</p>
             </div>
           </div>
@@ -688,6 +695,7 @@
   <script>
     // State
     let journeyData = null;
+    let isNewCampaign = false;
     let contractValue = 4000;
     let leadValue = 10;
 
@@ -728,6 +736,28 @@
     function applyMasks() {
       const docInput = document.getElementById('client_document');
       const phoneInput = document.getElementById('client_phone');
+      const campaignWhatsappInput = document.getElementById('campaign_whatsapp');
+
+      // Funcao para aplicar mascara de telefone
+      function applyPhoneMask(input) {
+        if (!input) return;
+        input.addEventListener('input', function(e) {
+          let v = e.target.value.replace(/\D/g, '');
+          // Remove o 55 do inicio se digitado
+          if (v.startsWith('55') && v.length > 11) {
+            v = v.substring(2);
+          }
+          if (v.length > 11) v = v.substring(0, 11);
+          if (v.length > 6) {
+            v = v.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
+          } else if (v.length > 2) {
+            v = v.replace(/^(\d{2})(\d{0,5})/, '($1) $2');
+          } else if (v.length > 0) {
+            v = v.replace(/^(\d*)/, '($1');
+          }
+          e.target.value = v;
+        });
+      }
 
       if (docInput) {
         docInput.addEventListener('input', function(e) {
@@ -747,20 +777,9 @@
         });
       }
 
-      if (phoneInput) {
-        phoneInput.addEventListener('input', function(e) {
-          let v = e.target.value.replace(/\D/g, '');
-          if (v.length > 11) v = v.substring(0, 11);
-          if (v.length > 6) {
-            v = v.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
-          } else if (v.length > 2) {
-            v = v.replace(/^(\d{2})(\d{0,5})/, '($1) $2');
-          } else if (v.length > 0) {
-            v = v.replace(/^(\d*)/, '($1');
-          }
-          e.target.value = v;
-        });
-      }
+      // Aplicar mascara de telefone nos campos
+      applyPhoneMask(phoneInput);
+      applyPhoneMask(campaignWhatsappInput);
     }
 
     // Wait for supabase client to be ready
@@ -803,20 +822,52 @@
           }
         });
 
-        if (!response.ok) {
-          throw new Error('Erro ao carregar dados da jornada');
+        // Se não encontrou jornada, modo "nova campanha" - formulário em branco
+        if (!response.ok || response.status === 404) {
+          console.log('[Contrato] Nenhuma jornada encontrada - modo nova campanha');
+          isNewCampaign = true;
+          // Preencher com dados do usuário logado
+          const user = session.user;
+          journeyData = {
+            client_name: user.user_metadata?.full_name || '',
+            client_email: user.email || '',
+            client_phone: user.user_metadata?.phone || '',
+            proposal_data: {},
+            contract_value: 4000,
+            lead_value: 10
+          };
+          populateForm();
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('contract-form').style.display = 'block';
+          return;
         }
 
         const data = await response.json();
         if (!data.success || !data.journey) {
-          throw new Error('Jornada não encontrada');
+          // Modo nova campanha
+          console.log('[Contrato] Jornada vazia - modo nova campanha');
+          isNewCampaign = true;
+          const user = session.user;
+          journeyData = {
+            client_name: user.user_metadata?.full_name || '',
+            client_email: user.email || '',
+            client_phone: user.user_metadata?.phone || '',
+            proposal_data: {},
+            contract_value: 4000,
+            lead_value: 10
+          };
+          populateForm();
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('contract-form').style.display = 'block';
+          return;
         }
 
         journeyData = data.journey;
+        isNewCampaign = false;
 
-        // Steps that have access to contract page (proposta_visualizada onwards)
+        // Steps that have access to contract page (proposta_visualizada onwards, or new campaign)
         const contractAllowedSteps = [
-          'proposta_visualizada', 'proposta_aceita', 'contrato_enviado', 'contrato_assinado',
+          'proposta_enviada', 'proposta_visualizada', 'proposta_aceita', 'contrato_enviado', 'contrato_assinado',
           'pagamento_pendente', 'pagamento_confirmado', 'credenciais_pendente', 'credenciais_ok',
           'briefing_pendente', 'briefing_completo', 'campanha_ativa', 'campanha_concluida'
         ];
@@ -870,11 +921,21 @@
 
       // Proposal data
       const proposal = journeyData.proposal_data || {};
+      document.getElementById('campaign_name').value = proposal.campaign_name || proposal.project_name || '';
       document.getElementById('project_name').value = proposal.project_name || '';
       document.getElementById('target_niche').value = proposal.target_niche || '';
       document.getElementById('service_description').value = proposal.service_description || '';
       document.getElementById('target_audience').value = proposal.target_audience || '';
-      document.getElementById('campaign_whatsapp').value = journeyData.client_phone || '';
+      // Formatar telefone para input (sem +55)
+      const rawPhone = journeyData.client_phone || '';
+      let formattedPhone = rawPhone.replace(/\D/g, '');
+      if (formattedPhone.startsWith('55') && formattedPhone.length > 11) {
+        formattedPhone = formattedPhone.substring(2);
+      }
+      if (formattedPhone.length === 11) {
+        formattedPhone = formattedPhone.replace(/^(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+      }
+      document.getElementById('campaign_whatsapp').value = formattedPhone;
 
       // Contract values
       contractValue = proposal.contract_value || journeyData.contract_value || 4000;
@@ -1037,7 +1098,7 @@
         // Validate form
         const requiredFields = [
           'client_name', 'client_document', 'client_address', 'client_email', 'client_phone',
-          'project_name', 'campaign_whatsapp', 'target_niche', 'service_description', 'target_audience'
+          'campaign_name', 'project_name', 'campaign_whatsapp', 'target_niche', 'service_description', 'target_audience'
         ];
 
         for (const field of requiredFields) {
@@ -1066,7 +1127,7 @@
             'Authorization': `Bearer ${session.access_token}`
           },
           body: JSON.stringify({
-            journey_id: journeyData.id,
+            journey_id: isNewCampaign ? 'new' : journeyData.id,
             // Dados do Contratante
             client_name: document.getElementById('client_name').value.trim(),
             client_document: document.getElementById('client_document').value.trim(),
@@ -1075,6 +1136,7 @@
             client_phone: document.getElementById('client_phone').value.trim(),
             client_representative: document.getElementById('client_representative').value.trim() || null,
             // Dados da Campanha
+            campaign_name: document.getElementById('campaign_name').value.trim(),
             project_name: document.getElementById('project_name').value.trim(),
             campaign_whatsapp: document.getElementById('campaign_whatsapp').value.trim(),
             target_niche: document.getElementById('target_niche').value.trim(),

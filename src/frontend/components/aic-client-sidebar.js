@@ -300,6 +300,14 @@
     .aic-sidebar-footer-link.logout:hover {
       color: #ef4444;
     }
+    .aic-sidebar-footer-link.admin-back {
+      color: #0ECC97;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .aic-sidebar-footer-link.admin-back:hover {
+      color: #10E6A8;
+    }
 
     body.aic-sidebar-open { margin-left: 260px; }
     body.aic-sidebar-open .header { margin-left: 260px; width: calc(100% - 260px); }
@@ -325,12 +333,28 @@
     currentStep: 'proposta_enviada',
     progress: 0,
     campaignId: null,
-    journeyId: null
+    journeyId: null,
+    isNewCampaign: false,  // Modo nova campanha (sem jornada existente)
+    // Timestamps de completude de cada etapa (para verificacao real)
+    completedSteps: {
+      proposta_visualizada: null,
+      contrato_assinado: null,
+      pagamento_confirmado: null,
+      credenciais_ok: null,
+      briefing_completo: null,
+      campanha_ativa: null
+    }
   };
 
   // Verificar se etapa esta acessivel
-  function isStepAccessible(requiredSteps) {
+  function isStepAccessible(requiredSteps, itemId) {
     if (!requiredSteps || requiredSteps.length === 0) return true;
+
+    // No modo nova campanha, apenas Proposta e Minha Jornada são acessíveis
+    if (journeyState.isNewCampaign) {
+      return itemId === 'proposta' || itemId === 'jornada';
+    }
+
     const currentIndex = STEP_ORDER.indexOf(journeyState.currentStep);
     return requiredSteps.some(function(step) {
       const requiredIndex = STEP_ORDER.indexOf(step);
@@ -338,18 +362,20 @@
     });
   }
 
-  // Verificar se etapa esta completa
+  // Verificar se etapa esta completa (usando timestamps reais)
   function isStepCompleted(completedAt) {
     if (!completedAt) return false;
-    const currentIndex = STEP_ORDER.indexOf(journeyState.currentStep);
-    const completedIndex = STEP_ORDER.indexOf(completedAt);
-    return currentIndex > completedIndex;
+    // Verificar se temos o timestamp real da etapa completada
+    // completedAt é o nome da etapa (ex: 'proposta_visualizada')
+    // journeyState.completedSteps tem os timestamps
+    const timestamp = journeyState.completedSteps[completedAt];
+    return timestamp !== null && timestamp !== undefined;
   }
 
   // Verificar se e etapa atual
   function isCurrentStep(item) {
     if (!item.completedAt) return false;
-    const accessible = isStepAccessible(item.requiredSteps);
+    const accessible = isStepAccessible(item.requiredSteps, item.id);
     const completed = isStepCompleted(item.completedAt);
     return accessible && !completed;
   }
@@ -409,10 +435,15 @@
       var item = MENU_ITEMS[i];
       if (item.id === 'faturas' || item.id === 'leads') continue; // Separar em outra secao
 
-      var accessible = item.alwaysVisible || isStepAccessible(item.requiredSteps);
+      var accessible = item.alwaysVisible || isStepAccessible(item.requiredSteps, item.id);
       var completed = isStepCompleted(item.completedAt);
       var current = isCurrentStep(item);
       var active = isActivePage(item.path);
+
+      // No modo nova campanha, Proposta é a etapa atual (entrada do cliente)
+      if (journeyState.isNewCampaign && item.id === 'proposta') {
+        current = true;
+      }
 
       var className = 'aic-sidebar-link';
       var statusHtml = '';
@@ -449,7 +480,7 @@
 
     for (var j = 0; j < financeItems.length; j++) {
       var fitem = financeItems[j];
-      var faccessible = isStepAccessible(fitem.requiredSteps);
+      var faccessible = isStepAccessible(fitem.requiredSteps, fitem.id);
       var factive = isActivePage(fitem.path);
 
       var fclassName = 'aic-sidebar-link';
@@ -466,11 +497,11 @@
     html += '</div>';
     html += '</div>';
 
-    // Footer
-    html += '<div class="aic-sidebar-footer">' +
-      '<a href="https://wa.me/5511999999999" target="_blank" class="aic-sidebar-footer-link">Precisa de ajuda?</a>' +
-      '<button class="aic-sidebar-footer-link logout" onclick="window.aicClientLogout()">Sair</button>' +
-    '</div>';
+    // Footer - Portal do cliente NUNCA mostra "Voltar para Admin"
+    html += '<div class="aic-sidebar-footer">';
+    html += '<a href="https://wa.me/5511999999999" target="_blank" class="aic-sidebar-footer-link">Precisa de ajuda?</a>';
+    html += '<button class="aic-sidebar-footer-link logout" onclick="window.aicClientLogout()">Sair</button>';
+    html += '</div>';
 
     nav.innerHTML = html;
     return nav;
@@ -489,8 +520,9 @@
   // Logout function
   window.aicClientLogout = async function() {
     try {
-      if (window.supabaseClient) {
-        await window.supabaseClient.auth.signOut();
+      var supabaseRef = window.supabaseClient || window.supabase;
+      if (supabaseRef && supabaseRef.auth) {
+        await supabaseRef.auth.signOut();
       }
       localStorage.removeItem('aic_client_journey');
       localStorage.removeItem('aic_access_token');
@@ -525,18 +557,58 @@
       if (response.ok) {
         var data = await response.json();
         if (data.success && data.journey) {
+          var j = data.journey;
           journeyState = {
-            clientName: data.journey.client_name || 'Cliente',
-            currentStep: data.journey.current_step || 'proposta_enviada',
-            progress: data.journey.progress || 0,
-            campaignId: data.journey.campaign_id,
-            journeyId: data.journey.id
+            clientName: j.client_name || 'Cliente',
+            currentStep: j.current_step || 'proposta_enviada',
+            progress: j.progress || 0,
+            campaignId: j.campaign_id,
+            journeyId: j.id,
+            isNewCampaign: false,
+            // Timestamps reais de cada etapa (para verificacao de completude)
+            completedSteps: {
+              proposta_visualizada: j.proposta_visualizada_at || null,
+              contrato_assinado: j.contrato_assinado_at || null,
+              pagamento_confirmado: j.pagamento_confirmado_at || null,
+              credenciais_ok: j.credenciais_ok_at || null,
+              briefing_completo: j.briefing_completo_at || null,
+              campanha_ativa: j.campanha_ativa_at || null
+            }
           };
           localStorage.setItem('aic_client_journey', JSON.stringify(journeyState));
         }
       } else if (response.status === 401) {
         window.location.href = '/cliente/login';
         return;
+      } else if (response.status === 404) {
+        // Sem jornada existente - modo nova campanha
+        console.log('[Sidebar] Nenhuma jornada encontrada - modo nova campanha');
+
+        // Tentar obter email do usuário do Supabase
+        var clientName = 'Cliente';
+        try {
+          // Tentar window.supabaseClient, depois window.supabase (alias)
+          var supabaseRef = window.supabaseClient || window.supabase;
+          if (supabaseRef && supabaseRef.auth) {
+            var sessionResult = await supabaseRef.auth.getSession();
+            var user = sessionResult.data.session?.user;
+            if (user) {
+              clientName = user.user_metadata?.full_name || user.email || 'Cliente';
+            }
+          }
+        } catch (e) {
+          console.log('[Sidebar] Não foi possível obter email do usuário:', e);
+        }
+
+        journeyState = {
+          clientName: clientName,
+          currentStep: 'nova_campanha',
+          progress: 0,
+          campaignId: null,
+          journeyId: null,
+          isNewCampaign: true
+        };
+        localStorage.removeItem('aic_client_journey');
       }
     } catch (e) {
       console.error('Erro ao carregar jornada:', e);

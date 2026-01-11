@@ -153,7 +153,9 @@
   "homepage": "https://github.com/Marseau/universal-booking-system#readme",
   "dependencies": {
     "@octokit/rest": "^22.0.0",
+    "@sendgrid/mail": "^8.1.6",
     "@supabase/supabase-js": "^2.50.5",
+    "@types/pdfkit": "^0.17.4",
     "axios": "^1.10.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
@@ -185,6 +187,7 @@
     "openai": "^6.9.1",
     "parquetjs-lite": "^0.8.7",
     "pdf-parse": "^2.4.5",
+    "pdfkit": "^0.17.2",
     "pg": "^8.16.3",
     "playwright": "^1.54.1",
     "pngjs": "^7.0.0",

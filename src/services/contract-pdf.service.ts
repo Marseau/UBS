@@ -27,6 +27,9 @@ interface ContractData {
   client_address: string;
   client_representative?: string;
 
+  // Campanha
+  campaign_name?: string;
+
   // Contrato
   contract_id: string;
   contract_date: string;
@@ -397,7 +400,7 @@ class ContractPDFService {
     </div>
 
     <h1>CONTRATO DE PRESTAÇÃO DE SERVIÇOS</h1>
-    <p class="subtitle">Campanha de Prospecção Ativa e Qualificação de Leads</p>
+    <p class="subtitle">${data.campaign_name || 'Campanha de Prospecção Ativa e Qualificação de Leads'}</p>
 
     <!-- Preâmbulo -->
     <h2>PREÂMBULO</h2>

@@ -1033,12 +1033,33 @@
     // Get campaign ID from URL
     const urlParams = new URLSearchParams(window.location.search);
     campaignId = urlParams.get('campaign');
+    const isClientPortal = window.location.pathname.startsWith('/cliente');
 
     // Initialize
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', async function() {
+      // Se nao tem campaign na URL e esta no portal do cliente, buscar da jornada
+      if (!campaignId && isClientPortal) {
+        try {
+          const token = localStorage.getItem('aic_access_token') || '';
+          const journeyResponse = await fetch('/api/aic/journey/me', {
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+
+          if (journeyResponse.ok) {
+            const journeyData = await journeyResponse.json();
+            if (journeyData.success && journeyData.journey && journeyData.journey.campaign_id) {
+              campaignId = journeyData.journey.campaign_id;
+              console.log('[Briefing] Campaign ID obtido da jornada:', campaignId);
+            }
+          }
+        } catch (e) {
+          console.error('[Briefing] Erro ao buscar jornada:', e);
+        }
+      }
+
       if (!campaignId) {
         alert('ID da campanha nao encontrado. Redirecionando...');
-        window.location.href = '/aic-campaign-onboarding.html';
+        window.location.href = isClientPortal ? '/cliente' : '/aic-campaign-onboarding.html';
         return;
       }
 

@@ -482,16 +482,27 @@
   <!-- Client Sidebar -->
   <script src="/components/aic-client-sidebar.js"></script>
 
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/supabase-client.js"></script>
+
   <!-- PDF Generator - pdfmake -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
 
   <script>
-    // Configuration
-    const SUPABASE_URL = 'https://qsdfyffuonywmtnlycri.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExMjY0NzgsImV4cCI6MjA2NjcwMjQ3OH0.IDJdOApiNM0FJvRe5mp28L7U89GWeHpPoPlPreexwbg';
-
     let journeyData = null;
+
+    // Get campaign parameter from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const campaignParam = urlParams.get('campaign');
+
+    function buildUrl(path) {
+      if (campaignParam) {
+        return path + '?campaign=' + campaignParam;
+      }
+      return path;
+    }
 
     // Funcao para baixar PDF - documento estruturado com pdfmake
     async function downloadPDF() {
@@ -699,55 +710,42 @@
 
     async function init() {
       try {
-        const isAdmin = localStorage.getItem('aic_user_role') === 'admin';
+        // Verificar sessao Supabase
+        const { data: { session } } = await supabase.auth.getSession();
 
-        // Admin usa cliente selecionado
-        if (isAdmin) {
-          // Aguardar sidebar carregar
-          await new Promise(r => setTimeout(r, 150));
-          const selectedClient = window.getSelectedClient ? window.getSelectedClient() : null;
-          if (selectedClient) {
-            journeyData = { journey: selectedClient };
-            renderPage();
-            return;
-          }
-          // Admin sem cliente selecionado
-          document.getElementById('main-content').innerHTML = `
-            <div class="loading-state">
-              <p>Selecione um cliente no menu lateral para visualizar.</p>
-            </div>
-          `;
+        if (!session) {
+          window.location.href = buildUrl('/cliente/login');
           return;
         }
 
-        // Cliente normal - verificar token
-        const token = localStorage.getItem('aic_access_token') || localStorage.getItem('aic_client_token');
-        if (!token) {
-          window.location.href = '/cliente/login';
-          return;
-        }
+        // Se tem campaign param, tentar carregar jornada existente
+        if (campaignParam) {
+          const apiUrl = '/api/aic/journey/me?campaign=' + campaignParam;
+          const response = await fetch(apiUrl, {
+            headers: { 'Authorization': `Bearer ${session.access_token}` }
+          });
 
-        // Load journey data
-        const response = await fetch('/api/aic/journey/me', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            localStorage.removeItem('aic_access_token');
-            localStorage.removeItem('aic_client_token');
-            window.location.href = '/cliente/login';
-            return;
+          if (response.ok) {
+            const result = await response.json();
+            if (result.success && result.journey) {
+              journeyData = result.journey;
+            }
           }
-          throw new Error('Erro ao carregar dados');
         }
 
-        const result = await response.json();
-        if (result.success && result.journey) {
-          journeyData = result.journey;
-        } else {
-          throw new Error('Jornada nao encontrada');
+        // Se não tem jornada, usar dados padrão (proposta é padrão!)
+        if (!journeyData) {
+          const user = session.user;
+          journeyData = {
+            client_name: user.user_metadata?.full_name || user.email || 'Cliente',
+            client_email: user.email,
+            contract_value: 4000,
+            lead_value: 10,
+            current_step: 'proposta_enviada',  // Ainda não aceitou
+            isNewClient: true  // Flag para saber que é cliente novo
+          };
         }
+
         renderPage();
 
       } catch (error) {
@@ -990,30 +988,71 @@
       btn.textContent = 'Processando...';
 
       try {
-        const token = localStorage.getItem('aic_access_token') || localStorage.getItem('aic_client_token');
-        const response = await fetch('/api/aic/journey/advance', {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          window.location.href = buildUrl('/cliente/login');
+          return;
+        }
+
+        // Se é cliente novo (sem jornada), criar jornada ao aceitar proposta
+        if (journeyData.isNewClient) {
+          const createResponse = await fetch('/api/aic/journey', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({
+              client_name: journeyData.client_name,
+              client_email: journeyData.client_email,
+              current_step: 'proposta_visualizada',  // Proposta aceita
+              contract_value: journeyData.contract_value,
+              lead_value: journeyData.lead_value
+            })
+          });
+
+          if (!createResponse.ok) {
+            const errorData = await createResponse.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Erro ao criar jornada');
+          }
+
+          const createResult = await createResponse.json();
+          // Redirecionar para contrato com a nova jornada
+          window.location.href = '/cliente/contrato?campaign=' + createResult.journey.id;
+          return;
+        }
+
+        // Se já tem jornada, avançar etapa
+        let advanceUrl = '/api/aic/journey/advance';
+        if (campaignParam) {
+          advanceUrl += '?journey=' + campaignParam;
+        }
+
+        const response = await fetch(advanceUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${session.access_token}`
           },
           body: JSON.stringify({
-            action: 'accept_proposal'
+            action: 'accept_proposal',
+            journey_id: campaignParam || journeyData?.id
           })
         });
 
         if (!response.ok) {
-          throw new Error('Erro ao aceitar proposta');
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Erro ao aceitar proposta');
         }
 
-        // Redirect to contract
-        window.location.href = '/cliente/contrato';
+        // Redirect to contract with campaign parameter
+        window.location.href = buildUrl('/cliente/contrato');
 
       } catch (error) {
         console.error('Erro:', error);
         btn.disabled = false;
         btn.textContent = 'Aceitar Proposta e Continuar';
-        alert('Erro ao aceitar proposta. Por favor, tente novamente.');
+        alert(error.message || 'Erro ao aceitar proposta. Por favor, tente novamente.');
       }
     }
 

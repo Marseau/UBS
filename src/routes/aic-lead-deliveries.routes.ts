@@ -12,6 +12,7 @@ const router = Router();
 /**
  * POST /api/aic/lead-deliveries
  * Registra uma nova entrega de lead quente (AI Agent encaminhou)
+ * Cria fatura automaticamente na tabela aic_campaign_payments
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
@@ -23,7 +24,9 @@ router.post('/', async (req: Request, res: Response) => {
       lead_instagram,
       delivered_to,
       delivery_value = 10.00,
-      notes
+      delivery_type = 'interesse_confirmado',
+      notes,
+      auto_invoice = true // Criar fatura automaticamente (padrao: true)
     } = req.body;
 
     if (!campaign_id || !lead_whatsapp) {
@@ -33,6 +36,9 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
 
+    const deliveredAt = new Date().toISOString();
+
+    // 1. Criar registro da entrega
     const { data: delivery, error } = await supabase
       .from('aic_lead_deliveries')
       .insert({
@@ -45,7 +51,7 @@ router.post('/', async (req: Request, res: Response) => {
         delivery_value,
         notes,
         status: 'entregue',
-        delivered_at: new Date().toISOString()
+        delivered_at: deliveredAt
       })
       .select()
       .single();
@@ -61,10 +67,65 @@ router.post('/', async (req: Request, res: Response) => {
 
     console.log(`[Lead Deliveries] Lead entregue: ${lead_whatsapp} -> ${delivered_to}`);
 
+    // 2. Criar fatura automaticamente
+    let invoice = null;
+    if (auto_invoice && delivery_value > 0) {
+      try {
+        // Gerar numero da fatura sequencial por campanha
+        const { count } = await supabase
+          .from('aic_campaign_payments')
+          .select('*', { count: 'exact', head: true })
+          .eq('campaign_id', campaign_id)
+          .eq('type', 'lead_invoice');
+
+        const sequenceNum = (count || 0) + 1;
+        const invoiceNumber = `LEAD-${campaign_id.slice(0, 6).toUpperCase()}-${String(sequenceNum).padStart(4, '0')}`;
+
+        // Definir vencimento (5 dias uteis)
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 5);
+
+        // Descricao baseada no tipo de entrega
+        const typeLabels: Record<string, string> = {
+          'reuniao_marcada': 'Reuniao Marcada',
+          'proposta_enviada': 'Proposta Enviada',
+          'interesse_confirmado': 'Interesse Confirmado',
+          'whatsapp_capturado': 'WhatsApp Capturado',
+          'negociacao': 'Em Negociacao'
+        };
+        const typeLabel = typeLabels[delivery_type] || delivery_type;
+
+        const { data: invoiceData, error: invoiceError } = await supabase
+          .from('aic_campaign_payments')
+          .insert({
+            campaign_id,
+            delivery_id: delivery.id,
+            type: 'lead_invoice',
+            invoice_number: invoiceNumber,
+            description: `Lead Quente: ${lead_name} (${typeLabel})`,
+            amount: delivery_value,
+            due_date: dueDate.toISOString().split('T')[0],
+            status: 'pending'
+          })
+          .select()
+          .single();
+
+        if (invoiceError) {
+          console.error('[Lead Deliveries] Erro ao criar fatura:', invoiceError);
+        } else {
+          invoice = invoiceData;
+          console.log(`[Lead Deliveries] Fatura criada: ${invoiceNumber} - R$ ${delivery_value}`);
+        }
+      } catch (invoiceErr) {
+        console.error('[Lead Deliveries] Erro ao criar fatura automatica:', invoiceErr);
+      }
+    }
+
     return res.status(201).json({
       success: true,
-      message: 'Lead entregue registrado',
-      delivery
+      message: auto_invoice && invoice ? 'Lead entregue e fatura criada' : 'Lead entregue registrado',
+      delivery,
+      invoice
     });
 
   } catch (error) {

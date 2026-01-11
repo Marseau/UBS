@@ -128,7 +128,8 @@ router.get('/me', authenticateClient, async (req: ClientRequest, res: Response) 
 router.post('/advance', authenticateClient, async (req: ClientRequest, res: Response) => {
   try {
     const userId = req.clientUser?.id;
-    const { action, ip } = req.body;
+    const { action, ip, journey_id } = req.body;
+    const journeyIdFromQuery = req.query.journey as string;
 
     if (!userId) {
       return res.status(401).json({
@@ -137,8 +138,17 @@ router.post('/advance', authenticateClient, async (req: ClientRequest, res: Resp
       });
     }
 
-    // Buscar jornada do usuario
-    const journey = await clientJourneyService.getJourneyByUserId(userId);
+    // Buscar jornada do usuario (suporta multi-campanha)
+    const targetJourneyId = journey_id || journeyIdFromQuery;
+    let journey;
+
+    if (targetJourneyId) {
+      // Buscar jornada especifica do usuario
+      journey = await clientJourneyService.getJourneyByIdAndUser(targetJourneyId, userId);
+    } else {
+      // Buscar primeira jornada do usuario
+      journey = await clientJourneyService.getJourneyByUserId(userId);
+    }
 
     if (!journey) {
       return res.status(404).json({
@@ -300,6 +310,9 @@ router.post('/', async (req: Request, res: Response) => {
       client_company,
       proposal_data,
       created_by,
+      current_step,
+      contract_value,
+      lead_value,
       send_invite = false // Enviar convite por email
     } = req.body;
 
@@ -310,6 +323,21 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
 
+    // Extrair auth_user_id do token se presente (cliente autenticado criando própria jornada)
+    let authUserId: string | null = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.substring(7);
+        const { supabaseAdmin } = await import('../config/database');
+        const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+        authUserId = user?.id || null;
+        console.log('[Journey Routes] auth_user_id extraído do token:', authUserId);
+      } catch (e) {
+        console.log('[Journey Routes] Não foi possível extrair user do token:', e);
+      }
+    }
+
     const result = await clientJourneyService.createJourney({
       delivery_id,
       client_name,
@@ -317,8 +345,14 @@ router.post('/', async (req: Request, res: Response) => {
       client_phone,
       client_document,
       client_company,
-      proposal_data,
-      created_by
+      proposal_data: {
+        ...proposal_data,
+        contract_value: contract_value || proposal_data?.contract_value,
+        lead_value: lead_value || proposal_data?.lead_value
+      },
+      created_by,
+      current_step: current_step || 'proposta_enviada',
+      auth_user_id: authUserId || undefined  // Vincular ao usuário autenticado
     });
 
     if (!result.success || !result.journey) {
@@ -485,6 +519,408 @@ router.get('/by-delivery/:deliveryId', async (req: Request, res: Response) => {
       success: false,
       message: 'Erro ao buscar jornada'
     });
+  }
+});
+
+// ============================================
+// LEADS ENTREGUES (Portal do Cliente)
+// (ANTES de /:id para evitar conflito de rota)
+// ============================================
+
+/**
+ * GET /api/aic/journey/leads/delivered
+ * Listar leads entregues para o cliente autenticado
+ * Filtro opcional: ?campaign_id=UUID
+ */
+router.get('/leads/delivered', authenticateClient, async (req: ClientRequest, res: Response) => {
+  try {
+    const userId = req.clientUser?.id;
+    const campaignIdFilter = req.query.campaign_id as string;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Usuario nao autenticado'
+      });
+    }
+
+    const { supabaseAdmin } = await import('../config/database');
+
+    // Buscar campanhas do usuario atraves das jornadas
+    const { data: journeys, error: journeyError } = await supabaseAdmin
+      .from('aic_client_journeys')
+      .select('campaign_id')
+      .eq('auth_user_id', userId)
+      .not('campaign_id', 'is', null);
+
+    if (journeyError) {
+      console.error('[Journey Routes] Error fetching user journeys:', journeyError);
+      return res.status(500).json({ success: false, message: 'Erro ao buscar campanhas' });
+    }
+
+    const campaignIds = journeys?.map(j => j.campaign_id).filter(Boolean) || [];
+
+    if (campaignIds.length === 0) {
+      return res.json({
+        success: true,
+        leads: [],
+        total: 0,
+        message: 'Nenhuma campanha encontrada para este usuario'
+      });
+    }
+
+    // Aplicar filtro de campanha se fornecido
+    let targetCampaigns = campaignIds;
+    if (campaignIdFilter && campaignIds.includes(campaignIdFilter)) {
+      targetCampaigns = [campaignIdFilter];
+    }
+
+    // Buscar leads entregues das campanhas do cliente
+    const { data: leads, error: leadsError } = await supabaseAdmin
+      .from('aic_lead_deliveries')
+      .select(`
+        id,
+        campaign_id,
+        lead_name,
+        lead_whatsapp,
+        lead_email,
+        lead_instagram,
+        delivery_value,
+        meeting_scheduled_at,
+        invoice_id,
+        created_at
+      `)
+      .in('campaign_id', targetCampaigns)
+      .order('created_at', { ascending: false });
+
+    if (leadsError) {
+      console.error('[Journey Routes] Error fetching delivered leads:', leadsError);
+      return res.status(500).json({ success: false, message: 'Erro ao buscar leads' });
+    }
+
+    return res.json({
+      success: true,
+      leads: leads || [],
+      total: leads?.length || 0
+    });
+  } catch (error) {
+    console.error('[Journey Routes] Error fetching delivered leads:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar leads entregues'
+    });
+  }
+});
+
+// ============================================
+// PAGAMENTOS UNIFICADOS POR CAMPANHA
+// (Movido para ANTES de /:id para evitar conflito de rota)
+// ============================================
+
+/**
+ * GET /api/aic/journey/payments
+ * Listar todos os pagamentos agrupados por campanha
+ */
+router.get('/payments', async (req: Request, res: Response) => {
+  try {
+    const { campaign_id, status, type } = req.query;
+    const { supabaseAdmin } = await import('../config/database');
+
+    let query = supabaseAdmin
+      .from('aic_campaign_payments')
+      .select(`
+        *,
+        campaign:cluster_campaigns(id, campaign_name, nicho_principal),
+        journey:aic_client_journeys(id, client_name, client_email)
+      `)
+      .order('due_date', { ascending: true });
+
+    if (campaign_id) {
+      query = query.eq('campaign_id', campaign_id);
+    }
+    if (status) {
+      query = query.eq('status', status);
+    }
+    if (type) {
+      query = query.eq('type', type);
+    }
+
+    const { data: payments, error } = await query;
+
+    if (error) {
+      console.error('[Journey Routes] Error fetching payments:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao buscar pagamentos' });
+    }
+
+    // Agrupar por campanha
+    const grouped: Record<string, any> = {};
+    for (const payment of payments || []) {
+      const campId = payment.campaign_id;
+      if (!grouped[campId]) {
+        grouped[campId] = {
+          campaign_id: campId,
+          campaign_name: payment.campaign?.campaign_name || 'Campanha',
+          nicho: payment.campaign?.nicho_principal,
+          payments: [],
+          totals: {
+            total: 0,
+            confirmed: 0,
+            pending: 0
+          }
+        };
+      }
+
+      // Adicionar nome do cliente no payment para o frontend
+      const paymentWithClient = {
+        ...payment,
+        journey_client_name: payment.journey?.client_name || null
+      };
+      grouped[campId].payments.push(paymentWithClient);
+
+      // Calcular totais
+      const amount = parseFloat(payment.amount) || 0;
+      grouped[campId].totals.total += amount;
+      if (payment.status === 'confirmed') {
+        grouped[campId].totals.confirmed += amount;
+      } else if (payment.status !== 'cancelled' && payment.status !== 'rejected') {
+        grouped[campId].totals.pending += amount;
+      }
+    }
+
+    return res.json({
+      success: true,
+      campaigns: Object.values(grouped),
+      total_payments: payments?.length || 0
+    });
+  } catch (error) {
+    console.error('[Journey Routes] Error fetching payments:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao buscar pagamentos' });
+  }
+});
+
+/**
+ * GET /api/aic/journey/payments/pending
+ * Listar pagamentos pendentes de validacao (submitted)
+ */
+router.get('/payments/pending', async (req: Request, res: Response) => {
+  try {
+    const { supabaseAdmin } = await import('../config/database');
+
+    const { data: payments, error } = await supabaseAdmin
+      .from('aic_campaign_payments')
+      .select(`
+        *,
+        campaign:cluster_campaigns(id, campaign_name),
+        journey:aic_client_journeys(id, client_name, client_email)
+      `)
+      .eq('status', 'submitted')
+      .order('submitted_at', { ascending: true });
+
+    if (error) {
+      console.error('[Journey Routes] Error fetching pending payments:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao buscar pagamentos' });
+    }
+
+    return res.json({
+      success: true,
+      payments: payments || [],
+      count: payments?.length || 0
+    });
+  } catch (error) {
+    console.error('[Journey Routes] Error fetching pending payments:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao buscar pagamentos' });
+  }
+});
+
+/**
+ * POST /api/aic/journey/payments/create-invoice
+ * Criar fatura de leads para uma campanha
+ */
+router.post('/payments/create-invoice', async (req: Request, res: Response) => {
+  try {
+    const { campaign_id, delivery_id, amount, description, due_date } = req.body;
+    const { supabaseAdmin } = await import('../config/database');
+
+    if (!campaign_id || !amount) {
+      return res.status(400).json({ success: false, message: 'campaign_id e amount sao obrigatorios' });
+    }
+
+    // Gerar numero da fatura
+    const { count } = await supabaseAdmin
+      .from('aic_campaign_payments')
+      .select('*', { count: 'exact', head: true })
+      .eq('type', 'lead_invoice');
+
+    const invoiceNumber = `INV-${new Date().getFullYear()}-${String((count || 0) + 1).padStart(4, '0')}`;
+
+    const { data: invoice, error } = await supabaseAdmin
+      .from('aic_campaign_payments')
+      .insert({
+        campaign_id,
+        delivery_id: delivery_id || null,
+        type: 'lead_invoice',
+        invoice_number: invoiceNumber,
+        description: description || 'Fatura de leads entregues',
+        amount,
+        due_date: due_date || new Date().toISOString().split('T')[0],
+        status: 'pending'
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[Journey Routes] Error creating invoice:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao criar fatura' });
+    }
+
+    return res.json({
+      success: true,
+      invoice,
+      message: `Fatura ${invoiceNumber} criada com sucesso`
+    });
+  } catch (error) {
+    console.error('[Journey Routes] Error creating invoice:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao criar fatura' });
+  }
+});
+
+/**
+ * POST /api/aic/journey/payments/:id/confirm
+ * Confirmar um pagamento especifico
+ */
+router.post('/payments/:id/confirm', async (req: Request, res: Response) => {
+  try {
+    const paymentId = getParam(req, 'id');
+    const { confirmed_by } = req.body;
+    const { supabaseAdmin } = await import('../config/database');
+
+    // Buscar o pagamento
+    const { data: payment, error: fetchError } = await supabaseAdmin
+      .from('aic_campaign_payments')
+      .select('*, journey:aic_client_journeys(id, current_step)')
+      .eq('id', paymentId)
+      .single();
+
+    if (fetchError || !payment) {
+      return res.status(404).json({ success: false, message: 'Pagamento nao encontrado' });
+    }
+
+    // Atualizar o pagamento
+    const { error: updateError } = await supabaseAdmin
+      .from('aic_campaign_payments')
+      .update({
+        status: 'confirmed',
+        confirmed_at: new Date().toISOString(),
+        confirmed_by: confirmed_by || 'admin'
+      })
+      .eq('id', paymentId);
+
+    if (updateError) {
+      console.error('[Journey Routes] Error confirming payment:', updateError);
+      return res.status(500).json({ success: false, message: 'Erro ao confirmar pagamento' });
+    }
+
+    // Verificar se todas as parcelas do contrato foram pagas
+    if (payment.type === 'contract_installment' && payment.journey_id) {
+      const { data: allPayments } = await supabaseAdmin
+        .from('aic_campaign_payments')
+        .select('status')
+        .eq('campaign_id', payment.campaign_id)
+        .eq('type', 'contract_installment');
+
+      const allConfirmed = allPayments?.every(p => p.status === 'confirmed');
+
+      if (allConfirmed) {
+        // Atualizar journey para pagamento_confirmado
+        await supabaseAdmin
+          .from('aic_client_journeys')
+          .update({
+            current_step: 'pagamento_confirmado',
+            next_action_message: 'Pagamento confirmado! Configure suas credenciais.'
+          })
+          .eq('id', payment.journey_id);
+      }
+
+      // Atualizar total_paid na journey
+      const { data: confirmedPayments } = await supabaseAdmin
+        .from('aic_campaign_payments')
+        .select('amount')
+        .eq('campaign_id', payment.campaign_id)
+        .eq('type', 'contract_installment')
+        .eq('status', 'confirmed');
+
+      const totalPaid = confirmedPayments?.reduce((sum, p) => sum + parseFloat(p.amount), 0) || 0;
+
+      await supabaseAdmin
+        .from('aic_client_journeys')
+        .update({ total_paid: totalPaid })
+        .eq('id', payment.journey_id);
+    }
+
+    console.log(`[Journey Routes] Payment ${paymentId} confirmed`);
+
+    return res.json({
+      success: true,
+      message: 'Pagamento confirmado com sucesso'
+    });
+  } catch (error) {
+    console.error('[Journey Routes] Error confirming payment:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao confirmar pagamento' });
+  }
+});
+
+/**
+ * POST /api/aic/journey/payments/:id/reject
+ * Rejeitar um pagamento
+ */
+router.post('/payments/:id/reject', async (req: Request, res: Response) => {
+  try {
+    const paymentId = getParam(req, 'id');
+    const { reason } = req.body;
+    const { supabaseAdmin } = await import('../config/database');
+
+    // Buscar pagamento para resetar status
+    const { data: payment } = await supabaseAdmin
+      .from('aic_campaign_payments')
+      .select('journey_id')
+      .eq('id', paymentId)
+      .single();
+
+    const { error } = await supabaseAdmin
+      .from('aic_campaign_payments')
+      .update({
+        status: 'pending', // Volta para pendente para o cliente reenviar
+        rejection_reason: reason || 'Comprovante invalido',
+        payment_proof_url: null,
+        submitted_at: null
+      })
+      .eq('id', paymentId);
+
+    if (error) {
+      console.error('[Journey Routes] Error rejecting payment:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao rejeitar pagamento' });
+    }
+
+    // Atualizar journey se for parcela de contrato
+    if (payment?.journey_id) {
+      await supabaseAdmin
+        .from('aic_client_journeys')
+        .update({
+          current_step: 'contrato_assinado',
+          next_action_message: `Pagamento rejeitado: ${reason || 'Comprovante invalido'}. Por favor, envie novamente.`,
+          payment_submitted_at: null,
+          payment_proof_url: null
+        })
+        .eq('id', payment.journey_id);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Pagamento rejeitado. Cliente sera notificado.'
+    });
+  } catch (error) {
+    console.error('[Journey Routes] Error rejecting payment:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao rejeitar pagamento' });
   }
 });
 
@@ -690,6 +1126,111 @@ router.post('/:id/notify-payment', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao notificar pagamento'
+    });
+  }
+});
+
+/**
+ * POST /api/aic/journey/submit-payment
+ * Cliente envia comprovante de pagamento (self-service)
+ * Aceita journey_id via query ?journey=ID ou body { journey_id }
+ * Atualiza a tabela aic_journey_payments e a journey
+ */
+router.post('/submit-payment', async (req: Request, res: Response) => {
+  try {
+    const journeyId = req.query.journey as string || req.body.journey_id;
+    const { payment_proof_url, payment_notes, installment_number } = req.body;
+
+    if (!journeyId) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID da jornada é obrigatório'
+      });
+    }
+
+    const journey = await clientJourneyService.getJourneyById(journeyId);
+    if (!journey) {
+      return res.status(404).json({
+        success: false,
+        message: 'Jornada não encontrada'
+      });
+    }
+
+    const { supabaseAdmin } = await import('../config/database');
+
+    // Buscar próxima parcela pendente ou a especificada
+    let query = supabaseAdmin
+      .from('aic_journey_payments')
+      .select('*')
+      .eq('journey_id', journeyId)
+      .eq('status', 'pending')
+      .order('installment_number', { ascending: true });
+
+    if (installment_number) {
+      query = query.eq('installment_number', installment_number);
+    }
+
+    const { data: pendingPayments, error: fetchError } = await query.limit(1);
+
+    if (fetchError || !pendingPayments || pendingPayments.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nenhuma parcela pendente encontrada'
+      });
+    }
+
+    const payment = pendingPayments[0];
+
+    // Atualizar a parcela com o comprovante
+    const { error: updateError } = await supabaseAdmin
+      .from('aic_journey_payments')
+      .update({
+        status: 'submitted',
+        payment_proof_url: payment_proof_url || null,
+        payment_notes: payment_notes || null,
+        submitted_at: new Date().toISOString()
+      })
+      .eq('id', payment.id);
+
+    if (updateError) {
+      console.error('[Journey Routes] Error updating payment:', updateError);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao enviar comprovante'
+      });
+    }
+
+    // Atualizar journey para pagamento_pendente (compatibilidade)
+    await supabaseAdmin
+      .from('aic_client_journeys')
+      .update({
+        payment_submitted_at: new Date().toISOString(),
+        payment_proof_url: payment_proof_url || null,
+        payment_notes: payment_notes || null,
+        payment_amount: payment.amount,
+        payment_installment: payment.installment_number,
+        current_step: 'pagamento_pendente',
+        next_action_message: 'Pagamento em análise. Você receberá uma notificação quando confirmado.'
+      })
+      .eq('id', journeyId);
+
+    console.log(`[Journey Routes] Payment submitted for journey ${journeyId}: R$ ${payment.amount} (parcela ${payment.installment_number})`);
+
+    return res.json({
+      success: true,
+      message: 'Comprovante enviado com sucesso. Aguarde a confirmação.',
+      payment: {
+        id: payment.id,
+        amount: payment.amount,
+        installment: payment.installment_number,
+        due_date: payment.due_date
+      }
+    });
+  } catch (error) {
+    console.error('[Journey Routes] Error submitting payment:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao enviar comprovante'
     });
   }
 });

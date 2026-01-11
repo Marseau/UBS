@@ -106,6 +106,11 @@
       font-size: 14px;
     }
 
+    /* Esconder header quando sidebar está aberto */
+    body.aic-sidebar-open .header {
+      display: none;
+    }
+
     /* Main Content */
     .main { padding: 48px 0 80px; }
 
@@ -267,6 +272,33 @@
     .lead-instagram {
       font-size: 12px;
       color: var(--aic-purple);
+    }
+
+    /* Unseen Indicators */
+    .unseen-row {
+      background: rgba(249, 158, 11, 0.05) !important;
+      border-left: 3px solid var(--aic-orange);
+    }
+    .unseen-row:hover {
+      background: rgba(249, 158, 11, 0.1) !important;
+    }
+    .unseen-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: var(--aic-orange);
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: pulse 2s infinite;
+      vertical-align: middle;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.2); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    .lead-info {
+      position: relative;
     }
 
     /* Status Badge */
@@ -508,6 +540,9 @@
           <h1><span>Reunioes</span> de Fechamento</h1>
           <p>Prospects interessados em contratar os servicos AIC</p>
         </div>
+        <button id="btnMarkAllSeen" onclick="markAllSeen()" style="background:var(--aic-orange);color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;display:none;">
+          ✓ Marcar todas como vistas
+        </button>
       </div>
 
       <!-- Stats Grid -->
@@ -523,6 +558,10 @@
         <div class="stat-card">
           <div class="stat-label">Em Negociacao</div>
           <div class="stat-value purple" id="statNegociando">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Contratos Enviados</div>
+          <div class="stat-value" style="color:var(--aic-orange);" id="statEnviados">0</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Contratos Assinados</div>
@@ -542,6 +581,7 @@
           <button class="filter-tab" data-status="reuniao_agendada">Reuniao Agendada</button>
           <button class="filter-tab" data-status="reuniao_realizada">Reuniao Realizada</button>
           <button class="filter-tab" data-status="negociando">Negociando</button>
+          <button class="filter-tab" data-status="contrato_enviado">Contrato Enviado</button>
           <button class="filter-tab" data-status="contrato_assinado">Contrato Assinado</button>
           <button class="filter-tab" data-status="briefing_pendente">Briefing</button>
           <button class="filter-tab" data-status="onboarding_pendente">Onboarding</button>
@@ -616,19 +656,66 @@
           <label>Observacoes</label>
           <textarea id="modalNotes" rows="3" placeholder="Anotacoes sobre o prospect..."></textarea>
         </div>
+        <!-- Contract Link Info -->
+        <div id="contractLinkInfo" style="display:none;background:var(--aic-orange-subtle);border:1px solid var(--aic-orange);border-radius:8px;padding:16px;margin-top:12px;">
+          <p style="font-size:13px;color:var(--aic-orange);margin-bottom:8px;">
+            <strong>📋 Link do Contrato</strong> - Sera gerado automaticamente ao salvar
+          </p>
+          <p style="font-size:12px;color:var(--aic-gray);">
+            Envie este link para o prospect assinar o contrato digitalmente. Apos a assinatura, o status sera atualizado automaticamente.
+          </p>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-cancel" onclick="closeModal()">Cancelar</button>
-        <button class="btn btn-save" onclick="saveStatus()">Salvar</button>
+        <button class="btn btn-save" id="btnSaveStatus" onclick="saveStatus()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Contract Link -->
+  <div id="contractLinkModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Link do Contrato Gerado</h3>
+        <button class="modal-close" onclick="closeContractModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:14px;color:var(--aic-gray);margin-bottom:16px;">
+          Envie este link para o prospect pelo WhatsApp ou Email. Quando ele assinar, o status sera atualizado automaticamente para "Contrato Assinado".
+        </p>
+        <div style="background:var(--aic-navy);border:1px solid var(--aic-border);border-radius:8px;padding:16px;display:flex;gap:12px;align-items:center;">
+          <input type="text" id="contractLinkInput" readonly style="flex:1;background:transparent;border:none;color:var(--aic-white);font-size:13px;outline:none;">
+          <button onclick="copyContractLink()" style="background:var(--aic-green);color:var(--aic-navy);border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:500;white-space:nowrap;">
+            📋 Copiar
+          </button>
+        </div>
+        <div id="copySuccess" style="display:none;text-align:center;color:var(--aic-green);font-size:13px;margin-top:12px;">
+          ✓ Link copiado para a area de transferencia!
+        </div>
+
+        <div style="margin-top:24px;background:var(--aic-green-subtle);border:1px solid rgba(14,204,151,0.3);border-radius:8px;padding:16px;">
+          <p style="font-size:13px;color:var(--aic-green);margin-bottom:8px;"><strong>Sugestao de mensagem:</strong></p>
+          <p id="whatsappMessage" style="font-size:13px;color:var(--aic-gray-light);line-height:1.6;"></p>
+          <button onclick="copyWhatsappMessage()" style="margin-top:12px;background:rgba(37,211,102,0.2);color:#25d366;border:1px solid rgba(37,211,102,0.5);padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;">
+            📱 Copiar Mensagem
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-cancel" onclick="closeContractModal()">Fechar</button>
+        <button id="emailSendBtn" onclick="sendContractByEmail()" class="btn" style="background:var(--aic-blue);color:white;border:none;display:flex;align-items:center;gap:6px;">
+          <span id="emailBtnText">📧 Enviar por Email</span>
+        </button>
+        <a id="whatsappSendBtn" href="#" target="_blank" class="btn btn-save" style="background:#25d366;text-decoration:none;">
+          Enviar por WhatsApp
+        </a>
       </div>
     </div>
   </div>
 
   <script>
-    const SUPABASE_URL = 'https://qsdfyffuonywmtnlycri.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTM5NjMwMzIsImV4cCI6MjAyOTUzOTAzMn0.szp1X8vTNhe5FEyzPkSqvSuMCBwQfbRp5qCBno3EJxI';
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+    // API-based page - no Supabase client needed
     let allDeliveries = [];
     let currentFilter = '';
 
@@ -640,6 +727,19 @@
         if (data.success) {
           // Only show prospects (campaign_id is NULL)
           allDeliveries = (data.deliveries || []).filter(d => d.campaign_id === null);
+
+          // Check for unseen items and show button
+          const unseenCount = allDeliveries.filter(d => !d.seen_at).length;
+          const btnMarkAll = document.getElementById('btnMarkAllSeen');
+          if (btnMarkAll) {
+            if (unseenCount > 0) {
+              btnMarkAll.style.display = 'block';
+              btnMarkAll.textContent = `✓ Marcar ${unseenCount} como vistas`;
+            } else {
+              btnMarkAll.style.display = 'none';
+            }
+          }
+
           updateStats();
           renderTable();
         }
@@ -655,10 +755,40 @@
       }
     }
 
+    async function markAllSeen() {
+      try {
+        const response = await fetch('/api/aic/lead-deliveries/mark-all-seen', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          // Update local data
+          allDeliveries.forEach(d => {
+            if (!d.seen_at) d.seen_at = new Date().toISOString();
+          });
+
+          // Hide button
+          const btnMarkAll = document.getElementById('btnMarkAllSeen');
+          if (btnMarkAll) btnMarkAll.style.display = 'none';
+
+          // Re-render table to remove unseen indicators
+          renderTable();
+
+          alert(`${data.marked_count} reunioes marcadas como vistas`);
+        }
+      } catch (error) {
+        console.error('Erro ao marcar como vistas:', error);
+        alert('Erro ao marcar como vistas');
+      }
+    }
+
     function updateStats() {
       document.getElementById('statTotal').textContent = allDeliveries.length;
       document.getElementById('statAgendadas').textContent = allDeliveries.filter(d => d.status === 'reuniao_agendada').length;
       document.getElementById('statNegociando').textContent = allDeliveries.filter(d => d.status === 'negociando').length;
+      document.getElementById('statEnviados').textContent = allDeliveries.filter(d => d.status === 'contrato_enviado').length;
       document.getElementById('statContratos').textContent = allDeliveries.filter(d => d.status === 'contrato_assinado').length;
       document.getElementById('statAtivas').textContent = allDeliveries.filter(d => d.status === 'campanha_ativa').length;
     }
@@ -693,9 +823,10 @@
       }
 
       tbody.innerHTML = filtered.map(d => `
-        <tr>
+        <tr class="${!d.seen_at ? 'unseen-row' : ''}">
           <td>
             <div class="lead-info">
+              ${!d.seen_at ? '<span class="unseen-dot" title="Nova"></span>' : ''}
               <span class="lead-name">${d.lead_name || 'Prospect'}</span>
               <span class="lead-phone">${d.lead_whatsapp}</span>
               ${d.lead_email ? `<span class="lead-email">${d.lead_email}</span>` : ''}
@@ -709,6 +840,8 @@
           <td>
             <div class="action-buttons">
               <button class="btn-action primary" onclick="openModal('${d.id}', '${d.status}')">Atualizar</button>
+              ${d.status === 'contrato_enviado' ? `<button class="btn-action" style="background:var(--aic-orange-subtle);color:var(--aic-orange);" onclick="viewContractLink('${d.id}')">📋 Link</button>` : ''}
+              ${d.contract_id ? `<a href="/aic-campaign-briefing.html?contract=${d.contract_id}" class="btn-action" style="background:var(--aic-green-subtle);color:var(--aic-green);">Ver Contrato</a>` : ''}
               <a href="https://wa.me/${d.lead_whatsapp?.replace(/\D/g, '')}" target="_blank" class="btn-action whatsapp">WhatsApp</a>
             </div>
           </td>
@@ -774,6 +907,20 @@
       const status = document.getElementById('modalStatus').value;
       const showMeeting = ['reuniao_agendada', 'reuniao_realizada'].includes(status);
       document.getElementById('meetingFields').style.display = showMeeting ? 'block' : 'none';
+
+      // Show contract link info when selecting contrato_enviado
+      const showContractInfo = status === 'contrato_enviado';
+      document.getElementById('contractLinkInfo').style.display = showContractInfo ? 'block' : 'none';
+
+      // Update button text
+      const btnSave = document.getElementById('btnSaveStatus');
+      if (showContractInfo) {
+        btnSave.textContent = 'Gerar Link e Salvar';
+        btnSave.style.background = 'var(--aic-orange)';
+      } else {
+        btnSave.textContent = 'Salvar';
+        btnSave.style.background = 'var(--aic-yellow)';
+      }
     }
 
     document.getElementById('modalStatus').addEventListener('change', toggleMeetingFields);
@@ -784,6 +931,40 @@
       const notes = document.getElementById('modalNotes').value;
       const meetingAt = document.getElementById('modalMeetingAt').value;
 
+      const btnSave = document.getElementById('btnSaveStatus');
+      btnSave.disabled = true;
+      btnSave.textContent = 'Salvando...';
+
+      // If contrato_enviado, generate contract link
+      if (status === 'contrato_enviado') {
+        try {
+          const linkResponse = await fetch(`/api/aic/lead-deliveries/${id}/generate-contract-link`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ regenerate: false })
+          });
+
+          const linkData = await linkResponse.json();
+          if (linkData.success) {
+            closeModal();
+            loadDeliveries();
+            showContractLinkModal(linkData.contract_url, id);
+          } else {
+            alert('Erro ao gerar link: ' + linkData.message);
+            btnSave.disabled = false;
+            btnSave.textContent = 'Gerar Link e Salvar';
+          }
+          return;
+        } catch (error) {
+          console.error('Erro ao gerar link:', error);
+          alert('Erro ao gerar link do contrato');
+          btnSave.disabled = false;
+          btnSave.textContent = 'Gerar Link e Salvar';
+          return;
+        }
+      }
+
+      // Normal status update
       const body = { status, notes };
       if (meetingAt && status === 'reuniao_agendada') {
         body.meeting_scheduled_at = meetingAt;
@@ -810,10 +991,137 @@
         console.error('Erro:', error);
         alert('Erro ao atualizar status');
       }
+
+      btnSave.disabled = false;
+      btnSave.textContent = 'Salvar';
+    }
+
+    // Contract Link Modal Functions
+    let currentContractData = { url: '', deliveryId: '' };
+
+    function showContractLinkModal(contractUrl, deliveryId) {
+      currentContractData = { url: contractUrl, deliveryId };
+
+      // Find delivery to get prospect info
+      const delivery = allDeliveries.find(d => d.id === deliveryId);
+      const prospectName = delivery?.lead_name || 'Prospect';
+      const prospectPhone = delivery?.lead_whatsapp?.replace(/\D/g, '') || '';
+
+      // Set link input
+      document.getElementById('contractLinkInput').value = contractUrl;
+
+      // Create WhatsApp message
+      const message = `Ola ${prospectName}!
+
+Conforme combinamos, segue o link para formalizar nossa parceria. E um processo simples e rapido:
+
+${contractUrl}
+
+Basta preencher os dados e aceitar os termos. Qualquer duvida estou a disposicao!`;
+
+      document.getElementById('whatsappMessage').textContent = message;
+
+      // Set WhatsApp send button
+      const encodedMessage = encodeURIComponent(message);
+      document.getElementById('whatsappSendBtn').href = `https://wa.me/${prospectPhone}?text=${encodedMessage}`;
+
+      // Show modal
+      document.getElementById('contractLinkModal').classList.add('active');
+    }
+
+    function closeContractModal() {
+      document.getElementById('contractLinkModal').classList.remove('active');
+      document.getElementById('copySuccess').style.display = 'none';
+    }
+
+    function copyContractLink() {
+      const input = document.getElementById('contractLinkInput');
+      navigator.clipboard.writeText(input.value).then(() => {
+        document.getElementById('copySuccess').style.display = 'block';
+        setTimeout(() => {
+          document.getElementById('copySuccess').style.display = 'none';
+        }, 3000);
+      });
+    }
+
+    function copyWhatsappMessage() {
+      const message = document.getElementById('whatsappMessage').textContent;
+      navigator.clipboard.writeText(message).then(() => {
+        alert('Mensagem copiada!');
+      });
+    }
+
+    // Send contract link by email
+    async function sendContractByEmail() {
+      if (!currentContractData?.deliveryId) {
+        alert('Erro: ID do delivery nao encontrado');
+        return;
+      }
+
+      const delivery = allDeliveries.find(d => d.id === currentContractData.deliveryId);
+      if (!delivery?.lead_email) {
+        alert('Este prospect nao tem email cadastrado. Preencha o email primeiro.');
+        return;
+      }
+
+      const btn = document.getElementById('emailSendBtn');
+      const btnText = document.getElementById('emailBtnText');
+      btn.disabled = true;
+      btnText.textContent = 'Enviando...';
+
+      try {
+        const response = await fetch(`/api/aic/contracts/${currentContractData.deliveryId}/send-link`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          btnText.textContent = '✓ Email Enviado!';
+          btn.style.background = 'var(--aic-green)';
+          setTimeout(() => {
+            btn.disabled = false;
+            btnText.textContent = '📧 Enviar por Email';
+            btn.style.background = 'var(--aic-blue)';
+          }, 3000);
+        } else {
+          alert('Erro ao enviar email: ' + data.message);
+          btn.disabled = false;
+          btnText.textContent = '📧 Enviar por Email';
+        }
+      } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao enviar email');
+        btn.disabled = false;
+        btnText.textContent = '📧 Enviar por Email';
+      }
+    }
+
+    // Generate/View contract link for existing contrato_enviado
+    async function viewContractLink(deliveryId) {
+      try {
+        const response = await fetch(`/api/aic/lead-deliveries/${deliveryId}/generate-contract-link`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ regenerate: false })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          showContractLinkModal(data.contract_url, deliveryId);
+        } else {
+          alert('Erro: ' + data.message);
+        }
+      } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao obter link do contrato');
+      }
     }
 
     // Load data on page load
     loadDeliveries();
   </script>
+  <script src="/components/aic-sidebar.js"></script>
 </body>
 </html>

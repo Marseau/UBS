@@ -271,25 +271,6 @@
       display: block;
     }
 
-    /* Magic Link */
-    .btn-magic {
-      width: 100%;
-      background: transparent;
-      color: var(--aic-green);
-      border: 1px solid var(--aic-green);
-      border-radius: 12px;
-      padding: 14px 24px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      margin-top: 12px;
-    }
-
-    .btn-magic:hover {
-      background: var(--aic-green-subtle);
-    }
-
     /* Footer */
     .login-footer {
       margin-top: 32px;
@@ -352,10 +333,6 @@
           </div>
 
           <button type="submit" class="btn-primary" id="btnLogin">Entrar</button>
-
-          <button type="button" class="btn-magic" onclick="sendMagicLink()">
-            Enviar link de acesso por email
-          </button>
         </form>
 
         <div class="login-links">
@@ -449,10 +426,105 @@
     </div>
   </div>
 
-  <!-- Supabase Client -->
-  <script src="/js/supabase-client.js"></script>
-
   <script>
+    // ===========================================
+    // SUPABASE INITIALIZATION (INLINE)
+    // ===========================================
+    const SUPABASE_URL = 'https://qsdfyffuonywmtnlycri.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExMjY0NzgsImV4cCI6MjA2NjcwMjQ3OH0.IDJdOApiNM0FJvRe5mp28L7U89GWeHpPoPlPreexwbg';
+
+    // Verificar se SDK do CDN carregou
+    if (typeof supabase === 'undefined') {
+      document.addEventListener('DOMContentLoaded', function() {
+        const msg = document.getElementById('message');
+        if (msg) {
+          msg.textContent = 'Erro: SDK do Supabase nao carregou. Verifique sua conexao e recarregue a pagina.';
+          msg.className = 'message error';
+        }
+      });
+      throw new Error('Supabase SDK not loaded');
+    }
+
+    // Criar cliente Supabase
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.supabaseClient = supabaseClient;
+
+    // Criar AICAuth
+    const AICAuth = {
+      async getSession() {
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        return { session, error };
+      },
+      async getUser() {
+        const { data: { user }, error } = await supabaseClient.auth.getUser();
+        return { user, error };
+      },
+      async signInWithGoogle() {
+        const { data, error } = await supabaseClient.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.origin + '/aic-campaigns-dashboard.html' }
+        });
+        return { data, error };
+      },
+      async signInWithEmail(email, password) {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        return { data, error };
+      },
+      async signUp(email, password, metadata = {}) {
+        const { data, error } = await supabaseClient.auth.signUp({
+          email, password, options: { data: metadata }
+        });
+        return { data, error };
+      },
+      async signOut() {
+        const { error } = await supabaseClient.auth.signOut();
+        if (!error) window.location.href = '/aic-login.html';
+        return { error };
+      },
+      async resetPassword(email) {
+        const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + '/aic-reset-password.html'
+        });
+        return { data, error };
+      },
+      onAuthStateChange(callback) {
+        return supabaseClient.auth.onAuthStateChange(callback);
+      }
+    };
+    window.AICAuth = AICAuth;
+
+    // ===========================================
+    // LOGIN PAGE LOGIC
+    // ===========================================
+
+    // Protecao anti-loop: detectar redirects excessivos
+    const REDIRECT_KEY = 'aic_login_redirects';
+    const MAX_REDIRECTS = 3;
+    const REDIRECT_WINDOW = 10000; // 10 segundos
+
+    function checkRedirectLoop() {
+      const now = Date.now();
+      const stored = sessionStorage.getItem(REDIRECT_KEY);
+      let redirects = stored ? JSON.parse(stored) : [];
+      redirects = redirects.filter(t => now - t < REDIRECT_WINDOW);
+      if (redirects.length >= MAX_REDIRECTS) {
+        console.error('Loop de redirect detectado!');
+        return true;
+      }
+      redirects.push(now);
+      sessionStorage.setItem(REDIRECT_KEY, JSON.stringify(redirects));
+      return false;
+    }
+
+    function safeRedirect(url) {
+      if (checkRedirectLoop()) {
+        showMessage('Muitos redirecionamentos. Aguarde alguns segundos.');
+        return false;
+      }
+      window.location.href = url;
+      return true;
+    }
+
     // Salvar redirect no localStorage para usar após login
     const urlParams = new URLSearchParams(window.location.search);
     const savedRedirect = urlParams.get('redirect');
@@ -460,27 +532,39 @@
       localStorage.setItem('aic_login_redirect', savedRedirect);
     }
 
-    // Verificar se ja esta logado
-    (async function() {
-      const { user } = await AICAuth.getUser();
-      if (user) {
-        // Ja logado - smart redirect based on role
-        await smartRedirect(user);
-      }
-    })();
-
     // Mostrar mensagem
     function showMessage(text, type = 'error') {
       const msg = document.getElementById('message');
-      msg.textContent = text;
-      msg.className = 'message ' + type;
+      if (msg) {
+        msg.textContent = text;
+        msg.className = 'message ' + type;
+      }
     }
 
     function clearMessage() {
       const msg = document.getElementById('message');
-      msg.className = 'message';
-      msg.textContent = '';
+      if (msg) {
+        msg.className = 'message';
+        msg.textContent = '';
+      }
     }
+
+    // Verificar se ja esta logado (executar apos DOM ready)
+    document.addEventListener('DOMContentLoaded', async function() {
+      try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session?.user) {
+          // Salvar token no localStorage antes de redirecionar
+          if (session.access_token) {
+            localStorage.setItem('aic_access_token', session.access_token);
+            localStorage.setItem('aic_refresh_token', session.refresh_token || '');
+          }
+          await smartRedirect(session.user);
+        }
+      } catch (e) {
+        console.error('Erro ao verificar sessao:', e);
+      }
+    });
 
     // Smart routing based on lead delivery status
     async function smartRedirect(user) {
@@ -495,7 +579,7 @@
 
       const email = user?.email;
       if (!email) {
-        window.location.href = '/aic-aguardando.html?msg=sem_email';
+        safeRedirect('/aic-aguardando.html?msg=sem_email');
         return;
       }
 
@@ -511,6 +595,26 @@
         if (isAdmin) {
           window.location.href = '/aic/campanhas';
           return;
+        }
+
+        // Verificar se tem jornada de cliente (portal do cliente)
+        try {
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          if (session?.access_token) {
+            const journeyRes = await fetch('/api/aic/journey/me', {
+              headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+            if (journeyRes.ok) {
+              const journeyData = await journeyRes.json();
+              if (journeyData.success && journeyData.journey) {
+                // Tem jornada de cliente - redirecionar para portal do cliente
+                window.location.href = '/cliente';
+                return;
+              }
+            }
+          }
+        } catch (journeyErr) {
+          console.log('Nao possui jornada de cliente, verificando lead_deliveries...');
         }
 
         // Buscar lead na tabela de entregas (por email)
@@ -543,7 +647,7 @@
 
         // Nao e um lead entregue - nao pode seguir
         if (!delivery) {
-          window.location.href = '/aic-aguardando.html?msg=nao_qualificado';
+          safeRedirect('/aic-aguardando.html?msg=nao_qualificado');
           return;
         }
 
@@ -556,7 +660,7 @@
           case 'reuniao_realizada':
           case 'negociando':
             // Aguardando representante/admin liberar
-            window.location.href = '/aic-aguardando.html?msg=em_negociacao';
+            safeRedirect('/aic-aguardando.html?msg=em_negociacao');
             break;
 
           case 'contrato_enviado':
@@ -587,7 +691,7 @@
           case 'onboarding_completo':
           case 'aguardando_campanha':
             // Tudo pronto, aguardando admin criar campanha
-            window.location.href = '/aic-aguardando.html?msg=aguardando_campanha';
+            safeRedirect('/aic-aguardando.html?msg=aguardando_campanha');
             break;
 
           case 'campanha_ativa':
@@ -598,16 +702,16 @@
 
           case 'perdido':
             // Lead perdido
-            window.location.href = '/aic-aguardando.html?msg=contato_encerrado';
+            safeRedirect('/aic-aguardando.html?msg=contato_encerrado');
             break;
 
           default:
-            window.location.href = '/aic-aguardando.html';
+            safeRedirect('/aic-aguardando.html');
         }
 
       } catch (err) {
         console.error('Routing error:', err);
-        window.location.href = '/aic-aguardando.html?msg=erro';
+        safeRedirect('/aic-aguardando.html?msg=erro');
       }
     }
 
@@ -676,6 +780,13 @@
         const { data, error } = await AICAuth.signInWithEmail(email, password);
         if (error) throw error;
 
+        // Salvar token explicitamente no localStorage para compartilhar entre paginas
+        if (data.session?.access_token) {
+          localStorage.setItem('aic_access_token', data.session.access_token);
+          localStorage.setItem('aic_refresh_token', data.session.refresh_token || '');
+          console.log('[Login] Token salvo no localStorage');
+        }
+
         // Smart redirect based on user role
         await smartRedirect(data.user);
 
@@ -697,23 +808,6 @@
         showMessage(message);
         btn.textContent = originalText;
         btn.disabled = false;
-      }
-    }
-
-    // Magic Link
-    async function sendMagicLink() {
-      const email = document.getElementById('email').value;
-      if (!email) {
-        showMessage('Digite seu email primeiro');
-        return;
-      }
-
-      try {
-        const { data, error } = await AICAuth.sendMagicLink(email);
-        if (error) throw error;
-        showMessage('Link enviado! Verifique seu email.', 'success');
-      } catch (err) {
-        showMessage('Erro ao enviar link: ' + err.message);
       }
     }
 

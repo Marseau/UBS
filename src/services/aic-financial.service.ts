@@ -278,8 +278,11 @@ class AICFinancialService {
 
   /**
    * Registrar entrega de lead quente
+   * Cria fatura automaticamente na tabela aic_campaign_payments
    */
-  async createDelivery(input: CreateDeliveryInput): Promise<HotLeadDelivery> {
+  async createDelivery(input: CreateDeliveryInput & { auto_invoice?: boolean }): Promise<HotLeadDelivery & { invoice?: any }> {
+    const deliveredAt = new Date().toISOString();
+
     const { data, error } = await supabase
       .from('aic_hot_lead_deliveries')
       .insert({
@@ -301,13 +304,71 @@ class AICFinancialService {
         conversation_summary: input.conversation_summary,
         billable: input.billable ?? true,
         unit_value: input.unit_value,
-        delivered_at: new Date().toISOString()
+        delivered_at: deliveredAt
       })
       .select()
       .single();
 
     if (error) throw error;
     console.log(`[AIC Financial] Delivery created: ${data.id} - ${input.lead_name} (${input.delivery_type})`);
+
+    // Criar fatura automaticamente (padrao: true)
+    const autoInvoice = input.auto_invoice !== false;
+    const unitValue = input.unit_value || 0;
+
+    if (autoInvoice && unitValue > 0 && input.billable !== false) {
+      try {
+        // Gerar numero da fatura sequencial
+        const { count } = await supabase
+          .from('aic_campaign_payments')
+          .select('*', { count: 'exact', head: true })
+          .eq('campaign_id', input.campaign_id)
+          .eq('type', 'lead_invoice');
+
+        const sequenceNum = (count || 0) + 1;
+        const invoiceNumber = `LEAD-${input.campaign_id.slice(0, 6).toUpperCase()}-${String(sequenceNum).padStart(4, '0')}`;
+
+        // Vencimento em 5 dias
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 5);
+
+        // Descricao baseada no tipo
+        const typeLabels: Record<string, string> = {
+          'reuniao_marcada': 'Reuniao Marcada',
+          'proposta_enviada': 'Proposta Enviada',
+          'interesse_confirmado': 'Interesse Confirmado',
+          'whatsapp_capturado': 'WhatsApp Capturado',
+          'negociacao': 'Em Negociacao'
+        };
+        const typeLabel = typeLabels[input.delivery_type] || input.delivery_type;
+
+        const { data: invoice, error: invoiceError } = await supabase
+          .from('aic_campaign_payments')
+          .insert({
+            campaign_id: input.campaign_id,
+            journey_id: input.journey_id,
+            delivery_id: data.id,
+            type: 'lead_invoice',
+            invoice_number: invoiceNumber,
+            description: `Lead Quente: ${input.lead_name} (${typeLabel})`,
+            amount: unitValue,
+            due_date: dueDate.toISOString().split('T')[0],
+            status: 'pending'
+          })
+          .select()
+          .single();
+
+        if (invoiceError) {
+          console.error('[AIC Financial] Erro ao criar fatura automatica:', invoiceError);
+        } else {
+          console.log(`[AIC Financial] Fatura criada: ${invoiceNumber} - R$ ${unitValue}`);
+          return { ...data, invoice };
+        }
+      } catch (invoiceErr) {
+        console.error('[AIC Financial] Erro ao criar fatura:', invoiceErr);
+      }
+    }
+
     return data;
   }
 

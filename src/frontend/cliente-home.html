@@ -89,6 +89,41 @@
       border-color: var(--aic-green);
     }
 
+    /* Search Input */
+    .search-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      color: var(--aic-gray);
+      pointer-events: none;
+    }
+
+    .search-input {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 10px;
+      padding: 12px 16px 12px 42px;
+      color: var(--aic-white);
+      font-size: 14px;
+      font-family: inherit;
+      min-width: 220px;
+      transition: border-color 0.2s;
+    }
+
+    .search-input::placeholder {
+      color: var(--aic-gray);
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--aic-green);
+    }
+
     /* Stats Cards */
     .stats-grid {
       display: grid;
@@ -341,6 +376,28 @@
       margin-bottom: 24px;
     }
 
+    .btn-new-campaign {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 28px;
+      background: var(--aic-green);
+      color: var(--aic-navy);
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+
+    .btn-new-campaign:hover {
+      background: #10E6A8;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(14, 204, 151, 0.3);
+    }
+
     /* Buttons */
     .btn {
       display: inline-flex;
@@ -584,6 +641,13 @@
           <p id="pageSubtitle">Gerencie suas campanhas de prospeccao inteligente</p>
         </div>
         <div class="header-actions">
+          <!-- Search by name -->
+          <div class="search-wrapper">
+            <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input type="text" class="search-input" id="searchInput" placeholder="Buscar campanha...">
+          </div>
           <!-- Admin: Client Filter -->
           <select class="filter-select" id="clientFilter" style="display: none;">
             <option value="">Todos os clientes</option>
@@ -648,8 +712,12 @@
         <div class="empty-icon">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
         </div>
-        <h3>Nenhuma campanha encontrada</h3>
+        <h3 id="emptyTitle">Nenhuma campanha encontrada</h3>
         <p id="emptyMessage">Voce ainda nao possui campanhas cadastradas.</p>
+        <a href="/cliente/proposta" class="btn-new-campaign" id="btnNewCampaign" style="margin-top: 24px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <span>Ver Proposta</span>
+        </a>
       </div>
     </div>
   </div>
@@ -658,6 +726,7 @@
     const SUPABASE_URL = 'https://qsdfyffuonywmtnlycri.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExMjY0NzgsImV4cCI6MjA2NjcwMjQ3OH0.IDJdOApiNM0FJvRe5mp28L7U89GWeHpPoPlPreexwbg';
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.supabaseClient = supabaseClient;  // Exportar para sidebar usar
 
     // Icons
     const ICONS = {
@@ -687,25 +756,21 @@
     };
 
     let campaigns = [];
+    let allCampaignsCount = 0;  // Total de campanhas (para saber se é cliente novo ou retornando)
     let clients = [];
     let isAdmin = false;
     let currentClientId = null;
 
     async function init() {
-      isAdmin = localStorage.getItem('aic_user_role') === 'admin';
+      // Esta página é SEMPRE visão do cliente, nunca admin
+      isAdmin = false;
 
-      // Setup filters
+      // Setup filters (apenas status filter, client filter não existe para cliente)
       document.getElementById('statusFilter').addEventListener('change', renderCampaigns);
-      document.getElementById('clientFilter').addEventListener('change', (e) => {
-        currentClientId = e.target.value;
-        renderCampaigns();
-      });
+      document.getElementById('searchInput').addEventListener('input', renderCampaigns);
 
-      if (isAdmin) {
-        document.getElementById('pageTitle').textContent = 'Gestao de Campanhas';
-        document.getElementById('pageSubtitle').textContent = 'Visualize e gerencie todas as campanhas dos clientes';
-        document.getElementById('clientFilter').style.display = 'block';
-      }
+      // Garantir que elementos de admin estejam ocultos
+      document.getElementById('clientFilter').style.display = 'none';
 
       await loadCampaigns();
     }
@@ -748,6 +813,7 @@
 
         const data = await response.json();
         campaigns = data.campaigns || [];
+        allCampaignsCount = data.total_count || campaigns.length;  // Total histórico de campanhas
 
         // Extract unique clients for admin filter
         if (isAdmin && campaigns.length > 0) {
@@ -786,10 +852,25 @@
     function renderCampaigns() {
       const statusFilter = document.getElementById('statusFilter').value;
       const clientFilter = currentClientId;
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
 
       // Filter campaigns
       let filtered = campaigns.filter(c => {
         const stepConfig = STEP_CONFIG[c.current_step] || { group: 'setup' };
+
+        // Search filter (by campaign name, project name, or client name)
+        if (searchTerm) {
+          const campaignName = (c.campaign_name || '').toLowerCase();
+          const projectName = (c.project_name || '').toLowerCase();
+          const clientName = (c.client_name || '').toLowerCase();
+          const nicho = (c.nicho_principal || '').toLowerCase();
+          if (!campaignName.includes(searchTerm) &&
+              !projectName.includes(searchTerm) &&
+              !clientName.includes(searchTerm) &&
+              !nicho.includes(searchTerm)) {
+            return false;
+          }
+        }
 
         // Status filter
         if (statusFilter) {
@@ -821,9 +902,23 @@
       if (filtered.length === 0) {
         container.innerHTML = '';
         document.getElementById('emptyState').style.display = 'block';
-        document.getElementById('emptyMessage').textContent = statusFilter || clientFilter
-          ? 'Nenhuma campanha encontrada com os filtros selecionados.'
-          : 'Voce ainda nao possui campanhas cadastradas.';
+
+        if (statusFilter || clientFilter) {
+          // Filtro aplicado mas sem resultados
+          document.getElementById('emptyTitle').textContent = 'Nenhuma campanha encontrada';
+          document.getElementById('emptyMessage').textContent = 'Nenhuma campanha encontrada com os filtros selecionados.';
+          document.getElementById('btnNewCampaign').style.display = 'none';
+        } else if (allCampaignsCount === 0) {
+          // Cliente novo - nunca teve campanhas
+          document.getElementById('emptyTitle').textContent = 'Bem Vindo!';
+          document.getElementById('emptyMessage').textContent = 'Comece sua jornada, pressione em Proposta para conhecer nossa proposta de trabalho.';
+          document.getElementById('btnNewCampaign').style.display = 'inline-flex';
+        } else {
+          // Cliente retornando - já teve campanhas antes
+          document.getElementById('emptyTitle').textContent = 'Nova Campanha';
+          document.getElementById('emptyMessage').textContent = 'Inicie mais uma jornada, pressione em Proposta para aceitar.';
+          document.getElementById('btnNewCampaign').style.display = 'inline-flex';
+        }
         return;
       }
 

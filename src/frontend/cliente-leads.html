@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leads Entregues | Portal AIC</title>
+  <link rel="icon" type="image/png" href="/assets/AIC/Imagens%20Vetor%20/AIC%20Icone%20Cheio.png">
+  <meta name="theme-color" content="#0C1B33">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-green-glow: rgba(14, 204, 151, 0.15);
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-navy-lighter: #1a3055;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-gray-light: #cbd5e1;
+      --aic-border: #1e3a5f;
+      --aic-blue: #3b82f6;
+      --aic-purple: #8b5cf6;
+      --aic-yellow: #f59e0b;
+      --aic-red: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      min-height: 100vh;
+    }
+
+    .main-content {
+      padding: 32px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* Header Section */
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .page-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .page-header p {
+      color: var(--aic-gray);
+      font-size: 15px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    /* Search Input */
+    .search-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      color: var(--aic-gray);
+      pointer-events: none;
+    }
+
+    .search-input {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 10px;
+      padding: 12px 16px 12px 42px;
+      color: var(--aic-white);
+      font-size: 14px;
+      font-family: inherit;
+      min-width: 260px;
+      transition: border-color 0.2s;
+    }
+
+    .search-input::placeholder {
+      color: var(--aic-gray);
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--aic-green);
+    }
+
+    /* Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .stat-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stat-icon.green { background: rgba(14, 204, 151, 0.15); color: var(--aic-green); }
+    .stat-icon.blue { background: rgba(59, 130, 246, 0.15); color: var(--aic-blue); }
+    .stat-icon.yellow { background: rgba(245, 158, 11, 0.15); color: var(--aic-yellow); }
+    .stat-icon.purple { background: rgba(139, 92, 246, 0.15); color: var(--aic-purple); }
+
+    .stat-info h3 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+
+    .stat-info p {
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+
+    /* Table Container */
+    .table-container {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--aic-border);
+    }
+
+    .table-header h2 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .table-count {
+      background: var(--aic-navy-lighter);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+
+    /* Table */
+    .leads-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .leads-table th {
+      text-align: left;
+      padding: 14px 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--aic-gray);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--aic-border);
+      background: var(--aic-navy);
+    }
+
+    .leads-table td {
+      padding: 16px 20px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--aic-border);
+      vertical-align: middle;
+    }
+
+    .leads-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .leads-table tr:hover {
+      background: rgba(14, 204, 151, 0.03);
+    }
+
+    /* Lead Name Column */
+    .lead-name {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .lead-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--aic-navy);
+    }
+
+    .lead-info h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .lead-info span {
+      font-size: 12px;
+      color: var(--aic-gray);
+    }
+
+    /* Contact Links */
+    .contact-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: var(--aic-navy);
+      border-radius: 6px;
+      color: var(--aic-gray-light);
+      text-decoration: none;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .contact-link:hover {
+      background: var(--aic-navy-lighter);
+      color: var(--aic-white);
+    }
+
+    .contact-link.whatsapp:hover { color: #25D366; }
+    .contact-link.instagram:hover { color: #E1306C; }
+    .contact-link.email:hover { color: var(--aic-blue); }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-badge.meeting {
+      background: rgba(14, 204, 151, 0.15);
+      color: var(--aic-green);
+    }
+
+    .status-badge.delivered {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--aic-blue);
+    }
+
+    .status-badge.invoiced {
+      background: rgba(139, 92, 246, 0.15);
+      color: var(--aic-purple);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .empty-icon {
+      width: 64px;
+      height: 64px;
+      background: var(--aic-navy);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      color: var(--aic-gray);
+    }
+
+    .empty-state h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .empty-state p {
+      color: var(--aic-gray);
+      font-size: 14px;
+    }
+
+    /* Loading State */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px;
+      color: var(--aic-gray);
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--aic-navy-lighter);
+      border-top-color: var(--aic-green);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Mobile Header */
+    .mobile-header {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: var(--aic-navy-light);
+      border-bottom: 1px solid var(--aic-border);
+      z-index: 999;
+      padding: 0 16px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .mobile-header-logo {
+      height: 28px;
+    }
+
+    .mobile-menu-btn {
+      width: 40px;
+      height: 40px;
+      background: transparent;
+      border: none;
+      color: var(--aic-white);
+      font-size: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+    }
+
+    .mobile-menu-btn:hover {
+      background: var(--aic-navy-lighter);
+    }
+
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 998;
+    }
+
+    .sidebar-overlay.active {
+      display: block;
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      body { margin-left: 0 !important; }
+      .main-content { padding: 24px 20px; }
+      .mobile-header { display: flex; }
+      .main-content { padding-top: 80px; }
+      .aic-sidebar-toggle { display: none !important; }
+    }
+
+    @media (max-width: 768px) {
+      .main-content {
+        padding: 16px;
+        padding-top: 70px;
+      }
+      .page-header {
+        flex-direction: column;
+        gap: 16px;
+      }
+      .page-header h1 {
+        font-size: 22px;
+      }
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+      .stat-card {
+        padding: 16px;
+        flex-direction: column;
+        text-align: center;
+        gap: 12px;
+      }
+      .stat-icon {
+        width: 40px;
+        height: 40px;
+      }
+      .stat-info h3 {
+        font-size: 20px;
+      }
+      /* Table responsive */
+      .table-responsive {
+        overflow-x: auto;
+      }
+      .leads-table {
+        min-width: 700px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .main-content {
+        padding: 12px;
+        padding-top: 70px;
+      }
+      .stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .stat-card {
+        padding: 12px;
+      }
+      .stat-info h3 {
+        font-size: 18px;
+      }
+      .stat-info p {
+        font-size: 11px;
+      }
+      .search-input {
+        width: 100%;
+        min-width: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Mobile Header -->
+  <header class="mobile-header" id="mobileHeader">
+    <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="mobile-header-logo">
+    <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileSidebar()">
+      &#9776;
+    </button>
+  </header>
+
+  <!-- Sidebar overlay for mobile -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileSidebar()"></div>
+
+  <div class="main-content">
+    <!-- Loading State -->
+    <div class="loading" id="loadingState">
+      <div class="spinner"></div>
+      <p>Carregando leads...</p>
+    </div>
+
+    <!-- Content -->
+    <div id="contentArea" style="display: none;">
+      <!-- Header -->
+      <div class="page-header">
+        <div>
+          <h1>Leads Entregues</h1>
+          <p>Acompanhe todos os leads qualificados entregues para sua campanha</p>
+        </div>
+        <div class="header-actions">
+          <div class="search-wrapper">
+            <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input type="text" class="search-input" id="searchInput" placeholder="Buscar por nome, WhatsApp...">
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+          <div class="stat-icon green">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div class="stat-info">
+            <h3 id="statTotal">0</h3>
+            <p>Total de Leads</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <div class="stat-info">
+            <h3 id="statMeetings">0</h3>
+            <p>Com Reuniao</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon yellow">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <div class="stat-info">
+            <h3 id="statValue">R$0</h3>
+            <p>Valor Total</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon purple">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+          <div class="stat-info">
+            <h3 id="statInvoiced">0</h3>
+            <p>Faturados</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table Container -->
+      <div class="table-container">
+        <div class="table-header">
+          <h2>Leads Qualificados</h2>
+          <span class="table-count" id="tableCount">0 leads</span>
+        </div>
+
+        <div class="table-responsive">
+          <table class="leads-table" id="leadsTable">
+            <thead>
+              <tr>
+                <th>Lead</th>
+                <th>WhatsApp</th>
+                <th>Instagram</th>
+                <th>Reuniao</th>
+                <th>Valor</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="leadsBody">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state" id="emptyState" style="display: none;">
+          <div class="empty-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          </div>
+          <h3>Nenhum lead entregue ainda</h3>
+          <p>Os leads qualificados serao exibidos aqui assim que forem entregues pela sua campanha.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://qsdfyffuonywmtnlycri.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExMjY0NzgsImV4cCI6MjA2NjcwMjQ3OH0.IDJdOApiNM0FJvRe5mp28L7U89GWeHpPoPlPreexwbg';
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.supabaseClient = supabaseClient;
+
+    let allLeads = [];
+    let campaignId = null;
+
+    async function init() {
+      // Obter campaign_id da URL
+      const urlParams = new URLSearchParams(window.location.search);
+      campaignId = urlParams.get('campaign');
+
+      if (!campaignId) {
+        // Tentar obter da jornada do cliente
+        const journeyData = localStorage.getItem('aic_client_journey');
+        if (journeyData) {
+          const journey = JSON.parse(journeyData);
+          campaignId = journey.campaignId;
+        }
+      }
+
+      // Setup search filter
+      document.getElementById('searchInput').addEventListener('input', renderLeads);
+
+      await loadLeads();
+    }
+
+    async function loadLeads() {
+      try {
+        // Obter token
+        let token = localStorage.getItem('aic_access_token');
+        if (!token) {
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          token = session?.access_token;
+        }
+
+        if (!token) {
+          window.location.href = '/cliente/login?redirect=/cliente/leads';
+          return;
+        }
+
+        // Buscar leads da API (via journey routes)
+        let endpoint = '/api/aic/journey/leads/delivered';
+        if (campaignId) {
+          endpoint += `?campaign_id=${campaignId}`;
+        }
+
+        const response = await fetch(endpoint, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            window.location.href = '/cliente/login?redirect=/cliente/leads';
+            return;
+          }
+          throw new Error('Erro ao carregar leads');
+        }
+
+        const data = await response.json();
+        allLeads = data.leads || [];
+
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('contentArea').style.display = 'block';
+
+        updateStats();
+        renderLeads();
+
+      } catch (error) {
+        console.error('Erro:', error);
+        document.getElementById('loadingState').innerHTML = `
+          <p style="color: #ef4444;">Erro ao carregar leads</p>
+          <button onclick="location.reload()" style="margin-top: 16px; padding: 10px 20px; background: var(--aic-green); border: none; border-radius: 8px; color: var(--aic-navy); cursor: pointer;">Tentar novamente</button>
+        `;
+      }
+    }
+
+    function updateStats() {
+      const total = allLeads.length;
+      const withMeeting = allLeads.filter(l => l.meeting_scheduled_at).length;
+      const totalValue = allLeads.reduce((sum, l) => sum + Number(l.delivery_value || 0), 0);
+      const invoiced = allLeads.filter(l => l.invoice_id).length;
+
+      document.getElementById('statTotal').textContent = total;
+      document.getElementById('statMeetings').textContent = withMeeting;
+      document.getElementById('statValue').textContent = `R$${totalValue.toFixed(2)}`;
+      document.getElementById('statInvoiced').textContent = invoiced;
+    }
+
+    function renderLeads() {
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+
+      // Filter leads
+      let filtered = allLeads;
+      if (searchTerm) {
+        filtered = allLeads.filter(lead => {
+          const name = (lead.lead_name || '').toLowerCase();
+          const whatsapp = (lead.lead_whatsapp || '').toLowerCase();
+          const instagram = (lead.lead_instagram || '').toLowerCase();
+          const email = (lead.lead_email || '').toLowerCase();
+          return name.includes(searchTerm) ||
+                 whatsapp.includes(searchTerm) ||
+                 instagram.includes(searchTerm) ||
+                 email.includes(searchTerm);
+        });
+      }
+
+      // Update count
+      document.getElementById('tableCount').textContent = `${filtered.length} leads`;
+
+      // Show empty state if no leads
+      if (filtered.length === 0) {
+        document.getElementById('leadsBody').innerHTML = '';
+        document.getElementById('emptyState').style.display = 'block';
+        document.getElementById('leadsTable').style.display = 'none';
+        return;
+      }
+
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('leadsTable').style.display = 'table';
+
+      // Render leads
+      const tbody = document.getElementById('leadsBody');
+      tbody.innerHTML = filtered.map(lead => renderLeadRow(lead)).join('');
+    }
+
+    function renderLeadRow(lead) {
+      const initials = getInitials(lead.lead_name);
+      const whatsappLink = lead.lead_whatsapp
+        ? `<a href="https://wa.me/${lead.lead_whatsapp.replace(/\D/g, '')}" target="_blank" class="contact-link whatsapp">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+            ${formatPhone(lead.lead_whatsapp)}
+           </a>`
+        : '<span style="color: var(--aic-gray);">-</span>';
+
+      const instagramLink = lead.lead_instagram
+        ? `<a href="https://instagram.com/${lead.lead_instagram}" target="_blank" class="contact-link instagram">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+            @${lead.lead_instagram}
+           </a>`
+        : '<span style="color: var(--aic-gray);">-</span>';
+
+      const meetingDate = lead.meeting_scheduled_at
+        ? formatDateTime(lead.meeting_scheduled_at)
+        : '-';
+
+      const status = getLeadStatus(lead);
+
+      return `
+        <tr>
+          <td>
+            <div class="lead-name">
+              <div class="lead-avatar">${initials}</div>
+              <div class="lead-info">
+                <h4>${lead.lead_name || 'Lead'}</h4>
+                <span>${formatDate(lead.created_at)}</span>
+              </div>
+            </div>
+          </td>
+          <td>${whatsappLink}</td>
+          <td>${instagramLink}</td>
+          <td>${meetingDate}</td>
+          <td><strong style="color: var(--aic-green);">R$${Number(lead.delivery_value || 0).toFixed(2)}</strong></td>
+          <td>${status}</td>
+        </tr>
+      `;
+    }
+
+    function getLeadStatus(lead) {
+      if (lead.invoice_id) {
+        return '<span class="status-badge invoiced">Faturado</span>';
+      }
+      if (lead.meeting_scheduled_at) {
+        return '<span class="status-badge meeting">Reuniao Agendada</span>';
+      }
+      return '<span class="status-badge delivered">Entregue</span>';
+    }
+
+    function getInitials(name) {
+      if (!name) return '?';
+      const parts = name.trim().split(' ');
+      if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+      return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    }
+
+    function formatPhone(phone) {
+      if (!phone) return '';
+      const clean = phone.replace(/\D/g, '');
+      if (clean.length === 13) { // +55 11 99999-9999
+        return `(${clean.slice(2,4)}) ${clean.slice(4,9)}-${clean.slice(9)}`;
+      }
+      if (clean.length === 11) { // 11 99999-9999
+        return `(${clean.slice(0,2)}) ${clean.slice(2,7)}-${clean.slice(7)}`;
+      }
+      return phone;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    }
+
+    function formatDateTime(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr);
+      return date.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // Initialize
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') {
+        init();
+      }
+    });
+
+    // Mobile sidebar toggle
+    function toggleMobileSidebar() {
+      const sidebar = document.getElementById('aic-sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      const btn = document.getElementById('mobileMenuBtn');
+      if (sidebar) {
+        const isOpen = sidebar.classList.contains('open');
+        if (isOpen) {
+          sidebar.classList.remove('open');
+          sidebar.classList.add('collapsed');
+          overlay.classList.remove('active');
+          btn.innerHTML = '&#9776;';
+        } else {
+          sidebar.classList.add('open');
+          sidebar.classList.remove('collapsed');
+          overlay.classList.add('active');
+          btn.innerHTML = '&#10005;';
+        }
+      }
+    }
+    window.toggleMobileSidebar = toggleMobileSidebar;
+  </script>
+  <script src="/components/aic-client-sidebar.js"></script>
+</body>
+</html>

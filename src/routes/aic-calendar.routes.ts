@@ -93,7 +93,13 @@ router.post('/schedule', async (req: Request, res: Response) => {
     const campaignName = campaign?.campaign_name || 'AIC';
 
     // 2. Criar slot object
-    let slot;
+    interface TimeSlot {
+      start: Date;
+      end: Date;
+      formatted: string;
+    }
+
+    let slot: TimeSlot | undefined;
     if (slot_start && slot_end) {
       slot = {
         start: new Date(slot_start),
@@ -124,6 +130,14 @@ router.post('/schedule', async (req: Request, res: Response) => {
       slot = availableSlots[slotIndex];
     }
 
+    // Verificar que slot está definido (TypeScript guard)
+    if (!slot) {
+      return res.status(400).json({
+        success: false,
+        message: 'Não foi possível determinar o horário do agendamento'
+      });
+    }
+
     // 3. Agendar no Google Calendar
     const calendarService = await createCalendarService(campaign_id);
     const scheduleResult = await calendarService.scheduleAppointment(
@@ -151,6 +165,7 @@ router.post('/schedule', async (req: Request, res: Response) => {
     }
 
     // 4. REGISTRAR ENTREGA DO LEAD (base do faturamento variável)
+    const deliveryValue = 10.00; // R$10 por lead entregue
     const { data: delivery, error: deliveryError } = await supabase
       .from('aic_lead_deliveries')
       .insert({
@@ -160,7 +175,7 @@ router.post('/schedule', async (req: Request, res: Response) => {
         lead_email,
         lead_instagram,
         delivered_to,
-        delivery_value: 10.00, // R$10 por lead entregue
+        delivery_value: deliveryValue,
         status: 'reuniao_agendada',
         meeting_scheduled_at: slot.start.toISOString(),
         notes: `Reunião agendada via AI Agent. Event ID: ${scheduleResult.eventId}`
@@ -172,6 +187,10 @@ router.post('/schedule', async (req: Request, res: Response) => {
       console.error('[AIC Calendar] Erro ao registrar entrega:', deliveryError);
       // Não falhar a operação, apenas logar
     }
+
+    // NOTA: Fatura NÃO é criada automaticamente aqui
+    // Faturas são geradas semanalmente via workflow (toda segunda-feira)
+    // com relatório PDF consolidado de todos os leads da semana
 
     // 5. Atualizar conversa com info de agendamento
     const cleanPhone = lead_phone.replace(/\D/g, '');
@@ -193,7 +212,7 @@ router.post('/schedule', async (req: Request, res: Response) => {
         `📸 @${lead_instagram || 'N/A'}\n` +
         `🏢 ${campaignName}\n` +
         `📅 ${slot.formatted}\n` +
-        `💰 R$10,00 faturado\n` +
+        `💰 R$${deliveryValue.toFixed(2)} (fatura semanal)\n` +
         `🔗 ${scheduleResult.meetLink || 'WhatsApp Call'}`;
 
       fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -221,7 +240,8 @@ router.post('/schedule', async (req: Request, res: Response) => {
         formatted: slot.formatted
       },
       delivery_id: delivery?.id,
-      delivery_value: 10.00
+      delivery_value: deliveryValue,
+      note: 'Fatura será gerada semanalmente (toda segunda-feira)'
     });
 
   } catch (error: any) {
