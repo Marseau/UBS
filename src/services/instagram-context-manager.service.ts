@@ -62,6 +62,10 @@ export async function createIsolatedContext(): Promise<{
   requestId: string;
   cleanup: () => Promise<void>;
 }> {
+  // 🔧 FIX: Capturar referência do browser ANTES de ensureLoggedSession
+  // Se o browser mudar após a chamada, sabemos que foi recriado
+  const browserBeforeSession = getBrowserInstance();
+
   // Garantir que browser principal está autenticado
   await ensureLoggedSession();
 
@@ -70,11 +74,33 @@ export async function createIsolatedContext(): Promise<{
     throw new Error('Browser não inicializado.');
   }
 
+  // 🔧 FIX DETACHED FRAME: Se o browser foi recriado, invalidar persistentPage
+  // A referência antiga aponta para um browser que não existe mais
+  const browserWasRecreated = browserBeforeSession !== browser;
+  if (browserWasRecreated && persistentPage) {
+    console.log(`🔄 Browser foi recriado - invalidando página persistente antiga`);
+    // Não tentar fechar - o browser antigo já foi destruído
+    if (persistentRequestId) {
+      activePages.delete(persistentRequestId);
+    }
+    persistentPage = null;
+    persistentRequestId = null;
+  }
+
   // 🆕 VERIFICAR SE PÁGINA PERSISTENTE EXISTE E ESTÁ VÁLIDA
   if (persistentPage && !persistentPage.isClosed()) {
     try {
-      // Testar se frame está válido
-      await persistentPage.evaluate(() => window.location.href);
+      // 🔧 FIX: Verificar também se o browser da página é o mesmo browser atual
+      const pageBrowser = persistentPage.browser();
+      if (pageBrowser !== browser) {
+        throw new Error('Page belongs to a different browser instance');
+      }
+
+      // Testar se frame está válido (com timeout para evitar hang)
+      await Promise.race([
+        persistentPage.evaluate(() => window.location.href),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Frame validation timeout')), 5000))
+      ]);
 
       console.log(`♻️  Reutilizando página existente: ${persistentRequestId}`);
 
@@ -291,6 +317,23 @@ export async function forceClosePersistentPage(): Promise<void> {
       }
     } catch (err: any) {
       console.warn(`⚠️  Erro ao fechar página persistente: ${err.message}`);
+    }
+    persistentPage = null;
+    persistentRequestId = null;
+  }
+}
+
+/**
+ * 🔧 FIX: Reseta estado da página persistente SEM tentar fechar
+ * Use quando o browser já foi fechado externamente (crash, closeBrowser, etc)
+ * Evita erros de "detached frame" ao tentar fechar página de browser morto
+ */
+export function resetPersistentPageState(): void {
+  if (persistentPage) {
+    console.log(`🔄 Resetando estado da página persistente ${persistentRequestId} (browser já fechado)`);
+    // Remover do Map se ainda estiver lá
+    if (persistentRequestId) {
+      activePages.delete(persistentRequestId);
     }
     persistentPage = null;
     persistentRequestId = null;

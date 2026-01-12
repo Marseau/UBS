@@ -11,7 +11,7 @@ import {
   extractHashtagsFromPosts,
   retryWithBackoff
 } from './instagram-profile.utils';
-import { createIsolatedContext, createDedicatedPage, forceClosePersistentPage } from './instagram-context-manager.service';
+import { createIsolatedContext, createDedicatedPage, forceClosePersistentPage, resetPersistentPageState } from './instagram-context-manager.service';
 import { discoverHashtagVariations, HashtagVariation } from './instagram-hashtag-discovery.service';
 import { getAccountRotation } from './instagram-account-rotation.service';
 import {
@@ -528,6 +528,8 @@ const cleanupBrowser = async () => {
     }
     browserInstance = null;
     sessionPage = null;
+    // 🔧 FIX: Resetar estado da página persistente
+    resetPersistentPageState();
   }
 };
 
@@ -1291,6 +1293,9 @@ export async function closeBrowser(): Promise<void> {
     sessionPage = null;
     sessionInitialization = null;
     loggedUsername = null;
+    // 🔧 FIX: Resetar estado da página persistente no context-manager
+    // Evita que createIsolatedContext() tente reutilizar página de browser morto
+    resetPersistentPageState();
     console.log('🔒 Browser fechado');
   }
 }
@@ -1427,6 +1432,8 @@ async function handleSessionError(page: Page, errorType: string): Promise<boolea
     browserInstance = null;
     sessionInitialization = null;
     loggedUsername = null;
+    // 🔧 FIX: Resetar estado da página persistente
+    resetPersistentPageState();
 
     console.log(`✅ Browser fechado`);
 
@@ -1749,6 +1756,8 @@ export async function scrapeInstagramTag(
         sessionPage = null;
         sessionInitialization = null;
         loggedUsername = null;
+        // 🔧 FIX: Resetar estado da página persistente
+        resetPersistentPageState();
 
         // 🔧 FIX: Fechar página anterior ANTES de criar nova
         try {
@@ -4212,6 +4221,8 @@ export async function scrapeInstagramTag(
       loggedUsername = null;
       sessionPage = null;
       browserInstance = null;
+      // 🔧 FIX: Resetar estado da página persistente
+      resetPersistentPageState();
       console.log(`   ✅ Variáveis de sessão resetadas`);
       console.log(`========================================\n`);
 
@@ -5482,6 +5493,8 @@ export async function forceCloseBrowser(): Promise<{ success: boolean; message: 
     await browserInstance.close();
     browserInstance = null;
     sessionPage = null;
+    // 🔧 FIX: Resetar estado da página persistente
+    resetPersistentPageState();
     return { success: true, message: `Browser (PID: ${pid}) fechado com sucesso` };
   } catch (err: any) {
     // Se não conseguiu fechar graciosamente, mata o processo
@@ -5490,6 +5503,8 @@ export async function forceCloseBrowser(): Promise<{ success: boolean; message: 
     }
     browserInstance = null;
     sessionPage = null;
+    // 🔧 FIX: Resetar estado da página persistente
+    resetPersistentPageState();
     return { success: true, message: `Browser (PID: ${pid}) killed forçadamente` };
   }
 }
