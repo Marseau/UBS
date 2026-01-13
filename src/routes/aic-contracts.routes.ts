@@ -122,6 +122,84 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/aic/contracts/preview-pdf
+ * Generate a preview PDF for legal review BEFORE signing
+ * Returns the PDF as download (without signature data)
+ */
+router.post('/preview-pdf', async (req: Request, res: Response) => {
+  try {
+    const {
+      client_name,
+      client_document,
+      client_address,
+      client_representative,
+      campaign_name,
+      project_name,
+      campaign_whatsapp,
+      target_niche,
+      service_description,
+      target_audience,
+      contract_value = 4000,
+      lead_value = 10,
+    } = req.body;
+
+    if (!client_name) {
+      return res.status(400).json({ success: false, message: 'Nome do cliente é obrigatório' });
+    }
+
+    console.log(`[AIC Contracts] Generating preview PDF for: ${client_name}`);
+
+    // Generate contract PDF without signature (preview mode)
+    const contractId = `PREVIEW-${Date.now()}`;
+    const contractDate = new Date().toISOString();
+
+    const pdfResult = await contractPDFService.generateContractPDF({
+      client_name,
+      client_document: client_document || '',
+      client_address: client_address || '',
+      client_representative: client_representative || '',
+      // Dados da campanha
+      campaign_name: campaign_name || project_name || `Campanha ${client_name}`,
+      project_name: project_name || campaign_name || `Campanha ${client_name}`,
+      target_niche: target_niche || '',
+      service_description: service_description || '',
+      target_audience: target_audience || '',
+      campaign_whatsapp: campaign_whatsapp || '',
+      // Contrato
+      contract_id: contractId,
+      contract_date: contractDate,
+      contract_value: contract_value,
+      lead_value: lead_value,
+      // Assinatura (preview - não assinado)
+      signature_name: '--- PRÉVIA - NÃO ASSINADO ---',
+      signature_ip: 'N/A',
+      signature_date: contractDate,
+      signature_user_agent: 'Preview Mode',
+    });
+
+    if (!pdfResult.buffer) {
+      return res.status(500).json({ success: false, message: 'Erro ao gerar PDF' });
+    }
+
+    // Return PDF as download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Contrato-AIC-PREVIA-${client_name.replace(/\s+/g, '-')}.pdf"`);
+    res.setHeader('Content-Length', pdfResult.buffer.length);
+
+    console.log(`[AIC Contracts] Preview PDF generated: ${pdfResult.filename}`);
+
+    return res.send(pdfResult.buffer);
+
+  } catch (error) {
+    console.error('[AIC Contracts] Preview PDF error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao gerar prévia do PDF',
+    });
+  }
+});
+
+/**
  * POST /api/aic/contracts/sign-contract
  * Simple internal contract signing (without D4Sign)
  * For testing and cases where external e-signature is not needed
@@ -233,7 +311,14 @@ router.post('/sign-contract', async (req: Request, res: Response) => {
       client_document: client_document || '',
       client_address: client_address || '',
       client_representative: client_representative || '',
+      // Dados da campanha
       campaign_name: campaign_name || project_name || `Campanha ${client_name}`,
+      project_name: project_name || campaign_name || `Campanha ${client_name}`,
+      target_niche: target_niche || '',
+      service_description: service_description || '',
+      target_audience: target_audience || '',
+      campaign_whatsapp: campaign_whatsapp || '',
+      // Contrato
       contract_id: contractId,
       contract_date: signatureDate,
       contract_value: contract_value || journey.contract_value || 4000,
@@ -754,7 +839,14 @@ router.post('/:deliveryId/sign', async (req: Request, res: Response) => {
         client_document: signatureData.client_document,
         client_address: signatureData.client_address,
         client_representative: signatureData.client_representative,
+        // Dados da campanha
         campaign_name: delivery.cluster_campaigns?.campaign_name || `Campanha ${signatureData.client_name}`,
+        project_name: signatureData.project_name || delivery.cluster_campaigns?.project_name || '',
+        target_niche: signatureData.target_niche || delivery.cluster_campaigns?.nicho_principal || '',
+        service_description: signatureData.service_description || delivery.cluster_campaigns?.service_description || '',
+        target_audience: signatureData.target_audience || delivery.cluster_campaigns?.target_audience || '',
+        campaign_whatsapp: signatureData.campaign_whatsapp || '',
+        // Contrato
         contract_id: contractId,
         contract_date: signatureDate,
         contract_value: delivery.contract_value || 4000,
@@ -1044,7 +1136,14 @@ router.post('/sign-external', async (req: Request, res: Response) => {
       client_document: client_document || '',
       client_address: client_address || '',
       client_representative: client_representative || '',
+      // Dados da campanha
       campaign_name: campaign_name || project_name || `Campanha ${client_name}`,
+      project_name: project_name || campaign_name || `Campanha ${client_name}`,
+      target_niche: target_niche || '',
+      service_description: service_description || '',
+      target_audience: target_audience || '',
+      campaign_whatsapp: campaign_whatsapp || '',
+      // Contrato
       contract_id: contractId,
       contract_date: contractDate,
       contract_value: contract_value || journey.contract_value || 4000,

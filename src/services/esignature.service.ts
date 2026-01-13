@@ -404,6 +404,261 @@ export class ClicksignProvider implements ESignatureProvider {
 }
 
 // ============================================
+// ZAPSIGN PROVIDER IMPLEMENTATION
+// ============================================
+
+interface ZapSignConfig {
+  apiToken: string;
+  baseUrl: string;
+  sandbox: boolean;
+}
+
+interface ZapSignSigner {
+  token?: string;
+  status?: string;
+  name: string;
+  email: string;
+  phone_country?: string;
+  phone_number?: string;
+  external_id?: string;
+  signed_at?: string;
+  sign_url?: string;
+}
+
+interface ZapSignDocResponse {
+  token?: string;
+  status?: string;
+  name?: string;
+  created_at?: string;
+  signers?: ZapSignSigner[];
+  sign_url?: string;
+  signed_file?: string;
+  message?: string;
+  error?: string;
+}
+
+export class ZapSignProvider implements ESignatureProvider {
+  readonly providerName = 'ZapSign';
+  private config: ZapSignConfig;
+
+  constructor(config?: Partial<ZapSignConfig>) {
+    this.config = {
+      apiToken: config?.apiToken || process.env.ZAPSIGN_API_TOKEN || '',
+      baseUrl: config?.baseUrl || process.env.ZAPSIGN_API_URL || 'https://api.zapsign.com.br/api/v1',
+      sandbox: config?.sandbox ?? (process.env.ZAPSIGN_SANDBOX === 'true'),
+    };
+
+    if (!this.config.apiToken) {
+      console.warn('[ZapSign] API token not configured. Set ZAPSIGN_API_TOKEN.');
+    }
+  }
+
+  private async request<T = ZapSignDocResponse>(
+    method: 'GET' | 'POST' | 'DELETE',
+    endpoint: string,
+    body?: Record<string, unknown>
+  ): Promise<T> {
+    const url = `${this.config.baseUrl}${endpoint}`;
+
+    const options: RequestInit = {
+      method,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.config.apiToken}`,
+      },
+    };
+
+    if (body && method !== 'GET') {
+      options.body = JSON.stringify(body);
+    }
+
+    console.log(`[ZapSign] ${method} ${endpoint}`);
+
+    const response = await fetch(url, options);
+    const data = await response.json() as T;
+
+    if (!response.ok) {
+      console.error('[ZapSign] API Error:', data);
+      throw new Error((data as ZapSignDocResponse).message || (data as ZapSignDocResponse).error || `ZapSign API error: ${response.status}`);
+    }
+
+    return data;
+  }
+
+  /**
+   * Create document with signer in one request (ZapSign way)
+   * @see https://docs.zapsign.com.br/
+   */
+  async createDocument(data: DocumentData): Promise<CreateDocumentResult> {
+    try {
+      // ZapSign creates document with signers in one request
+      // For now, just upload the document - signers added separately
+      const result = await this.request<ZapSignDocResponse>('POST', '/docs/', {
+        name: data.name,
+        base64_pdf: data.content,
+        lang: 'pt-br',
+        disable_signer_emails: false,
+        sandbox: this.config.sandbox,
+      });
+
+      if (result.token) {
+        console.log(`[ZapSign] Document created: ${result.token}`);
+        return {
+          success: true,
+          documentId: result.token,
+        };
+      }
+
+      return { success: false, error: result.message || result.error || 'Erro ao criar documento' };
+    } catch (error) {
+      console.error('[ZapSign] createDocument error:', error);
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /**
+   * Add signer to document
+   */
+  async addSigner(documentId: string, signer: SignerData): Promise<AddSignerResult> {
+    try {
+      const result = await this.request<ZapSignDocResponse>('POST', `/docs/${documentId}/add-signer/`, {
+        name: signer.name,
+        email: signer.email,
+        phone_country: '55',
+        phone_number: signer.phone?.replace(/\D/g, '') || '',
+        auth_mode: 'assinaturaTela', // assinaturaTela, tokenEmail, tokenSms, tokenWhatsapp
+        send_automatic_email: true,
+        send_automatic_whatsapp: signer.authMethod === 3,
+      });
+
+      // ZapSign returns the signer info in a different structure
+      const signerToken = (result as unknown as ZapSignSigner).token;
+
+      if (signerToken) {
+        console.log(`[ZapSign] Signer added: ${signer.email} (${signerToken})`);
+        return {
+          success: true,
+          signerId: signerToken,
+          signerKey: signerToken,
+        };
+      }
+
+      return { success: false, error: result.message || result.error || 'Erro ao adicionar signatario' };
+    } catch (error) {
+      console.error('[ZapSign] addSigner error:', error);
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /**
+   * Get signing URL for signer
+   */
+  async getSigningUrl(documentId: string, signerId: string): Promise<SigningUrlResult> {
+    try {
+      // Get document details to find signer URL
+      const result = await this.request<ZapSignDocResponse>('GET', `/docs/${documentId}/`);
+
+      if (result.signers && result.signers.length > 0) {
+        // Find signer by token or email
+        const signer = result.signers.find(s => s.token === signerId || s.email === signerId);
+        if (signer?.sign_url) {
+          return { success: true, url: signer.sign_url };
+        }
+        // Return first signer URL if not found
+        if (result.signers[0]?.sign_url) {
+          return { success: true, url: result.signers[0].sign_url };
+        }
+      }
+
+      return { success: false, error: 'URL de assinatura nao encontrada' };
+    } catch (error) {
+      console.error('[ZapSign] getSigningUrl error:', error);
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /**
+   * Get document status
+   */
+  async getDocumentStatus(documentId: string): Promise<DocumentStatusResult> {
+    try {
+      const result = await this.request<ZapSignDocResponse>('GET', `/docs/${documentId}/`);
+
+      // Map ZapSign status to our status
+      const statusMap: Record<string, DocumentStatus> = {
+        'pending': 'pending',
+        'signed': 'signed',
+        'cancelled': 'cancelled',
+        'expired': 'expired',
+      };
+
+      const status = statusMap[result.status || ''] || 'waiting';
+
+      const signers = (result.signers || []).map(s => ({
+        email: s.email,
+        name: s.name,
+        signed: s.status === 'signed',
+        signedAt: s.signed_at,
+      }));
+
+      const allSigned = signers.length > 0 && signers.every(s => s.signed);
+
+      return {
+        status: allSigned ? 'signed' : status,
+        signedAt: allSigned ? signers[0]?.signedAt : undefined,
+        signedByAll: allSigned,
+        signers,
+      };
+    } catch (error) {
+      console.error('[ZapSign] getDocumentStatus error:', error);
+      return {
+        status: 'pending',
+        signedByAll: false,
+        signers: [],
+      };
+    }
+  }
+
+  /**
+   * Cancel/delete document
+   */
+  async cancelDocument(documentId: string): Promise<boolean> {
+    try {
+      await this.request('DELETE', `/docs/${documentId}/`);
+      console.log(`[ZapSign] Document cancelled: ${documentId}`);
+      return true;
+    } catch (error) {
+      console.error('[ZapSign] cancelDocument error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Validate webhook signature
+   * ZapSign uses a simple token validation
+   */
+  validateWebhookSignature(payload: string, signature: string): boolean {
+    const secret = process.env.ZAPSIGN_WEBHOOK_SECRET;
+    if (!secret) return true; // No secret configured, accept all
+
+    try {
+      const expectedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(payload)
+        .digest('hex');
+
+      return crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expectedSignature)
+      );
+    } catch {
+      return false;
+    }
+  }
+}
+
+// ============================================
 // SERVICE SINGLETON
 // ============================================
 
@@ -416,6 +671,9 @@ class ESignatureService {
     switch (providerName) {
       case 'clicksign':
         this.provider = new ClicksignProvider();
+        break;
+      case 'zapsign':
+        this.provider = new ZapSignProvider();
         break;
       case 'd4sign':
       default:

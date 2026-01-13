@@ -21,6 +21,7 @@
   const STEP_ORDER = [
     'proposta_enviada',
     'proposta_visualizada',
+    'proposta_aceita',
     'contrato_enviado',
     'contrato_assinado',
     'pagamento_pendente',
@@ -47,7 +48,7 @@
       label: 'Proposta',
       path: '/cliente/proposta',
       requiredSteps: ['proposta_enviada'],
-      completedAt: 'proposta_visualizada'
+      completedAt: 'proposta_aceita'  // Proposta completa quando aceita
     },
     {
       id: 'contrato',
@@ -338,6 +339,7 @@
     // Timestamps de completude de cada etapa (para verificacao real)
     completedSteps: {
       proposta_visualizada: null,
+      proposta_aceita: null,
       contrato_assinado: null,
       pagamento_confirmado: null,
       credenciais_ok: null,
@@ -568,6 +570,7 @@
             // Timestamps reais de cada etapa (para verificacao de completude)
             completedSteps: {
               proposta_visualizada: j.proposta_visualizada_at || null,
+              proposta_aceita: j.proposta_aceita_at || null,
               contrato_assinado: j.contrato_assinado_at || null,
               pagamento_confirmado: j.pagamento_confirmado_at || null,
               credenciais_ok: j.credenciais_ok_at || null,
@@ -593,7 +596,7 @@
             var sessionResult = await supabaseRef.auth.getSession();
             var user = sessionResult.data.session?.user;
             if (user) {
-              clientName = user.user_metadata?.full_name || user.email || 'Cliente';
+              clientName = user.user_metadata?.name || user.user_metadata?.full_name || user.email || 'Cliente';
             }
           }
         } catch (e) {

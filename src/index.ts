@@ -1258,7 +1258,15 @@ app.get('/aic/minha-jornada', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'aic-minha-jornada.html'));
 });
 
-// AIC Pagamento - Pagina de pagamento
+// AIC Pagamento - Pagina de pagamento (com query string ?campaign=)
+app.get('/aic/pagamento', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(frontendPath, 'aic-pagamento.html'));
+});
+
+// AIC Pagamento - Pagina de pagamento (com path param :journeyId)
 app.get('/aic/pagamento/:journeyId', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');

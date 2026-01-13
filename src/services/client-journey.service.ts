@@ -14,6 +14,7 @@ import { supabaseAdmin } from '../config/database';
 export type JourneyStep =
   | 'proposta_enviada'
   | 'proposta_visualizada'
+  | 'proposta_aceita'
   | 'contrato_enviado'
   | 'contrato_assinado'
   | 'pagamento_pendente'
@@ -84,6 +85,7 @@ export interface StepTransitionResult {
 const STEP_ORDER: JourneyStep[] = [
   'proposta_enviada',
   'proposta_visualizada',
+  'proposta_aceita',
   'contrato_enviado',
   'contrato_assinado',
   'pagamento_pendente',
@@ -102,7 +104,12 @@ const STEP_MESSAGES: Record<JourneyStep, { message: string; urlPath?: string }> 
     urlPath: '/aic/proposta'
   },
   proposta_visualizada: {
-    message: 'Voce visualizou a proposta. Aguarde o envio do contrato.',
+    message: 'Voce visualizou a proposta. Clique para aceitar.',
+    urlPath: '/cliente/proposta'
+  },
+  proposta_aceita: {
+    message: 'Proposta aceita! Agora assine o contrato.',
+    urlPath: '/cliente/contrato'
   },
   contrato_enviado: {
     message: 'Seu contrato esta pronto para assinatura! Clique no link para assinar eletronicamente.',
@@ -148,11 +155,12 @@ const STEP_MESSAGES: Record<JourneyStep, { message: string; urlPath?: string }> 
 const STEP_PROGRESS: Record<JourneyStep, number> = {
   proposta_enviada: 5,
   proposta_visualizada: 10,
-  contrato_enviado: 15,
-  contrato_assinado: 25,
-  pagamento_pendente: 30,
-  pagamento_confirmado: 45,
-  credenciais_pendente: 50,
+  proposta_aceita: 20,
+  contrato_enviado: 25,
+  contrato_assinado: 35,
+  pagamento_pendente: 40,
+  pagamento_confirmado: 50,
+  credenciais_pendente: 55,
   credenciais_ok: 65,
   briefing_pendente: 70,
   briefing_completo: 85,
@@ -582,6 +590,7 @@ class ClientJourneyService {
     const stepLabels: Record<JourneyStep, string> = {
       proposta_enviada: 'Proposta Enviada',
       proposta_visualizada: 'Proposta Visualizada',
+      proposta_aceita: 'Proposta Aceita',
       contrato_enviado: 'Contrato Enviado',
       contrato_assinado: 'Contrato Assinado',
       pagamento_pendente: 'Pagamento Pendente',

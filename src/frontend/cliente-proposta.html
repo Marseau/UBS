@@ -100,6 +100,159 @@
       color: var(--aic-yellow);
     }
 
+    /* Welcome Modal */
+    .welcome-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(12, 27, 51, 0.9);
+      backdrop-filter: blur(4px);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .welcome-modal {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-green);
+      border-radius: 16px;
+      max-width: 480px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      animation: slideUp 0.3s ease;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .welcome-modal-header {
+      padding: 24px 24px 16px;
+      border-bottom: 1px solid var(--aic-border);
+      text-align: center;
+    }
+    .welcome-modal-header h2 {
+      margin: 0 0 8px 0;
+      font-size: 20px;
+      color: var(--aic-green);
+    }
+    .welcome-modal-header p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--aic-gray-light);
+    }
+    .welcome-modal-body {
+      padding: 20px 24px;
+    }
+    .welcome-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .welcome-step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      background: var(--aic-navy);
+      border-radius: 8px;
+      border: 1px solid var(--aic-border);
+    }
+    .welcome-step.active {
+      border-color: var(--aic-green);
+      background: var(--aic-green-glow);
+    }
+    .welcome-step-number {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--aic-border);
+      color: var(--aic-gray);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .welcome-step.active .welcome-step-number {
+      background: var(--aic-green);
+      color: var(--aic-navy);
+    }
+    .welcome-step-text {
+      font-size: 13px;
+      color: var(--aic-gray);
+    }
+    .welcome-step.active .welcome-step-text {
+      color: var(--aic-white);
+      font-weight: 500;
+    }
+    .welcome-modal-contact {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--aic-border);
+      text-align: center;
+    }
+    .welcome-modal-contact p {
+      font-size: 12px;
+      color: var(--aic-gray);
+      margin: 0 0 10px 0;
+    }
+    .welcome-contact-links {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .welcome-contact-links a {
+      font-size: 11px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .welcome-contact-links .wa {
+      background: #25D366;
+      color: white;
+    }
+    .welcome-contact-links .email {
+      background: var(--aic-navy);
+      color: var(--aic-gray-light);
+      border: 1px solid var(--aic-border);
+    }
+    .welcome-contact-links .landing {
+      background: transparent;
+      color: var(--aic-green);
+      border: 1px solid var(--aic-green);
+    }
+    .welcome-modal-footer {
+      padding: 16px 24px 24px;
+    }
+    .welcome-modal-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      color: var(--aic-navy);
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .welcome-modal-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px var(--aic-green-glow);
+    }
+
     /* Header */
     .page-header {
       text-align: center;
@@ -737,7 +890,7 @@
         if (!journeyData) {
           const user = session.user;
           journeyData = {
-            client_name: user.user_metadata?.full_name || user.email || 'Cliente',
+            client_name: user.user_metadata?.name || user.user_metadata?.full_name || user.email || 'Cliente',
             client_email: user.email,
             contract_value: 4000,
             lead_value: 10,
@@ -760,7 +913,7 @@
     }
 
     function renderPage() {
-      const isAccepted = ['proposta_visualizada', 'contrato_enviado', 'contrato_assinado',
+      const isAccepted = ['proposta_aceita', 'contrato_enviado', 'contrato_assinado',
         'pagamento_pendente', 'pagamento_confirmado', 'credenciais_pendente', 'credenciais_ok',
         'briefing_pendente', 'briefing_completo', 'campanha_ativa', 'campanha_concluida'
       ].includes(journeyData.current_step);
@@ -770,7 +923,55 @@
       const clientName = journeyData.client_name || 'Cliente';
 
       document.getElementById('main-content').innerHTML = `
-        <!-- Status Checklist -->
+        ${journeyData.isNewClient ? `
+        <!-- Welcome Modal - Popup de orientação para clientes novos -->
+        <div class="welcome-modal-overlay" id="welcome-modal">
+          <div class="welcome-modal">
+            <div class="welcome-modal-header">
+              <h2>Olá, ${clientName.split(' ')[0]}! Bem-vindo ao Portal AIC</h2>
+              <p>Sua conta foi criada. Aqui você acompanha toda a jornada da sua campanha.</p>
+            </div>
+            <div class="welcome-modal-body">
+              <div class="welcome-steps">
+                <div class="welcome-step active">
+                  <div class="welcome-step-number">1</div>
+                  <div class="welcome-step-text">Proposta Comercial (você está aqui)</div>
+                </div>
+                <div class="welcome-step">
+                  <div class="welcome-step-number">2</div>
+                  <div class="welcome-step-text">Contrato</div>
+                </div>
+                <div class="welcome-step">
+                  <div class="welcome-step-number">3</div>
+                  <div class="welcome-step-text">Pagamento</div>
+                </div>
+                <div class="welcome-step">
+                  <div class="welcome-step-number">4</div>
+                  <div class="welcome-step-text">Briefing</div>
+                </div>
+                <div class="welcome-step">
+                  <div class="welcome-step-number">5</div>
+                  <div class="welcome-step-text">Campanha Ativa</div>
+                </div>
+              </div>
+              <div class="welcome-modal-contact">
+                <p>Dúvidas? Fale conosco ou veja mais informações:</p>
+                <div class="welcome-contact-links">
+                  <a href="https://wa.me/5511999040605?text=Olá!%20Tenho%20dúvidas%20sobre%20a%20proposta%20AIC" target="_blank" class="wa">WhatsApp</a>
+                  <a href="mailto:admin@stratfin.tec.br?subject=Dúvida%20sobre%20proposta%20AIC" class="email">Email</a>
+                  <a href="/aic-landing.html" target="_blank" class="landing">Ver FAQs</a>
+                </div>
+              </div>
+            </div>
+            <div class="welcome-modal-footer">
+              <button class="welcome-modal-btn" onclick="document.getElementById('welcome-modal').remove()">
+                Entendi, ver proposta
+              </button>
+            </div>
+          </div>
+        </div>
+        ` : `
+        <!-- Status Checklist - Para clientes com jornada -->
         <div class="status-checklist">
           <div class="status-item ok">
             <div class="status-check">&#10003;</div>
@@ -781,6 +982,7 @@
             <span class="status-label">${isAccepted ? 'OK do Cliente' : 'Aguardando Cliente'}</span>
           </div>
         </div>
+        `}
 
         <!-- Header -->
         <div class="page-header">

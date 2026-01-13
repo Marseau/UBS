@@ -29,6 +29,11 @@ interface ContractData {
 
   // Campanha
   campaign_name?: string;
+  project_name?: string;
+  target_niche?: string;
+  service_description?: string;
+  target_audience?: string;
+  campaign_whatsapp?: string;
 
   // Contrato
   contract_id: string;
@@ -152,6 +157,13 @@ class ContractPDFService {
                       'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
       return `${date.getDate()} de ${months[date.getMonth()]} de ${date.getFullYear()}`;
     };
+
+    // Detectar se é CPF (pessoa física) ou CNPJ (pessoa jurídica)
+    const documentDigits = (data.client_document || '').replace(/\D/g, '');
+    const isPessoaFisica = documentDigits.length <= 11;
+    const tipoContratante = isPessoaFisica
+      ? 'pessoa física'
+      : 'pessoa jurídica de direito privado';
 
     return `
 <!DOCTYPE html>
@@ -285,7 +297,6 @@ class ContractPDFService {
       border-collapse: collapse;
       margin: 15px 0;
       font-size: 10pt;
-      page-break-inside: avoid;
     }
 
     th, td {
@@ -410,17 +421,50 @@ class ContractPDFService {
       <div class="party">
         <div class="party-label">CONTRATADA:</div>
         <div class="party-data">
-          <strong>AIC - APPLIED INTELLIGENCE CLUSTERING</strong>, plataforma de prospecção inteligente e qualificação de leads, com sede na cidade de São Paulo/SP, inscrita no CNPJ sob o nº 00.000.000/0001-00, neste ato representada por seu representante legal, doravante denominada simplesmente "CONTRATADA" ou "AIC".
+          <strong>PEDRO CABRAL FRANCO CONSULTORIA EM TECNOLOGIA DA INFORMACAO LTDA</strong>, inscrita no CNPJ sob nº 44.767.357/0001-75, Inscrição Municipal 7.172.483-4, com sede na R PDE LEBRET 725, APT 5 - JARDIM LEONOR - CEP 05653-160, São Paulo/SP, operando sob a marca "AIC - Applied Intelligence Clustering", doravante denominada simplesmente "CONTRATADA" ou "AIC".
         </div>
       </div>
 
       <div class="party">
         <div class="party-label">CONTRATANTE:</div>
         <div class="party-data">
-          <strong>${data.client_name}</strong>, pessoa jurídica de direito privado, inscrita no CNPJ/CPF sob o nº <strong>${data.client_document}</strong>, com sede em <strong>${data.client_address}</strong>${data.client_representative ? `, neste ato representada por <strong>${data.client_representative}</strong>` : ''}, doravante denominada simplesmente "CONTRATANTE".
+          <strong>${data.client_name}</strong>, ${tipoContratante}, inscrit${isPessoaFisica ? 'a' : 'o'} no ${isPessoaFisica ? 'CPF' : 'CNPJ'} sob o nº <strong>${data.client_document}</strong>, ${isPessoaFisica ? 'residente e domiciliada em' : 'com sede em'} <strong>${data.client_address}</strong>${data.client_representative ? `, neste ato representada por <strong>${data.client_representative}</strong>` : ''}, doravante denominad${isPessoaFisica ? 'a' : 'o'} simplesmente "CONTRATANTE".
         </div>
       </div>
     </div>
+
+    <!-- Especificações da Campanha -->
+    <h2>ESPECIFICAÇÕES DA CAMPANHA</h2>
+    <table>
+      <tr>
+        <th style="width: 180px;">Campo</th>
+        <th>Especificação</th>
+      </tr>
+      <tr>
+        <td><strong>Nome da Campanha</strong></td>
+        <td>${data.campaign_name || '-'}</td>
+      </tr>
+      <tr>
+        <td><strong>Nome do Projeto</strong></td>
+        <td>${data.project_name || '-'}</td>
+      </tr>
+      <tr>
+        <td><strong>Nicho Alvo</strong></td>
+        <td>${data.target_niche || '-'}</td>
+      </tr>
+      <tr>
+        <td><strong>Descrição do Serviço</strong></td>
+        <td>${data.service_description || '-'}</td>
+      </tr>
+      <tr>
+        <td><strong>Público Alvo</strong></td>
+        <td>${data.target_audience || '-'}</td>
+      </tr>
+      <tr>
+        <td><strong>WhatsApp da Campanha</strong></td>
+        <td>${data.campaign_whatsapp || '-'}</td>
+      </tr>
+    </table>
 
     <p>As partes acima qualificadas têm entre si justo e contratado o presente Contrato de Prestação de Serviços, que se regerá pelas cláusulas e condições seguintes:</p>
 

@@ -140,6 +140,22 @@
       display: flex;
       align-items: center;
       gap: 16px;
+      transition: all 0.2s;
+    }
+
+    .stat-card.clickable {
+      cursor: pointer;
+    }
+
+    .stat-card.clickable:hover {
+      border-color: var(--aic-green);
+      transform: translateY(-2px);
+    }
+
+    .stat-card.selected {
+      border-color: var(--aic-green);
+      background: rgba(14, 204, 151, 0.1);
+      box-shadow: 0 0 0 1px var(--aic-green);
     }
 
     .stat-icon {
@@ -664,7 +680,7 @@
 
       <!-- Stats -->
       <div class="stats-grid" id="statsGrid">
-        <div class="stat-card">
+        <div class="stat-card clickable" id="statCardSetup" data-status="setup">
           <div class="stat-icon blue" id="statSetupIcon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </div>
@@ -673,7 +689,7 @@
             <p>Em Setup</p>
           </div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card clickable" id="statCardActive" data-status="active">
           <div class="stat-icon green">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
           </div>
@@ -682,7 +698,7 @@
             <p>Ativas</p>
           </div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card clickable" id="statCardCompleted" data-status="completed">
           <div class="stat-icon gray">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
           </div>
@@ -691,7 +707,7 @@
             <p>Concluidas</p>
           </div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card clickable" id="statCardPending" data-status="pending">
           <div class="stat-icon yellow">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           </div>
@@ -743,15 +759,18 @@
     const STEP_CONFIG = {
       'proposta_enviada': { label: 'Proposta Enviada', action: 'Aguardando visualizacao', icon: 'proposta', group: 'setup', progress: 10 },
       'proposta_visualizada': { label: 'Proposta Visualizada', action: 'Aguardando aceitacao', icon: 'proposta', group: 'setup', progress: 15 },
+      'proposta_aceita': { label: 'Proposta Aceita', action: 'Assinar contrato', icon: 'contrato', group: 'setup', progress: 20 },
       'contrato_enviado': { label: 'Contrato Enviado', action: 'Aguardando assinatura', icon: 'contrato', group: 'setup', progress: 25 },
       'contrato_assinado': { label: 'Contrato Assinado', action: 'Aguardando pagamento', icon: 'contrato', group: 'setup', progress: 35 },
       'pagamento_pendente': { label: 'Pagamento Pendente', action: 'Aguardando confirmacao', icon: 'pagamento', group: 'pending', progress: 40 },
-      'pagamento_confirmado': { label: 'Pagamento Confirmado', action: 'Preencher briefing', icon: 'pagamento', group: 'setup', progress: 50 },
-      'briefing_pendente': { label: 'Briefing Pendente', action: 'Completar briefing', icon: 'briefing', group: 'setup', progress: 55 },
-      'briefing_completo': { label: 'Briefing Completo', action: 'Fazer onboarding', icon: 'briefing', group: 'setup', progress: 65 },
-      'onboarding_pendente': { label: 'Onboarding Pendente', action: 'Configurar credenciais', icon: 'onboarding', group: 'setup', progress: 75 },
-      'onboarding_completo': { label: 'Onboarding Completo', action: 'Aguardando ativacao', icon: 'onboarding', group: 'setup', progress: 85 },
-      'campanha_ativa': { label: 'Campanha Ativa', action: 'Ver metricas', icon: 'campanha', group: 'active', progress: 90 },
+      'pagamento_confirmado': { label: 'Pagamento Confirmado', action: 'Configurar credenciais', icon: 'pagamento', group: 'setup', progress: 50 },
+      'credenciais_pendente': { label: 'Credenciais Pendente', action: 'Configurar WhatsApp/Instagram', icon: 'onboarding', group: 'setup', progress: 55 },
+      'credenciais_ok': { label: 'Credenciais Configuradas', action: 'Preencher briefing', icon: 'onboarding', group: 'setup', progress: 60 },
+      'briefing_pendente': { label: 'Briefing Pendente', action: 'Completar briefing', icon: 'briefing', group: 'setup', progress: 70 },
+      'briefing_completo': { label: 'Briefing Completo', action: 'Aguardando ativacao', icon: 'briefing', group: 'setup', progress: 80 },
+      'onboarding_pendente': { label: 'Onboarding Pendente', action: 'Configurar conta', icon: 'onboarding', group: 'setup', progress: 85 },
+      'onboarding_completo': { label: 'Onboarding Completo', action: 'Aguardando ativacao', icon: 'onboarding', group: 'setup', progress: 90 },
+      'campanha_ativa': { label: 'Campanha Ativa', action: 'Ver metricas', icon: 'campanha', group: 'active', progress: 95 },
       'campanha_concluida': { label: 'Campanha Concluida', action: 'Ver relatorio', icon: 'campanha', group: 'completed', progress: 100 }
     };
 
@@ -812,7 +831,9 @@
         }
 
         const data = await response.json();
+        console.log('[ClientHome] API response:', data);
         campaigns = data.campaigns || [];
+        console.log('[ClientHome] Loaded campaigns:', campaigns);
         allCampaignsCount = data.total_count || campaigns.length;  // Total histórico de campanhas
 
         // Extract unique clients for admin filter
@@ -854,9 +875,15 @@
       const clientFilter = currentClientId;
       const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
 
+      console.log('[ClientHome] renderCampaigns called');
+      console.log('[ClientHome] statusFilter:', statusFilter);
+      console.log('[ClientHome] campaigns:', campaigns);
+      console.log('[ClientHome] campaigns.length:', campaigns.length);
+
       // Filter campaigns
       let filtered = campaigns.filter(c => {
         const stepConfig = STEP_CONFIG[c.current_step] || { group: 'setup' };
+        console.log('[ClientHome] Filtering campaign:', c.campaign_name, 'step:', c.current_step, 'group:', stepConfig.group);
 
         // Search filter (by campaign name, project name, or client name)
         if (searchTerm) {
@@ -1010,12 +1037,17 @@
       const step = campaign.current_step;
 
       // Map step to appropriate page with campaign ID
-      if (step.includes('proposta')) {
+      // proposta_aceita deve ir para contrato (próximo passo)
+      if (step === 'proposta_aceita') {
+        return `/cliente/contrato?campaign=${campaign.id}`;
+      } else if (step.includes('proposta')) {
         return `/cliente/proposta?campaign=${campaign.id}`;
       } else if (step.includes('contrato')) {
         return `/cliente/contrato?campaign=${campaign.id}`;
       } else if (step.includes('pagamento')) {
         return `/cliente/pagamento?campaign=${campaign.id}`;
+      } else if (step.includes('credenciais')) {
+        return `/cliente/credenciais?campaign=${campaign.id}`;
       } else if (step.includes('briefing')) {
         return `/cliente/briefing?campaign=${campaign.id}`;
       } else if (step.includes('onboarding')) {
@@ -1025,6 +1057,32 @@
       }
 
       return `/cliente/proposta?campaign=${campaign.id}`;
+    }
+
+    // Filter by clicking on stat cards
+    function filterByStatus(status) {
+      console.log('[ClientHome] filterByStatus called with:', status);
+      const statusFilter = document.getElementById('statusFilter');
+      const statCards = document.querySelectorAll('.stat-card.clickable');
+
+      // Se clicar no mesmo filtro, limpa o filtro
+      if (statusFilter.value === status) {
+        statusFilter.value = '';
+        statCards.forEach(card => card.classList.remove('selected'));
+      } else {
+        statusFilter.value = status;
+        // Atualizar visual dos cards
+        statCards.forEach(card => {
+          if (card.dataset.status === status) {
+            card.classList.add('selected');
+          } else {
+            card.classList.remove('selected');
+          }
+        });
+      }
+
+      // Disparar evento de change para refiltrar
+      statusFilter.dispatchEvent(new Event('change'));
     }
 
     function updateStats(allCampaigns) {
@@ -1042,6 +1100,17 @@
       document.getElementById('statActive').textContent = active;
       document.getElementById('statCompleted').textContent = completed;
       document.getElementById('statPending').textContent = pending;
+
+      // Atualizar visual do card selecionado baseado no filtro atual
+      const currentFilter = document.getElementById('statusFilter').value;
+      const statCards = document.querySelectorAll('.stat-card.clickable');
+      statCards.forEach(card => {
+        if (card.dataset.status === currentFilter) {
+          card.classList.add('selected');
+        } else {
+          card.classList.remove('selected');
+        }
+      });
     }
 
     // Initialize - aguardar Supabase carregar sessão do localStorage
@@ -1073,6 +1142,16 @@
       }
     }
     window.toggleMobileSidebar = toggleMobileSidebar;
+    window.filterByStatus = filterByStatus;
+
+    // Adicionar event listeners nos cards de estatisticas
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('[ClientHome] Adding click listeners to stat cards');
+      document.getElementById('statCardSetup')?.addEventListener('click', () => filterByStatus('setup'));
+      document.getElementById('statCardActive')?.addEventListener('click', () => filterByStatus('active'));
+      document.getElementById('statCardCompleted')?.addEventListener('click', () => filterByStatus('completed'));
+      document.getElementById('statCardPending')?.addEventListener('click', () => filterByStatus('pending'));
+    });
   </script>
   <script src="/components/aic-client-sidebar.js"></script>
 </body>

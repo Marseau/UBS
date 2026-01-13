@@ -47,6 +47,12 @@
       line-height: 1.7;
       min-height: 100vh;
     }
+    body.has-sidebar {
+      margin-left: 280px;
+    }
+    @media (max-width: 768px) {
+      body.has-sidebar { margin-left: 0; }
+    }
 
     /* Container */
     .container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
@@ -1034,11 +1040,12 @@
     const urlParams = new URLSearchParams(window.location.search);
     campaignId = urlParams.get('campaign');
     const isClientPortal = window.location.pathname.startsWith('/cliente');
+    let clientJourneyId = urlParams.get('journey'); // ID da jornada do cliente
 
     // Initialize
     document.addEventListener('DOMContentLoaded', async function() {
       // Se nao tem campaign na URL e esta no portal do cliente, buscar da jornada
-      if (!campaignId && isClientPortal) {
+      if ((!campaignId || !clientJourneyId) && isClientPortal) {
         try {
           const token = localStorage.getItem('aic_access_token') || '';
           const journeyResponse = await fetch('/api/aic/journey/me', {
@@ -1047,9 +1054,14 @@
 
           if (journeyResponse.ok) {
             const journeyData = await journeyResponse.json();
-            if (journeyData.success && journeyData.journey && journeyData.journey.campaign_id) {
-              campaignId = journeyData.journey.campaign_id;
-              console.log('[Briefing] Campaign ID obtido da jornada:', campaignId);
+            if (journeyData.success && journeyData.journey) {
+              if (journeyData.journey.campaign_id) {
+                campaignId = journeyData.journey.campaign_id;
+              }
+              if (journeyData.journey.id) {
+                clientJourneyId = journeyData.journey.id;
+              }
+              console.log('[Briefing] Campaign ID:', campaignId, 'Journey ID:', clientJourneyId);
             }
           }
         } catch (e) {
@@ -1398,28 +1410,34 @@
         // Check completion percentage
         const percent = parseInt(document.getElementById('progress-percent').textContent);
 
+        // Usar clientJourneyId (obtido na inicializacao) ou da URL
+        const journeyId = clientJourneyId || urlParams.get('journey');
+
         // Integrar com Journey: marcar briefing completo se >= 80%
-        const urlParams = new URLSearchParams(window.location.search);
-        const journeyId = urlParams.get('journey');
         if (journeyId && percent >= 80) {
           try {
+            const token = localStorage.getItem('aic_access_token') || '';
             await fetch(`/api/aic/journey/${journeyId}/briefing-complete`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' }
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+              }
             });
             console.log('Journey updated: briefing complete');
 
             // Mostrar mensagem de sucesso e redirecionar para dashboard
             setTimeout(() => {
+              const dashboardUrl = isClientPortal ? '/cliente/dashboard' : `/aic-dashboard-campaign.html?campaign=${campaignId}`;
               if (confirm('Briefing completo! Sua campanha esta pronta para ser ativada. Deseja ir para o dashboard?')) {
-                window.location.href = `/aic-dashboard-campaign.html?campaign=${campaignId}`;
+                window.location.href = dashboardUrl;
               }
             }, 1500);
           } catch (journeyError) {
             console.warn('Could not update journey:', journeyError);
           }
-        } else if (percent >= 50 && !journeyId) {
-          // Fluxo antigo sem journey
+        } else if (percent >= 50 && !journeyId && !isClientPortal) {
+          // Fluxo antigo sem journey (apenas para admin, nao no portal do cliente)
           setTimeout(() => {
             if (confirm('Briefing salvo! Deseja continuar para a configuracao tecnica (WhatsApp/Instagram)?')) {
               window.location.href = `/aic-campaign-onboarding.html?campaign=${campaignId}`;
@@ -1427,6 +1445,9 @@
           }, 1500);
         } else if (journeyId && percent < 80) {
           showStatus('save-status', `Briefing em ${percent}%. Complete pelo menos 80% para ativar sua campanha.`, 'warning');
+        } else if (isClientPortal && !journeyId) {
+          // Portal do cliente sem journeyId - nao mostrar prompt antigo
+          console.log('[Briefing] Portal do cliente sem journeyId, nao mostrar prompt');
         }
 
       } catch (error) {
@@ -1680,7 +1701,17 @@
     };
   </script>
 
-  <!-- AIC Sidebar Navigation -->
-  <script src="/components/aic-sidebar.js"></script>
+  <!-- AIC Sidebar Navigation - Carrega sidebar baseado no contexto -->
+  <script>
+    (function() {
+      const isClientPortal = window.location.pathname.startsWith('/cliente');
+      const sidebarScript = document.createElement('script');
+      sidebarScript.src = isClientPortal ? '/components/aic-client-sidebar.js' : '/components/aic-sidebar.js';
+      document.body.appendChild(sidebarScript);
+      if (isClientPortal) {
+        document.body.classList.add('has-sidebar');
+      }
+    })();
+  </script>
 </body>
 </html>

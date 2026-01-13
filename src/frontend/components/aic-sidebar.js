@@ -153,6 +153,24 @@
     body.aic-sidebar-open { margin-left: 260px; }
     body.aic-sidebar-open .header { margin-left: 260px; width: calc(100% - 260px); }
 
+    /* Badge de notificação */
+    .aic-sidebar-badge {
+      background: #ef4444;
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 10px;
+      margin-left: 8px;
+      min-width: 18px;
+      text-align: center;
+      animation: pulse-badge 2s infinite;
+    }
+    @keyframes pulse-badge {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
     /* Back to campaigns link */
     .aic-sidebar-back {
       display: flex;
@@ -286,7 +304,6 @@
       const baseUrl = isAdmin ? '/aic' : '/cliente';
       navContent += '<a href="' + baseUrl + '/proposta?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('proposta') && !isActive('proposta-comercial') ? ' active' : '') + '">Proposta</a>';
       navContent += '<a href="' + baseUrl + '/contrato?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('contrato') ? ' active' : '') + '">Contrato</a>';
-      navContent += '<a href="' + baseUrl + '/pagamento?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('pagamento') ? ' active' : '') + '">Pagamento</a>';
       navContent += '<a href="' + baseUrl + '/briefing?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('briefing') ? ' active' : '') + '">Briefing</a>';
       navContent += '<a href="' + baseUrl + '/onboarding?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('onboarding') ? ' active' : '') + '">Onboarding</a>';
       navContent += '<a href="' + baseUrl + '/dashboard?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('dashboard') && !isActive('financeiro') ? ' active' : '') + '">Dashboard</a>';
@@ -313,16 +330,22 @@
 
         // Inteligencia
         navContent += '<div class="aic-sidebar-section">';
-        navContent += '<div class="aic-sidebar-section-title">Inteligencia</div>';
+        navContent += '<div class="aic-sidebar-section-title">Inteligência</div>';
         navContent += '<a href="/aic/clusters" class="aic-sidebar-link' + (isActive('clusters') ? ' active' : '') + '">Clusters</a>';
         navContent += '<a href="/aic/inteligencia" class="aic-sidebar-link' + (isActive('inteligencia') ? ' active' : '') + '">Dynamic Intelligence</a>';
+        navContent += '</div>';
+
+        // Analytics
+        navContent += '<div class="aic-sidebar-section">';
+        navContent += '<div class="aic-sidebar-section-title">Analytics</div>';
+        navContent += '<a href="/aic/analytics" class="aic-sidebar-link' + (isActive('analytics') ? ' active' : '') + '">Visão Geral</a>';
         navContent += '</div>';
 
         // Financeiro
         navContent += '<div class="aic-sidebar-section">';
         navContent += '<div class="aic-sidebar-section-title">Financeiro</div>';
-        navContent += '<a href="/aic/financeiro" class="aic-sidebar-link' + (isActive('financeiro') ? ' active' : '') + '">Dashboard Financeiro</a>';
-        navContent += '<a href="/aic/reunioes-fechamento" class="aic-sidebar-link' + (isActive('reunioes-fechamento') ? ' active' : '') + '">Reunioes Fechamento</a>';
+        navContent += '<a href="/aic/financeiro" id="sidebar-financeiro-link" class="aic-sidebar-link' + (isActive('financeiro') ? ' active' : '') + '">Dashboard Financeiro<span id="pending-payments-badge" class="aic-sidebar-badge" style="display:none;"></span></a>';
+        navContent += '<a href="/aic/reunioes-fechamento" id="sidebar-reunioes-link" class="aic-sidebar-link' + (isActive('reunioes-fechamento') ? ' active' : '') + '">Reuniões Fechamento<span id="unseen-reunioes-badge" class="aic-sidebar-badge" style="display:none;"></span></a>';
         navContent += '</div>';
 
         // Documentos
@@ -386,6 +409,56 @@
     }
   }
 
+  // Carregar contagem de pagamentos pendentes de confirmacao
+  async function loadPendingPaymentsCount() {
+    const role = getUserRole();
+    if (role !== 'admin') return; // So mostra para admin
+
+    try {
+      const response = await fetch('/api/aic/journey/payments/pending');
+      if (response.ok) {
+        const data = await response.json();
+        const count = data.count || 0;
+        const badge = document.getElementById('pending-payments-badge');
+        if (badge) {
+          if (count > 0) {
+            badge.textContent = count > 99 ? '99+' : count;
+            badge.style.display = 'inline-block';
+          } else {
+            badge.style.display = 'none';
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao carregar pagamentos pendentes:', e);
+    }
+  }
+
+  // Carregar contagem de reunioes de fechamento nao vistas
+  async function loadUnseenReunioesCount() {
+    const role = getUserRole();
+    if (role !== 'admin') return; // So mostra para admin
+
+    try {
+      const response = await fetch('/api/aic/lead-deliveries/unseen-reunioes');
+      if (response.ok) {
+        const data = await response.json();
+        const count = data.unseen_count || 0;
+        const badge = document.getElementById('unseen-reunioes-badge');
+        if (badge) {
+          if (count > 0) {
+            badge.textContent = count > 99 ? '99+' : count;
+            badge.style.display = 'inline-block';
+          } else {
+            badge.style.display = 'none';
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao carregar reunioes nao vistas:', e);
+    }
+  }
+
   // Funcao de logout global
   window.aicLogout = async function() {
     try {
@@ -403,4 +476,8 @@
 
   // Inicializar
   buildSidebar();
+
+  // Carregar badges de notificacao (apenas admin)
+  loadPendingPaymentsCount();
+  loadUnseenReunioesCount();
 })();

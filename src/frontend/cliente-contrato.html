@@ -330,6 +330,145 @@
       line-height: 1.5;
       cursor: pointer;
     }
+    .checkbox-item.disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .checkbox-item.disabled label {
+      cursor: not-allowed;
+    }
+
+    /* Contract Modal */
+    .contract-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(12, 27, 51, 0.95);
+      backdrop-filter: blur(4px);
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .contract-modal-overlay.active {
+      display: flex;
+    }
+    .contract-modal {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      max-width: 700px;
+      width: 100%;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .contract-modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--aic-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .contract-modal-header h2 {
+      margin: 0;
+      font-size: 18px;
+      color: var(--aic-green);
+    }
+    .contract-modal-close {
+      background: none;
+      border: none;
+      color: var(--aic-gray);
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+    }
+    .contract-modal-close:hover {
+      color: var(--aic-white);
+    }
+    .contract-modal-body {
+      padding: 24px;
+      overflow-y: auto;
+      flex: 1;
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--aic-gray-light);
+    }
+    .contract-modal-body h3 {
+      color: var(--aic-white);
+      font-size: 15px;
+      margin: 24px 0 12px 0;
+    }
+    .contract-modal-body h3:first-child {
+      margin-top: 0;
+    }
+    .contract-modal-body p {
+      margin: 0 0 12px 0;
+    }
+    .contract-modal-body strong {
+      color: var(--aic-white);
+    }
+    .contract-modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--aic-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+    .scroll-progress {
+      font-size: 12px;
+      color: var(--aic-gray);
+    }
+    .scroll-progress.complete {
+      color: var(--aic-green);
+    }
+    .contract-modal-btn {
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .contract-modal-btn.primary {
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      color: var(--aic-navy);
+      border: none;
+    }
+    .contract-modal-btn.primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .contract-modal-btn.primary:not(:disabled):hover {
+      transform: translateY(-1px);
+    }
+    .read-contract-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-green);
+      border-radius: 10px;
+      color: var(--aic-green);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 20px;
+    }
+    .read-contract-btn:hover {
+      background: var(--aic-green-glow);
+    }
+    .read-contract-btn.read {
+      border-color: var(--aic-green);
+      background: var(--aic-green-glow);
+    }
 
     /* CTA section */
     .cta-section {
@@ -474,6 +613,130 @@
   </style>
 </head>
 <body>
+  <!-- Contract Modal -->
+  <div class="contract-modal-overlay" id="contract-modal">
+    <div class="contract-modal">
+      <div class="contract-modal-header">
+        <h2>Contrato de Prestação de Serviços AIC</h2>
+        <button class="contract-modal-close" onclick="closeContractModal()">&times;</button>
+      </div>
+      <div class="contract-modal-body" id="contract-modal-body">
+        <h3>CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE PROSPECÇÃO DIGITAL</h3>
+
+        <p>Pelo presente instrumento particular, de um lado:</p>
+
+        <p><strong>CONTRATADA:</strong> PEDRO CABRAL FRANCO CONSULTORIA EM TECNOLOGIA DA INFORMACAO LTDA, inscrita no CNPJ sob n. 44.767.357/0001-75, Inscricao Municipal 7.172.483-4, com sede na R PDE LEBRET 725, APT 5 - JARDIM LEONOR - CEP 05653-160, Sao Paulo/SP, operando sob a marca "AIC - Applied Intelligence Clustering", doravante denominada simplesmente "AIC".</p>
+
+        <p><strong>CONTRATANTE:</strong> Pessoa física ou jurídica identificada no cadastro eletrônico, doravante denominada simplesmente "CLIENTE".</p>
+
+        <p>As partes acima qualificadas têm entre si justo e contratado o seguinte:</p>
+
+        <h3>ESPECIFICAÇÕES DA CAMPANHA CONTRATADA</h3>
+        <div class="contract-campaign-specs" style="background: rgba(14, 204, 151, 0.08); border: 1px solid rgba(14, 204, 151, 0.2); border-radius: 8px; padding: 16px; margin: 16px 0;">
+          <p><strong>Nome da Campanha:</strong> <span id="contract-spec-campaign-name">-</span></p>
+          <p><strong>Nome do Projeto:</strong> <span id="contract-spec-project-name">-</span></p>
+          <p><strong>Nicho Alvo:</strong> <span id="contract-spec-target-niche">-</span></p>
+          <p><strong>Descricao do Servico:</strong> <span id="contract-spec-service-description">-</span></p>
+          <p><strong>Publico Alvo:</strong> <span id="contract-spec-target-audience">-</span></p>
+          <p><strong>WhatsApp da Campanha:</strong> <span id="contract-spec-campaign-whatsapp">-</span></p>
+          <p style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(14, 204, 151, 0.2);"><strong>Valor da Campanha:</strong> <span id="contract-spec-contract-value">R$ 4.000,00</span></p>
+          <p><strong>Valor por Lead Qualificado:</strong> <span id="contract-spec-lead-value">R$ 10,00</span></p>
+          <p><strong>Duracao:</strong> 30 dias corridos</p>
+        </div>
+
+        <h3>CLÁUSULA 1 - DO OBJETO</h3>
+        <p>1.1. O presente contrato tem por objeto a prestação de serviços de prospecção digital ativa pela AIC ao CLIENTE, consistindo em:</p>
+        <p>a) Identificação e seleção de até 2.000 (dois mil) perfis públicos do Instagram pertencentes ao mesmo nicho/cluster definido em conjunto;</p>
+        <p>b) Envio de mensagens personalizadas via Instagram Direct e/ou WhatsApp;</p>
+        <p>c) Qualificação inicial das respostas recebidas;</p>
+        <p>d) Entrega de leads qualificados conforme critérios definidos neste contrato.</p>
+
+        <h3>CLÁUSULA 2 - DA DEFINIÇÃO DE LEAD QUALIFICADO</h3>
+        <p>2.1. Para os fins deste contrato, considera-se <strong>LEAD QUALIFICADO</strong> aquele que cumulativamente:</p>
+        <p>a) Responde à abordagem demonstrando interesse genuíno no serviço/produto do CLIENTE;</p>
+        <p>b) Fornece contato válido (telefone, e-mail ou WhatsApp) OU agenda conversa/reunião;</p>
+        <p>c) Possui aderência ao perfil de cliente ideal definido no briefing.</p>
+        <p>2.2. <strong>NÃO</strong> são considerados leads qualificados:</p>
+        <p>a) Respostas de spam, curiosidade sem fit ou concorrentes;</p>
+        <p>b) Contatos inválidos ou inexistentes;</p>
+        <p>c) Respostas negativas ou pedidos de remoção.</p>
+
+        <h3>CLÁUSULA 3 - DO PREÇO E FORMA DE PAGAMENTO</h3>
+        <p>3.1. O CLIENTE pagará à AIC:</p>
+        <p>a) <strong>Taxa de Setup:</strong> 50% do valor total da campanha no ato da contratação;</p>
+        <p>b) <strong>Segunda Parcela:</strong> 50% restante após 15 dias do início da campanha;</p>
+        <p>c) <strong>Valor por Lead:</strong> Conforme tabela acordada, por cada lead qualificado entregue.</p>
+        <p>3.2. Os pagamentos deverão ser realizados via PIX ou transferência bancária.</p>
+        <p>3.3. O não pagamento nas datas acordadas ensejará suspensão imediata dos serviços.</p>
+
+        <h3>CLÁUSULA 4 - DO PRAZO</h3>
+        <p>4.1. A campanha terá duração de 30 (trinta) dias corridos, contados a partir da confirmação do primeiro pagamento e aprovação do briefing.</p>
+        <p>4.2. A fase de preparação (briefing, seleção de perfis, criação de scripts) levará aproximadamente 10 dias úteis antes do início dos envios.</p>
+
+        <h3>CLÁUSULA 5 - DAS OBRIGAÇÕES DA AIC</h3>
+        <p>5.1. Compete à AIC:</p>
+        <p>a) Realizar diagnóstico estruturado do negócio do CLIENTE;</p>
+        <p>b) Selecionar e validar até 2.000 perfis públicos do nicho definido;</p>
+        <p>c) Desenvolver linha editorial e scripts personalizados;</p>
+        <p>d) Executar a campanha de prospecção conforme limites das plataformas;</p>
+        <p>e) Entregar relatórios de acompanhamento;</p>
+        <p>f) Qualificar e entregar os leads conforme critérios acordados.</p>
+
+        <h3>CLÁUSULA 6 - DAS OBRIGAÇÕES DO CLIENTE</h3>
+        <p>6.1. Compete ao CLIENTE:</p>
+        <p>a) Fornecer informações verdadeiras e completas no briefing;</p>
+        <p>b) Disponibilizar materiais solicitados (fotos, vídeos, depoimentos);</p>
+        <p>c) Responder prontamente às solicitações da AIC;</p>
+        <p>d) Efetuar os pagamentos nas datas acordadas;</p>
+        <p>e) Fornecer acesso às contas de WhatsApp e/ou Instagram quando necessário.</p>
+
+        <h3>CLÁUSULA 7 - DOS RISCOS E LIMITAÇÕES</h3>
+        <p>7.1. O CLIENTE declara estar ciente de que:</p>
+        <p>a) As plataformas (Instagram/WhatsApp) podem restringir ou bloquear contas que realizem prospecção ativa;</p>
+        <p>b) A AIC adota práticas para minimizar riscos, mas não pode garantir imunidade a restrições;</p>
+        <p>c) Em caso de bloqueio, a AIC não se responsabiliza por perdas decorrentes;</p>
+        <p>d) Os resultados projetados são estimativas baseadas em histórico, não garantias.</p>
+
+        <h3>CLÁUSULA 8 - DA CONTESTAÇÃO DE LEADS</h3>
+        <p>8.1. O CLIENTE terá prazo de 5 (cinco) dias úteis após a entrega de cada lote de leads para contestar a qualificação.</p>
+        <p>8.2. Contestações fora do prazo serão consideradas como aceite tácito.</p>
+        <p>8.3. A AIC analisará cada contestação e, se procedente, realizará substituição ou desconto.</p>
+
+        <h3>CLÁUSULA 9 - DA PROTEÇÃO DE DADOS (LGPD)</h3>
+        <p>9.1. A AIC declara que:</p>
+        <p>a) Utiliza apenas dados públicos disponíveis nas plataformas;</p>
+        <p>b) Respeita imediatamente solicitações de opt-out;</p>
+        <p>c) Não comercializa dados de terceiros;</p>
+        <p>d) Mantém práticas em conformidade com a LGPD (Lei 13.709/2018).</p>
+
+        <h3>CLÁUSULA 10 - DA RESCISÃO</h3>
+        <p>10.1. O contrato poderá ser rescindido:</p>
+        <p>a) Por acordo mútuo entre as partes;</p>
+        <p>b) Por inadimplemento de qualquer das partes;</p>
+        <p>c) Por caso fortuito ou força maior que impossibilite a execução.</p>
+        <p>10.2. Em caso de rescisão antecipada pelo CLIENTE, não haverá devolução de valores já pagos, salvo acordo específico.</p>
+
+        <h3>CLÁUSULA 11 - DO FORO</h3>
+        <p>11.1. Fica eleito o foro da Comarca de São Paulo/SP para dirimir quaisquer controvérsias oriundas deste contrato, com renúncia expressa a qualquer outro, por mais privilegiado que seja.</p>
+
+        <h3>CLÁUSULA 12 - DISPOSIÇÕES GERAIS</h3>
+        <p>12.1. Este contrato é firmado em caráter irrevogável e irretratável.</p>
+        <p>12.2. A assinatura eletrônica tem validade jurídica conforme MP 2.200-2/2001.</p>
+        <p>12.3. Casos omissos serão resolvidos de comum acordo entre as partes.</p>
+
+        <p style="margin-top: 32px; text-align: center; color: var(--aic-gray); font-size: 12px;">
+          --- FIM DO CONTRATO ---
+        </p>
+      </div>
+      <div class="contract-modal-footer">
+        <span class="scroll-progress" id="scroll-progress">Role até o final para continuar</span>
+        <button class="contract-modal-btn primary" id="btn-confirm-read" disabled onclick="confirmContractRead()">
+          Li o contrato completo
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Sidebar -->
   <script src="/components/aic-client-sidebar.js"></script>
 
@@ -641,9 +904,15 @@
       <!-- Terms Acceptance -->
       <div class="terms-section">
         <h2>Aceite dos Termos</h2>
+
+        <!-- Botão para ler contrato completo -->
+        <button type="button" class="read-contract-btn" id="btn-read-contract" onclick="openContractModal()">
+          Ler Contrato Completo (obrigatório)
+        </button>
+
         <div class="checkbox-group">
-          <div class="checkbox-item">
-            <input type="checkbox" id="term_read" required>
+          <div class="checkbox-item disabled" id="term_read_item">
+            <input type="checkbox" id="term_read" required disabled>
             <label for="term_read">Declaro que li e compreendi integralmente todas as cláusulas deste contrato.</label>
           </div>
           <div class="checkbox-item">
@@ -829,7 +1098,7 @@
           // Preencher com dados do usuário logado
           const user = session.user;
           journeyData = {
-            client_name: user.user_metadata?.full_name || '',
+            client_name: user.user_metadata?.name || user.user_metadata?.full_name || '',
             client_email: user.email || '',
             client_phone: user.user_metadata?.phone || '',
             proposal_data: {},
@@ -849,7 +1118,7 @@
           isNewCampaign = true;
           const user = session.user;
           journeyData = {
-            client_name: user.user_metadata?.full_name || '',
+            client_name: user.user_metadata?.name || user.user_metadata?.full_name || '',
             client_email: user.email || '',
             client_phone: user.user_metadata?.phone || '',
             proposal_data: {},
@@ -1169,18 +1438,166 @@
     async function downloadContractPreview() {
       const btn = document.getElementById('btn-preview');
       btn.disabled = true;
-      btn.textContent = 'Gerando...';
+      btn.textContent = 'Gerando PDF...';
 
       try {
-        // For now, just show a message - PDF preview can be added later
-        alert('Prévia do PDF será disponibilizada em breve. O contrato completo estará disponível após a assinatura.');
+        // Get session
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+        if (!session) {
+          window.location.href = '/cliente/login';
+          return;
+        }
+
+        // Collect form data
+        const formData = {
+          client_name: document.getElementById('client_name').value.trim(),
+          client_document: document.getElementById('client_document').value.trim(),
+          client_address: document.getElementById('client_address').value.trim(),
+          client_representative: document.getElementById('client_representative').value.trim() || null,
+          campaign_name: document.getElementById('campaign_name').value.trim(),
+          project_name: document.getElementById('project_name').value.trim(),
+          campaign_whatsapp: document.getElementById('campaign_whatsapp').value.trim(),
+          target_niche: document.getElementById('target_niche').value.trim(),
+          service_description: document.getElementById('service_description').value.trim(),
+          target_audience: document.getElementById('target_audience').value.trim(),
+          contract_value: contractValue,
+          lead_value: leadValue,
+        };
+
+        // Validate minimum required field
+        if (!formData.client_name) {
+          alert('Por favor, preencha pelo menos o nome do cliente para gerar a prévia.');
+          btn.disabled = false;
+          btn.textContent = 'Baixar Prévia PDF';
+          return;
+        }
+
+        // Call preview endpoint
+        const response = await fetch('/api/aic/contracts/preview-pdf', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify(formData)
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Erro ao gerar prévia');
+        }
+
+        // Download PDF
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Contrato-AIC-PREVIA-${formData.client_name.replace(/\s+/g, '-')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
         btn.disabled = false;
         btn.textContent = 'Baixar Prévia PDF';
+
       } catch (error) {
         console.error('Error downloading preview:', error);
+        alert('Erro ao gerar prévia: ' + error.message);
         btn.disabled = false;
         btn.textContent = 'Baixar Prévia PDF';
       }
+    }
+
+    // ========== CONTRACT MODAL ==========
+    let contractReadComplete = false;
+
+    function openContractModal() {
+      const modal = document.getElementById('contract-modal');
+      const modalBody = document.getElementById('contract-modal-body');
+      modal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+
+      // Preencher especificacoes da campanha no contrato
+      const campaignName = document.getElementById('campaign_name')?.value || '-';
+      const projectName = document.getElementById('project_name')?.value || '-';
+      const targetNiche = document.getElementById('target_niche')?.value || '-';
+      const serviceDescription = document.getElementById('service_description')?.value || '-';
+      const targetAudience = document.getElementById('target_audience')?.value || '-';
+      const campaignWhatsapp = document.getElementById('campaign_whatsapp')?.value || '-';
+
+      document.getElementById('contract-spec-campaign-name').textContent = campaignName;
+      document.getElementById('contract-spec-project-name').textContent = projectName;
+      document.getElementById('contract-spec-target-niche').textContent = targetNiche;
+      document.getElementById('contract-spec-service-description').textContent = serviceDescription;
+      document.getElementById('contract-spec-target-audience').textContent = targetAudience;
+      document.getElementById('contract-spec-campaign-whatsapp').textContent = campaignWhatsapp;
+
+      // Preencher valores
+      const contractValueEl = document.getElementById('contract-value');
+      const leadValueEl = document.getElementById('lead-value');
+      if (contractValueEl) {
+        document.getElementById('contract-spec-contract-value').textContent = contractValueEl.textContent;
+      }
+      if (leadValueEl) {
+        document.getElementById('contract-spec-lead-value').textContent = leadValueEl.textContent;
+      }
+
+      // Reset scroll
+      modalBody.scrollTop = 0;
+      updateScrollProgress();
+
+      // Add scroll listener
+      modalBody.addEventListener('scroll', updateScrollProgress);
+    }
+
+    function closeContractModal() {
+      const modal = document.getElementById('contract-modal');
+      modal.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    function updateScrollProgress() {
+      const modalBody = document.getElementById('contract-modal-body');
+      const scrollProgress = document.getElementById('scroll-progress');
+      const btnConfirm = document.getElementById('btn-confirm-read');
+
+      const scrollTop = modalBody.scrollTop;
+      const scrollHeight = modalBody.scrollHeight - modalBody.clientHeight;
+      const progress = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 100;
+
+      if (progress >= 95) {
+        scrollProgress.textContent = 'Você leu o contrato completo';
+        scrollProgress.classList.add('complete');
+        btnConfirm.disabled = false;
+      } else {
+        const percent = Math.round(progress);
+        scrollProgress.textContent = `Role até o final para continuar (${percent}%)`;
+        scrollProgress.classList.remove('complete');
+        btnConfirm.disabled = true;
+      }
+    }
+
+    function confirmContractRead() {
+      contractReadComplete = true;
+
+      // Enable the first checkbox
+      const termReadItem = document.getElementById('term_read_item');
+      const termReadCheckbox = document.getElementById('term_read');
+      termReadItem.classList.remove('disabled');
+      termReadCheckbox.disabled = false;
+      termReadCheckbox.checked = true;
+
+      // Update button style
+      const btnReadContract = document.getElementById('btn-read-contract');
+      btnReadContract.classList.add('read');
+      btnReadContract.textContent = 'Contrato lido';
+
+      // Close modal
+      closeContractModal();
+
+      // Trigger validation
+      validateTerms();
     }
 
     // Start

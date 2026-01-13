@@ -5391,46 +5391,103 @@
 
             if (!campaignId) return;
 
-            // Buscar dados do sessionStorage (passado pelo dashboard)
+            console.log('[URL] Campaign ID encontrado:', campaignId);
+
+            // Primeiro tentar sessionStorage (passado pelo dashboard)
+            let campaign = null;
             const storedData = sessionStorage.getItem('selectedCampaign');
-            if (!storedData) {
-                console.log('[URL] Sem dados em sessionStorage, ignorando auto-seleção');
-                return;
+
+            if (storedData) {
+                const parsed = JSON.parse(storedData);
+                if (parsed.id === campaignId) {
+                    campaign = parsed;
+                    console.log('[URL] Usando dados do sessionStorage');
+                }
             }
 
-            const campaign = JSON.parse(storedData);
-            if (campaign.id !== campaignId) {
-                console.log('[URL] Campaign ID não corresponde ao sessionStorage');
-                return;
+            // Se não tem sessionStorage ou ID não bate, buscar da API
+            if (!campaign) {
+                console.log('[URL] Buscando dados da API...');
+                try {
+                    const response = await fetch(`${API_BASE}/campaign/${campaignId}`);
+                    const result = await response.json();
+                    if (result.success && result.data?.campaign) {
+                        campaign = result.data.campaign;
+                        console.log('[URL] Dados carregados da API:', campaign);
+                    } else {
+                        console.error('[URL] Erro ao buscar campanha:', result);
+                        return;
+                    }
+                } catch (error) {
+                    console.error('[URL] Erro na requisição:', error);
+                    return;
+                }
             }
 
             console.log('[URL] Auto-selecionando dropdowns:', campaign);
 
             try {
-                // Auto-selecionar cliente
-                if (campaign.client_name) {
+                // Determinar client_name (pode vir de diferentes campos)
+                const clientName = campaign.client_name || campaign.client_contact_name || '';
+
+                if (clientName) {
                     const clientSelect = document.getElementById('clientSelect');
-                    const clientOption = Array.from(clientSelect.options).find(opt => opt.text === campaign.client_name);
+
+                    // Procurar cliente existente ou criar novo
+                    let clientOption = Array.from(clientSelect.options).find(opt => opt.text === clientName);
+
                     if (clientOption) {
                         clientSelect.value = clientOption.value;
-                        await loadProjects(campaign.client_name);
-
-                        // Auto-selecionar projeto pelo project_id
-                        if (campaign.project_id) {
-                            const projectSelect = document.getElementById('projectSelect');
-                            const projectOption = Array.from(projectSelect.options).find(opt => opt.value === campaign.project_id);
-                            if (projectOption) {
-                                projectSelect.value = campaign.project_id;
-                                await loadCampaigns(campaign.project_id);
-
-                                // Auto-selecionar campanha
-                                const campaignSelect = document.getElementById('campaignSelect');
-                                campaignSelect.value = campaignId;
-                                await onCampaignChange();
-                                console.log('[URL] Dropdowns auto-selecionados com sucesso');
-                            }
-                        }
+                    } else {
+                        // Cliente não existe nos dropdowns - adicionar temporariamente
+                        console.log('[URL] Cliente não encontrado, adicionando:', clientName);
+                        const newOption = new Option(clientName, clientName);
+                        clientSelect.add(newOption);
+                        clientSelect.value = clientName;
                     }
+
+                    await loadProjects(clientName);
+
+                    // Auto-selecionar projeto
+                    const projectName = campaign.project_name || campaign.campaign_name;
+                    if (projectName) {
+                        const projectSelect = document.getElementById('projectSelect');
+                        let projectOption = Array.from(projectSelect.options).find(opt =>
+                            opt.text === projectName || opt.value === campaign.project_id
+                        );
+
+                        if (projectOption) {
+                            projectSelect.value = projectOption.value;
+                            await loadCampaigns(projectSelect.value);
+                        } else {
+                            // Projeto não existe - adicionar temporariamente
+                            console.log('[URL] Projeto não encontrado, adicionando:', projectName);
+                            const newOption = new Option(projectName, campaign.project_id || 'no-project');
+                            projectSelect.add(newOption);
+                            projectSelect.value = newOption.value;
+
+                            // Se não tem project_id válido, não chamar loadCampaigns (evita erro UUID)
+                            // Adicionar campanha diretamente ao dropdown
+                            const campaignSelect = document.getElementById('campaignSelect');
+                            campaignSelect.innerHTML = `
+                                <option value="">-- Selecione --</option>
+                                <option value="${campaign.id}">${campaign.campaign_name}</option>
+                            `;
+                            campaignSelect.disabled = false;
+                        }
+
+                        // Auto-selecionar campanha
+                        const campaignSelect = document.getElementById('campaignSelect');
+                        campaignSelect.value = campaignId;
+
+                        // Carregar dados da campanha diretamente (mais confiável)
+                        await loadCampaignData(campaignId);
+                        console.log('[URL] Dropdowns auto-selecionados com sucesso');
+                    }
+                } else {
+                    // Sem client_name - carregar dados direto
+                    console.log('[URL] Sem client_name, carregando dados diretamente');
+                    await loadCampaignData(campaignId);
                 }
 
                 // Limpar sessionStorage após uso
@@ -5438,6 +5495,8 @@
 
             } catch (error) {
                 console.error('[URL] Erro ao auto-selecionar dropdowns:', error);
+                // Fallback: tentar carregar dados direto
+                await loadCampaignData(campaignId);
             }
         }
     </script>

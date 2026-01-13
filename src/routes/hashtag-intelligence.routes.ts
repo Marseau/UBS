@@ -1908,14 +1908,19 @@ router.get('/campaign/:campaignId', async (req, res) => {
 
     if (campaignError) throw campaignError;
 
-    // Buscar projeto associado
-    const { data: project, error: projectError } = await supabase
-      .from('cluster_projects')
-      .select('*')
-      .eq('id', campaign.project_id)
-      .single();
+    // Buscar projeto associado (se existir)
+    let project = null;
+    if (campaign.project_id) {
+      const { data: projectData, error: projectError } = await supabase
+        .from('cluster_projects')
+        .select('*')
+        .eq('id', campaign.project_id)
+        .single();
 
-    if (projectError) throw projectError;
+      if (!projectError) {
+        project = projectData;
+      }
+    }
 
     return res.json({
       success: true,

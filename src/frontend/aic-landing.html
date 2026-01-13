@@ -203,7 +203,8 @@
       transition: color 0.2s;
     }
     .nav-links a:hover { color: var(--aic-green); }
-    .nav-btn-secondary {
+    .nav-btn-secondary,
+    .nav-btn-portal {
       background: transparent;
       color: var(--aic-white) !important;
       padding: 10px 20px;
@@ -212,7 +213,8 @@
       border: 1px solid var(--aic-green);
       transition: all 0.2s;
     }
-    .nav-btn-secondary:hover {
+    .nav-btn-secondary:hover,
+    .nav-btn-portal:hover {
       background: var(--aic-green);
       color: var(--aic-navy) !important;
     }
@@ -1565,7 +1567,8 @@
         <a href="/aic-docs.html">Docs</a>
         <a href="/aic-campaigns-dashboard.html">Campanhas</a>
         <a href="/aic-campaign-onboarding.html">Nova Campanha</a>
-        <a href="/aic-login.html" class="nav-btn-secondary">Entrar</a>
+        <a href="/aic-login.html" class="nav-btn-secondary" id="nav-btn-entrar">Entrar</a>
+        <a href="/cliente/proposta" class="nav-btn-portal" id="nav-btn-portal" style="display: none;">Voltar ao Portal</a>
         <a href="#" class="nav-cta" data-umami-event="cta_nav_cadastro">Falar com Especialista</a>
       </div>
     </div>
@@ -2698,5 +2701,22 @@
     }
   </style>
 
+  <!-- Script para verificar sessao e mostrar botao Portal -->
+  <script>
+    (async function checkSession() {
+      try {
+        const { data: { session } } = await supabaseLanding.auth.getSession();
+        if (session && session.user) {
+          // Usuario logado - mostrar botao Portal, esconder Entrar
+          const btnEntrar = document.getElementById('nav-btn-entrar');
+          const btnPortal = document.getElementById('nav-btn-portal');
+          if (btnEntrar) btnEntrar.style.display = 'none';
+          if (btnPortal) btnPortal.style.display = 'inline-flex';
+        }
+      } catch (e) {
+        // Silently fail - manter botoes padrao
+      }
+    })();
+  </script>
 </body>
 </html>

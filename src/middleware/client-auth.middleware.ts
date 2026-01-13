@@ -59,7 +59,7 @@ export async function authenticateClient(
     req.clientUser = {
       id: user.id,
       email: user.email || '',
-      name: user.user_metadata?.full_name || user.user_metadata?.name,
+      name: user.user_metadata?.name || user.user_metadata?.full_name,
       phone: user.user_metadata?.phone
     };
 
@@ -97,7 +97,7 @@ export async function optionalClientAuth(
       req.clientUser = {
         id: user.id,
         email: user.email || '',
-        name: user.user_metadata?.full_name || user.user_metadata?.name,
+        name: user.user_metadata?.name || user.user_metadata?.full_name,
         phone: user.user_metadata?.phone
       };
     }

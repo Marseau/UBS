@@ -14,6 +14,7 @@ const router = Router();
 const STEP_TO_GROUP: Record<string, string> = {
   'proposta_enviada': 'setup',
   'proposta_visualizada': 'setup',
+  'proposta_aceita': 'setup',
   'contrato_enviado': 'setup',
   'contrato_assinado': 'setup',
   'pagamento_pendente': 'pending',
@@ -32,15 +33,16 @@ const STEP_TO_GROUP: Record<string, string> = {
 const STEP_TO_PROGRESS: Record<string, number> = {
   'proposta_enviada': 10,
   'proposta_visualizada': 15,
+  'proposta_aceita': 20,
   'contrato_enviado': 25,
   'contrato_assinado': 35,
   'pagamento_pendente': 40,
   'pagamento_confirmado': 50,
   'credenciais_pendente': 55,
   'credenciais_ok': 60,
-  'briefing_pendente': 65,
-  'briefing_completo': 70,
-  'onboarding_pendente': 80,
+  'briefing_pendente': 70,
+  'briefing_completo': 80,
+  'onboarding_pendente': 85,
   'onboarding_completo': 90,
   'campanha_ativa': 95,
   'campanha_concluida': 100
@@ -366,6 +368,139 @@ router.get('/:id', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao buscar campanha'
+    });
+  }
+});
+
+/**
+ * GET /api/aic/campaigns/:id/stats
+ * Obter estatisticas de uma campanha (conversas, leads, mensagens)
+ */
+router.get('/:id/stats', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Primeiro verificar se eh journey_id ou campaign_id
+    let campaignId = id;
+
+    // Tentar buscar como journey primeiro
+    const { data: journey } = await supabaseAdmin
+      .from('aic_client_journeys')
+      .select('campaign_id')
+      .eq('id', id)
+      .single();
+
+    if (journey?.campaign_id) {
+      campaignId = journey.campaign_id;
+    }
+
+    // Buscar info da campanha
+    const { data: campaign, error: campaignError } = await supabaseAdmin
+      .from('cluster_campaigns')
+      .select(`
+        id,
+        campaign_name,
+        project_name,
+        nicho_principal,
+        pipeline_status,
+        cluster_status,
+        created_at
+      `)
+      .eq('id', campaignId)
+      .single();
+
+    if (campaignError || !campaign) {
+      return res.status(404).json({
+        success: false,
+        message: 'Campanha nao encontrada'
+      });
+    }
+
+    // Buscar total de leads na campanha
+    const { count: leadsCount } = await supabaseAdmin
+      .from('campaign_leads')
+      .select('*', { count: 'exact', head: true })
+      .eq('campaign_id', campaignId);
+
+    // Buscar conversas
+    const { data: conversations } = await supabaseAdmin
+      .from('aic_conversations')
+      .select('id, status, qualification_status, lead_messages_count, channel')
+      .eq('campaign_id', campaignId);
+
+    // Buscar entregas de leads (reunioes)
+    const { data: deliveries } = await supabaseAdmin
+      .from('aic_lead_deliveries')
+      .select('id, meeting_scheduled_at, status')
+      .eq('campaign_id', campaignId);
+
+    // Buscar mensagens da fila
+    const { data: messages } = await supabaseAdmin
+      .from('aic_message_queue')
+      .select('id, channel, status')
+      .eq('campaign_id', campaignId)
+      .eq('status', 'sent');
+
+    // Calcular estatisticas
+    const totalConversations = conversations?.length || 0;
+    const respondedConversations = conversations?.filter(c => c.lead_messages_count && c.lead_messages_count > 0)?.length || 0;
+    const qualifiedConversations = conversations?.filter(c =>
+      c.qualification_status === 'qualified' ||
+      c.qualification_status === 'hot' ||
+      c.qualification_status === 'interested'
+    )?.length || 0;
+
+    const meetings = deliveries?.filter(d => d.meeting_scheduled_at)?.length || 0;
+
+    // Por canal
+    const whatsappMessages = messages?.filter(m => m.channel === 'whatsapp')?.length || 0;
+    const instagramMessages = messages?.filter(m => m.channel === 'instagram')?.length || 0;
+
+    const whatsappConversations = conversations?.filter(c => c.channel === 'whatsapp')?.length || 0;
+    const instagramConversations = conversations?.filter(c => c.channel === 'instagram')?.length || 0;
+
+    const whatsappResponses = conversations?.filter(c =>
+      c.channel === 'whatsapp' && c.lead_messages_count && c.lead_messages_count > 0
+    )?.length || 0;
+    const instagramResponses = conversations?.filter(c =>
+      c.channel === 'instagram' && c.lead_messages_count && c.lead_messages_count > 0
+    )?.length || 0;
+
+    return res.json({
+      success: true,
+      campaign: {
+        id: campaign.id,
+        name: campaign.campaign_name || campaign.project_name || 'Campanha',
+        niche: campaign.nicho_principal,
+        status: campaign.pipeline_status || campaign.cluster_status || 'setup',
+        created_at: campaign.created_at
+      },
+      leads: leadsCount || 0,
+      conversations: totalConversations,
+      responses: respondedConversations,
+      meetings: meetings,
+      funnel: {
+        leads: leadsCount || 0,
+        contacted: totalConversations,
+        responded: respondedConversations,
+        qualified: qualifiedConversations
+      },
+      channels: {
+        whatsapp: whatsappMessages,
+        instagram: instagramMessages,
+        whatsapp_rate: whatsappConversations > 0
+          ? Math.round((whatsappResponses / whatsappConversations) * 100)
+          : 0,
+        instagram_rate: instagramConversations > 0
+          ? Math.round((instagramResponses / instagramConversations) * 100)
+          : 0
+      }
+    });
+  } catch (error) {
+    console.error('[Client Campaigns] Error fetching stats:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar estatisticas'
     });
   }
 });

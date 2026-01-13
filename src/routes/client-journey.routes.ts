@@ -523,6 +523,392 @@ router.get('/by-delivery/:deliveryId', async (req: Request, res: Response) => {
 });
 
 // ============================================
+// CREDENCIAIS (Portal do Cliente)
+// (ANTES de /:id para evitar conflito de rota)
+// ============================================
+
+/**
+ * GET /api/aic/journey/credentials
+ * Obter credenciais da campanha do cliente autenticado
+ */
+router.get('/credentials', authenticateClient, async (req: ClientRequest, res: Response) => {
+  try {
+    const userId = req.clientUser?.id;
+    const journeyId = req.query.journey_id as string;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Usuario nao autenticado' });
+    }
+
+    const { supabaseAdmin } = await import('../config/database');
+
+    // Buscar jornada do usuario
+    let journeyQuery = supabaseAdmin
+      .from('aic_client_journeys')
+      .select('id, campaign_id')
+      .eq('auth_user_id', userId)
+      .not('campaign_id', 'is', null);
+
+    if (journeyId) {
+      journeyQuery = journeyQuery.eq('id', journeyId);
+    }
+
+    const { data: journey, error: journeyError } = await journeyQuery.single();
+
+    if (journeyError || !journey?.campaign_id) {
+      return res.json({
+        success: true,
+        credentials: { whatsapp: null, instagram: null }
+      });
+    }
+
+    // Buscar credenciais WhatsApp via cluster_campaigns
+    const { data: campaign } = await supabaseAdmin
+      .from('cluster_campaigns')
+      .select('whapi_channel_uuid')
+      .eq('id', journey.campaign_id)
+      .single();
+
+    let whatsappData: { phone: string; name: string; status: string } | null = null;
+    if (campaign?.whapi_channel_uuid) {
+      const { data: channel } = await supabaseAdmin
+        .from('whapi_channels')
+        .select('phone_number, name, status')
+        .eq('id', campaign.whapi_channel_uuid)
+        .single();
+
+      if (channel) {
+        whatsappData = {
+          phone: channel.phone_number,
+          name: channel.name,
+          status: channel.status
+        };
+      }
+    }
+
+    // Buscar credenciais Instagram
+    const { data: igAccount } = await supabaseAdmin
+      .from('instagram_accounts')
+      .select('instagram_username, status')
+      .eq('campaign_id', journey.campaign_id)
+      .single();
+
+    const instagramData = igAccount ? {
+      username: igAccount.instagram_username,
+      status: igAccount.status
+    } : null;
+
+    return res.json({
+      success: true,
+      credentials: {
+        whatsapp: whatsappData,
+        instagram: instagramData
+      }
+    });
+
+  } catch (error) {
+    console.error('[Journey Routes] Error fetching credentials:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao buscar credenciais' });
+  }
+});
+
+/**
+ * POST /api/aic/journey/credentials/whatsapp
+ * Salvar credenciais WhatsApp do cliente
+ */
+router.post('/credentials/whatsapp', authenticateClient, async (req: ClientRequest, res: Response) => {
+  try {
+    const userId = req.clientUser?.id;
+    const { phone } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Usuario nao autenticado' });
+    }
+
+    if (!phone) {
+      return res.status(400).json({ success: false, message: 'Numero de telefone obrigatorio' });
+    }
+
+    const { supabaseAdmin } = await import('../config/database');
+
+    // Buscar jornada do usuario
+    const { data: journey, error: journeyError } = await supabaseAdmin
+      .from('aic_client_journeys')
+      .select('id, campaign_id, client_name')
+      .eq('auth_user_id', userId)
+      .not('campaign_id', 'is', null)
+      .single();
+
+    if (journeyError || !journey?.campaign_id) {
+      return res.status(404).json({ success: false, message: 'Jornada nao encontrada' });
+    }
+
+    // Verificar se campanha ja tem canal WhatsApp
+    const { data: campaign } = await supabaseAdmin
+      .from('cluster_campaigns')
+      .select('whapi_channel_uuid')
+      .eq('id', journey.campaign_id)
+      .single();
+
+    let channelId = campaign?.whapi_channel_uuid;
+
+    if (channelId) {
+      // Atualizar canal existente
+      await supabaseAdmin
+        .from('whapi_channels')
+        .update({
+          phone_number: phone,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', channelId);
+    } else {
+      // Criar novo canal
+      // channel_id e api_token serão configurados pelo admin posteriormente
+      const tempChannelId = `pending_${Date.now()}`;
+      const { data: newChannel, error: channelError } = await supabaseAdmin
+        .from('whapi_channels')
+        .insert({
+          name: `WA - ${journey.client_name}`,
+          channel_id: tempChannelId,
+          phone_number: phone,
+          api_token: 'pending_configuration',
+          status: 'pending_setup',
+          rate_limit_hourly: 20,
+          rate_limit_daily: 120
+        })
+        .select('id')
+        .single();
+
+      if (channelError) {
+        console.error('[Journey Routes] Error creating channel:', channelError);
+        return res.status(500).json({ success: false, message: 'Erro ao criar canal WhatsApp' });
+      }
+
+      channelId = newChannel.id;
+
+      // Vincular ao campaign
+      await supabaseAdmin
+        .from('cluster_campaigns')
+        .update({ whapi_channel_uuid: channelId })
+        .eq('id', journey.campaign_id);
+    }
+
+    return res.json({
+      success: true,
+      message: 'WhatsApp salvo com sucesso'
+    });
+
+  } catch (error) {
+    console.error('[Journey Routes] Error saving WhatsApp credentials:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao salvar WhatsApp' });
+  }
+});
+
+/**
+ * POST /api/aic/journey/credentials/instagram
+ * Salvar credenciais Instagram do cliente
+ */
+router.post('/credentials/instagram', authenticateClient, async (req: ClientRequest, res: Response) => {
+  try {
+    const userId = req.clientUser?.id;
+    const { username, password } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Usuario nao autenticado' });
+    }
+
+    if (!username) {
+      return res.status(400).json({ success: false, message: 'Username obrigatorio' });
+    }
+
+    const { supabaseAdmin } = await import('../config/database');
+    const crypto = require('crypto');
+
+    // Buscar jornada do usuario
+    const { data: journey, error: journeyError } = await supabaseAdmin
+      .from('aic_client_journeys')
+      .select('id, campaign_id, client_name')
+      .eq('auth_user_id', userId)
+      .not('campaign_id', 'is', null)
+      .single();
+
+    if (journeyError || !journey?.campaign_id) {
+      return res.status(404).json({ success: false, message: 'Jornada nao encontrada' });
+    }
+
+    // Verificar se ja existe conta Instagram para esta campanha
+    const { data: existingAccount } = await supabaseAdmin
+      .from('instagram_accounts')
+      .select('id')
+      .eq('campaign_id', journey.campaign_id)
+      .single();
+
+    // Preparar dados de criptografia para senha
+    // Colunas encrypted_password, encryption_iv, encryption_tag sao NOT NULL
+    let encryptedData: { encrypted_password: string; encryption_iv: string; encryption_tag: string };
+
+    if (password && password !== '********') {
+      // Criptografar senha fornecida
+      // Usar SHA-256 para garantir chave de exatamente 32 bytes
+      const rawKey = process.env.ENCRYPTION_KEY || 'default-encryption-key-for-dev';
+      const encryptionKey = crypto.createHash('sha256').update(rawKey).digest();
+      const iv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv);
+
+      let encrypted = cipher.update(password, 'utf8', 'hex');
+      encrypted += cipher.final('hex');
+      const authTag = cipher.getAuthTag();
+
+      encryptedData = {
+        encrypted_password: encrypted,
+        encryption_iv: iv.toString('hex'),
+        encryption_tag: authTag.toString('hex')
+      };
+    } else {
+      // Usar placeholder para campos obrigatorios
+      encryptedData = {
+        encrypted_password: 'pending_configuration',
+        encryption_iv: 'pending',
+        encryption_tag: 'pending'
+      };
+    }
+
+    if (existingAccount) {
+      // Atualizar conta existente
+      const updateData: Record<string, unknown> = {
+        instagram_username: username.replace('@', ''),
+        updated_at: new Date().toISOString()
+      };
+
+      // Só atualizar criptografia se foi fornecida senha real
+      if (password && password !== '********') {
+        Object.assign(updateData, encryptedData);
+      }
+
+      const { error: updateError } = await supabaseAdmin
+        .from('instagram_accounts')
+        .update(updateData)
+        .eq('id', existingAccount.id);
+
+      if (updateError) {
+        console.error('[Journey Routes] Error updating Instagram account:', updateError);
+        return res.status(500).json({ success: false, message: 'Erro ao atualizar conta Instagram' });
+      }
+    } else {
+      // Criar nova conta - todos os campos NOT NULL sao obrigatorios
+      const { error: insertError } = await supabaseAdmin
+        .from('instagram_accounts')
+        .insert({
+          campaign_id: journey.campaign_id,
+          account_name: `IG - ${journey.client_name}`,
+          instagram_username: username.replace('@', ''),
+          status: 'pending_verification',
+          max_dms_per_day: 80,
+          max_follows_per_day: 100,
+          max_unfollows_per_day: 50,
+          max_follows_per_hour: 15,
+          allowed_hours_start: 9,
+          allowed_hours_end: 18,
+          allowed_days: [1, 2, 3, 4, 5],
+          encrypted_password: encryptedData.encrypted_password,
+          encryption_iv: encryptedData.encryption_iv,
+          encryption_tag: encryptedData.encryption_tag
+        });
+
+      if (insertError) {
+        console.error('[Journey Routes] Error creating Instagram account:', insertError);
+        return res.status(500).json({ success: false, message: 'Erro ao criar conta Instagram' });
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'Instagram salvo com sucesso'
+    });
+
+  } catch (error) {
+    console.error('[Journey Routes] Error saving Instagram credentials:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao salvar Instagram' });
+  }
+});
+
+/**
+ * POST /api/aic/journey/complete-credentials
+ * Marcar credenciais como completas (cliente autenticado)
+ */
+router.post('/complete-credentials', authenticateClient, async (req: ClientRequest, res: Response) => {
+  try {
+    const userId = req.clientUser?.id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Usuario nao autenticado' });
+    }
+
+    const { supabaseAdmin } = await import('../config/database');
+
+    // Buscar jornada do usuario
+    const { data: journey, error: journeyError } = await supabaseAdmin
+      .from('aic_client_journeys')
+      .select('id, campaign_id')
+      .eq('auth_user_id', userId)
+      .not('campaign_id', 'is', null)
+      .single();
+
+    if (journeyError || !journey) {
+      return res.status(404).json({ success: false, message: 'Jornada nao encontrada' });
+    }
+
+    // Verificar se ambas credenciais foram configuradas
+    const { data: campaign } = await supabaseAdmin
+      .from('cluster_campaigns')
+      .select('whapi_channel_uuid')
+      .eq('id', journey.campaign_id)
+      .single();
+
+    const { data: igAccount } = await supabaseAdmin
+      .from('instagram_accounts')
+      .select('id')
+      .eq('campaign_id', journey.campaign_id)
+      .single();
+
+    if (!campaign?.whapi_channel_uuid || !igAccount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Configure WhatsApp e Instagram antes de continuar'
+      });
+    }
+
+    // Atualizar jornada
+    const { error: updateError } = await supabaseAdmin
+      .from('aic_client_journeys')
+      .update({
+        current_step: 'briefing_pendente',
+        credenciais_ok_at: new Date().toISOString(),
+        briefing_pendente_at: new Date().toISOString(),
+        next_action_message: 'Preencher briefing da campanha',
+        next_action_url: '/cliente/briefing',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', journey.id);
+
+    if (updateError) {
+      console.error('[Journey Routes] Error updating journey:', updateError);
+      return res.status(500).json({ success: false, message: 'Erro ao atualizar jornada' });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Credenciais configuradas com sucesso',
+      nextStep: '/cliente/briefing'
+    });
+
+  } catch (error) {
+    console.error('[Journey Routes] Error completing credentials:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao completar credenciais' });
+  }
+});
+
+// ============================================
 // LEADS ENTREGUES (Portal do Cliente)
 // (ANTES de /:id para evitar conflito de rota)
 // ============================================
@@ -1213,6 +1599,36 @@ router.post('/submit-payment', async (req: Request, res: Response) => {
         next_action_message: 'Pagamento em análise. Você receberá uma notificação quando confirmado.'
       })
       .eq('id', journeyId);
+
+    // SINCRONIZAR: Atualizar também aic_campaign_payments (para o dashboard financeiro)
+    // Buscar a journey para pegar o campaign_id
+    const { data: journeyForSync } = await supabaseAdmin
+      .from('aic_client_journeys')
+      .select('campaign_id')
+      .eq('id', journeyId)
+      .single();
+
+    if (journeyForSync?.campaign_id) {
+      // Atualizar o pagamento correspondente em aic_campaign_payments
+      const { error: syncError } = await supabaseAdmin
+        .from('aic_campaign_payments')
+        .update({
+          status: 'submitted',
+          payment_proof_url: payment_proof_url || null,
+          payment_notes: payment_notes || null,
+          submitted_at: new Date().toISOString()
+        })
+        .eq('campaign_id', journeyForSync.campaign_id)
+        .eq('type', 'contract_installment')
+        .eq('installment_number', payment.installment_number)
+        .eq('status', 'pending');
+
+      if (syncError) {
+        console.warn('[Journey Routes] Warning: Could not sync to aic_campaign_payments:', syncError);
+      } else {
+        console.log(`[Journey Routes] Synced payment to aic_campaign_payments for campaign ${journeyForSync.campaign_id}`);
+      }
+    }
 
     console.log(`[Journey Routes] Payment submitted for journey ${journeyId}: R$ ${payment.amount} (parcela ${payment.installment_number})`);
 
