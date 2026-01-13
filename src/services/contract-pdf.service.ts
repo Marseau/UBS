@@ -491,7 +491,7 @@ class ContractPDFService {
       <li><strong>Coleta de Materiais de Apoio:</strong> Solicitação e organização de fotos, vídeos, depoimentos, logos, referências e apresentações existentes como insumo para a linha editorial.</li>
       <li><strong>Criação da Linha Editorial:</strong> Desenvolvimento de conteúdo estratégico e scripts de abordagem personalizados, adaptados ao cluster identificado.</li>
       <li><strong>Execução da Campanha:</strong> Envio de mensagens personalizadas em ritmo humano e controlado, com monitoramento diário e ajustes de copy/cadência conforme necessário.</li>
-      <li><strong>Qualificação e Agendamento:</strong> Triagem de respostas, identificação de interesse genuíno, e para leads com alto interesse, oferta automática de reunião com agendamento direto no Google Calendar da CONTRATANTE.</li>
+      <li><strong>Qualificação e Fechamento:</strong> Triagem de respostas, identificação de interesse genuíno, e para leads com alto interesse, handoff automático para fechamento humano direto no WhatsApp.</li>
     </ol>
 
     <!-- Cláusula 3 -->
@@ -563,7 +563,7 @@ class ContractPDFService {
     <p><span class="clause-number">5.1.</span> Para fins deste contrato, considera-se "Lead Qualificado" o prospecto que cumprir TODOS os seguintes requisitos cumulativos:</p>
     <ol type="I">
       <li>Responder às mensagens enviadas demonstrando interesse genuíno e aderente à oferta da CONTRATANTE;</li>
-      <li>Fornecer contato válido (e-mail, telefone ou WhatsApp) ou agendar conversa/reunião;</li>
+      <li>Fornecer contato válido (e-mail, telefone ou WhatsApp) ou aceitar contato direto;</li>
       <li>Apresentar fit com a oferta, ou seja, pertencer ao público-alvo definido na fase de diagnóstico.</li>
     </ol>
 
@@ -699,8 +699,8 @@ class ContractPDFService {
       <li>Avaliação e sugestões para landing page;</li>
       <li>Qualificação e triagem de respostas;</li>
       <li>Relatórios semanais e relatório final;</li>
-      <li>Agendamento automático via Google Calendar (quando autorizado);</li>
-      <li>Sistema de lembretes para reuniões agendadas.</li>
+      <li>Handoff automático para fechamento humano via WhatsApp;</li>
+      <li>Notificação de leads quentes prontos para fechamento.</li>
     </ul>
 
     <p><span class="clause-number">11.2.</span> <strong>NÃO ESTÁ INCLUÍDO</strong> no escopo dos serviços:</p>

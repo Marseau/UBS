@@ -527,8 +527,8 @@
       <div class="filters-row">
         <button onclick="filterByStatus('')" class="filter-btn active" data-status="">Todos</button>
         <button onclick="filterByStatus('entregue')" class="filter-btn" data-status="entregue">Entregue</button>
-        <button onclick="filterByStatus('reuniao_agendada')" class="filter-btn" data-status="reuniao_agendada">Reuniao Agendada</button>
-        <button onclick="filterByStatus('reuniao_realizada')" class="filter-btn" data-status="reuniao_realizada">Reuniao Realizada</button>
+        <button onclick="filterByStatus('reuniao_agendada')" class="filter-btn" data-status="reuniao_agendada">Handoff Ativo</button>
+        <button onclick="filterByStatus('reuniao_realizada')" class="filter-btn" data-status="reuniao_realizada">Contato Realizado</button>
         <button onclick="filterByStatus('negociando')" class="filter-btn" data-status="negociando">Negociando</button>
         <button onclick="filterByStatus('contrato_enviado')" class="filter-btn" data-status="contrato_enviado">Contrato Enviado</button>
         <button onclick="filterByStatus('contrato_assinado')" class="filter-btn" data-status="contrato_assinado">Contrato Assinado</button>
@@ -545,7 +545,7 @@
             <th>Lead</th>
             <th>Campanha</th>
             <th>Status</th>
-            <th>Reuniao</th>
+            <th>Contato</th>
             <th>Valor</th>
             <th>Entregue em</th>
             <th>Acoes</th>
@@ -573,8 +573,8 @@
         <label>Novo Status</label>
         <select id="modalStatus">
           <option value="entregue">Entregue</option>
-          <option value="reuniao_agendada">Reuniao Agendada</option>
-          <option value="reuniao_realizada">Reuniao Realizada</option>
+          <option value="reuniao_agendada">Handoff Ativo</option>
+          <option value="reuniao_realizada">Contato Realizado</option>
           <option value="negociando">Negociando</option>
           <option value="contrato_enviado">Contrato Enviado</option>
           <option value="contrato_assinado">Contrato Assinado</option>
@@ -590,7 +590,7 @@
       </div>
 
       <div class="form-group" id="meetingFields" style="display:none;">
-        <label>Data/Hora da Reuniao</label>
+        <label>Data/Hora do Contato</label>
         <input type="datetime-local" id="modalMeetingAt">
       </div>
 
@@ -772,8 +772,8 @@
     function formatStatus(status) {
       const labels = {
         'entregue': 'Entregue',
-        'reuniao_agendada': 'Reuniao Agendada',
-        'reuniao_realizada': 'Reuniao Realizada',
+        'reuniao_agendada': 'Handoff Ativo',
+        'reuniao_realizada': 'Contato Realizado',
         'negociando': 'Negociando',
         'contrato_enviado': 'Contrato Enviado',
         'contrato_assinado': 'Contrato Assinado',

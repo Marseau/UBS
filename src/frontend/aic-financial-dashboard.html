@@ -307,7 +307,7 @@
       font-size: 12px;
       font-weight: 500;
     }
-    .delivery-type-reuniao_marcada { background: var(--aic-green-subtle); color: var(--aic-green); }
+    .delivery-type-fechamento { background: var(--aic-green-subtle); color: var(--aic-green); }
     .delivery-type-whatsapp_capturado { background: var(--aic-blue-subtle); color: var(--aic-blue); }
     .delivery-type-interesse_confirmado { background: var(--aic-yellow-subtle); color: var(--aic-yellow); }
     .delivery-type-proposta_enviada { background: var(--aic-purple-subtle); color: var(--aic-purple); }
@@ -691,7 +691,7 @@
                   <th>Data</th>
                   <th>Lead</th>
                   <th>Tipo</th>
-                  <th>Reuniao</th>
+                  <th>Fechamento</th>
                   <th>Score</th>
                   <th>Valor</th>
                   <th>Fatura</th>
@@ -798,7 +798,7 @@
                   <th>Instagram</th>
                   <th>Telefone</th>
                   <th>Tipo</th>
-                  <th>Reuniao</th>
+                  <th>Fechamento</th>
                   <th>Score</th>
                   <th>Valor</th>
                   <th>Fatura</th>
@@ -837,7 +837,7 @@
         <div class="form-group">
           <label class="form-label">Tipo de Conversao *</label>
           <select id="deliveryType" class="form-input" required>
-            <option value="reuniao_marcada">Reuniao Marcada</option>
+            <option value="fechamento">Fechamento Realizado</option>
             <option value="whatsapp_capturado">WhatsApp Capturado</option>
             <option value="interesse_confirmado">Interesse Confirmado</option>
             <option value="proposta_enviada">Proposta Enviada</option>
@@ -861,7 +861,7 @@
           <input type="email" id="deliveryLeadEmail" class="form-input">
         </div>
         <div class="form-group">
-          <label class="form-label">Data/Hora da Reuniao (se aplicavel)</label>
+          <label class="form-label">Data/Hora do Fechamento (se aplicavel)</label>
           <input type="datetime-local" id="deliveryMeetingDate" class="form-input">
         </div>
         <div class="form-group">
@@ -1662,7 +1662,7 @@
 
     function formatDeliveryType(type) {
       const types = {
-        'reuniao_marcada': 'Reuniao',
+        'fechamento': 'Fechamento',
         'whatsapp_capturado': 'WhatsApp',
         'interesse_confirmado': 'Interesse',
         'proposta_enviada': 'Proposta',
