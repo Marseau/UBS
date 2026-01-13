@@ -1598,12 +1598,20 @@ router.post('/scrape-profiles-batch', async (req: Request, res: Response) => {
 
 /**
  * POST /api/instagram-scraper/cleanup-pages
- * Limpa todas as páginas abertas SEM fechar o browser
+ * Limpeza padrão do Puppeteer:
+ *   1. Aguarda 30s (segurança)
+ *   2. Fecha páginas gerenciadas (cleanupAllContexts)
+ *   3. Fecha o browser
+ *   4. Mata processos Chrome órfãos
+ *
  * ⚠️ ATENÇÃO: Só chamar quando NÃO houver scraping ativo!
- * O problema anterior era timeout do N8N causando chamada no meio do scrape.
  */
 router.post('/cleanup-pages', async (_req: Request, res: Response) => {
   try {
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+
     const { cleanupAllContexts, getContextStats } = await import('../services/instagram-context-manager.service');
     const { getBrowserInstance } = await import('../services/instagram-session.service');
 
@@ -1613,7 +1621,8 @@ router.post('/cleanup-pages', async (_req: Request, res: Response) => {
       return res.status(200).json({
         success: true,
         message: 'Browser não está inicializado, nada para limpar',
-        pages_cleaned: 0
+        pages_cleaned: 0,
+        browser_closed: false
       });
     }
 
@@ -1632,13 +1641,73 @@ router.post('/cleanup-pages', async (_req: Request, res: Response) => {
 
     console.log(`✅ [CLEANUP] ${pagesRemoved} páginas removidas (${pagesAfter.length} restantes)`);
 
+    // Fechar o browser completamente
+    console.log(`🧹 [CLEANUP] Fechando browser...`);
+    await closeBrowser();
+    console.log(`✅ [CLEANUP] Browser fechado`);
+
+    // Matar processos Chrome órfãos
+    let orphansKilled = 0;
+    const orphanPids: number[] = [];
+
+    try {
+      console.log(`🔍 [CLEANUP] Verificando processos órfãos...`);
+
+      // Obter PIDs dos workers PM2
+      const { stdout: pm2Output } = await execAsync(`pm2 jlist 2>/dev/null || echo "[]"`);
+      const pm2List = JSON.parse(pm2Output);
+      const workerPids = new Set(
+        pm2List
+          .filter((p: any) => p.name?.startsWith('ubs-') && p.pid)
+          .map((p: any) => p.pid)
+      );
+
+      // Listar Chrome principais (não Helpers)
+      const { stdout } = await execAsync(
+        `ps -eo pid,ppid,comm | grep -i "Chrome for Testing" | grep "/MacOS/Google Chrome for Testing$" | grep -v Helper || true`
+      );
+
+      const lines = stdout.trim().split('\n').filter((l: string) => l.trim());
+
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 2 && parts[0] && parts[1]) {
+          const pid = parseInt(parts[0], 10);
+          const ppid = parseInt(parts[1], 10);
+
+          // É órfão se PPID não é um worker ubs-*
+          if (!workerPids.has(ppid)) {
+            orphanPids.push(pid);
+            try {
+              await execAsync(`kill -9 ${pid}`);
+              orphansKilled++;
+              console.log(`   🔪 Órfão PID ${pid} (PPID: ${ppid}): morto`);
+            } catch {
+              // Processo pode já ter morrido
+            }
+          }
+        }
+      }
+
+      if (orphanPids.length === 0) {
+        console.log(`   ✅ Nenhum processo órfão encontrado`);
+      } else {
+        console.log(`✅ [CLEANUP] ${orphansKilled} órfãos eliminados`);
+      }
+    } catch (e: any) {
+      console.warn(`⚠️ [CLEANUP] Erro ao verificar órfãos: ${e.message}`);
+    }
+
     return res.status(200).json({
       success: true,
-      message: 'Páginas limpas com sucesso',
+      message: 'Páginas limpas, browser fechado e órfãos eliminados',
       pages_before: pagesBefore.length,
-      pages_after: pagesAfter.length,
+      pages_after: 0,
       pages_cleaned: pagesRemoved,
-      managed_pages_cleaned: statsBefore.activeCount
+      managed_pages_cleaned: statsBefore.activeCount,
+      browser_closed: true,
+      orphans_killed: orphansKilled,
+      orphan_pids: orphanPids
     });
   } catch (error: any) {
     console.error('❌ Erro ao limpar páginas:', error);
@@ -1646,6 +1715,215 @@ router.post('/cleanup-pages', async (_req: Request, res: Response) => {
       success: false,
       message: 'Erro ao limpar páginas',
       error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/cleanup-full
+ * Limpeza COMPLETA do ambiente Puppeteer
+ *
+ * Executa em ordem:
+ * 1. Fecha todas as páginas gerenciadas
+ * 2. Fecha o browser (libera memória)
+ * 3. Mata processos Chrome órfãos
+ * 4. Limpa arquivos de lock
+ *
+ * ⚠️ ATENÇÃO: Interrompe TODOS os scrapes ativos neste worker!
+ * Use apenas quando necessário reset completo.
+ *
+ * Parâmetros:
+ * - skip_wait: boolean (default false) - pular wait de segurança de 5s
+ * - dry_run: boolean (default false) - apenas detectar, não executar
+ */
+router.post('/cleanup-full', async (req: Request, res: Response) => {
+  const SKIP_WAIT = req.body.skip_wait === true;
+  const DRY_RUN = req.body.dry_run === true;
+
+  const result = {
+    success: true,
+    dry_run: DRY_RUN,
+    steps: {
+      pages_closed: 0,
+      browser_closed: false,
+      orphans_killed: 0,
+      orphan_pids: [] as number[],
+      locks_removed: [] as string[]
+    },
+    errors: [] as string[],
+    timestamp: new Date().toISOString()
+  };
+
+  try {
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+    const fs = await import('fs');
+    const path = await import('path');
+
+    console.log(`🧹 [CLEANUP-FULL] Iniciando limpeza completa (dry_run: ${DRY_RUN})...`);
+
+    // Passo 0: Wait de segurança (permite scrapes em andamento terminarem)
+    if (!SKIP_WAIT && !DRY_RUN) {
+      console.log(`⏳ [CLEANUP-FULL] Aguardando 5s antes de iniciar...`);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+
+    // Passo 1: Fechar páginas gerenciadas
+    try {
+      const { cleanupAllContexts, getContextStats } = await import('../services/instagram-context-manager.service');
+      const { getBrowserInstance } = await import('../services/instagram-session.service');
+
+      const browser = getBrowserInstance();
+      if (browser && browser.isConnected()) {
+        const pagesBefore = (await browser.pages()).length;
+        const stats = getContextStats();
+
+        if (!DRY_RUN) {
+          await cleanupAllContexts();
+          const pagesAfter = (await browser.pages()).length;
+          result.steps.pages_closed = pagesBefore - pagesAfter;
+        } else {
+          result.steps.pages_closed = stats.activeCount;
+        }
+
+        console.log(`   ✅ Páginas: ${result.steps.pages_closed} fechadas`);
+      }
+    } catch (e: any) {
+      result.errors.push(`Erro ao fechar páginas: ${e.message}`);
+    }
+
+    // Passo 2: Fechar browser
+    try {
+      const { getBrowserInstance } = await import('../services/instagram-session.service');
+      const browser = getBrowserInstance();
+
+      if (browser && browser.isConnected()) {
+        if (!DRY_RUN) {
+          await closeBrowser();
+          result.steps.browser_closed = true;
+        } else {
+          result.steps.browser_closed = true; // Seria fechado
+        }
+        console.log(`   ✅ Browser: fechado`);
+      } else {
+        console.log(`   ⚪ Browser: já estava fechado`);
+      }
+    } catch (e: any) {
+      result.errors.push(`Erro ao fechar browser: ${e.message}`);
+    }
+
+    // Passo 3: Matar processos Chrome órfãos
+    try {
+      // Obter PIDs dos workers
+      const { stdout: pm2Output } = await execAsync(`pm2 jlist 2>/dev/null || echo "[]"`);
+      const pm2List = JSON.parse(pm2Output);
+      const workerPids = new Set(
+        pm2List
+          .filter((p: any) => p.name?.startsWith('ubs-') && p.pid)
+          .map((p: any) => p.pid)
+      );
+
+      // Listar Chrome principais
+      const { stdout } = await execAsync(
+        `ps -eo pid,ppid,comm | grep -i "Chrome for Testing" | grep "/MacOS/Google Chrome for Testing$" | grep -v Helper || true`
+      );
+
+      const lines = stdout.trim().split('\n').filter(l => l.trim());
+
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 2 && parts[0] && parts[1]) {
+          const pid = parseInt(parts[0], 10);
+          const ppid = parseInt(parts[1], 10);
+
+          // É órfão se PPID não é um worker
+          if (!workerPids.has(ppid)) {
+            result.steps.orphan_pids.push(pid);
+
+            if (!DRY_RUN) {
+              try {
+                await execAsync(`kill -9 ${pid}`);
+                result.steps.orphans_killed++;
+                console.log(`   ✅ Órfão PID ${pid}: morto`);
+              } catch {
+                // Processo pode já ter morrido
+              }
+            }
+          }
+        }
+      }
+
+      if (result.steps.orphan_pids.length === 0) {
+        console.log(`   ⚪ Órfãos: nenhum encontrado`);
+      }
+    } catch (e: any) {
+      result.errors.push(`Erro ao matar órfãos: ${e.message}`);
+    }
+
+    // Passo 4: Limpar locks
+    try {
+      const sessionsDir = path.join(process.env.HOME || '', '.instagram-sessions');
+
+      if (fs.existsSync(sessionsDir)) {
+        const folders = fs.readdirSync(sessionsDir, { withFileTypes: true })
+          .filter(d => d.isDirectory())
+          .map(d => d.name);
+
+        for (const folder of folders) {
+          const lockFiles = ['SingletonLock', 'SingletonSocket', 'SingletonCookie'];
+          for (const lockFile of lockFiles) {
+            const lockPath = path.join(sessionsDir, folder, lockFile);
+            if (fs.existsSync(lockPath)) {
+              if (!DRY_RUN) {
+                fs.unlinkSync(lockPath);
+              }
+              result.steps.locks_removed.push(`${folder}/${lockFile}`);
+            }
+          }
+        }
+      }
+
+      // Também limpar /tmp/puppeteer_dev_chrome_profile-* locks
+      const tmpDir = '/tmp';
+      if (fs.existsSync(tmpDir)) {
+        const tmpFolders = fs.readdirSync(tmpDir, { withFileTypes: true })
+          .filter(d => d.isDirectory() && d.name.startsWith('puppeteer_dev_chrome_profile'))
+          .map(d => d.name);
+
+        for (const folder of tmpFolders) {
+          const lockFiles = ['SingletonLock', 'SingletonSocket', 'SingletonCookie'];
+          for (const lockFile of lockFiles) {
+            const lockPath = path.join(tmpDir, folder, lockFile);
+            if (fs.existsSync(lockPath)) {
+              if (!DRY_RUN) {
+                fs.unlinkSync(lockPath);
+              }
+              result.steps.locks_removed.push(`/tmp/${folder}/${lockFile}`);
+            }
+          }
+        }
+      }
+
+      if (result.steps.locks_removed.length > 0) {
+        console.log(`   ✅ Locks: ${result.steps.locks_removed.length} removidos`);
+      } else {
+        console.log(`   ⚪ Locks: nenhum encontrado`);
+      }
+    } catch (e: any) {
+      result.errors.push(`Erro ao limpar locks: ${e.message}`);
+    }
+
+    console.log(`🧹 [CLEANUP-FULL] Concluído!`);
+
+    return res.status(200).json(result);
+
+  } catch (error: any) {
+    console.error('❌ [CLEANUP-FULL] Erro:', error);
+    return res.status(500).json({
+      ...result,
+      success: false,
+      errors: [...result.errors, error.message]
     });
   }
 });
@@ -3975,6 +4253,242 @@ router.post('/extract-qr-whatsapp', async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error('❌ [QR-EXTRACT] Erro:', error.message);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/instagram-scraper/watchdog
+ * Watchdog para detectar e matar browsers ÓRFÃOS
+ *
+ * LÓGICA DE ÓRFÃOS (não por idade!):
+ * - Chrome saudável: PPID = PID de um worker Node.js (ubs-main, ubs-rescue, etc)
+ * - Chrome órfão: PPID = 1 (launchd) ou processo morto (worker reiniciou)
+ * - Só mata órfãos, nunca processos ativos independente da idade
+ *
+ * Parâmetros:
+ * - kill_orphans: boolean (default true) - matar processos órfãos
+ * - dry_run: boolean (default false) - apenas detectar sem matar
+ */
+router.post('/watchdog', async (req: Request, res: Response) => {
+  const KILL_ORPHANS = req.body.kill_orphans !== false; // default true
+  const DRY_RUN = req.body.dry_run === true; // default false
+
+  try {
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+    const { getBrowserInstance } = await import('../services/instagram-session.service');
+
+    const result: {
+      success: boolean;
+      browser_connected: boolean;
+      pages_total: number;
+      pages_error: number;
+      chrome_processes: number;
+      orphan_processes: number;
+      orphans_killed: number;
+      killed_pids: number[];
+      orphan_details: { pid: number; ppid: number; reason: string }[];
+      worker_pids: { name: string; pid: number }[];
+      errors: string[];
+      action_taken: string;
+      dry_run: boolean;
+    } = {
+      success: true,
+      browser_connected: false,
+      pages_total: 0,
+      pages_error: 0,
+      chrome_processes: 0,
+      orphan_processes: 0,
+      orphans_killed: 0,
+      killed_pids: [],
+      orphan_details: [],
+      worker_pids: [],
+      errors: [],
+      action_taken: 'none',
+      dry_run: DRY_RUN
+    };
+
+    console.log(`🐕 [WATCHDOG] Iniciando detecção de órfãos (kill: ${KILL_ORPHANS}, dry_run: ${DRY_RUN})`);
+
+    // 1. Verificar instância do browser deste worker
+    const browser = getBrowserInstance();
+    if (browser && browser.isConnected()) {
+      result.browser_connected = true;
+
+      try {
+        const pages = await browser.pages();
+        result.pages_total = pages.length;
+
+        for (const page of pages) {
+          try {
+            const url = page.url();
+            if (url.startsWith('chrome-error://') || url === 'about:blank') {
+              result.pages_error++;
+            }
+          } catch {
+            result.pages_error++;
+          }
+        }
+      } catch (e: any) {
+        result.errors.push(`Erro ao verificar páginas: ${e.message}`);
+      }
+    }
+
+    // 2. Obter PIDs dos workers Node.js (PM2)
+    try {
+      const { stdout: pm2Output } = await execAsync(
+        `pm2 jlist 2>/dev/null || echo "[]"`
+      );
+      const pm2List = JSON.parse(pm2Output);
+
+      for (const proc of pm2List) {
+        if (proc.name && proc.name.startsWith('ubs-') && proc.pid) {
+          result.worker_pids.push({ name: proc.name, pid: proc.pid });
+        }
+      }
+
+      console.log(`   Workers ativos: ${result.worker_pids.map(w => `${w.name}:${w.pid}`).join(', ')}`);
+    } catch (e: any) {
+      result.errors.push(`Erro ao obter workers PM2: ${e.message}`);
+    }
+
+    const workerPidSet = new Set(result.worker_pids.map(w => w.pid));
+
+    // 3. Listar todos os processos Chrome com PID e PPID
+    try {
+      const { stdout } = await execAsync(
+        `ps -eo pid,ppid,comm | grep -i "Chrome for Testing" | grep -v grep | grep -v crashpad || true`
+      );
+
+      const lines = stdout.trim().split('\n').filter(l => l.trim());
+
+      // Identificar Chrome "principais" (spawned diretamente pelo Node.js)
+      // São os que têm "/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing" no final
+      const chromeMainProcesses: { pid: number; ppid: number }[] = [];
+
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 3 && parts[0] && parts[1]) {
+          const pid = parseInt(parts[0], 10);
+          const ppid = parseInt(parts[1], 10);
+          const comm = parts.slice(2).join(' ');
+
+          // Chrome principal termina com "Google Chrome for Testing" (não Helper/Renderer)
+          if (comm.includes('/MacOS/Google Chrome for Testing') &&
+              !comm.includes('Helper') &&
+              !comm.includes('Renderer')) {
+            chromeMainProcesses.push({ pid, ppid });
+          }
+        }
+      }
+
+      result.chrome_processes = chromeMainProcesses.length;
+      console.log(`   Chrome principais encontrados: ${chromeMainProcesses.length}`);
+
+      // 4. Detectar órfãos - Chrome cujo PPID não é um worker
+      for (const chrome of chromeMainProcesses) {
+        const isOwnedByWorker = workerPidSet.has(chrome.ppid);
+
+        if (!isOwnedByWorker) {
+          // Verificar se o PPID existe e é um processo válido
+          let ppidExists = false;
+          let ppidComm = 'unknown';
+
+          try {
+            const { stdout: ppidCheck } = await execAsync(
+              `ps -p ${chrome.ppid} -o comm= 2>/dev/null || echo ""`
+            );
+            ppidExists = ppidCheck.trim().length > 0;
+            ppidComm = ppidCheck.trim() || 'dead';
+          } catch {
+            ppidExists = false;
+          }
+
+          let reason = '';
+          if (chrome.ppid === 1) {
+            reason = 'PPID=1 (reparented to launchd)';
+          } else if (!ppidExists) {
+            reason = `PPID=${chrome.ppid} morto`;
+          } else if (!isOwnedByWorker) {
+            reason = `PPID=${chrome.ppid} (${ppidComm}) não é worker ubs-*`;
+          }
+
+          result.orphan_details.push({
+            pid: chrome.pid,
+            ppid: chrome.ppid,
+            reason
+          });
+          result.orphan_processes++;
+
+          console.log(`   🔴 Órfão: PID ${chrome.pid} - ${reason}`);
+        }
+      }
+
+      // 5. Matar órfãos se configurado
+      if (KILL_ORPHANS && result.orphan_processes > 0 && !DRY_RUN) {
+        console.log(`🔪 [WATCHDOG] Matando ${result.orphan_processes} processos órfãos...`);
+
+        for (const orphan of result.orphan_details) {
+          try {
+            await execAsync(`kill -9 ${orphan.pid}`);
+            result.killed_pids.push(orphan.pid);
+            result.orphans_killed++;
+            console.log(`   ✓ PID ${orphan.pid} morto (${orphan.reason})`);
+          } catch (e: any) {
+            // Pode falhar se processo filho já morreu com o pai
+            if (!e.message.includes('No such process')) {
+              result.errors.push(`Falha ao matar PID ${orphan.pid}: ${e.message}`);
+            }
+          }
+        }
+
+        result.action_taken = 'killed_orphans';
+      } else if (DRY_RUN && result.orphan_processes > 0) {
+        result.action_taken = 'dry_run_detected_orphans';
+      }
+
+      // 6. Se muitas páginas em erro, fazer cleanup
+      if (result.pages_error > 3 && result.browser_connected) {
+        console.log(`🧹 [WATCHDOG] ${result.pages_error} páginas em erro, limpando contextos...`);
+        try {
+          const { cleanupAllContexts } = await import('../services/instagram-context-manager.service');
+          await cleanupAllContexts();
+          result.action_taken = result.action_taken === 'none'
+            ? 'cleaned_error_pages'
+            : `${result.action_taken},cleaned_error_pages`;
+        } catch (e: any) {
+          result.errors.push(`Erro ao limpar contextos: ${e.message}`);
+        }
+      }
+
+    } catch (e: any) {
+      result.errors.push(`Erro ao verificar processos: ${e.message}`);
+    }
+
+    // Determinar se há problema
+    const hasIssues = result.orphan_processes > 0 || result.pages_error > 3;
+
+    console.log(`🐕 [WATCHDOG] Resultado: ${hasIssues ? '⚠️ ÓRFÃOS DETECTADOS' : '✅ TUDO OK'}`);
+    console.log(`   Browser: ${result.browser_connected ? 'conectado' : 'desconectado'}`);
+    console.log(`   Páginas: ${result.pages_total} total, ${result.pages_error} com erro`);
+    console.log(`   Chrome: ${result.chrome_processes} principais, ${result.orphan_processes} órfãos`);
+    if (result.orphans_killed > 0) {
+      console.log(`   Mortos: ${result.orphans_killed} órfãos (PIDs: ${result.killed_pids.join(', ')})`);
+    }
+
+    return res.status(200).json({
+      ...result,
+      has_issues: hasIssues,
+      checked_at: new Date().toISOString()
+    });
+
+  } catch (error: any) {
+    console.error('❌ [WATCHDOG] Erro:', error.message);
     return res.status(500).json({
       success: false,
       error: error.message
