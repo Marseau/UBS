@@ -211,24 +211,6 @@ try {
 }
 
 try {
-  // Load Google OAuth routes (no auth required for OAuth flow)
-  const googleOAuthRoutes = require('./routes/google-oauth.routes');
-  app.use('/api/google-oauth', 'default' in googleOAuthRoutes ? googleOAuthRoutes.default : googleOAuthRoutes);
-  console.log('✅ Google OAuth routes loaded successfully - CALENDAR INTEGRATION READY');
-} catch (error) {
-  console.error("❌ Failed to load Google OAuth routes:", error);
-}
-
-try {
-  // Load Google Calendar OAuth routes for AIC campaigns
-  const googleCalendarOAuthRoutes = require('./routes/google-calendar-oauth.routes');
-  app.use('/api/campaigns', 'default' in googleCalendarOAuthRoutes ? googleCalendarOAuthRoutes.default : googleCalendarOAuthRoutes);
-  console.log('✅ Google Calendar OAuth routes loaded successfully - AIC SCHEDULING READY');
-} catch (error) {
-  console.error("❌ Failed to load Google Calendar OAuth routes:", error);
-}
-
-try {
   // Load auth routes first (critical for registration)
   const authRoutes = require('./routes/auth');
   app.use('/api/auth', 'default' in authRoutes ? authRoutes.default : authRoutes);
@@ -572,15 +554,6 @@ try {
   console.log('✅ Tenant routes loaded successfully - TENANT DATA APIS READY');
 } catch (error) {
   console.error("❌ Failed to load tenant routes:", error);
-}
-
-// Calendar Webhook Routes - Google Calendar bidirectional sync
-try {
-  const calendarWebhookRoutes = require('./routes/calendar-webhook');
-  app.use('/api/calendar', calendarWebhookRoutes);
-  console.log('✅ Calendar webhook routes loaded successfully - GOOGLE CALENDAR SYNC READY');
-} catch (error) {
-  console.error("❌ Failed to load calendar webhook routes:", error);
 }
 
 // Editorial Content Routes - Blog content (threads, reels, shorts)
@@ -1021,16 +994,6 @@ try {
   console.log('✅ AIC Client Campaigns routes loaded - MULTI-CAMPAIGN MODEL READY');
 } catch (error) {
   console.error("❌ Failed to load AIC Client Campaigns routes:", error);
-}
-
-// AIC Calendar Routes - Tools para AI Agent (buscar slots + agendar reuniao)
-try {
-  const aicCalendarRoutes = require('./routes/aic-calendar.routes');
-  const router = 'default' in aicCalendarRoutes ? aicCalendarRoutes.default : aicCalendarRoutes;
-  app.use('/api/aic/calendar', router);
-  console.log('✅ AIC Calendar routes loaded - AI AGENT SCHEDULING TOOLS READY');
-} catch (error) {
-  console.error("❌ Failed to load AIC Calendar routes:", error);
 }
 
 // AIC Financial Routes - Pagamentos, entregas de leads quentes e faturas
@@ -1536,7 +1499,6 @@ let emailService: any = null;
 let subscriptionMonitor: any = null;
 let analyticsScheduler: any = null;
 let _metricsCronService: any = null;
-let _calendarSyncCron: any = null;
 
 async function initializeServices() {
   try {
@@ -1798,19 +1760,6 @@ async function initializeServices() {
       } catch (error) {
         console.error('❌ Failed to initialize Conversation Billing Cron Service:', error);
       }
-    }
-
-    // Initialize Google Calendar Sync Cron
-    try {
-      const { calendarSyncCron } = require('./services/calendar-sync-cron.service');
-      calendarSyncCron.start();
-      
-      console.log('✅ Google Calendar Sync Cron initialized successfully');
-      console.log('📅 Sincronização automática a cada 15 minutos');
-      console.log('🔄 Eventos externos → appointments | Mudanças → atualizações');
-      
-    } catch (error) {
-      console.error('❌ Failed to initialize Calendar Sync Cron:', error);
     }
 
     // Dynamic Intelligence Cron Service - Auto-evolução semanal
