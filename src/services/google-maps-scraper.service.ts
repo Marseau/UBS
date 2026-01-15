@@ -17,9 +17,15 @@
 
 import puppeteer, { Browser, Page } from 'puppeteer';
 import { createClient } from '@supabase/supabase-js';
+import OpenAI from 'openai';
 import * as path from 'path';
 import * as fs from 'fs';
 import { exec } from 'child_process';
+
+// OpenAI client para Layer 3 (extração inteligente de Instagram)
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 // Diretório para persistir sessão do browser (inclui login Instagram)
 const GOOGLE_MAPS_USER_DATA_DIR = path.join(process.cwd(), 'cookies', 'google-maps', 'user-data');
@@ -133,9 +139,20 @@ async function createBrowser(): Promise<Browser> {
       '--no-first-run',
       '--password-store=basic',
       '--use-mock-keychain',
+      // === FLAGS ANTI-CRASH ===
+      '--disable-renderer-backgrounding',           // Evita suspensão do renderer
+      '--disable-backgrounding-occluded-windows',   // Evita pausar janelas ocultas
+      '--disable-hang-monitor',                     // Desativa monitor de travamento
+      '--disable-ipc-flooding-protection',          // Evita limite de IPC
+      '--disable-popup-blocking',                   // Evita bloqueio de popups
+      '--disable-prompt-on-repost',                 // Evita prompt de reenvio
+      '--enable-features=NetworkService,NetworkServiceInProcess',  // Mantém network no processo
+      '--force-color-profile=srgb',                 // Perfil de cor simples
+      '--js-flags=--max-old-space-size=512',        // Limita memória JS a 512MB
     ],
     defaultViewport: { width: 1920, height: 1080 },
     ignoreDefaultArgs: ['--enable-automation'],
+    timeout: 60000, // Timeout de 60s para lançar browser
   });
 
   // Capturar PID do processo Chrome para kill específico
@@ -441,12 +458,12 @@ async function humanScroll(page: Page, selector: string): Promise<void> {
     await humanDelay(100, 300);
   }
 
-  // Scroll com variação
+  // Scroll com variação (reduzido para evitar stress)
   await page.evaluate((sel) => {
     const element = document.querySelector(sel);
     if (element) {
-      // Scroll com variação maior
-      const scrollAmount = element.clientHeight * (0.4 + Math.random() * 0.5);
+      // Scroll menor e mais lento (20-40% da altura visível)
+      const scrollAmount = element.clientHeight * (0.2 + Math.random() * 0.2);
       element.scrollBy({
         top: scrollAmount,
         behavior: 'smooth'
@@ -454,8 +471,8 @@ async function humanScroll(page: Page, selector: string): Promise<void> {
     }
   }, selector);
 
-  // Pausa após scroll para parecer mais humano
-  await humanDelay(800, 1500);
+  // Pausa maior após scroll para carregar conteúdo
+  await humanDelay(2000, 4000);
 }
 
 /**
@@ -539,7 +556,9 @@ function extractInstagramUsername(text: string): string | null {
         // HTML/JS common terms
         'type', 'href', 'src', 'alt', 'title', 'class', 'style', 'script', 'link', 'meta', 'div', 'span', 'img', 'input', 'button', 'form', 'table', 'body', 'head', 'html',
         // Generic words
-        'instagram', 'facebook', 'twitter', 'youtube', 'tiktok', 'linkedin', 'whatsapp', 'email', 'contact', 'home', 'login', 'signup', 'register', 'admin', 'user', 'null', 'undefined', 'none', 'auto'
+        'instagram', 'facebook', 'twitter', 'youtube', 'tiktok', 'linkedin', 'whatsapp', 'email', 'contact', 'home', 'login', 'signup', 'register', 'admin', 'user', 'null', 'undefined', 'none', 'auto',
+        // Plataformas de criação de sites (falsos positivos - captura o Instagram da plataforma, não da empresa)
+        'wix', 'wixsite', 'squarespace', 'wordpress', 'weebly', 'godaddy', 'hostinger', 'shopify', 'webflow', 'carrd', 'notion', 'canva', 'google', 'microsoft', 'apple', 'amazon'
       ];
 
       // Filter out email domains (when @ captures email instead of Instagram)
@@ -841,58 +860,56 @@ async function extractInstagramLayer2(websiteUrl: string): Promise<{ username: s
 }
 
 /**
- * LAYER 3: Google Search (fallback)
- * - Busca no Google: "instagram.com {nome} {cidade}"
- * - Usa a page do Puppeteer existente
- * Tempo: ~5-10s
+ * LAYER 3: OpenAI direto (extração inteligente)
+ * - Pergunta diretamente ao OpenAI: "Qual o username no Instagram de {empresa}?"
+ * - Sem Google Search - a IA já tem conhecimento de muitos negócios
+ * Tempo: ~1-2s
  */
-async function extractInstagramLayer3(
-  page: Page,
-  businessName: string,
-  city: string
+async function extractInstagramLayer3OpenAI(
+  businessName: string
 ): Promise<{ username: string | null; reason: string }> {
   try {
-    const searchQuery = `instagram.com ${businessName} ${city}`;
-    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
+    console.log(`   🤖 [L3] Perguntando ao OpenAI: "${businessName}"`);
 
-    console.log(`   🔍 [L3] Google: "${searchQuery}"`);
-
-    // Navegar para busca do Google
-    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-
-    // Delay curto para carregar resultados
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Extrair links dos resultados
-    const results = await page.evaluate(() => {
-      const links: string[] = [];
-
-      // Resultados orgânicos do Google
-      const anchors = document.querySelectorAll('a[href*="instagram.com"]');
-      anchors.forEach(a => {
-        const href = a.getAttribute('href') || '';
-        if (href.includes('instagram.com/') && !href.includes('/p/') && !href.includes('/reel/')) {
-          links.push(href);
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      temperature: 0,
+      max_tokens: 30,
+      messages: [
+        {
+          role: 'system',
+          content: `Você retorna usernames do Instagram de empresas.
+Regras:
+- Retorne APENAS o username (sem @, sem URL, sem explicação)
+- Se não souber, retorne "null"
+- Username válido: 1-30 caracteres, apenas letras minúsculas, números, pontos e underscores`
+        },
+        {
+          role: 'user',
+          content: `Qual o username no Instagram de ${businessName}?`
         }
-      });
-
-      // Também pegar do texto visível
-      const bodyText = document.body?.innerText || '';
-      const matches = bodyText.match(/instagram\.com\/([a-zA-Z0-9._]{2,30})/gi) || [];
-      links.push(...matches);
-
-      return links;
+      ]
     });
 
-    // Processar resultados
-    for (const result of results) {
-      const username = extractInstagramUsername(result);
-      if (username) {
-        return { username, reason: 'Encontrado via Google Search' };
-      }
+    const response = completion.choices[0]?.message?.content?.trim().toLowerCase() || '';
+
+    // Validar resposta
+    if (!response || response === 'null' || response === 'none' || response.length < 2 || response.includes(' ')) {
+      console.log(`   ⚠️ [L3] OpenAI não sabe`);
+      return { username: null, reason: 'OpenAI não conhece esta empresa' };
     }
 
-    return { username: null, reason: 'Não encontrado no Google' };
+    // Limpar resposta
+    const username = response.replace(/^@/, '').replace(/[^a-z0-9._]/g, '').substring(0, 30);
+
+    // Validação final
+    if (username.length < 2 || !/^[a-z0-9._]+$/.test(username)) {
+      console.log(`   ⚠️ [L3] Username inválido: ${response}`);
+      return { username: null, reason: 'Username inválido' };
+    }
+
+    console.log(`   ✅ [L3] OpenAI: @${username}`);
+    return { username, reason: 'OpenAI conhece esta empresa' };
 
   } catch (error: any) {
     console.log(`   ⚠️ [L3] Erro: ${error.message}`);
@@ -902,59 +919,75 @@ async function extractInstagramLayer3(
 
 /**
  * ORQUESTRADOR: Tenta as 3 camadas em ordem
- * Layer 1 → Layer 2 → Layer 3 (opcional)
+ * Layer 1 (URL direta) → Layer 2 (HTTP Fetch) → Layer 3 (OpenAI direto)
+ *
+ * Se não tiver website, pula direto para Layer 3.
+ *
+ * @param businessName - Nome da empresa (obrigatório)
+ * @param websiteUrl - URL do website (opcional)
  */
 async function extractInstagramSmart(
-  websiteUrl: string,
   businessName: string,
-  city: string,
-  page?: Page,  // Só necessário para Layer 3
-  enableLayer3: boolean = false  // Layer 3 é mais lento, usar com moderação
+  websiteUrl?: string
 ): Promise<{ username: string | null; layer: number; reason: string; timeMs: number }> {
   const startTime = Date.now();
 
-  // ========== LAYER 1: URL direta ==========
-  console.log(`   ⚡ [L1] Verificando URL direta...`);
-  const layer1 = extractInstagramLayer1(websiteUrl);
+  // Se tem website, tenta L1 e L2
+  if (websiteUrl) {
+    // ========== LAYER 1: URL direta (~0ms) ==========
+    console.log(`   ⚡ [L1] Verificando URL direta...`);
+    const layer1 = extractInstagramLayer1(websiteUrl);
 
-  if (layer1.username) {
+    if (layer1.username) {
+      return {
+        username: layer1.username,
+        layer: 1,
+        reason: layer1.reason,
+        timeMs: Date.now() - startTime
+      };
+    }
+
+    if (layer1.skipOtherLayers) {
+      // Blacklist - nem tenta L3
+      return {
+        username: null,
+        layer: 1,
+        reason: layer1.reason,
+        timeMs: Date.now() - startTime
+      };
+    }
+
+    // ========== LAYER 2: HTTP Fetch (~1-5s) ==========
+    const layer2 = await extractInstagramLayer2(websiteUrl);
+
+    if (layer2.username) {
+      return {
+        username: layer2.username,
+        layer: 2,
+        reason: layer2.reason,
+        timeMs: Date.now() - startTime
+      };
+    }
+  }
+
+  // ========== LAYER 3: OpenAI direto (~1-2s) ==========
+  const layer3 = await extractInstagramLayer3OpenAI(businessName);
+
+  if (layer3.username) {
     return {
-      username: layer1.username,
-      layer: 1,
-      reason: layer1.reason,
+      username: layer3.username,
+      layer: 3,
+      reason: layer3.reason,
       timeMs: Date.now() - startTime
     };
   }
 
-  if (layer1.skipOtherLayers) {
-    return {
-      username: null,
-      layer: 1,
-      reason: layer1.reason,
-      timeMs: Date.now() - startTime
-    };
-  }
-
-  // ========== LAYER 2: HTTP Fetch ==========
-  const layer2 = await extractInstagramLayer2(websiteUrl);
-
-  if (layer2.username) {
-    return {
-      username: layer2.username,
-      layer: 2,
-      reason: layer2.reason,
-      timeMs: Date.now() - startTime
-    };
-  }
-
-  // ========== LAYER 3: Puppeteer (visita o site de verdade) ==========
-  // Layer 2 não encontrou no HTML estático - precisa renderizar JS
+  // Nenhuma layer encontrou
   return {
     username: null,
-    layer: 2,
-    reason: layer2.reason + ' (tentar Puppeteer)',
-    timeMs: Date.now() - startTime,
-    needsPuppeteer: true  // Flag para indicar que precisa de Puppeteer
+    layer: 3,
+    reason: layer3.reason,
+    timeMs: Date.now() - startTime
   };
 }
 
@@ -1445,43 +1478,73 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
   const MAX_CONSECUTIVE_ERRORS = 3;
 
   try {
-    browser = await createBrowser();
-    page = await browser.newPage();
+    // === INICIALIZAÇÃO COM RETRY (evita crash no início) ===
+    const MAX_INIT_RETRIES = 3;
+    let initSuccess = false;
 
-    // Set user agent
-    await page.setUserAgent(
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    );
+    for (let initAttempt = 1; initAttempt <= MAX_INIT_RETRIES && !initSuccess; initAttempt++) {
+      try {
+        if (initAttempt > 1) {
+          console.log(`\n🔄 Tentativa ${initAttempt}/${MAX_INIT_RETRIES} de inicialização...`);
+          await humanDelay(3000, 5000);
+        }
 
-    await page.setExtraHTTPHeaders({
-      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
-    });
+        browser = await createBrowser();
+        page = await browser.newPage();
 
-    // Navigate to Google Maps (página inicial)
-    console.log(`🌐 Navegando para Google Maps...`);
-    await page.goto('https://www.google.com/maps', { waitUntil: 'networkidle2', timeout: 60000 });
+        // Set user agent
+        await page.setUserAgent(
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        );
 
-    // Delay humanizado após carregar página (2s a 3s)
-    await humanDelay(2000, 3000);
+        await page.setExtraHTTPHeaders({
+          'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
+        });
 
-    // Digitar busca humanizada no campo de pesquisa
-    console.log(`⌨️ Digitando busca humanizada...`);
-    const searchBoxSelector = 'input[name="q"]';
-    await page.waitForSelector(searchBoxSelector, { timeout: 10000 });
-    await humanType(page, searchBoxSelector, searchQuery);
+        // Navigate to Google Maps (página inicial)
+        console.log(`🌐 Navegando para Google Maps...`);
+        await page.goto('https://www.google.com/maps', { waitUntil: 'networkidle2', timeout: 60000 });
 
-    // Delay antes de pressionar Enter (como um humano faria)
-    await humanDelay(500, 1000);
+        // Delay humanizado após carregar página (2s a 3s)
+        await humanDelay(2000, 3000);
 
-    // Pressionar Enter para buscar
-    await page.keyboard.press('Enter');
-    console.log(`🔍 Buscando...`);
+        // Digitar busca humanizada no campo de pesquisa
+        console.log(`⌨️ Digitando busca humanizada...`);
+        const searchBoxSelector = 'input[name="q"]';
+        await page.waitForSelector(searchBoxSelector, { timeout: 10000 });
+        await humanType(page, searchBoxSelector, searchQuery);
 
-    // Aguardar resultados carregarem
-    await page.waitForSelector('div[role="feed"]', { timeout: 30000 });
+        // Delay antes de pressionar Enter (como um humano faria)
+        await humanDelay(500, 1000);
 
-    // Delay humanizado após resultados carregarem (2s a 4s)
-    await humanDelay(2000, 4000);
+        // Pressionar Enter para buscar
+        await page.keyboard.press('Enter');
+        console.log(`🔍 Buscando...`);
+
+        // Aguardar resultados carregarem
+        await page.waitForSelector('div[role="feed"]', { timeout: 30000 });
+
+        // Delay humanizado após resultados carregarem (2s a 4s)
+        await humanDelay(2000, 4000);
+
+        initSuccess = true;
+        console.log(`✅ Inicialização bem-sucedida`);
+
+      } catch (initErr: any) {
+        console.error(`❌ Erro na inicialização (tentativa ${initAttempt}): ${initErr.message}`);
+
+        // Fechar browser se existir
+        if (browser) {
+          await forceCloseBrowser(browser);
+          browser = null;
+          page = null;
+        }
+
+        if (initAttempt >= MAX_INIT_RETRIES) {
+          throw new Error(`Falha após ${MAX_INIT_RETRIES} tentativas de inicialização: ${initErr.message}`);
+        }
+      }
+    }
 
     // ✅ HEALTH CHECK após carregar página
     log('INFO', 'Verificando saúde da página');
@@ -1589,7 +1652,7 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
         // Scrollar
         await humanScroll(page, 'div[role="feed"]');
         totalScrolls++;
-        await humanDelay(3000, 5000); // Reduzido de 10-18s para 3-5s (otimização)
+        await humanDelay(8000, 12000); // 8-12s para evitar stress no Google Maps
 
         // Verificar fim da lista
         listEnded = await page.evaluate(() => {
@@ -1612,8 +1675,8 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
           await forceCloseBrowser(browser);
 
           // Esperar bastante antes de reabrir (evitar rate limit)
-          const waitTime = 30000; // 30s (reduzido de 2min - menos stress no Google com Layer 2)
-          console.log(`   ⏳ Aguardando 30s antes de reabrir...`);
+          const waitTime = 600000; // 10 min (evita rate limit do Google)
+          console.log(`   ⏳ Aguardando 10 minutos antes de reabrir...`);
           await humanDelay(waitTime, waitTime + 5000);
 
           // Reabrir browser
@@ -1635,7 +1698,7 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
             console.log(`   📜 Voltando à posição anterior (${totalScrolls} scrolls)...`);
             for (let i = 0; i < totalScrolls; i++) {
               await humanScroll(page, 'div[role="feed"]');
-              await humanDelay(3000, 5000); // Mais tempo entre scrolls de recovery
+              await humanDelay(8000, 12000); // Mais tempo entre scrolls de recovery
               if ((i + 1) % 5 === 0) {
                 console.log(`      ... ${i + 1}/${totalScrolls} scrolls restaurados`);
               }
@@ -1764,69 +1827,37 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
           continue;
         }
 
-        // Check if has website
-        if (!business.website) {
-          console.log(`   ❌ Sem website, descartando`);
-          await page.keyboard.press('Escape');
-          await humanDelay(500, 1000);
-          continue;
+        // Website é opcional - podemos buscar Instagram só pelo nome
+        if (business.website) {
+          result.with_website++;
+          console.log(`   🔗 Website: ${business.website}`);
+        } else {
+          console.log(`   ℹ️ Sem website - tentando só pelo nome`);
         }
-
-        result.with_website++;
-        console.log(`   🔗 Website: ${business.website}`);
 
         // Go back to list
         await page.keyboard.press('Escape');
         await humanDelay(500, 1000);
 
         // ========================================
-        // EXTRAÇÃO DE INSTAGRAM (Layer 1 + 2 + Puppeteer fallback)
+        // EXTRAÇÃO DE INSTAGRAM (3 Layers)
+        // L1: URL direta | L2: HTTP Fetch | L3: OpenAI direto
         // ========================================
-        let instagram: string | null = null;
-        let extractionLayer = 0;
-        let extractionTime = 0;
-
-        // Tentar Layer 1 + 2 primeiro (rápido)
         const extractionResult = await extractInstagramSmart(
-          business.website,
           business.name,
-          parsedCity || cidade
+          business.website  // opcional
         );
 
-        if (extractionResult.username) {
-          // Encontrou nas layers rápidas
-          instagram = extractionResult.username;
-          extractionLayer = extractionResult.layer;
-          extractionTime = extractionResult.timeMs;
-          console.log(`   ✅ Instagram: @${instagram} [L${extractionLayer}] (${extractionTime}ms)`);
-        } else {
-          // Layer 1+2 não encontraram - usar Puppeteer
-          console.log(`   🔄 [L3] Puppeteer: visitando site...`);
-          const startPuppeteer = Date.now();
-
-          let websitePage: Page | null = null;
-          try {
-            websitePage = await browser!.newPage();
-            instagram = await extractInstagramFromWebsite(websitePage, business.website);
-            extractionLayer = 3;
-            extractionTime = Date.now() - startPuppeteer;
-
-            if (instagram) {
-              console.log(`   ✅ Instagram: @${instagram} [L3] (${extractionTime}ms)`);
-            }
-          } catch (webErr: any) {
-            console.log(`   ⚠️ [L3] Erro: ${webErr.message}`);
-          } finally {
-            if (websitePage) {
-              try { await websitePage.close(); } catch (e) {}
-            }
-          }
-        }
+        const instagram = extractionResult.username;
+        const extractionLayer = extractionResult.layer;
+        const extractionTime = extractionResult.timeMs;
 
         if (!instagram) {
-          console.log(`   ❌ Sem Instagram após todas as layers`);
+          console.log(`   ❌ Sem Instagram (L1+L2+L3 falharam) - ${extractionResult.reason}`);
           continue;
         }
+
+        console.log(`   ✅ Instagram: @${instagram} [L${extractionLayer}] (${extractionTime}ms)`);
 
         result.with_instagram++;
 
