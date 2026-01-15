@@ -642,6 +642,16 @@ try {
   console.error("❌ Failed to load Instagram scraper routes:", error);
 }
 
+// Google Maps Scraper Routes - Scraping de empresas no Google Maps
+try {
+  const googleMapsScraperRoutes = require('./routes/google-maps-scraper.routes');
+  const router = 'default' in googleMapsScraperRoutes ? googleMapsScraperRoutes.default : googleMapsScraperRoutes;
+  app.use('/api/google-maps', router);
+  console.log('✅ Google Maps Scraper routes loaded - BUSINESS SCRAPING VIA GOOGLE MAPS READY');
+} catch (error) {
+  console.error("❌ Failed to load Google Maps Scraper routes:", error);
+}
+
 // Hashtag Suggestions Routes - AI-powered hashtag co-occurrence analysis
 try {
   const hashtagSuggestionsRoutes = require('./routes/hashtag-suggestions.routes');
