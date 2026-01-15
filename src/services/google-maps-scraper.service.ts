@@ -1585,7 +1585,7 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
     let listEnded = false;   // Flag de fim da lista
     let totalScrolls = 0;    // Total de scrolls realizados (para recovery)
     let restartCount = 0;    // Contador de reinícios completos
-    const MAX_RESTARTS = 5;  // Só desiste depois de 5 reinícios
+    const MAX_RESTARTS = 2;  // Só 2 tentativas (Google trava após X scrolls)
 
     while (result.saved < max_resultados && !listEnded) {
       // Pegar listings atuais - com proteção contra frame detached
@@ -1675,8 +1675,8 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
           await forceCloseBrowser(browser);
 
           // Esperar bastante antes de reabrir (evitar rate limit)
-          const waitTime = 600000; // 10 min (evita rate limit do Google)
-          console.log(`   ⏳ Aguardando 10 minutos antes de reabrir...`);
+          const waitTime = 30000; // 30s
+          console.log(`   ⏳ Aguardando 30s antes de reabrir...`);
           await humanDelay(waitTime, waitTime + 5000);
 
           // Reabrir browser
