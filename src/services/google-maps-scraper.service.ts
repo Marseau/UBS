@@ -1912,6 +1912,10 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
     let totalScrolls = 0;    // Total de scrolls realizados (para recovery)
     let restartCount = 0;    // Contador de reinícios completos
     const MAX_RESTARTS = 2;  // Só 2 tentativas (Google trava após X scrolls)
+    const MAX_PROCESSED = 80; // Limite de leads processados (independente de salvos)
+    let scrollsWithoutNewSaves = 0; // Scrolls sem novos leads SALVOS (mais confiável que DOM count)
+    let lastSavedCount = 0;  // Para rastrear progresso real
+    const MAX_SCROLLS_WITHOUT_SAVES = 15; // Se 15 scrolls sem salvar nada, parar
 
     while (result.saved < max_resultados && !listEnded) {
       // Pegar listings atuais - com proteção contra frame detached
@@ -1962,8 +1966,9 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
             console.log(`   ✅ Posição restaurada`);
           }
 
-          // Resetar só flags de erro, manter posição
+          // Resetar só stagnant (DOM), NÃO resetar scrollsWithoutNewSaves (progresso real)
           stagnantScrolls = 0;
+          // scrollsWithoutNewSaves mantido - não foi restart completo
 
           console.log(`   📊 Progresso: ${result.saved}/${max_resultados} salvos - continuando do item ${processedIndex + 1}`);
           continue; // Tentar novamente
@@ -1999,6 +2004,12 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
           }
 
           // Lista terminou mas tinha bastante resultado - tentar reiniciar
+          // Se já processou 80+ leads, não vale reiniciar - área já foi bem coberta
+          if (result.total_scraped >= MAX_PROCESSED) {
+            console.log(`🛑 Já processou ${result.total_scraped} leads - encerrando sem reiniciar`);
+            break;
+          }
+
           restartCount++;
           console.log(`🔄 Fim da lista detectado - reinício ${restartCount}/${MAX_RESTARTS} (${result.saved}/${max_resultados} salvos)`);
 
@@ -2043,8 +2054,10 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
             console.log(`   ✅ Posição restaurada - continuando do item ${processedIndex + 1}`);
           }
 
-          // Resetar só flags de erro, manter posição
+          // Resetar flags de erro após restart completo - dar nova chance
           stagnantScrolls = 0;
+          scrollsWithoutNewSaves = 0; // Reset após restart completo
+          lastSavedCount = result.saved;
           listEnded = false;
 
           console.log(`   📊 Progresso: ${result.saved}/${max_resultados} salvos - continuando do item ${processedIndex + 1}`);
@@ -2053,14 +2066,36 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
           continue;
         }
 
-        // Verificar se carregou novos
+        // Verificar se carregou novos no DOM
         const newListings = await page.$$('div.Nv2PK');
+
+        // Verificar progresso REAL (leads salvos, não apenas DOM)
+        if (result.saved === lastSavedCount) {
+          scrollsWithoutNewSaves++;
+        } else {
+          scrollsWithoutNewSaves = 0;
+          lastSavedCount = result.saved;
+        }
+
+        // Se muitos scrolls sem salvar nada, parar (independente do DOM)
+        if (scrollsWithoutNewSaves >= MAX_SCROLLS_WITHOUT_SAVES) {
+          console.log(`🛑 ${scrollsWithoutNewSaves} scrolls sem novos leads salvos - encerrando`);
+          console.log(`   📊 Total: ${result.total_scraped} processados, ${result.saved} salvos`);
+          break;
+        }
+
         if (newListings.length === currentListings.length) {
           stagnantScrolls++;
-          console.log(`   ⏳ Scroll sem novos resultados (${stagnantScrolls}x)`);
+          console.log(`   ⏳ Scroll sem novos resultados DOM (${stagnantScrolls}x) | Sem salvos: ${scrollsWithoutNewSaves}/${MAX_SCROLLS_WITHOUT_SAVES}`);
 
           // Após muitos scrolls sem resultado, reiniciar browser
           if (stagnantScrolls >= 10) {
+            // Se já processou 80+ leads, não vale reiniciar - área já foi bem coberta
+            if (result.total_scraped >= MAX_PROCESSED) {
+              console.log(`🛑 Já processou ${result.total_scraped} leads - encerrando sem reiniciar`);
+              break;
+            }
+
             restartCount++;
             console.log(`🔄 ${stagnantScrolls} scrolls sem novos resultados - reinício ${restartCount}/${MAX_RESTARTS}`);
 
@@ -2105,13 +2140,16 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
               console.log(`   ✅ Posição restaurada`);
             }
 
-            // Resetar só flags de erro, manter posição
+            // Resetar flags de erro após restart completo - dar nova chance
             stagnantScrolls = 0;
+            scrollsWithoutNewSaves = 0; // Reset após restart completo
+            lastSavedCount = result.saved;
 
             console.log(`   📊 Progresso: ${result.saved}/${max_resultados} salvos - continuando do item ${processedIndex + 1}`);
           }
         } else {
           stagnantScrolls = 0;
+          // NÃO resetar scrollsWithoutNewSaves aqui - apenas DOM mudou, não houve restart
         }
         continue;
       }
@@ -2318,8 +2356,10 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
             console.log(`   ✅ Posição restaurada`);
           }
 
-          // Resetar só contadores de erro
+          // Resetar contadores após restart completo - dar nova chance
           stagnantScrolls = 0;
+          scrollsWithoutNewSaves = 0;
+          lastSavedCount = result.saved;
 
           console.log(`   ✅ Browser recriado - continuando do item ${processedIndex + 1}`);
           continue;
@@ -2338,6 +2378,8 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
     // Mensagem final
     if (result.saved >= max_resultados) {
       console.log(`\n🎉 META ATINGIDA: ${result.saved} leads salvos!`);
+    } else if (result.total_scraped >= MAX_PROCESSED) {
+      console.log(`\n🛑 LIMITE DE PROCESSADOS: ${result.total_scraped} leads analisados (${result.saved} salvos)`);
     } else {
       console.log(`\n⚠️ Fim da lista: ${result.saved}/${max_resultados} leads salvos`);
     }
