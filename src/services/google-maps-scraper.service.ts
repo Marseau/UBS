@@ -1137,7 +1137,13 @@ async function extractInstagramLayer4Puppeteer(
     // Criar browser dedicado para L4
     browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--ignore-certificate-errors',
+        '--ignore-ssl-errors'
+      ]
     });
     page = await browser.newPage();
 
