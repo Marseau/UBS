@@ -64,30 +64,13 @@ export interface ScrapeOptions {
   cidade: string;          // Ex: "São Paulo" (usado como fallback se não tiver localização)
   estado?: string;         // Ex: "SP"
   localizacao?: string;    // Ex: "Av Faria Lima" - busca será: "Av Faria Lima, Empresa"
+  bairro?: string;         // Ex: "Pinheiros" - para referência no log
   max_resultados?: number; // Ex: 50
   saveToDb?: boolean;
   // Coordenadas (alternativo a localizacao) - usa URL: /maps/search/{termo}/@{lat},{lng},{zoom}z
   lat?: number;            // Latitude (ex: -23.5631)
   lng?: number;            // Longitude (ex: -46.6544)
   zoom?: number;           // Zoom (default: 17 = ~700m diâmetro)
-  gridPointId?: number;    // ID do ponto no grid (para tracking)
-}
-
-/**
- * Opções para scraping baseado em coordenadas
- * URL format: https://www.google.com/maps/search/{keyword}/@{lat},{lng},{zoom}z
- */
-export interface CoordsScrapeOptions {
-  keyword: string;         // Ex: "empresa", "restaurante"
-  lat: number;             // Latitude
-  lng: number;             // Longitude
-  zoom?: number;           // Zoom level (default: 17 = ~700m diâmetro)
-  cidade?: string;         // Para referência no lead
-  estado?: string;         // Para referência no lead
-  bairro?: string;         // Para referência no lead
-  max_resultados?: number; // Max resultados (default: 60)
-  scrolls?: number;        // Número de scrolls (default: 0 = sem scroll)
-  saveToDb?: boolean;      // Salvar no banco (default: true)
   gridPointId?: number;    // ID do ponto no grid (para tracking)
 }
 
@@ -1100,26 +1083,158 @@ async function extractInstagramSmart(
     }
   }
 
-  // ========== LAYER 3: OpenAI conservador (~1-2s) ==========
-  // Só chega aqui se: não tem website OU L2.5 não encontrou no texto
-  const layer3 = await extractInstagramLayer3OpenAI(businessName);
+  // ========== LAYER 3: Puppeteer scrape (~5-10s) ==========
+  // Só chega aqui se: L1, L2, L2.5 falharam E tem website
+  if (websiteUrl) {
+    console.log(`   🔄 [L2.5] Não encontrou, tentando L4 (Puppeteer)...`);
+    const layer3 = await extractInstagramLayer4Puppeteer(websiteUrl);
 
-  if (layer3.username) {
-    return {
-      username: layer3.username,
-      layer: 3,
-      reason: layer3.reason,
-      timeMs: Date.now() - startTime
-    };
+    if (layer3.username) {
+      return {
+        username: layer3.username,
+        layer: 3,
+        reason: layer3.reason,
+        timeMs: Date.now() - startTime
+      };
+    }
   }
 
   // Nenhuma layer encontrou
   return {
     username: null,
     layer: 3,
-    reason: layer3.reason,
+    reason: websiteUrl ? 'Puppeteer não encontrou Instagram no site' : 'Sem website para buscar Instagram',
     timeMs: Date.now() - startTime
   };
+}
+
+/**
+ * LAYER 4: Puppeteer scrape (último recurso)
+ * - Abre browser, renderiza JS, scrolla até footer
+ * - Busca links Instagram no DOM renderizado
+ * - Usado quando L1, L2, L3 falharam
+ * Tempo: ~5-10s
+ */
+async function extractInstagramLayer4Puppeteer(
+  websiteUrl: string
+): Promise<{ username: string | null; reason: string }> {
+  if (!websiteUrl) {
+    return { username: null, reason: 'URL vazia' };
+  }
+
+  // Garantir protocolo
+  let url = websiteUrl;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'https://' + url;
+  }
+
+  console.log(`   🌐 [L4] Puppeteer scrape: ${url}`);
+
+  let browser: Browser | null = null;
+  let page: Page | null = null;
+
+  try {
+    // Criar browser dedicado para L4
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+    page = await browser.newPage();
+
+    await page.setUserAgent(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    );
+
+    // Timeout para navegação
+    await page.setDefaultTimeout(30000);
+
+    // Navegar - esperar página carregar completamente
+    try {
+      await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    } catch (navErr: any) {
+      // Se falhar, tentar com protocolo alternativo
+      const altUrl = url.startsWith('https://')
+        ? url.replace('https://', 'http://')
+        : url.replace('http://', 'https://');
+      console.log(`   ⚠️ [L4] Erro com ${url}, tentando ${altUrl}...`);
+      try {
+        await page.goto(altUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+      } catch (altErr: any) {
+        console.log(`   ❌ [L4] Falhou em ambos protocolos`);
+        throw altErr;
+      }
+    }
+
+    // Aguardar JS renderizar
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Scroll até footer
+    await page.evaluate(async () => {
+      const scrollStep = window.innerHeight;
+      for (let i = 0; i < 5; i++) {
+        window.scrollBy(0, scrollStep);
+        await new Promise(r => setTimeout(r, 200));
+      }
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+
+    // Aguardar conteúdo dinâmico
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Extrair links Instagram do DOM
+    const instagramData = await page.evaluate(() => {
+      const results: string[] = [];
+
+      // Links diretos
+      document.querySelectorAll('a[href*="instagram.com"], a[href*="instagr.am"]').forEach(link => {
+        const href = link.getAttribute('href');
+        if (href) results.push(href);
+      });
+
+      // Links com texto/aria "instagram"
+      document.querySelectorAll('a').forEach(link => {
+        const text = (link.textContent || '').toLowerCase();
+        const ariaLabel = (link.getAttribute('aria-label') || '').toLowerCase();
+        const href = link.getAttribute('href') || '';
+        if ((text.includes('instagram') || ariaLabel.includes('instagram')) && href) {
+          results.push(href);
+        }
+      });
+
+      // Texto com instagram.com/username
+      const bodyText = document.body?.innerText || '';
+      const mentions = bodyText.match(/instagram\.com\/[a-zA-Z0-9._]+/gi) || [];
+      results.push(...mentions);
+
+      // Ícones sociais
+      document.querySelectorAll('[class*="instagram"], [id*="instagram"], a[title*="instagram" i]').forEach(el => {
+        const href = el.getAttribute('href') || (el as HTMLAnchorElement).closest('a')?.getAttribute('href');
+        if (href) results.push(href);
+      });
+
+      return results;
+    });
+
+    // Validar usernames encontrados
+    for (const data of instagramData) {
+      const username = extractInstagramUsername(data);
+      if (username) {
+        console.log(`   ✅ [L4] Instagram encontrado: @${username}`);
+        return { username, reason: 'Puppeteer scrape' };
+      }
+    }
+
+    console.log(`   ❌ [L4] Nenhum Instagram no DOM`);
+    return { username: null, reason: 'Não encontrado no DOM renderizado' };
+
+  } catch (error: any) {
+    console.log(`   ⚠️ [L4] Erro: ${error.message}`);
+    return { username: null, reason: `Erro: ${error.message}` };
+  } finally {
+    // Fechar browser L4
+    if (page) try { await page.close(); } catch (e) {}
+    if (browser) try { await browser.close(); } catch (e) {}
+  }
 }
 
 // ============================================
@@ -1566,6 +1681,7 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
     cidade,
     estado = '',
     localizacao = '',
+    bairro = '',
     max_resultados = 50,
     saveToDb = true,
     lat,
@@ -1612,11 +1728,14 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
   // Limpar logs anteriores
   clearScrapeLogs();
 
-  log('INFO', 'Iniciando scraping', { query: searchQuery, max_resultados, useCoords });
-  console.log(`\n🔍 [GOOGLE-MAPS] Buscando: "${searchQuery}"`);
+  log('INFO', 'Iniciando scraping', { query: searchQuery, max_resultados, useCoords, bairro });
+  console.log(`\n🔍 [GOOGLE-MAPS] Buscando: "${termo}"`);
   if (useCoords) {
     console.log(`📍 Coordenadas: ${lat}, ${lng} (zoom ${zoom})`);
+    console.log(`📍 Bairro: ${bairro || 'N/A'}`);
     console.log(`🔗 URL: ${searchUrl}`);
+  } else {
+    console.log(`📍 Busca: ${searchQuery}`);
   }
   console.log(`📊 Max: ${max_resultados} resultados`);
   console.log(`📋 Lógica: Só persiste leads COM Instagram\n`);
@@ -1660,6 +1779,48 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
           // Aguardar resultados carregarem
           await page.waitForSelector('div[role="feed"]', { timeout: 30000 });
           await humanDelay(2000, 4000);
+
+          // ⚠️ IMPORTANTE: Desabilitar "Buscar nesta área" para manter coordenadas fixas
+          try {
+            // Checkbox "Update results when map moves" - seletor específico do Google Maps
+            const checkboxDisabled = await page.evaluate(() => {
+              // Seletor 1: Checkbox com aria-label contendo "update" ou "atualizar"
+              const checkbox = document.querySelector('input[type="checkbox"][aria-checked="true"]') ||
+                               document.querySelector('button[aria-checked="true"][role="checkbox"]') ||
+                               document.querySelector('[data-value="Search as I move the map"]') ||
+                               document.querySelector('[aria-label*="update results"]') ||
+                               document.querySelector('[aria-label*="atualizar resultados"]');
+
+              if (checkbox) {
+                (checkbox as HTMLElement).click();
+                return true;
+              }
+
+              // Seletor 2: Buscar por texto visível
+              const labels = document.querySelectorAll('label, span, div');
+              for (const label of labels) {
+                const text = (label as HTMLElement).innerText?.toLowerCase() || '';
+                if (text.includes('search as i move') || text.includes('buscar quando mover') ||
+                    text.includes('atualizar quando mover') || text.includes('update results')) {
+                  const clickable = label.closest('button') || label.querySelector('input') || label;
+                  if (clickable) {
+                    (clickable as HTMLElement).click();
+                    return true;
+                  }
+                }
+              }
+
+              return false;
+            });
+
+            if (checkboxDisabled) {
+              console.log(`🔒 Checkbox "Buscar quando mover" desativado`);
+            } else {
+              console.log(`⚠️ Checkbox não encontrado (pode já estar desativado)`);
+            }
+          } catch (lockErr) {
+            console.log(`⚠️ Não foi possível desativar checkbox (pode continuar)`);
+          }
         } else {
           // Modo texto: ir para Maps e digitar busca
           console.log(`🌐 Navegando para Google Maps...`);
@@ -2358,289 +2519,6 @@ export async function getScrapingStats(days: number = 7): Promise<any> {
 }
 
 /**
- * Scrape Google Maps usando coordenadas (lat/lng)
- * URL: https://www.google.com/maps/search/{keyword}/@{lat},{lng},{zoom}z
- *
- * Mais preciso que busca por texto, permite controle de área exata.
- * Ideal para usar com grid de pontos.
- */
-export async function scrapeGoogleMapsCoords(options: CoordsScrapeOptions): Promise<ScrapeResult> {
-  const {
-    keyword,
-    lat,
-    lng,
-    zoom = 17,           // 17z ≈ 700m diâmetro
-    cidade = '',
-    estado = '',
-    bairro = '',
-    max_resultados = 60,
-    scrolls = 0,         // Sem scroll por padrão (pega só os visíveis)
-    saveToDb = true,
-    gridPointId
-  } = options;
-
-  const result: ScrapeResult = {
-    success: false,
-    leads: [],
-    total_scraped: 0,
-    with_website: 0,
-    with_instagram: 0,
-    saved: 0,
-    duplicates: 0,
-    errors: []
-  };
-
-  // URL com coordenadas
-  const searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(keyword)}/@${lat},${lng},${zoom}z`;
-
-  clearScrapeLogs();
-  log('INFO', 'Iniciando scraping por coordenadas', {
-    keyword,
-    lat,
-    lng,
-    zoom,
-    bairro,
-    url: searchUrl
-  });
-
-  console.log(`\n🔍 [GOOGLE-MAPS-COORDS] Buscando: "${keyword}"`);
-  console.log(`📍 Coordenadas: ${lat}, ${lng} (zoom ${zoom})`);
-  console.log(`📍 Bairro: ${bairro || 'N/A'}`);
-  console.log(`📊 Max: ${max_resultados} | Scrolls: ${scrolls}`);
-  console.log(`🔗 URL: ${searchUrl}\n`);
-
-  let browser: Browser | null = null;
-  let page: Page | null = null;
-
-  try {
-    // Inicializar browser
-    browser = await createBrowser();
-    page = await browser.newPage();
-
-    await page.setUserAgent(
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    );
-
-    await page.setExtraHTTPHeaders({
-      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
-    });
-
-    // Navegar diretamente para URL com coordenadas
-    console.log(`🌐 Navegando para URL com coordenadas...`);
-    await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-    await humanDelay(3000, 5000);
-
-    // Health check
-    const healthResult = await healthCheck(page);
-    if (!healthResult.ok) {
-      if (healthResult.issue === 'BAN' || healthResult.issue === 'CAPTCHA') {
-        throw new Error(`Scraping abortado: ${healthResult.message}`);
-      }
-      if (healthResult.issue === 'NO_RESULTS') {
-        console.log(`⚠️ Nenhum resultado para "${keyword}" nesta área`);
-        result.success = true;
-        return result;
-      }
-    }
-
-    // Aguardar resultados
-    try {
-      await page.waitForSelector('div[role="feed"]', { timeout: 15000 });
-    } catch (e) {
-      console.log(`⚠️ Feed de resultados não encontrado`);
-      result.success = true;
-      return result;
-    }
-
-    await humanDelay(2000, 3000);
-
-    // Scrolls opcionais (controlados)
-    if (scrolls > 0) {
-      console.log(`📜 Executando ${scrolls} scroll(s)...`);
-      for (let i = 0; i < scrolls; i++) {
-        await humanScroll(page, 'div[role="feed"]');
-        await humanDelay(3000, 5000);
-        console.log(`   Scroll ${i + 1}/${scrolls} completo`);
-      }
-    }
-
-    // Pegar listings
-    const listings = await page.$$('div.Nv2PK');
-    const totalListings = Math.min(listings.length, max_resultados);
-    console.log(`📋 Encontrados ${listings.length} resultados, processando ${totalListings}\n`);
-
-    // Processar cada listing
-    for (let i = 0; i < totalListings; i++) {
-      const itemNumber = i + 1;
-      console.log(`📍 [${itemNumber}/${totalListings}] Processando...`);
-
-      try {
-        // Re-selecionar listings (DOM pode mudar após cliques)
-        const currentListings = await page.$$('div.Nv2PK');
-        if (i >= currentListings.length) {
-          console.log(`   ⏭️ Item não encontrado, pulando`);
-          continue;
-        }
-
-        const business = await scrapeBusinessDetails(page, currentListings[i]);
-        result.total_scraped++;
-
-        if (!business || !business.name) {
-          console.log(`   ⏭️ Sem dados, pulando`);
-          await page.keyboard.press('Escape');
-          await humanDelay(500, 1000);
-          continue;
-        }
-
-        console.log(`   📌 ${business.name}`);
-
-        // Verificar duplicado
-        const checkCity = cidade || 'São Paulo';
-        const isDuplicate = await checkDuplicateByName(business.name, checkCity);
-        if (isDuplicate) {
-          console.log(`   ⏭️ Já existe no banco`);
-          result.duplicates++;
-          await page.keyboard.press('Escape');
-          await humanDelay(500, 1000);
-          continue;
-        }
-
-        if (business.website) {
-          result.with_website++;
-          console.log(`   🔗 Website: ${business.website}`);
-        }
-
-        await page.keyboard.press('Escape');
-        await humanDelay(500, 1000);
-
-        // Extrair Instagram (3 layers)
-        const extractionResult = await extractInstagramSmart(
-          business.name,
-          business.website
-        );
-
-        const instagram = extractionResult.username;
-
-        if (!instagram) {
-          console.log(`   ❌ Sem Instagram - ${extractionResult.reason}`);
-          continue;
-        }
-
-        console.log(`   ✅ Instagram: @${instagram} [L${extractionResult.layer}]`);
-        result.with_instagram++;
-
-        // Validar WhatsApp
-        const whatsappNumber = extractWhatsAppNumber(business.phone || '');
-
-        // Criar lead
-        const lead: GoogleLead = {
-          name: business.name,
-          instagram_username: instagram,
-          phone_whatsapp: whatsappNumber || undefined,
-          full_address: business.address,
-          city: cidade || 'São Paulo',
-          state: estado || 'SP',
-          website: business.website,
-          rating: business.rating,
-          reviews_count: business.reviews_count,
-          search_query: `${keyword}@${lat},${lng}`,
-          search_theme: keyword,
-          search_city: cidade || bairro || 'São Paulo'
-        };
-
-        result.leads.push(lead);
-
-        // Salvar no banco
-        if (saveToDb) {
-          const { error } = await supabase
-            .from('google_leads')
-            .insert({
-              ...lead,
-              status: 'pending',
-              grid_point_id: gridPointId || null
-            });
-
-          if (error) {
-            if (error.message.includes('duplicate') || error.message.includes('unique')) {
-              console.log(`   ⚠️ Instagram @${instagram} já existe`);
-              result.duplicates++;
-            } else {
-              console.error(`   ❌ Erro ao salvar:`, error.message);
-              result.errors.push(`${business.name}: ${error.message}`);
-            }
-          } else {
-            console.log(`   💾 Salvo: @${instagram}`);
-            result.saved++;
-          }
-        }
-
-      } catch (err: any) {
-        console.error(`   ❌ Erro: ${err.message}`);
-        result.errors.push(err.message);
-        try {
-          await page.keyboard.press('Escape');
-        } catch (e) {}
-        await humanDelay(500, 1000);
-      }
-    }
-
-    // Atualizar grid point se fornecido
-    if (gridPointId && saveToDb) {
-      await supabase
-        .from('scraping_grid_points')
-        .update({
-          last_scraped: new Date().toISOString(),
-          total_results: result.total_scraped,
-          total_with_instagram: result.with_instagram,
-          status: 'completed',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', gridPointId);
-    }
-
-    result.success = true;
-
-  } catch (error: any) {
-    console.error(`\n❌ [GOOGLE-MAPS-COORDS] Erro:`, error.message);
-    result.errors.push(error.message);
-
-    // Atualizar grid point com erro
-    if (gridPointId && saveToDb) {
-      await supabase
-        .from('scraping_grid_points')
-        .update({
-          status: 'error',
-          error_message: error.message,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', gridPointId);
-    }
-
-  } finally {
-    if (page) {
-      try { await page.close(); } catch (e) {}
-    }
-    if (browser) {
-      try { await browser.close(); } catch (e) {}
-      console.log('🔒 Browser fechado');
-    }
-  }
-
-  // Resumo
-  console.log(`\n${'='.repeat(50)}`);
-  console.log(`📊 RESUMO - ${bairro || `${lat},${lng}`} - "${keyword}"`);
-  console.log(`${'='.repeat(50)}`);
-  console.log(`   Processados: ${result.total_scraped}`);
-  console.log(`   Com website: ${result.with_website}`);
-  console.log(`   Com Instagram: ${result.with_instagram}`);
-  console.log(`   Salvos: ${result.saved}`);
-  console.log(`   Duplicados: ${result.duplicates}`);
-  console.log(`${'='.repeat(50)}\n`);
-
-  return result;
-}
-
-/**
  * Scrape um ponto do grid pelo ID
  * Busca o ponto na tabela scraping_grid_points e executa scrape para cada keyword
  */
@@ -2729,7 +2607,6 @@ export async function scrapeGridPoint(pointId: number): Promise<{
 export default {
   scrapeGoogleMaps,
   scrapeGoogleMapsDetailed,
-  scrapeGoogleMapsCoords,
   scrapeGridPoint,
   getPendingLeadsForEnrichment,
   updateLeadStatus,

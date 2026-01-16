@@ -240,7 +240,7 @@ router.delete('/logs', (_req: Request, res: Response) => {
  * POST /api/google-maps/scrape-coords
  * Raspagem do Google Maps usando coordenadas (lat/lng)
  * Usa a função scrapeGoogleMaps com parâmetros lat/lng
- * Body: { keyword, lat, lng, zoom?, cidade?, estado?, max_resultados?, gridPointId? }
+ * Body: { keyword, lat, lng, zoom?, cidade?, estado?, bairro?, max_resultados?, gridPointId? }
  */
 router.post('/scrape-coords', async (req: Request, res: Response) => {
   try {
@@ -251,6 +251,7 @@ router.post('/scrape-coords', async (req: Request, res: Response) => {
       zoom = 17,
       cidade = 'São Paulo',
       estado = 'SP',
+      bairro = '',
       max_resultados = 50,
       gridPointId
     } = req.body;
@@ -264,26 +265,25 @@ router.post('/scrape-coords', async (req: Request, res: Response) => {
 
     console.log(`[Google Maps] Scraping por coordenadas: "${keyword}" @ ${lat},${lng}`);
 
-    // Usa a função original com parâmetros de coordenadas
-    const config: GoogleMapsScraperConfig = {
+    // Usa scrapeGoogleMaps com coordenadas (mesma função, parâmetros lat/lng)
+    const result = await scrapeGoogleMaps({
       termo: keyword,
       cidade,
       estado,
-      max_resultados: parseInt(max_resultados as any) || 50,
+      bairro,
       lat: parseFloat(lat),
       lng: parseFloat(lng),
       zoom: parseInt(zoom as any) || 17,
+      max_resultados: parseInt(max_resultados as any) || 50,
       gridPointId: gridPointId ? parseInt(gridPointId) : undefined
-    };
-
-    const result = await scrapeGoogleMaps(config);
+    });
 
     return res.status(200).json({
       success: result.success,
       keyword,
-      lat: config.lat,
-      lng: config.lng,
-      zoom: config.zoom,
+      lat: parseFloat(lat),
+      lng: parseFloat(lng),
+      zoom: parseInt(zoom as any) || 17,
       total_scraped: result.total_scraped,
       with_website: result.with_website,
       with_instagram: result.with_instagram,
