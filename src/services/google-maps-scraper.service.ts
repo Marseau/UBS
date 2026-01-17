@@ -1953,17 +1953,26 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
           });
           await humanDelay(3000, 5000);
 
-          // Scrollar de volta à mesma posição
-          if (totalScrolls > 0) {
-            console.log(`   📜 Voltando à posição anterior (${totalScrolls} scrolls)...`);
-            for (let i = 0; i < totalScrolls; i++) {
+          // Scrollar até carregar items suficientes (baseado em processedIndex, não scrolls)
+          if (processedIndex > 0) {
+            console.log(`   📜 Restaurando posição (carregando ${processedIndex} items)...`);
+            let loadedItems = 0;
+            let scrollCount = 0;
+            const MAX_SCROLL_RECOVERY = 50;
+
+            while (loadedItems < processedIndex && scrollCount < MAX_SCROLL_RECOVERY) {
               await humanScroll(page, 'div[role="feed"]');
-              await humanDelay(2000, 3500); // Tempo para carregar cada scroll
-              if ((i + 1) % 5 === 0) {
-                console.log(`      ... ${i + 1}/${totalScrolls} scrolls`);
+              scrollCount++;
+              await humanDelay(2000, 3500);
+
+              // Contar items carregados no DOM
+              loadedItems = await page.$$eval('div.Nv2PK', items => items.length);
+
+              if (scrollCount % 5 === 0) {
+                console.log(`      ... ${loadedItems}/${processedIndex} items (${scrollCount} scrolls)`);
               }
             }
-            console.log(`   ✅ Posição restaurada`);
+            console.log(`   ✅ Posição restaurada (${loadedItems} items com ${scrollCount} scrolls)`);
           }
 
           // Resetar só stagnant (DOM), NÃO resetar scrollsWithoutNewSaves (progresso real)
@@ -1978,7 +1987,7 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
 
       // Se não há mais itens para processar, scrollar
       if (processedIndex >= currentListings.length) {
-        console.log(`📜 [SCROLL] Carregando mais... (${result.saved}/${max_resultados} salvos)`);
+        console.log(`📜 [SCROLL] Carregando mais... (processedIndex=${processedIndex}, listingsDOM=${currentListings.length}, salvos=${result.saved}/${max_resultados})`);
 
         // Scrollar
         await humanScroll(page, 'div[role="feed"]');
@@ -2041,17 +2050,26 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
           });
           await humanDelay(5000, 8000);
 
-          // Scrollar de volta à posição anterior
-          if (totalScrolls > 0) {
-            console.log(`   📜 Voltando à posição anterior (${totalScrolls} scrolls)...`);
-            for (let i = 0; i < totalScrolls; i++) {
+          // Scrollar até carregar items suficientes (baseado em processedIndex, não scrolls)
+          if (processedIndex > 0) {
+            console.log(`   📜 Restaurando posição (carregando ${processedIndex} items)...`);
+            let loadedItems = 0;
+            let scrollCount = 0;
+            const MAX_SCROLL_RECOVERY = 50;
+
+            while (loadedItems < processedIndex && scrollCount < MAX_SCROLL_RECOVERY) {
               await humanScroll(page, 'div[role="feed"]');
+              scrollCount++;
               await humanDelay(8000, 12000); // Mais tempo entre scrolls de recovery
-              if ((i + 1) % 5 === 0) {
-                console.log(`      ... ${i + 1}/${totalScrolls} scrolls restaurados`);
+
+              // Contar items carregados no DOM
+              loadedItems = await page.$$eval('div.Nv2PK', items => items.length);
+
+              if (scrollCount % 5 === 0) {
+                console.log(`      ... ${loadedItems}/${processedIndex} items (${scrollCount} scrolls)`);
               }
             }
-            console.log(`   ✅ Posição restaurada - continuando do item ${processedIndex + 1}`);
+            console.log(`   ✅ Posição restaurada (${loadedItems} items com ${scrollCount} scrolls)`);
           }
 
           // Resetar flags de erro após restart completo - dar nova chance
