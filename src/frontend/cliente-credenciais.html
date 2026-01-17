@@ -611,34 +611,53 @@
                   <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
                 </svg>
               </div>
-              Instagram
-              <span class="status-badge ${hasInstagram ? 'complete' : 'pending'}">${hasInstagram ? 'Configurado' : 'Pendente'}</span>
+              Instagram Business
+              <span class="status-badge ${hasInstagram ? 'complete' : 'pending'}" id="ig-status-badge">${hasInstagram ? 'Conectado' : 'Pendente'}</span>
             </h2>
-            <p class="subtitle">Conta Instagram que sera usada para enviar DMs aos leads.</p>
+            <p class="subtitle">Conecte sua conta Instagram Business via Facebook para envio de DMs.</p>
 
-            <div class="info-box">
-              <h4>Dica</h4>
-              <p>Recomendamos usar uma conta Instagram Business ou Creator com pelo menos 30 dias de uso e algum conteudo publicado.</p>
+            <div class="warning-box" style="background: rgba(255, 193, 7, 0.1); border-color: #ffc107;">
+              <h4>Pre-requisitos Obrigatorios</h4>
+              <ol style="margin: 8px 0 0 16px; line-height: 1.6;">
+                <li><strong>Conta Instagram Business ou Creator</strong> - Converta em Configuracoes → Conta → Mudar para conta profissional</li>
+                <li><strong>Facebook Page vinculada</strong> - Conecte seu Instagram a uma Facebook Page</li>
+                <li><strong>Acesso de Admin a Page</strong> - Voce precisa ser administrador da Page</li>
+              </ol>
             </div>
 
-            <form id="instagram-form" onsubmit="return saveInstagram(event)">
-              <div class="form-group">
-                <label class="form-label">Username Instagram *</label>
-                <input type="text" id="ig_username" class="form-input" placeholder="@seuusername" value="${credentialsData.instagram?.username || ''}" required>
-                <p class="form-hint">Sem o @ no inicio</p>
-              </div>
-
-              <div class="form-group">
-                <label class="form-label">Senha *</label>
-                <input type="password" id="ig_password" class="form-input" placeholder="Sua senha do Instagram" ${hasInstagram ? 'value="********"' : ''}>
-                <p class="form-hint">Usada apenas para login automatizado. Armazenada de forma segura.</p>
-              </div>
-
-              <button type="submit" class="btn btn-primary btn-full" id="ig-btn">
-                ${hasInstagram ? 'Atualizar Instagram' : 'Salvar Instagram'}
+            <!-- Botao de conexao OAuth -->
+            <div id="ig-connect-section" style="display: ${hasInstagram ? 'none' : 'block'};">
+              <button type="button" class="btn btn-primary btn-full" onclick="connectInstagram()" id="ig-connect-btn">
+                <svg style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle;" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.879V14.89h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.989C18.343 21.129 22 16.99 22 12c0-5.523-4.477-10-10-10z"/>
+                </svg>
+                Conectar com Facebook
               </button>
-              <div id="ig-status" class="status-message"></div>
-            </form>
+              <p class="form-hint" style="text-align: center; margin-top: 12px;">Voce sera redirecionado para o Facebook para autorizar o acesso.</p>
+            </div>
+
+            <!-- Conta conectada -->
+            <div id="ig-connected-section" style="display: ${hasInstagram ? 'flex' : 'none'}; align-items: center; gap: 16px; padding: 16px; background: rgba(14, 204, 151, 0.1); border-radius: 8px; margin-top: 16px;">
+              <img id="ig-profile-pic" src="${credentialsData.instagram?.profile_picture_url || ''}" alt="Profile" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #0ecc97;">
+              <div style="flex: 1;">
+                <div style="font-weight: 600; color: #fff;">@<span id="ig-connected-username">${credentialsData.instagram?.username || ''}</span></div>
+                <div style="color: #888; font-size: 13px;">Instagram Business conectado</div>
+              </div>
+              <span style="font-size: 24px; color: #0ecc97;">✓</span>
+            </div>
+
+            ${hasInstagram ? `
+              <button type="button" class="btn btn-full" onclick="disconnectInstagram()" style="margin-top: 12px; background: transparent; border: 1px solid #666; color: #888;">
+                Desconectar Instagram
+              </button>
+            ` : ''}
+
+            <div class="info-box" style="margin-top: 16px; background: rgba(14, 204, 151, 0.1); border-color: #0ecc97;">
+              <h4 style="color: #0ecc97;">Seguranca via OAuth</h4>
+              <p><strong>Nunca pedimos sua senha!</strong> A conexao e feita via autorizacao segura do Facebook/Meta. Voce pode revogar o acesso a qualquer momento nas configuracoes do Facebook.</p>
+            </div>
+
+            <div id="ig-status" class="status-message"></div>
           </div>
 
           <!-- Continue Button -->
@@ -701,44 +720,87 @@
       }
     }
 
-    async function saveInstagram(event) {
-      event.preventDefault();
-      const btn = document.getElementById('ig-btn');
-      btn.disabled = true;
-      btn.textContent = 'Salvando...';
+    // Connect Instagram via OAuth (redirects to Facebook)
+    function connectInstagram() {
+      const campaignId = journeyData?.campaign_id;
+      if (!campaignId) {
+        showStatus('ig-status', 'Erro: Campaign ID nao encontrado', 'error');
+        return;
+      }
+
+      // Salvar estado para retorno
+      localStorage.setItem('ig_oauth_return', window.location.href);
+
+      // Redirecionar para OAuth
+      window.location.href = `/api/instagram/oauth/authorize?campaignId=${campaignId}`;
+    }
+
+    // Disconnect Instagram account
+    async function disconnectInstagram() {
+      if (!confirm('Tem certeza que deseja desconectar sua conta Instagram?')) {
+        return;
+      }
+
+      const campaignId = journeyData?.campaign_id;
+      if (!campaignId) {
+        showStatus('ig-status', 'Erro: Campaign ID nao encontrado', 'error');
+        return;
+      }
 
       try {
-        const token = localStorage.getItem('aic_access_token');
-        const response = await fetch('/api/aic/journey/credentials/instagram', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            username: document.getElementById('ig_username').value.trim().replace('@', ''),
-            password: document.getElementById('ig_password').value
-          })
+        const response = await fetch(`/api/instagram/oauth/disconnect/${campaignId}`, {
+          method: 'POST'
         });
 
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.message || 'Erro ao salvar');
+          throw new Error(error.error || 'Erro ao desconectar');
         }
 
-        showStatus('ig-status', 'Instagram salvo com sucesso!', 'success');
-        credentialsData.instagram = { username: document.getElementById('ig_username').value };
+        showStatus('ig-status', 'Conta desconectada com sucesso', 'success');
+        credentialsData.instagram = null;
 
         setTimeout(() => {
           renderPage();
         }, 1000);
 
       } catch (error) {
-        showStatus('ig-status', error.message || 'Erro ao salvar. Tente novamente.', 'error');
-        btn.disabled = false;
-        btn.textContent = 'Salvar Instagram';
+        showStatus('ig-status', error.message || 'Erro ao desconectar', 'error');
       }
     }
+
+    // Handle OAuth callback
+    function handleInstagramOAuthCallback() {
+      const urlParams = new URLSearchParams(window.location.search);
+
+      if (urlParams.has('instagram_connected')) {
+        const username = urlParams.get('instagram_username') || '';
+        showStatus('ig-status', `Conta @${username} conectada com sucesso!`, 'success');
+        credentialsData.instagram = { username };
+
+        // Limpar URL
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+
+        setTimeout(() => {
+          renderPage();
+        }, 1000);
+      }
+
+      if (urlParams.has('instagram_error')) {
+        const error = decodeURIComponent(urlParams.get('instagram_error') || 'Erro desconhecido');
+        showStatus('ig-status', error, 'error');
+
+        // Limpar URL
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+      }
+    }
+
+    // Check on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      handleInstagramOAuthCallback();
+    });
 
     async function completeCredentials() {
       const btn = document.getElementById('complete-btn');

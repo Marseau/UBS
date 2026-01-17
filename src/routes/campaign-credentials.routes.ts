@@ -19,6 +19,7 @@ import {
   AuthenticatedRequest
 } from '../middleware/aic-auth.middleware';
 import { clientJourneyService } from '../services/client-journey.service';
+import { getWhapiPartnerService } from '../services/whapi-partner.service';
 
 const router = Router();
 
@@ -2802,6 +2803,387 @@ router.get('/leads/meta-audience-stats', async (req: Request, res: Response): Pr
 
   } catch (error: any) {
     console.error('[META LEADS STATS] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// WHAPI PARTNER API - GERENCIAMENTO DE CANAIS
+// ============================================================================
+
+/**
+ * POST /api/campaigns/:campaignId/whatsapp/channel
+ * Cria um canal WhatsApp via Partner API para a campanha
+ */
+router.post('/campaigns/:campaignId/whatsapp/channel', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+
+    if (!campaignId) {
+      res.status(400).json({ error: 'campaignId is required' });
+      return;
+    }
+
+    // Verificar se campanha existe
+    const { data: campaign, error: campaignError } = await supabase
+      .from('cluster_campaigns')
+      .select('id, campaign_name, whapi_channel_uuid')
+      .eq('id', campaignId)
+      .single();
+
+    if (campaignError || !campaign) {
+      res.status(404).json({ error: 'Campaign not found' });
+      return;
+    }
+
+    // Verificar se já tem canal
+    if (campaign.whapi_channel_uuid) {
+      res.status(400).json({
+        error: 'Campaign already has a WhatsApp channel',
+        channelId: campaign.whapi_channel_uuid
+      });
+      return;
+    }
+
+    // Criar canal via Partner API
+    const partnerService = getWhapiPartnerService();
+    const result = await partnerService.createChannelForCampaign(campaignId, campaign.campaign_name);
+
+    if (!result.success) {
+      res.status(500).json({ error: result.error || 'Failed to create channel' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      channel: {
+        id: result.channel!.id,
+        name: result.channel!.name,
+        status: result.channel!.status,
+        apiUrl: result.channel!.apiUrl
+      },
+      message: 'Canal criado com sucesso. Agora gere o QR Code para conectar o WhatsApp.'
+    });
+
+  } catch (error: any) {
+    console.error('[Partner API] Error creating WhatsApp channel:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/campaigns/:campaignId/whatsapp/qr
+ * Obtém QR Code para conectar o WhatsApp da campanha
+ */
+router.get('/campaigns/:campaignId/whatsapp/qr', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+
+    // Buscar canal da campanha
+    const { data: campaign, error: campaignError } = await supabase
+      .from('cluster_campaigns')
+      .select('id, campaign_name, whapi_channel_uuid')
+      .eq('id', campaignId)
+      .single();
+
+    if (campaignError || !campaign) {
+      res.status(404).json({ error: 'Campaign not found' });
+      return;
+    }
+
+    if (!campaign.whapi_channel_uuid) {
+      res.status(400).json({
+        error: 'Campaign does not have a WhatsApp channel. Create one first.',
+        createUrl: `/api/campaigns/${campaignId}/whatsapp/channel`
+      });
+      return;
+    }
+
+    // Buscar token do canal
+    const { data: channel, error: channelError } = await supabase
+      .from('whapi_channels')
+      .select('api_token, status, phone_number')
+      .eq('channel_id', campaign.whapi_channel_uuid)
+      .single();
+
+    if (channelError || !channel) {
+      res.status(404).json({ error: 'WhatsApp channel not found in database' });
+      return;
+    }
+
+    // Se já tem telefone conectado, não precisa de QR
+    if (channel.phone_number && channel.status === 'active') {
+      res.json({
+        connected: true,
+        phone: channel.phone_number,
+        message: 'WhatsApp já está conectado'
+      });
+      return;
+    }
+
+    // Obter QR Code
+    const partnerService = getWhapiPartnerService();
+    const qrResult = await partnerService.getChannelQRCode(channel.api_token);
+
+    if (!qrResult.success) {
+      // Verificar se já está conectado
+      const statusResult = await partnerService.getChannelStatus(channel.api_token);
+
+      if (statusResult.connected) {
+        // Atualizar banco com telefone
+        if (statusResult.phone) {
+          await supabase
+            .from('whapi_channels')
+            .update({
+              phone_number: statusResult.phone,
+              status: 'active',
+              last_connected_at: new Date().toISOString()
+            })
+            .eq('channel_id', campaign.whapi_channel_uuid);
+        }
+
+        res.json({
+          connected: true,
+          phone: statusResult.phone,
+          message: 'WhatsApp já está conectado'
+        });
+        return;
+      }
+
+      res.status(500).json({ error: qrResult.error || 'Failed to generate QR code' });
+      return;
+    }
+
+    res.json({
+      connected: false,
+      qrCode: qrResult.qrCode,
+      message: 'Escaneie o QR Code com o WhatsApp do cliente'
+    });
+
+  } catch (error: any) {
+    console.error('[Partner API] Error getting QR code:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/campaigns/:campaignId/whatsapp/status
+ * Verifica status da conexão WhatsApp da campanha
+ */
+router.get('/campaigns/:campaignId/whatsapp/status', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+
+    // Buscar canal da campanha
+    const { data: campaign, error: campaignError } = await supabase
+      .from('cluster_campaigns')
+      .select('id, campaign_name, whapi_channel_uuid')
+      .eq('id', campaignId)
+      .single();
+
+    if (campaignError || !campaign) {
+      res.status(404).json({ error: 'Campaign not found' });
+      return;
+    }
+
+    if (!campaign.whapi_channel_uuid) {
+      res.json({
+        hasChannel: false,
+        connected: false,
+        message: 'Campanha não tem canal WhatsApp configurado'
+      });
+      return;
+    }
+
+    // Buscar token do canal
+    const { data: channel, error: channelError } = await supabase
+      .from('whapi_channels')
+      .select('api_token, status, phone_number, name')
+      .eq('channel_id', campaign.whapi_channel_uuid)
+      .single();
+
+    if (channelError || !channel) {
+      res.json({
+        hasChannel: true,
+        channelId: campaign.whapi_channel_uuid,
+        connected: false,
+        error: 'Canal não encontrado no banco local'
+      });
+      return;
+    }
+
+    // Verificar status real na Whapi
+    const partnerService = getWhapiPartnerService();
+    const statusResult = await partnerService.getChannelStatus(channel.api_token);
+
+    // Atualizar banco se conectado
+    if (statusResult.connected && statusResult.phone && channel.status !== 'active') {
+      await supabase
+        .from('whapi_channels')
+        .update({
+          phone_number: statusResult.phone,
+          status: 'active',
+          last_connected_at: new Date().toISOString()
+        })
+        .eq('channel_id', campaign.whapi_channel_uuid);
+    }
+
+    res.json({
+      hasChannel: true,
+      channelId: campaign.whapi_channel_uuid,
+      channelName: channel.name,
+      connected: statusResult.connected,
+      phone: statusResult.phone || channel.phone_number,
+      localStatus: channel.status
+    });
+
+  } catch (error: any) {
+    console.error('[Partner API] Error checking status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/campaigns/:campaignId/whatsapp/webhook
+ * Configura webhook do canal WhatsApp da campanha
+ */
+router.post('/campaigns/:campaignId/whatsapp/webhook', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+    const { webhookUrl } = req.body;
+
+    // URL padrão do whapi-worker
+    const defaultWebhookUrl = process.env.WHAPI_WEBHOOK_URL || 'https://yourdomain.com/api/whapi/webhook';
+    const finalWebhookUrl = webhookUrl || defaultWebhookUrl;
+
+    // Buscar canal da campanha
+    const { data: campaign, error: campaignError } = await supabase
+      .from('cluster_campaigns')
+      .select('id, whapi_channel_uuid')
+      .eq('id', campaignId)
+      .single();
+
+    if (campaignError || !campaign || !campaign.whapi_channel_uuid) {
+      res.status(404).json({ error: 'Campaign or WhatsApp channel not found' });
+      return;
+    }
+
+    // Buscar token do canal
+    const { data: channel } = await supabase
+      .from('whapi_channels')
+      .select('api_token')
+      .eq('channel_id', campaign.whapi_channel_uuid)
+      .single();
+
+    if (!channel) {
+      res.status(404).json({ error: 'Channel token not found' });
+      return;
+    }
+
+    // Configurar webhook
+    const partnerService = getWhapiPartnerService();
+    const result = await partnerService.configureChannelWebhook(channel.api_token, finalWebhookUrl);
+
+    if (!result.success) {
+      res.status(500).json({ error: result.error || 'Failed to configure webhook' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      webhookUrl: finalWebhookUrl,
+      message: 'Webhook configurado com sucesso'
+    });
+
+  } catch (error: any) {
+    console.error('[Partner API] Error configuring webhook:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/campaigns/:campaignId/whatsapp/activate
+ * Ativa canal para produção (trial -> live)
+ */
+router.post('/campaigns/:campaignId/whatsapp/activate', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+
+    // Buscar canal da campanha
+    const { data: campaign, error: campaignError } = await supabase
+      .from('cluster_campaigns')
+      .select('id, whapi_channel_uuid')
+      .eq('id', campaignId)
+      .single();
+
+    if (campaignError || !campaign || !campaign.whapi_channel_uuid) {
+      res.status(404).json({ error: 'Campaign or WhatsApp channel not found' });
+      return;
+    }
+
+    // Ativar canal
+    const partnerService = getWhapiPartnerService();
+    const result = await partnerService.activateChannelForProduction(campaign.whapi_channel_uuid);
+
+    if (!result.success) {
+      res.status(500).json({ error: result.error || 'Failed to activate channel' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Canal ativado para produção (modo LIVE)'
+    });
+
+  } catch (error: any) {
+    console.error('[Partner API] Error activating channel:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/whapi/partner/channels
+ * Lista todos os canais do Partner Account
+ */
+router.get('/whapi/partner/channels', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const partnerService = getWhapiPartnerService();
+    const result = await partnerService.listChannels({ projectId: 'aic-campaigns' });
+
+    if (!result.success) {
+      res.status(500).json({ error: result.error || 'Failed to list channels' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      total: result.total,
+      channels: result.channels
+    });
+
+  } catch (error: any) {
+    console.error('[Partner API] Error listing channels:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/whapi/partner/sync
+ * Sincroniza canais da Whapi com o banco local
+ */
+router.post('/whapi/partner/sync', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const partnerService = getWhapiPartnerService();
+    const result = await partnerService.syncChannelsWithDatabase();
+
+    res.json({
+      success: true,
+      synced: result.synced,
+      errors: result.errors
+    });
+
+  } catch (error: any) {
+    console.error('[Partner API] Error syncing channels:', error);
     res.status(500).json({ error: error.message });
   }
 });

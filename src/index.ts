@@ -846,6 +846,16 @@ try {
   console.error('❌ Failed to load Instagram DM Webhook routes:', error);
 }
 
+// Instagram OAuth Routes - Connect Instagram Business accounts via Meta OAuth
+try {
+  const instagramOAuthRoutes = require('./routes/instagram-oauth.routes');
+  const router = 'default' in instagramOAuthRoutes ? instagramOAuthRoutes.default : instagramOAuthRoutes;
+  app.use('/api/instagram/oauth', router);
+  console.log('✅ Instagram OAuth routes loaded - META OAUTH INTEGRATION READY');
+} catch (error) {
+  console.error('❌ Failed to load Instagram OAuth routes:', error);
+}
+
 // Account Actions Routes - Record social media actions (multi-platform)
 try {
   const accountActionsRoutes = require('./routes/account-actions.routes');
