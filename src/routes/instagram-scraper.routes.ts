@@ -3134,8 +3134,20 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
             }
           }
 
+          // 🗑️ DELETAR do google_leads - perfil não existe ou deu erro
+          try {
+            console.log(`   🗑️  Removendo @${username} do google_leads...`);
+            await supabase
+              .from('google_leads')
+              .delete()
+              .eq('instagram_username', username);
+            console.log(`   ✅ Removido do google_leads`);
+          } catch (delErr: any) {
+            console.log(`   ⚠️  Erro ao remover: ${delErr.message}`);
+          }
+
           errors.push({ username, error: profileError.message });
-          results.push({ username, action: 'error', reason: profileError.message });
+          results.push({ username, action: 'error', reason: `Removido do google_leads: ${profileError.message}` });
         }
 
         // Delay entre perfis (como rescue)
