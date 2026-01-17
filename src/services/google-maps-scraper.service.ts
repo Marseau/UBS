@@ -49,7 +49,8 @@ export interface GoogleLead {
   full_address?: string;      // Endereço completo do Google Maps
   city?: string;
   state?: string;
-  phone_whatsapp?: string;    // Só se for celular brasileiro (WhatsApp)
+  phone_whatsapp?: string;    // Telefone brasileiro normalizado E.164
+  email?: string;             // Email extraído do website
   website?: string;
   instagram_username: string; // Required - only persist if we have this
   rating?: number;
@@ -496,9 +497,10 @@ async function checkDuplicateByName(name: string, city: string): Promise<boolean
 }
 
 /**
- * Validate and format phone as WhatsApp (Brazilian mobile only)
- * Brazilian mobile: starts with 9 after DDD, total 11 digits (DDD + 9 + 8 digits)
- * Examples: (11) 99999-9999, 11999999999, +55 11 99999-9999
+ * Normalize Brazilian phone number to E.164 format for WhatsApp
+ * Accepts both 10-digit (landline/old mobile) and 11-digit (new mobile) numbers
+ * Examples: (11) 3333-4444, (11) 99999-9999, 11999999999, +55 11 99999-9999
+ * Returns: 5511999999999 or 551133334444
  */
 function extractWhatsAppNumber(phone: string): string | null {
   if (!phone) return null;
@@ -511,28 +513,60 @@ function extractWhatsAppNumber(phone: string): string | null {
     digits = digits.substring(2);
   }
 
-  // Must be 11 digits: DDD (2) + 9 (1) + number (8)
-  if (digits.length !== 11) {
+  // Accept 10 digits (landline/old mobile) or 11 digits (new mobile with 9)
+  if (digits.length !== 10 && digits.length !== 11) {
     return null;
   }
 
-  // Must start with valid DDD (11-99) and mobile prefix (9)
+  // Validate DDD (first 2 digits must be 11-99)
   const ddd = digits.substring(0, 2);
-  const mobilePrefix = digits.charAt(2);
-
-  // Valid DDDs are 11-99 (excluding some invalid ones)
   const dddNum = parseInt(ddd);
   if (dddNum < 11 || dddNum > 99) {
     return null;
   }
 
-  // Mobile numbers in Brazil start with 9
-  if (mobilePrefix !== '9') {
-    return null;
+  // Format as E.164: +55 DDD NUMBER
+  return `55${digits}`;
+}
+
+/**
+ * Extract email from text (website content, bio, etc.)
+ * Returns the first valid email found
+ */
+function extractEmail(text: string): string | null {
+  if (!text) return null;
+
+  // Standard email regex
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi;
+  const matches = text.match(emailRegex);
+
+  if (!matches || matches.length === 0) return null;
+
+  // Filter out common invalid patterns
+  const invalidPatterns = [
+    /example\.com$/i,
+    /test\.com$/i,
+    /domain\.com$/i,
+    /email\.com$/i,
+    /your-?email/i,
+    /seu-?email/i,
+    /@sentry\./i,
+    /@wix\./i,
+    /@facebook\./i,
+    /@instagram\./i,
+    /noreply/i,
+    /no-reply/i,
+  ];
+
+  for (const email of matches) {
+    const lowerEmail = email.toLowerCase();
+    const isInvalid = invalidPatterns.some(pattern => pattern.test(lowerEmail));
+    if (!isInvalid) {
+      return lowerEmail;
+    }
   }
 
-  // Format as WhatsApp number with country code: 5511999999999
-  return `55${digits}`;
+  return null;
 }
 
 /**
@@ -1022,7 +1056,7 @@ REGRAS MUITO RIGOROSAS:
 async function extractInstagramSmart(
   businessName: string,
   websiteUrl?: string
-): Promise<{ username: string | null; layer: number; reason: string; timeMs: number }> {
+): Promise<{ username: string | null; layer: number; reason: string; timeMs: number; websiteHtml?: string }> {
   const startTime = Date.now();
 
   // Variável para armazenar o HTML do website (se disponível)
@@ -1056,17 +1090,18 @@ async function extractInstagramSmart(
     // ========== LAYER 2: HTTP Fetch (~1-5s) ==========
     const layer2 = await extractInstagramLayer2(websiteUrl);
 
+    // Guardar HTML para L2.5 e extração de email
+    websiteHtmlText = layer2.htmlText;
+
     if (layer2.username) {
       return {
         username: layer2.username,
         layer: 2,
         reason: layer2.reason,
-        timeMs: Date.now() - startTime
+        timeMs: Date.now() - startTime,
+        websiteHtml: websiteHtmlText
       };
     }
-
-    // Guardar HTML para L2.5
-    websiteHtmlText = layer2.htmlText;
 
     // ========== LAYER 2.5: GPT analisa website (~1-2s) ==========
     if (websiteHtmlText && websiteHtmlText.length > 50) {
@@ -1077,7 +1112,8 @@ async function extractInstagramSmart(
           username: layer2_5.username,
           layer: 2.5,
           reason: layer2_5.reason,
-          timeMs: Date.now() - startTime
+          timeMs: Date.now() - startTime,
+          websiteHtml: websiteHtmlText
         };
       }
     }
@@ -1094,7 +1130,8 @@ async function extractInstagramSmart(
         username: layer3.username,
         layer: 3,
         reason: layer3.reason,
-        timeMs: Date.now() - startTime
+        timeMs: Date.now() - startTime,
+        websiteHtml: websiteHtmlText
       };
     }
   }
@@ -1104,7 +1141,8 @@ async function extractInstagramSmart(
     username: null,
     layer: 3,
     reason: websiteUrl ? 'Puppeteer não encontrou Instagram no site' : 'Sem website para buscar Instagram',
-    timeMs: Date.now() - startTime
+    timeMs: Date.now() - startTime,
+    websiteHtml: websiteHtmlText
   };
 }
 
@@ -1912,7 +1950,7 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
     let totalScrolls = 0;    // Total de scrolls realizados (para recovery)
     let restartCount = 0;    // Contador de reinícios completos
     const MAX_RESTARTS = 2;  // Só 2 tentativas (Google trava após X scrolls)
-    const MAX_PROCESSED = 80; // Limite de leads processados (independente de salvos)
+    const MAX_PROCESSED = 50; // Limite de leads processados (independente de salvos)
     let scrollsWithoutNewSaves = 0; // Scrolls sem novos leads SALVOS (mais confiável que DOM count)
     let lastSavedCount = 0;  // Para rastrear progresso real
     const MAX_SCROLLS_WITHOUT_SAVES = 15; // Se 15 scrolls sem salvar nada, parar
@@ -2013,7 +2051,7 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
           }
 
           // Lista terminou mas tinha bastante resultado - tentar reiniciar
-          // Se já processou 80+ leads, não vale reiniciar - área já foi bem coberta
+          // Se já processou 50+ leads, não vale reiniciar - área já foi bem coberta
           if (result.total_scraped >= MAX_PROCESSED) {
             console.log(`🛑 Já processou ${result.total_scraped} leads - encerrando sem reiniciar`);
             break;
@@ -2108,7 +2146,7 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
 
           // Após muitos scrolls sem resultado, reiniciar browser
           if (stagnantScrolls >= 10) {
-            // Se já processou 80+ leads, não vale reiniciar - área já foi bem coberta
+            // Se já processou 50+ leads, não vale reiniciar - área já foi bem coberta
             if (result.total_scraped >= MAX_PROCESSED) {
               console.log(`🛑 Já processou ${result.total_scraped} leads - encerrando sem reiniciar`);
               break;
@@ -2244,6 +2282,7 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
         const instagram = extractionResult.username;
         const extractionLayer = extractionResult.layer;
         const extractionTime = extractionResult.timeMs;
+        const websiteHtml = extractionResult.websiteHtml;
 
         if (!instagram) {
           console.log(`   ❌ Sem Instagram (L1+L2+L2.5+L3 falharam) - ${extractionResult.reason}`);
@@ -2254,20 +2293,27 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
 
         result.with_instagram++;
 
-        // Validate phone as WhatsApp (only Brazilian mobile)
+        // Normalize phone to E.164 (accepts 10 or 11 digits)
         const whatsappNumber = extractWhatsAppNumber(business.phone || '');
         if (whatsappNumber) {
-          console.log(`   📱 WhatsApp válido: ${whatsappNumber}`);
+          console.log(`   📱 WhatsApp: ${whatsappNumber}`);
         } else if (business.phone) {
-          console.log(`   📞 Telefone fixo (não é WhatsApp): ${business.phone}`);
+          console.log(`   📞 Telefone inválido: ${business.phone}`);
+        }
+
+        // Extract email from website content
+        const email = extractEmail(websiteHtml || '');
+        if (email) {
+          console.log(`   📧 Email: ${email}`);
         }
 
         // Create lead (only if we have Instagram)
         const lead: GoogleLead = {
           name: business.name,
           instagram_username: instagram,
-          phone_whatsapp: whatsappNumber || undefined, // Só se for celular
-          full_address: business.address,              // Endereço completo
+          phone_whatsapp: whatsappNumber || undefined,
+          email: email || undefined,
+          full_address: business.address,
           city: parsedCity || cidade,
           state: parsedState || estado,
           website: business.website,

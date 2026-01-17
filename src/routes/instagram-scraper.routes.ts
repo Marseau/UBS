@@ -2510,7 +2510,8 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
     const {
       usernames,
       target_segment,
-      engagement_data // Array com dados de engajamento por username
+      engagement_data, // Array com dados de engajamento por username
+      delay_ms = 3000
     } = req.body;
 
     if (!usernames || !Array.isArray(usernames) || usernames.length === 0) {
@@ -2519,6 +2520,18 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
         message: 'Campo "usernames" é obrigatório e deve ser um array não-vazio'
       });
     }
+
+    // Importar funções
+    const puppeteer = await import('puppeteer');
+    const fs = await import('fs');
+    const path = await import('path');
+    const { scrapeProfileWithExistingPage } = await import('../services/instagram-scraper-single.service');
+    const { calculateActivityScore, extractHashtagsFromPosts, retryWithBackoff } = await import('../services/instagram-profile.utils');
+    const { detectLanguage } = await import('../services/language-country-detector.service');
+
+    // Diretório dedicado para ubs-google (separado do rescue)
+    const GOOGLE_INPUT_USER_DATA_DIR = path.join(process.cwd(), 'cookies', 'google-input', 'user-data');
+    const GOOGLE_INPUT_COOKIES_FILE = path.join(process.cwd(), 'cookies', 'google-input', 'instagram-cookies.json');
 
     // Criar mapa de engajamento para fácil acesso
     const engagementMap = new Map();
@@ -2530,68 +2543,349 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
 
     console.log(`\n🔍 [${reqId}] ========== SCRAPE-INPUT-USERS INICIADO ==========`);
     console.log(`🔍 [${reqId}] ${usernames.length} usernames recebidos`);
+    console.log(`🔍 [${reqId}] Conta dedicada: @${process.env.INSTAGRAM_GOOGLE_INPUT_USERNAME || 'marciofranco03'}`);
+    console.log(`🔍 [${reqId}] Diretório: ${GOOGLE_INPUT_USER_DATA_DIR}`);
     console.log(`🔍 [${reqId}] Dados de engajamento: ${engagement_data ? 'SIM' : 'NÃO'}`);
 
-    const validatedProfiles: InstagramProfileData[] = [];
-    const errors: any[] = [];
-
-    // Se temos engagement_data, NÃO fazer scraping - apenas atualizar banco
-    const hasEngagementData = engagement_data && Array.isArray(engagement_data) && engagement_data.length > 0;
-
-    if (!hasEngagementData) {
-      // MODO NORMAL: Scrapar cada username usando scrapeInstagramUserSearch
-      console.log(`📊 [${reqId}] Modo: SCRAPING COMPLETO`);
-
-      for (const username of usernames) {
-        try {
-          console.log(`\n👤 [${reqId}] Scrapando @${username}...`);
-
-          // Usar scrapeInstagramUserSearch com username como termo de busca
-          // skipValidations = true para perfis de engajamento (sem filtro de idioma/activity)
-          const profiles = await scrapeInstagramUserSearch(username, 1, true);
-
-          if (profiles && profiles.length > 0) {
-            const profileData = profiles[0];
-            if (profileData) {
-              validatedProfiles.push(profileData);
-              console.log(`   ✅ Perfil @${username} scrapado com sucesso`);
-              console.log(`   🏷️  Hashtags bio: ${profileData.hashtags_bio?.length || 0}`);
-              console.log(`   🏷️  Hashtags posts: ${profileData.hashtags_posts?.length || 0}`);
-            } else {
-              console.log(`   ⚠️  Perfil @${username} retornou dados vazios`);
-              errors.push({ username, error: 'Dados vazios retornados' });
-            }
-          } else {
-            console.log(`   ⚠️  Perfil @${username} não encontrado`);
-            errors.push({ username, error: 'Perfil não encontrado' });
-          }
-
-        } catch (error: any) {
-          console.error(`   ❌ Erro ao scrapar @${username}:`, error.message);
-          errors.push({ username, error: error.message });
-        }
-      }
-    } else {
-      // MODO ENGAJAMENTO: Pular scraping completamente
-      console.log(`💬 [${reqId}] Modo: APENAS ATUALIZAÇÃO DE ENGAJAMENTO (sem scraping)`);
+    // Criar diretório se não existir
+    if (!fs.existsSync(GOOGLE_INPUT_USER_DATA_DIR)) {
+      fs.mkdirSync(GOOGLE_INPUT_USER_DATA_DIR, { recursive: true });
+      console.log(`📁 [${reqId}] Criado diretório: ${GOOGLE_INPUT_USER_DATA_DIR}`);
     }
 
-    // Processar TODOS os usernames - incluindo os que já existem
-    console.log(`\n💾 [${reqId}] Processando ${usernames.length} usernames para salvar/atualizar no banco...`);
+    // Criar browser dedicado para google-input
+    let browser = await puppeteer.default.launch({
+      headless: false,
+      userDataDir: GOOGLE_INPUT_USER_DATA_DIR,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+        '--window-size=1280,800'
+      ],
+      defaultViewport: { width: 1280, height: 800 }
+    });
 
-    for (const username of usernames) {
+    let page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+    // Carregar cookies se existirem
+    if (fs.existsSync(GOOGLE_INPUT_COOKIES_FILE)) {
       try {
-        // Buscar perfil existente
-        const { data: existing } = await supabase
-          .from('instagram_leads')
-          .select('id, username, full_name, engagement_score, interaction_count')
-          .eq('username', username)
-          .single();
+        const cookiesData = fs.readFileSync(GOOGLE_INPUT_COOKIES_FILE, 'utf8');
+        const cookies = JSON.parse(cookiesData);
+        await page.setCookie(...cookies);
+        console.log(`🍪 [${reqId}] ${cookies.length} cookies carregados`);
+      } catch (e: any) {
+        console.log(`⚠️  [${reqId}] Erro ao carregar cookies: ${e.message}`);
+      }
+    }
 
-        // Obter dados de engajamento para este username
+    // Navegar para Instagram para verificar login
+    await page.goto('https://www.instagram.com/', {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    }).catch(() => {});
+
+    // Verificar se está logado (mesma lógica da rescue)
+    const currentCookies = await page.cookies();
+    const hasSessionId = currentCookies.some(c => c.name === 'sessionid' && c.value);
+    const hasDsUserId = currentCookies.some(c => c.name === 'ds_user_id' && c.value);
+    const isLogged = hasSessionId && hasDsUserId;
+
+    if (!isLogged) {
+      console.log(`🔐 [${reqId}] Não logado - iniciando login automático...`);
+
+      const igUsername = process.env.INSTAGRAM_GOOGLE_INPUT_USERNAME || process.env.INSTAGRAM_REFRESH_USERNAME;
+      const igPassword = process.env.INSTAGRAM_GOOGLE_INPUT_PASSWORD || process.env.INSTAGRAM_REFRESH_PASSWORD;
+
+      if (!igUsername || !igPassword) {
+        await browser.close();
+        return res.status(500).json({
+          success: false,
+          message: 'Credenciais INSTAGRAM_GOOGLE_INPUT_* ou INSTAGRAM_REFRESH_* não configuradas no .env'
+        });
+      }
+
+      // Navegar para login
+      await page.goto('https://www.instagram.com/accounts/login/', {
+        waitUntil: 'networkidle2',
+        timeout: 120000
+      }).catch(() => {});
+
+      // Aguardar campos de login
+      const usernameSelector = 'input[type="text"], input[name="username"], input[autocomplete="username"]';
+      const passwordSelector = 'input[type="password"], input[name="password"], input[autocomplete="current-password"]';
+
+      await page.waitForSelector(usernameSelector, { timeout: 20000 });
+      await page.waitForSelector(passwordSelector, { timeout: 20000 });
+
+      // Preencher credenciais com digitação humanizada
+      const usernameInput = await page.$(usernameSelector);
+      const passwordInput = await page.$(passwordSelector);
+
+      if (usernameInput && passwordInput) {
+        await usernameInput.click({ clickCount: 3 });
+        await usernameInput.type(igUsername, { delay: 50 + Math.random() * 100 });
+        await new Promise(r => setTimeout(r, 500 + Math.random() * 500));
+
+        await passwordInput.click({ clickCount: 3 });
+        await passwordInput.type(igPassword, { delay: 50 + Math.random() * 100 });
+        await new Promise(r => setTimeout(r, 500 + Math.random() * 500));
+      }
+
+      // Clicar no botão de login
+      const clicked = await page.evaluate(`
+        (function() {
+          const buttons = Array.from(document.querySelectorAll('button, div[role="button"]'));
+          const loginBtn = buttons.find(btn => {
+            const text = btn.textContent?.trim().toLowerCase() || '';
+            return text === 'log in' || text === 'entrar';
+          });
+          if (loginBtn) {
+            loginBtn.click();
+            return true;
+          }
+          return false;
+        })()
+      `);
+
+      if (!clicked) {
+        console.log(`   ⚠️  [${reqId}] Botão de login não encontrado - tentando Enter`);
+        await page.keyboard.press('Enter');
+      }
+
+      console.log(`   ⏳ [${reqId}] Aguardando login... (pode precisar verificação manual)`);
+
+      // Aguardar login (até 90 segundos)
+      const deadline = Date.now() + 90000;
+      let loggedAfterLogin = false;
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 2000 + Math.random() * 1000));
+        const cookiesAfter = await page.cookies();
+        const hasSession = cookiesAfter.some(c => c.name === 'sessionid' && c.value);
+        const hasUserId = cookiesAfter.some(c => c.name === 'ds_user_id' && c.value);
+        loggedAfterLogin = hasSession && hasUserId;
+        if (loggedAfterLogin) break;
+      }
+
+      if (loggedAfterLogin) {
+        console.log(`   ✅ [${reqId}] Login bem-sucedido!`);
+
+        // Salvar cookies
+        const loginCookies = await page.cookies();
+        const cookiesDir = path.dirname(GOOGLE_INPUT_COOKIES_FILE);
+        if (!fs.existsSync(cookiesDir)) {
+          fs.mkdirSync(cookiesDir, { recursive: true });
+        }
+        fs.writeFileSync(GOOGLE_INPUT_COOKIES_FILE, JSON.stringify(loginCookies, null, 2));
+        console.log(`   💾 [${reqId}] ${loginCookies.length} cookies salvos`);
+      } else {
+        await browser.close();
+        return res.status(500).json({
+          success: false,
+          message: 'Falha no login - verifique credenciais ou faça login manual'
+        });
+      }
+    } else {
+      console.log(`✅ [${reqId}] Sessão válida encontrada`);
+    }
+
+    console.log(`🔧 [${reqId}] Browser dedicado pronto para google-input`);
+
+    // Função para recriar browser se desconectado
+    const ensureValidPage = async (): Promise<boolean> => {
+      try {
+        await page.evaluate('1+1');
+        return true;
+      } catch {
+        console.log(`   ⚠️  Página desconectada, recriando browser...`);
+        try {
+          await browser.close();
+        } catch {}
+        browser = await puppeteer.default.launch({
+          headless: false,
+          userDataDir: GOOGLE_INPUT_USER_DATA_DIR,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-blink-features=AutomationControlled',
+            '--window-size=1280,800'
+          ],
+          defaultViewport: { width: 1280, height: 800 }
+        });
+        page = await browser.newPage();
+        await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        console.log(`   ✅ Novo browser criado`);
+        return true;
+      }
+    };
+
+    // Cleanup function
+    const cleanup = async () => {
+      try {
+        // Salvar cookies antes de fechar
+        if (page && !page.isClosed()) {
+          const cookies = await page.cookies();
+          const cookiesDir = path.dirname(GOOGLE_INPUT_COOKIES_FILE);
+          if (!fs.existsSync(cookiesDir)) {
+            fs.mkdirSync(cookiesDir, { recursive: true });
+          }
+          fs.writeFileSync(GOOGLE_INPUT_COOKIES_FILE, JSON.stringify(cookies, null, 2));
+          console.log(`   💾 [${reqId}] ${cookies.length} cookies salvos`);
+        }
+      } catch (e: any) {
+        console.warn(`   ⚠️  [${reqId}] Erro ao salvar cookies: ${e.message}`);
+      }
+      try {
+        await browser.close();
+      } catch {}
+    };
+
+    // Contadores de resultado
+    const results: { username: string; action: 'inserted' | 'updated' | 'skipped_complete' | 'skipped_activity' | 'skipped_language' | 'skipped_not_found' | 'error'; reason?: string; lead_id?: string }[] = [];
+    const errors: any[] = [];
+
+    try {
+      // Processar cada username
+      for (let i = 0; i < usernames.length; i++) {
+        const username = usernames[i].replace('@', '').trim();
+        if (!username) continue;
+
+        console.log(`\n[${i + 1}/${usernames.length}] Processando @${username}...`);
+
+        // Verificar se página ainda é válida
+        await ensureValidPage();
+
+        try {
+          // ========================================
+          // 1. VERIFICAR SE JÁ EXISTE - Se incompleto, enriquecer
+          // ========================================
+          let existingLeadData: { id: string; city: string | null; state: string | null; email: string | null; whatsapp_number: string | null } | null = null;
+          let needsEnrichment = false;
+
+          const { data: existing } = await supabase
+            .from('instagram_leads')
+            .select('id, city, state, email, whatsapp_number')
+            .eq('username', username)
+            .single();
+
+          if (existing) {
+            existingLeadData = existing;
+            // Verificar se falta algum dado importante
+            const missingFields: string[] = [];
+            if (!existing.city) missingFields.push('city');
+            if (!existing.state) missingFields.push('state');
+            if (!existing.email) missingFields.push('email');
+            if (!existing.whatsapp_number) missingFields.push('whatsapp_number');
+
+            if (missingFields.length > 0) {
+              needsEnrichment = true;
+              console.log(`   🔄 @${username} existe mas falta: ${missingFields.join(', ')} - vamos ENRIQUECER`);
+            } else {
+              console.log(`   ✅ @${username} já está completo - pulando`);
+              results.push({ username, action: 'skipped_complete', reason: 'Lead já possui todos os dados', lead_id: existing.id });
+              continue;
+            }
+          }
+
+          // ========================================
+          // 1.5 BUSCAR DADOS DO GOOGLE MAPS (se existir)
+          // ========================================
+          let googleMapsData: { city: string | null; state: string | null; email: string | null; phone_whatsapp: string | null; full_address: string | null; search_theme: string | null } | null = null;
+          const { data: gmLead } = await supabase
+            .from('google_leads')
+            .select('city, state, email, phone_whatsapp, full_address, search_theme')
+            .eq('instagram_username', username)
+            .single();
+
+          if (gmLead) {
+            googleMapsData = gmLead;
+            console.log(`   🗺️  Dados do Google Maps: city=${gmLead.city}, whatsapp=${gmLead.phone_whatsapp ? 'SIM' : 'NÃO'}`);
+          }
+
+          // ========================================
+          // 2. NAVEGAR DIRETO PARA O PERFIL (como rescue)
+          // ========================================
+          console.log(`   🌐 Navegando para https://www.instagram.com/${username}/`);
+          await page.goto(`https://www.instagram.com/${username}/`, {
+            waitUntil: 'networkidle2',
+            timeout: 30000
+          });
+          await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+
+          // Scrape do perfil (mesma função da rescue)
+          const profile = await scrapeProfileWithExistingPage(page, username, true);
+
+          if (!profile || !profile.username) {
+            console.log(`   ⚠️  Perfil @${username} não encontrado ou privado`);
+            results.push({ username, action: 'skipped_not_found', reason: 'Perfil não encontrado ou privado' });
+            continue;
+          }
+
+          // Verificar se dados foram extraídos (evitar falso positivo de activity 0)
+          const hasData = profile.followers_count > 0 || profile.bio || profile.full_name;
+          if (!hasData) {
+            console.log(`   ⚠️  Perfil @${username} - dados não extraídos (página bloqueada ou estrutura diferente)`);
+            results.push({ username, action: 'skipped_not_found', reason: 'Dados não extraídos - continuar para próximo' });
+            continue;
+          }
+
+          console.log(`   ✅ Perfil scrapado: ${profile.full_name || username}`);
+
+        // ========================================
+        // 3. VALIDAÇÃO ACTIVITY SCORE (como rescue)
+        // ========================================
+        const activityScore = calculateActivityScore(profile);
+        console.log(`   📊 Activity Score: ${activityScore.score}/100`);
+
+        if (!activityScore.isActive) {
+          console.log(`   🚫 REJEITADO: Activity score ${activityScore.score} < 50`);
+          results.push({ username, action: 'skipped_activity', reason: `Activity score ${activityScore.score} < 50` });
+          continue;
+        }
+
+        // ========================================
+        // 4. VALIDAÇÃO IDIOMA (como rescue)
+        // ========================================
+        const languageDetection = await detectLanguage(profile.bio || '', username);
+        console.log(`   🌍 Idioma: ${languageDetection.language}`);
+
+        if (languageDetection.language !== 'pt') {
+          console.log(`   🚫 REJEITADO: Idioma ${languageDetection.language} != pt`);
+          results.push({ username, action: 'skipped_language', reason: `Idioma ${languageDetection.language} != pt` });
+          continue;
+        }
+
+        // ========================================
+        // 5. APROVADO - Extrair hashtags dos posts (IGUAL scrape-users)
+        // ========================================
+        console.log(`   ✅ APROVADO - Extraindo hashtags dos posts...`);
+
+        let hashtagsPosts: string[] | null = null;
+        try {
+          hashtagsPosts = await retryWithBackoff(
+            () => extractHashtagsFromPosts(page, 2),
+            2, 1000
+          );
+          if (hashtagsPosts && hashtagsPosts.length > 0) {
+            console.log(`   🏷️  ${hashtagsPosts.length} hashtags extraídas dos posts`);
+          } else {
+            console.log(`   ⚠️  Nenhuma hashtag encontrada nos posts`);
+          }
+        } catch (hashtagError: any) {
+          console.log(`   ⚠️  Erro ao extrair hashtags: ${hashtagError.message}`);
+        }
+
+        // ========================================
+        // 6. Preparar dados para INSERT
+        // ========================================
+        console.log(`   💾 Inserindo no banco...`);
+
+        // Obter dados de engajamento (se houver)
         const engagement = engagementMap.get(username);
-
-        // Calcular interaction_type e engagement_score
         let lastInteractionType: string | null = null;
         let engagementScore = 0;
         let hasCommented = false;
@@ -2607,61 +2901,12 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
             lastInteractionType = 'like';
             engagementScore += 10;
           }
-
           if (engagement.is_new_follower) {
             lastInteractionType = 'follow';
             engagementScore += 30;
-            followStatus = 'followed'; // Usar 'followed' em vez de 'following'
+            followStatus = 'followed';
             followedAt = engagement.notification_date || new Date().toISOString();
           }
-        }
-
-        // Se perfil já existe E temos dados de engajamento, ATUALIZAR
-        if (existing && engagement) {
-          console.log(`   🔄 @${username} já existe - ATUALIZANDO dados de engajamento...`);
-
-          const { error: updateError } = await supabase
-            .from('instagram_leads')
-            .update({
-              has_commented: hasCommented,
-              last_interaction_type: lastInteractionType,
-              interaction_count: (existing.interaction_count || 0) + 1,
-              engagement_score: (existing.engagement_score || 0) + engagementScore,
-              follow_status: followStatus !== 'not_followed' ? followStatus : undefined,
-              followed_at: followedAt || undefined,
-              last_check_notified_at: engagement.notification_date || new Date().toISOString()
-            })
-            .eq('username', username);
-
-          if (updateError) {
-            console.error(`   ❌ Erro ao atualizar @${username}:`, updateError.message);
-            errors.push({ username, error: updateError.message });
-          } else {
-            console.log(`   ✅ @${username} atualizado no banco com engagement_score +${engagementScore}`);
-            // Adicionar aos perfis validados para retornar na resposta
-            validatedProfiles.push({
-              username,
-              full_name: existing.full_name,
-              engagement_score: (existing.engagement_score || 0) + engagementScore,
-              interaction_count: (existing.interaction_count || 0) + 1,
-              last_interaction_type: lastInteractionType,
-              has_commented: hasCommented
-            } as any);
-          }
-          continue;
-        }
-
-        // Se perfil já existe MAS NÃO temos engagement_data, pular
-        if (existing && !engagement) {
-          console.log(`   ⚠️  @${username} já existe (sem dados de engajamento) - pulando`);
-          continue;
-        }
-
-        // Se perfil NÃO existe, buscar nos perfis scrapados e inserir
-        const profile = validatedProfiles.find(p => p.username === username);
-        if (!profile) {
-          console.log(`   ⚠️  @${username} não foi scrapado - pulando inserção`);
-          continue;
         }
 
         // 📱 EXTRAIR WHATSAPP: website wa.me e bio
@@ -2670,77 +2915,265 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
           profile.bio,
           profile.phone
         );
-
-        const { error: insertError } = await supabase
-          .from('instagram_leads')
-          .insert({
-            username: profile.username,
-            full_name: profile.full_name,
-            bio: profile.bio,
-            website: profile.website,
-            followers_count: profile.followers_count,
-            following_count: profile.following_count,
-            posts_count: profile.posts_count,
-            profile_pic_url: profile.profile_pic_url,
-            is_verified: profile.is_verified,
-            is_business_account: profile.is_business_account,
-            email: profile.email,
-            phone: profile.phone,
-            business_category: profile.business_category,
-            city: profile.city,
-            state: profile.state,
-            neighborhood: profile.neighborhood,
-            address: profile.address,
-            zip_code: profile.zip_code,
-            segment: target_segment || null,
-            search_term_used: 'engagement_notifications',
-            captured_at: new Date().toISOString(),
-            hashtags_bio: profile.hashtags_bio || null,
-            hashtags_posts: profile.hashtags_posts || null,
-            // Dados de engajamento
-            has_commented: hasCommented,
-            last_interaction_type: lastInteractionType,
-            interaction_count: engagementScore > 0 ? 1 : 0,
-            engagement_score: engagementScore,
-            follow_status: followStatus,
-            followed_at: followedAt,
-            last_check_notified_at: engagement?.notification_date || null,
-            // Flags de enriquecimento - novo lead precisa ser processado
-            dado_enriquecido: false,
-            url_enriched: false,
-            // 📱 WhatsApp extraído no momento do scrape
-            ...(waExtraction.whatsapp_number && {
-              whatsapp_number: waExtraction.whatsapp_number,
-              whatsapp_source: waExtraction.whatsapp_source,
-              whatsapp_verified: waExtraction.whatsapp_verified
-            })
-          });
-
-        if (insertError) {
-          console.error(`   ❌ Erro ao salvar @${profile.username}:`, insertError.message);
-          errors.push({ username: profile.username, error: insertError.message });
-        } else {
-          console.log(`   ✅ @${username} salvo no banco`);
+        if (waExtraction.whatsapp_number) {
+          console.log(`   📱 WhatsApp encontrado: ${waExtraction.whatsapp_number} (${waExtraction.whatsapp_source})`);
         }
 
-      } catch (dbError: any) {
-        console.error(`   ❌ Erro BD @${username}:`, dbError.message);
-        errors.push({ username, error: dbError.message });
+        // Calcular lead_score (activity_score 0-100 → lead_score 0-1)
+        const leadScore = activityScore.score ? activityScore.score / 100 : null;
+
+        // Extrair hashtags_bio
+        const hashtagsBio = profile.bio
+          ? (profile.bio.match(/#\w+/g) || []).map((h: string) => h.toLowerCase())
+          : null;
+
+        // ========================================
+        // 6. INSERT ou UPDATE (enriquecimento)
+        // ========================================
+        if (needsEnrichment && existingLeadData) {
+          // 🔄 UPDATE: Enriquecer lead existente com dados que faltam
+          console.log(`   🔄 Atualizando lead existente...`);
+
+          const updateData: Record<string, any> = {
+            updated_at: new Date().toISOString()
+          };
+
+          // Só atualiza campos que estavam vazios (prioridade: Instagram > Google Maps)
+          if (!existingLeadData.city) {
+            const cityValue = profile.city || googleMapsData?.city;
+            if (cityValue) updateData.city = cityValue;
+          }
+          if (!existingLeadData.state) {
+            const stateValue = profile.state || googleMapsData?.state;
+            if (stateValue) updateData.state = stateValue;
+          }
+          if (!existingLeadData.email) {
+            const emailValue = profile.email || googleMapsData?.email;
+            if (emailValue) updateData.email = emailValue;
+          }
+          if (!existingLeadData.whatsapp_number) {
+            // Prioridade: Instagram > Google Maps
+            if (waExtraction.whatsapp_number) {
+              updateData.whatsapp_number = waExtraction.whatsapp_number;
+              updateData.whatsapp_source = waExtraction.whatsapp_source;
+              updateData.whatsapp_verified = waExtraction.whatsapp_verified;
+            } else if (googleMapsData?.phone_whatsapp) {
+              updateData.whatsapp_number = googleMapsData.phone_whatsapp;
+              updateData.whatsapp_source = 'google_maps';
+              updateData.whatsapp_verified = [];
+            }
+          }
+          // Adiciona endereço completo do Google Maps se não tiver
+          if (googleMapsData?.full_address && !profile.address) {
+            updateData.address = googleMapsData.full_address;
+          }
+
+          // Atualiza também dados dinâmicos
+          updateData.followers_count = profile.followers_count;
+          updateData.following_count = profile.following_count;
+          updateData.posts_count = profile.posts_count;
+          updateData.activity_score = activityScore.score;
+          updateData.is_active = activityScore.isActive;
+
+          const { error: updateError } = await supabase
+            .from('instagram_leads')
+            .update(updateData)
+            .eq('id', existingLeadData.id);
+
+          if (updateError) {
+            console.log(`   ❌ Erro ao atualizar: ${updateError.message}`);
+            errors.push({ username, error: updateError.message });
+            results.push({ username, action: 'error', reason: `Erro UPDATE: ${updateError.message}` });
+          } else {
+            const fieldsUpdated = Object.keys(updateData).filter(k => k !== 'updated_at').join(', ');
+            console.log(`   ✅ Atualizado: ${fieldsUpdated}`);
+            results.push({ username, action: 'updated', lead_id: existingLeadData.id, reason: `Campos: ${fieldsUpdated}` });
+          }
+        } else {
+          // 🆕 INSERT: Novo lead
+          console.log(`   💾 Inserindo novo lead...`);
+
+          // Merge dados: Instagram tem prioridade, Google Maps é fallback
+          const finalCity = profile.city || googleMapsData?.city || null;
+          const finalState = profile.state || googleMapsData?.state || null;
+          const finalEmail = profile.email || googleMapsData?.email || null;
+          const finalAddress = profile.address || googleMapsData?.full_address || null;
+
+          // WhatsApp: prioridade Instagram > Google Maps
+          let finalWhatsappData: { whatsapp_number: string; whatsapp_source: string; whatsapp_verified: any } | null = null;
+          if (waExtraction.whatsapp_number) {
+            finalWhatsappData = {
+              whatsapp_number: waExtraction.whatsapp_number,
+              whatsapp_source: waExtraction.whatsapp_source || 'instagram',
+              whatsapp_verified: waExtraction.whatsapp_verified
+            };
+          } else if (googleMapsData?.phone_whatsapp) {
+            finalWhatsappData = {
+              whatsapp_number: googleMapsData.phone_whatsapp,
+              whatsapp_source: 'google_maps',
+              whatsapp_verified: []
+            };
+          }
+
+          if (googleMapsData) {
+            console.log(`   🗺️  Merge com Google Maps: city=${finalCity}, whatsapp=${finalWhatsappData ? 'SIM' : 'NÃO'}`);
+          }
+
+          const { data: newLead, error: insertError } = await supabase
+            .from('instagram_leads')
+            .insert({
+              username: profile.username,
+              full_name: profile.full_name,
+              bio: profile.bio,
+              website: profile.website,
+              followers_count: profile.followers_count,
+              following_count: profile.following_count,
+              posts_count: profile.posts_count,
+              profile_pic_url: profile.profile_pic_url,
+              is_verified: profile.is_verified,
+              is_business_account: profile.is_business_account,
+              email: finalEmail,
+              phone: profile.phone,
+              business_category: profile.business_category,
+              city: finalCity,
+              state: finalState,
+              neighborhood: profile.neighborhood,
+              address: finalAddress,
+              zip_code: profile.zip_code,
+              // Scores e validações
+              activity_score: activityScore.score,
+              is_active: activityScore.isActive,
+              language: languageDetection.language,
+              lead_score: leadScore,
+              // Hashtags
+              hashtags_bio: hashtagsBio && hashtagsBio.length > 0 ? hashtagsBio : null,
+              hashtags_posts: hashtagsPosts && hashtagsPosts.length > 0 ? hashtagsPosts : null,
+              // Metadados
+              segment: target_segment || null,
+              search_term_used: target_segment || googleMapsData?.search_theme || null,
+              lead_source: 'scrape_input_users',
+              captured_at: new Date().toISOString(),
+              // Dados de engajamento (se houver)
+              has_commented: hasCommented,
+              last_interaction_type: lastInteractionType,
+              interaction_count: engagementScore > 0 ? 1 : 0,
+              engagement_score: engagementScore,
+              follow_status: followStatus,
+              followed_at: followedAt,
+              last_check_notified_at: engagement?.notification_date || null,
+              // 📱 WhatsApp (merge Instagram + Google Maps)
+              ...(finalWhatsappData && {
+                whatsapp_number: finalWhatsappData.whatsapp_number,
+                whatsapp_source: finalWhatsappData.whatsapp_source,
+                whatsapp_verified: finalWhatsappData.whatsapp_verified
+              }),
+              // ========================================
+              // FLAGS DE ENRIQUECIMENTO (como rescue)
+              // Deixa preparado para pipelines processarem
+              // ========================================
+              dado_enriquecido: false,
+              url_enriched: false,
+              hashtags_extracted: false,
+              hashtags_ready_for_embedding: false
+            })
+            .select()
+            .single();
+
+          if (insertError) {
+            console.log(`   ❌ Erro ao salvar: ${insertError.message}`);
+            errors.push({ username, error: insertError.message });
+            results.push({ username, action: 'error', reason: `Erro DB: ${insertError.message}` });
+          } else {
+            console.log(`   ✅ Salvo com ID: ${newLead?.id}`);
+            console.log(`   🏷️  Hashtags bio: ${hashtagsBio?.length || 0}`);
+            console.log(`   🏷️  Hashtags posts: ${hashtagsPosts?.length || 0}`);
+            results.push({ username, action: 'inserted', lead_id: newLead?.id });
+          }
+        }
+
+        } catch (profileError: any) {
+          console.log(`   ❌ Erro: ${profileError.message}`);
+
+          // Se frame desconectou, recriar browser para próximos perfis
+          const isDetachedFrame = profileError.message?.includes('detached Frame') ||
+                                  profileError.message?.includes('Target closed') ||
+                                  profileError.message?.includes('Session closed');
+
+          if (isDetachedFrame) {
+            console.log(`   🔄 Recriando browser...`);
+            try {
+              await browser.close();
+            } catch {}
+            try {
+              browser = await puppeteer.default.launch({
+                headless: false,
+                userDataDir: GOOGLE_INPUT_USER_DATA_DIR,
+                args: [
+                  '--no-sandbox',
+                  '--disable-setuid-sandbox',
+                  '--disable-dev-shm-usage',
+                  '--disable-blink-features=AutomationControlled',
+                  '--window-size=1280,800'
+                ],
+                defaultViewport: { width: 1280, height: 800 }
+              });
+              page = await browser.newPage();
+              await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+              console.log(`   ✅ Browser recriado`);
+            } catch (recreateErr: any) {
+              console.log(`   ❌ Falha ao recriar browser: ${recreateErr.message}`);
+            }
+          }
+
+          errors.push({ username, error: profileError.message });
+          results.push({ username, action: 'error', reason: profileError.message });
+        }
+
+        // Delay entre perfis (como rescue)
+        if (i < usernames.length - 1) {
+          console.log(`   ⏳ Aguardando ${delay_ms}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay_ms));
+        }
       }
+
+    } finally {
+      // Fechar sessão do browser (como rescue)
+      await cleanup();
+      console.log(`   🧹 Sessão de browser encerrada`);
     }
+
+    // Contadores finais
+    const inserted = results.filter(r => r.action === 'inserted').length;
+    const updated = results.filter(r => r.action === 'updated').length;
+    const skippedComplete = results.filter(r => r.action === 'skipped_complete').length;
+    const skippedActivity = results.filter(r => r.action === 'skipped_activity').length;
+    const skippedLanguage = results.filter(r => r.action === 'skipped_language').length;
+    const skippedNotFound = results.filter(r => r.action === 'skipped_not_found').length;
+    const errorsCount = results.filter(r => r.action === 'error').length;
 
     console.log(`\n✅ [${reqId}] ========== SCRAPE-INPUT-USERS CONCLUÍDO ==========`);
     console.log(`📊 [${reqId}] Resumo:`);
-    console.log(`   - Usernames recebidos: ${usernames.length}`);
-    console.log(`   - Perfis scrapados: ${validatedProfiles.length}`);
-    console.log(`   - Erros: ${errors.length}`);
+    console.log(`   🆕 Inseridos: ${inserted}`);
+    console.log(`   🔄 Enriquecidos: ${updated}`);
+    console.log(`   ✅ Já completos: ${skippedComplete}`);
+    console.log(`   🚫 Activity < 50: ${skippedActivity}`);
+    console.log(`   🚫 Idioma != pt: ${skippedLanguage}`);
+    console.log(`   ⚠️  Não encontrados: ${skippedNotFound}`);
+    console.log(`   ❌ Erros: ${errorsCount}`);
 
     return res.status(200).json({
       success: true,
-      scraped_count: validatedProfiles.length,
-      total_requested: usernames.length,
-      profiles: validatedProfiles,
-      errors: errors.length > 0 ? errors : undefined
+      data: {
+        results,
+        total_requested: usernames.length,
+        total_inserted: inserted,
+        total_updated: updated,
+        total_skipped_complete: skippedComplete,
+        total_skipped_activity: skippedActivity,
+        total_skipped_language: skippedLanguage,
+        total_skipped_not_found: skippedNotFound,
+        total_errors: errorsCount
+      }
     });
 
   } catch (error: any) {
