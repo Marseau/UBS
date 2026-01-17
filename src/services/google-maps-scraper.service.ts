@@ -49,7 +49,8 @@ export interface GoogleLead {
   full_address?: string;      // Endereço completo do Google Maps
   city?: string;
   state?: string;
-  phone_whatsapp?: string;    // Telefone brasileiro normalizado E.164
+  phone?: string;             // Telefone normalizado E.164 (qualquer)
+  phone_whatsapp?: string;    // WhatsApp CONFIRMADO (evidência wa.me no website)
   email?: string;             // Email extraído do website
   website?: string;
   instagram_username: string; // Required - only persist if we have this
@@ -2294,9 +2295,22 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
         result.with_instagram++;
 
         // Normalize phone to E.164 (accepts 10 or 11 digits)
-        const whatsappNumber = extractWhatsAppNumber(business.phone || '');
-        if (whatsappNumber) {
-          console.log(`   📱 WhatsApp: ${whatsappNumber}`);
+        const normalizedPhone = extractWhatsAppNumber(business.phone || '');
+
+        // Só marca como WhatsApp se tiver EVIDÊNCIA REAL no website (wa.me ou api.whatsapp)
+        const hasWhatsAppEvidence = websiteHtml && (
+          websiteHtml.includes('wa.me/') ||
+          websiteHtml.includes('api.whatsapp.com') ||
+          websiteHtml.includes('whatsapp://') ||
+          /href=["'][^"']*whatsapp/i.test(websiteHtml)
+        );
+
+        const confirmedWhatsApp = hasWhatsAppEvidence ? normalizedPhone : null;
+
+        if (confirmedWhatsApp) {
+          console.log(`   📱 WhatsApp CONFIRMADO: ${confirmedWhatsApp}`);
+        } else if (normalizedPhone) {
+          console.log(`   📞 Telefone: ${normalizedPhone} (sem evidência de WhatsApp)`);
         } else if (business.phone) {
           console.log(`   📞 Telefone inválido: ${business.phone}`);
         }
@@ -2311,7 +2325,8 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
         const lead: GoogleLead = {
           name: business.name,
           instagram_username: instagram,
-          phone_whatsapp: whatsappNumber || undefined,
+          phone: normalizedPhone || undefined,
+          phone_whatsapp: confirmedWhatsApp || undefined,
           email: email || undefined,
           full_address: business.address,
           city: parsedCity || cidade,
