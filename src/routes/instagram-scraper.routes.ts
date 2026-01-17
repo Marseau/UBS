@@ -2975,6 +2975,15 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
           updateData.activity_score = activityScore.score;
           updateData.is_active = activityScore.isActive;
 
+          // ========================================
+          // RESETAR FLAGS DE ENRIQUECIMENTO
+          // Para que pipelines reprocessem o lead
+          // ========================================
+          updateData.dado_enriquecido = false;
+          updateData.url_enriched = false;
+          updateData.hashtags_extracted = false;
+          updateData.hashtags_ready_for_embedding = false;
+
           const { error: updateError } = await supabase
             .from('instagram_leads')
             .update(updateData)
