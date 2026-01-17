@@ -389,8 +389,11 @@ export class UrlScraperService {
    * Validate Brazilian phone number format
    * @param phone - Phone number string (can contain formatting)
    * @returns true if valid Brazilian phone
-   * - 11 dígitos: celular (DDD + 9 + 8 dígitos)
-   * - 10 dígitos: fixo apenas se começa com 2,3,4,5 (rejeita 6,7,8,9 = celular sem 9)
+   * - 11 dígitos: celular com 9 (DDD + 9 + 8 dígitos)
+   * - 10 dígitos: celular sem 9 ou fixo (DDD + 8 dígitos)
+   *
+   * IMPORTANTE: WhatsApp aceita números com ou sem o 9º dígito.
+   * A regra do 9 é para discagem telefônica, não para WhatsApp.
    */
   private static isValidBrazilianPhone(phone: string): boolean {
     let cleaned = phone.replace(/[^0-9]/g, '');
@@ -403,21 +406,9 @@ export class UrlScraperService {
     }
 
     // Must be 10 or 11 digits (with area code)
+    // 10 dígitos = celular sem 9 ou fixo
+    // 11 dígitos = celular com 9
     if (cleaned.length !== 10 && cleaned.length !== 11) return false;
-
-    // If 11 digits, 3rd digit must be 9 (mobile)
-    if (cleaned.length === 11 && cleaned[2] !== '9') return false;
-
-    // If 10 digits, check if it's landline (2,3,4,5) or mobile without 9 (6,7,8,9)
-    if (cleaned.length === 10) {
-      const firstDigitAfterDDD = cleaned.charAt(2);
-      // Celular sem o 9 (começa com 6,7,8,9) - INVÁLIDO
-      if (['6', '7', '8', '9'].includes(firstDigitAfterDDD)) {
-        console.log(`   ⚠️ [VALIDATE] Número rejeitado (celular sem 9): 55${cleaned}`);
-        return false;
-      }
-      // Fixo (começa com 2,3,4,5) - válido
-    }
 
     // Area code must be between 11-99
     const areaCode = parseInt(cleaned.substring(0, 2));

@@ -190,25 +190,21 @@ export function extractWhatsAppFromBio(bio: string | null | undefined): string |
 
 /**
  * Valida se o número está em formato Brasil válido para WhatsApp
- * - 13 dígitos: celular (55 + DDD + 9 + 8 dígitos)
- * - 12 dígitos: fixo apenas se começa com 2,3,4,5 após DDD
- * - Rejeita 12 dígitos começando com 6,7,8,9 (celular sem o 9 = inválido)
+ * - 13 dígitos: celular com 9 (55 + DDD + 9 + 8 dígitos)
+ * - 12 dígitos: celular sem 9 ou fixo (55 + DDD + 8 dígitos)
+ *
+ * IMPORTANTE: WhatsApp aceita números com ou sem o 9º dígito.
+ * A regra do 9 é para discagem telefônica, não para WhatsApp.
  */
 export function isValidBrazilNumber(number: string): boolean {
   if (!number.startsWith('55')) return false;
 
-  // 13 dígitos = celular completo (55 + DDD + 9XXXXXXXX)
+  // 13 dígitos = celular com 9 (55 + DDD + 9XXXXXXXX)
   if (number.length === 13) return true;
 
-  // 12 dígitos = pode ser fixo ou celular incompleto
-  if (number.length === 12) {
-    const firstDigitAfterDDD = number.charAt(4);
-    // Fixo começa com 2,3,4,5 - válido
-    if (['2', '3', '4', '5'].includes(firstDigitAfterDDD)) return true;
-    // Celular começa com 6,7,8,9 mas falta o 9 - INVÁLIDO
-    console.log(`   ⚠️ [WA-VALIDATE] Número rejeitado (celular sem 9): ${number}`);
-    return false;
-  }
+  // 12 dígitos = celular sem 9 ou fixo (55 + DDD + XXXXXXXX)
+  // WhatsApp aceita ambos os formatos
+  if (number.length === 12) return true;
 
   return false;
 }
