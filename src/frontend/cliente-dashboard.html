@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard da Campanha | Portal AIC</title>
+  <title>Analytics da Campanha | AIC</title>
   <link rel="icon" type="image/png" href="/assets/AIC/Imagens%20Vetor%20/AIC%20Icone%20Cheio.png">
   <meta name="theme-color" content="#0C1B33">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -764,7 +764,10 @@
         }
 
         if (!token) {
-          window.location.href = '/cliente/login?redirect=/cliente/dashboard';
+          const isAdminPath = window.location.pathname.startsWith('/aic/');
+          const loginUrl = isAdminPath ? '/aic/login' : '/cliente/login';
+          const redirectUrl = isAdminPath ? '/aic/campaign-analytics' : '/cliente/dashboard';
+          window.location.href = `${loginUrl}?redirect=${redirectUrl}`;
           return;
         }
 
@@ -784,8 +787,13 @@
     }
 
     function setupActionButtons() {
-      document.getElementById('btnLeads').href = `/cliente/leads?campaign=${campaignId}`;
-      document.getElementById('btnBriefing').href = `/cliente/briefing?campaign=${campaignId}`;
+      // Detecta se é admin ou cliente baseado no role ou na URL
+      const role = localStorage.getItem('aic_user_role');
+      const isAdmin = role === 'admin' || window.location.pathname.startsWith('/aic/');
+      const baseUrl = isAdmin ? '/aic' : '/cliente';
+
+      document.getElementById('btnLeads').href = `${baseUrl}/leads-entregues?campaign=${campaignId}`;
+      document.getElementById('btnBriefing').href = `${baseUrl}/briefing?campaign=${campaignId}`;
     }
 
     async function loadDashboardData() {
@@ -977,13 +985,15 @@
     }
 
     function showError(message) {
+      const isAdminPath = window.location.pathname.startsWith('/aic/');
+      const backUrl = isAdminPath ? '/aic/campanhas' : '/cliente';
       document.getElementById('loadingState').innerHTML = `
         <div class="empty-icon">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         </div>
         <h3 style="margin-bottom: 8px;">${message}</h3>
         <p style="color: var(--aic-gray); margin-bottom: 20px;">Verifique se voce tem acesso a esta campanha.</p>
-        <a href="/cliente" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; background: var(--aic-green); color: var(--aic-navy); border-radius: 10px; text-decoration: none; font-weight: 600;">
+        <a href="${backUrl}" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; background: var(--aic-green); color: var(--aic-navy); border-radius: 10px; text-decoration: none; font-weight: 600;">
           Voltar para Campanhas
         </a>
       `;
@@ -1017,7 +1027,14 @@
       }
     }
     window.toggleMobileSidebar = toggleMobileSidebar;
+
+    // Carrega o sidebar correto baseado no contexto (admin ou cliente)
+    (function() {
+      const isAdminPath = window.location.pathname.startsWith('/aic/');
+      const sidebarScript = document.createElement('script');
+      sidebarScript.src = isAdminPath ? '/components/aic-sidebar.js' : '/components/aic-client-sidebar.js';
+      document.body.appendChild(sidebarScript);
+    })();
   </script>
-  <script src="/components/aic-client-sidebar.js"></script>
 </body>
 </html>

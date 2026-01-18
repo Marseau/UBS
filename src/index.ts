@@ -1342,8 +1342,11 @@ app.get('/aic/campanhas', serveAICPage('aic-campaigns-dashboard.html'));
 // AIC Admin - Visao Geral da Campanha
 app.get('/aic/visao-geral', serveAICPage('aic-dashboard-campaign.html'));
 
-// AIC Admin - Analytics/Metricas
+// AIC Admin - Analytics/Metricas (visao geral)
 app.get('/aic/analytics', serveAICPage('aic-dashboard-prova.html'));
+
+// AIC Admin - Analytics da Campanha (metricas especificas)
+app.get('/aic/campaign-analytics', serveAICPage('cliente-dashboard.html'));
 
 // AIC Admin - Briefing
 app.get('/aic/briefing', serveAICPage('aic-campaign-briefing.html'));
@@ -1351,6 +1354,9 @@ app.get('/aic/briefing', serveAICPage('aic-campaign-briefing.html'));
 // AIC Admin - Credenciais/Onboarding
 app.get('/aic/credenciais', serveAICPage('aic-campaign-onboarding.html'));
 app.get('/aic/onboarding', serveAICPage('aic-campaign-onboarding.html'));
+
+// AIC Admin - Dashboard da Campanha
+app.get('/aic/dashboard', serveAICPage('aic-dashboard-campaign.html'));
 
 // AIC Admin - Financeiro
 app.get('/aic/financeiro', serveAICPage('aic-financial-dashboard.html'));

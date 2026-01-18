@@ -266,9 +266,10 @@
 
   function buildSidebar() {
     const role = getUserRole();
-    const isAdmin = role === 'admin';
-    const isInCampaign = !!campaignId;
     const isClientPortal = currentPath.startsWith('/cliente');
+    // Se está no portal cliente, mostra menu cliente (mesmo se for admin visualizando)
+    const isAdmin = isClientPortal ? false : (role === 'admin');
+    const isInCampaign = !!campaignId;
 
     const nav = document.createElement('nav');
     nav.className = 'aic-sidebar';
@@ -306,14 +307,13 @@
       navContent += '<a href="' + baseUrl + '/contrato?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('contrato') ? ' active' : '') + '">Contrato</a>';
       navContent += '<a href="' + baseUrl + '/briefing?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('briefing') ? ' active' : '') + '">Briefing</a>';
       navContent += '<a href="' + baseUrl + '/onboarding?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('onboarding') ? ' active' : '') + '">Onboarding</a>';
-      navContent += '<a href="' + baseUrl + '/dashboard?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('dashboard') && !isActive('financeiro') ? ' active' : '') + '">Dashboard</a>';
       navContent += '</div>';
 
       // Admin extras dentro da campanha
       if (isAdmin) {
         navContent += '<div class="aic-sidebar-section">';
         navContent += '<div class="aic-sidebar-section-title">Gestao</div>';
-        navContent += '<a href="/aic/analytics?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('analytics') ? ' active' : '') + '">Analytics</a>';
+        navContent += '<a href="/aic/campaign-analytics?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('campaign-analytics') ? ' active' : '') + '">Analytics</a>';
         navContent += '<a href="/aic/leads-entregues?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('leads-entregues') ? ' active' : '') + '">Leads Entregues</a>';
         navContent += '</div>';
       }
