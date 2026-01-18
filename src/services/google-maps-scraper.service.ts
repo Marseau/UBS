@@ -96,6 +96,9 @@ export interface ScrapeResult {
 async function createBrowser(): Promise<Browser> {
   console.log('🚀 [GOOGLE-MAPS] Iniciando Chrome for Testing...');
 
+  // Limpar processos órfãos do Google Maps antes de iniciar novo browser
+  await cleanupOrphanProcesses();
+
   const executablePath = fs.existsSync(CHROME_EXECUTABLE_PATH)
     ? CHROME_EXECUTABLE_PATH
     : undefined;
@@ -185,6 +188,27 @@ export async function closeBrowser(browser: Browser | null): Promise<void> {
       console.log('🧹 [GOOGLE-MAPS] Browser já estava fechado');
     }
   }
+}
+
+/**
+ * Cleanup orphan Chrome processes from Google Maps scraper
+ * Only kills Chrome processes that are using google-maps user-data-dir
+ * Runs before starting a new browser to ensure clean state
+ */
+async function cleanupOrphanProcesses(): Promise<void> {
+  return new Promise((resolve) => {
+    // Kill apenas processos Chrome que usam google-maps user-data-dir
+    // macOS xargs não suporta -r, então usamos if + wc para checar se há PIDs
+    const cmd = `pids=$(ps aux | grep "Chrome for Testing" | grep "google-maps" | grep -v grep | awk '{print $2}'); if [ -n "$pids" ]; then echo $pids | xargs kill -9 2>/dev/null && echo "killed"; fi`;
+
+    exec(cmd, (error, stdout, stderr) => {
+      if (stdout && stdout.includes('killed')) {
+        console.log('🧹 [GOOGLE-MAPS] Processos órfãos limpos');
+      }
+      // Aguardar recursos serem liberados
+      setTimeout(resolve, 500);
+    });
+  });
 }
 
 /**
@@ -1983,10 +2007,10 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
           page = await browser.newPage();
           await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-          // Navegar de volta para Google Maps
-          const searchQuery = localizacao ? `${localizacao}, ${termo}` : `${cidade}, ${termo}`;
-          console.log(`   🔄 Navegando de volta: "${searchQuery}"`);
-          await page.goto(`https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`, {
+          // Navegar de volta para Google Maps (usando coordenadas se disponíveis)
+          const restartUrl = searchUrl || `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`;
+          console.log(`   🔄 Navegando de volta: "${searchUrl ? `coords @${lat},${lng}` : searchQuery}"`);
+          await page.goto(restartUrl, {
             waitUntil: 'networkidle2',
             timeout: 60000
           });
@@ -2081,9 +2105,10 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
           page = await browser.newPage();
           await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-          const searchQuery = localizacao ? `${localizacao}, ${termo}` : `${cidade}, ${termo}`;
-          console.log(`   🔍 Navegando para busca: "${searchQuery}"`);
-          await page.goto(`https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`, {
+          // Usar coordenadas se disponíveis
+          const restartUrl2 = searchUrl || `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`;
+          console.log(`   🔍 Navegando para busca: "${searchUrl ? `coords @${lat},${lng}` : searchQuery}"`);
+          await page.goto(restartUrl2, {
             waitUntil: 'networkidle2',
             timeout: 60000
           });
@@ -2176,9 +2201,10 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
             page = await browser.newPage();
             await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-            const searchQuery = localizacao ? `${localizacao}, ${termo}` : `${cidade}, ${termo}`;
-            console.log(`   🔍 Navegando para busca: "${searchQuery}"`);
-            await page.goto(`https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`, {
+            // Usar coordenadas se disponíveis
+            const restartUrl3 = searchUrl || `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`;
+            console.log(`   🔍 Navegando para busca: "${searchUrl ? `coords @${lat},${lng}` : searchQuery}"`);
+            await page.goto(restartUrl3, {
               waitUntil: 'networkidle2',
               timeout: 60000
             });
@@ -2413,10 +2439,10 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
           page = await browser.newPage();
           await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-          // Navegar de volta para Google Maps com a mesma busca
-          const searchQuery = localizacao ? `${localizacao}, ${termo}` : `${cidade}, ${termo}`;
-          console.log(`   🔄 Navegando de volta para Google Maps: "${searchQuery}"`);
-          await page.goto(`https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`, {
+          // Navegar de volta para Google Maps (usando coordenadas se disponíveis)
+          const restartUrl4 = searchUrl || `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`;
+          console.log(`   🔄 Navegando de volta para Google Maps: "${searchUrl ? `coords @${lat},${lng}` : searchQuery}"`);
+          await page.goto(restartUrl4, {
             waitUntil: 'networkidle2',
             timeout: 60000
           });
@@ -2469,13 +2495,13 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
     console.error(`\n❌ [GOOGLE-MAPS] Erro fatal:`, error.message);
     result.errors.push(error.message);
   } finally {
-    // Fechar page e browser
+    // Fechar page e browser usando forceClose (com timeout e kill)
     if (page) {
       try { await page.close(); } catch (e) {}
     }
     if (browser) {
-      try { await browser.close(); } catch (e) {}
-      console.log('🔒 Browser fechado');
+      await forceCloseBrowser(browser);
+      console.log('🔒 Browser fechado (forceClose)');
     }
   }
 
