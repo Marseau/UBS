@@ -273,8 +273,20 @@ export function calculateActivityScore(profile: ProfileForScoring): ActivityScor
  * @returns Array de hashtags únicas extraídas dos posts ou null se nenhuma encontrada
  */
 export async function extractHashtagsFromPosts(page: any, maxPosts: number = 4): Promise<string[] | null> {
+  // ⏱️ TIMEOUT GLOBAL DE 3 MINUTOS - Se não responder, aborta e retorna null
+  const GLOBAL_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutos
+  const startTime = Date.now();
+
+  const checkGlobalTimeout = () => {
+    const elapsed = Date.now() - startTime;
+    if (elapsed > GLOBAL_TIMEOUT_MS) {
+      const elapsedMin = (elapsed / 60000).toFixed(1);
+      throw new Error(`GLOBAL_TIMEOUT: Extração de hashtags excedeu ${elapsedMin}min - abortando`);
+    }
+  };
+
   try {
-    console.log(`   🔍 Clicando nos últimos ${maxPosts} posts para extrair hashtags (3s por post, timeout individual de 15s)...`);
+    console.log(`   🔍 Clicando nos últimos ${maxPosts} posts para extrair hashtags (timeout global: 3min)...`);
 
     const allHashtags = new Set<string>();
     const profileUrl = page.url();
@@ -284,12 +296,33 @@ export async function extractHashtagsFromPosts(page: any, maxPosts: number = 4):
 
     // Clicar nos últimos N posts
     for (let i = 0; i < maxPosts; i++) {
+      // ⏱️ Verificar timeout global antes de cada post
+      checkGlobalTimeout();
+
+      // 🔍 Verificar se página ainda está válida (detecta tela preta/corrompida)
+      try {
+        const isPageValid = await Promise.race([
+          page.evaluate(() => document.body !== null).catch(() => false),
+          new Promise<boolean>(resolve => setTimeout(() => resolve(false), 5000))
+        ]);
+
+        if (!isPageValid) {
+          console.log(`   ❌ Página corrompida/tela preta detectada - abortando extração de hashtags`);
+          throw new Error('PAGE_CORRUPTED: Browser page is not responding');
+        }
+      } catch (pageCheckError: any) {
+        if (pageCheckError.message.includes('PAGE_CORRUPTED') || pageCheckError.message.includes('GLOBAL_TIMEOUT')) {
+          throw pageCheckError;
+        }
+        console.log(`   ⚠️  Erro ao verificar página: ${pageCheckError.message} - tentando continuar`);
+      }
+
       try {
         // Voltar para a página do perfil se não for a primeira iteração
         if (i > 0) {
           await Promise.race([
-            page.goto(profileUrl, { waitUntil: 'networkidle2', timeout: 15000 }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Navigation timeout')), 15000))
+            page.goto(profileUrl, { waitUntil: 'networkidle2', timeout: 10000 }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Navigation timeout')), 10000))
           ]).catch((err: Error) => {
             console.log(`   ⚠️  Timeout ao retornar ao perfil (post ${i + 1}): ${err.message}`);
             return null;
@@ -412,6 +445,12 @@ export async function extractHashtagsFromPosts(page: any, maxPosts: number = 4):
         await new Promise(resolve => setTimeout(resolve, 1000));
 
       } catch (postError: any) {
+        // 🚨 Propagar erros críticos (não continuar)
+        if (postError.message.includes('GLOBAL_TIMEOUT') || postError.message.includes('PAGE_CORRUPTED')) {
+          console.log(`   🚨 Erro crítico: ${postError.message}`);
+          throw postError;
+        }
+
         console.log(`   ⚠️  Erro ao processar post ${i + 1}: ${postError.message}`);
         // Tentar fechar modal se houver erro
         try {
@@ -435,7 +474,14 @@ export async function extractHashtagsFromPosts(page: any, maxPosts: number = 4):
     return finalHashtags;
 
   } catch (error: any) {
-    console.log(`   ⚠️  Erro ao extrair hashtags dos posts: ${error.message}`);
+    // 🚨 Log diferenciado para erros críticos
+    if (error.message.includes('GLOBAL_TIMEOUT')) {
+      console.log(`   ⏱️  TIMEOUT GLOBAL atingido (3min) - extração de hashtags abortada`);
+    } else if (error.message.includes('PAGE_CORRUPTED')) {
+      console.log(`   🖥️  PÁGINA CORROMPIDA/TELA PRETA - extração de hashtags abortada`);
+    } else {
+      console.log(`   ⚠️  Erro ao extrair hashtags dos posts: ${error.message}`);
+    }
     return null;
   }
 }
