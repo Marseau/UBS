@@ -21,7 +21,7 @@ import * as path from "path";
 export interface DocumentUpload {
   campaignId: string | null; // null = documento global
   title: string;
-  docType: "knowledge" | "faq" | "product" | "policy" | "script" | "other";
+  docType: "briefing" | "landing_page" | "knowledge" | "faq" | "product" | "policy" | "script" | "other";
   content?: string; // Texto direto
   filePath?: string; // Caminho do arquivo
   fileBuffer?: Buffer; // Buffer do arquivo

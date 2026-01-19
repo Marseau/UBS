@@ -203,7 +203,8 @@
       transition: color 0.2s;
     }
     .nav-links a:hover { color: var(--aic-green); }
-    .nav-btn-secondary {
+    .nav-btn-secondary,
+    .nav-btn-portal {
       background: transparent;
       color: var(--aic-white) !important;
       padding: 10px 20px;
@@ -212,7 +213,8 @@
       border: 1px solid var(--aic-green);
       transition: all 0.2s;
     }
-    .nav-btn-secondary:hover {
+    .nav-btn-secondary:hover,
+    .nav-btn-portal:hover {
       background: var(--aic-green);
       color: var(--aic-navy) !important;
     }
@@ -1518,7 +1520,7 @@
           return { success: false, error: authError.message };
         }
 
-        // Criar perfil em public.users
+        // Criar perfil em public.users (cliente AIC)
         if (authData?.user?.id) {
           const { error: profileError } = await supabaseLanding
             .from('users')
@@ -1527,7 +1529,8 @@
               email: email,
               name: name,
               phone: phone,
-              tipo_user: 'normal',
+              tipo_user: 'client',
+              account_type: 'real',
               user_origin: origin, // 'aic' ou 'google'
               user_app: 'aic',
               created_at: new Date().toISOString()
@@ -1562,10 +1565,9 @@
         <a href="#metodologia">Metodologia</a>
         <a href="#investimento">Investimento</a>
         <a href="/aic-docs.html">Docs</a>
-        <a href="/aic-campaigns-dashboard.html">Campanhas</a>
-        <a href="/aic-campaign-onboarding.html">Nova Campanha</a>
-        <a href="/aic-login.html" class="nav-btn-secondary">Entrar</a>
-        <a href="https://wa.me/5511999040605?text=Olá! Vim pela landing da AIC e quero saber mais.&utm_source=organic&utm_medium=landing&utm_campaign=aic" class="nav-cta" target="_blank" data-umami-event="cta_nav_whatsapp">Falar com Especialista</a>
+        <a href="/aic-login.html" class="nav-btn-secondary" id="nav-btn-entrar">Entrar</a>
+        <a href="/cliente/proposta" class="nav-btn-portal" id="nav-btn-portal" style="display: none;">Voltar ao Portal</a>
+        <a href="https://wa.me/5511999040605?text=Olá! Vim pela landing da AIC e gostaria de saber mais." target="_blank" class="nav-cta" data-umami-event="cta_nav_cadastro">Falar com Especialista</a>
       </div>
     </div>
   </nav>
@@ -1583,7 +1585,7 @@
         <li>Expanda seus negócios de forma previsível e escalável</li>
       </ul>
       <div class="hero-ctas">
-        <a href="https://wa.me/5511999040605?text=Olá! Quero começar minha jornada para leads qualificados com a AIC.&utm_source=organic&utm_medium=landing&utm_campaign=aic" class="btn-primary" target="_blank" data-umami-event="cta_hero_whatsapp">
+        <a href="/aic-login.html" class="btn-primary" data-umami-event="cta_hero_cadastro">
           Comece sua Jornada Agora
         </a>
         <a href="/aic-docs.html" class="btn-secondary">
@@ -1662,8 +1664,8 @@
           <p>Aumente suas vendas e expanda seus negócios de forma escalável, com um fluxo constante de leads qualificados.</p>
         </div>
         <div class="benefit-card">
-          <h4>Agendamento automático</h4>
-          <p>Leads interessados são automaticamente direcionados para agendar uma reunião. O AI Agent oferece horários disponíveis e cria o compromisso direto no seu Google Calendar.</p>
+          <h4>Handoff inteligente</h4>
+          <p>Leads qualificados são automaticamente direcionados para um especialista humano. O AI Agent identifica o momento ideal e transfere a conversa para fechamento direto no WhatsApp.</p>
         </div>
       </div>
     </div>
@@ -1692,7 +1694,7 @@
     <div class="container">
       <div class="section-header">
         <h2>Ecossistema Completo</h2>
-        <p>Seis tecnologias integradas que trabalham juntas — da descoberta ao agendamento.</p>
+        <p>Seis tecnologias integradas que trabalham juntas — da descoberta ao fechamento.</p>
       </div>
 
       <!-- Pipeline Visual -->
@@ -1725,7 +1727,7 @@
           <div class="pipeline-arrow"></div>
           <div class="pipeline-step">
             <div class="pipeline-icon">6</div>
-            <span>Agendamento</span>
+            <span>Fechamento</span>
           </div>
         </div>
       </div>
@@ -1769,15 +1771,15 @@
 
         <div class="ecosystem-card">
           <div class="ecosystem-number">6</div>
-          <h4>Agendamento Automático</h4>
-          <p>Quando o lead demonstra interesse, oferecemos slots e criamos eventos no Google Calendar. Com confirmação e lembretes automáticos.</p>
-          <div class="ecosystem-tech">Google Calendar API</div>
+          <h4>Handoff para Fechamento</h4>
+          <p>Quando o lead demonstra alto interesse, a IA transfere automaticamente para um especialista humano fechar o negócio direto no WhatsApp.</p>
+          <div class="ecosystem-tech">Human Takeover</div>
         </div>
       </div>
 
       <div class="ecosystem-result">
         <div class="ecosystem-result-content">
-          <p><strong>Resultado:</strong> Cada componente potencializa o próximo. O lead que chega ao agendamento já foi filtrado, clusterizado, pontuado, abordado e qualificado.</p>
+          <p><strong>Resultado:</strong> Cada componente potencializa o próximo. O lead que chega ao fechamento já foi filtrado, clusterizado, pontuado, abordado e qualificado.</p>
         </div>
       </div>
     </div>
@@ -1945,8 +1947,8 @@
           <li>Entrega de leads qualificados em planilha</li>
         </ul>
         <div class="pricing-cta">
-          <a href="https://wa.me/5511999040605?text=Olá! Quero aproveitar a promoção de lançamento da AIC (R$10/lead na primeira campanha).&utm_source=organic&utm_medium=landing&utm_campaign=aic_promo" class="btn-primary" target="_blank" data-umami-event="cta_pricing_whatsapp_promo">
-            🚀 Aproveitar Oferta de Lançamento
+          <a href="https://wa.me/5511999040605?text=Olá! Quero aproveitar a oferta de lançamento da AIC!" target="_blank" class="btn-primary" data-umami-event="cta_pricing_cadastro">
+            Aproveitar Oferta de Lançamento
           </a>
         </div>
       </div>
@@ -1993,7 +1995,7 @@
     <div class="container cta-content">
       <h2>Quer saber se a AIC funciona para o seu negócio?</h2>
       <p>Converse com nossa equipe para entender se o seu nicho e oferta têm fit com a metodologia de clusters de intenção.</p>
-      <a href="https://wa.me/5511999040605?text=Olá! Vim pela landing da AIC e quero entender se funciona para o meu negócio.&utm_source=organic&utm_medium=landing&utm_campaign=aic" class="btn-primary" target="_blank" data-umami-event="cta_bottom_whatsapp">
+      <a href="https://wa.me/5511999040605?text=Olá! Gostaria de saber se a AIC funciona para o meu negócio." target="_blank" class="btn-primary" data-umami-event="cta_bottom_cadastro">
         Falar com Especialista
       </a>
     </div>
@@ -2223,7 +2225,7 @@
       function trackLeadClick(ctaElement) {
         const ctaName = ctaElement.getAttribute('data-umami-event') || 'unknown_cta';
         const ctaHref = ctaElement.getAttribute('href') || '';
-        const isWhatsAppLink = ctaHref.includes('wa.me');
+        const isRedirectLink = ctaHref.includes('wa.me') || ctaHref.includes('mailto:');
 
         // Verificar se já tem dados do lead
         const storedLead = getStoredLeadData();
@@ -2232,13 +2234,13 @@
           // Já tem dados - enviar tracking direto
           sendTracking(storedLead, ctaName, ctaHref);
 
-          // Se for link WhatsApp, deixa abrir normalmente
+          // Se for link de redirecionamento (WhatsApp ou email), deixa abrir normalmente
           // Se for card, não faz nada (navegação continua)
           console.log('[AIC Lead Capture] Lead já identificado:', storedLead.name);
         } else {
           // Primeira interação - abrir modal
           pendingElement = ctaElement;
-          pendingAction = isWhatsAppLink ? 'redirect' : 'track';
+          pendingAction = isRedirectLink ? 'redirect' : 'track';
           openModal();
           console.log('[AIC Lead Capture] Abrindo modal para captura');
         }
@@ -2309,9 +2311,10 @@
           const name = document.getElementById('leadName').value.trim();
           const email = document.getElementById('leadEmail').value.trim();
           const phone = document.getElementById('leadPhone').value.trim();
+          const instagram = document.getElementById('leadInstagram').value.trim();
 
           if (!name || !email || !phone) {
-            alert('Por favor, preencha todos os campos');
+            alert('Por favor, preencha todos os campos obrigatórios');
             return;
           }
 
@@ -2324,46 +2327,96 @@
           // Salvar dados localmente
           storeLeadData(name, email, phone);
 
-          // Determinar origem: 'google' se usou Google Sign-In, 'aic' caso contrario
-          const leadOrigin = isGoogleSignIn ? 'google' : 'aic';
+          try {
+            // Capturar UTM params da URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const utmParams = {
+              utm_source: urlParams.get('utm_source') || undefined,
+              utm_medium: urlParams.get('utm_medium') || undefined,
+              utm_campaign: urlParams.get('utm_campaign') || undefined,
+              utm_content: urlParams.get('utm_content') || undefined,
+              utm_term: urlParams.get('utm_term') || undefined
+            };
 
-          // Criar pre-cadastro no Supabase Auth (nao bloqueia fluxo)
-          createAICPreRegistration(name, email, phone, leadOrigin)
-            .then(result => {
-              if (result.success) {
-                console.log('[AIC Lead Capture] Pre-cadastro realizado:', result.alreadyExists ? 'ja existia' : 'novo usuario', 'origem:', leadOrigin);
-              } else {
-                console.warn('[AIC Lead Capture] Pre-cadastro falhou (nao critico):', result.error);
-              }
-            })
-            .catch(err => {
-              console.warn('[AIC Lead Capture] Erro no pre-cadastro (nao critico):', err);
+            // Chamar API de captura de lead
+            const response = await fetch('/api/landing/capture', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                campaignId: CAMPAIGN_ID,
+                name,
+                email,
+                whatsapp: phone,
+                instagramUsername: instagram || '',
+                utmParams
+              })
             });
 
-          // Enviar tracking
-          if (pendingElement) {
-            const ctaName = pendingElement.getAttribute('data-umami-event') || 'unknown_cta';
-            const ctaHref = pendingElement.getAttribute('href') || '';
-            sendTracking({ name, email, phone }, ctaName, ctaHref);
+            const result = await response.json();
+
+            if (result.success && result.redirectUrl) {
+              console.log('[AIC Lead Capture] Lead capturado:', result.isExistingLead ? 'existente' : 'novo');
+
+              // Determinar origem para tracking
+              const leadOrigin = isGoogleSignIn ? 'google' : 'aic';
+
+              // Criar pre-cadastro no Supabase Auth (não bloqueia fluxo)
+              createAICPreRegistration(name, email, phone, leadOrigin)
+                .then(r => console.log('[AIC Lead Capture] Pre-cadastro:', r.success ? 'ok' : 'falhou'))
+                .catch(err => console.warn('[AIC Lead Capture] Erro pre-cadastro:', err));
+
+              // Enviar tracking
+              if (pendingElement) {
+                const ctaName = pendingElement.getAttribute('data-umami-event') || 'unknown_cta';
+                const ctaHref = pendingElement.getAttribute('href') || '';
+                sendTracking({ name, email, phone, instagram }, ctaName, ctaHref);
+              }
+
+              // Enviar email de follow-up via N8N (não bloqueia fluxo)
+              fetch('https://n8n.ubs.app.br/webhook/aic-lead-followup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, phone, instagram, campaignId: CAMPAIGN_ID })
+              }).catch(err => console.warn('[AIC] Erro ao enviar email follow-up:', err));
+
+              // Fechar modal e redirecionar para WhatsApp da campanha
+              closeModal();
+              pendingAction = null;
+              pendingElement = null;
+              window.location.href = result.redirectUrl;
+
+            } else {
+              // Fallback: se API falhar, usar WhatsApp padrão
+              console.warn('[AIC Lead Capture] API falhou, usando fallback:', result.error);
+
+              // Fechar modal
+              closeModal();
+              pendingAction = null;
+              pendingElement = null;
+
+              // WhatsApp do especialista (fallback)
+              const whatsappNumber = '5511921947727';
+              const whatsappMessage = encodeURIComponent(`Olá! Sou ${name} e gostaria de saber mais sobre a AIC.`);
+              window.location.href = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
+            }
+
+          } catch (error) {
+            console.error('[AIC Lead Capture] Erro ao capturar lead:', error);
+
+            // Fallback: WhatsApp padrão em caso de erro
+            closeModal();
+            pendingAction = null;
+            pendingElement = null;
+
+            const whatsappNumber = '5511921947727';
+            const whatsappMessage = encodeURIComponent(`Olá! Sou ${name} e gostaria de saber mais sobre a AIC.`);
+            window.location.href = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
+
+          } finally {
+            // Restaurar botão
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
           }
-
-          // Restaurar botão
-          submitBtn.disabled = false;
-          submitBtn.textContent = originalText;
-
-          // Fechar modal
-          closeModal();
-
-          // Executar ação pendente
-          if (pendingAction === 'redirect' && pendingElement) {
-            // Redirecionar para WhatsApp
-            window.location.href = pendingElement.href;
-          }
-          // Se for 'track', não faz nada - apenas trackeia
-
-          // Limpar pendências
-          pendingAction = null;
-          pendingElement = null;
         });
 
         // Event listener do botão cancelar
@@ -2383,7 +2436,7 @@
             } else {
               // Já tem dados - apenas trackear
               trackLeadClick(this);
-              // Se for WhatsApp, deixa redirecionar normalmente
+              // Se for link de redirecionamento (WhatsApp ou email), deixa seguir
               // Se for card/botão sem href, não faz nada
             }
           });
@@ -2476,6 +2529,18 @@
           >
         </div>
 
+        <div class="form-group">
+          <label for="leadInstagram">Instagram (opcional)</label>
+          <input
+            type="text"
+            id="leadInstagram"
+            name="instagram"
+            placeholder="@seu_usuario"
+            autocomplete="off"
+          >
+          <span class="form-hint">Seu @ do Instagram para personalizarmos o atendimento</span>
+        </div>
+
         <div class="form-actions">
           <button type="button" class="btn-cancel" id="modalCancelBtn">Cancelar</button>
           <button type="submit" class="btn-submit">Continuar</button>
@@ -2506,14 +2571,14 @@
     }
 
     .lead-modal-content {
-      background: linear-gradient(135deg, #0C1B33 0%, #1a2942 100%);
-      border-radius: 20px;
-      padding: 40px;
+      background: linear-gradient(135deg, var(--aic-navy) 0%, var(--aic-navy-light) 100%);
+      border-radius: 24px;
+      padding: 48px;
       max-width: 500px;
       width: 90%;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
       animation: slideUp 0.3s ease;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--aic-border);
     }
 
     .lead-modal-header {
@@ -2522,14 +2587,14 @@
     }
 
     .lead-modal-header h2 {
-      color: #fff;
+      color: var(--aic-white);
       font-size: 28px;
       font-weight: 700;
       margin-bottom: 10px;
     }
 
     .lead-modal-header p {
-      color: rgba(255, 255, 255, 0.7);
+      color: var(--aic-gray);
       font-size: 16px;
     }
 
@@ -2554,33 +2619,33 @@
       top: 50%;
       width: 100%;
       height: 1px;
-      background: rgba(255, 255, 255, 0.2);
+      background: var(--aic-border);
     }
 
     .divider span {
       position: relative;
-      background: #0C1B33;
+      background: var(--aic-navy);
       padding: 0 15px;
-      color: rgba(255, 255, 255, 0.6);
+      color: var(--aic-gray);
       font-size: 14px;
     }
 
     .btn-manual {
       width: 100%;
-      padding: 14px 24px;
-      border-radius: 10px;
+      padding: 16px 32px;
+      border-radius: 12px;
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.3s ease;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      background: rgba(255, 255, 255, 0.05);
-      color: #fff;
+      transition: all 0.2s ease;
+      border: 1px solid var(--aic-border);
+      background: transparent;
+      color: var(--aic-white);
     }
 
     .btn-manual:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: rgba(255, 255, 255, 0.3);
+      border-color: var(--aic-green);
+      background: var(--aic-green-subtle);
     }
 
     .lead-form {
@@ -2596,30 +2661,37 @@
     }
 
     .form-group label {
-      color: #fff;
+      color: var(--aic-white);
       font-size: 14px;
       font-weight: 600;
     }
 
     .form-group input {
-      padding: 14px 16px;
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      background: rgba(255, 255, 255, 0.05);
-      color: #fff;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid var(--aic-border);
+      background: var(--aic-navy);
+      color: var(--aic-white);
       font-size: 16px;
-      transition: all 0.3s ease;
+      transition: all 0.2s ease;
     }
 
     .form-group input:focus {
       outline: none;
-      border-color: #00D9FF;
-      background: rgba(255, 255, 255, 0.1);
-      box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1);
+      border-color: var(--aic-green);
+      background: var(--aic-navy-light);
+      box-shadow: 0 0 0 3px var(--aic-green-glow);
     }
 
     .form-group input::placeholder {
-      color: rgba(255, 255, 255, 0.4);
+      color: var(--aic-gray);
+    }
+
+    .form-hint {
+      display: block;
+      font-size: 12px;
+      color: var(--aic-gray);
+      margin-top: 6px;
     }
 
     .form-actions {
@@ -2630,32 +2702,34 @@
 
     .btn-cancel, .btn-submit {
       flex: 1;
-      padding: 14px 24px;
-      border-radius: 10px;
+      padding: 16px 32px;
+      border-radius: 12px;
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.3s ease;
-      border: none;
+      transition: all 0.2s ease;
     }
 
     .btn-cancel {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
+      background: transparent;
+      color: var(--aic-white);
+      border: 1px solid var(--aic-border);
     }
 
     .btn-cancel:hover {
-      background: rgba(255, 255, 255, 0.15);
+      border-color: var(--aic-green);
+      background: var(--aic-green-subtle);
     }
 
     .btn-submit {
-      background: linear-gradient(135deg, #00D9FF 0%, #00A8CC 100%);
-      color: #0C1B33;
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      color: var(--aic-navy);
+      border: none;
     }
 
     .btn-submit:hover {
       transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(0, 217, 255, 0.3);
+      box-shadow: 0 8px 30px var(--aic-green-glow);
     }
 
     @keyframes fadeIn {
@@ -2690,5 +2764,22 @@
     }
   </style>
 
+  <!-- Script para verificar sessao e mostrar botao Portal -->
+  <script>
+    (async function checkSession() {
+      try {
+        const { data: { session } } = await supabaseLanding.auth.getSession();
+        if (session && session.user) {
+          // Usuario logado - mostrar botao Portal, esconder Entrar
+          const btnEntrar = document.getElementById('nav-btn-entrar');
+          const btnPortal = document.getElementById('nav-btn-portal');
+          if (btnEntrar) btnEntrar.style.display = 'none';
+          if (btnPortal) btnPortal.style.display = 'inline-flex';
+        }
+      } catch (e) {
+        // Silently fail - manter botoes padrao
+      }
+    })();
+  </script>
 </body>
 </html>

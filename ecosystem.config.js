@@ -6,8 +6,9 @@
  *   3000 - ubs-main     (scrape-tag, scrape-users)
  *   3002 - ubs-rescue   (scrape-users-rescue)
  *   3003 - ubs-url      (scrape-url, scrape-followers)
- *   3004 - ubs-dm       (puppeteer DMs outbound)
- *   3005 - ubs-dev      (testes e desenvolvimento)
+ *   3004 - ubs-dev      (testes e desenvolvimento)
+ *   3005 - ubs-dm       (puppeteer DMs outbound)
+ *   3007 - ubs-google   (Google Maps scraping)
  *
  * Uso:
  *   pm2 start ecosystem.config.js
@@ -149,6 +150,31 @@ module.exports = {
       merge_logs: true,
       min_uptime: '10s',
       max_restarts: 3
+    },
+
+    // ========================================
+    // WORKER GOOGLE - Porta 3007
+    // Google Maps scraping
+    // ========================================
+    {
+      name: 'ubs-google',
+      script: 'dist/index.js',
+      cwd: CWD,
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '512M',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3007
+      },
+      error_file: './logs/pm2-google-error.log',
+      out_file: './logs/pm2-google-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
+      min_uptime: '10s',
+      max_restarts: 10
     },
 
     // ========================================

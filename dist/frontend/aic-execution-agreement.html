@@ -292,6 +292,124 @@
       color: var(--aic-gray);
       margin: 0;
     }
+
+    /* Form Styles */
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--aic-white);
+      margin-bottom: 8px;
+    }
+    .form-input, .form-textarea {
+      width: 100%;
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 15px;
+      color: var(--aic-white);
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus, .form-textarea:focus {
+      outline: none;
+      border-color: var(--aic-green);
+    }
+    .form-input::placeholder, .form-textarea::placeholder {
+      color: var(--aic-gray);
+    }
+    .form-textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    .form-hint {
+      font-size: 12px;
+      color: var(--aic-gray);
+      margin-top: 6px;
+    }
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .checkbox-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .checkbox-item input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-top: 2px;
+      accent-color: var(--aic-green);
+      flex-shrink: 0;
+    }
+    .checkbox-item label {
+      font-size: 14px;
+      color: var(--aic-gray-light);
+      line-height: 1.5;
+      cursor: pointer;
+    }
+    .status-message {
+      padding: 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      margin-top: 20px;
+      display: none;
+    }
+    .status-message.show {
+      display: block;
+    }
+    .status-message.success {
+      background: rgba(14, 204, 151, 0.1);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      color: var(--aic-green);
+    }
+    .status-message.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+    }
+
+    /* CTA Button */
+    .cta-button {
+      display: inline-block;
+      padding: 16px 32px;
+      background: linear-gradient(135deg, var(--aic-green) 0%, var(--aic-green-dark) 100%);
+      color: var(--aic-navy);
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.3s;
+      box-shadow: 0 4px 20px var(--aic-green-glow);
+    }
+    .cta-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 30px var(--aic-green-glow);
+    }
+    .cta-button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    @media (max-width: 768px) {
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
@@ -468,6 +586,120 @@
       <p>Importação em CRM: feita pela AIC (se autorizado) ou pelo cliente, conforme combinado.</p>
     </div>
 
+    <!-- Formulário de Contratação -->
+    <div class="card" id="contract-form-section" style="border: 2px solid var(--aic-green); box-shadow: 0 0 30px rgba(14, 204, 151, 0.15);">
+      <h2>Formalizar Contratacao</h2>
+      <p style="margin-bottom: 24px;">Preencha os dados abaixo para formalizar a contratacao da campanha AIC.</p>
+
+      <form id="contract-form" onsubmit="return submitContract(event)">
+        <!-- Dados do Contratante -->
+        <div style="background: var(--aic-navy); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+          <h3 style="color: var(--aic-green); margin-bottom: 16px; font-size: 16px;">Dados do Contratante</h3>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="client_name">Nome Completo / Razao Social *</label>
+              <input type="text" id="client_name" class="form-input" placeholder="Seu nome ou razao social" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="client_document">CPF / CNPJ</label>
+              <input type="text" id="client_document" class="form-input" placeholder="000.000.000-00 ou 00.000.000/0000-00">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="client_email">Email *</label>
+              <input type="email" id="client_email" class="form-input" placeholder="seu@email.com" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="client_phone">Telefone/WhatsApp *</label>
+              <input type="tel" id="client_phone" class="form-input" placeholder="+55 11 99999-9999" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="client_company">Empresa (se aplicavel)</label>
+            <input type="text" id="client_company" class="form-input" placeholder="Nome da sua empresa">
+          </div>
+        </div>
+
+        <!-- Dados da Campanha -->
+        <div style="background: var(--aic-navy); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+          <h3 style="color: var(--aic-green); margin-bottom: 16px; font-size: 16px;">Dados da Campanha</h3>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="project_name">Nome do Projeto/Campanha *</label>
+              <input type="text" id="project_name" class="form-input" placeholder="Ex: Campanha Consultoria Financeira" required>
+              <p class="form-hint">Como voce quer identificar esta campanha</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="target_niche">Nicho/Segmento Alvo *</label>
+              <input type="text" id="target_niche" class="form-input" placeholder="Ex: Dentistas, E-commerce, Advogados..." required>
+              <p class="form-hint">Qual segmento de mercado quer atingir</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="service_description">Descricao do Servico/Produto *</label>
+            <textarea id="service_description" class="form-textarea" placeholder="Descreva brevemente o que voce oferece e qual problema resolve para seus clientes..." required></textarea>
+            <p class="form-hint">Isso ajudara a personalizar as mensagens de outreach</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="target_audience">Publico-Alvo *</label>
+            <textarea id="target_audience" class="form-textarea" placeholder="Descreva quem e seu cliente ideal: caracteristicas, dores, objetivos..." required></textarea>
+            <p class="form-hint">Quem voce quer atingir com esta campanha</p>
+          </div>
+        </div>
+
+        <!-- Termos e Aceite -->
+        <div style="background: rgba(14, 204, 151, 0.1); border: 1px solid rgba(14, 204, 151, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+          <h3 style="color: var(--aic-green); margin-bottom: 16px; font-size: 16px;">Aceite dos Termos</h3>
+
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <input type="checkbox" id="term_read" required>
+              <label for="term_read">Li e compreendi todos os termos do Execution Agreement acima, incluindo fases, SLAs, escopo, riscos e valores.</label>
+            </div>
+
+            <div class="checkbox-item">
+              <input type="checkbox" id="term_risks" required>
+              <label for="term_risks">Estou ciente dos riscos de restricao ou bloqueio de conta nas plataformas (WhatsApp/Instagram) e que a AIC mitiga mas nao elimina esses riscos.</label>
+            </div>
+
+            <div class="checkbox-item">
+              <input type="checkbox" id="term_payment" required>
+              <label for="term_payment">Concordo com os valores (R$ 4.000 + R$ 10/lead) e forma de pagamento (50% inicio + 50% apos 15 dias).</label>
+            </div>
+
+            <div class="checkbox-item">
+              <input type="checkbox" id="term_lgpd" required>
+              <label for="term_lgpd">Confirmo que os dados utilizados serao publicos e que o contato sera feito respeitando opt-out imediato e conformidade LGPD.</label>
+            </div>
+
+            <div class="checkbox-item">
+              <input type="checkbox" id="term_authorize" required>
+              <label for="term_authorize">Autorizo a AIC a executar a campanha conforme descrito, utilizando as credenciais que fornecerei na etapa de onboarding.</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Botão de Assinatura -->
+        <div style="text-align: center;">
+          <button type="submit" class="cta-button" id="btn-sign" style="font-size: 18px; padding: 18px 48px;">
+            Assinar Digitalmente e Prosseguir
+          </button>
+          <p style="margin-top: 12px; font-size: 13px; color: var(--aic-gray);">
+            Ao assinar, voce concorda com todos os termos acima. Um email de confirmacao sera enviado.
+          </p>
+        </div>
+
+        <div id="contract-status" class="status-message"></div>
+      </form>
+    </div>
+
     <!-- Footer -->
     <div class="footer">
       <div class="footer-links">
@@ -479,5 +711,207 @@
       <p>Documento confidencial AIC. © 2025 Applied Intelligence Clustering.</p>
     </div>
   </div>
+
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/components/aic-auth.js"></script>
+
+  <script>
+    // Supabase config
+    const SUPABASE_URL = 'https://qsdfyffuonywmtnlycri.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzZGZ5ZmZ1b255d210bmx5Y3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExMjY0NzgsImV4cCI6MjA2NjcwMjQ3OH0.IDJdOApiNM0FJvRe5mp28L7U89GWeHpPoPlPreexwbg';
+    const supabase = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Estado global para delivery vinculado
+    let currentDeliveryId = null;
+    let currentToken = null;
+
+    // Verificar token na URL e carregar dados do delivery
+    async function checkTokenAndPrefill() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token');
+
+      if (token) {
+        currentToken = token;
+        try {
+          const response = await fetch(`/api/aic/lead-deliveries/by-token/${token}`);
+          const data = await response.json();
+
+          if (!data.success) {
+            showStatus('contract-status', 'Link invalido ou expirado. Entre em contato com o time AIC.', 'error');
+            document.getElementById('btn-sign').disabled = true;
+            return;
+          }
+
+          if (data.already_signed) {
+            showStatus('contract-status', 'Voce ja assinou o contrato! Redirecionando para o briefing...', 'success');
+            document.getElementById('btn-sign').disabled = true;
+            setTimeout(() => {
+              window.location.href = `/aic-campaign-briefing.html?contract=${data.delivery.contract_id}`;
+            }, 2000);
+            return;
+          }
+
+          // Pre-fill com dados do delivery
+          currentDeliveryId = data.delivery.id;
+          if (data.delivery.lead_name) {
+            document.getElementById('client_name').value = data.delivery.lead_name;
+          }
+          if (data.delivery.lead_email) {
+            document.getElementById('client_email').value = data.delivery.lead_email;
+          }
+          if (data.delivery.lead_whatsapp) {
+            document.getElementById('client_phone').value = data.delivery.lead_whatsapp;
+          }
+
+          // Atualizar header com nome do prospect
+          if (data.delivery.lead_name) {
+            document.querySelector('.header .subtitle').innerHTML =
+              `Ola <strong>${data.delivery.lead_name}</strong>! Abaixo estao os termos do Execution Agreement.`;
+          }
+
+          // Scroll para o formulario
+          setTimeout(() => {
+            document.getElementById('contract-form-section').scrollIntoView({ behavior: 'smooth' });
+          }, 500);
+
+        } catch (err) {
+          console.error('Erro ao carregar delivery:', err);
+        }
+      }
+    }
+
+    // Check if user is logged in and pre-fill data
+    async function checkAuthAndPrefill() {
+      if (!supabase) return;
+
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          // Pre-fill email (se nao ja preenchido pelo token)
+          const emailField = document.getElementById('client_email');
+          if (!emailField.value) {
+            emailField.value = user.email || '';
+          }
+
+          // Pre-fill name from metadata (se nao ja preenchido pelo token)
+          const nameField = document.getElementById('client_name');
+          if (!nameField.value && user.user_metadata?.name) {
+            nameField.value = user.user_metadata.name;
+          }
+
+          // Pre-fill phone from metadata (se nao ja preenchido pelo token)
+          const phoneField = document.getElementById('client_phone');
+          if (!phoneField.value && user.user_metadata?.phone) {
+            phoneField.value = user.user_metadata.phone;
+          }
+        }
+      } catch (err) {
+        console.error('Error checking auth:', err);
+      }
+    }
+
+    // Submit contract
+    async function submitContract(event) {
+      event.preventDefault();
+
+      const btn = document.getElementById('btn-sign');
+      const statusEl = document.getElementById('contract-status');
+
+      btn.disabled = true;
+      btn.textContent = 'Processando...';
+
+      try {
+        // Collect form data
+        const contractData = {
+          client_name: document.getElementById('client_name').value.trim(),
+          client_document: document.getElementById('client_document').value.trim() || null,
+          client_email: document.getElementById('client_email').value.trim(),
+          client_phone: document.getElementById('client_phone').value.trim(),
+          client_company: document.getElementById('client_company').value.trim() || null,
+          project_name: document.getElementById('project_name').value.trim(),
+          target_niche: document.getElementById('target_niche').value.trim(),
+          service_description: document.getElementById('service_description').value.trim(),
+          target_audience: document.getElementById('target_audience').value.trim(),
+          terms_accepted: true,
+          terms_accepted_at: new Date().toISOString(),
+          user_agent: navigator.userAgent,
+          status: 'signed'
+        };
+
+        // Get auth user if logged in
+        if (supabase) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            contractData.auth_user_id = user.id;
+          }
+        }
+
+        let response;
+        let result;
+
+        // Se temos um deliveryId (veio de link de contrato), usar endpoint especifico
+        if (currentDeliveryId) {
+          response = await fetch(`/api/aic/lead-deliveries/${currentDeliveryId}/sign-contract`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(contractData)
+          });
+        } else {
+          // Fluxo normal (sem token)
+          response = await fetch('/api/aic/contracts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(contractData)
+          });
+        }
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Erro ao salvar contrato');
+        }
+
+        result = await response.json();
+
+        // Show success
+        showStatus('contract-status', 'Contrato assinado com sucesso! Redirecionando para o briefing...', 'success');
+
+        // Disable form
+        const inputs = document.querySelectorAll('#contract-form input, #contract-form textarea');
+        inputs.forEach(input => input.disabled = true);
+        btn.textContent = 'Contrato Assinado';
+
+        // Redirect to briefing with contract_id
+        setTimeout(() => {
+          window.location.href = `/aic-campaign-briefing.html?contract=${result.contract.id}`;
+        }, 2000);
+
+      } catch (error) {
+        console.error('Erro:', error);
+        showStatus('contract-status', error.message || 'Erro ao processar contrato. Tente novamente.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Assinar Digitalmente e Prosseguir';
+      }
+    }
+
+    // Show status message
+    function showStatus(elementId, message, type) {
+      const element = document.getElementById(elementId);
+      element.textContent = message;
+      element.className = `status-message show ${type}`;
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', async function() {
+      // Primeiro verificar token, depois auth
+      await checkTokenAndPrefill();
+      await checkAuthAndPrefill();
+
+      // Scroll to form if hash is #contratar
+      if (window.location.hash === '#contratar') {
+        document.getElementById('contract-form-section').scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+  </script>
 </body>
 </html>

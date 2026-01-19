@@ -1,23 +1,23 @@
 {
   "currentAccountIndex": 2,
-  "lastRotationTime": 1767748112469,
-  "lastActivityTime": 1767786365918,
+  "lastRotationTime": 1768767081188,
+  "lastActivityTime": 1768852410477,
   "accounts": [
     {
       "username": "francomarcio887@gmail.com",
       "instagramUsername": "marciofranco2",
       "failureCount": 0,
-      "lastFailureTime": 1767660413758,
+      "lastFailureTime": 1768610213254,
       "isBlocked": false,
-      "usageCount": 11
+      "usageCount": 119
     },
     {
       "username": "gourmetsousvide@gmail.com",
       "instagramUsername": "gourmetsousvide",
-      "failureCount": 3,
-      "lastFailureTime": 1767746290599,
-      "isBlocked": true,
-      "usageCount": 20
+      "failureCount": 0,
+      "lastFailureTime": 1768765256814,
+      "isBlocked": false,
+      "usageCount": 107
     },
     {
       "username": "marciofranco890@gmail.com",
@@ -25,7 +25,7 @@
       "failureCount": 0,
       "lastFailureTime": 0,
       "isBlocked": false,
-      "usageCount": 19
+      "usageCount": 183
     }
   ]
 }

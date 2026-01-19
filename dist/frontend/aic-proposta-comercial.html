@@ -43,6 +43,8 @@
       height: auto;
       margin-bottom: 24px;
     }
+    /* Hide logo when sidebar is visible */
+    body.aic-sidebar-open .logo { display: none; }
     .header h1 {
       font-size: 28px;
       font-weight: 700;
@@ -284,10 +286,85 @@
       margin-right: 8px;
       margin-bottom: 8px;
     }
+
+    /* Download button */
+    .download-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      color: var(--aic-white);
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-weight: 500;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-right: 12px;
+    }
+    .download-button:hover {
+      border-color: var(--aic-green);
+      background: var(--aic-green-glow);
+    }
+    /* Top Nav */
+    .top-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 0;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--aic-border);
+    }
+    .top-nav-logo {
+      height: 28px;
+      width: auto;
+    }
+    .top-nav-links {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+    .top-nav-links a {
+      color: var(--aic-gray);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+    .top-nav-links a:hover {
+      color: var(--aic-green);
+    }
+    .top-nav-links .btn-back {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: var(--aic-navy-lighter);
+      border: 1px solid var(--aic-border);
+      border-radius: 8px;
+      color: var(--aic-white);
+      font-weight: 500;
+    }
+    .top-nav-links .btn-back:hover {
+      background: var(--aic-green);
+      border-color: var(--aic-green);
+      color: var(--aic-navy);
+    }
   </style>
 </head>
 <body>
   <div class="page">
+    <!-- Top Navigation -->
+    <nav class="top-nav">
+      <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="top-nav-logo">
+      <div class="top-nav-links">
+        <a href="/aic-docs.html">Documentação</a>
+        <a href="/aic-faq-compliance.html">FAQ</a>
+        <a href="/aic" class="btn-back">← Voltar para Landing</a>
+      </div>
+    </nav>
+
     <!-- Header -->
     <div class="header">
       <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="logo">
@@ -500,6 +577,14 @@
 
     <!-- CTA -->
     <div class="cta-section">
+      <button onclick="downloadPDF()" class="download-button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Baixar PDF
+      </button>
       <a href="https://wa.me/5511999040605?text=Olá! Gostaria de saber mais sobre a proposta AIC.&utm_source=organic&utm_medium=proposal&utm_campaign=aic" class="cta-button" target="_blank" data-umami-event="cta_proposta_whatsapp">
         Vamos Conversar
       </a>
@@ -512,7 +597,91 @@
     </div>
   </div>
 
-  <!-- AIC Sidebar Navigation -->
-  <script src="/components/aic-sidebar.js"></script>
+  <!-- PDF Generator - pdfmake -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+
+  <script>
+    function downloadPDF() {
+      const docDefinition = {
+        pageSize: 'A4',
+        pageMargins: [40, 60, 40, 60],
+        content: [
+          { text: 'PROPOSTA COMERCIAL', style: 'header', alignment: 'center' },
+          { text: 'AIC - Audience Intelligence Cluster', style: 'subheader', alignment: 'center', margin: [0, 0, 0, 30] },
+
+          { text: 'O QUE E A AIC?', style: 'sectionTitle' },
+          { text: 'A AIC (Audience Intelligence Cluster) e uma plataforma inovadora desenvolvida para transformar dados publicos em agrupamentos inteligentes e acionaveis. Utilizando algoritmos avancados de analise de dados e machine learning, a AIC identifica grupos de individuos com comportamentos e caracteristicas semelhantes.', margin: [0, 0, 0, 15] },
+
+          { text: 'OBJETIVO DA CAMPANHA', style: 'sectionTitle' },
+          { text: 'Realizar uma campanha estruturada de prospeccao ativa, enviando mensagens personalizadas a ate 2.000 potenciais clientes pertencentes ao mesmo segmento ("cluster"), ao longo de 30 dias.', margin: [0, 0, 0, 10] },
+          {
+            columns: [
+              { text: '2.000\nContatos qualificados', style: 'statBox', width: '*' },
+              { text: '30\nDias de campanha', style: 'statBox', width: '*' },
+              { text: '1\nCluster focado', style: 'statBox', width: '*' }
+            ],
+            margin: [0, 10, 0, 20]
+          },
+
+          { text: 'METODOLOGIA AIC', style: 'sectionTitle' },
+          {
+            ol: [
+              'Diagnostico Estruturado - Entendemos profundamente seu negocio e cliente ideal.',
+              'Selecao dos 2.000 Perfis - Filtragem inteligente ate 2.000 prospects qualificados.',
+              'Avaliacao da Landing Page - Revisamos clareza, narrativa e consistencia.',
+              'Coleta de Materiais - Fotos, videos, depoimentos como insumo.',
+              'Criacao da Linha Editorial - Conteudo estrategico alinhado ao cluster.',
+              'Acompanhamento Continuo - Analise e ajustes em tempo real.'
+            ],
+            margin: [0, 0, 0, 20]
+          },
+
+          { text: 'EXPECTATIVA DE RESULTADOS', style: 'sectionTitle' },
+          {
+            columns: [
+              { text: '2.000\nContatos enviados', style: 'statBox', width: '*' },
+              { text: '300-500\nRespostas iniciais', style: 'statBox', width: '*' },
+              { text: '120-200\nLeads qualificados', style: 'statBox', width: '*' }
+            ],
+            margin: [0, 10, 0, 20]
+          },
+
+          { text: 'INVESTIMENTO', style: 'sectionTitle' },
+          { text: 'R$ 4.000', style: 'priceMain', alignment: 'center' },
+          { text: '+ R$ 10,00 por lead qualificado (pago ao final)', alignment: 'center', margin: [0, 0, 0, 10] },
+          { text: 'Pagamento: 50% no inicio + 50% apos 15 dias', alignment: 'center', style: 'highlight', margin: [0, 0, 0, 20] },
+
+          { text: 'O QUE ESTA INCLUSO:', style: 'sectionTitle', fontSize: 11 },
+          {
+            ul: [
+              'Diagnostico completo do negocio e cluster',
+              'Selecao e validacao de ate 2.000 perfis',
+              'Avaliacao e sugestoes para landing page',
+              'Criacao de linha editorial completa',
+              'Execucao da campanha por 30 dias',
+              'Acompanhamento e relatorios',
+              'Entrega de leads qualificados'
+            ],
+            margin: [0, 0, 0, 30]
+          },
+
+          { text: 'Documento confidencial AIC. (c) 2025 Audience Intelligence Cluster.', style: 'footer', alignment: 'center' }
+        ],
+        styles: {
+          header: { fontSize: 22, bold: true, color: '#0ECC97' },
+          subheader: { fontSize: 12, color: '#666666' },
+          sectionTitle: { fontSize: 14, bold: true, color: '#0C1B33', margin: [0, 15, 0, 10] },
+          statBox: { fontSize: 11, alignment: 'center', color: '#333333' },
+          priceMain: { fontSize: 28, bold: true, color: '#0ECC97' },
+          highlight: { fontSize: 11, color: '#0ECC97' },
+          footer: { fontSize: 9, color: '#999999', margin: [0, 20, 0, 0] }
+        },
+        defaultStyle: { fontSize: 10, lineHeight: 1.4 }
+      };
+
+      pdfMake.createPdf(docDefinition).download('AIC-Proposta-Comercial.pdf');
+    }
+  </script>
 </body>
 </html>
