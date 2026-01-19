@@ -47,16 +47,25 @@ router.get('/authorize', (req: Request, res: Response): void => {
  */
 router.get('/callback', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { code, state, error, error_description } = req.query;
+    const { code, state, error, error_description, error_code, error_message } = req.query;
 
-    // Verificar se usuário negou autorização
-    if (error) {
-      console.error('[Instagram OAuth] Usuário negou autorização:', error_description);
-      res.redirect(`/aic-campaign-onboarding.html?instagram_error=${encodeURIComponent(error_description as string || 'Autorização negada')}`);
+    // Log completo dos parâmetros para debug
+    console.log('[Instagram OAuth] Callback params:', {
+      code: code ? 'presente' : 'ausente',
+      state: state ? 'presente' : 'ausente',
+      error, error_description, error_code, error_message
+    });
+
+    // Verificar se Facebook retornou erro (pode usar error ou error_code)
+    if (error || error_code) {
+      const errorMsg = (error_message || error_description || error || 'Erro desconhecido') as string;
+      console.error('[Instagram OAuth] Erro do Facebook:', { error_code, error_message, error, error_description });
+      res.redirect(`/aic-campaign-onboarding.html?instagram_error=${encodeURIComponent(errorMsg)}`);
       return;
     }
 
     if (!code || !state || typeof code !== 'string' || typeof state !== 'string') {
+      console.error('[Instagram OAuth] Parâmetros faltando:', { code: !!code, state: !!state });
       res.status(400).json({ error: 'Parâmetros inválidos no callback' });
       return;
     }
@@ -68,7 +77,7 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
 
     if (!result.success) {
       console.error('[Instagram OAuth] Erro no callback:', result.error);
-      res.redirect(`/aic-campaign-onboarding.html?instagram_error=${encodeURIComponent(result.error || 'Erro desconhecido')}`);
+      res.redirect(`/cliente-credenciais.html?instagram_error=${encodeURIComponent(result.error || 'Erro desconhecido')}`);
       return;
     }
 
@@ -78,12 +87,12 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
     const stateData = oauthService.parseState(state);
     const campaignId = stateData?.campaignId || '';
 
-    // Redirecionar de volta para o onboarding com sucesso
-    res.redirect(`/aic-campaign-onboarding.html?campaign=${campaignId}&instagram_connected=true&instagram_username=${encodeURIComponent(result.account?.username || '')}`);
+    // Redirecionar de volta para a página de credenciais com sucesso
+    res.redirect(`/cliente-credenciais.html?campaign=${campaignId}&instagram_connected=true&instagram_username=${encodeURIComponent(result.account?.username || '')}`);
 
   } catch (error: any) {
     console.error('[Instagram OAuth] Erro no callback:', error);
-    res.redirect(`/aic-campaign-onboarding.html?instagram_error=${encodeURIComponent('Erro interno ao processar autorização')}`);
+    res.redirect(`/cliente-credenciais.html?instagram_error=${encodeURIComponent('Erro interno ao processar autorização')}`);
   }
 });
 

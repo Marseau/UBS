@@ -8,6 +8,7 @@ import { clientJourneyService, JourneyStep } from '../services/client-journey.se
 import { authenticateClient, ClientRequest } from '../middleware/client-auth.middleware';
 import { clientInviteService } from '../services/client-invite.service';
 import { proposalPDFService } from '../services/proposal-pdf.service';
+import { getWhapiPartnerService } from '../services/whapi-partner.service';
 
 const router = Router();
 
@@ -614,7 +615,8 @@ router.get('/credentials', authenticateClient, async (req: ClientRequest, res: R
 
 /**
  * POST /api/aic/journey/credentials/whatsapp
- * Salvar credenciais WhatsApp do cliente
+ * Criar canal WhatsApp via Whapi Partner API
+ * Retorna QR Code para o cliente escanear
  */
 router.post('/credentials/whatsapp', authenticateClient, async (req: ClientRequest, res: Response) => {
   try {
@@ -646,61 +648,301 @@ router.post('/credentials/whatsapp', authenticateClient, async (req: ClientReque
     // Verificar se campanha ja tem canal WhatsApp
     const { data: campaign } = await supabaseAdmin
       .from('cluster_campaigns')
-      .select('whapi_channel_uuid')
+      .select('whapi_channel_uuid, campaign_name')
       .eq('id', journey.campaign_id)
       .single();
 
     let channelId = campaign?.whapi_channel_uuid;
+    let channelToken: string | undefined;
 
     if (channelId) {
-      // Atualizar canal existente
-      await supabaseAdmin
+      // Verificar se canal existente tem token real ou e placeholder
+      const { data: existingChannel } = await supabaseAdmin
         .from('whapi_channels')
-        .update({
-          phone_number: phone,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', channelId);
-    } else {
-      // Criar novo canal
-      // channel_id e api_token serão configurados pelo admin posteriormente
-      const tempChannelId = `pending_${Date.now()}`;
+        .select('api_token, status')
+        .eq('id', channelId)
+        .single();
+
+      if (existingChannel?.api_token && existingChannel.api_token !== 'pending_configuration') {
+        // Canal ja existe com token real - apenas atualizar telefone
+        await supabaseAdmin
+          .from('whapi_channels')
+          .update({
+            phone_number: phone,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', channelId);
+
+        channelToken = existingChannel.api_token;
+        console.log(`[Journey Routes] Canal existente atualizado: ${channelId}`);
+      } else {
+        // Canal existe mas sem token real - precisa criar na Whapi
+        channelId = null; // Forcar criacao
+      }
+    }
+
+    // Se nao tem canal ou canal sem token, criar via Partner API
+    if (!channelId) {
+      const partnerService = getWhapiPartnerService();
+      const channelName = `AIC - ${campaign?.campaign_name || journey.client_name}`;
+
+      console.log(`[Journey Routes] Criando canal Whapi: ${channelName}`);
+
+      const createResult = await partnerService.createChannel({
+        name: channelName,
+        projectId: process.env.WHAPI_PROJECT_ID || 'zQk0Fsp90x1jGVnqsKZ0',
+        phone: phone.replace(/\D/g, '')
+      });
+
+      if (!createResult.success || !createResult.channel) {
+        console.error('[Journey Routes] Erro ao criar canal Whapi:', createResult.error);
+        return res.status(500).json({
+          success: false,
+          message: `Erro ao criar canal WhatsApp: ${createResult.error || 'Erro desconhecido'}`
+        });
+      }
+
+      // Salvar canal no banco
       const { data: newChannel, error: channelError } = await supabaseAdmin
         .from('whapi_channels')
         .insert({
-          name: `WA - ${journey.client_name}`,
-          channel_id: tempChannelId,
+          id: createResult.channel.id,
+          name: createResult.channel.name,
+          channel_id: createResult.channel.id,
           phone_number: phone,
-          api_token: 'pending_configuration',
-          status: 'pending_setup',
+          api_token: createResult.channel.token,
+          status: 'pending_qr', // Aguardando QR Code scan
           rate_limit_hourly: 20,
-          rate_limit_daily: 120
+          rate_limit_daily: 120,
+          notes: `Criado via Partner API para campanha ${journey.campaign_id}`
         })
         .select('id')
         .single();
 
       if (channelError) {
-        console.error('[Journey Routes] Error creating channel:', channelError);
-        return res.status(500).json({ success: false, message: 'Erro ao criar canal WhatsApp' });
+        console.error('[Journey Routes] Erro ao salvar canal no banco:', channelError);
+        // Canal foi criado na Whapi mas nao salvou - tentar com ID gerado
+        const { data: retryChannel, error: retryError } = await supabaseAdmin
+          .from('whapi_channels')
+          .insert({
+            name: createResult.channel.name,
+            channel_id: createResult.channel.id,
+            phone_number: phone,
+            api_token: createResult.channel.token,
+            status: 'pending_qr',
+            rate_limit_hourly: 20,
+            rate_limit_daily: 120
+          })
+          .select('id')
+          .single();
+
+        if (retryError) {
+          return res.status(500).json({ success: false, message: 'Erro ao salvar canal no banco' });
+        }
+        channelId = retryChannel.id;
+      } else {
+        channelId = newChannel.id;
       }
 
-      channelId = newChannel.id;
+      channelToken = createResult.channel.token;
 
       // Vincular ao campaign
       await supabaseAdmin
         .from('cluster_campaigns')
         .update({ whapi_channel_uuid: channelId })
         .eq('id', journey.campaign_id);
+
+      console.log(`[Journey Routes] Canal criado e vinculado: ${channelId}`);
+    }
+
+    // Obter QR Code para conexao
+    let qrCode: string | undefined;
+    if (channelToken) {
+      const partnerService = getWhapiPartnerService();
+      const qrResult = await partnerService.getChannelQRCode(channelToken);
+
+      if (qrResult.success && qrResult.qrCode) {
+        qrCode = qrResult.qrCode;
+      } else {
+        console.log('[Journey Routes] QR Code nao disponivel (canal pode ja estar conectado)');
+      }
     }
 
     return res.json({
       success: true,
-      message: 'WhatsApp salvo com sucesso'
+      message: qrCode ? 'Canal criado! Escaneie o QR Code para conectar.' : 'Canal configurado com sucesso',
+      channel_id: channelId,
+      qr_code: qrCode,
+      needs_qr_scan: !!qrCode
     });
 
   } catch (error) {
     console.error('[Journey Routes] Error saving WhatsApp credentials:', error);
     return res.status(500).json({ success: false, message: 'Erro ao salvar WhatsApp' });
+  }
+});
+
+/**
+ * GET /api/aic/journey/credentials/whatsapp/qr
+ * Obter QR Code do canal WhatsApp
+ */
+router.get('/credentials/whatsapp/qr', authenticateClient, async (req: ClientRequest, res: Response) => {
+  try {
+    const userId = req.clientUser?.id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Usuario nao autenticado' });
+    }
+
+    const { supabaseAdmin } = await import('../config/database');
+
+    // Buscar jornada e canal do usuario
+    const { data: journey } = await supabaseAdmin
+      .from('aic_client_journeys')
+      .select('campaign_id')
+      .eq('auth_user_id', userId)
+      .not('campaign_id', 'is', null)
+      .single();
+
+    if (!journey?.campaign_id) {
+      return res.status(404).json({ success: false, message: 'Campanha nao encontrada' });
+    }
+
+    const { data: campaign } = await supabaseAdmin
+      .from('cluster_campaigns')
+      .select('whapi_channel_uuid')
+      .eq('id', journey.campaign_id)
+      .single();
+
+    if (!campaign?.whapi_channel_uuid) {
+      return res.status(404).json({ success: false, message: 'Canal WhatsApp nao configurado' });
+    }
+
+    const { data: channel } = await supabaseAdmin
+      .from('whapi_channels')
+      .select('api_token, status')
+      .eq('id', campaign.whapi_channel_uuid)
+      .single();
+
+    if (!channel?.api_token || channel.api_token === 'pending_configuration') {
+      return res.status(400).json({ success: false, message: 'Canal sem token configurado' });
+    }
+
+    // Se ja esta conectado, nao precisa de QR
+    if (channel.status === 'active' || channel.status === 'connected') {
+      return res.json({
+        success: true,
+        connected: true,
+        message: 'Canal ja esta conectado'
+      });
+    }
+
+    // Obter QR Code
+    const partnerService = getWhapiPartnerService();
+    const qrResult = await partnerService.getChannelQRCode(channel.api_token);
+
+    if (!qrResult.success) {
+      return res.json({
+        success: false,
+        error: qrResult.error || 'QR Code nao disponivel'
+      });
+    }
+
+    return res.json({
+      success: true,
+      qr_code: qrResult.qrCode,
+      connected: false
+    });
+
+  } catch (error) {
+    console.error('[Journey Routes] Error getting QR code:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao obter QR Code' });
+  }
+});
+
+/**
+ * GET /api/aic/journey/credentials/whatsapp/status
+ * Verificar status de conexao do canal WhatsApp
+ */
+router.get('/credentials/whatsapp/status', authenticateClient, async (req: ClientRequest, res: Response) => {
+  try {
+    const userId = req.clientUser?.id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Usuario nao autenticado' });
+    }
+
+    const { supabaseAdmin } = await import('../config/database');
+
+    // Buscar jornada e canal do usuario
+    const { data: journey } = await supabaseAdmin
+      .from('aic_client_journeys')
+      .select('campaign_id')
+      .eq('auth_user_id', userId)
+      .not('campaign_id', 'is', null)
+      .single();
+
+    if (!journey?.campaign_id) {
+      return res.status(404).json({ success: false, message: 'Campanha nao encontrada' });
+    }
+
+    const { data: campaign } = await supabaseAdmin
+      .from('cluster_campaigns')
+      .select('whapi_channel_uuid')
+      .eq('id', journey.campaign_id)
+      .single();
+
+    if (!campaign?.whapi_channel_uuid) {
+      return res.json({
+        success: true,
+        configured: false,
+        connected: false,
+        status: 'not_configured'
+      });
+    }
+
+    const { data: channel } = await supabaseAdmin
+      .from('whapi_channels')
+      .select('api_token, status, phone_number')
+      .eq('id', campaign.whapi_channel_uuid)
+      .single();
+
+    if (!channel?.api_token || channel.api_token === 'pending_configuration') {
+      return res.json({
+        success: true,
+        configured: false,
+        connected: false,
+        status: 'pending_token'
+      });
+    }
+
+    // Verificar status real na Whapi
+    const partnerService = getWhapiPartnerService();
+    const statusResult = await partnerService.getChannelStatus(channel.api_token);
+
+    // Atualizar status no banco se conectou
+    if (statusResult.connected && channel.status !== 'active') {
+      await supabaseAdmin
+        .from('whapi_channels')
+        .update({
+          status: 'active',
+          phone_number: statusResult.phone || channel.phone_number,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', campaign.whapi_channel_uuid);
+    }
+
+    return res.json({
+      success: true,
+      configured: true,
+      connected: statusResult.connected,
+      status: statusResult.connected ? 'connected' : 'disconnected',
+      phone: statusResult.phone || channel.phone_number
+    });
+
+  } catch (error) {
+    console.error('[Journey Routes] Error checking WhatsApp status:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao verificar status' });
   }
 });
 

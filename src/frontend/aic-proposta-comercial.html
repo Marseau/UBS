@@ -308,10 +308,63 @@
       border-color: var(--aic-green);
       background: var(--aic-green-glow);
     }
+    /* Top Nav */
+    .top-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 0;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--aic-border);
+    }
+    .top-nav-logo {
+      height: 28px;
+      width: auto;
+    }
+    .top-nav-links {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+    .top-nav-links a {
+      color: var(--aic-gray);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+    .top-nav-links a:hover {
+      color: var(--aic-green);
+    }
+    .top-nav-links .btn-back {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: var(--aic-navy-lighter);
+      border: 1px solid var(--aic-border);
+      border-radius: 8px;
+      color: var(--aic-white);
+      font-weight: 500;
+    }
+    .top-nav-links .btn-back:hover {
+      background: var(--aic-green);
+      border-color: var(--aic-green);
+      color: var(--aic-navy);
+    }
   </style>
 </head>
 <body>
   <div class="page">
+    <!-- Top Navigation -->
+    <nav class="top-nav">
+      <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="top-nav-logo">
+      <div class="top-nav-links">
+        <a href="/aic-docs.html">Documentação</a>
+        <a href="/aic-faq-compliance.html">FAQ</a>
+        <a href="/aic" class="btn-back">← Voltar para Landing</a>
+      </div>
+    </nav>
+
     <!-- Header -->
     <div class="header">
       <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="logo">
@@ -630,8 +683,5 @@
       pdfMake.createPdf(docDefinition).download('AIC-Proposta-Comercial.pdf');
     }
   </script>
-
-  <!-- AIC Sidebar Navigation -->
-  <script src="/components/aic-sidebar.js"></script>
 </body>
 </html>

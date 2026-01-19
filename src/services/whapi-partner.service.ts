@@ -115,11 +115,12 @@ export class WhapiPartnerService {
    */
   async createChannel(options: CreateChannelOptions): Promise<CreateChannelResult> {
     try {
-      console.log('[WhapiPartner] Criando canal:', options.name);
+      const projectId = options.projectId || process.env.WHAPI_PROJECT_ID || 'zQk0Fsp90x1jGVnqsKZ0';
+      console.log('[WhapiPartner] Criando canal:', options.name, 'no projeto:', projectId);
 
       const response = await this.client.put('/channels', {
         name: options.name,
-        projectId: options.projectId || 'aic-campaigns',
+        projectId: projectId,
         phone: options.phone
       });
 
@@ -132,7 +133,7 @@ export class WhapiPartnerService {
         status: response.data.mode || 'trial',
         activeTill: response.data.activeTill,
         createdAt: response.data.createdAt,
-        projectId: options.projectId || 'aic-campaigns'
+        projectId: projectId
       };
 
       console.log('[WhapiPartner] Canal criado com sucesso:', channel.id);
@@ -298,7 +299,7 @@ export class WhapiPartnerService {
       // 1. Criar canal na Whapi
       const result = await this.createChannel({
         name: `AIC - ${campaignName}`,
-        projectId: 'aic-campaigns'
+        projectId: process.env.WHAPI_PROJECT_ID || 'zQk0Fsp90x1jGVnqsKZ0'
       });
 
       if (!result.success || !result.channel) {
@@ -353,6 +354,8 @@ export class WhapiPartnerService {
    */
   async getChannelQRCode(channelToken: string): Promise<{ success: boolean; qrCode?: string; error?: string }> {
     try {
+      console.log('[WhapiPartner] Obtendo QR Code com token:', channelToken?.substring(0, 20) + '...');
+
       // QR Code é obtido via API do canal, não via Partner API
       const channelClient = axios.create({
         baseURL: 'https://gate.whapi.cloud',
@@ -363,13 +366,40 @@ export class WhapiPartnerService {
         timeout: 30000
       });
 
-      const response = await channelClient.get('/settings/qr');
+      // Tentar endpoint /users/login (retorna QR em base64)
+      const response = await channelClient.get('/users/login');
+
+      console.log('[WhapiPartner] Resposta QR:', JSON.stringify(response.data).substring(0, 200));
+
+      // A resposta pode ter qr, qr_code, ou qrCode
+      const qrCode = response.data?.qr || response.data?.qr_code || response.data?.qrCode;
+
+      if (qrCode) {
+        return {
+          success: true,
+          qrCode: qrCode
+        };
+      }
+
+      // Se não tem QR mas tem status, pode já estar conectado
+      if (response.data?.status === 'connected' || response.data?.status === 'online') {
+        return {
+          success: false,
+          error: 'Canal já está conectado'
+        };
+      }
 
       return {
-        success: true,
-        qrCode: response.data?.qr || response.data?.qr_code
+        success: false,
+        error: 'QR Code não disponível na resposta'
       };
     } catch (error: any) {
+      console.error('[WhapiPartner] Erro ao obter QR:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+
       // Se retornar 404 ou similar, pode significar que já está conectado
       if (error.response?.status === 404 || error.response?.status === 400) {
         return {
@@ -481,7 +511,7 @@ export class WhapiPartnerService {
 
     try {
       // Listar canais da Whapi
-      const listResult = await this.listChannels({ projectId: 'aic-campaigns' });
+      const listResult = await this.listChannels({ projectId: process.env.WHAPI_PROJECT_ID || 'zQk0Fsp90x1jGVnqsKZ0' });
 
       if (!listResult.success) {
         result.errors.push(`Erro ao listar canais: ${listResult.error}`);

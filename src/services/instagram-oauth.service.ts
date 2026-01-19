@@ -1,19 +1,20 @@
 /**
  * Instagram OAuth Service
  *
- * Implementa o fluxo OAuth do Facebook/Instagram para obter acesso
+ * Implementa o fluxo OAuth do Instagram Business Login para obter acesso
  * à Instagram Graph API de forma segura e em conformidade com ToS.
  *
- * Fluxo:
+ * Fluxo (Instagram Business Login - Lançado Julho 2024):
  * 1. Cliente clica "Conectar Instagram"
- * 2. Redireciona para Facebook Login
+ * 2. Redireciona para Instagram Login (não Facebook)
  * 3. Cliente autoriza permissões
  * 4. Callback recebe code
- * 5. Troca code por access_token
- * 6. Obtém Instagram Business Account ID
- * 7. Salva tokens no banco (criptografados)
+ * 5. Troca code por access_token (short-lived)
+ * 6. Troca por long-lived token (60 dias)
+ * 7. Obtém dados da conta Instagram
+ * 8. Salva tokens no banco (criptografados)
  *
- * Documentação: https://developers.facebook.com/docs/instagram-api/getting-started
+ * Documentação: https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login
  */
 
 import axios from 'axios';
@@ -44,24 +45,25 @@ export interface InstagramAccount {
 
 export interface OAuthTokenResponse {
   access_token: string;
-  token_type: string;
+  user_id?: number;
+  permissions?: string[];
+  token_type?: string;
   expires_in?: number;
 }
 
-export interface FacebookPage {
+export interface InstagramUserProfile {
   id: string;
-  name: string;
-  access_token: string;
-  instagram_business_account?: {
-    id: string;
-    username?: string;
-    name?: string;
-    profile_picture_url?: string;
-  };
+  username: string;
+  name?: string;
+  account_type?: string;
+  profile_picture_url?: string;
+  followers_count?: number;
+  follows_count?: number;
+  media_count?: number;
 }
 
 // ============================================================================
-// INSTAGRAM OAUTH SERVICE
+// INSTAGRAM OAUTH SERVICE (Instagram Business Login)
 // ============================================================================
 
 export class InstagramOAuthService {
@@ -69,28 +71,27 @@ export class InstagramOAuthService {
   private config: InstagramOAuthConfig;
   private encryptionKey: string;
 
-  // Permissões necessárias para Instagram Graph API
+  // Permissões para Instagram Business Login
+  // Ref: https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login
   private readonly SCOPES = [
-    'instagram_basic',
-    'instagram_manage_messages',
-    'instagram_manage_comments',
-    'pages_show_list',
-    'pages_read_engagement',
-    'pages_manage_metadata',
-    'business_management'
+    'instagram_business_basic',
+    'instagram_business_manage_messages',
+    'instagram_business_manage_comments',
+    'instagram_business_content_publish'
   ];
 
   constructor() {
+    // Usar Instagram App ID e Secret (não Facebook)
     this.config = {
-      appId: process.env.META_APP_ID || '',
-      appSecret: process.env.META_APP_SECRET || '',
+      appId: process.env.INSTAGRAM_APP_ID || '',
+      appSecret: process.env.INSTAGRAM_APP_SECRET || '',
       redirectUri: process.env.META_OAUTH_REDIRECT_URI || ''
     };
 
     this.encryptionKey = process.env.CREDENTIALS_ENCRYPTION_KEY || 'default-key-change-in-production';
 
     if (!this.config.appId || !this.config.appSecret) {
-      console.warn('[InstagramOAuth] META_APP_ID ou META_APP_SECRET não configurados');
+      console.warn('[InstagramOAuth] INSTAGRAM_APP_ID ou INSTAGRAM_APP_SECRET não configurados');
     }
 
     this.supabase = createClient(
@@ -100,11 +101,11 @@ export class InstagramOAuthService {
   }
 
   // ==========================================================================
-  // FLUXO OAUTH
+  // FLUXO OAUTH (Instagram Business Login)
   // ==========================================================================
 
   /**
-   * Gera URL de autorização do Facebook
+   * Gera URL de autorização do Instagram
    * Cliente será redirecionado para esta URL
    */
   generateAuthorizationUrl(campaignId: string): string {
@@ -118,7 +119,8 @@ export class InstagramOAuthService {
       state: state
     });
 
-    return `https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}`;
+    // Instagram Business Login usa www.instagram.com/oauth/authorize
+    return `https://www.instagram.com/oauth/authorize?${params.toString()}`;
   }
 
   /**
@@ -132,11 +134,17 @@ export class InstagramOAuthService {
       nonce: crypto.randomBytes(16).toString('hex')
     };
 
-    const cipher = crypto.createCipher('aes-256-cbc', this.encryptionKey);
+    // Gerar IV aleatório de 16 bytes
+    const iv = crypto.randomBytes(16);
+    // Garantir que a chave tem 32 bytes (AES-256)
+    const key = crypto.createHash('sha256').update(this.encryptionKey).digest();
+
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
     let encrypted = cipher.update(JSON.stringify(data), 'utf8', 'base64');
     encrypted += cipher.final('base64');
 
-    return encrypted;
+    // Concatenar IV + encrypted (IV em hex para facilitar parsing)
+    return iv.toString('hex') + ':' + encrypted;
   }
 
   /**
@@ -144,8 +152,18 @@ export class InstagramOAuthService {
    */
   parseState(state: string): { campaignId: string; timestamp: number } | null {
     try {
-      const decipher = crypto.createDecipher('aes-256-cbc', this.encryptionKey);
-      let decrypted = decipher.update(state, 'base64', 'utf8');
+      // Separar IV e dados criptografados
+      const [ivHex, encrypted] = state.split(':');
+      if (!ivHex || !encrypted) {
+        console.error('[InstagramOAuth] State inválido: formato incorreto');
+        return null;
+      }
+
+      const iv = Buffer.from(ivHex, 'hex');
+      const key = crypto.createHash('sha256').update(this.encryptionKey).digest();
+
+      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+      let decrypted = decipher.update(encrypted, 'base64', 'utf8');
       decrypted += decipher.final('utf8');
 
       const data = JSON.parse(decrypted);
@@ -164,18 +182,33 @@ export class InstagramOAuthService {
   }
 
   /**
-   * Troca authorization code por access token
+   * Troca authorization code por access token (short-lived)
+   * Instagram usa POST com form-urlencoded (diferente do Facebook)
    */
   async exchangeCodeForToken(code: string): Promise<OAuthTokenResponse | null> {
     try {
-      const response = await axios.get('https://graph.facebook.com/v18.0/oauth/access_token', {
-        params: {
-          client_id: this.config.appId,
-          client_secret: this.config.appSecret,
-          redirect_uri: this.config.redirectUri,
-          code: code
-        }
+      console.log('[InstagramOAuth] Trocando code por token...');
+
+      // Instagram token endpoint usa POST com form data
+      const params = new URLSearchParams({
+        client_id: this.config.appId,
+        client_secret: this.config.appSecret,
+        grant_type: 'authorization_code',
+        redirect_uri: this.config.redirectUri,
+        code: code
       });
+
+      const response = await axios.post(
+        'https://api.instagram.com/oauth/access_token',
+        params.toString(),
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        }
+      );
+
+      console.log('[InstagramOAuth] Token obtido com sucesso, user_id:', response.data.user_id);
 
       return response.data;
     } catch (error: any) {
@@ -186,17 +219,21 @@ export class InstagramOAuthService {
 
   /**
    * Obtém long-lived token (60 dias) a partir do short-lived
+   * Para Instagram, usa endpoint diferente do Facebook
    */
   async getLongLivedToken(shortLivedToken: string): Promise<OAuthTokenResponse | null> {
     try {
-      const response = await axios.get('https://graph.facebook.com/v18.0/oauth/access_token', {
+      console.log('[InstagramOAuth] Obtendo long-lived token...');
+
+      const response = await axios.get('https://graph.instagram.com/access_token', {
         params: {
-          grant_type: 'fb_exchange_token',
-          client_id: this.config.appId,
+          grant_type: 'ig_exchange_token',
           client_secret: this.config.appSecret,
-          fb_exchange_token: shortLivedToken
+          access_token: shortLivedToken
         }
       });
+
+      console.log('[InstagramOAuth] Long-lived token obtido, expira em:', response.data.expires_in, 'segundos');
 
       return response.data;
     } catch (error: any) {
@@ -206,21 +243,41 @@ export class InstagramOAuthService {
   }
 
   /**
-   * Obtém lista de Facebook Pages do usuário
+   * Refresh do long-lived token (antes de expirar)
    */
-  async getUserPages(accessToken: string): Promise<FacebookPage[]> {
+  async refreshLongLivedToken(longLivedToken: string): Promise<OAuthTokenResponse | null> {
     try {
-      const response = await axios.get('https://graph.facebook.com/v18.0/me/accounts', {
+      const response = await axios.get('https://graph.instagram.com/refresh_access_token', {
         params: {
-          access_token: accessToken,
-          fields: 'id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}'
+          grant_type: 'ig_refresh_token',
+          access_token: longLivedToken
         }
       });
 
-      return response.data.data || [];
+      return response.data;
     } catch (error: any) {
-      console.error('[InstagramOAuth] Erro ao obter pages:', error.response?.data || error.message);
-      return [];
+      console.error('[InstagramOAuth] Erro ao refresh token:', error.response?.data || error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Obtém perfil do usuário Instagram
+   */
+  async getUserProfile(accessToken: string, userId?: string): Promise<InstagramUserProfile | null> {
+    try {
+      const id = userId || 'me';
+      const response = await axios.get(`https://graph.instagram.com/v21.0/${id}`, {
+        params: {
+          fields: 'id,username,name,account_type,profile_picture_url,followers_count,follows_count,media_count',
+          access_token: accessToken
+        }
+      });
+
+      return response.data;
+    } catch (error: any) {
+      console.error('[InstagramOAuth] Erro ao obter perfil:', error.response?.data || error.message);
+      return null;
     }
   }
 
@@ -239,6 +296,7 @@ export class InstagramOAuthService {
     }
 
     const { campaignId } = stateData;
+    console.log(`[InstagramOAuth] Processando callback para campanha: ${campaignId}`);
 
     // 2. Trocar code por short-lived token
     const shortLivedToken = await this.exchangeCodeForToken(code);
@@ -249,38 +307,35 @@ export class InstagramOAuthService {
     // 3. Obter long-lived token (60 dias)
     const longLivedToken = await this.getLongLivedToken(shortLivedToken.access_token);
     if (!longLivedToken) {
-      return { success: false, error: 'Erro ao obter long-lived token' };
+      // Se falhar, usar o short-lived mesmo (1 hora)
+      console.warn('[InstagramOAuth] Usando short-lived token como fallback');
     }
 
-    // 4. Obter Facebook Pages com Instagram Business Account
-    const pages = await this.getUserPages(longLivedToken.access_token);
+    const finalToken = longLivedToken?.access_token || shortLivedToken.access_token;
+    const expiresIn = longLivedToken?.expires_in || 3600; // 1 hora se short-lived
 
-    // 5. Encontrar page com Instagram Business Account
-    const pageWithInstagram = pages.find(page => page.instagram_business_account);
-
-    if (!pageWithInstagram || !pageWithInstagram.instagram_business_account) {
-      return {
-        success: false,
-        error: 'Nenhuma conta Instagram Business encontrada. Certifique-se de que sua conta Instagram está convertida para Business/Creator e conectada a uma Facebook Page.'
-      };
+    // 4. Obter perfil do usuário Instagram (usar 'me' para Instagram Business Login)
+    const profile = await this.getUserProfile(finalToken);
+    if (!profile) {
+      return { success: false, error: 'Erro ao obter perfil do Instagram' };
     }
 
-    const igAccount = pageWithInstagram.instagram_business_account;
+    console.log(`[InstagramOAuth] Perfil obtido: @${profile.username}`);
 
-    // 6. Salvar no banco de dados
+    // 5. Montar objeto da conta
     const account: InstagramAccount = {
-      id: igAccount.id,
-      instagram_business_account_id: igAccount.id,
-      username: igAccount.username || '',
-      name: igAccount.name,
-      profile_picture_url: igAccount.profile_picture_url,
-      page_id: pageWithInstagram.id,
-      page_name: pageWithInstagram.name,
-      access_token: pageWithInstagram.access_token, // Page access token para API calls
-      token_expires_at: new Date(Date.now() + (longLivedToken.expires_in || 5184000) * 1000)
+      id: profile.id,
+      instagram_business_account_id: profile.id,
+      username: profile.username,
+      name: profile.name,
+      profile_picture_url: profile.profile_picture_url,
+      page_id: profile.id, // Para Instagram Business Login, não há Facebook Page
+      page_name: profile.name || profile.username,
+      access_token: finalToken,
+      token_expires_at: new Date(Date.now() + expiresIn * 1000)
     };
 
-    // Salvar conta no banco
+    // 6. Salvar conta no banco
     const saveResult = await this.saveInstagramAccount(campaignId, account);
 
     if (!saveResult.success) {
@@ -319,7 +374,7 @@ export class InstagramOAuthService {
         access_token_encrypted: encryptedToken,
         token_expires_at: account.token_expires_at?.toISOString(),
         status: 'active',
-        auth_method: 'oauth',
+        auth_method: 'instagram_business_login', // Novo método
         updated_at: new Date().toISOString()
       };
 
@@ -412,17 +467,16 @@ export class InstagramOAuthService {
 
     // Verificar se token ainda é válido com uma chamada à API
     try {
-      const response = await axios.get(`https://graph.facebook.com/v18.0/${account.instagram_business_account_id}`, {
-        params: {
-          fields: 'username,name,profile_picture_url',
-          access_token: account.access_token
-        }
-      });
+      const profile = await this.getUserProfile(account.access_token);
+
+      if (!profile) {
+        throw new Error('Não foi possível obter perfil');
+      }
 
       return {
         connected: true,
-        username: response.data.username || account.username,
-        profile_picture_url: response.data.profile_picture_url || account.profile_picture_url,
+        username: profile.username || account.username,
+        profile_picture_url: profile.profile_picture_url || account.profile_picture_url,
         expires_at: account.token_expires_at
       };
     } catch (error: any) {
@@ -519,6 +573,10 @@ export function getInstagramOAuthService(): InstagramOAuthService {
     instagramOAuthInstance = new InstagramOAuthService();
   }
   return instagramOAuthInstance;
+}
+
+export function resetInstagramOAuthService(): void {
+  instagramOAuthInstance = null;
 }
 
 export default InstagramOAuthService;

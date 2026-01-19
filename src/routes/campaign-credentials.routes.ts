@@ -1250,6 +1250,7 @@ router.patch('/campaigns/:campaignId/briefing/approve', optionalAuthAIC, async (
 // ============================================================================
 
 import { campaignDocumentProcessor, DocumentUpload } from '../services/campaign-document-processor.service';
+import { getLandingPageScraperService } from '../services/landing-page-scraper.service';
 import multer from 'multer';
 
 // Configurar multer para upload de arquivos
@@ -1546,6 +1547,114 @@ router.post('/campaigns/:campaignId/documents/:title/reprocess', optionalAuthAIC
     });
   } catch (error: any) {
     console.error('[Campaign Documents] Error reprocessing document:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/campaigns/:campaignId/landing-page
+ * Processa landing page: extrai conteudo e embeda para RAG
+ */
+router.post('/campaigns/:campaignId/landing-page', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+    const { url } = req.body;
+
+    if (!campaignId) {
+      res.status(400).json({ error: 'campaignId is required' });
+      return;
+    }
+
+    if (!url) {
+      res.status(400).json({ error: 'url is required' });
+      return;
+    }
+
+    // Verificar acesso a campanha
+    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess) {
+      res.status(404).json({ error: 'Campaign not found' });
+      return;
+    }
+
+    console.log(`[Landing Page] Processing: ${url} for campaign ${campaignId}`);
+
+    const scraper = getLandingPageScraperService();
+    const result = await scraper.processLandingPage(url, campaignId);
+
+    if (!result.success) {
+      res.status(400).json({
+        error: result.error || 'Falha ao processar landing page',
+        success: false
+      });
+      return;
+    }
+
+    // Salvar URL da landing page na campanha
+    await supabase
+      .from('cluster_campaigns')
+      .update({ landing_page_url: url })
+      .eq('id', campaignId);
+
+    res.json({
+      success: true,
+      title: result.title,
+      description: result.description,
+      preview: result.content,
+      chunksCreated: result.chunksCreated,
+      message: `Landing page processada: ${result.chunksCreated} blocos criados`
+    });
+
+  } catch (error: any) {
+    console.error('[Landing Page] Error processing:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/campaigns/:campaignId/landing-page/preview
+ * Preview do conteudo da landing page sem embedar
+ */
+router.get('/campaigns/:campaignId/landing-page/preview', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+    const { url } = req.query;
+
+    if (!campaignId) {
+      res.status(400).json({ error: 'campaignId is required' });
+      return;
+    }
+
+    if (!url || typeof url !== 'string') {
+      res.status(400).json({ error: 'url query param is required' });
+      return;
+    }
+
+    // Verificar acesso a campanha
+    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess) {
+      res.status(404).json({ error: 'Campaign not found' });
+      return;
+    }
+
+    const scraper = getLandingPageScraperService();
+    const content = await scraper.extractOnly(url as string);
+
+    if (!content) {
+      res.status(400).json({ error: 'Nao foi possivel extrair conteudo da URL' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      title: content.title,
+      description: content.description,
+      headings: content.headings.slice(0, 10),
+      preview: content.fullText.substring(0, 1000)
+    });
+
+  } catch (error: any) {
+    console.error('[Landing Page] Error previewing:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -3148,7 +3257,7 @@ router.post('/campaigns/:campaignId/whatsapp/activate', async (req: Request, res
 router.get('/whapi/partner/channels', async (req: Request, res: Response): Promise<void> => {
   try {
     const partnerService = getWhapiPartnerService();
-    const result = await partnerService.listChannels({ projectId: 'aic-campaigns' });
+    const result = await partnerService.listChannels({ projectId: process.env.WHAPI_PROJECT_ID || 'zQk0Fsp90x1jGVnqsKZ0' });
 
     if (!result.success) {
       res.status(500).json({ error: result.error || 'Failed to list channels' });
