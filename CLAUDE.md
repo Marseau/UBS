@@ -194,6 +194,37 @@ Todos os workflows com prefixo UBS, WhatsAppSalon, ou relacionados a multi-tenan
 - `landing.html` (landing UBS)
 - `landingTM.html` (Taylor Made)
 
+### 6.4 Landing Pages Dinamicas por Campanha
+
+Sistema de landing pages personalizadas por slug da campanha, permitindo que clientes usem URLs exclusivas em suas acoes de marketing.
+
+**Rota:** `/lp/:slug`
+
+**Exemplo:** `https://aic.ubs.app.br/lp/social-media-booster-360`
+
+**Funcionamento:**
+1. Slug e gerado automaticamente a partir do nome da campanha (trigger no banco)
+2. Rota busca campanha pelo slug e injeta `CAMPAIGN_ID` na landing page
+3. Lead preenche formulario (nome, email, WhatsApp, Instagram opcional)
+4. API captura lead e redireciona para WhatsApp da campanha
+5. AI Agent inicia qualificacao automatica
+
+**Tabela:** `cluster_campaigns.slug` (VARCHAR, UNIQUE, auto-gerado)
+
+**API de Captura de Leads:**
+
+| Endpoint | Metodo | Descricao |
+|----------|--------|-----------|
+| `/api/landing/capture` | POST | Captura lead e retorna URL do WhatsApp |
+| `/api/landing/campaign/:id` | GET | Info publica da campanha |
+| `/api/landing/check-lead` | POST | Verifica se lead ja existe |
+
+**Fluxo de Captura:**
+- **Com Instagram:** Verifica em `campaign_leads`, se novo cria em `instagram_leads` + `campaign_leads` com `source='landing'`
+- **Sem Instagram:** Redireciona para WhatsApp da campanha (AI Agent solicita IG na conversa)
+
+**Portal do Cliente:** A URL da LP aparece na pagina `/cliente/credenciais` com instrucoes detalhadas de uso.
+
 ---
 
 ## 7. FLUXO DE DADOS COMPLETO

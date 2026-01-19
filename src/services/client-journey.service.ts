@@ -664,6 +664,7 @@ class ClientJourneyService {
         campaign:cluster_campaigns (
           id,
           campaign_name,
+          slug,
           project_name,
           nicho_principal,
           service_description,
@@ -698,6 +699,7 @@ class ClientJourneyService {
         campaign:cluster_campaigns (
           id,
           campaign_name,
+          slug,
           project_name,
           nicho_principal,
           service_description,

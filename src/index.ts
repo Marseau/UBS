@@ -1066,6 +1066,16 @@ try {
   console.error("❌ Failed to load WhatsApp Inbound routes:", error);
 }
 
+// Landing Lead Capture Routes - Captura leads da landing page
+try {
+  const landingLeadRoutes = require('./routes/landing-lead.routes');
+  const router = 'default' in landingLeadRoutes ? landingLeadRoutes.default : landingLeadRoutes;
+  app.use('/api/landing', router);
+  console.log('✅ Landing Lead Capture routes loaded');
+} catch (error) {
+  console.error("❌ Failed to load Landing Lead routes:", error);
+}
+
 // Define o caminho para a pasta frontend de forma explícita e segura
 // IMPORTANTE: Prioriza dist/frontend quando rodando de dist/ (produção)
 const candidatePaths: string[] = [
@@ -1207,6 +1217,59 @@ app.get('/test-tenant-redirect', (_req, res) => {
 // AIC CAMPAIGN SLUG ROUTES
 // ============================================================================
 
+// Landing Page dinâmica por slug da campanha
+// Exemplo: /lp/social-media-booster-360
+app.get('/lp/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    // Buscar campanha pelo slug
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    );
+
+    const { data: campaign, error } = await supabase
+      .from('cluster_campaigns')
+      .select('id, campaign_name, slug')
+      .eq('slug', slug)
+      .single();
+
+    if (error || !campaign) {
+      console.log(`[LP] Campanha não encontrada: ${slug}`);
+      return res.status(404).send('Campanha não encontrada');
+    }
+
+    console.log(`[LP] Servindo landing para campanha: ${campaign.campaign_name} (${campaign.id})`);
+
+    // Ler o template da landing page
+    const landingPath = path.join(frontendPath, 'aic-landing.html');
+    let html = fs.readFileSync(landingPath, 'utf8');
+
+    // Injetar o CAMPAIGN_ID correto (substituir o hardcoded)
+    html = html.replace(
+      /const CAMPAIGN_ID = '[^']+';/,
+      `const CAMPAIGN_ID = '${campaign.id}'; // ${campaign.campaign_name}`
+    );
+
+    // Adicionar meta tags para SEO
+    const metaTags = `
+    <meta name="campaign-id" content="${campaign.id}">
+    <meta name="campaign-slug" content="${campaign.slug}">
+    <meta property="og:title" content="${campaign.campaign_name} | AIC">
+    `;
+    html = html.replace('</head>', `${metaTags}</head>`);
+
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    return res.send(html);
+
+  } catch (error) {
+    console.error('[LP] Erro ao servir landing:', error);
+    return res.status(500).send('Erro interno');
+  }
+});
+
 // AIC Campaigns Dashboard
 app.get('/campaigns', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'aic-campaigns-dashboard.html'));
@@ -1295,7 +1358,7 @@ app.get('/cliente/credenciais', serveClientPage('cliente-credenciais.html'));
 // Portal do Cliente - Briefing
 app.get('/cliente/briefing', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.sendFile(path.join(frontendPath, 'aic-campaign-briefing.html'));
+  res.sendFile(path.join(frontendPath, 'aic-campaign-briefing-v2.html'));
 });
 
 // Portal do Cliente - Onboarding (configuracao da campanha)
@@ -1349,7 +1412,8 @@ app.get('/aic/analytics', serveAICPage('aic-dashboard-prova.html'));
 app.get('/aic/campaign-analytics', serveAICPage('cliente-dashboard.html'));
 
 // AIC Admin - Briefing
-app.get('/aic/briefing', serveAICPage('aic-campaign-briefing.html'));
+app.get('/aic/briefing', serveAICPage('aic-campaign-briefing-v2.html'));
+app.get('/aic/briefing-old', serveAICPage('aic-campaign-briefing.html'));
 
 // AIC Admin - Credenciais/Onboarding
 app.get('/aic/credenciais', serveAICPage('aic-campaign-onboarding.html'));

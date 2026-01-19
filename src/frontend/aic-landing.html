@@ -1565,11 +1565,9 @@
         <a href="#metodologia">Metodologia</a>
         <a href="#investimento">Investimento</a>
         <a href="/aic-docs.html">Docs</a>
-        <a href="/aic-campaigns-dashboard.html">Campanhas</a>
-        <a href="/aic-campaign-onboarding.html">Nova Campanha</a>
         <a href="/aic-login.html" class="nav-btn-secondary" id="nav-btn-entrar">Entrar</a>
         <a href="/cliente/proposta" class="nav-btn-portal" id="nav-btn-portal" style="display: none;">Voltar ao Portal</a>
-        <a href="#" class="nav-cta" data-umami-event="cta_nav_cadastro">Falar com Especialista</a>
+        <a href="https://wa.me/5511999040605?text=Olá! Vim pela landing da AIC e gostaria de saber mais." target="_blank" class="nav-cta" data-umami-event="cta_nav_cadastro">Falar com Especialista</a>
       </div>
     </div>
   </nav>
@@ -1587,7 +1585,7 @@
         <li>Expanda seus negócios de forma previsível e escalável</li>
       </ul>
       <div class="hero-ctas">
-        <a href="#" class="btn-primary" data-umami-event="cta_hero_cadastro">
+        <a href="/aic-login.html" class="btn-primary" data-umami-event="cta_hero_cadastro">
           Comece sua Jornada Agora
         </a>
         <a href="/aic-docs.html" class="btn-secondary">
@@ -1949,7 +1947,7 @@
           <li>Entrega de leads qualificados em planilha</li>
         </ul>
         <div class="pricing-cta">
-          <a href="#" class="btn-primary" data-umami-event="cta_pricing_cadastro">
+          <a href="https://wa.me/5511999040605?text=Olá! Quero aproveitar a oferta de lançamento da AIC!" target="_blank" class="btn-primary" data-umami-event="cta_pricing_cadastro">
             Aproveitar Oferta de Lançamento
           </a>
         </div>
@@ -1997,7 +1995,7 @@
     <div class="container cta-content">
       <h2>Quer saber se a AIC funciona para o seu negócio?</h2>
       <p>Converse com nossa equipe para entender se o seu nicho e oferta têm fit com a metodologia de clusters de intenção.</p>
-      <a href="#" class="btn-primary" data-umami-event="cta_bottom_cadastro">
+      <a href="https://wa.me/5511999040605?text=Olá! Gostaria de saber se a AIC funciona para o meu negócio." target="_blank" class="btn-primary" data-umami-event="cta_bottom_cadastro">
         Falar com Especialista
       </a>
     </div>
@@ -2313,9 +2311,10 @@
           const name = document.getElementById('leadName').value.trim();
           const email = document.getElementById('leadEmail').value.trim();
           const phone = document.getElementById('leadPhone').value.trim();
+          const instagram = document.getElementById('leadInstagram').value.trim();
 
           if (!name || !email || !phone) {
-            alert('Por favor, preencha todos os campos');
+            alert('Por favor, preencha todos os campos obrigatórios');
             return;
           }
 
@@ -2328,51 +2327,96 @@
           // Salvar dados localmente
           storeLeadData(name, email, phone);
 
-          // Determinar origem: 'google' se usou Google Sign-In, 'aic' caso contrario
-          const leadOrigin = isGoogleSignIn ? 'google' : 'aic';
+          try {
+            // Capturar UTM params da URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const utmParams = {
+              utm_source: urlParams.get('utm_source') || undefined,
+              utm_medium: urlParams.get('utm_medium') || undefined,
+              utm_campaign: urlParams.get('utm_campaign') || undefined,
+              utm_content: urlParams.get('utm_content') || undefined,
+              utm_term: urlParams.get('utm_term') || undefined
+            };
 
-          // Criar pre-cadastro no Supabase Auth (nao bloqueia fluxo)
-          createAICPreRegistration(name, email, phone, leadOrigin)
-            .then(result => {
-              if (result.success) {
-                console.log('[AIC Lead Capture] Pre-cadastro realizado:', result.alreadyExists ? 'ja existia' : 'novo usuario', 'origem:', leadOrigin);
-              } else {
-                console.warn('[AIC Lead Capture] Pre-cadastro falhou (nao critico):', result.error);
-              }
-            })
-            .catch(err => {
-              console.warn('[AIC Lead Capture] Erro no pre-cadastro (nao critico):', err);
+            // Chamar API de captura de lead
+            const response = await fetch('/api/landing/capture', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                campaignId: CAMPAIGN_ID,
+                name,
+                email,
+                whatsapp: phone,
+                instagramUsername: instagram || '',
+                utmParams
+              })
             });
 
-          // Enviar tracking
-          if (pendingElement) {
-            const ctaName = pendingElement.getAttribute('data-umami-event') || 'unknown_cta';
-            const ctaHref = pendingElement.getAttribute('href') || '';
-            sendTracking({ name, email, phone }, ctaName, ctaHref);
+            const result = await response.json();
+
+            if (result.success && result.redirectUrl) {
+              console.log('[AIC Lead Capture] Lead capturado:', result.isExistingLead ? 'existente' : 'novo');
+
+              // Determinar origem para tracking
+              const leadOrigin = isGoogleSignIn ? 'google' : 'aic';
+
+              // Criar pre-cadastro no Supabase Auth (não bloqueia fluxo)
+              createAICPreRegistration(name, email, phone, leadOrigin)
+                .then(r => console.log('[AIC Lead Capture] Pre-cadastro:', r.success ? 'ok' : 'falhou'))
+                .catch(err => console.warn('[AIC Lead Capture] Erro pre-cadastro:', err));
+
+              // Enviar tracking
+              if (pendingElement) {
+                const ctaName = pendingElement.getAttribute('data-umami-event') || 'unknown_cta';
+                const ctaHref = pendingElement.getAttribute('href') || '';
+                sendTracking({ name, email, phone, instagram }, ctaName, ctaHref);
+              }
+
+              // Enviar email de follow-up via N8N (não bloqueia fluxo)
+              fetch('https://n8n.ubs.app.br/webhook/aic-lead-followup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, phone, instagram, campaignId: CAMPAIGN_ID })
+              }).catch(err => console.warn('[AIC] Erro ao enviar email follow-up:', err));
+
+              // Fechar modal e redirecionar para WhatsApp da campanha
+              closeModal();
+              pendingAction = null;
+              pendingElement = null;
+              window.location.href = result.redirectUrl;
+
+            } else {
+              // Fallback: se API falhar, usar WhatsApp padrão
+              console.warn('[AIC Lead Capture] API falhou, usando fallback:', result.error);
+
+              // Fechar modal
+              closeModal();
+              pendingAction = null;
+              pendingElement = null;
+
+              // WhatsApp do especialista (fallback)
+              const whatsappNumber = '5511921947727';
+              const whatsappMessage = encodeURIComponent(`Olá! Sou ${name} e gostaria de saber mais sobre a AIC.`);
+              window.location.href = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
+            }
+
+          } catch (error) {
+            console.error('[AIC Lead Capture] Erro ao capturar lead:', error);
+
+            // Fallback: WhatsApp padrão em caso de erro
+            closeModal();
+            pendingAction = null;
+            pendingElement = null;
+
+            const whatsappNumber = '5511921947727';
+            const whatsappMessage = encodeURIComponent(`Olá! Sou ${name} e gostaria de saber mais sobre a AIC.`);
+            window.location.href = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
+
+          } finally {
+            // Restaurar botão
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
           }
-
-          // Enviar email de follow-up via N8N (não bloqueia fluxo)
-          fetch('https://n8n.ubs.app.br/webhook/aic-lead-followup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, phone })
-          }).catch(err => console.warn('[AIC] Erro ao enviar email follow-up:', err));
-
-          // Restaurar botão
-          submitBtn.disabled = false;
-          submitBtn.textContent = originalText;
-
-          // Fechar modal
-          closeModal();
-
-          // Limpar pendências
-          pendingAction = null;
-          pendingElement = null;
-
-          // Redirecionar para WhatsApp com AI Agent
-          const whatsappNumber = '5511921947727';
-          const whatsappMessage = encodeURIComponent(`Olá! Sou ${name} e gostaria de saber mais sobre a AIC.`);
-          window.location.href = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
         });
 
         // Event listener do botão cancelar
@@ -2483,6 +2527,18 @@
             placeholder="(11) 99999-9999"
             autocomplete="tel"
           >
+        </div>
+
+        <div class="form-group">
+          <label for="leadInstagram">Instagram (opcional)</label>
+          <input
+            type="text"
+            id="leadInstagram"
+            name="instagram"
+            placeholder="@seu_usuario"
+            autocomplete="off"
+          >
+          <span class="form-hint">Seu @ do Instagram para personalizarmos o atendimento</span>
         </div>
 
         <div class="form-actions">
@@ -2629,6 +2685,13 @@
 
     .form-group input::placeholder {
       color: var(--aic-gray);
+    }
+
+    .form-hint {
+      display: block;
+      font-size: 12px;
+      color: var(--aic-gray);
+      margin-top: 6px;
     }
 
     .form-actions {

@@ -392,6 +392,139 @@
       .main-content { padding: 20px; }
       .form-row { grid-template-columns: 1fr; }
     }
+
+    /* QR Code Modal */
+    .qr-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(12, 27, 51, 0.95);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+    .qr-modal.show { display: flex; }
+    .qr-modal-content {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 20px;
+      padding: 32px;
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+    }
+    .qr-modal h2 {
+      margin: 0 0 8px 0;
+      font-size: 22px;
+      color: var(--aic-white);
+    }
+    .qr-modal .subtitle {
+      color: var(--aic-gray);
+      margin-bottom: 24px;
+    }
+    .qr-code-container {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+      display: inline-block;
+    }
+    .qr-code-container img {
+      max-width: 220px;
+      height: auto;
+    }
+    .qr-steps {
+      background: var(--aic-navy);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: left;
+      margin-bottom: 24px;
+    }
+    .qr-steps h4 {
+      margin: 0 0 16px 0;
+      font-size: 14px;
+      color: var(--aic-green);
+    }
+    .qr-steps ol {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .qr-steps li {
+      margin-bottom: 10px;
+      font-size: 14px;
+      color: var(--aic-gray-light);
+    }
+    .qr-steps li strong {
+      color: var(--aic-white);
+    }
+    .qr-status {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    .qr-status.checking {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: var(--aic-yellow);
+    }
+    .qr-status.connected {
+      background: rgba(14, 204, 151, 0.1);
+      border: 1px solid rgba(14, 204, 151, 0.3);
+      color: var(--aic-green);
+    }
+    .qr-modal-buttons {
+      display: flex;
+      gap: 12px;
+    }
+    .qr-modal-buttons .btn {
+      flex: 1;
+    }
+
+    /* Process Steps */
+    .process-steps {
+      background: var(--aic-navy);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .process-steps h4 {
+      margin: 0 0 16px 0;
+      font-size: 14px;
+      color: var(--aic-green);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .process-step {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .process-step:last-child { margin-bottom: 0; }
+    .step-number {
+      width: 24px;
+      height: 24px;
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--aic-gray);
+      flex-shrink: 0;
+    }
+    .step-text {
+      font-size: 13px;
+      color: var(--aic-gray-light);
+      padding-top: 2px;
+    }
   </style>
 </head>
 <body class="has-sidebar">
@@ -580,13 +713,15 @@
                 </svg>
               </div>
               WhatsApp
-              <span class="status-badge ${hasWhatsapp ? 'complete' : 'pending'}">${hasWhatsapp ? 'Configurado' : 'Pendente'}</span>
+              <span class="status-badge ${hasWhatsapp ? 'complete' : 'pending'}">${hasWhatsapp ? 'Conectado' : 'Pendente'}</span>
             </h2>
-            <p class="subtitle">Numero WhatsApp que sera usado para enviar mensagens aos leads.</p>
+            <p class="subtitle">Conecte o WhatsApp que sera usado para enviar mensagens aos leads.</p>
+
+            ${!hasWhatsapp ? '<div class="process-steps"><h4>Como funciona a conexao</h4><div class="process-step"><div class="step-number">1</div><div class="step-text">Informe o numero do WhatsApp que sera usado na campanha</div></div><div class="process-step"><div class="step-number">2</div><div class="step-text">Um <strong>QR Code</strong> sera exibido na tela</div></div><div class="process-step"><div class="step-number">3</div><div class="step-text">Abra o <strong>WhatsApp no celular</strong> > Menu > <strong>Aparelhos conectados</strong> > Conectar</div></div><div class="process-step"><div class="step-number">4</div><div class="step-text">Escaneie o QR Code e pronto!</div></div></div>' : ''}
 
             <div class="warning-box">
               <h4>Importante</h4>
-              <p>Use uma linha WhatsApp exclusiva para a campanha. Nao use seu numero pessoal. Recomendamos criar uma conta WhatsApp normal (nao Business).</p>
+              <p>Use uma linha WhatsApp <strong>exclusiva</strong> para a campanha. Nao use seu numero pessoal. Recomendamos criar uma conta WhatsApp normal (nao Business).</p>
             </div>
 
             <form id="whatsapp-form" onsubmit="return saveWhatsapp(event)">
@@ -597,7 +732,7 @@
               </div>
 
               <button type="submit" class="btn btn-primary btn-full" id="wa-btn">
-                ${hasWhatsapp ? 'Atualizar WhatsApp' : 'Salvar WhatsApp'}
+                ${hasWhatsapp ? 'WhatsApp Conectado' : 'Conectar WhatsApp'}
               </button>
               <div id="wa-status" class="status-message"></div>
             </form>
@@ -614,14 +749,12 @@
               Instagram Business
               <span class="status-badge ${hasInstagram ? 'complete' : 'pending'}" id="ig-status-badge">${hasInstagram ? 'Conectado' : 'Pendente'}</span>
             </h2>
-            <p class="subtitle">Conecte sua conta Instagram Business via Facebook para envio de DMs.</p>
+            <p class="subtitle">Conecte sua conta Instagram Business para envio de DMs.</p>
 
             <div class="warning-box" style="background: rgba(255, 193, 7, 0.1); border-color: #ffc107;">
-              <h4>Pre-requisitos Obrigatorios</h4>
+              <h4>Pre-requisito Obrigatorio</h4>
               <ol style="margin: 8px 0 0 16px; line-height: 1.6;">
                 <li><strong>Conta Instagram Business ou Creator</strong> - Converta em Configuracoes → Conta → Mudar para conta profissional</li>
-                <li><strong>Facebook Page vinculada</strong> - Conecte seu Instagram a uma Facebook Page</li>
-                <li><strong>Acesso de Admin a Page</strong> - Voce precisa ser administrador da Page</li>
               </ol>
             </div>
 
@@ -629,11 +762,11 @@
             <div id="ig-connect-section" style="display: ${hasInstagram ? 'none' : 'block'};">
               <button type="button" class="btn btn-primary btn-full" onclick="connectInstagram()" id="ig-connect-btn">
                 <svg style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle;" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.879V14.89h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.989C18.343 21.129 22 16.99 22 12c0-5.523-4.477-10-10-10z"/>
+                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
                 </svg>
-                Conectar com Facebook
+                Conectar com Instagram
               </button>
-              <p class="form-hint" style="text-align: center; margin-top: 12px;">Voce sera redirecionado para o Facebook para autorizar o acesso.</p>
+              <p class="form-hint" style="text-align: center; margin-top: 12px;">Voce sera redirecionado para o Instagram para autorizar o acesso.</p>
             </div>
 
             <!-- Conta conectada -->
@@ -654,7 +787,7 @@
 
             <div class="info-box" style="margin-top: 16px; background: rgba(14, 204, 151, 0.1); border-color: #0ecc97;">
               <h4 style="color: #0ecc97;">Seguranca via OAuth</h4>
-              <p><strong>Nunca pedimos sua senha!</strong> A conexao e feita via autorizacao segura do Facebook/Meta. Voce pode revogar o acesso a qualquer momento nas configuracoes do Facebook.</p>
+              <p><strong>Nunca pedimos sua senha!</strong> A conexao e feita via autorizacao segura do Instagram. Voce pode revogar o acesso a qualquer momento nas configuracoes do Instagram.</p>
             </div>
 
             <div id="ig-status" class="status-message"></div>
@@ -672,6 +805,82 @@
             </p>
           `}
         `}
+
+        <!-- URL da Landing Page - Sempre visível se tiver campanha -->
+        ${journeyData.campaign?.slug ? `
+          <div class="card" style="margin-top: 24px; border-color: var(--aic-green);">
+            <h2>
+              <div class="icon" style="background: var(--aic-green-glow);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                </svg>
+              </div>
+              URL da sua Landing Page
+            </h2>
+
+            <div class="info-box" style="background: var(--aic-green-glow); border-color: var(--aic-green);">
+              <h4 style="color: var(--aic-green); margin-bottom: 12px;">Link exclusivo da sua campanha</h4>
+              <p style="margin-bottom: 16px;">Use este link em suas acoes de marketing. Os leads serao automaticamente direcionados para o WhatsApp da campanha.</p>
+
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="text"
+                  id="lp-url"
+                  class="form-input"
+                  value="https://aic.ubs.app.br/lp/${journeyData.campaign?.slug}"
+                  readonly
+                  style="flex: 1; background: var(--aic-navy-light); font-family: monospace; font-size: 13px;"
+                >
+                <button type="button" class="btn btn-primary" onclick="copyLPUrl()" style="white-space: nowrap;">
+                  Copiar
+                </button>
+              </div>
+              <p id="copy-feedback" style="display: none; color: var(--aic-green); font-size: 12px; margin-top: 8px;">Link copiado!</p>
+            </div>
+
+            <div style="background: var(--aic-navy-light); border-radius: 12px; padding: 20px; margin-top: 16px;">
+              <h4 style="color: var(--aic-white); margin: 0 0 16px 0; font-size: 15px;">Como usar este link?</h4>
+
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                  <span style="background: var(--aic-green); color: var(--aic-navy); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;">1</span>
+                  <div>
+                    <strong style="color: var(--aic-white);">Na sua Landing Page</strong>
+                    <p style="color: var(--aic-gray); font-size: 13px; margin: 4px 0 0 0;">Coloque um botao ou link apontando para esta URL. Exemplo:</p>
+                    <code style="display: block; background: var(--aic-navy); padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-top: 8px; color: var(--aic-gray-light); overflow-x: auto;">&lt;a href="https://aic.ubs.app.br/lp/${journeyData.campaign?.slug}"&gt;Falar com Especialista&lt;/a&gt;</code>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                  <span style="background: var(--aic-green); color: var(--aic-navy); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;">2</span>
+                  <div>
+                    <strong style="color: var(--aic-white);">Em campanhas de anuncios</strong>
+                    <p style="color: var(--aic-gray); font-size: 13px; margin: 4px 0 0 0;">Use como URL de destino em Facebook Ads, Google Ads, etc. Adicione UTM para rastrear:</p>
+                    <code style="display: block; background: var(--aic-navy); padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-top: 8px; color: var(--aic-gray-light); overflow-x: auto; word-break: break-all;">https://aic.ubs.app.br/lp/${journeyData.campaign?.slug}?utm_source=facebook&utm_medium=ads</code>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                  <span style="background: var(--aic-green); color: var(--aic-navy); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;">3</span>
+                  <div>
+                    <strong style="color: var(--aic-white);">Em redes sociais</strong>
+                    <p style="color: var(--aic-gray); font-size: 13px; margin: 4px 0 0 0;">Compartilhe diretamente no Instagram, WhatsApp Status, LinkedIn, etc.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="warning-box" style="margin-top: 16px; background: rgba(59, 130, 246, 0.1); border-color: #3b82f6;">
+              <h4 style="color: #3b82f6;">O que acontece quando alguem acessa?</h4>
+              <ol style="margin: 8px 0 0 16px; line-height: 1.8; color: var(--aic-gray-light);">
+                <li>O visitante ve a landing page da AIC</li>
+                <li>Preenche nome, email, WhatsApp e Instagram (opcional)</li>
+                <li>E redirecionado automaticamente para o <strong>WhatsApp da sua campanha</strong></li>
+                <li>O AI Agent inicia a conversa de qualificacao</li>
+              </ol>
+            </div>
+          </div>
+        ` : ''}
       `;
     }
 
@@ -682,11 +891,35 @@
       el.className = `status-message show ${type}`;
     }
 
+    // Copiar URL da Landing Page
+    function copyLPUrl() {
+      const urlInput = document.getElementById('lp-url');
+      const feedback = document.getElementById('copy-feedback');
+
+      urlInput.select();
+      urlInput.setSelectionRange(0, 99999); // Para mobile
+
+      try {
+        navigator.clipboard.writeText(urlInput.value);
+        feedback.style.display = 'block';
+        setTimeout(() => {
+          feedback.style.display = 'none';
+        }, 2000);
+      } catch (err) {
+        // Fallback para browsers antigos
+        document.execCommand('copy');
+        feedback.style.display = 'block';
+        setTimeout(() => {
+          feedback.style.display = 'none';
+        }, 2000);
+      }
+    }
+
     async function saveWhatsapp(event) {
       event.preventDefault();
       const btn = document.getElementById('wa-btn');
       btn.disabled = true;
-      btn.textContent = 'Salvando...';
+      btn.textContent = 'Conectando...';
 
       try {
         const token = localStorage.getItem('aic_access_token');
@@ -701,12 +934,22 @@
           })
         });
 
+        const data = await response.json();
+
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || 'Erro ao salvar');
+          throw new Error(data.message || 'Erro ao conectar');
         }
 
-        showStatus('wa-status', 'WhatsApp salvo com sucesso!', 'success');
+        // Se retornou QR Code, mostrar modal
+        if (data.qr_code) {
+          btn.disabled = false;
+          btn.textContent = 'Conectar WhatsApp';
+          showQRModal(data.qr_code);
+          return;
+        }
+
+        // Se nao precisa de QR (ja conectado), atualizar UI
+        showStatus('wa-status', data.message || 'WhatsApp conectado com sucesso!', 'success');
         credentialsData.whatsapp = { phone: document.getElementById('wa_phone').value };
 
         setTimeout(() => {
@@ -714,9 +957,9 @@
         }, 1000);
 
       } catch (error) {
-        showStatus('wa-status', error.message || 'Erro ao salvar. Tente novamente.', 'error');
+        showStatus('wa-status', error.message || 'Erro ao conectar. Tente novamente.', 'error');
         btn.disabled = false;
-        btn.textContent = 'Salvar WhatsApp';
+        btn.textContent = 'Conectar WhatsApp';
       }
     }
 
@@ -832,6 +1075,111 @@
 
     // Initialize
     init();
+  </script>
+
+  <!-- QR Code Modal -->
+  <div class="qr-modal" id="qr-modal">
+    <div class="qr-modal-content">
+      <h2>Conectar WhatsApp</h2>
+      <p class="subtitle">Escaneie o QR Code com seu celular</p>
+
+      <div class="qr-code-container" id="qr-container">
+        <img id="qr-image" src="" alt="QR Code">
+      </div>
+
+      <div class="qr-steps">
+        <h4>Passo a passo</h4>
+        <ol>
+          <li>Abra o <strong>WhatsApp</strong> no seu celular</li>
+          <li>Toque em <strong>Menu</strong> (tres pontinhos) ou <strong>Configuracoes</strong></li>
+          <li>Selecione <strong>Aparelhos conectados</strong></li>
+          <li>Toque em <strong>Conectar um aparelho</strong></li>
+          <li>Aponte a camera para este QR Code</li>
+        </ol>
+      </div>
+
+      <div class="qr-status checking" id="qr-status">
+        Aguardando conexao...
+      </div>
+
+      <div class="qr-modal-buttons">
+        <button class="btn btn-secondary" onclick="closeQRModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="checkWhatsAppStatus()">Verificar Conexao</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let statusCheckInterval = null;
+
+    function showQRModal(qrCode) {
+      const modal = document.getElementById('qr-modal');
+      const qrImage = document.getElementById('qr-image');
+      const statusEl = document.getElementById('qr-status');
+
+      // QR Code pode vir como base64 ou URL
+      if (qrCode.startsWith('data:') || qrCode.startsWith('http')) {
+        qrImage.src = qrCode;
+      } else {
+        // Assume base64 sem prefixo
+        qrImage.src = 'data:image/png;base64,' + qrCode;
+      }
+
+      statusEl.className = 'qr-status checking';
+      statusEl.textContent = 'Aguardando conexao...';
+
+      modal.classList.add('show');
+
+      // Iniciar verificacao automatica a cada 3 segundos
+      startStatusCheck();
+    }
+
+    function closeQRModal() {
+      const modal = document.getElementById('qr-modal');
+      modal.classList.remove('show');
+      stopStatusCheck();
+    }
+
+    function startStatusCheck() {
+      stopStatusCheck(); // Limpar intervalo anterior
+      statusCheckInterval = setInterval(checkWhatsAppStatus, 3000);
+    }
+
+    function stopStatusCheck() {
+      if (statusCheckInterval) {
+        clearInterval(statusCheckInterval);
+        statusCheckInterval = null;
+      }
+    }
+
+    async function checkWhatsAppStatus() {
+      const statusEl = document.getElementById('qr-status');
+
+      try {
+        const token = localStorage.getItem('aic_access_token');
+        const response = await fetch('/api/aic/journey/credentials/whatsapp/status', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+
+        const data = await response.json();
+
+        if (data.connected) {
+          statusEl.className = 'qr-status connected';
+          statusEl.textContent = 'WhatsApp conectado com sucesso!';
+          stopStatusCheck();
+
+          // Atualizar dados e fechar modal apos 2 segundos
+          credentialsData.whatsapp = { phone: data.phone || document.getElementById('wa_phone').value };
+
+          setTimeout(() => {
+            closeQRModal();
+            renderPage();
+          }, 2000);
+        }
+      } catch (error) {
+        console.error('Erro ao verificar status:', error);
+      }
+    }
   </script>
 </body>
 </html>
