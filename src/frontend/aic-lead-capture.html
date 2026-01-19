@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fale Conosco</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0ECC97;
+      --primary-dark: #0BA578;
+      --bg-dark: #0C1B33;
+      --bg-card: #122444;
+      --text-white: #FDFDFD;
+      --text-gray: #94a3b8;
+      --border: #1e3a5f;
+      --error: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, var(--bg-dark) 0%, #0a1628 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      color: var(--text-white);
+    }
+
+    .capture-container {
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .capture-card {
+      background: var(--bg-card);
+      border-radius: 20px;
+      padding: 40px;
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    }
+
+    .capture-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .business-name {
+      font-size: 14px;
+      color: var(--primary);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+
+    .capture-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      line-height: 1.2;
+    }
+
+    .capture-subtitle {
+      color: var(--text-gray);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .capture-form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-white);
+    }
+
+    .form-label .optional {
+      color: var(--text-gray);
+      font-weight: 400;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg-dark);
+      color: var(--text-white);
+      font-size: 15px;
+      font-family: inherit;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(14, 204, 151, 0.15);
+    }
+
+    .form-input::placeholder {
+      color: #64748b;
+    }
+
+    .form-hint {
+      font-size: 12px;
+      color: var(--text-gray);
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 16px 24px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: var(--bg-dark);
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-top: 8px;
+    }
+
+    .btn-submit:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(14, 204, 151, 0.3);
+    }
+
+    .btn-submit:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .error-message {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: var(--error);
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .error-message.show {
+      display: block;
+    }
+
+    .privacy-note {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 12px;
+      color: var(--text-gray);
+    }
+
+    .privacy-note a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    .privacy-note a:hover {
+      text-decoration: underline;
+    }
+
+    /* Loading state */
+    .btn-submit.loading {
+      position: relative;
+      color: transparent;
+    }
+
+    .btn-submit.loading::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      top: 50%;
+      left: 50%;
+      margin-left: -10px;
+      margin-top: -10px;
+      border: 2px solid var(--bg-dark);
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Powered by */
+    .powered-by {
+      text-align: center;
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: #4a5568;
+    }
+
+    .powered-by a {
+      color: #4a5568;
+      text-decoration: none;
+    }
+
+    .powered-by a:hover {
+      color: var(--primary);
+    }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+      .capture-card {
+        padding: 28px 24px;
+      }
+
+      .capture-title {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="capture-container">
+    <div class="capture-card">
+      <div class="capture-header">
+        <div class="business-name" id="businessName">Carregando...</div>
+        <h1 class="capture-title">Fale com um Especialista</h1>
+        <p class="capture-subtitle">Preencha seus dados para iniciar uma conversa pelo WhatsApp</p>
+      </div>
+
+      <form class="capture-form" id="captureForm">
+        <div id="errorMessage" class="error-message"></div>
+
+        <div class="form-group">
+          <label class="form-label" for="name">Nome completo</label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            class="form-input"
+            placeholder="Seu nome"
+            required
+            autocomplete="name"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="email">Email</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            class="form-input"
+            placeholder="seu@email.com"
+            required
+            autocomplete="email"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="whatsapp">WhatsApp</label>
+          <input
+            type="tel"
+            id="whatsapp"
+            name="whatsapp"
+            class="form-input"
+            placeholder="(11) 99999-9999"
+            required
+            autocomplete="tel"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="instagram">Instagram <span class="optional">(opcional)</span></label>
+          <input
+            type="text"
+            id="instagram"
+            name="instagram"
+            class="form-input"
+            placeholder="@seu_usuario"
+            autocomplete="off"
+          >
+          <span class="form-hint">Seu @ para personalizarmos o atendimento</span>
+        </div>
+
+        <button type="submit" class="btn-submit" id="submitBtn">
+          Iniciar Conversa
+        </button>
+      </form>
+
+      <p class="privacy-note">
+        Ao continuar, você concorda com nossa <a href="/privacy" target="_blank">Política de Privacidade</a>
+      </p>
+
+      <div class="powered-by">
+        Powered by <a href="https://aic.ubs.app.br" target="_blank">AIC</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =====================================================
+    // CONFIGURAÇÃO - Injetado pelo servidor
+    // =====================================================
+    const CAMPAIGN_ID = '{{CAMPAIGN_ID}}';
+    const CAMPAIGN_NAME = '{{CAMPAIGN_NAME}}';
+    const BUSINESS_NAME = '{{BUSINESS_NAME}}';
+
+    // =====================================================
+    // INICIALIZAÇÃO
+    // =====================================================
+    document.addEventListener('DOMContentLoaded', function() {
+      // Atualizar nome do negócio
+      const businessNameEl = document.getElementById('businessName');
+      if (BUSINESS_NAME && BUSINESS_NAME !== '{{BUSINESS_NAME}}') {
+        businessNameEl.textContent = BUSINESS_NAME;
+      } else if (CAMPAIGN_NAME && CAMPAIGN_NAME !== '{{CAMPAIGN_NAME}}') {
+        businessNameEl.textContent = CAMPAIGN_NAME;
+      } else {
+        businessNameEl.style.display = 'none';
+      }
+
+      // Máscara de telefone
+      const whatsappInput = document.getElementById('whatsapp');
+      whatsappInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length > 11) value = value.slice(0, 11);
+
+        if (value.length > 0) {
+          if (value.length <= 2) {
+            value = '(' + value;
+          } else if (value.length <= 7) {
+            value = '(' + value.slice(0, 2) + ') ' + value.slice(2);
+          } else {
+            value = '(' + value.slice(0, 2) + ') ' + value.slice(2, 7) + '-' + value.slice(7);
+          }
+        }
+        e.target.value = value;
+      });
+
+      // Capturar UTM params
+      const urlParams = new URLSearchParams(window.location.search);
+      window.utmParams = {
+        utm_source: urlParams.get('utm_source') || undefined,
+        utm_medium: urlParams.get('utm_medium') || undefined,
+        utm_campaign: urlParams.get('utm_campaign') || undefined,
+        utm_content: urlParams.get('utm_content') || undefined,
+        utm_term: urlParams.get('utm_term') || undefined
+      };
+    });
+
+    // =====================================================
+    // FORM SUBMISSION
+    // =====================================================
+    document.getElementById('captureForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const submitBtn = document.getElementById('submitBtn');
+      const errorMessage = document.getElementById('errorMessage');
+
+      // Obter valores
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const whatsapp = document.getElementById('whatsapp').value.trim();
+      const instagram = document.getElementById('instagram').value.trim();
+
+      // Validação básica
+      if (!name || !email || !whatsapp) {
+        showError('Por favor, preencha todos os campos obrigatórios.');
+        return;
+      }
+
+      // Loading state
+      submitBtn.classList.add('loading');
+      submitBtn.disabled = true;
+      errorMessage.classList.remove('show');
+
+      try {
+        // Chamar API de captura
+        const response = await fetch('/api/landing/capture', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            campaignId: CAMPAIGN_ID,
+            name,
+            email,
+            whatsapp: whatsapp.replace(/\D/g, ''),
+            instagramUsername: instagram,
+            utmParams: window.utmParams
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success && result.redirectUrl) {
+          // Redirecionar para WhatsApp
+          window.location.href = result.redirectUrl;
+        } else {
+          showError(result.error || 'Erro ao processar. Tente novamente.');
+          submitBtn.classList.remove('loading');
+          submitBtn.disabled = false;
+        }
+
+      } catch (error) {
+        console.error('Erro:', error);
+        showError('Erro de conexão. Verifique sua internet e tente novamente.');
+        submitBtn.classList.remove('loading');
+        submitBtn.disabled = false;
+      }
+    });
+
+    function showError(message) {
+      const errorMessage = document.getElementById('errorMessage');
+      errorMessage.textContent = message;
+      errorMessage.classList.add('show');
+    }
+  </script>
+</body>
+</html>

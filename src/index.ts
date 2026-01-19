@@ -1217,8 +1217,9 @@ app.get('/test-tenant-redirect', (_req, res) => {
 // AIC CAMPAIGN SLUG ROUTES
 // ============================================================================
 
-// Landing Page dinâmica por slug da campanha
-// Exemplo: /lp/social-media-booster-360
+// Página de Captura de Leads por slug da campanha
+// Cliente usa: https://aic.ubs.app.br/lp/slug-da-campanha
+// Mostra formulário simples, redireciona para WhatsApp da campanha
 app.get('/lp/:slug', async (req, res) => {
   try {
     const { slug } = req.params;
@@ -1232,40 +1233,41 @@ app.get('/lp/:slug', async (req, res) => {
 
     const { data: campaign, error } = await supabase
       .from('cluster_campaigns')
-      .select('id, campaign_name, slug')
+      .select('id, campaign_name, business_name, slug')
       .eq('slug', slug)
       .single();
 
     if (error || !campaign) {
-      console.log(`[LP] Campanha não encontrada: ${slug}`);
-      return res.status(404).send('Campanha não encontrada');
+      console.log(`[LP Capture] Campanha não encontrada: ${slug}`);
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html><head><title>Não encontrado</title>
+        <style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0C1B33;color:#fff;margin:0;}
+        .box{text-align:center;padding:40px;}.box h1{font-size:48px;margin:0 0 16px;color:#ef4444;}.box p{color:#94a3b8;}</style>
+        </head><body><div class="box"><h1>404</h1><p>Página não encontrada</p></div></body></html>
+      `);
     }
 
-    console.log(`[LP] Servindo landing para campanha: ${campaign.campaign_name} (${campaign.id})`);
+    console.log(`[LP Capture] Servindo captura para: ${campaign.business_name || campaign.campaign_name} (${campaign.id})`);
 
-    // Ler o template da landing page
-    const landingPath = path.join(frontendPath, 'aic-landing.html');
-    let html = fs.readFileSync(landingPath, 'utf8');
+    // Ler o template da página de captura
+    const capturePath = path.join(frontendPath, 'aic-lead-capture.html');
+    let html = fs.readFileSync(capturePath, 'utf8');
 
-    // Injetar o CAMPAIGN_ID correto (substituir o hardcoded)
-    html = html.replace(
-      /const CAMPAIGN_ID = '[^']+';/,
-      `const CAMPAIGN_ID = '${campaign.id}'; // ${campaign.campaign_name}`
-    );
+    // Injetar dados da campanha
+    html = html.replace(/\{\{CAMPAIGN_ID\}\}/g, campaign.id);
+    html = html.replace(/\{\{CAMPAIGN_NAME\}\}/g, campaign.campaign_name || '');
+    html = html.replace(/\{\{BUSINESS_NAME\}\}/g, campaign.business_name || campaign.campaign_name || '');
 
-    // Adicionar meta tags para SEO
-    const metaTags = `
-    <meta name="campaign-id" content="${campaign.id}">
-    <meta name="campaign-slug" content="${campaign.slug}">
-    <meta property="og:title" content="${campaign.campaign_name} | AIC">
-    `;
-    html = html.replace('</head>', `${metaTags}</head>`);
+    // Atualizar título da página
+    const pageTitle = campaign.business_name || campaign.campaign_name || 'Fale Conosco';
+    html = html.replace('<title>Fale Conosco</title>', `<title>Fale Conosco | ${pageTitle}</title>`);
 
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     return res.send(html);
 
   } catch (error) {
-    console.error('[LP] Erro ao servir landing:', error);
+    console.error('[LP Capture] Erro ao servir página:', error);
     return res.status(500).send('Erro interno');
   }
 });
