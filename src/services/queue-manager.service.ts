@@ -25,6 +25,14 @@ export interface WhatsAppMessageJob {
   priority?: number;
 }
 
+export interface LeadEnrichmentJob {
+  leadId: string;
+  username: string;
+  source: 'landing' | 'inbound_whatsapp' | 'inbound_instagram' | 'scraper' | 'manual';
+  campaignId?: string;
+  priority?: number;
+}
+
 export class QueueManager {
   private static instance: QueueManager;
   private connection: IORedis;
@@ -32,6 +40,7 @@ export class QueueManager {
   // Filas
   public instagramDMQueue: Queue<InstagramDMJob>;
   public whatsappMessageQueue: Queue<WhatsAppMessageJob>;
+  public leadEnrichmentQueue: Queue<LeadEnrichmentJob>;
 
   private constructor() {
     // Configuração de conexão Redis
@@ -76,9 +85,15 @@ export class QueueManager {
       defaultQueueOptions
     );
 
+    this.leadEnrichmentQueue = new Queue<LeadEnrichmentJob>(
+      'lead-enrichment',
+      defaultQueueOptions
+    );
+
     console.log('✅ Queue Manager initialized');
     console.log('📨 Instagram DM Queue: Ready');
     console.log('💬 WhatsApp Message Queue: Ready');
+    console.log('🔍 Lead Enrichment Queue: Ready');
   }
 
   /**
@@ -122,6 +137,24 @@ export class QueueManager {
   }
 
   /**
+   * Enfileirar lead para enriquecimento
+   * Funciona para qualquer fonte: landing, inbound_whatsapp, inbound_instagram, scraper, manual
+   */
+  async enqueueLeadEnrichment(
+    data: LeadEnrichmentJob,
+    priority: number = 5
+  ): Promise<string> {
+    const job = await this.leadEnrichmentQueue.add('enrich-lead', data, {
+      priority,
+      // Evitar duplicatas por leadId
+      jobId: `enrich-${data.leadId}`,
+    });
+
+    console.log(`🔍 [Lead Enrichment] Enfileirado job ${job.id} - @${data.username} (source: ${data.source})`);
+    return job.id!;
+  }
+
+  /**
    * Obter estatísticas das filas
    */
   async getQueueStats() {
@@ -141,9 +174,18 @@ export class QueueManager {
       delayed: await this.whatsappMessageQueue.getDelayedCount(),
     };
 
+    const leadEnrichmentStats = {
+      waiting: await this.leadEnrichmentQueue.getWaitingCount(),
+      active: await this.leadEnrichmentQueue.getActiveCount(),
+      completed: await this.leadEnrichmentQueue.getCompletedCount(),
+      failed: await this.leadEnrichmentQueue.getFailedCount(),
+      delayed: await this.leadEnrichmentQueue.getDelayedCount(),
+    };
+
     return {
       instagram: instagramStats,
       whatsapp: whatsappStats,
+      leadEnrichment: leadEnrichmentStats,
     };
   }
 
@@ -153,6 +195,7 @@ export class QueueManager {
   async clearAllQueues() {
     await this.instagramDMQueue.drain();
     await this.whatsappMessageQueue.drain();
+    await this.leadEnrichmentQueue.drain();
     console.log('🧹 Todas as filas limpas');
   }
 
@@ -162,6 +205,7 @@ export class QueueManager {
   async close() {
     await this.instagramDMQueue.close();
     await this.whatsappMessageQueue.close();
+    await this.leadEnrichmentQueue.close();
     await this.connection.quit();
     console.log('✅ Queue Manager closed');
   }

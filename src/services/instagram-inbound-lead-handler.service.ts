@@ -8,6 +8,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { agentPromptService, PromptVariables } from './agent-prompt.service';
 import OpenAI from 'openai';
+import { enqueueLeadForEnrichment } from './lead-enrichment-worker.service';
 
 export interface InstagramInboundLeadData {
   campaign_id: string;
@@ -89,7 +90,7 @@ export class InstagramInboundLeadHandler {
       await this.registerOutreach(newLead.id as string, data.username, response);
 
       // 6. Enfileirar enriquecimento em background (baixa prioridade)
-      await this.enqueueProfileEnrichment(newLead.id as string, data.username);
+      await this.enqueueProfileEnrichment(newLead.id as string, data.username, data.campaign_id);
 
       return {
         success: true,
@@ -286,10 +287,13 @@ export class InstagramInboundLeadHandler {
   /**
    * Enfileirar enriquecimento de perfil (background)
    */
-  private async enqueueProfileEnrichment(leadId: string, username: string) {
-    // TODO: Implementar fila de enriquecimento
-    console.log(`🔄 [Instagram Inbound] Enfileirando enriquecimento: ${username}`);
-    // Por enquanto, apenas log
+  private async enqueueProfileEnrichment(leadId: string, username: string, campaignId?: string) {
+    try {
+      await enqueueLeadForEnrichment(leadId, username, 'inbound_instagram', campaignId, 7); // Prioridade 7 (mais baixa)
+      console.log(`🔄 [Instagram Inbound] Enfileirado para enriquecimento: @${username}`);
+    } catch (error: any) {
+      console.error(`[Instagram Inbound] Erro ao enfileirar enriquecimento:`, error.message);
+    }
   }
 }
 

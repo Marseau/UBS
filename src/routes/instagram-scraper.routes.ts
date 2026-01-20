@@ -3216,7 +3216,8 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
  * {
  *   "username": "perfil_alvo",
  *   "target_segment": "coworking" (opcional),
- *   "engagement_data": { "commented": true, ... } (opcional)
+ *   "engagement_data": { "commented": true, ... } (opcional),
+ *   "force": true (opcional - processa mesmo se lead já existe)
  * }
  *
  * Response:
@@ -3232,7 +3233,7 @@ router.post('/scrape-input-newusers', async (req: Request, res: Response) => {
   const reqId = `NEWINPUT_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
   try {
-    const { username: rawUsername, target_segment, engagement_data } = req.body;
+    const { username: rawUsername, target_segment, engagement_data, force } = req.body;
 
     // Validar input
     if (!rawUsername || typeof rawUsername !== 'string') {
@@ -3383,29 +3384,22 @@ router.post('/scrape-input-newusers', async (req: Request, res: Response) => {
         .eq('username', username)
         .single();
 
-      let existingLeadData = existing;
-      let needsEnrichment = false;
+      let existingLeadId: string | null = null;
 
       if (existing) {
-        const missingFields: string[] = [];
-        if (!existing.city) missingFields.push('city');
-        if (!existing.state) missingFields.push('state');
-        if (!existing.email) missingFields.push('email');
-        if (!existing.whatsapp_number) missingFields.push('whatsapp_number');
-
-        if (missingFields.length > 0) {
-          needsEnrichment = true;
-          console.log(`   🔄 @${username} existe mas falta: ${missingFields.join(', ')}`);
-        } else {
-          console.log(`   ✅ @${username} já está completo - pulando`);
+        if (!force) {
+          console.log(`   ✅ @${username} já existe - pulando`);
           await cleanup();
           return res.status(200).json({
             success: true,
-            action: 'skipped_complete',
-            reason: 'Lead já possui todos os dados',
+            action: 'skipped_exists',
+            reason: 'Lead já existe no banco',
             lead_id: existing.id
           });
         }
+        // force=true: continuar processando para atualizar dados
+        console.log(`   🔄 @${username} já existe mas force=true - atualizando`);
+        existingLeadId = existing.id;
       }
 
       // ========================================
@@ -3539,36 +3533,49 @@ router.post('/scrape-input-newusers', async (req: Request, res: Response) => {
       // ========================================
       // 9. INSERT OU UPDATE
       // ========================================
-      if (needsEnrichment && existingLeadData) {
-        // UPDATE
+      let finalLeadId: string;
+      let actionType: 'inserted' | 'updated';
+
+      if (existingLeadId) {
+        // UPDATE - lead já existe, atualizar com dados do scrape
         console.log(`   🔄 Atualizando lead existente...`);
-        const updateData: Record<string, any> = { updated_at: new Date().toISOString() };
 
-        if (!existingLeadData.city && (profile.city || gmLead?.city)) updateData.city = profile.city || gmLead?.city;
-        if (!existingLeadData.state && (profile.state || gmLead?.state)) updateData.state = profile.state || gmLead?.state;
-        if (!existingLeadData.email && (profile.email || gmLead?.email)) updateData.email = profile.email || gmLead?.email;
-        if (!existingLeadData.whatsapp_number) {
-          if (waExtraction.whatsapp_number) {
-            updateData.whatsapp_number = waExtraction.whatsapp_number;
-            updateData.whatsapp_source = waExtraction.whatsapp_source;
-            updateData.whatsapp_verified = waExtraction.whatsapp_verified;
-          } else if (gmLead?.phone_whatsapp) {
-            updateData.whatsapp_number = gmLead.phone_whatsapp;
-            updateData.whatsapp_source = 'google_maps';
-          }
-        }
+        const { error } = await supabase.from('instagram_leads').update({
+          full_name: profile.full_name,
+          bio: profile.bio,
+          website: profile.website,
+          followers_count: profile.followers_count,
+          following_count: profile.following_count,
+          posts_count: profile.posts_count,
+          profile_pic_url: profile.profile_pic_url,
+          is_verified: profile.is_verified,
+          is_business_account: profile.is_business_account,
+          email: profile.email || gmLead?.email,
+          phone: profile.phone,
+          business_category: profile.business_category,
+          city: profile.city || gmLead?.city,
+          state: profile.state || gmLead?.state,
+          neighborhood: profile.neighborhood,
+          address: profile.address || gmLead?.full_address,
+          zip_code: profile.zip_code,
+          activity_score: activityScore.score,
+          is_active: activityScore.isActive,
+          language: languageDetection.language,
+          lead_score: activityScore.score / 100,
+          hashtags_bio: hashtagsBio,
+          hashtags_posts: hashtagsPosts,
+          ...(waExtraction.whatsapp_number && {
+            whatsapp_number: waExtraction.whatsapp_number,
+            whatsapp_source: waExtraction.whatsapp_source,
+            whatsapp_verified: waExtraction.whatsapp_verified
+          }),
+          dado_enriquecido: false,
+          url_enriched: false,
+          hashtags_extracted: false,
+          hashtags_ready_for_embedding: false,
+          updated_at: new Date().toISOString()
+        }).eq('id', existingLeadId);
 
-        updateData.followers_count = profile.followers_count;
-        updateData.following_count = profile.following_count;
-        updateData.posts_count = profile.posts_count;
-        updateData.activity_score = activityScore.score;
-        updateData.is_active = activityScore.isActive;
-        updateData.dado_enriquecido = false;
-        updateData.url_enriched = false;
-        updateData.hashtags_extracted = false;
-        updateData.hashtags_ready_for_embedding = false;
-
-        const { error } = await supabase.from('instagram_leads').update(updateData).eq('id', existingLeadData.id);
         await cleanup();
 
         if (error) {
@@ -3579,22 +3586,12 @@ router.post('/scrape-input-newusers', async (req: Request, res: Response) => {
           });
         }
 
-        console.log(`   ✅ [${reqId}] Atualizado com sucesso!`);
-        return res.status(200).json({
-          success: true,
-          action: 'updated',
-          lead_id: existingLeadData.id,
-          profile: {
-            username: profile.username,
-            full_name: profile.full_name,
-            followers_count: profile.followers_count,
-            activity_score: activityScore.score,
-            whatsapp_number: updateData.whatsapp_number || existingLeadData.whatsapp_number
-          }
-        });
+        finalLeadId = existingLeadId;
+        actionType = 'updated';
+        console.log(`   ✅ [${reqId}] Atualizado: ${finalLeadId}`);
 
       } else {
-        // INSERT
+        // INSERT - lead novo
         console.log(`   💾 Inserindo novo lead...`);
 
         const { data: newLead, error } = await supabase.from('instagram_leads').insert({
@@ -3623,7 +3620,7 @@ router.post('/scrape-input-newusers', async (req: Request, res: Response) => {
           hashtags_bio: hashtagsBio,
           hashtags_posts: hashtagsPosts,
           segment: target_segment || null,
-          search_term_used: target_segment || gmLead?.search_theme,
+          search_term_used: target_segment || gmLead?.search_theme || 'landing_page',
           lead_source: 'scrape_input_newusers',
           captured_at: new Date().toISOString(),
           has_commented: hasCommented,
@@ -3652,28 +3649,34 @@ router.post('/scrape-input-newusers', async (req: Request, res: Response) => {
           });
         }
 
-        console.log(`   ✅ [${reqId}] Inserido: ${newLead?.id}`);
-        return res.status(200).json({
-          success: true,
-          action: 'inserted',
-          lead_id: newLead?.id,
-          profile: {
-            username: profile.username,
-            full_name: profile.full_name,
-            bio: profile.bio,
-            followers_count: profile.followers_count,
-            following_count: profile.following_count,
-            posts_count: profile.posts_count,
-            activity_score: activityScore.score,
-            language: languageDetection.language,
-            whatsapp_number: waExtraction.whatsapp_number,
-            city: profile.city || gmLead?.city,
-            state: profile.state || gmLead?.state,
-            hashtags_bio: hashtagsBio,
-            hashtags_posts: hashtagsPosts
-          }
-        });
+        finalLeadId = newLead?.id;
+        actionType = 'inserted';
+        console.log(`   ✅ [${reqId}] Inserido: ${finalLeadId}`);
       }
+
+      return res.status(200).json({
+        success: true,
+        action: actionType,
+        lead_id: finalLeadId,
+        profile: {
+          username: profile.username,
+          full_name: profile.full_name,
+          bio: profile.bio,
+          website: profile.website,
+          email: profile.email || gmLead?.email,
+          phone: profile.phone,
+          followers_count: profile.followers_count,
+          following_count: profile.following_count,
+          posts_count: profile.posts_count,
+          activity_score: activityScore.score,
+          language: languageDetection.language,
+          whatsapp_number: waExtraction.whatsapp_number,
+          city: profile.city || gmLead?.city,
+          state: profile.state || gmLead?.state,
+          hashtags_bio: hashtagsBio,
+          hashtags_posts: hashtagsPosts
+        }
+      });
 
     } catch (profileError: any) {
       console.log(`   ❌ [${reqId}] Erro: ${profileError.message}`);

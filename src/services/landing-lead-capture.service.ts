@@ -15,7 +15,6 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { scrapeInstagramProfile } from './instagram-scraper-single.service';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -46,6 +45,7 @@ export interface LandingLeadResult {
   isExistingLead: boolean;
   leadId?: string;
   campaignLeadId?: string;
+  noigLeadId?: string;  // Lead sem Instagram
   redirectWhatsapp?: string;
   whatsappMessage?: string;
   error?: string;
@@ -82,14 +82,29 @@ export class LandingLeadCaptureService {
         return { success: false, isExistingLead: false, error: 'Campanha não encontrada' };
       }
 
-      // 2. Se não tem Instagram, apenas redirecionar para WhatsApp
-      // O AI Agent vai solicitar o Instagram durante a conversa
+      // 2. Se não tem Instagram, salvar em campaign_leads_noig (lead frio)
       if (!username) {
-        console.log(`[LandingLeadCapture] Lead sem Instagram - redirecionando para WhatsApp da campanha`);
+        console.log(`[LandingLeadCapture] Lead sem Instagram - salvando em campaign_leads_noig`);
+
+        const noigLead = await this.createNoigLead({
+          campaignId,
+          name,
+          email,
+          whatsapp,
+          utmParams
+        });
+
+        if (!noigLead) {
+          console.error(`[LandingLeadCapture] Erro ao criar lead noig`);
+          // Continua mesmo com erro - não bloqueia o redirect
+        } else {
+          console.log(`[LandingLeadCapture] Lead noig criado: ${noigLead.id}`);
+        }
 
         return {
           success: true,
           isExistingLead: false,
+          noigLeadId: noigLead?.id,
           redirectWhatsapp: campaign.whatsappNumber,
           whatsappMessage: this.buildWhatsappMessageWithoutIG(name, campaign.campaignName)
         };
@@ -131,8 +146,12 @@ export class LandingLeadCaptureService {
           return { success: false, isExistingLead: false, error: 'Erro ao criar lead' };
         }
 
-        // Disparar scraping em background
-        this.triggerAsyncScraping(username, instagramLead.id);
+        // Disparar pipeline completo via N8N (scraping + enrichment + url scrape + embeddings)
+        fetch('http://192.168.15.5:3005/webhook/new-lead-pipeline', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username })
+        }).catch(err => console.error(`[LandingLeadCapture] Erro ao disparar pipeline N8N:`, err.message));
       } else {
         // Atualizar dados de contato se necessário
         await this.updateInstagramLeadContact(instagramLead.id, { email, whatsappNumber: whatsapp, fullName: name });
@@ -353,7 +372,7 @@ export class LandingLeadCaptureService {
         .insert({
           campaign_id: data.campaignId,
           lead_id: data.leadId,
-          status: 'new',
+          status: 'pending',
           match_source: data.source,
           visited_landing: true,
           visited_landing_at: new Date().toISOString(),
@@ -377,44 +396,41 @@ export class LandingLeadCaptureService {
   }
 
   /**
-   * Dispara scraping em background
+   * Cria lead sem Instagram na tabela campaign_leads_noig
    */
-  private async triggerAsyncScraping(username: string, leadId: string): Promise<void> {
-    // Executar em background sem bloquear a resposta
-    setImmediate(async () => {
-      try {
-        console.log(`[LandingLeadCapture] Iniciando scraping async para @${username}`);
+  private async createNoigLead(data: {
+    campaignId: string;
+    name: string;
+    email: string;
+    whatsapp: string;
+    utmParams?: LandingLeadInput['utmParams'];
+  }): Promise<{ id: string } | null> {
+    try {
+      const { data: noigLead, error } = await supabase
+        .from('campaign_leads_noig')
+        .insert({
+          campaign_id: data.campaignId,
+          name: data.name,
+          email: data.email || null,
+          whatsapp: data.whatsapp,
+          utm_params: data.utmParams || null,
+          status: 'new',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select('id')
+        .single();
 
-        const profileData = await scrapeInstagramProfile(username);
-
-        if (profileData) {
-          // Atualizar instagram_leads com dados scraped
-          await supabase
-            .from('instagram_leads')
-            .update({
-              full_name: profileData.full_name || undefined,
-              bio: profileData.bio || undefined,
-              followers_count: profileData.followers_count || undefined,
-              following_count: profileData.following_count || undefined,
-              posts_count: profileData.posts_count || undefined,
-              profile_pic_url: profileData.profile_pic_url || undefined,
-              is_business: profileData.is_business_account || false,
-              is_verified: profileData.is_verified || false,
-              external_url: profileData.website || undefined,
-              category: profileData.business_category || undefined,
-              hashtags: profileData.hashtags_bio || [],
-              needs_scraping: false,
-              scraped_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', leadId);
-
-          console.log(`[LandingLeadCapture] Scraping concluído para @${username}`);
-        }
-      } catch (error) {
-        console.error(`[LandingLeadCapture] Erro no scraping async de @${username}:`, error);
+      if (error) {
+        console.error('[LandingLeadCapture] Erro ao criar lead noig:', error);
+        return null;
       }
-    });
+
+      return { id: noigLead.id };
+    } catch (error) {
+      console.error('[LandingLeadCapture] Erro ao criar lead noig:', error);
+      return null;
+    }
   }
 
   /**

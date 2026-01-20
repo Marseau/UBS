@@ -30,6 +30,85 @@ const openai = new OpenAI({
 // Diretório para persistir sessão do browser (inclui login Instagram)
 const GOOGLE_MAPS_USER_DATA_DIR = path.join(process.cwd(), 'cookies', 'google-maps', 'user-data');
 
+// 🕐 BACKOFF EXPONENCIAL - Estado persistido para sobreviver a reinícios
+const BACKOFF_STATE_FILE = path.join(process.cwd(), 'cookies', 'google-maps', 'backoff-state.json');
+const BACKOFF_DELAYS = [
+  5 * 60 * 1000,   // 1ª falha: 5 minutos
+  15 * 60 * 1000,  // 2ª falha: 15 minutos
+  30 * 60 * 1000,  // 3ª falha: 30 minutos
+];
+
+interface BackoffState {
+  consecutiveFailures: number;
+  lastFailureAt: string | null;
+  cooldownUntil: string | null;
+}
+
+function readBackoffState(): BackoffState {
+  try {
+    if (fs.existsSync(BACKOFF_STATE_FILE)) {
+      return JSON.parse(fs.readFileSync(BACKOFF_STATE_FILE, 'utf-8'));
+    }
+  } catch (e) {}
+  return { consecutiveFailures: 0, lastFailureAt: null, cooldownUntil: null };
+}
+
+function writeBackoffState(state: BackoffState): void {
+  try {
+    const dir = path.dirname(BACKOFF_STATE_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(BACKOFF_STATE_FILE, JSON.stringify(state, null, 2));
+  } catch (e) {
+    console.error('[BACKOFF] Erro ao salvar estado:', e);
+  }
+}
+
+function resetBackoffState(): void {
+  writeBackoffState({ consecutiveFailures: 0, lastFailureAt: null, cooldownUntil: null });
+}
+
+async function handleBackoffFailure(): Promise<{ shouldSkip: boolean; waitMs: number }> {
+  const state = readBackoffState();
+  state.consecutiveFailures++;
+  state.lastFailureAt = new Date().toISOString();
+
+  const delayIndex = Math.min(state.consecutiveFailures - 1, BACKOFF_DELAYS.length - 1);
+  const waitMs = BACKOFF_DELAYS[delayIndex];
+
+  state.cooldownUntil = new Date(Date.now() + waitMs).toISOString();
+  writeBackoffState(state);
+
+  const waitMinutes = Math.round(waitMs / 60000);
+  console.log(`\n⏳ [BACKOFF] Falha ${state.consecutiveFailures} - Aguardando ${waitMinutes} minutos...`);
+  console.log(`   Cooldown até: ${state.cooldownUntil}`);
+
+  // Se já é a 3ª falha, sinaliza para pular para próximo grid point
+  const shouldSkip = state.consecutiveFailures >= 3;
+  if (shouldSkip) {
+    console.log(`   🔄 3ª falha consecutiva - sinalizando para pular grid point`);
+  }
+
+  return { shouldSkip, waitMs };
+}
+
+function checkCooldownActive(): { active: boolean; remainingMs: number } {
+  const state = readBackoffState();
+  if (!state.cooldownUntil) {
+    return { active: false, remainingMs: 0 };
+  }
+
+  const cooldownTime = new Date(state.cooldownUntil).getTime();
+  const now = Date.now();
+
+  if (now < cooldownTime) {
+    return { active: true, remainingMs: cooldownTime - now };
+  }
+
+  return { active: false, remainingMs: 0 };
+}
+
 // Supabase client
 const supabase = createClient(
   process.env.SUPABASE_URL || 'https://qsdfyffuonywmtnlycri.supabase.co',
@@ -123,14 +202,13 @@ async function createBrowser(): Promise<Browser> {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--disable-gpu',
       '--disable-infobars',
       '--disable-notifications',
-      '--disable-extensions',
       '--window-size=1920,1080',
       '--lang=pt-BR',
+      // 🕵️ STEALTH FLAGS (essenciais para evitar detecção)
       '--disable-blink-features=AutomationControlled',
+      '--exclude-switches=enable-automation',
       // Desabilitar bloqueios de conteúdo (ERR_BLOCKED_BY_CLIENT)
       '--disable-web-security',
       '--disable-features=IsolateOrigins,site-per-process,BlockInsecurePrivateNetworkRequests,SafeBrowsingEnhancedProtection',
@@ -1776,6 +1854,18 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
     errors: []
   };
 
+  // 🕐 BACKOFF: Verificar se está em cooldown
+  const cooldown = checkCooldownActive();
+  if (cooldown.active) {
+    const remainingMinutes = Math.ceil(cooldown.remainingMs / 60000);
+    console.log(`\n⏳ [BACKOFF] Cooldown ativo - aguardando ${remainingMinutes} minutos...`);
+    console.log(`   Retorne após o cooldown ou aguarde aqui.`);
+
+    // Aguardar o cooldown
+    await new Promise(resolve => setTimeout(resolve, cooldown.remainingMs));
+    console.log(`✅ [BACKOFF] Cooldown finalizado, retomando scraping...`);
+  }
+
   // Montar query/URL de busca
   let searchQuery: string;
   let searchUrl: string | null = null;
@@ -1828,6 +1918,80 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
 
         browser = await createBrowser();
         page = await browser.newPage();
+
+        // 🕵️ STEALTH: Aplicar scripts anti-detecção ANTES de navegar
+        console.log('🕵️ [GOOGLE-MAPS] Aplicando scripts anti-detecção...');
+        await page.evaluateOnNewDocument(() => {
+          // 1. REMOVE navigator.webdriver (CRÍTICO - Google detecta isso!)
+          Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined
+          });
+
+          // 2. WEBGL FINGERPRINT - Mascara para parecer Mac real
+          const getParameter = WebGLRenderingContext.prototype.getParameter;
+          WebGLRenderingContext.prototype.getParameter = function(parameter: any) {
+            if (parameter === 37445) return 'Apple Inc.'; // UNMASKED_VENDOR_WEBGL
+            if (parameter === 37446) return 'Apple M2';   // UNMASKED_RENDERER_WEBGL
+            return getParameter.call(this, parameter);
+          };
+
+          // 3. CANVAS FINGERPRINT - Adiciona ruído mínimo
+          const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+          HTMLCanvasElement.prototype.toDataURL = function(type?: string) {
+            const context = this.getContext('2d');
+            if (context) {
+              const imageData = context.getImageData(0, 0, this.width, this.height);
+              for (let i = 0; i < imageData.data.length; i += 4) {
+                imageData.data[i] += Math.floor(Math.random() * 2);
+              }
+              context.putImageData(imageData, 0, 0);
+            }
+            return originalToDataURL.call(this, type);
+          };
+
+          // 4. WEBRTC IP LEAK - Bloqueia leak de IP local
+          const originalGetUserMedia = navigator.mediaDevices?.getUserMedia;
+          if (originalGetUserMedia) {
+            navigator.mediaDevices.getUserMedia = function() {
+              return Promise.reject(new Error('Permission denied'));
+            };
+          }
+          // @ts-ignore
+          window.RTCPeerConnection = undefined;
+          // @ts-ignore
+          window.webkitRTCPeerConnection = undefined;
+
+          // 5. HARDWARE CONCURRENCY - Mac M2 tem 8 cores
+          Object.defineProperty(navigator, 'hardwareConcurrency', {
+            get: () => 8
+          });
+
+          // 6. CHROME APP/RUNTIME - Remove indicadores de automação
+          // @ts-ignore
+          window.chrome = { runtime: {} };
+
+          // 7. PERMISSIONS - Simula permissões realistas
+          const originalQuery = window.navigator.permissions?.query;
+          if (originalQuery) {
+            window.navigator.permissions.query = function(parameters: any) {
+              if (parameters.name === 'notifications') {
+                return Promise.resolve({ state: 'denied' } as PermissionStatus);
+              }
+              return originalQuery.call(window.navigator.permissions, parameters);
+            };
+          }
+
+          // 8. PLUGINS - Navegador real não tem plugins
+          Object.defineProperty(navigator, 'plugins', {
+            get: () => []
+          });
+
+          // 9. LANGUAGES - Idiomas realistas
+          Object.defineProperty(navigator, 'languages', {
+            get: () => ['pt-BR', 'pt', 'en-US', 'en']
+          });
+        });
+        console.log('✅ [GOOGLE-MAPS] Scripts anti-detecção aplicados');
 
         // Set user agent
         await page.setUserAgent(
@@ -1930,6 +2094,20 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
         }
 
         if (initAttempt >= MAX_INIT_RETRIES) {
+          // 🕐 BACKOFF: Aplicar espera exponencial após todas as tentativas falharem
+          const { shouldSkip, waitMs } = await handleBackoffFailure();
+
+          if (shouldSkip) {
+            // 3ª falha consecutiva - retornar para que o workflow pule para próximo grid
+            result.errors.push(`Backoff: 3 falhas consecutivas - pulando grid point`);
+            result.success = false;
+            return result;
+          }
+
+          // Aguardar o tempo de backoff
+          console.log(`⏳ Aguardando ${Math.round(waitMs / 60000)} minutos antes de retornar erro...`);
+          await new Promise(resolve => setTimeout(resolve, waitMs));
+
           throw new Error(`Falha após ${MAX_INIT_RETRIES} tentativas de inicialização: ${initErr.message}`);
         }
       }
@@ -2490,6 +2668,10 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
     }
 
     result.success = true;
+
+    // 🕐 BACKOFF: Reset em caso de sucesso
+    resetBackoffState();
+    console.log(`✅ [BACKOFF] Estado resetado - scraping bem-sucedido`);
 
   } catch (error: any) {
     console.error(`\n❌ [GOOGLE-MAPS] Erro fatal:`, error.message);

@@ -1601,14 +1601,20 @@ async function initializeServices() {
       console.log('📨 Initializing BullMQ Queue System...');
       const { getInstagramDMWorker } = await import('./services/instagram-dm-worker.service');
       const { getWhatsAppMessageWorker } = await import('./services/whatsapp-message-worker.service');
+      const { getLeadEnrichmentWorker } = await import('./services/lead-enrichment-worker.service');
 
       // Initialize workers (singleton instances)
       getInstagramDMWorker();
       getWhatsAppMessageWorker();
 
+      // Initialize Lead Enrichment Worker (processes leads from ANY source)
+      const leadEnrichmentWorker = getLeadEnrichmentWorker();
+      leadEnrichmentWorker.start();
+
       console.log('✅ BullMQ Queue System initialized successfully');
       console.log('📨 Instagram DM Worker: Active');
       console.log('💬 WhatsApp Message Worker: Active');
+      console.log('🔍 Lead Enrichment Worker: Active (BullMQ)');
       console.log('🎯 Queue Management API: /api/queue/*');
 
     } catch (error) {
@@ -1944,9 +1950,11 @@ const gracefulShutdown = async (signal: string) => {
     try {
       const { getInstagramDMWorker } = await import('./services/instagram-dm-worker.service');
       const { getWhatsAppMessageWorker } = await import('./services/whatsapp-message-worker.service');
+      const { getLeadEnrichmentWorker } = await import('./services/lead-enrichment-worker.service');
 
       await getInstagramDMWorker().close();
       await getWhatsAppMessageWorker().close();
+      await getLeadEnrichmentWorker().stop();
       await queueManager.close();
 
       console.log('✅ Workers de fila encerrados');
