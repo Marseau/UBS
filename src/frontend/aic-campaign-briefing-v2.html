@@ -1117,6 +1117,29 @@
     }
 
     // =====================================================
+    // AUTH HELPERS
+    // =====================================================
+    function getAuthHeaders() {
+      const token = localStorage.getItem('aic_access_token') || '';
+      return {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      };
+    }
+
+    async function authFetch(url, options = {}) {
+      const headers = {
+        ...getAuthHeaders(),
+        ...options.headers
+      };
+      // Don't set Content-Type for FormData
+      if (options.body instanceof FormData) {
+        delete headers['Content-Type'];
+      }
+      return fetch(url, { ...options, headers });
+    }
+
+    // =====================================================
     // INITIALIZATION
     // =====================================================
     document.addEventListener('DOMContentLoaded', async function() {
@@ -1189,9 +1212,8 @@
       showLandingStatus('processing', 'Processando...', 'Extraindo conteudo da landing page...');
 
       try {
-        const response = await fetch(`/api/campaigns/${campaignId}/landing-page`, {
+        const response = await authFetch(`/api/campaigns/${campaignId}/landing-page`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url })
         });
 
@@ -1395,7 +1417,7 @@
         formData.append('title', file.name.replace(/\.[^/.]+$/, ''));
         formData.append('docType', type === 'empresa' ? 'briefing' : 'knowledge');
 
-        const response = await fetch(`/api/campaigns/${campaignId}/documents`, {
+        const response = await authFetch(`/api/campaigns/${campaignId}/documents`, {
           method: 'POST',
           body: formData
         });
@@ -1427,7 +1449,7 @@
     async function loadExistingData() {
       try {
         // Load campaign data (for landing_page_url)
-        const campaignRes = await fetch(`/api/campaign/${campaignId}`);
+        const campaignRes = await authFetch(`/api/campaign/${campaignId}`);
         if (campaignRes.ok) {
           const campaignData = await campaignRes.json();
           if (campaignData.success && campaignData.campaign) {
@@ -1441,7 +1463,7 @@
         }
 
         // Load existing briefing
-        const briefingRes = await fetch(`/api/campaigns/${campaignId}/briefing`);
+        const briefingRes = await authFetch(`/api/campaigns/${campaignId}/briefing`);
         if (briefingRes.ok) {
           const briefing = await briefingRes.json();
           if (briefing) {
@@ -1491,7 +1513,7 @@
       const container = document.getElementById('documents-container');
 
       try {
-        const response = await fetch(`/api/campaigns/${campaignId}/documents`);
+        const response = await authFetch(`/api/campaigns/${campaignId}/documents`);
         const result = await response.json();
 
         if (!response.ok) {
@@ -1553,7 +1575,7 @@
       if (!confirm('Remover este documento?')) return;
 
       try {
-        const response = await fetch(`/api/campaigns/${campaignId}/documents/${title}`, {
+        const response = await authFetch(`/api/campaigns/${campaignId}/documents/${title}`, {
           method: 'DELETE'
         });
 
@@ -1575,9 +1597,8 @@
     async function autoSave() {
       try {
         const data = collectFormData();
-        const response = await fetch(`/api/campaigns/${campaignId}/briefing`, {
+        const response = await authFetch(`/api/campaigns/${campaignId}/briefing`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
         if (response.ok) {
@@ -1703,9 +1724,8 @@
 
         const data = collectFormData();
 
-        const response = await fetch(`/api/campaigns/${campaignId}/briefing`, {
+        const response = await authFetch(`/api/campaigns/${campaignId}/briefing`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
 
