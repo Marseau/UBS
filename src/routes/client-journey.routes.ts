@@ -566,7 +566,7 @@ router.get('/credentials', authenticateClient, async (req: ClientRequest, res: R
     // Buscar credenciais WhatsApp via cluster_campaigns
     const { data: campaign } = await supabaseAdmin
       .from('cluster_campaigns')
-      .select('whapi_channel_uuid')
+      .select('whapi_channel_uuid, outreach_ratio_whatsapp, outreach_ratio_instagram')
       .eq('id', journey.campaign_id)
       .single();
 
@@ -590,20 +590,23 @@ router.get('/credentials', authenticateClient, async (req: ClientRequest, res: R
     // Buscar credenciais Instagram
     const { data: igAccount } = await supabaseAdmin
       .from('instagram_accounts')
-      .select('instagram_username, status')
+      .select('instagram_username, status, profile_picture_url')
       .eq('campaign_id', journey.campaign_id)
       .single();
 
     const instagramData = igAccount ? {
       username: igAccount.instagram_username,
-      status: igAccount.status
+      status: igAccount.status,
+      profile_picture_url: igAccount.profile_picture_url
     } : null;
 
     return res.json({
       success: true,
       credentials: {
         whatsapp: whatsappData,
-        instagram: instagramData
+        instagram: instagramData,
+        outreach_ratio_whatsapp: campaign?.outreach_ratio_whatsapp ?? 60,
+        outreach_ratio_instagram: campaign?.outreach_ratio_instagram ?? 40
       }
     });
 
@@ -943,6 +946,149 @@ router.get('/credentials/whatsapp/status', authenticateClient, async (req: Clien
   } catch (error) {
     console.error('[Journey Routes] Error checking WhatsApp status:', error);
     return res.status(500).json({ success: false, message: 'Erro ao verificar status' });
+  }
+});
+
+/**
+ * POST /api/aic/journey/credentials/whatsapp/disconnect
+ * Desconectar canal WhatsApp para permitir reconexao com outro numero
+ */
+router.post('/credentials/whatsapp/disconnect', authenticateClient, async (req: ClientRequest, res: Response) => {
+  try {
+    const userId = req.clientUser?.id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Usuario nao autenticado' });
+    }
+
+    const { supabaseAdmin } = await import('../config/database');
+
+    // Buscar jornada e canal do usuario
+    const { data: journey } = await supabaseAdmin
+      .from('aic_client_journeys')
+      .select('campaign_id')
+      .eq('auth_user_id', userId)
+      .not('campaign_id', 'is', null)
+      .single();
+
+    if (!journey?.campaign_id) {
+      return res.status(404).json({ success: false, message: 'Campanha nao encontrada' });
+    }
+
+    const { data: campaign } = await supabaseAdmin
+      .from('cluster_campaigns')
+      .select('whapi_channel_uuid')
+      .eq('id', journey.campaign_id)
+      .single();
+
+    if (!campaign?.whapi_channel_uuid) {
+      return res.json({
+        success: true,
+        message: 'Nenhum canal WhatsApp configurado'
+      });
+    }
+
+    // Marcar canal como desconectado (manter o registro para logs)
+    await supabaseAdmin
+      .from('whapi_channels')
+      .update({
+        status: 'disconnected',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', campaign.whapi_channel_uuid);
+
+    // Remover referencia do canal na campanha para permitir nova configuracao
+    await supabaseAdmin
+      .from('cluster_campaigns')
+      .update({
+        whapi_channel_uuid: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', journey.campaign_id);
+
+    console.log(`[Journey Routes] WhatsApp disconnected for campaign ${journey.campaign_id}`);
+
+    return res.json({
+      success: true,
+      message: 'WhatsApp desconectado com sucesso'
+    });
+
+  } catch (error) {
+    console.error('[Journey Routes] Error disconnecting WhatsApp:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao desconectar WhatsApp' });
+  }
+});
+
+/**
+ * POST /api/aic/journey/credentials/outreach-ratio
+ * Salvar proporcao de outreach WhatsApp/Instagram
+ */
+router.post('/credentials/outreach-ratio', authenticateClient, async (req: ClientRequest, res: Response) => {
+  try {
+    const userId = req.clientUser?.id;
+    const { campaign_id, whatsapp_ratio, instagram_ratio } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Usuario nao autenticado' });
+    }
+
+    if (whatsapp_ratio === undefined || instagram_ratio === undefined) {
+      return res.status(400).json({ success: false, message: 'Proporcoes sao obrigatorias' });
+    }
+
+    // Validate that ratios sum to 100
+    if (whatsapp_ratio + instagram_ratio !== 100) {
+      return res.status(400).json({ success: false, message: 'Proporcoes devem somar 100%' });
+    }
+
+    const { supabaseAdmin } = await import('../config/database');
+
+    // Get campaign ID from journey if not provided
+    let targetCampaignId = campaign_id;
+    if (!targetCampaignId) {
+      const { data: journey } = await supabaseAdmin
+        .from('aic_client_journeys')
+        .select('campaign_id')
+        .eq('auth_user_id', userId)
+        .not('campaign_id', 'is', null)
+        .single();
+
+      targetCampaignId = journey?.campaign_id;
+    }
+
+    if (!targetCampaignId) {
+      return res.status(404).json({ success: false, message: 'Campanha nao encontrada' });
+    }
+
+    // Update campaign with outreach ratio
+    const { error } = await supabaseAdmin
+      .from('cluster_campaigns')
+      .update({
+        outreach_ratio_whatsapp: whatsapp_ratio,
+        outreach_ratio_instagram: instagram_ratio,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', targetCampaignId);
+
+    if (error) {
+      console.error('[Journey Routes] Error saving outreach ratio:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao salvar proporcao' });
+    }
+
+    console.log(`[Journey Routes] Outreach ratio saved for campaign ${targetCampaignId}: ${whatsapp_ratio}% WA / ${instagram_ratio}% IG`);
+
+    return res.json({
+      success: true,
+      message: 'Proporcao de outreach salva com sucesso',
+      data: {
+        whatsapp_ratio,
+        instagram_ratio
+      }
+    });
+
+  } catch (error) {
+    console.error('[Journey Routes] Error saving outreach ratio:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao salvar proporcao' });
   }
 });
 

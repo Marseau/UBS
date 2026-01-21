@@ -559,6 +559,60 @@
       return '+' + numbers.slice(0, 2) + ' ' + numbers.slice(2, 4) + ' ' + numbers.slice(4, 9) + '-' + numbers.slice(9);
     }
 
+    // Update ratio display
+    function updateRatioDisplay(waValue) {
+      const waEl = document.getElementById('wa-ratio-value');
+      const igEl = document.getElementById('ig-ratio-value');
+      if (waEl) waEl.textContent = `${waValue}%`;
+      if (igEl) igEl.textContent = `${100 - parseInt(waValue)}%`;
+    }
+
+    // Save outreach ratio to campaign
+    async function saveOutreachRatio() {
+      const btn = document.getElementById('ratio-btn');
+      const ratioInput = document.getElementById('outreach-ratio');
+      const waRatio = parseInt(ratioInput?.value || '60');
+
+      if (!journeyData?.campaign_id) {
+        showStatus('ratio-status', 'Erro: Campanha nao encontrada', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+
+      try {
+        const token = localStorage.getItem('aic_access_token');
+        const response = await fetch('/api/aic/journey/credentials/outreach-ratio', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({
+            campaign_id: journeyData.campaign_id,
+            whatsapp_ratio: waRatio,
+            instagram_ratio: 100 - waRatio
+          })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message || 'Erro ao salvar');
+        }
+
+        credentialsData.outreach_ratio_whatsapp = waRatio;
+        showStatus('ratio-status', 'Proporcao salva com sucesso!', 'success');
+
+      } catch (error) {
+        showStatus('ratio-status', error.message || 'Erro ao salvar proporcao', 'error');
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Salvar Proporcao';
+    }
+
     async function init() {
       try {
         const isAdmin = localStorage.getItem('aic_user_role') === 'admin';
@@ -642,7 +696,12 @@
         });
         if (response.ok) {
           const data = await response.json();
-          credentialsData = data.credentials || { whatsapp: null, instagram: null };
+          const creds = data.credentials || { whatsapp: null, instagram: null };
+          credentialsData = {
+            whatsapp: creds.whatsapp,
+            instagram: creds.instagram,
+            outreach_ratio_whatsapp: creds.outreach_ratio_whatsapp ?? 60
+          };
         }
       } catch (err) {
         console.warn('Could not load credentials:', err);
@@ -727,15 +786,21 @@
             <form id="whatsapp-form" onsubmit="return saveWhatsapp(event)">
               <div class="form-group">
                 <label class="form-label">Numero WhatsApp *</label>
-                <input type="tel" id="wa_phone" class="form-input" placeholder="+55 11 99999-9999" value="${formatPhone(credentialsData.whatsapp?.phone || '')}" oninput="this.value = formatPhone(this.value)" required>
+                <input type="tel" id="wa_phone" class="form-input" placeholder="+55 11 99999-9999" value="${formatPhone(credentialsData.whatsapp?.phone || '')}" oninput="this.value = formatPhone(this.value)" required ${hasWhatsapp ? 'disabled' : ''}>
                 <p class="form-hint">Formato: +55 DDD NUMERO</p>
               </div>
 
-              <button type="submit" class="btn btn-primary btn-full" id="wa-btn">
+              <button type="submit" class="btn btn-primary btn-full" id="wa-btn" ${hasWhatsapp ? 'disabled' : ''}>
                 ${hasWhatsapp ? 'WhatsApp Conectado' : 'Conectar WhatsApp'}
               </button>
               <div id="wa-status" class="status-message"></div>
             </form>
+
+            ${hasWhatsapp ? `
+              <button type="button" class="btn btn-full" onclick="disconnectWhatsApp()" style="margin-top: 12px; background: transparent; border: 1px solid #666; color: #888;">
+                Desconectar e Trocar Numero
+              </button>
+            ` : ''}
           </div>
 
           <!-- Instagram Card -->
@@ -771,7 +836,7 @@
 
             <!-- Conta conectada -->
             <div id="ig-connected-section" style="display: ${hasInstagram ? 'flex' : 'none'}; align-items: center; gap: 16px; padding: 16px; background: rgba(14, 204, 151, 0.1); border-radius: 8px; margin-top: 16px;">
-              <img id="ig-profile-pic" src="${credentialsData.instagram?.profile_picture_url || ''}" alt="Profile" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #0ecc97;">
+              <img id="ig-profile-pic" src="${credentialsData.instagram?.profile_picture_url || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwZWNjOTciIHN0cm9rZS13aWR0aD0iMS41Ij48Y2lyY2xlIGN4PSIxMiIgY3k9IjgiIHI9IjQiLz48cGF0aCBkPSJNNCAxOXYtMmE0IDQgMCAwIDEgNC00aDhhNCA0IDAgMCAxIDQgNHYyIi8+PC9zdmc+'}" alt="Profile" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #0ecc97; background: rgba(14, 204, 151, 0.2);" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwZWNjOTciIHN0cm9rZS13aWR0aD0iMS41Ij48Y2lyY2xlIGN4PSIxMiIgY3k9IjgiIHI9IjQiLz48cGF0aCBkPSJNNCAxOXYtMmE0IDQgMCAwIDEgNC00aDhhNCA0IDAgMCAxIDQgNHYyIi8+PC9zdmc+'">
               <div style="flex: 1;">
                 <div style="font-weight: 600; color: #fff;">@<span id="ig-connected-username">${credentialsData.instagram?.username || ''}</span></div>
                 <div style="color: #888; font-size: 13px;">Instagram Business conectado</div>
@@ -792,6 +857,48 @@
 
             <div id="ig-status" class="status-message"></div>
           </div>
+
+          <!-- Outreach Ratio Configuration (shown when both are configured) -->
+          ${hasWhatsapp || hasInstagram ? `
+          <div class="card" style="margin-top: 16px;">
+            <h2>
+              <div class="icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 20V10"/>
+                  <path d="M18 20V4"/>
+                  <path d="M6 20v-4"/>
+                </svg>
+              </div>
+              Configuracao de Outreach
+            </h2>
+            <p class="subtitle">Defina a proporcao de envio entre WhatsApp e Instagram.</p>
+
+            <div class="form-group" style="margin-top: 16px;">
+              <label class="form-label">Proporcao de Envio</label>
+              <div style="display: flex; align-items: center; gap: 16px; margin-top: 8px;">
+                <div style="flex: 1;">
+                  <input type="range" id="outreach-ratio" min="0" max="100" value="${credentialsData.outreach_ratio_whatsapp || 60}"
+                         oninput="updateRatioDisplay(this.value)"
+                         style="width: 100%; accent-color: var(--aic-green);">
+                  <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+                    <span style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--aic-green);">
+                      <span style="font-weight: 600;" id="wa-ratio-value">${credentialsData.outreach_ratio_whatsapp || 60}%</span> WhatsApp
+                    </span>
+                    <span style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #E4405F;">
+                      <span style="font-weight: 600;" id="ig-ratio-value">${100 - (credentialsData.outreach_ratio_whatsapp || 60)}%</span> Instagram
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <p class="form-hint">Recomendado: 60% WhatsApp / 40% Instagram (WhatsApp tem maior taxa de resposta)</p>
+            </div>
+
+            <button type="button" class="btn btn-secondary btn-full" onclick="saveOutreachRatio()" id="ratio-btn" style="margin-top: 12px;">
+              Salvar Proporcao
+            </button>
+            <div id="ratio-status" class="status-message"></div>
+          </div>
+          ` : ''}
 
           <!-- Continue Button -->
           ${progress === 2 ? `
@@ -979,6 +1086,45 @@
     }
 
     // Disconnect Instagram account
+    async function disconnectWhatsApp() {
+      if (!confirm('Tem certeza que deseja desconectar o WhatsApp? Voce precisara escanear o QR code novamente.')) {
+        return;
+      }
+
+      const campaignId = journeyData?.campaign_id;
+      if (!campaignId) {
+        showStatus('wa-status', 'Erro: Campaign ID nao encontrado', 'error');
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('aic_access_token');
+        const response = await fetch(`/api/aic/journey/credentials/whatsapp/disconnect`, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ campaign_id: campaignId })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Erro ao desconectar');
+        }
+
+        showStatus('wa-status', 'WhatsApp desconectado. Voce pode conectar um novo numero.', 'success');
+        credentialsData.whatsapp = null;
+
+        setTimeout(() => {
+          renderPage();
+        }, 1000);
+
+      } catch (error) {
+        showStatus('wa-status', error.message || 'Erro ao desconectar', 'error');
+      }
+    }
+
     async function disconnectInstagram() {
       if (!confirm('Tem certeza que deseja desconectar sua conta Instagram?')) {
         return;
@@ -1013,17 +1159,40 @@
     }
 
     // Handle OAuth callback
-    function handleInstagramOAuthCallback() {
+    async function handleInstagramOAuthCallback() {
       const urlParams = new URLSearchParams(window.location.search);
 
       if (urlParams.has('instagram_connected')) {
         const username = urlParams.get('instagram_username') || '';
-        showStatus('ig-status', `Conta @${username} conectada com sucesso!`, 'success');
-        credentialsData.instagram = { username };
+        showStatus('ig-status', `Conta @${username} conectada! Validando...`, 'success');
 
         // Limpar URL
         const cleanUrl = window.location.pathname;
         window.history.replaceState({}, '', cleanUrl);
+
+        // Validar a conexao com a API do Instagram
+        if (journeyData?.campaign_id) {
+          try {
+            const validationResponse = await fetch(`/api/instagram/oauth/status/${journeyData.campaign_id}`);
+            const validationData = await validationResponse.json();
+
+            if (validationData.connected) {
+              credentialsData.instagram = {
+                username: validationData.username || username,
+                profile_picture_url: validationData.profile_picture_url
+              };
+              showStatus('ig-status', `Conta @${validationData.username || username} validada com sucesso!`, 'success');
+            } else {
+              showStatus('ig-status', validationData.error || 'Erro na validacao. Tente reconectar.', 'error');
+              credentialsData.instagram = null;
+            }
+          } catch (err) {
+            console.error('Erro ao validar Instagram:', err);
+            credentialsData.instagram = { username };
+          }
+        } else {
+          credentialsData.instagram = { username };
+        }
 
         setTimeout(() => {
           renderPage();
