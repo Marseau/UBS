@@ -510,41 +510,33 @@ router.post('/scrape-users', async (req: Request, res: Response) => {
       console.log(`📊 [${reqId}] ANTES: ${pagesBefore.length} páginas abertas no browser`);
     }
 
-    // 🔧 FIX: Loop de retry para RETRY_IMMEDIATELY (igual scrape-tag)
+    // 🔧 Loop de retry simples (3 tentativas) - rotação é feita pelo scrape-tag
     const MAX_RETRIES = 3;
     let profiles: any[] = [];
+    let lastError: any = null;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
         if (attempt > 1) {
-          console.log(`\n🔄 [${reqId}] ========================================`);
-          console.log(`🔄 [${reqId}] RETRY ${attempt}/${MAX_RETRIES}`);
-          console.log(`🔄 [${reqId}] ========================================\n`);
+          console.log(`\n🔄 [${reqId}] RETRY ${attempt}/${MAX_RETRIES}`);
+          // Aguardar antes de retry
+          const waitTime = 3000 + Math.random() * 2000; // 3-5s
+          console.log(`   ⏳ Aguardando ${(waitTime/1000).toFixed(1)}s antes de retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
         }
 
         profiles = await scrapeInstagramUserSearch(search_term, max_profiles);
         break; // Sucesso - sair do loop
 
       } catch (retryError: any) {
-        if (retryError.message?.includes('RETRY_IMMEDIATELY') ||
-            retryError.message?.includes('ACCOUNT_UNAVAILABLE')) {
-          console.log(`\n🔄 [${reqId}] ${retryError.message?.includes('RETRY') ? 'RETRY_IMMEDIATELY' : 'ACCOUNT_UNAVAILABLE'} capturado (tentativa ${attempt}/${MAX_RETRIES})`);
+        lastError = retryError;
+        console.log(`\n⚠️  [${reqId}] Tentativa ${attempt}/${MAX_RETRIES} falhou: ${retryError.message}`);
 
-          if (attempt === MAX_RETRIES) {
-            console.log(`❌ [${reqId}] Máximo de retries atingido`);
-            throw new Error(`Máximo de ${MAX_RETRIES} retries atingido após recuperação de falha`);
-          }
-
-          // Aguardar antes de retry
-          const waitTime = 5000 + Math.random() * 5000; // 5-10s
-          console.log(`   ⏳ Aguardando ${(waitTime/1000).toFixed(1)}s antes de retry...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-
-          continue; // Próxima tentativa
+        if (attempt === MAX_RETRIES) {
+          console.log(`❌ [${reqId}] Máximo de retries atingido - encerrando scrape-users`);
+          console.log(`   ℹ️  scrape-tag irá resolver a rotação de conta se necessário`);
+          throw lastError;
         }
-
-        // Outros erros: propagar
-        throw retryError;
       }
     }
 

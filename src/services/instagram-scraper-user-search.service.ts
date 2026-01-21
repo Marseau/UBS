@@ -10,7 +10,6 @@ import {
   extractHashtagsFromPosts
 } from './instagram-profile.utils';
 import { createIsolatedContext } from './instagram-context-manager.service';
-import { getAccountRotation } from './instagram-account-rotation.service';
 import { extractWhatsAppForPersistence } from '../utils/whatsapp-extractor.util';
 import { createClient } from '@supabase/supabase-js';
 
@@ -234,41 +233,6 @@ export async function scrapeInstagramUserSearch(
   maxProfiles: number = 5,
   skipValidations: boolean = false
 ): Promise<InstagramProfileData[]> {
-  console.log(`\n🔍 [SCRAPE-USERS] Iniciando busca para: "${searchTerm}"`);
-
-  // 🆕 CRÍTICO: Verificar conta disponível ANTES de criar contexto (igual scrape-tag)
-  const rotation = getAccountRotation();
-  let accountCheck = await rotation.ensureAvailableAccount();
-
-  // 🔧 FIX: Se IP cooling ativo, AGUARDAR ao invés de jogar erro
-  if (!accountCheck.success && accountCheck.reason?.includes('Aguarde')) {
-    const waitMatch = accountCheck.reason.match(/Aguarde (\d+)min/);
-    if (waitMatch) {
-      const waitMinutes = parseInt(waitMatch[1]);
-      console.log(`\n⏰ ========================================`);
-      console.log(`⏰ 🧊 IP COOLING ATIVO - AGUARDANDO ${waitMinutes}min`);
-      console.log(`⏰ Motivo: ${accountCheck.reason}`);
-      console.log(`⏰ ========================================\n`);
-
-      // Aguardar o tempo necessário
-      await new Promise(resolve => setTimeout(resolve, waitMinutes * 60 * 1000));
-
-      console.log(`✅ Período de IP cooling concluído - verificando conta novamente...`);
-
-      // Verificar novamente após espera
-      accountCheck = await rotation.ensureAvailableAccount();
-    }
-  }
-
-  // Se ainda falhou após esperar, aí sim joga erro
-  if (!accountCheck.success) {
-    throw new Error(`ACCOUNT_UNAVAILABLE: ${accountCheck.reason}`);
-  }
-
-  if (accountCheck.rotated) {
-    console.log(`🔄 Rotacionado para @${accountCheck.account} antes de iniciar`);
-  }
-
   const { page, requestId, cleanup } = await createIsolatedContext();
   console.log(`🔒 Request ${requestId} iniciada para scrape-users: "${searchTerm}"`);
   try {
@@ -943,33 +907,6 @@ export async function scrapeInstagramUserSearch(
 
   } catch (error: any) {
     console.error(`❌ Erro na busca de usuários "${searchTerm}":`, error.message);
-
-    // 🆕 CRÍTICO: Registrar falha para rotação de conta (igual scrape-tag)
-    const errorMsg = error.message || '';
-    const is429 = errorMsg.includes('429') || errorMsg.includes('rate limit') || errorMsg.includes('Too Many');
-    const isChallenge = errorMsg.includes('challenge') || errorMsg.includes('suspicious') || errorMsg.includes('verificação');
-    const isSessionInvalid = errorMsg.includes('SESSION_INVALID') || errorMsg.includes('não autenticado');
-    const isSomethingWrong = errorMsg.includes('Something went wrong') || errorMsg.includes('went wrong');
-
-    if (is429 || isChallenge || isSessionInvalid || isSomethingWrong) {
-      const errorType = is429 ? 'RATE_LIMIT_429' :
-                        isChallenge ? 'CHALLENGE_DETECTED' :
-                        isSessionInvalid ? 'SESSION_INVALID' : 'SOMETHING_WENT_WRONG';
-
-      console.log(`\n🚨 ========================================`);
-      console.log(`🚨 FALHA CRÍTICA DETECTADA: ${errorType}`);
-      console.log(`🚨 Registrando falha para rotação de conta...`);
-      console.log(`🚨 ========================================\n`);
-
-      try {
-        const rotation = getAccountRotation();
-        await rotation.recordFailure(errorType, errorMsg);
-        console.log(`   ✅ Falha registrada - conta será rotacionada na próxima execução`);
-      } catch (rotationError: any) {
-        console.error(`   ⚠️  Erro ao registrar falha: ${rotationError.message}`);
-      }
-    }
-
     throw error;
   } finally {
     console.log(`🔓 Request ${requestId} finalizada (scrape-users: "${searchTerm}")`);
