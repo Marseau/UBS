@@ -1652,67 +1652,21 @@ async function initializeServices() {
       console.error('❌ [DEPLOY-3] Failed to initialize Memory Optimizer:', error);
     }
     
-    // Initialize New Metrics Cron Service
-    try {
-      const { NewMetricsCronService } = await import('./services/new-metrics-cron.service');
-      const metricsCron = new NewMetricsCronService();
-      
-      // Start metrics cron job (runs daily at 03:00h)
-      metricsCron.start();
-      
-      console.log('✅ New Metrics Cron Service initialized successfully');
-      console.log('⏰ Metrics cron job scheduled for 03:00h daily (America/Sao_Paulo)');
-      
-    } catch (error) {
-      console.error('❌ Failed to initialize New Metrics Cron Service:', error);
-    }
+    // [UBS-DEPRECATED] New Metrics Cron Service - Desativado (foco 100% AIC)
+    // try {
+    //   const { NewMetricsCronService } = await import('./services/new-metrics-cron.service');
+    //   const metricsCron = new NewMetricsCronService();
+    //   metricsCron.start();
+    //   console.log('✅ New Metrics Cron Service initialized successfully');
+    // } catch (error) {
+    //   console.error('❌ Failed to initialize New Metrics Cron Service:', error);
+    // }
+    console.log('⚠️ [UBS-DEPRECATED] New Metrics Cron Service desativado (foco AIC)');
     
     
-    // Initialize COMPREHENSIVE METRICS SYSTEM (TODAS AS 14+ MÉTRICAS)
-    if (process.env.ENABLE_COMPREHENSIVE_METRICS !== 'false') {
-      try {
-        const { executeAllMetrics } = require('../execute-all-metrics');
-        const cron = require('node-cron');
-        
-        // Schedule comprehensive metrics calculation daily at 03:30h (after other crons)
-        cron.schedule('30 3 * * *', async () => {
-          console.log('🚀 Executando sistema completo de métricas...');
-          try {
-            const result = await executeAllMetrics();
-            console.log('✅ Sistema de métricas executado:', result.success ? 'SUCESSO' : 'FALHA');
-          } catch (error) {
-            console.error('❌ Erro no sistema de métricas:', error);
-          }
-        });
-        
-        console.log('✅ Sistema Completo de Métricas inicializado');
-        console.log('⏰ Cron agendado para 03:30h diariamente');
-        console.log('📊 Cobertura: 14+ métricas para todos os tenants (7d/30d/90d)');
-        
-        // Add manual execution endpoint
-        app.post('/api/admin/execute-comprehensive-metrics', authMiddleware.verifyToken, async (_req, res) => {
-          try {
-            console.log('🚀 Execução manual do sistema de métricas iniciada...');
-            const result = await executeAllMetrics();
-            res.json({
-              success: result.success,
-              message: result.success ? 'Métricas calculadas com sucesso' : 'Erro no cálculo de métricas',
-              data: result
-            });
-          } catch (error) {
-            console.error('❌ Erro na execução manual:', error);
-            res.status(500).json({
-              success: false,
-              message: 'Erro interno no sistema de métricas',
-              error: error instanceof Error ? error.message : String(error)
-            });
-          }
-        });
-        
-      } catch (error) {
-        console.error('❌ Failed to initialize Comprehensive Metrics System:', error);
-      }
-    }
+    // [UBS-DEPRECATED] COMPREHENSIVE METRICS SYSTEM - Desativado (foco 100% AIC)
+    // if (process.env.ENABLE_COMPREHENSIVE_METRICS !== 'false') { ... }
+    console.log('⚠️ [UBS-DEPRECATED] Comprehensive Metrics System desativado (foco AIC)');
     
     // Initialize Email Service
     if (process.env.ENABLE_EMAIL_SERVICE === 'true') {
@@ -1750,115 +1704,25 @@ async function initializeServices() {
       console.log('✅ Email reminder scheduler activated (hourly)');
     }
     
-    // Initialize Analytics Scheduler
-    if (process.env.ENABLE_ANALYTICS_SCHEDULER !== 'false') {
-      try {
-        const { getSchedulerInstance } = await import('./services/analytics-scheduler.service');
-        analyticsScheduler = getSchedulerInstance();
-        await analyticsScheduler.initialize();
-        console.log('✅ Analytics scheduler initialized successfully');
-      } catch (error) {
-        console.error('❌ Failed to initialize analytics scheduler:', error);
-        // Don't break the app if analytics scheduler fails
-      }
-    }
+    // [UBS-DEPRECATED] Analytics Scheduler - Desativado (foco 100% AIC)
+    // if (process.env.ENABLE_ANALYTICS_SCHEDULER !== 'false') { ... }
+    console.log('⚠️ [UBS-DEPRECATED] Analytics Scheduler desativado (foco AIC)');
     
-    // Initialize CONVERSATION BILLING CRON SERVICE (VERSÃO DEFINITIVA)
-    if (process.env.ENABLE_CONVERSATION_BILLING !== 'false') {
-      try {
-        console.log('💰 Billing System agora integrado ao Unified Cron Service...');
-        console.log('📋 Modelo: Planos fixos + excedente por conversa');
-        console.log('🎯 Métricas baseadas em conversation_outcome (dados reais)');
-        console.log('✅ Billing calculation integrado ao Unified Cron Service');
-        console.log('💰 Sistema completo de cobrança por conversas ativo');
-        console.log('📊 Management API: /api/cron/* endpoints disponíveis');
-        
-      } catch (error) {
-        console.error('❌ Failed to initialize Billing System:', error);
-      }
-    }
+    // [UBS-DEPRECATED] CONVERSATION BILLING CRON SERVICE - Desativado (foco 100% AIC)
+    // if (process.env.ENABLE_CONVERSATION_BILLING !== 'false') { ... }
+    console.log('⚠️ [UBS-DEPRECATED] Conversation Billing desativado (foco AIC)');
 
-    // Initialize OPTIMIZED TENANT METRICS CRON SERVICE (25x more efficient for 10k tenants)
-    if (process.env.ENABLE_UNIFIED_CRON !== 'false') {
-      try {
-        console.log('🚀 Initializing Optimized Tenant Metrics Cron Service...');
-        console.log('📋 MIGRATED: unified-cron.service → tenant-metrics-cron-optimized.service');
-        console.log('🚀 PERFORMANCE: 25x faster, Redis caching, intelligent batching for 10k tenants');
-        
-        const TenantMetricsCronOptimizedService = (await import('./services/tenant-metrics-cron-optimized.service')).default;
-        const optimizedService = new TenantMetricsCronOptimizedService();
-        await optimizedService.initialize();
-        
-        // Store service instance globally for API access
-        (global as any).tenantMetricsCronService = optimizedService;
-        
-        console.log('✅ Optimized Tenant Metrics Cron Service initialized successfully');
-        console.log('🎯 MIGRATION COMPLETE: 25x performance boost + platform aggregation');
-        console.log('⏰ Smart scheduling: Daily comprehensive + Weekly risk + Monthly evolution');
-        console.log('📊 Management API: /api/cron/* endpoints migrated and enhanced');
-        
-      } catch (error) {
-        console.error('❌ Failed to initialize Unified Cron Service:', error);
-        console.log('🔄 Falling back to legacy services...');
-        
-        // FALLBACK: Initialize old services if unified fails
-        try {
-          console.log('🕐 [FALLBACK] Initializing Tenant-Platform Cron Service...');
-          const { tenantPlatformCronService } = await import('./services/tenant-platform-cron.service');
-          tenantPlatformCronService.initialize();
-          console.log('✅ [FALLBACK] Tenant-Platform Cron Service active');
-        } catch (fallbackError) {
-          console.error('❌ [FALLBACK] Failed to initialize fallback service:', fallbackError);
-        }
-      }
-    } else {
-      console.log('⚠️ Unified Cron Service disabled via ENABLE_UNIFIED_CRON=false');
-      console.log('🔄 Using legacy services...');
-      
-      // Initialize legacy services when unified is disabled
-      if (process.env.ENABLE_TENANT_PLATFORM_CRON !== 'false') {
-        try {
-          console.log('🕐 [LEGACY] Initializing Tenant-Platform Cron Service...');
-          const { tenantPlatformCronService } = await import('./services/tenant-platform-cron.service');
-          tenantPlatformCronService.initialize();
-          console.log('✅ [LEGACY] Tenant-Platform Cron Service initialized');
-        } catch (error) {
-          console.error('❌ [LEGACY] Failed to initialize Tenant-Platform Cron Service:', error);
-        }
-      }
-    }
-    
-    // Initialize Optimized Cron Service (NEW)
-    if (process.env.ENABLE_OPTIMIZED_CRON !== 'false') {
-      try {
-        console.log('🚀 Inicializando Optimized Cron Service...');
-        console.log('📋 Replacing: 21 legacy crons → 5 optimized crons');
-        
-        const { optimizedCronService: _optimizedCronService } = await import('./services/optimized-cron.service');
-        console.log('✅ Optimized Cron Service initialized successfully - PRODUCTION READY');
-      } catch (error) {
-        console.error('❌ Failed to initialize Optimized Cron Service:', error);
-      }
-    }
+    // [UBS-DEPRECATED] OPTIMIZED TENANT METRICS CRON SERVICE - Desativado (foco 100% AIC)
+    // if (process.env.ENABLE_UNIFIED_CRON !== 'false') { ... }
+    console.log('⚠️ [UBS-DEPRECATED] Tenant Metrics Cron desativado (foco AIC)');
 
-    // Initialize Conversation Billing Cron Service (NEW MODEL)
-    if (process.env.ENABLE_BILLING_CRON !== 'false') {
-      try {
-        console.log('💰 Inicializando Conversation Billing Cron Service...');
-        console.log('📋 Modelo de cobrança: Planos fixos + excedente');
-        
-        // Sistema de billing agora integrado ao unified-cron.service
-        console.log('📋 Billing calculation integrado ao Unified Cron Service');
-        
-        console.log('✅ Conversation Billing Cron Service initialized successfully');
-        console.log('🎯 Atualização automática de métricas de cobrança ativa');
-        console.log('💳 Modelo: Básico R$ 44,48 | Profissional R$ 111,20 | Enterprise R$ 278,00');
-        console.log('⚡ Excedente: R$ 0,25 por conversa adicional');
-        
-      } catch (error) {
-        console.error('❌ Failed to initialize Conversation Billing Cron Service:', error);
-      }
-    }
+    // [UBS-DEPRECATED] Optimized Cron Service - Desativado (foco 100% AIC)
+    // if (process.env.ENABLE_OPTIMIZED_CRON !== 'false') { ... }
+    console.log('⚠️ [UBS-DEPRECATED] Optimized Cron Service desativado (foco AIC)');
+
+    // [UBS-DEPRECATED] Conversation Billing Cron Service - Desativado (foco 100% AIC)
+    // if (process.env.ENABLE_BILLING_CRON !== 'false') { ... }
+    console.log('⚠️ [UBS-DEPRECATED] Billing Cron desativado (foco AIC)');
 
     // Dynamic Intelligence Cron Service - Auto-evolução semanal
     try {
