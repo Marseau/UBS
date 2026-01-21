@@ -782,7 +782,7 @@
 
         <!-- Landing Page URL -->
         <div class="landing-section">
-          <div class="form-group" style="margin-bottom: 0;">
+          <div class="form-group" style="margin-bottom: 0;" id="landing-input-container">
             <label class="form-label">URL da Landing Page<span class="required">*</span></label>
             <div class="landing-input-group">
               <input type="url" id="landing_page_url" class="landing-input" placeholder="https://seusite.com/campanha">
@@ -859,6 +859,21 @@
             <h2>Dados da Campanha</h2>
             <p>Informacoes especificas que nao estao na landing page: objetivos, concorrentes e objecoes.</p>
           </div>
+        </div>
+
+        <!-- AI Auto-Fill Button -->
+        <div class="ai-extract-section" id="ai-extract-section">
+          <div class="info-box" style="background: linear-gradient(135deg, rgba(14, 204, 151, 0.1), rgba(12, 27, 51, 0.1)); border: 1px solid var(--aic-green);">
+            <span class="info-box-icon">🤖</span>
+            <div class="info-box-content" style="flex: 1;">
+              <div class="info-box-title">Preenchimento Inteligente</div>
+              <p>A IA pode analisar seus documentos e sugerir respostas para os campos abaixo. Voce revisa e ajusta conforme necessario.</p>
+            </div>
+            <button type="button" class="btn btn-secondary" id="btn-ai-extract" onclick="extractWithAI()" style="white-space: nowrap;">
+              <span id="ai-extract-text">🤖 Preencher com IA</span>
+            </button>
+          </div>
+          <div class="ai-extract-status" id="ai-extract-status" style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 14px;"></div>
         </div>
 
         <!-- Objetivo -->
@@ -949,8 +964,8 @@
           <div class="form-section-title">Objecoes Comuns</div>
 
           <div class="form-group">
-            <label class="form-label" for="objections">Liste as objecoes mais comuns<span class="required">*</span></label>
-            <textarea id="objections" class="form-textarea large" placeholder="Ex:&#10;- 'Esta muito caro'&#10;- 'Preciso pensar'&#10;- 'Ja tenho fornecedor'&#10;- 'Nao tenho tempo agora'&#10;- 'Vou falar com meu socio'"></textarea>
+            <label class="form-label" for="objections">Objecoes comuns e como responder<span class="required">*</span></label>
+            <textarea id="objections" class="form-textarea large" placeholder="Ex:&#10;OBJEÇÃO: Está muito caro&#10;RESPOSTA: Nosso preço reflete qualidade e resultados comprovados...&#10;&#10;OBJEÇÃO: Preciso pensar&#10;RESPOSTA: Entendo! Posso agendar uma conversa rápida amanhã para tirar dúvidas?"></textarea>
             <p class="form-hint">O agente usara isso para responder objecoes de forma convincente</p>
           </div>
         </div>
@@ -1305,13 +1320,188 @@
       }
     }
 
+    // =====================================================
+    // AI EXTRACTION - Preencher com IA
+    // =====================================================
+
+    /**
+     * Extrai campos do briefing usando IA a partir dos documentos
+     * O cliente revisa e ajusta as sugestões
+     */
+    async function extractWithAI() {
+      const btn = document.getElementById('btn-ai-extract');
+      const btnText = document.getElementById('ai-extract-text');
+      const statusEl = document.getElementById('ai-extract-status');
+
+      btn.disabled = true;
+      btnText.textContent = '⏳ Analisando documentos...';
+      statusEl.style.display = 'none';
+
+      try {
+        const response = await authFetch(`/api/campaigns/${campaignId}/briefing/ai-extract`, {
+          method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          showAIExtractStatus('error', result.error || 'Erro ao extrair campos');
+          btn.disabled = false;
+          btnText.textContent = '🤖 Preencher com IA';
+          return;
+        }
+
+        // Preencher campos com as sugestões da IA
+        const fields = result.fields || {};
+        let filledCount = 0;
+
+        // Oferta especial
+        if (fields.campaign_offer) {
+          const el = document.getElementById('campaign_offer');
+          if (el && !el.value.trim()) {
+            el.value = fields.campaign_offer;
+            highlightField(el);
+            filledCount++;
+          }
+        }
+
+        // Público-alvo / ICP
+        if (fields.target_audience) {
+          const el = document.getElementById('target_audience');
+          if (el && !el.value.trim()) {
+            el.value = fields.target_audience;
+            highlightField(el);
+            filledCount++;
+          }
+        }
+
+        // Problema principal
+        if (fields.main_pain) {
+          const el = document.getElementById('main_pain');
+          if (el && !el.value.trim()) {
+            el.value = fields.main_pain;
+            highlightField(el);
+            filledCount++;
+          }
+        }
+
+        // Por que escolher
+        if (fields.why_choose_us) {
+          const el = document.getElementById('why_choose_us');
+          if (el && !el.value.trim()) {
+            el.value = fields.why_choose_us;
+            highlightField(el);
+            filledCount++;
+          }
+        }
+
+        // Objeções comuns (novo formato: [{objection, response}])
+        if (fields.objections && fields.objections.length > 0) {
+          const el = document.getElementById('objections');
+          if (el && !el.value.trim()) {
+            // Suporta formato antigo (string[]) e novo ({objection, response}[])
+            const formatted = fields.objections.map(o => {
+              if (typeof o === 'string') return `- ${o}`;
+              return `OBJEÇÃO: ${o.objection}\nRESPOSTA: ${o.response}`;
+            }).join('\n\n');
+            el.value = formatted;
+            highlightField(el);
+            filledCount++;
+          }
+        }
+
+        // CTA
+        if (fields.call_to_action) {
+          const el = document.getElementById('campaign_cta');
+          if (el && !el.value.trim()) {
+            el.value = fields.call_to_action;
+            highlightField(el);
+            filledCount++;
+          }
+        }
+
+        // Concorrentes
+        if (fields.competitors && fields.competitors.length > 0) {
+          const el = document.getElementById('competitors');
+          if (el && !el.value.trim()) {
+            el.value = fields.competitors.join(', ');
+            highlightField(el);
+            filledCount++;
+          }
+        }
+
+        // Tom de voz
+        if (fields.tone_of_voice) {
+          const el = document.getElementById('tone_of_voice');
+          if (el && !el.value) {
+            el.value = fields.tone_of_voice;
+            highlightField(el);
+            filledCount++;
+          }
+        }
+
+        // Mostrar status de sucesso
+        const sources = result.sources || [];
+        const sourcesText = sources.length > 0 ? ` (baseado em ${sources.length} documento${sources.length > 1 ? 's' : ''})` : '';
+        showAIExtractStatus('success', `✅ ${filledCount} campo${filledCount !== 1 ? 's' : ''} preenchido${filledCount !== 1 ? 's' : ''}${sourcesText}. Revise e ajuste conforme necessario.`);
+
+        console.log('[AI Extract] Campos preenchidos:', filledCount, 'de', Object.keys(fields).length);
+
+      } catch (error) {
+        console.error('[AI Extract] Erro:', error);
+        showAIExtractStatus('error', 'Erro ao conectar com o servidor. Tente novamente.');
+      }
+
+      btn.disabled = false;
+      btnText.textContent = '🤖 Preencher com IA';
+    }
+
+    /**
+     * Destaca visualmente um campo preenchido pela IA
+     */
+    function highlightField(element) {
+      element.style.borderColor = '#0ECC97';
+      element.style.boxShadow = '0 0 0 3px rgba(14, 204, 151, 0.2)';
+      setTimeout(() => {
+        element.style.borderColor = '';
+        element.style.boxShadow = '';
+      }, 5000);
+    }
+
+    /**
+     * Mostra status da extração por IA
+     */
+    function showAIExtractStatus(type, message) {
+      const statusEl = document.getElementById('ai-extract-status');
+      statusEl.style.display = 'block';
+      statusEl.textContent = message;
+
+      if (type === 'success') {
+        statusEl.style.background = 'rgba(14, 204, 151, 0.1)';
+        statusEl.style.color = '#0ECC97';
+        statusEl.style.border = '1px solid rgba(14, 204, 151, 0.3)';
+      } else if (type === 'error') {
+        statusEl.style.background = 'rgba(239, 68, 68, 0.1)';
+        statusEl.style.color = '#ef4444';
+        statusEl.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+      }
+    }
+
     function showLandingStatus(type, title, text) {
       const statusEl = document.getElementById('landing-status');
       const iconEl = document.getElementById('landing-status-icon');
       const titleEl = document.getElementById('landing-status-title');
       const textEl = document.getElementById('landing-status-text');
+      const inputContainer = document.getElementById('landing-input-container');
 
       statusEl.className = `landing-status show ${type}`;
+
+      // Hide input when already processed successfully
+      if (type === 'success' && inputContainer) {
+        inputContainer.style.display = 'none';
+      } else if (inputContainer) {
+        inputContainer.style.display = 'block';
+      }
 
       const icons = {
         processing: '⏳',
@@ -1509,11 +1699,12 @@
     async function loadExistingData() {
       try {
         // Load campaign data (for landing_page_url)
-        const campaignRes = await authFetch(`/api/campaign/${campaignId}`);
+        const campaignRes = await authFetch(`/api/hashtag-intelligence/campaign/${campaignId}`);
         if (campaignRes.ok) {
           const campaignData = await campaignRes.json();
-          if (campaignData.success && campaignData.campaign) {
-            const c = campaignData.campaign;
+          // API returns { success, data: { campaign, project } }
+          if (campaignData.success && campaignData.data?.campaign) {
+            const c = campaignData.data.campaign;
             if (c.landing_page_url) {
               document.getElementById('landing_page_url').value = c.landing_page_url;
               landingPageProcessed = true;

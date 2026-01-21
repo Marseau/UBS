@@ -20,6 +20,7 @@ import {
 } from '../middleware/aic-auth.middleware';
 import { clientJourneyService } from '../services/client-journey.service';
 import { getWhapiPartnerService } from '../services/whapi-partner.service';
+import { campaignDocumentProcessor, DocumentUpload } from '../services/campaign-document-processor.service';
 
 const router = Router();
 
@@ -1036,6 +1037,85 @@ router.get('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: Authe
 });
 
 /**
+ * Embeda o briefing como documento para RAG
+ * Remove documento anterior e cria novo com dados atualizados
+ */
+async function embedBriefingForRAG(campaignId: string, briefing: any): Promise<void> {
+  try {
+    // 1. Remover documento de briefing anterior (se existir)
+    await supabase
+      .from('campaign_documents')
+      .update({ is_active: false })
+      .eq('campaign_id', campaignId)
+      .eq('doc_type', 'briefing')
+      .ilike('title', '%Briefing%');
+
+    // 2. Verificar se há dados relevantes para embedar
+    const hasContent = briefing.company_name || briefing.main_differentiator ||
+                       briefing.icp_description || briefing.icp_main_pain ||
+                       briefing.call_to_action || briefing.campaign_offer;
+
+    if (!hasContent) {
+      console.log(`[Briefing Embed] Sem conteúdo relevante para campanha ${campaignId}`);
+      return;
+    }
+
+    // 3. Formatar briefing como documento estruturado
+    const briefingContent = `
+=== BRIEFING DA CAMPANHA ===
+
+EMPRESA
+- Nome: ${briefing.company_name || 'Não informado'}
+- Principal Diferencial: ${briefing.main_differentiator || 'Não informado'}
+
+PÚBLICO-ALVO (ICP)
+- Perfil do Cliente Ideal: ${briefing.icp_description || 'Não informado'}
+- Principal Dor/Problema: ${briefing.icp_main_pain || 'Não informado'}
+
+CAMPANHA
+- Objetivo: ${briefing.campaign_objective || 'Não informado'}
+- Oferta Especial: ${briefing.campaign_offer || 'Não informado'}
+- Call to Action (CTA): ${briefing.call_to_action || 'Não informado'}
+- Link de Agendamento: ${briefing.calendar_link || 'Não informado'}
+
+ARGUMENTAÇÃO
+- Por que escolher você: ${briefing.why_choose_us || 'Não informado'}
+- Principais Objeções: ${briefing.common_objections || 'Não informado'}
+- Tom de Voz: ${briefing.tone_of_voice || 'Não informado'}
+
+CONCORRÊNCIA
+- Concorrentes: ${briefing.competitors || 'Não informado'}
+
+Atualizado em: ${new Date().toLocaleDateString('pt-BR')}
+    `.trim();
+
+    console.log(`[Briefing Embed] Embedando briefing para campanha: ${campaignId}`);
+
+    // 4. Embedar documento
+    const embedResult = await campaignDocumentProcessor.processDocument({
+      campaignId: campaignId,
+      title: `Briefing da Campanha`,
+      docType: 'briefing',
+      content: briefingContent,
+      metadata: {
+        source: 'briefing_form',
+        completion_percentage: briefing.completion_percentage || 0,
+        updated_at: new Date().toISOString(),
+      }
+    });
+
+    if (embedResult.success) {
+      console.log(`[Briefing Embed] ✅ Sucesso: ${embedResult.chunksCreated} chunks, ${embedResult.totalTokens} tokens`);
+    } else {
+      console.error(`[Briefing Embed] ❌ Falha: ${embedResult.error}`);
+    }
+  } catch (error) {
+    console.error('[Briefing Embed] Erro:', error);
+    throw error;
+  }
+}
+
+/**
  * POST /api/campaigns/:campaignId/briefing
  * Cria ou atualiza o briefing de uma campanha
  * Permite acesso sem autenticacao para fluxo de onboarding do cliente
@@ -1147,6 +1227,11 @@ router.post('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: Auth
       }
     }
 
+    // Embedar briefing para RAG (em background, não bloqueia resposta)
+    embedBriefingForRAG(campaignId, result).catch(err => {
+      console.error('[Campaign Credentials] Erro ao embedar briefing (background):', err);
+    });
+
     res.json({
       success: true,
       briefing: result,
@@ -1193,6 +1278,52 @@ router.get('/campaigns/:campaignId/briefing/context', optionalAuthAIC, async (re
     });
   } catch (error: any) {
     console.error('[Campaign Credentials] Error getting briefing context:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/campaigns/:campaignId/briefing/ai-extract
+ * Extrai campos do briefing usando IA a partir dos documentos da campanha
+ * Usado para pré-preencher o formulário - cliente valida e ajusta
+ */
+router.post('/campaigns/:campaignId/briefing/ai-extract', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const campaignId = req.params.campaignId;
+    if (!campaignId) {
+      res.status(400).json({ error: 'campaignId is required' });
+      return;
+    }
+
+    // Verificar acesso a campanha
+    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess) {
+      res.status(404).json({ error: 'Campaign not found' });
+      return;
+    }
+
+    console.log(`[AI Extract] Iniciando extração para campanha: ${campaignId}`);
+
+    // Chamar o serviço de extração
+    const result = await campaignDocumentProcessor.extractBriefingFields(campaignId);
+
+    if (!result.success) {
+      res.status(400).json({
+        success: false,
+        error: result.error || 'Erro ao extrair campos do briefing'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      fields: result.fields,
+      sources: result.sources,
+      message: 'Campos extraídos com sucesso. Revise e ajuste conforme necessário.'
+    });
+
+  } catch (error: any) {
+    console.error('[AI Extract] Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1249,7 +1380,6 @@ router.patch('/campaigns/:campaignId/briefing/approve', optionalAuthAIC, async (
 // CAMPAIGN DOCUMENTS (RAG)
 // ============================================================================
 
-import { campaignDocumentProcessor, DocumentUpload } from '../services/campaign-document-processor.service';
 import { getLandingPageScraperService } from '../services/landing-page-scraper.service';
 import multer from 'multer';
 

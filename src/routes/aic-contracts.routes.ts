@@ -9,6 +9,7 @@ import { contractPDFService } from '../services/contract-pdf.service';
 import { contractEmailService } from '../services/contract-email.service';
 import { contractSecurityService } from '../services/contract-security.service';
 import { clientJourneyService } from '../services/client-journey.service';
+import { campaignDocumentProcessor } from '../services/campaign-document-processor.service';
 
 const router = Router();
 
@@ -381,6 +382,65 @@ router.post('/sign-contract', async (req: Request, res: Response) => {
       } else if (newCampaign) {
         campaignId = newCampaign.id;
         console.log(`[AIC Contracts] Created new campaign: ${campaignId}`);
+      }
+    }
+
+    // 3.5 Embedar dados do contrato para RAG (se tiver campaignId e dados relevantes)
+    if (campaignId && (target_niche || target_audience || service_description)) {
+      try {
+        // Formatar dados do contrato como documento estruturado
+        const contractContent = `
+=== DADOS DO CONTRATO ASSINADO ===
+
+CLIENTE
+- Nome: ${client_name}
+- Empresa: ${client_representative || 'Pessoa Física'}
+- Documento: ${client_document || 'Não informado'}
+- Endereço: ${client_address || 'Não informado'}
+
+CAMPANHA
+- Nome: ${campaign_name || project_name || `Campanha ${client_name}`}
+- Nicho Alvo: ${target_niche || 'A definir no briefing'}
+- Público-Alvo (ICP): ${target_audience || 'A definir no briefing'}
+- Descrição do Serviço/Produto: ${service_description || 'A definir no briefing'}
+
+VALORES
+- Valor do Contrato: R$ ${contract_value || 4000}
+- Valor por Lead Qualificado: R$ ${lead_value || 10}
+
+CONTATO
+- WhatsApp da Campanha: ${campaign_whatsapp || 'A definir'}
+- Email: ${client_email}
+
+Data de Assinatura: ${new Date(signatureDate).toLocaleDateString('pt-BR')}
+ID do Contrato: ${contractId}
+        `.trim();
+
+        console.log(`[AIC Contracts] Embedando dados do contrato para campanha: ${campaignId}`);
+
+        const embedResult = await campaignDocumentProcessor.processDocument({
+          campaignId: campaignId,
+          title: `Contrato AIC - ${client_name}`,
+          docType: 'briefing', // Usar 'briefing' pois são dados essenciais para o agente
+          content: contractContent,
+          sourceUrl: pdfResult.url || undefined,
+          metadata: {
+            contract_id: contractId,
+            signed_at: signatureDate,
+            client_name: client_name,
+            contract_value: contract_value || 4000,
+            lead_value: lead_value || 10,
+          }
+        });
+
+        if (embedResult.success) {
+          console.log(`[AIC Contracts] ✅ Contrato embedado: ${embedResult.chunksCreated} chunks, ${embedResult.totalTokens} tokens`);
+        } else {
+          console.error(`[AIC Contracts] ⚠️ Falha ao embedar contrato: ${embedResult.error}`);
+        }
+      } catch (embedError) {
+        // Não falhar a assinatura se o embedding falhar - apenas logar
+        console.error('[AIC Contracts] Erro ao embedar dados do contrato:', embedError);
       }
     }
 
@@ -1263,6 +1323,127 @@ router.post('/sign-external', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Erro interno ao processar assinatura',
+    });
+  }
+});
+
+/**
+ * POST /api/aic/contracts/backfill-embeddings
+ * Backfill: Embeda dados do contrato para campanhas existentes
+ * Use para campanhas que foram criadas antes do embedding automático
+ */
+router.post('/backfill-embeddings', async (req: Request, res: Response) => {
+  try {
+    const { campaign_id } = req.body;
+
+    if (!campaign_id) {
+      return res.status(400).json({ success: false, message: 'campaign_id é obrigatório' });
+    }
+
+    // 1. Buscar dados da campanha
+    const { data: campaign, error: campaignError } = await supabase
+      .from('cluster_campaigns')
+      .select('*')
+      .eq('id', campaign_id)
+      .single();
+
+    if (campaignError || !campaign) {
+      return res.status(404).json({ success: false, message: 'Campanha não encontrada' });
+    }
+
+    // 2. Buscar jornada associada
+    const { data: journey } = await supabase
+      .from('aic_client_journeys')
+      .select('client_name, client_email, contract_value, lead_value, proposal_data, contract_pdf_url')
+      .eq('campaign_id', campaign_id)
+      .single();
+
+    // 3. Verificar se já existe documento do contrato
+    const { data: existingDoc } = await supabase
+      .from('campaign_documents')
+      .select('id')
+      .eq('campaign_id', campaign_id)
+      .eq('doc_type', 'briefing')
+      .ilike('title', '%Contrato%')
+      .single();
+
+    if (existingDoc) {
+      return res.json({
+        success: true,
+        message: 'Contrato já embedado para esta campanha',
+        skipped: true
+      });
+    }
+
+    // 4. Formatar dados do contrato
+    const clientName = journey?.client_name || campaign.client_contact_name || 'Cliente';
+    const clientEmail = journey?.client_email || campaign.client_email || '';
+    const contractValue = journey?.contract_value || campaign.contract_value || 4000;
+    const leadValue = journey?.lead_value || campaign.lead_value || 10;
+
+    const contractContent = `
+=== DADOS DO CONTRATO ASSINADO ===
+
+CLIENTE
+- Nome: ${clientName}
+- Empresa: ${campaign.client_company || 'Pessoa Física'}
+- Documento: ${campaign.client_document || 'Não informado'}
+
+CAMPANHA
+- Nome: ${campaign.campaign_name}
+- Nicho Alvo: ${campaign.nicho_principal || 'A definir no briefing'}
+- Público-Alvo (ICP): ${campaign.target_audience || 'A definir no briefing'}
+- Descrição do Serviço/Produto: ${campaign.service_description || 'A definir no briefing'}
+
+VALORES
+- Valor do Contrato: R$ ${contractValue}
+- Valor por Lead Qualificado: R$ ${leadValue}
+
+CONTATO
+- WhatsApp da Campanha: ${campaign.client_whatsapp_number || 'A definir'}
+- Email: ${clientEmail}
+
+Data de Criação: ${new Date(campaign.created_at).toLocaleDateString('pt-BR')}
+    `.trim();
+
+    console.log(`[AIC Contracts Backfill] Embedando dados para campanha: ${campaign_id}`);
+
+    // 5. Embedar documento
+    const embedResult = await campaignDocumentProcessor.processDocument({
+      campaignId: campaign_id,
+      title: `Contrato AIC - ${clientName}`,
+      docType: 'briefing',
+      content: contractContent,
+      sourceUrl: journey?.contract_pdf_url || undefined,
+      metadata: {
+        backfill: true,
+        campaign_name: campaign.campaign_name,
+        contract_value: contractValue,
+        lead_value: leadValue,
+      }
+    });
+
+    if (embedResult.success) {
+      console.log(`[AIC Contracts Backfill] ✅ Sucesso: ${embedResult.chunksCreated} chunks`);
+      return res.json({
+        success: true,
+        message: 'Dados do contrato embedados com sucesso',
+        chunks_created: embedResult.chunksCreated,
+        total_tokens: embedResult.totalTokens,
+      });
+    } else {
+      console.error(`[AIC Contracts Backfill] ❌ Falha: ${embedResult.error}`);
+      return res.status(500).json({
+        success: false,
+        message: embedResult.error || 'Erro ao embedar dados',
+      });
+    }
+
+  } catch (error) {
+    console.error('[AIC Contracts Backfill] Erro:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno ao processar backfill',
     });
   }
 });

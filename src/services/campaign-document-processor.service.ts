@@ -753,6 +753,206 @@ Responda EXATAMENTE neste formato JSON:
 
     return documents.map(d => `${d.title}: ${d.content}`).join("\n\n");
   }
+
+  // =====================================================
+  // EXTRAÇÃO COMPLETA DE BRIEFING VIA GPT
+  // =====================================================
+
+  /**
+   * Extrai TODOS os campos do briefing dos documentos da campanha
+   * Usado para pré-preencher o formulário com sugestões da IA
+   * O cliente valida e ajusta conforme necessário
+   */
+  async extractBriefingFields(campaignId: string): Promise<{
+    success: boolean;
+    fields?: {
+      campaign_offer?: string;
+      target_audience?: string;
+      main_pain?: string;
+      why_choose_us?: string;
+      objections?: string[];
+      call_to_action?: string;
+      competitors?: string[];
+      tone_of_voice?: string;
+    };
+    sources?: string[];
+    error?: string;
+  }> {
+    try {
+      console.log(`🤖 [AI Extract] Extraindo campos do briefing para campanha: ${campaignId}`);
+
+      // 1. Buscar dados estruturados da campanha (contrato/proposta)
+      const { data: campaign, error: campaignError } = await this.supabase
+        .from("cluster_campaigns")
+        .select("campaign_name, nicho_principal, target_audience, service_description")
+        .eq("id", campaignId)
+        .single();
+
+      // 2. Buscar dados da jornada (proposal_data)
+      const { data: journey } = await this.supabase
+        .from("aic_client_journeys")
+        .select("proposal_data, contract_value, lead_value")
+        .eq("campaign_id", campaignId)
+        .single();
+
+      // 3. Buscar todos os documentos da campanha
+      const { data: documents, error } = await this.supabase
+        .from("campaign_documents")
+        .select("title, content, doc_type, content_chunk, source_url")
+        .eq("campaign_id", campaignId)
+        .eq("is_active", true)
+        .order("doc_type")
+        .order("content_chunk");
+
+      if (error) {
+        console.error("[AI Extract] Erro ao buscar documentos:", error);
+        return { success: false, error: "Erro ao buscar documentos da campanha" };
+      }
+
+      // Verificar se há alguma fonte de dados
+      const hasDocuments = documents && documents.length > 0;
+      const hasCampaignData = campaign && (campaign.nicho_principal || campaign.target_audience || campaign.service_description);
+      const hasJourneyData = journey?.proposal_data && Object.keys(journey.proposal_data).length > 0;
+
+      if (!hasDocuments && !hasCampaignData && !hasJourneyData) {
+        return { success: false, error: "Nenhum dado encontrado. Processe a landing page, faça upload de documentos ou preencha os dados da campanha." };
+      }
+
+      console.log(`📚 [AI Extract] Fontes: ${documents?.length || 0} docs, campanha: ${hasCampaignData ? 'sim' : 'não'}, jornada: ${hasJourneyData ? 'sim' : 'não'}`);
+
+      // 4. Montar contexto combinado
+      let combinedContent = "";
+      const maxChars = 48000; // ~12000 tokens
+      const sources: string[] = [];
+
+      // 4.1 Adicionar dados estruturados da campanha (PRIORIDADE)
+      if (hasCampaignData) {
+        combinedContent += `\n\n=== DADOS DO CONTRATO/PROPOSTA ===\n`;
+        if (campaign.campaign_name) combinedContent += `Nome da Campanha: ${campaign.campaign_name}\n`;
+        if (campaign.nicho_principal) combinedContent += `Nicho Principal: ${campaign.nicho_principal}\n`;
+        if (campaign.target_audience) combinedContent += `Público-Alvo: ${campaign.target_audience}\n`;
+        if (campaign.service_description) combinedContent += `Descrição do Serviço: ${campaign.service_description}\n`;
+        sources.push("Contrato/Proposta");
+      }
+
+      // 4.2 Adicionar dados da jornada
+      if (hasJourneyData) {
+        const pd = journey.proposal_data as any;
+        combinedContent += `\n\n=== DADOS DA JORNADA ===\n`;
+        if (pd.target_niche) combinedContent += `Nicho: ${pd.target_niche}\n`;
+        if (pd.target_audience) combinedContent += `Público: ${pd.target_audience}\n`;
+        if (pd.service_description) combinedContent += `Serviço: ${pd.service_description}\n`;
+        if (journey.contract_value) combinedContent += `Valor do Contrato: R$ ${journey.contract_value}\n`;
+        if (journey.lead_value) combinedContent += `Valor por Lead: R$ ${journey.lead_value}\n`;
+        sources.push("Jornada do Cliente");
+      }
+
+      // 4.3 Adicionar documentos (LP, uploads)
+      if (hasDocuments) {
+        for (const doc of documents) {
+          if (combinedContent.length + doc.content.length > maxChars) {
+            break;
+          }
+          combinedContent += `\n\n=== ${doc.doc_type.toUpperCase()}: ${doc.title} ===\n${doc.content}`;
+          if (doc.source_url && !sources.includes(doc.source_url)) {
+            sources.push(doc.source_url);
+          }
+        }
+      }
+
+      console.log(`📝 [AI Extract] Conteúdo combinado: ${combinedContent.length} caracteres de ${sources.length} fontes`);
+
+      // 3. Usar GPT para extrair campos do briefing
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0.3,
+        messages: [
+          {
+            role: "system",
+            content: `Você é um especialista em análise de documentos comerciais e criação de briefings de campanhas de marketing.
+
+Sua tarefa é extrair informações específicas dos documentos fornecidos para pré-preencher um formulário de briefing.
+
+REGRAS IMPORTANTES:
+- Extraia APENAS informações que estão EXPLICITAMENTE nos documentos
+- Se encontrar a informação, cite o trecho relevante
+- Se NÃO encontrar informação suficiente, deixe o campo como null (não invente)
+- Seja específico e use linguagem de vendas/marketing quando apropriado
+- Para objeções, pense nas objeções COMUNS que clientes teriam ao considerar o produto/serviço`
+          },
+          {
+            role: "user",
+            content: `Analise os seguintes documentos e extraia os campos do briefing:
+
+DOCUMENTOS:
+${combinedContent}
+
+---
+
+Extraia as seguintes informações:
+
+1. **OFERTA ESPECIAL** (campaign_offer): Há alguma oferta, desconto, promoção, condição especial ou benefício exclusivo mencionado? (ex: "20% de desconto", "primeira consulta grátis", "preço especial por lead")
+
+2. **PERFIL DO CLIENTE IDEAL** (target_audience): Quem é o público-alvo? Descreva o perfil ideal: segmento, porte, características, necessidades. Seja específico.
+
+3. **PROBLEMA QUE RESOLVE** (main_pain): Qual é a principal dor/problema que o produto/serviço resolve para o cliente?
+
+4. **POR QUE ESCOLHER** (why_choose_us): Quais são os principais diferenciais? Por que o cliente deveria escolher este serviço/produto ao invés da concorrência?
+
+5. **OBJEÇÕES E RESPOSTAS** (objections): IMPORTANTE - procure trechos que parecem respostas a dúvidas/objeções comuns, mesmo que a pergunta não esteja explícita. Exemplos de objeções típicas: "Isso é spam?", "E se minha conta for bloqueada?", "Como sei que funciona?", "Qual o prazo?", "Como é o pagamento?". Quando encontrar uma resposta/explicação defensiva, crie a objeção correspondente. Formato: [{"objection": "a dúvida/objeção do cliente", "response": "como responder"}]
+
+6. **CALL TO ACTION** (call_to_action): Qual seria a melhor proposta para um lead qualificado? (ex: "Agendar uma demonstração", "Solicitar orçamento", "Iniciar teste grátis")
+
+7. **CONCORRENTES** (competitors): Há menção de concorrentes ou empresas similares no mercado?
+
+8. **TOM DE VOZ** (tone_of_voice): Qual tom de comunicação parece mais adequado? Opções: formal, consultivo, amigavel, tecnico, inspirador
+
+Responda EXATAMENTE neste formato JSON:
+{
+  "campaign_offer": "string ou null se não encontrado",
+  "target_audience": "string ou null se não encontrado",
+  "main_pain": "string ou null se não encontrado",
+  "why_choose_us": "string ou null se não encontrado",
+  "objections": [{"objection": "pergunta/objeção", "response": "como responder"}, ...] ou null,
+  "call_to_action": "string ou null se não encontrado",
+  "competitors": ["concorrente 1", ...] ou null,
+  "tone_of_voice": "formal|consultivo|amigavel|tecnico|inspirador ou null"
+}`
+          }
+        ],
+        response_format: { type: "json_object" }
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return { success: false, error: "GPT não retornou resposta" };
+      }
+
+      const extracted = JSON.parse(content);
+      console.log(`✅ [AI Extract] Campos extraídos com sucesso:`, Object.keys(extracted).filter(k => extracted[k]));
+
+      // Limpar campos null
+      const fields: any = {};
+      if (extracted.campaign_offer) fields.campaign_offer = extracted.campaign_offer;
+      if (extracted.target_audience) fields.target_audience = extracted.target_audience;
+      if (extracted.main_pain) fields.main_pain = extracted.main_pain;
+      if (extracted.why_choose_us) fields.why_choose_us = extracted.why_choose_us;
+      if (extracted.objections && extracted.objections.length > 0) fields.objections = extracted.objections;
+      if (extracted.call_to_action) fields.call_to_action = extracted.call_to_action;
+      if (extracted.competitors && extracted.competitors.length > 0) fields.competitors = extracted.competitors;
+      if (extracted.tone_of_voice) fields.tone_of_voice = extracted.tone_of_voice;
+
+      return {
+        success: true,
+        fields,
+        sources
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`❌ [AI Extract] Erro:`, errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }
 }
 
 // Export singleton
