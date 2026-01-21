@@ -879,35 +879,39 @@
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label" for="calendar_link">Link de Agendamento<span class="optional">(se aplicavel)</span></label>
-              <input type="url" id="calendar_link" class="form-input" placeholder="https://calendly.com/...">
+              <label class="form-label" for="calendar_link">Link de Auto-Agendamento<span class="optional">(opcional)</span></label>
+              <input type="url" id="calendar_link" class="form-input" placeholder="https://calendly.com/sua-empresa">
+              <p class="form-hint">Opcional: Se voce usa Calendly, Cal.com ou similar, o agente pode compartilhar este link para o lead agendar direto. Caso contrario, o agente encaminha o lead para seu WhatsApp.</p>
             </div>
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="campaign_cta">Call to Action (CTA)<span class="required">*</span></label>
-            <input type="text" id="campaign_cta" class="form-input" placeholder="Ex: Agende uma demonstracao gratuita de 15 minutos">
-            <p class="form-hint">A acao que voce quer que o lead tome ao final da conversa</p>
+            <label class="form-label" for="campaign_cta">Proposta para Lead Qualificado<span class="required">*</span></label>
+            <input type="text" id="campaign_cta" class="form-input" placeholder="Ex: Conversar 15 minutos com nosso especialista sobre seu caso">
+            <p class="form-hint">O que o agente deve propor quando identificar um lead qualificado? Ex: "agendar uma demonstracao", "receber uma proposta personalizada"</p>
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="campaign_offer">Oferta Especial<span class="optional">(opcional)</span></label>
-            <textarea id="campaign_offer" class="form-textarea" placeholder="Ha alguma oferta especial para esta campanha? Desconto, bonus, condicao especial..."></textarea>
+            <label class="form-label" for="campaign_offer">Oferta ou Beneficio Exclusivo<span class="optional">(opcional)</span></label>
+            <textarea id="campaign_offer" class="form-textarea" placeholder="Ex: 20% de desconto na primeira compra, consultoria gratuita, bonus exclusivo..."></textarea>
+            <p class="form-hint">Algo especial para incentivar a acao. Sera preenchido automaticamente se detectado na landing page.</p>
           </div>
         </div>
 
         <!-- Publico e Dores -->
         <div class="form-section">
-          <div class="form-section-title">Publico-Alvo</div>
+          <div class="form-section-title">Publico-Alvo e Problema</div>
 
           <div class="form-group">
-            <label class="form-label" for="target_audience">Quem e o publico desta campanha?<span class="required">*</span></label>
+            <label class="form-label" for="target_audience">Perfil do Cliente Ideal (ICP)<span class="required">*</span></label>
             <textarea id="target_audience" class="form-textarea" placeholder="Ex: Donos de clinicas de estetica em SP, com mais de 3 anos de mercado, que faturam acima de R$50k/mes..."></textarea>
+            <p class="form-hint">Descreva QUEM e seu cliente ideal. O agente usara isso para qualificar leads.</p>
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="main_pain">Principal dor/problema<span class="required">*</span></label>
-            <textarea id="main_pain" class="form-textarea" placeholder="Qual o principal problema que seu publico enfrenta e que voce resolve?"></textarea>
+            <label class="form-label" for="main_pain">Problema que Voce Resolve<span class="required">*</span></label>
+            <textarea id="main_pain" class="form-textarea" placeholder="Ex: Dificuldade em atrair novos clientes qualificados sem depender de indicacoes"></textarea>
+            <p class="form-hint">QUAL problema seu produto/servico resolve? O agente usara para criar conexao com o lead.</p>
           </div>
         </div>
 
@@ -1233,6 +1237,9 @@
           `"${result.title || url}" - ${result.chunksCreated} blocos de conhecimento criados.`
         );
 
+        // Auto-fill form fields from LP data
+        autoFillFromLandingPage(result);
+
         // Reload documents to show the new one
         await loadDocuments();
 
@@ -1243,6 +1250,59 @@
 
       btn.disabled = false;
       btn.textContent = 'Processar';
+    }
+
+    /**
+     * Auto-fill form fields from landing page extraction
+     * Only fills empty fields - doesn't overwrite user data
+     */
+    function autoFillFromLandingPage(lpData) {
+      if (!lpData) return;
+
+      const content = (lpData.content || '').toLowerCase();
+      const description = lpData.description || '';
+
+      // Auto-fill offer if detected and field is empty
+      const offerField = document.getElementById('campaign_offer');
+      if (offerField && !offerField.value.trim()) {
+        // Look for common offer patterns
+        const offerPatterns = [
+          /(\d+%\s*(?:de\s*)?(?:desconto|off))/gi,
+          /(gratu[ií]t[oa]|free|bonus|brinde)/gi,
+          /(oferta\s*(?:especial|exclusiva|limitada))/gi,
+          /(primeira?\s*(?:compra|pedido|mes)\s*(?:gr[aá]tis|free)?)/gi
+        ];
+
+        for (const pattern of offerPatterns) {
+          const match = content.match(pattern) || (lpData.content || '').match(pattern);
+          if (match) {
+            offerField.value = `Detectado na LP: "${match[0]}" - edite conforme necessario`;
+            offerField.style.borderColor = '#0ECC97';
+            setTimeout(() => offerField.style.borderColor = '', 3000);
+            break;
+          }
+        }
+      }
+
+      // Auto-fill description/pain point if detected
+      const painField = document.getElementById('main_pain');
+      if (painField && !painField.value.trim() && description) {
+        // Use LP description as a starting point for pain/problem
+        if (description.length > 30 && description.length < 500) {
+          painField.value = description;
+          painField.style.borderColor = '#0ECC97';
+          setTimeout(() => painField.style.borderColor = '', 3000);
+        }
+      }
+
+      // Show notification about auto-filled fields
+      const filledFields = [];
+      if (offerField?.value.includes('Detectado na LP')) filledFields.push('Oferta');
+      if (painField?.value === description && description) filledFields.push('Problema');
+
+      if (filledFields.length > 0) {
+        console.log('[Briefing] Auto-preenchido da LP:', filledFields.join(', '));
+      }
     }
 
     function showLandingStatus(type, title, text) {
