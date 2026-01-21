@@ -2157,6 +2157,8 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
     let scrollsWithoutNewSaves = 0; // Scrolls sem novos leads SALVOS (mais confiável que DOM count)
     let lastSavedCount = 0;  // Para rastrear progresso real
     const MAX_SCROLLS_WITHOUT_SAVES = 15; // Se 15 scrolls sem salvar nada, parar
+    let processedWithoutSaves = 0; // Itens processados sem persistir (esgotamento)
+    const MAX_PROCESSED_WITHOUT_SAVES = 30; // Se 30 processados sem salvar, grid esgotado
 
     while (result.saved < max_resultados && !listEnded) {
       // Pegar listings atuais - com proteção contra frame detached
@@ -2432,13 +2434,20 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
 
       // Processar item atual
       const itemNumber = processedIndex + 1;
-      console.log(`\n📍 [${itemNumber}] Processando... (${result.saved}/${max_resultados} salvos)`);
+      console.log(`\n📍 [${itemNumber}] Processando... (${result.saved}/${max_resultados} salvos | sem novos: ${processedWithoutSaves}/${MAX_PROCESSED_WITHOUT_SAVES})`);
 
       try {
         // Get business details (com clique humanizado)
         const business = await scrapeBusinessDetails(page, currentListings[processedIndex]);
         result.total_scraped++;
         processedIndex++;
+        processedWithoutSaves++; // Incrementar contador de esgotamento
+
+        // Verificar esgotamento do grid (30 processados sem salvar)
+        if (processedWithoutSaves >= MAX_PROCESSED_WITHOUT_SAVES) {
+          console.log(`🏁 Grid esgotado: ${processedWithoutSaves} itens processados sem novos leads - encerrando`);
+          break;
+        }
 
         if (!business || !business.name) {
           console.log(`   ⏭️ Sem dados, pulando`);
@@ -2569,6 +2578,7 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
             log('SUCCESS', 'Lead salvo', { instagram, name: business.name });
             console.log(`   💾 Salvo: @${instagram}`);
             result.saved++;
+            processedWithoutSaves = 0; // Reset contador de esgotamento
           }
         }
 
