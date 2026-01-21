@@ -168,7 +168,7 @@ export async function optionalAuthAIC(
 
 /**
  * Verifica se usuario tem acesso a uma campanha
- * Admin tem acesso a todas; usuarios normais apenas as suas
+ * Admin tem acesso a todas; usuarios normais verificam ownership ou via client journey
  */
 export async function checkCampaignAccess(
   campaignId: string,
@@ -191,6 +191,7 @@ export async function checkCampaignAccess(
     return { hasAccess: false, campaign: null };
   }
 
+  // Primeiro tenta por user_id direto na campanha
   const { data: campaign } = await supabase
     .from('cluster_campaigns')
     .select('*')
@@ -198,7 +199,30 @@ export async function checkCampaignAccess(
     .eq('user_id', userId)
     .single();
 
-  return { hasAccess: !!campaign, campaign };
+  if (campaign) {
+    return { hasAccess: true, campaign };
+  }
+
+  // Se nao encontrou, verifica via aic_client_journeys (portal do cliente)
+  const { data: journeyAccess } = await supabase
+    .from('aic_client_journeys')
+    .select('id, campaign_id')
+    .eq('campaign_id', campaignId)
+    .eq('auth_user_id', userId)
+    .single();
+
+  if (journeyAccess) {
+    // Buscar campanha para retornar
+    const { data: campaignByJourney } = await supabase
+      .from('cluster_campaigns')
+      .select('*')
+      .eq('id', campaignId)
+      .single();
+
+    return { hasAccess: !!campaignByJourney, campaign: campaignByJourney };
+  }
+
+  return { hasAccess: false, campaign: null };
 }
 
 /**
