@@ -6,13 +6,13 @@
 
 (function() {
   const currentPath = window.location.pathname;
-  const urlParams = new URLSearchParams(window.location.search);
-  const campaignParam = urlParams.get('campaign');
 
   // Funcao para construir URL com campaign param
+  // IMPORTANTE: Usar journeyState.campaignId (correto) ao inves do parametro da URL (pode estar errado)
   function buildUrl(path) {
-    if (campaignParam) {
-      return path + '?campaign=' + campaignParam;
+    // Use campaignId from journey state if available (set after API call)
+    if (journeyState && journeyState.campaignId) {
+      return path + '?campaign=' + journeyState.campaignId;
     }
     return path;
   }

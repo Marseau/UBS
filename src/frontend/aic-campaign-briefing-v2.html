@@ -1121,11 +1121,11 @@
     // =====================================================
     document.addEventListener('DOMContentLoaded', async function() {
       const urlParams = new URLSearchParams(window.location.search);
-      campaignId = urlParams.get('campaign');
-      clientJourneyId = urlParams.get('journey');
+      const urlCampaignId = urlParams.get('campaign');
+      const urlJourneyId = urlParams.get('journey');
 
-      // Try to get campaign from journey if not in URL
-      if ((!campaignId || !clientJourneyId) && isClientPortal) {
+      // For client portal, ALWAYS get campaign_id from API to avoid using journey_id by mistake
+      if (isClientPortal) {
         try {
           const token = localStorage.getItem('aic_access_token') || '';
           const response = await fetch('/api/aic/journey/me', {
@@ -1134,13 +1134,19 @@
           if (response.ok) {
             const data = await response.json();
             if (data.success && data.journey) {
-              campaignId = campaignId || data.journey.campaign_id;
-              clientJourneyId = clientJourneyId || data.journey.id;
+              // Always use campaign_id from API for client portal (URL might have wrong ID)
+              campaignId = data.journey.campaign_id;
+              clientJourneyId = data.journey.id;
+              console.log('[Briefing] Using campaign_id from API:', campaignId);
             }
           }
         } catch (e) {
           console.error('Error fetching journey:', e);
         }
+      } else {
+        // For admin, use URL parameters
+        campaignId = urlCampaignId;
+        clientJourneyId = urlJourneyId;
       }
 
       if (!campaignId) {
