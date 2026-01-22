@@ -956,13 +956,13 @@
         <!-- AI Auto-Fill Button -->
         <div class="ai-extract-section" id="ai-extract-section">
           <div class="info-box" style="background: linear-gradient(135deg, rgba(14, 204, 151, 0.1), rgba(12, 27, 51, 0.1)); border: 1px solid var(--aic-green);">
-            <span class="info-box-icon">🤖</span>
+            <span class="info-box-icon">[IA]</span>
             <div class="info-box-content" style="flex: 1;">
               <div class="info-box-title">Preenchimento Inteligente</div>
               <p>A IA pode analisar seus documentos e sugerir respostas para os campos abaixo. Voce revisa e ajusta conforme necessario.</p>
             </div>
             <button type="button" class="btn btn-secondary" id="btn-ai-extract" onclick="extractWithAI()" style="white-space: nowrap;">
-              <span id="ai-extract-text">🤖 Preencher com IA</span>
+              <span id="ai-extract-text">[IA] Preencher com IA</span>
             </button>
           </div>
           <div class="ai-extract-status" id="ai-extract-status" style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 14px;"></div>
@@ -1440,7 +1440,7 @@
       const statusEl = document.getElementById('ai-extract-status');
 
       btn.disabled = true;
-      btnText.textContent = '⏳ Analisando documentos...';
+      btnText.textContent = '[...] Analisando documentos...';
       statusEl.style.display = 'none';
 
       try {
@@ -1453,7 +1453,7 @@
         if (!response.ok || !result.success) {
           showAIExtractStatus('error', result.error || 'Erro ao extrair campos');
           btn.disabled = false;
-          btnText.textContent = '🤖 Preencher com IA';
+          btnText.textContent = '[IA] Preencher com IA';
           return;
         }
 
@@ -1560,7 +1560,7 @@
       }
 
       btn.disabled = false;
-      btnText.textContent = '🤖 Preencher com IA';
+      btnText.textContent = '[IA] Preencher com IA';
     }
 
     /**
@@ -1611,7 +1611,7 @@
       }
 
       const icons = {
-        processing: '⏳',
+        processing: '[...]',
         success: '[OK]',
         error: '[X]'
       };
@@ -2044,7 +2044,7 @@
     function getDocIcon(type) {
       const icons = {
         'briefing': '[B]',
-        'landing_page': '🌐',
+        'landing_page': '[LP]',
         'knowledge': '📚',
         'faq': '❓',
         'product': '📦',
