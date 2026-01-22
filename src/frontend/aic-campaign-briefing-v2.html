@@ -723,6 +723,98 @@
       .step-icon { margin: 0 auto; }
       .landing-input-group { flex-direction: column; }
     }
+
+    /* Objections List */
+    .objections-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .objection-item {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--aic-border);
+      border-radius: 8px;
+      padding: 16px;
+      position: relative;
+    }
+    .objection-item:hover {
+      border-color: var(--aic-primary);
+    }
+    .objection-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .objection-number {
+      font-size: 12px;
+      color: var(--aic-gray);
+      font-weight: 500;
+    }
+    .objection-remove {
+      background: transparent;
+      border: none;
+      color: var(--aic-gray);
+      cursor: pointer;
+      padding: 4px 8px;
+      font-size: 18px;
+      line-height: 1;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .objection-remove:hover {
+      background: rgba(255,59,48,0.1);
+      color: #ff3b30;
+    }
+    .objection-fields {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .objection-field label {
+      display: block;
+      font-size: 12px;
+      color: var(--aic-gray);
+      margin-bottom: 4px;
+    }
+    .objection-field input,
+    .objection-field textarea {
+      width: 100%;
+      background: var(--aic-surface);
+      border: 1px solid var(--aic-border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: var(--aic-text);
+      font-size: 14px;
+      font-family: inherit;
+    }
+    .objection-field textarea {
+      min-height: 60px;
+      resize: vertical;
+    }
+    .objection-field input:focus,
+    .objection-field textarea:focus {
+      outline: none;
+      border-color: var(--aic-primary);
+    }
+    .add-objection-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px;
+      background: transparent;
+      border: 2px dashed var(--aic-border);
+      border-radius: 8px;
+      color: var(--aic-gray);
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .add-objection-btn:hover {
+      border-color: var(--aic-primary);
+      color: var(--aic-primary);
+    }
   </style>
 </head>
 <body>
@@ -965,9 +1057,16 @@
           <div class="form-section-title">Objecoes Comuns</div>
 
           <div class="form-group">
-            <label class="form-label" for="objections">Objecoes comuns e como responder<span class="required">*</span></label>
-            <textarea id="objections" class="form-textarea large" placeholder="Ex:&#10;OBJEÇÃO: Está muito caro&#10;RESPOSTA: Nosso preço reflete qualidade e resultados comprovados...&#10;&#10;OBJEÇÃO: Preciso pensar&#10;RESPOSTA: Entendo! Posso agendar uma conversa rápida amanhã para tirar dúvidas?"></textarea>
-            <p class="form-hint">O agente usara isso para responder objecoes de forma convincente</p>
+            <label class="form-label">Objecoes comuns e como responder<span class="required">*</span></label>
+            <p class="form-hint" style="margin-bottom: 12px;">O agente usara isso para responder objecoes de forma convincente. Adicione, edite ou remova conforme necessario.</p>
+
+            <div id="objections-list" class="objections-list">
+              <!-- Objections will be added here dynamically -->
+            </div>
+
+            <button type="button" class="add-objection-btn" onclick="addObjection()">
+              + Adicionar objecao
+            </button>
           </div>
         </div>
 
@@ -1201,6 +1300,12 @@
       // Load existing data
       await loadExistingData();
       await loadDocuments();
+
+      // Inicializar lista de objeções se vazia
+      const objectionsList = document.getElementById('objections-list');
+      if (objectionsList && objectionsList.children.length === 0) {
+        addObjection();
+      }
     });
 
     // =====================================================
@@ -1396,17 +1501,18 @@
           }
         }
 
-        // Objeções comuns (novo formato: [{objection, response}])
+        // Objeções comuns (formato: [{objection, response}])
         if (fields.objections && fields.objections.length > 0) {
-          const el = document.getElementById('objections');
-          if (el && !el.value.trim()) {
-            // Suporta formato antigo (string[]) e novo ({objection, response}[])
-            const formatted = fields.objections.map(o => {
-              if (typeof o === 'string') return `- ${o}`;
-              return `OBJEÇÃO: ${o.objection}\nRESPOSTA: ${o.response}`;
-            }).join('\n\n');
-            el.value = formatted;
-            highlightField(el);
+          const list = document.getElementById('objections-list');
+          // Só preenche se lista estiver vazia ou tiver apenas um item vazio
+          const currentObjections = getObjections();
+          if (currentObjections.length === 0 || (currentObjections.length === 1 && !currentObjections[0].objection && !currentObjections[0].response)) {
+            setObjections(fields.objections);
+            // Highlight all items
+            list.querySelectorAll('.objection-item').forEach(item => {
+              item.style.borderColor = 'var(--aic-primary)';
+              setTimeout(() => item.style.borderColor = '', 2000);
+            });
             filledCount++;
           }
         }
@@ -1530,6 +1636,100 @@
         outroInput.required = false;
         outroInput.value = '';
       }
+    }
+
+    // =====================================================
+    // OBJECTIONS LIST MANAGEMENT
+    // =====================================================
+    let objectionCounter = 0;
+
+    function addObjection(objection = '', response = '') {
+      const list = document.getElementById('objections-list');
+      const itemId = objectionCounter++;
+      const itemCount = list.children.length + 1;
+
+      const item = document.createElement('div');
+      item.className = 'objection-item';
+      item.dataset.id = itemId;
+      item.innerHTML = `
+        <div class="objection-header">
+          <span class="objection-number">Objecao ${itemCount}</span>
+          <button type="button" class="objection-remove" onclick="removeObjection(${itemId})" title="Remover objecao">&times;</button>
+        </div>
+        <div class="objection-fields">
+          <div class="objection-field">
+            <label>Objecao do cliente</label>
+            <input type="text" class="objection-text" value="${escapeHtml(objection)}" placeholder="Ex: Esta muito caro">
+          </div>
+          <div class="objection-field">
+            <label>Resposta do agente</label>
+            <textarea class="objection-response" placeholder="Ex: Nosso preco reflete qualidade e resultados comprovados...">${escapeHtml(response)}</textarea>
+          </div>
+        </div>
+      `;
+
+      list.appendChild(item);
+    }
+
+    function removeObjection(id) {
+      const list = document.getElementById('objections-list');
+      const item = list.querySelector(`[data-id="${id}"]`);
+      if (item) {
+        item.remove();
+        updateObjectionNumbers();
+      }
+    }
+
+    function updateObjectionNumbers() {
+      const list = document.getElementById('objections-list');
+      const items = list.querySelectorAll('.objection-item');
+      items.forEach((item, index) => {
+        item.querySelector('.objection-number').textContent = `Objecao ${index + 1}`;
+      });
+    }
+
+    function getObjections() {
+      const list = document.getElementById('objections-list');
+      const items = list.querySelectorAll('.objection-item');
+      const objections = [];
+
+      items.forEach(item => {
+        const objection = item.querySelector('.objection-text').value.trim();
+        const response = item.querySelector('.objection-response').value.trim();
+        if (objection || response) {
+          objections.push({ objection, response });
+        }
+      });
+
+      return objections;
+    }
+
+    function setObjections(objections) {
+      const list = document.getElementById('objections-list');
+      list.innerHTML = '';
+      objectionCounter = 0;
+
+      if (Array.isArray(objections)) {
+        objections.forEach(obj => {
+          if (typeof obj === 'object' && obj.objection) {
+            addObjection(obj.objection, obj.response || '');
+          } else if (typeof obj === 'string') {
+            // Legacy format: just string
+            addObjection(obj, '');
+          }
+        });
+      }
+
+      // Add empty one if list is empty
+      if (list.children.length === 0) {
+        addObjection();
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text || '';
+      return div.innerHTML;
     }
 
     // =====================================================
@@ -1791,7 +1991,7 @@
       if (briefing.why_choose_us) document.getElementById('why_choose_us').value = briefing.why_choose_us;
 
       if (briefing.icp_objections && Array.isArray(briefing.icp_objections)) {
-        document.getElementById('objections').value = briefing.icp_objections.map(o => `- ${o}`).join('\n');
+        setObjections(briefing.icp_objections);
       }
 
       if (briefing.tone_of_voice) document.getElementById('tone_of_voice').value = briefing.tone_of_voice;
@@ -1955,13 +2155,10 @@
       const whyUs = document.getElementById('why_choose_us').value.trim();
       if (whyUs) data.why_choose_us = whyUs;
 
-      // Objections
-      const objections = document.getElementById('objections').value.trim();
-      if (objections) {
-        data.icp_objections = objections
-          .split('\n')
-          .map(line => line.replace(/^[-•]\s*/, '').trim())
-          .filter(line => line.length > 0);
+      // Objections - novo formato estruturado
+      const objections = getObjections();
+      if (objections.length > 0) {
+        data.icp_objections = objections;
       }
 
       // Tone
@@ -1991,7 +2188,8 @@
         const cta = document.getElementById('campaign_cta').value.trim();
         const audience = document.getElementById('target_audience').value.trim();
         const whyUs = document.getElementById('why_choose_us').value.trim();
-        const objections = document.getElementById('objections').value.trim();
+        const objectionsList = getObjections();
+        const hasObjections = objectionsList.some(o => o.objection && o.response);
 
         if (!cta) {
           showStatus('save-status', 'O campo "Call to Action" e obrigatorio.', 'error');
@@ -2017,8 +2215,8 @@
           return;
         }
 
-        if (!objections) {
-          showStatus('save-status', 'O campo "Objecoes comuns" e obrigatorio.', 'error');
+        if (!hasObjections) {
+          showStatus('save-status', 'Adicione pelo menos uma objecao com resposta.', 'error');
           btn.disabled = false;
           btn.textContent = 'Salvar e Concluir';
           showStep(2);
