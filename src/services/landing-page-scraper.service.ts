@@ -30,6 +30,7 @@ export interface ExtractedContent {
   headings: string[];
   paragraphs: string[];
   lists: string[];
+  ctas: string[];
   fullText: string;
 }
 
@@ -205,6 +206,30 @@ export class LandingPageScraperService {
       }
     });
 
+    // Extrair CTAs (botoes e links de acao)
+    const ctas: string[] = [];
+    const ctaSelectors = [
+      'button',
+      'a.btn', 'a.button', 'a.cta',
+      '[class*="btn-"]', '[class*="button-"]', '[class*="cta-"]',
+      '[role="button"]',
+      'a[href*="whatsapp"]', 'a[href*="wa.me"]',
+      'a[href*="calendly"]', 'a[href*="agendar"]',
+      '.hero a', '.hero button',
+      '[class*="primary"]', '[class*="action"]'
+    ];
+    $(ctaSelectors.join(', ')).each((_, el) => {
+      const text = $(el).text().trim();
+      if (text && text.length >= 3 && text.length < 100) {
+        // Evitar duplicatas e textos genericos
+        const normalized = text.replace(/\s+/g, ' ');
+        if (!ctas.includes(normalized) &&
+            !['×', 'X', '✕', 'Menu', 'Toggle'].includes(normalized)) {
+          ctas.push(normalized);
+        }
+      }
+    });
+
     // Extrair texto de sections e divs principais
     const mainContent: string[] = [];
     $('main, article, section, [role="main"]').each((_, el) => {
@@ -239,6 +264,11 @@ export class LandingPageScraperService {
       lists.slice(0, 30).forEach(l => fullTextParts.push(l));
     }
 
+    if (ctas.length > 0) {
+      fullTextParts.push('\n\n## CTAs (Chamadas para Acao)');
+      ctas.slice(0, 10).forEach(c => fullTextParts.push(`- ${c}`));
+    }
+
     const fullText = fullTextParts.join('\n').trim();
 
     return {
@@ -247,6 +277,7 @@ export class LandingPageScraperService {
       headings: headings.slice(0, 20),
       paragraphs: paragraphs.slice(0, 50),
       lists: lists.slice(0, 30),
+      ctas: ctas.slice(0, 10),
       fullText
     };
   }
@@ -277,6 +308,11 @@ export class LandingPageScraperService {
     if (extracted.lists.length > 0) {
       parts.push(`\nCARACTERISTICAS E BENEFICIOS:`);
       extracted.lists.forEach(l => parts.push(l));
+    }
+
+    if (extracted.ctas && extracted.ctas.length > 0) {
+      parts.push(`\nCTAs (BOTOES DE ACAO):`);
+      extracted.ctas.forEach(c => parts.push(`- ${c}`));
     }
 
     return parts.join('\n');
