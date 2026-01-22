@@ -900,7 +900,7 @@
           <div class="upload-section-title">Documento da Empresa <span style="color: var(--aic-gray); font-weight: 400;">(opcional)</span></div>
 
           <div class="info-box" style="margin-bottom: 16px;">
-            <span class="info-box-icon">💡</span>
+            <span class="info-box-icon">i</span>
             <div class="info-box-content">
               <div class="info-box-title">Dica</div>
               <p>Se voce tem uma apresentacao institucional, pitch deck ou proposta comercial, envie aqui. Isso complementa as informacoes da landing page.</p>
@@ -912,14 +912,14 @@
                ondragover="handleDragOver(event, 'empresa')"
                ondragleave="handleDragLeave(event, 'empresa')"
                ondrop="handleDrop(event, 'empresa')">
-            <div class="upload-icon">📄</div>
+            <div class="upload-icon">[doc]</div>
             <div class="upload-title">Arraste um documento ou clique para selecionar</div>
             <div class="upload-subtitle">PDF, DOCX ou TXT - Maximo 10MB</div>
           </div>
           <input type="file" id="file-empresa" style="display: none;" accept=".pdf,.docx,.txt,.md" onchange="handleFileSelect(event, 'empresa')">
 
           <div class="file-preview" id="file-preview-empresa" style="display: none;">
-            <span class="file-preview-icon">📎</span>
+            <span class="file-preview-icon">[+]</span>
             <div class="file-preview-info">
               <div class="file-preview-name" id="file-name-empresa"></div>
               <div class="file-preview-size" id="file-size-empresa"></div>
@@ -1138,7 +1138,7 @@
              ondragover="handleDragOver(event, 'docs')"
              ondragleave="handleDragLeave(event, 'docs')"
              ondrop="handleDrop(event, 'docs')">
-          <div class="upload-icon">📎</div>
+          <div class="upload-icon">[+]</div>
           <div class="upload-title">Adicionar documento</div>
           <div class="upload-subtitle">PDF, DOCX ou TXT - Maximo 10MB</div>
         </div>
@@ -1172,7 +1172,7 @@
       <!-- ============================================== -->
       <div class="step-card" id="step-4">
         <div class="completion-card">
-          <div class="completion-icon">🎉</div>
+          <div class="completion-icon">*</div>
           <h2 class="completion-title">Briefing Completo!</h2>
           <p class="completion-text">Seu agente de IA esta pronto para comecar a conversar com seus leads de forma personalizada.</p>
           <button class="btn btn-primary" onclick="goToDashboard()">
@@ -1550,7 +1550,7 @@
         // Mostrar status de sucesso
         const sources = result.sources || [];
         const sourcesText = sources.length > 0 ? ` (baseado em ${sources.length} documento${sources.length > 1 ? 's' : ''})` : '';
-        showAIExtractStatus('success', `✅ ${filledCount} campo${filledCount !== 1 ? 's' : ''} preenchido${filledCount !== 1 ? 's' : ''}${sourcesText}. Revise e ajuste conforme necessario.`);
+        showAIExtractStatus('success', `[OK] ${filledCount} campo${filledCount !== 1 ? 's' : ''} preenchido${filledCount !== 1 ? 's' : ''}${sourcesText}. Revise e ajuste conforme necessario.`);
 
         console.log('[AI Extract] Campos preenchidos:', filledCount, 'de', Object.keys(fields).length);
 
@@ -1612,8 +1612,8 @@
 
       const icons = {
         processing: '⏳',
-        success: '✅',
-        error: '❌'
+        success: '[OK]',
+        error: '[X]'
       };
 
       iconEl.textContent = icons[type] || '';
@@ -2043,16 +2043,16 @@
 
     function getDocIcon(type) {
       const icons = {
-        'briefing': '📋',
+        'briefing': '[B]',
         'landing_page': '🌐',
         'knowledge': '📚',
         'faq': '❓',
         'product': '📦',
         'policy': '📜',
-        'script': '📝',
-        'other': '📄'
+        'script': '[S]',
+        'other': '[doc]'
       };
-      return icons[type] || '📄';
+      return icons[type] || '[doc]';
     }
 
     function getDocTypeLabel(type) {
