@@ -2244,36 +2244,34 @@ export async function scrapeGoogleMaps(options: ScrapeOptions): Promise<ScrapeRe
         });
 
         if (listEnded) {
-          // 🔧 FIX: Se poucos resultados (< 50), reiniciar UMA VEZ antes de desistir
-          // Google às vezes mostra poucos resultados inicialmente mas há mais disponíveis
+          // 🔧 FIX: Se poucos resultados (< 50) na PRIMEIRA vez, reiniciar UMA VEZ
+          // Na SEGUNDA vez que fim da lista aparecer, encerra (pode ser anti-bot)
           const MIN_RESULTS_BEFORE_RESTART = 50;
 
-          if (result.total_scraped < MIN_RESULTS_BEFORE_RESTART) {
-            // Primeira vez com poucos resultados? Reiniciar para tentar pegar mais
-            if (restartCount === 0) {
-              restartCount++;
-              console.log(`🔄 Fim da lista com poucos resultados (${result.total_scraped}) - tentando reinício ${restartCount}/${MAX_RESTARTS}`);
-              console.log(`   ℹ️  Google pode ter mais resultados após reinício`);
-            } else {
-              // Já tentou reiniciar - agora sim considera esgotado
-              console.log(`🏁 Lista esgotada para "${termo}" nesta localização (${result.total_scraped} resultados, ${result.saved} salvos)`);
-              console.log(`   ℹ️  Já tentou reinício - não há mais empresas para este termo/local`);
-              (result as any).list_exhausted = true;
-              break;
-            }
-          } else if (result.total_scraped >= MAX_PROCESSED) {
-            // Lista terminou e já processou bastante - área bem coberta
-            console.log(`🛑 Já processou ${result.total_scraped} leads - encerrando sem reiniciar`);
+          // Já tentou reiniciar antes? Encerra independente do total
+          if (restartCount > 0) {
+            console.log(`🏁 Fim da lista detectado pela 2ª vez (${result.total_scraped} resultados, ${result.saved} salvos)`);
+            console.log(`   ℹ️  Encerrando - pode ser anti-bot ou lista genuinamente esgotada`);
+            (result as any).list_exhausted = true;
             break;
-          } else {
-            // Lista terminou com resultados razoáveis - tentar reiniciar
-            restartCount++;
-            console.log(`🔄 Fim da lista detectado - reinício ${restartCount}/${MAX_RESTARTS} (${result.saved}/${max_resultados} salvos)`);
           }
 
-          if (restartCount >= MAX_RESTARTS) {
-            console.log(`🏁 Máximo de ${MAX_RESTARTS} reinícios atingido, encerrando`);
+          // Primeira vez - decidir se vale reiniciar
+          if (result.total_scraped >= MAX_PROCESSED) {
+            // Já processou bastante - área bem coberta, não precisa reiniciar
+            console.log(`🛑 Já processou ${result.total_scraped} leads - encerrando sem reiniciar`);
             break;
+          }
+
+          if (result.total_scraped < MIN_RESULTS_BEFORE_RESTART) {
+            // Poucos resultados na primeira vez - reiniciar para tentar pegar mais
+            restartCount++;
+            console.log(`🔄 Fim da lista com poucos resultados (${result.total_scraped}) - tentando reinício`);
+            console.log(`   ℹ️  Google pode ter mais resultados após reinício`);
+          } else {
+            // Resultados razoáveis mas não atingiu meta - reiniciar
+            restartCount++;
+            console.log(`🔄 Fim da lista detectado (${result.total_scraped} resultados) - tentando reinício`);
           }
 
           // Fechar browser completamente
