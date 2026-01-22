@@ -628,6 +628,19 @@
         </div>
       </div>
 
+      <!-- Pending Activations Section -->
+      <div id="pending-activations" style="display: none; margin-bottom: 32px;">
+        <div style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.1), rgba(14, 204, 151, 0.05)); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 16px; padding: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="color: #06b6d4; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+              <span style="background: #06b6d4; color: var(--aic-navy); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;" id="pending-count">0</span>
+              Jornadas Aguardando Ativacao
+            </h3>
+          </div>
+          <div id="pending-list" style="display: flex; flex-direction: column; gap: 12px;"></div>
+        </div>
+      </div>
+
       <!-- Campaigns Grid -->
       <div id="campaigns-container">
         <div class="loading">
@@ -659,6 +672,7 @@
       loadCampaigns();
       setupFilterTabs();
       loadUnseenReunioesCount();
+      loadPendingActivations();
     });
 
     // Load unseen reunioes count for badge
@@ -676,6 +690,68 @@
         }
       } catch (error) {
         console.error('Error loading unseen reunioes count:', error);
+      }
+    }
+
+    // Load pending activations (briefing_completo journeys)
+    async function loadPendingActivations() {
+      try {
+        const response = await fetch('/api/aic/journey?current_step=briefing_completo');
+        const data = await response.json();
+
+        if (!data.success || !data.journeys || data.journeys.length === 0) {
+          document.getElementById('pending-activations').style.display = 'none';
+          return;
+        }
+
+        const container = document.getElementById('pending-activations');
+        const list = document.getElementById('pending-list');
+        const countEl = document.getElementById('pending-count');
+
+        container.style.display = 'block';
+        countEl.textContent = data.journeys.length;
+
+        list.innerHTML = data.journeys.map(j => `
+          <div style="background: var(--aic-navy); border: 1px solid var(--aic-border); border-radius: 12px; padding: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div style="flex: 1; min-width: 200px;">
+              <div style="font-weight: 600; color: var(--aic-white); margin-bottom: 4px;">${j.client_name || 'Cliente'}</div>
+              <div style="font-size: 13px; color: var(--aic-gray);">${j.client_email || ''}</div>
+              <div style="font-size: 12px; color: var(--aic-gray); margin-top: 4px;">Campanha: ${j.proposal_data?.project_name || j.campaign_id?.substring(0, 8) || 'N/A'}</div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <a href="/aic/briefing?campaign=${j.campaign_id}" style="padding: 8px 16px; background: transparent; border: 1px solid var(--aic-border); border-radius: 8px; color: var(--aic-gray); text-decoration: none; font-size: 13px; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--aic-green)';this.style.color='var(--aic-green)'" onmouseout="this.style.borderColor='var(--aic-border)';this.style.color='var(--aic-gray)'">Ver Briefing</a>
+              <button onclick="activateJourney('${j.id}')" style="padding: 8px 16px; background: var(--aic-green); border: none; border-radius: 8px; color: var(--aic-navy); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='var(--aic-green-dark)'" onmouseout="this.style.background='var(--aic-green)'">Ativar Campanha</button>
+            </div>
+          </div>
+        `).join('');
+
+      } catch (error) {
+        console.error('Error loading pending activations:', error);
+      }
+    }
+
+    // Activate journey/campaign
+    async function activateJourney(journeyId) {
+      if (!confirm('Tem certeza que deseja ativar esta campanha?')) return;
+
+      try {
+        const response = await fetch(`/api/aic/journey/${journeyId}/activate-campaign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('Campanha ativada com sucesso!');
+          loadPendingActivations();
+          loadCampaigns();
+        } else {
+          alert('Erro ao ativar: ' + (data.message || 'Erro desconhecido'));
+        }
+      } catch (error) {
+        console.error('Error activating campaign:', error);
+        alert('Erro ao ativar campanha');
       }
     }
 
