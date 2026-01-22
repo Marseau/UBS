@@ -276,11 +276,36 @@
         } else if (journey.current_step === 'campanha_concluida') {
           statusEl.textContent = 'Concluida';
           statusEl.className = 'text-blue-400';
+        } else if (journey.current_step === 'briefing_completo') {
+          statusEl.textContent = 'Aguardando Ativacao';
+          statusEl.className = 'text-cyan-400';
+          // Mostrar mensagem explicativa
+          showAwaitingActivationMessage();
         } else {
           statusEl.textContent = 'Configurando';
           statusEl.className = 'text-yellow-400';
         }
       }
+    }
+
+    function showAwaitingActivationMessage() {
+      const container = document.querySelector('.container');
+      const banner = document.createElement('div');
+      banner.className = 'awaiting-activation-banner';
+      banner.innerHTML = `
+        <div style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.1), rgba(14, 204, 151, 0.1)); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+          <h3 style="color: #06b6d4; font-size: 18px; font-weight: 600; margin-bottom: 12px;">Briefing Concluido - Aguardando Ativacao</h3>
+          <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 16px;">
+            Parabens! Voce concluiu todas as etapas de configuracao. Nossa equipe esta revisando seu briefing
+            e ativara sua campanha em breve. Voce sera notificado quando a campanha estiver ativa.
+          </p>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <span style="background: rgba(6, 182, 212, 0.2); color: #06b6d4; padding: 6px 12px; border-radius: 6px; font-size: 13px;">Briefing revisado pela equipe</span>
+            <span style="background: rgba(14, 204, 151, 0.2); color: #0ECC97; padding: 6px 12px; border-radius: 6px; font-size: 13px;">Campanha sera ativada em ate 24h</span>
+          </div>
+        </div>
+      `;
+      container.insertBefore(banner, container.firstChild.nextSibling);
     }
   </script>
 </body>

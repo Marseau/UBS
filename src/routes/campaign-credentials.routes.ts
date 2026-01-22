@@ -1220,13 +1220,45 @@ router.post('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: Auth
       if (completion >= 80) {
         const { data: journey } = await supabase
           .from('aic_client_journeys')
-          .select('id, current_step')
+          .select('id, current_step, client_name, client_email')
           .eq('campaign_id', campaignId)
           .single();
 
         if (journey && journey.current_step === 'briefing_pendente') {
           await clientJourneyService.markBriefingComplete(journey.id);
           console.log(`[Campaign Credentials] Journey ${journey.id} updated to briefing_completo`);
+
+          // Notificar admin via Telegram que briefing foi concluido
+          try {
+            if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+              const { data: campaign } = await supabase
+                .from('cluster_campaigns')
+                .select('campaign_name')
+                .eq('id', campaignId)
+                .single();
+
+              const telegramMessage =
+                `*BRIEFING CONCLUIDO - Pronto para Ativar*\n\n` +
+                `Cliente: ${journey.client_name || 'N/A'}\n` +
+                `Email: ${journey.client_email || 'N/A'}\n` +
+                `Campanha: ${campaign?.campaign_name || campaignId}\n` +
+                `Completude: ${completion}%\n\n` +
+                `Acao: Revisar e ativar campanha`;
+
+              await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chat_id: process.env.TELEGRAM_CHAT_ID,
+                  text: telegramMessage,
+                  parse_mode: 'Markdown'
+                })
+              });
+              console.log(`[Campaign Credentials] Telegram notification sent for briefing completion`);
+            }
+          } catch (telegramError) {
+            console.warn('[Campaign Credentials] Erro ao enviar notificacao Telegram:', telegramError);
+          }
         }
       }
     }
