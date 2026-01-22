@@ -1718,10 +1718,13 @@
         if (briefingRes.ok) {
           const briefing = await briefingRes.json();
           if (briefing) {
-            populateForm(briefing);
-            // Update completion progress bar
+            // Sempre atualizar progresso (mesmo sem campos preenchidos, pode ter LP)
             if (typeof briefing.completion_percentage === 'number') {
               updateCompletionProgress(briefing.completion_percentage);
+            }
+            // Só preencher form se tiver campos além de completion_percentage
+            if (briefing.id || briefing.company_name) {
+              populateForm(briefing);
             }
           }
         }

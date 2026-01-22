@@ -1025,7 +1025,11 @@ router.get('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: Authe
     }
 
     if (!briefing) {
-      res.json(null);
+      // Mesmo sem briefing, calcular progresso baseado em LP processada
+      const { data: completion } = await supabase.rpc('calculate_briefing_completion_by_campaign', {
+        p_campaign_id: campaignId
+      });
+      res.json({ completion_percentage: completion || 0 });
       return;
     }
 
