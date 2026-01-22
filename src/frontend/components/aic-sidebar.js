@@ -325,7 +325,7 @@
         // Admin - Secao Principal
         navContent += '<div class="aic-sidebar-section">';
         navContent += '<div class="aic-sidebar-section-title">Principal</div>';
-        navContent += '<a href="/aic/campanhas" class="aic-sidebar-link' + (isActive('campanhas') ? ' active' : '') + '">Todas Campanhas</a>';
+        navContent += '<a href="/aic/campanhas" id="sidebar-campanhas-link" class="aic-sidebar-link' + (isActive('campanhas') ? ' active' : '') + '">Todas Campanhas<span id="pending-activations-badge" class="aic-sidebar-badge" style="display:none;"></span></a>';
         navContent += '</div>';
 
         // Inteligencia
@@ -459,6 +459,31 @@
     }
   }
 
+  // Carregar contagem de jornadas aguardando ativacao
+  async function loadPendingActivationsCount() {
+    const role = getUserRole();
+    if (role !== 'admin') return; // So mostra para admin
+
+    try {
+      const response = await fetch('/api/aic/journey?current_step=briefing_completo');
+      if (response.ok) {
+        const data = await response.json();
+        const count = data.journeys?.length || 0;
+        const badge = document.getElementById('pending-activations-badge');
+        if (badge) {
+          if (count > 0) {
+            badge.textContent = count > 99 ? '99+' : count;
+            badge.style.display = 'inline-block';
+          } else {
+            badge.style.display = 'none';
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao carregar jornadas pendentes:', e);
+    }
+  }
+
   // Funcao de logout global
   window.aicLogout = async function() {
     try {
@@ -480,4 +505,5 @@
   // Carregar badges de notificacao (apenas admin)
   loadPendingPaymentsCount();
   loadUnseenReunioesCount();
+  loadPendingActivationsCount();
 })();
