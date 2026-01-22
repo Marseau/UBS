@@ -12,6 +12,7 @@ import {
   retryWithBackoff
 } from './instagram-profile.utils';
 import { createIsolatedContext, createDedicatedPage, forceClosePersistentPage, resetPersistentPageState } from './instagram-context-manager.service';
+import { closeBrowser as closeSessionBrowser } from './instagram-session.service';
 import { discoverHashtagVariations, HashtagVariation } from './instagram-hashtag-discovery.service';
 import { getAccountRotation } from './instagram-account-rotation.service';
 import {
@@ -4044,9 +4045,9 @@ export async function scrapeInstagramTag(
               // 1. Fechar page atual (se possível)
               try { await cleanup(); } catch {}
 
-              // 2. Fechar browser completamente
+              // 2. Fechar browser completamente (usando session service, não o local)
               console.log(`🔒 Fechando browser travado...`);
-              await closeBrowser();
+              await closeSessionBrowser();
 
               // 3. Aguardar 5-10 segundos para limpeza completa
               const cooldownMs = 5000 + Math.random() * 5000;
