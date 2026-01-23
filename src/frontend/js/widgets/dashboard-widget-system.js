@@ -696,7 +696,7 @@ class SectionWidget extends UBSWidget {
 class FilterWidget extends UBSWidget {
     constructor(container, options = {}) {
         super(container, {
-            filters: [], // { type: 'select', name: 'period', label: 'Período', options: [...] }
+            filters: [], // { type: 'select', name: 'period', label: 'Período', options: … }
             layout: 'horizontal', // horizontal, vertical
             onChange: null,
             ...options

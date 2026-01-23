@@ -439,7 +439,7 @@
       .header-progress { display: none; }
     }
   </style>
-</head>
+<link rel="stylesheet" href="/css/icons.css"></head>
 <body>
   <!-- Header -->
   <header class="header">
@@ -968,7 +968,7 @@
                  ondragover="handleDragOver(event)"
                  ondragleave="handleDragLeave(event)"
                  ondrop="handleDrop(event)">
-              <div style="font-size: 48px; margin-bottom: 16px;">[doc]</div>
+              <div style="font-size: 48px; margin-bottom: 16px;"><span class='ic ic-doc'></span></div>
               <p style="color: #fff; font-size: 16px; margin-bottom: 8px;">Arraste um arquivo aqui ou clique para selecionar</p>
               <p style="color: #666; font-size: 14px;">PDF, DOCX, TXT ou MD - Maximo 10MB</p>
             </div>
@@ -1530,7 +1530,7 @@
       // Update UI
       const uploadArea = document.getElementById('upload-area');
       uploadArea.innerHTML = `
-        <div style="font-size: 48px; margin-bottom: 16px;">[OK]</div>
+        <div style="font-size: 48px; margin-bottom: 16px;"><span class='ic ic-ok'></span></div>
         <p style="color: #00d4ff; font-size: 16px; margin-bottom: 8px;">${file.name}</p>
         <p style="color: #666; font-size: 14px;">${(file.size / 1024).toFixed(1)} KB</p>
         <button type="button" onclick="clearFile(event)" style="margin-top: 12px; padding: 8px 16px; background: #333; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Trocar arquivo</button>
@@ -1554,7 +1554,7 @@
 
       const uploadArea = document.getElementById('upload-area');
       uploadArea.innerHTML = `
-        <div style="font-size: 48px; margin-bottom: 16px;">[doc]</div>
+        <div style="font-size: 48px; margin-bottom: 16px;"><span class='ic ic-doc'></span></div>
         <p style="color: #fff; font-size: 16px; margin-bottom: 8px;">Arraste um arquivo aqui ou clique para selecionar</p>
         <p style="color: #666; font-size: 14px;">PDF, DOCX, TXT ou MD - Maximo 10MB</p>
       `;

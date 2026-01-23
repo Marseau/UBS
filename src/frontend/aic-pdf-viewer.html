@@ -243,7 +243,7 @@
       body { display: none !important; }
     }
   </style>
-</head>
+<link rel="stylesheet" href="/css/icons.css"></head>
 <body oncontextmenu="return false;" ondragstart="return false;">
   <!-- Header -->
   <div class="header">
@@ -271,7 +271,7 @@
   <!-- PDF Container -->
   <div class="pdf-container" id="pdfContainer">
     <div class="no-doc" id="noDoc">
-      <div class="no-doc-icon">[doc]</div>
+      <div class="no-doc-icon"><span class='ic ic-doc'></span></div>
       <h2>Nenhum documento selecionado</h2>
       <p>Acesse este viewer através de um link autorizado.</p>
       <a href="/aic-docs.html" class="back-btn">← Voltar para Documentação</a>
@@ -401,7 +401,7 @@
       }).catch(function(error) {
         console.error('Error loading PDF:', error);
         document.getElementById('loading').innerHTML = `
-          <div class="no-doc-icon">[!]</div>
+          <div class="no-doc-icon"><span class='ic ic-warn'></span></div>
           <h2 style="color: var(--aic-white);">Erro ao carregar documento</h2>
           <p style="color: var(--aic-gray);">O documento não está disponível ou você não tem permissão para acessá-lo.</p>
           <a href="/aic-docs.html" class="back-btn">← Voltar para Documentação</a>

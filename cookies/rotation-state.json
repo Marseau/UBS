@@ -1,7 +1,7 @@
 {
   "currentAccountIndex": 0,
   "lastRotationTime": 1769021062720,
-  "lastActivityTime": 1769107016007,
+  "lastActivityTime": 1769169385273,
   "accounts": [
     {
       "username": "francomarcio887@gmail.com",
@@ -9,7 +9,7 @@
       "failureCount": 0,
       "lastFailureTime": 0,
       "isBlocked": false,
-      "usageCount": 137
+      "usageCount": 150
     },
     {
       "username": "gourmetsousvide@gmail.com",

@@ -284,7 +284,7 @@
             }
         }
     </style>
-</head>
+<link rel="stylesheet" href="/css/icons.css"></head>
 <body>
     <!-- Mobile Sidebar Overlay -->
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
@@ -827,7 +827,7 @@
                 services.push({
                     id: i + 1,
                     icon: `<div class="service-icon"><i class="${categoryIcons[categoryIndex]}"></i></div>`,
-                    name: serviceNames[i],
+                    name: serviceNames<span class='ic ic-info'></span>,
                     category: `<span class="category-badge category-${category}">${categoryLabels[categoryIndex]}</span>`,
                     price: price,
                     duration: `${duration} min`,

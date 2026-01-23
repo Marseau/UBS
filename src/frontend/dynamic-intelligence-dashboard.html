@@ -749,7 +749,7 @@
             margin-bottom: 20px;
         }
     </style>
-</head>
+<link rel="stylesheet" href="/css/icons.css"></head>
 <body>
     <div class="container">
         <div class="header">
@@ -2670,11 +2670,11 @@
                 personasPanel.innerHTML = '<p style="color: var(--aic-gray); text-align: center; padding: 40px;">Clique em "Gerar Personas" para criar personas para cada cluster.</p>';
             }
 
-            // DMs - Backend pode retornar: {scripts: [...]} ou array direto
+            // DMs - Backend pode retornar: {scripts: <span class='ic ic-load'></span>} ou array direto
             if (contentTypes.includes('dm') && clusters) {
                 let dmsHtml = '<div style="display: grid; gap: 15px;">';
                 clusters.forEach((cluster, idx) => {
-                    // Suportar ambos formatos: {scripts: [...]} ou array direto
+                    // Suportar ambos formatos: {scripts: <span class='ic ic-load'></span>} ou array direto
                     let scripts = [];
                     if (cluster.dm_scripts) {
                         if (Array.isArray(cluster.dm_scripts)) {
