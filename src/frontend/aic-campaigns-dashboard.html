@@ -301,6 +301,15 @@
     .btn-action.primary:hover {
       background: var(--aic-green-dark);
     }
+    .btn-action.danger {
+      background: transparent;
+      color: #ef4444;
+      border-color: #ef4444;
+    }
+    .btn-action.danger:hover {
+      background: #ef4444;
+      color: white;
+    }
 
     /* Empty State */
     .empty-state {
@@ -903,6 +912,9 @@
             <a href="/cliente/dashboard?campaign=${campaign.id}" class="btn-action">
               Dashboard
             </a>
+            <button class="btn-action danger" onclick="deleteCampaign('${campaign.id}', '${campaign.campaign_name.replace(/'/g, "\\'")}')">
+              Excluir
+            </button>
           </div>
         </div>
       `;
@@ -1050,6 +1062,44 @@
       } catch (error) {
         console.error('[Toggle Status] Error:', error);
         alert('Erro ao atualizar status da campanha');
+      }
+    }
+
+    // ============================================================================
+    // DELETE CAMPAIGN FUNCTION
+    // ============================================================================
+
+    async function deleteCampaign(campaignId, campaignName) {
+      // Confirmação dupla para segurança
+      const confirmed = confirm(`Tem certeza que deseja EXCLUIR a campanha "${campaignName}"?\n\nEsta ação é IRREVERSÍVEL e irá apagar:\n- Todos os leads da campanha\n- Todos os documentos\n- Todo o briefing\n- Todas as conversas`);
+
+      if (!confirmed) return;
+
+      const doubleConfirm = confirm(`ÚLTIMA CONFIRMAÇÃO:\n\nDigite OK para confirmar a exclusão permanente de "${campaignName}"`);
+
+      if (!doubleConfirm) return;
+
+      try {
+        const response = await fetch(`/api/campaigns/${campaignId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.message || 'Erro ao excluir campanha');
+        }
+
+        // Remover da lista local
+        campaigns = campaigns.filter(c => c.id !== campaignId);
+
+        // Re-render
+        renderCampaigns();
+
+        alert(`Campanha "${campaignName}" excluída com sucesso.`);
+      } catch (error) {
+        console.error('[Delete Campaign] Error:', error);
+        alert('Erro ao excluir campanha: ' + error.message);
       }
     }
 

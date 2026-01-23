@@ -3463,4 +3463,132 @@ router.post('/whapi/partner/sync', async (req: Request, res: Response): Promise<
   }
 });
 
+// ============================================================================
+// DELETE CAMPAIGN - Exclusão completa de campanha
+// ============================================================================
+
+/**
+ * DELETE /api/campaigns/:campaignId
+ * Exclui completamente uma campanha e todos os dados relacionados
+ * CUIDADO: Esta ação é irreversível!
+ */
+router.delete('/campaigns/:campaignId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+
+    console.log(`\n🗑️ [DELETE CAMPAIGN] Iniciando exclusão da campanha ${campaignId}`);
+
+    // Verificar se campanha existe
+    const { data: campaign, error: fetchError } = await supabase
+      .from('cluster_campaigns')
+      .select('id, campaign_name')
+      .eq('id', campaignId)
+      .single();
+
+    if (fetchError || !campaign) {
+      res.status(404).json({
+        success: false,
+        message: 'Campanha não encontrada'
+      });
+      return;
+    }
+
+    console.log(`📋 Campanha encontrada: ${campaign.campaign_name}`);
+
+    // Deletar em ordem para respeitar foreign keys
+    // 1. campaign_documents (documentos embedados)
+    const { error: docsError } = await supabase
+      .from('campaign_documents')
+      .delete()
+      .eq('campaign_id', campaignId);
+    if (docsError) console.warn('⚠️ Erro ao deletar documents:', docsError.message);
+    else console.log('✓ campaign_documents deletados');
+
+    // 2. campaign_briefing
+    const { error: briefingError } = await supabase
+      .from('campaign_briefing')
+      .delete()
+      .eq('campaign_id', campaignId);
+    if (briefingError) console.warn('⚠️ Erro ao deletar briefing:', briefingError.message);
+    else console.log('✓ campaign_briefing deletado');
+
+    // 3. campaign_leads (leads alocados na campanha)
+    const { error: leadsError } = await supabase
+      .from('campaign_leads')
+      .delete()
+      .eq('campaign_id', campaignId);
+    if (leadsError) console.warn('⚠️ Erro ao deletar campaign_leads:', leadsError.message);
+    else console.log('✓ campaign_leads deletados');
+
+    // 4. campaign_subclusters
+    const { error: subclustersError } = await supabase
+      .from('campaign_subclusters')
+      .delete()
+      .eq('campaign_id', campaignId);
+    if (subclustersError) console.warn('⚠️ Erro ao deletar subclusters:', subclustersError.message);
+    else console.log('✓ campaign_subclusters deletados');
+
+    // 5. aic_conversations (conversas da campanha)
+    const { error: convsError } = await supabase
+      .from('aic_conversations')
+      .delete()
+      .eq('campaign_id', campaignId);
+    if (convsError) console.warn('⚠️ Erro ao deletar conversations:', convsError.message);
+    else console.log('✓ aic_conversations deletadas');
+
+    // 6. aic_message_queue (mensagens na fila)
+    const { error: queueError } = await supabase
+      .from('aic_message_queue')
+      .delete()
+      .eq('campaign_id', campaignId);
+    if (queueError) console.warn('⚠️ Erro ao deletar message_queue:', queueError.message);
+    else console.log('✓ aic_message_queue deletada');
+
+    // 7. aic_client_journeys (jornadas do cliente)
+    const { error: journeysError } = await supabase
+      .from('aic_client_journeys')
+      .delete()
+      .eq('campaign_id', campaignId);
+    if (journeysError) console.warn('⚠️ Erro ao deletar journeys:', journeysError.message);
+    else console.log('✓ aic_client_journeys deletadas');
+
+    // 8. instagram_accounts (contas IG vinculadas)
+    const { error: igError } = await supabase
+      .from('instagram_accounts')
+      .delete()
+      .eq('campaign_id', campaignId);
+    if (igError) console.warn('⚠️ Erro ao deletar instagram_accounts:', igError.message);
+    else console.log('✓ instagram_accounts deletadas');
+
+    // 9. Finalmente, deletar a campanha principal
+    const { error: campaignError } = await supabase
+      .from('cluster_campaigns')
+      .delete()
+      .eq('id', campaignId);
+
+    if (campaignError) {
+      console.error('❌ Erro ao deletar campanha:', campaignError);
+      res.status(500).json({
+        success: false,
+        message: 'Erro ao excluir campanha: ' + campaignError.message
+      });
+      return;
+    }
+
+    console.log(`✅ Campanha "${campaign.campaign_name}" excluída com sucesso!\n`);
+
+    res.json({
+      success: true,
+      message: `Campanha "${campaign.campaign_name}" excluída com sucesso`
+    });
+
+  } catch (error: any) {
+    console.error('❌ [DELETE CAMPAIGN] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 export default router;
