@@ -1228,7 +1228,7 @@
                 <div id="campaignStatusIndicator" style="display: none; margin-bottom: 20px; padding: 15px; border-radius: 10px; border: 2px solid;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
-                            <strong style="font-size: 1.1em;"><span class='ic ic-chart'></span> Status:</strong>
+                            <strong style="font-size: 1.1em;"><span class="ic ic-chart"></span> Status:</strong>
                             <span id="campaignStatusBadge" style="padding: 5px 12px; border-radius: 15px; font-weight: bold; margin-left: 10px;"></span>
                             <span id="campaignStatusMessage" style="margin-left: 15px; color: #64748b;"></span>
                         </div>
@@ -1238,7 +1238,7 @@
                     </div>
                     <!-- Alerta de bloqueio -->
                     <div id="campaignLockedAlert" style="display: none; margin-top: 12px; padding: 10px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.5); border-radius: 8px; color: #fbbf24;">
-                        <span class='ic ic-warn'></span> <strong>Campanha bloqueada para edição.</strong> Para modificar clustering ou leads, retorne para status "draft".
+                        <span class="ic ic-warn"></span> <strong>Campanha bloqueada para edição.</strong> Para modificar clustering ou leads, retorne para status "draft".
                     </div>
                 </div>
 
@@ -1295,7 +1295,7 @@
                             style="height: 44px; padding: 0 20px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; border-radius: 8px; color: white; cursor: not-allowed; font-size: 0.85em; white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 6px; opacity: 0.5;"
                             title="Preencha Nicho, Descrição e Público Alvo para habilitar"
                         >
-                            <span class='ic ic-ai'></span> Gerar Seeds
+                            <span class="ic ic-ai"></span> Gerar Seeds
                         </button>
                         <span class="input-hint" style="margin: 0;">Preencha Nicho, Descrição e Público Alvo para habilitar.</span>
                     </div>
@@ -1336,7 +1336,7 @@
                     <div id="suggestedScrapingContainer" style="display: none; margin-top: 12px;">
                         <details id="scrapingDropdown" open style="background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 8px; padding: 10px;">
                             <summary style="cursor: pointer; color: #fbbf24; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-                                <span><span class='ic ic-search'></span> Sugestões para Scraping</span>
+                                <span><span class="ic ic-search"></span> Sugestões para Scraping</span>
                                 <span id="suggestedScrapingCount" style="font-size: 0.8em; color: var(--aic-gray);">(0)</span>
                             </summary>
 
@@ -1388,7 +1388,7 @@
                         style="padding: 10px 16px; background: linear-gradient(135deg, #10b981, #059669); border: none; border-radius: 8px; color: white; cursor: pointer; font-size: 0.85em; white-space: nowrap;"
                         title="Extrai Nicho, Publico Alvo e Descricao dos documentos da campanha usando IA"
                     >
-                        <span class='ic ic-doc'></span> Extrair dos Docs
+                        <span class="ic ic-doc"></span> Extrair dos Docs
                     </button>
                     <span style="margin-left: 8px; font-size: 0.8em; color: var(--aic-gray);">Preenche os campos acima com base nos documentos da campanha</span>
                 </div>
@@ -1459,7 +1459,7 @@
 
                 <!-- Configuracao de Leads e Export Meta -->
                 <details style="margin-top: 20px;" open>
-                    <summary style="cursor: pointer; color: var(--aic-green); font-weight: 600;"><span class='ic ic-chart'></span> Configuração de Leads & Export Meta</summary>
+                    <summary style="cursor: pointer; color: var(--aic-green); font-weight: 600;"><span class="ic ic-chart"></span> Configuração de Leads & Export Meta</summary>
                     <div style="display: flex; gap: 15px; margin-top: 15px; padding: 15px; background: var(--aic-navy-light); border-radius: 8px; align-items: flex-end; flex-wrap: wrap;">
                         <div class="input-group" style="margin-bottom: 0; width: 120px; flex-shrink: 0;">
                             <label class="input-label" style="font-size: 0.85em;">Nº Leads</label>
@@ -1481,7 +1481,7 @@
                         </div>
                         <div style="flex-shrink: 0;">
                             <button class="btn" id="exportMetaBtn" onclick="exportMetaAudience()" style="height: 44px; white-space: nowrap; padding: 0 24px;">
-                                <span class='ic ic-export'></span> Exportar CSV
+                                <span class="ic ic-export"></span> Exportar CSV
                             </button>
                         </div>
                     </div>
@@ -1496,10 +1496,10 @@
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 20px;">
                     <button class="btn" id="analyzeBtn" onclick="validateNiche()">
-                        <span class='ic ic-search'></span> Validar Nicho
+                        <span class="ic ic-search"></span> Validar Nicho
                     </button>
                     <button class="btn btn-outline" id="saveDraftBtn" onclick="saveDraft()" title="Salvar campos sem precisar validar">
-                        <span class='ic ic-edit'></span> Salvar Rascunho
+                        <span class="ic ic-edit"></span> Salvar Rascunho
                     </button>
                     <button class="btn btn-success" id="saveCampaignBtn" onclick="saveAnalysis()">
                         💾 Salvar Campanha
@@ -1715,7 +1715,7 @@
                             <div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">por subcluster</div>
                         </div>
                         <div class="flag-card flag-yes" id="flagCopy" onclick="generateCopyPerCluster()">
-                            <div class="flag-icon"><span class='ic ic-edit'></span></div>
+                            <div class="flag-icon"><span class="ic ic-edit"></span></div>
                             <div class="flag-label">Gerar Copies</div>
                             <div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">única da campanha</div>
                         </div>
@@ -1729,7 +1729,7 @@
                     <!-- Conteudo Gerado por Cluster (Visualizacao) -->
                     <div id="clusterContentSection" style="display: none; margin-top: 30px;">
                         <h3 style="color: var(--aic-green); margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 1.5em;"><span class='ic ic-doc'></span></span> Conteudo Gerado por Cluster
+                            <span style="font-size: 1.5em;"><span class="ic ic-doc"></span></span> Conteudo Gerado por Cluster
                         </h3>
                         <div id="generatedContentTabs" style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
                             <button class="content-tab active" onclick="showContentTab('personas')" data-tab="personas">Personas</button>
@@ -1799,7 +1799,7 @@
                     Esta campanha já possui leads capturados e não pode mais ser editada.
                 </p>
                 <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; padding: 20px; border-radius: 12px; max-width: 500px; margin: 0 auto;">
-                    <div style="font-size: 1.2em; color: #10b981; font-weight: 600;"><span class='ic ic-ok'></span> Campanha em Outreach</div>
+                    <div style="font-size: 1.2em; color: #10b981; font-weight: 600;"><span class="ic ic-ok"></span> Campanha em Outreach</div>
                     <div style="color: var(--aic-gray); margin-top: 10px;">Os leads estão sendo processados pelo sistema de outreach.</div>
                 </div>
             </div>
@@ -1901,7 +1901,7 @@
             pills.innerHTML = niches.map((nicho, index) => {
                 const isActive = index === activeIndex;
                 const isValidated = nicho.is_validated;
-                const statusIcon = isValidated ? '<span class='ic ic-ok'></span>' : '<span class='ic ic-load'></span>';
+                const statusIcon = isValidated ? '<span class="ic ic-ok"></span>' : '<span class="ic ic-load"></span>';
                 const activeStyle = isActive ? 'background: var(--aic-green); color: var(--aic-navy);' : '';
 
                 return `
@@ -2078,7 +2078,7 @@
             ].filter(Boolean).join('. ');
 
             btn.disabled = true;
-            btn.innerHTML = '<span class='ic ic-load'></span> Analisando hashtags...';
+            btn.innerHTML = '<span class="ic ic-load"></span> Analisando hashtags...';
 
             try {
                 // Nova API: sugere seeds baseado em top 100 hashtags (freq >= 20)
@@ -2098,7 +2098,7 @@
 
                     // Log detalhado
                     console.log('🌱 Seeds sugeridas:', result.data.total_seeds);
-                    console.log('<span class='ic ic-chart'></span> Metodologia:', result.data.metodologia);
+                    console.log('<span class="ic ic-chart"></span> Metodologia:', result.data.metodologia);
 
                     // Log de auto-adjust se aplicado
                     const autoAdj = result.data.auto_adjust;
@@ -2120,15 +2120,15 @@
                         scrapingCount.textContent = `(${suggested.length} hashtags não encontradas)`;
                         renderScrapingHashtags(); // Usa função dedicada para renderizar
                         scrapingContainer.style.display = 'block';
-                        console.log('<span class='ic ic-search'></span> Sugestões para scraping:', suggested);
+                        console.log('<span class="ic ic-search"></span> Sugestões para scraping:', suggested);
                     } else {
                         scrapingContainer.style.display = 'none';
                     }
 
                     // Feedback visual
-                    btn.innerHTML = `<span class='ic ic-ok'></span> ${result.data.total_seeds} seeds!`;
+                    btn.innerHTML = `<span class="ic ic-ok"></span> ${result.data.total_seeds} seeds!`;
                     setTimeout(() => {
-                        btn.innerHTML = '<span class='ic ic-ai'></span> Gerar Seeds';
+                        btn.innerHTML = '<span class="ic ic-ai"></span> Gerar Seeds';
                         btn.disabled = false;
                     }, 2000);
                 } else {
@@ -2138,7 +2138,7 @@
             } catch (error) {
                 console.error('Erro ao gerar seeds:', error);
                 alert(`Erro: ${error.message}`);
-                btn.innerHTML = '<span class='ic ic-ai'></span> Gerar Seeds';
+                btn.innerHTML = '<span class="ic ic-ai"></span> Gerar Seeds';
                 btn.disabled = false;
             }
         }
@@ -2417,7 +2417,7 @@
             }
 
             btn.disabled = true;
-            btn.innerHTML = '<span class='ic ic-load'></span> Salvando...';
+            btn.innerHTML = '<span class="ic ic-load"></span> Salvando...';
 
             try {
                 const response = await fetch(`${API_BASE}/save-search-terms`, {
@@ -2434,8 +2434,8 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    console.log('<span class='ic ic-ok'></span> Search terms salvos:', result.data);
-                    btn.innerHTML = '<span class='ic ic-ok'></span> Salvo!';
+                    console.log('<span class="ic ic-ok"></span> Search terms salvos:', result.data);
+                    btn.innerHTML = '<span class="ic ic-ok"></span> Salvo!';
                     setTimeout(() => {
                         btn.innerHTML = '💾 Gerar Search Terms';
                         btn.disabled = false;
@@ -2464,7 +2464,7 @@
             }
 
             btn.disabled = true;
-            btn.innerHTML = '<span class='ic ic-load'></span> Analisando docs...';
+            btn.innerHTML = '<span class="ic ic-load"></span> Analisando docs...';
 
             try {
                 const response = await fetch(`${API_BASE}/extract-from-docs`, {
@@ -2487,11 +2487,11 @@
                         document.getElementById('serviceDescription').value = result.data.descricaoServico;
                     }
 
-                    console.log('<span class='ic ic-doc'></span> Campos extraídos dos documentos:', result.data);
+                    console.log('<span class="ic ic-doc"></span> Campos extraídos dos documentos:', result.data);
 
-                    btn.innerHTML = '<span class='ic ic-ok'></span> Extraído!';
+                    btn.innerHTML = '<span class="ic ic-ok"></span> Extraído!';
                     setTimeout(() => {
-                        btn.innerHTML = '<span class='ic ic-doc'></span> Extrair dos Docs';
+                        btn.innerHTML = '<span class="ic ic-doc"></span> Extrair dos Docs';
                         btn.disabled = false;
                     }, 2000);
                 } else {
@@ -2501,7 +2501,7 @@
             } catch (error) {
                 console.error('Erro ao extrair dos docs:', error);
                 alert(`Erro: ${error.message}`);
-                btn.innerHTML = '<span class='ic ic-doc'></span> Extrair dos Docs';
+                btn.innerHTML = '<span class="ic ic-doc"></span> Extrair dos Docs';
                 btn.disabled = false;
             }
         }
@@ -2587,7 +2587,7 @@
             const hashtags = currentSeeds.length > 0 ? [...currentSeeds] : [];
 
             btn.disabled = true;
-            btn.innerHTML = '<span class='ic ic-load'></span> Exportando...';
+            btn.innerHTML = '<span class="ic ic-load"></span> Exportando...';
             statsDiv.style.display = 'none';
 
             try {
@@ -2649,9 +2649,9 @@
                 window.URL.revokeObjectURL(url);
                 a.remove();
 
-                btn.innerHTML = '<span class='ic ic-ok'></span> CSV Baixado!';
+                btn.innerHTML = '<span class="ic ic-ok"></span> CSV Baixado!';
                 setTimeout(() => {
-                    btn.innerHTML = '<span class='ic ic-export'></span> Exportar Meta CSV';
+                    btn.innerHTML = '<span class="ic ic-export"></span> Exportar Meta CSV';
                     btn.disabled = false;
                 }, 2000);
 
@@ -2659,7 +2659,7 @@
                 console.error('Erro ao exportar Meta:', error);
                 statsDiv.innerHTML = `<div style="color: #ff6b6b;">❌ Erro: ${error.message}</div>`;
                 statsDiv.style.display = 'block';
-                btn.innerHTML = '<span class='ic ic-export'></span> Exportar Meta CSV';
+                btn.innerHTML = '<span class="ic ic-export"></span> Exportar Meta CSV';
                 btn.disabled = false;
             }
         }
@@ -2697,7 +2697,7 @@
                 flagDM.innerHTML = '<div class="flag-icon">💬</div><div class="flag-label">Scripts DM</div><div class="flag-sublabel">Personalizados</div>';
             }
             if (flagCopy) {
-                flagCopy.innerHTML = '<div class="flag-icon"><span class='ic ic-edit'></span></div><div class="flag-label">Copies</div><div class="flag-sublabel">Landing + Ads</div>';
+                flagCopy.innerHTML = '<div class="flag-icon"><span class="ic ic-edit"></span></div><div class="flag-label">Copies</div><div class="flag-sublabel">Landing + Ads</div>';
             }
 
             // Reset status do clustering
@@ -2773,35 +2773,35 @@
             const viabilityStatus = document.getElementById('viabilityStatus');
             if (data.isViable) {
                 viabilityStatus.className = 'viability-status viability-viable';
-                viabilityStatus.innerHTML = '<span class='ic ic-ok'></span> NICHO VIAVEL';
+                viabilityStatus.innerHTML = '<span class="ic ic-ok"></span> NICHO VIAVEL';
             } else {
                 viabilityStatus.className = 'viability-status viability-not-viable';
-                viabilityStatus.innerHTML = '<span class='ic ic-warn'></span> PRECISA MAIS DADOS';
+                viabilityStatus.innerHTML = '<span class="ic ic-warn"></span> PRECISA MAIS DADOS';
             }
 
             // Criterios Grid
             const criteriaGrid = document.getElementById('criteriaGrid');
             criteriaGrid.innerHTML = `
                 <div class="criteria-item ${data.passedCriteria.hashtagsWithFreq5 ? 'passed' : 'failed'}">
-                    <div class="criteria-icon">${data.passedCriteria.hashtagsWithFreq5 ? '<span class='ic ic-ok'></span>' : '❌'}</div>
+                    <div class="criteria-icon">${data.passedCriteria.hashtagsWithFreq5 ? '<span class="ic ic-ok"></span>' : '❌'}</div>
                     <div class="criteria-label">Hashtags freq>=5</div>
                     <div class="criteria-value">${data.hashtagsWithFreq5}</div>
                     <div class="criteria-target">min: ${data.criteria.minHashtagsWithFreq5}</div>
                 </div>
                 <div class="criteria-item ${data.passedCriteria.uniqueLeads ? 'passed' : 'failed'}">
-                    <div class="criteria-icon">${data.passedCriteria.uniqueLeads ? '<span class='ic ic-ok'></span>' : '❌'}</div>
+                    <div class="criteria-icon">${data.passedCriteria.uniqueLeads ? '<span class="ic ic-ok"></span>' : '❌'}</div>
                     <div class="criteria-label">Leads Unicos</div>
                     <div class="criteria-value">${data.totalUniqueLeads.toLocaleString('pt-BR')}</div>
                     <div class="criteria-target">min: ${data.criteria.minUniqueLeads}</div>
                 </div>
                 <div class="criteria-item ${data.passedCriteria.hashtagsWithLeads3 ? 'passed' : 'failed'}">
-                    <div class="criteria-icon">${data.passedCriteria.hashtagsWithLeads3 ? '<span class='ic ic-ok'></span>' : '❌'}</div>
+                    <div class="criteria-icon">${data.passedCriteria.hashtagsWithLeads3 ? '<span class="ic ic-ok"></span>' : '❌'}</div>
                     <div class="criteria-label">Hashtags c/ 3+ leads</div>
                     <div class="criteria-value">${data.hashtagsWithLeads3}</div>
                     <div class="criteria-target">min: ${data.criteria.minHashtagsWithLeads3}</div>
                 </div>
                 <div class="criteria-item ${data.passedCriteria.contactRate ? 'passed' : 'failed'}">
-                    <div class="criteria-icon">${data.passedCriteria.contactRate ? '<span class='ic ic-ok'></span>' : '❌'}</div>
+                    <div class="criteria-icon">${data.passedCriteria.contactRate ? '<span class="ic ic-ok"></span>' : '❌'}</div>
                     <div class="criteria-label">WhatsApp Rate</div>
                     <div class="criteria-value" style="color: #25D366;">${data.averageContactRate}%</div>
                     <div class="criteria-target">min: ${data.criteria.minContactRate}%</div>
@@ -2815,7 +2815,7 @@
             if (!data.isViable && data.recommendations.length > 0) {
                 recommendationsBox.style.display = 'block';
                 recommendationsList.innerHTML = data.recommendations
-                    .filter(r => !r.startsWith('<span class='ic ic-ok'></span>'))
+                    .filter(r => !r.startsWith('<span class="ic ic-ok"></span>'))
                     .map(r => `<li>${r}</li>`)
                     .join('');
             } else {
@@ -2923,7 +2923,7 @@
                 if (result.success) {
                     resultDiv.innerHTML = `
                         <div class="search-terms-success">
-                            <span class='ic ic-ok'></span> ${result.message}<br>
+                            <span class="ic ic-ok"></span> ${result.message}<br>
                             <small>ID: ${result.data.id} | Termos: ${result.data.terms_count}</small>
                         </div>
                     `;
@@ -3003,7 +3003,7 @@
 
             contentTypes.forEach(type => {
                 if (flags[type]) {
-                    flags[type].innerHTML = `<div class="flag-icon"><span class='ic ic-load'></span></div><div class="flag-label">Gerando...</div><div class="flag-sublabel">${numClusters} clusters</div>`;
+                    flags[type].innerHTML = `<div class="flag-icon"><span class="ic ic-load"></span></div><div class="flag-label">Gerando...</div><div class="flag-sublabel">${numClusters} clusters</div>`;
                     flags[type].style.pointerEvents = 'none';
                 }
             });
@@ -3035,7 +3035,7 @@
                             const label = type === 'persona' ? 'Personas' : type === 'dm' ? 'DMs' : 'Copies';
                             // Copy é única da campanha, não por cluster
                             const sublabel = type === 'copy' ? '1 única da campanha' : `${numClusters} personalizados`;
-                            flags[type].innerHTML = `<div class="flag-icon"><span class='ic ic-ok'></span></div><div class="flag-label">${label}</div><div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">${sublabel}</div>`;
+                            flags[type].innerHTML = `<div class="flag-icon"><span class="ic ic-ok"></span></div><div class="flag-label">${label}</div><div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">${sublabel}</div>`;
                             flags[type].classList.add('flag-completed');
                         }
                     });
@@ -3043,8 +3043,8 @@
                     // Renderizar resultados (clusters + copy única)
                     renderSubclustersContent(result.data.clusters, contentTypes, result.data.campaign_copy);
 
-                    const copyMsg = result.data.campaign_copy ? '\n<span class='ic ic-edit'></span> Copy única da campanha: GERADA' : '';
-                    alert(`<span class='ic ic-ok'></span> Conteúdo gerado para ${numClusters} clusters!${copyMsg}\n<span class='ic ic-chart'></span> Tokens usados: ${result.data.total_tokens}`);
+                    const copyMsg = result.data.campaign_copy ? '\n<span class="ic ic-edit"></span> Copy única da campanha: GERADA' : '';
+                    alert(`<span class="ic ic-ok"></span> Conteúdo gerado para ${numClusters} clusters!${copyMsg}\n<span class="ic ic-chart"></span> Tokens usados: ${result.data.total_tokens}`);
                 } else {
                     throw new Error(result.message || 'Erro ao gerar conteúdo');
                 }
@@ -3055,7 +3055,7 @@
                 // Restaurar flags
                 contentTypes.forEach(type => {
                     if (flags[type]) {
-                        const icon = type === 'persona' ? '🎭' : type === 'dm' ? '💬' : '<span class='ic ic-edit'></span>';
+                        const icon = type === 'persona' ? '🎭' : type === 'dm' ? '💬' : '<span class="ic ic-edit"></span>';
                         const label = type === 'persona' ? 'Persona' : type === 'dm' ? 'Scripts DM' : 'Copies';
                         const sublabel = type === 'persona' ? 'Por cluster' : type === 'dm' ? 'Personalizados' : 'Landing + Ads';
                         flags[type].innerHTML = `<div class="flag-icon">${icon}</div><div class="flag-label">${label}</div><div class="flag-sublabel">${sublabel}</div>`;
@@ -3077,7 +3077,7 @@
                 const c = campaignCopy;
                 html += `
                     <div class="campaign-copy-section" style="margin-top: 20px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #f59e0b; border-radius: 12px; padding: 20px;">
-                        <h3 style="color: #92400e; margin-bottom: 15px;"><span class='ic ic-edit'></span> Copy Única da Campanha</h3>
+                        <h3 style="color: #92400e; margin-bottom: 15px;"><span class="ic ic-edit"></span> Copy Única da Campanha</h3>
                         <p style="color: #78350f; font-size: 0.85em; margin-bottom: 15px; opacity: 0.8;">Consolidando insights de ${clusters.length} clusters</p>
 
                         ${c.landing ? `
@@ -3246,7 +3246,7 @@
 
             const flagCapture = document.getElementById('flagCapture');
             if (flagCapture) {
-                flagCapture.innerHTML = `<div class="flag-icon"><span class='ic ic-load'></span></div><div class="flag-label">Capturando...</div><div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">aguarde</div>`;
+                flagCapture.innerHTML = `<div class="flag-icon"><span class="ic ic-load"></span></div><div class="flag-label">Capturando...</div><div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">aguarde</div>`;
                 flagCapture.style.pointerEvents = 'none';
             }
 
@@ -3266,14 +3266,14 @@
 
                     // Atualizar flag com sucesso
                     if (flagCapture) {
-                        flagCapture.innerHTML = `<div class="flag-icon"><span class='ic ic-ok'></span></div><div class="flag-label">Leads Capturados</div><div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">${result.data.captured} leads</div>`;
+                        flagCapture.innerHTML = `<div class="flag-icon"><span class="ic ic-ok"></span></div><div class="flag-label">Leads Capturados</div><div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">${result.data.captured} leads</div>`;
                         flagCapture.style.pointerEvents = 'auto';
                     }
 
                     // Renderizar estatísticas por cluster
                     renderCapturedLeadsStats(result.data);
 
-                    alert(`<span class='ic ic-ok'></span> ${result.data.captured} leads capturados e associados aos clusters!\n\nAgora você pode iniciar o Outreach personalizado.`);
+                    alert(`<span class="ic ic-ok"></span> ${result.data.captured} leads capturados e associados aos clusters!\n\nAgora você pode iniciar o Outreach personalizado.`);
                 } else {
                     throw new Error(result.message || 'Erro ao capturar leads');
                 }
@@ -3311,7 +3311,7 @@
             const card = document.querySelector(`.cluster-card[data-cluster-id="${clusterId}"]`);
             const btn = card?.querySelector('.cluster-capture-btn');
             if (btn) {
-                btn.innerHTML = '<span class='ic ic-load'></span> Capturando...';
+                btn.innerHTML = '<span class="ic ic-load"></span> Capturando...';
                 btn.disabled = true;
             }
 
@@ -3347,7 +3347,7 @@
                         if (sc) sc.status = 'in_outreach';
                     }
 
-                    alert(`<span class='ic ic-ok'></span> ${result.data.captured} leads capturados do cluster "${clusterName}"!\n\nCluster bloqueado para edição.`);
+                    alert(`<span class="ic ic-ok"></span> ${result.data.captured} leads capturados do cluster "${clusterName}"!\n\nCluster bloqueado para edição.`);
 
                     // Recarregar subclusters para atualizar estado
                     await loadGeneratedContent(currentCampaignId);
@@ -3376,7 +3376,7 @@
             `;
 
             for (const [clusterId, stats] of Object.entries(captureData.by_cluster)) {
-                const hasPersona = stats.has_persona ? '<span class='ic ic-ok'></span>' : '<span class='ic ic-warn'></span>';
+                const hasPersona = stats.has_persona ? '<span class="ic ic-ok"></span>' : '<span class="ic ic-warn"></span>';
                 const personaLabel = stats.has_persona ? 'Com Persona' : 'Sem Persona';
 
                 html += `
@@ -3441,7 +3441,7 @@
 
             const flagCard = document.getElementById('flagCopy');
             const originalHTML = flagCard.innerHTML;
-            flagCard.innerHTML = '<div class="flag-icon"><span class='ic ic-load'></span></div><div class="flag-label">Gerando...</div><div class="flag-sublabel">' + currentClusteringResult.clusters.length + ' subclusters</div>';
+            flagCard.innerHTML = '<div class="flag-icon"><span class="ic ic-load"></span></div><div class="flag-label">Gerando...</div><div class="flag-sublabel">' + currentClusteringResult.clusters.length + ' subclusters</div>';
             flagCard.style.pointerEvents = 'none';
 
             try {
@@ -3465,7 +3465,7 @@
                 if (result.success) {
                     currentCopies = result.data.copies;
                     showGeneratedContent('copy', result.data);
-                    flagCard.innerHTML = '<div class="flag-icon"><span class='ic ic-ok'></span></div><div class="flag-label">Copies Gerados</div><div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">' + currentClusteringResult.clusters.length + ' subclusters</div>';
+                    flagCard.innerHTML = '<div class="flag-icon"><span class="ic ic-ok"></span></div><div class="flag-label">Copies Gerados</div><div class="flag-sublabel" style="font-size: 0.75em; opacity: 0.8;">' + currentClusteringResult.clusters.length + ' subclusters</div>';
                     flagCard.classList.add('flag-completed');
                 } else {
                     throw new Error(result.message || 'Erro ao gerar copies');
@@ -3502,7 +3502,7 @@
 
             const flagCard = document.getElementById('flagPersona');
             const originalHTML = flagCard.innerHTML;
-            flagCard.innerHTML = '<div class="flag-icon"><span class='ic ic-load'></span></div><div class="flag-label">Gerando...</div>';
+            flagCard.innerHTML = '<div class="flag-icon"><span class="ic ic-load"></span></div><div class="flag-label">Gerando...</div>';
             flagCard.style.pointerEvents = 'none';
 
             try {
@@ -3526,7 +3526,7 @@
                 if (result.success) {
                     currentPersona = result.data.persona;
                     showGeneratedContent('persona', result.data);
-                    flagCard.innerHTML = '<div class="flag-icon"><span class='ic ic-ok'></span></div><div class="flag-label">Persona Gerada</div>';
+                    flagCard.innerHTML = '<div class="flag-icon"><span class="ic ic-ok"></span></div><div class="flag-label">Persona Gerada</div>';
                     flagCard.classList.add('flag-completed');
                 } else {
                     throw new Error(result.message || 'Erro ao gerar persona');
@@ -3555,7 +3555,7 @@
 
             const flagCard = document.getElementById('flagDM');
             const originalHTML = flagCard.innerHTML;
-            flagCard.innerHTML = '<div class="flag-icon"><span class='ic ic-load'></span></div><div class="flag-label">Gerando...</div>';
+            flagCard.innerHTML = '<div class="flag-icon"><span class="ic ic-load"></span></div><div class="flag-label">Gerando...</div>';
             flagCard.style.pointerEvents = 'none';
 
             try {
@@ -3578,7 +3578,7 @@
                 if (result.success) {
                     currentDMScripts = result.data.dm_scripts;
                     showGeneratedContent('dm', result.data);
-                    flagCard.innerHTML = '<div class="flag-icon"><span class='ic ic-ok'></span></div><div class="flag-label">DM Gerado</div>';
+                    flagCard.innerHTML = '<div class="flag-icon"><span class="ic ic-ok"></span></div><div class="flag-label">DM Gerado</div>';
                     flagCard.classList.add('flag-completed');
                 } else {
                     throw new Error(result.message || 'Erro ao gerar DM');
@@ -3607,7 +3607,7 @@
 
             const flagCard = document.getElementById('flagCopy');
             const originalHTML = flagCard.innerHTML;
-            flagCard.innerHTML = '<div class="flag-icon"><span class='ic ic-load'></span></div><div class="flag-label">Gerando...</div>';
+            flagCard.innerHTML = '<div class="flag-icon"><span class="ic ic-load"></span></div><div class="flag-label">Gerando...</div>';
             flagCard.style.pointerEvents = 'none';
 
             try {
@@ -3630,7 +3630,7 @@
                 if (result.success) {
                     currentCopies = result.data.copies;
                     showGeneratedContent('copy', result.data);
-                    flagCard.innerHTML = '<div class="flag-icon"><span class='ic ic-ok'></span></div><div class="flag-label">Copy Gerado</div>';
+                    flagCard.innerHTML = '<div class="flag-icon"><span class="ic ic-ok"></span></div><div class="flag-label">Copy Gerado</div>';
                     flagCard.classList.add('flag-completed');
                 } else {
                     throw new Error(result.message || 'Erro ao gerar Copy');
@@ -3665,7 +3665,7 @@
             const titles = {
                 persona: '🎭 Persona ICP',
                 dm: '✉️ Scripts de DM',
-                copy: '<span class='ic ic-edit'></span> Pack de Copies'
+                copy: '<span class="ic ic-edit"></span> Pack de Copies'
             };
 
             const contents = {
@@ -3683,7 +3683,7 @@
                     <div class="generated-meta">
                         <span>Modelo: ${data.model}</span>
                         <span>Tokens: ${data.tokens_used}</span>
-                        <button class="btn-copy-content" onclick="copyToClipboard('${cardId}-content')"><span class='ic ic-doc'></span> Copiar</button>
+                        <button class="btn-copy-content" onclick="copyToClipboard('${cardId}-content')"><span class="ic ic-doc"></span> Copiar</button>
                     </div>
                 </div>
                 <div id="${cardId}-content" class="generated-content-body">
@@ -3745,7 +3745,7 @@
             currentCopies = null;
 
             const flags = ['flagPersona', 'flagDM', 'flagCopy'];
-            const icons = ['[user]', '✉️', '<span class='ic ic-edit'></span>'];
+            const icons = ['[user]', '✉️', '<span class="ic ic-edit"></span>'];
             const labels = ['Gerar Persona', 'Gerar DM', 'Gerar Copy'];
 
             flags.forEach((id, i) => {
@@ -3788,9 +3788,9 @@
 
         // Configuração de status (cores AIC)
         const STATUS_CONFIG = {
-            'draft': { label: 'Rascunho', color: '#3b82f6', bgColor: 'rgba(59, 130, 246, 0.15)', icon: '<span class='ic ic-edit'></span>', message: 'Pode editar clustering, leads e conteúdo' },
-            'ready': { label: 'Pronto', color: '#0ECC97', bgColor: 'rgba(14, 204, 151, 0.15)', icon: '<span class='ic ic-ok'></span>', message: 'Bloqueado - Pronto para iniciar outreach' },
-            'ready_for_outreach': { label: 'Pronto p/ Outreach', color: '#0ECC97', bgColor: 'rgba(14, 204, 151, 0.15)', icon: '<span class='ic ic-ok'></span>', message: 'Bloqueado - Pronto para iniciar outreach' },
+            'draft': { label: 'Rascunho', color: '#3b82f6', bgColor: 'rgba(59, 130, 246, 0.15)', icon: '<span class="ic ic-edit"></span>', message: 'Pode editar clustering, leads e conteúdo' },
+            'ready': { label: 'Pronto', color: '#0ECC97', bgColor: 'rgba(14, 204, 151, 0.15)', icon: '<span class="ic ic-ok"></span>', message: 'Bloqueado - Pronto para iniciar outreach' },
+            'ready_for_outreach': { label: 'Pronto p/ Outreach', color: '#0ECC97', bgColor: 'rgba(14, 204, 151, 0.15)', icon: '<span class="ic ic-ok"></span>', message: 'Bloqueado - Pronto para iniciar outreach' },
             'active': { label: 'Em Andamento', color: '#f59e0b', bgColor: 'rgba(245, 158, 11, 0.15)', icon: '🚀', message: 'Outreach em execução' },
             'completed': { label: 'Concluído', color: '#94a3b8', bgColor: 'rgba(148, 163, 184, 0.15)', icon: '🏁', message: 'Campanha finalizada' },
             'paused': { label: 'Pausado', color: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.15)', icon: '⏸️', message: 'Temporariamente pausado' }
@@ -3904,7 +3904,7 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    alert(`<span class='ic ic-ok'></span> ${result.message}`);
+                    alert(`<span class="ic ic-ok"></span> ${result.message}`);
                     await loadCampaignStatus(currentCampaignId);
                 } else {
                     alert(`❌ ${result.message}`);
@@ -4186,7 +4186,7 @@
 
                         <!-- Soluções -->
                         <div style="background: rgba(14, 204, 151, 0.15); padding: 15px; border-radius: 8px;">
-                            <h5 style="color: var(--aic-green); margin: 0 0 10px 0;"><span class='ic ic-ok'></span> Seções de Solução</h5>
+                            <h5 style="color: var(--aic-green); margin: 0 0 10px 0;"><span class="ic ic-ok"></span> Seções de Solução</h5>
                             <ul style="margin: 0; padding-left: 20px; color: #064e3b;">
                                 ${solucoes.map(s => `<li style="margin: 5px 0;">${s}</li>`).join('')}
                             </ul>
@@ -4262,7 +4262,7 @@
             });
             container.style.display = 'block';
 
-            container.innerHTML = '<p style="color: #64748b; text-align: center; padding: 40px;"><span class='ic ic-load'></span> Carregando leads...</p>';
+            container.innerHTML = '<p style="color: #64748b; text-align: center; padding: 40px;"><span class="ic ic-load"></span> Carregando leads...</p>';
 
             try {
                 const response = await fetch(`${API_BASE}/campaign/${campaignId}/leads-by-cluster?cluster_id=${clusterId}&page=${page}&limit=50`);
@@ -4286,7 +4286,7 @@
                                 <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; color: #334155;">@${username}</td>
                                 <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; color: #334155;">${fullName}</td>
                                 <td style="padding: 8px; text-align: center; border-bottom: 1px solid #f1f5f9;">
-                                    ${hasContact ? '<span style="color: #10b981;"><span class='ic ic-ok'></span></span>' : '<span style="color: #94a3b8;">-</span>'}
+                                    ${hasContact ? '<span style="color: #10b981;"><span class="ic ic-ok"></span></span>' : '<span style="color: #94a3b8;">-</span>'}
                                 </td>
                                 <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f1f5f9; color: #334155;">${score.toFixed(2)}</td>
                             </tr>
@@ -4720,7 +4720,7 @@
                         currentPersona = campaign.generated_persona;
                         const flagCard = document.getElementById('flagPersona');
                         if (flagCard) {
-                            flagCard.innerHTML = '<div class="flag-icon"><span class='ic ic-ok'></span></div><div class="flag-label">Persona Gerada</div>';
+                            flagCard.innerHTML = '<div class="flag-icon"><span class="ic ic-ok"></span></div><div class="flag-label">Persona Gerada</div>';
                             flagCard.classList.add('flag-completed');
                         }
                     }
@@ -4728,7 +4728,7 @@
                         currentDMScripts = campaign.generated_dm_scripts;
                         const flagCard = document.getElementById('flagDM');
                         if (flagCard) {
-                            flagCard.innerHTML = '<div class="flag-icon"><span class='ic ic-ok'></span></div><div class="flag-label">DM Gerado</div>';
+                            flagCard.innerHTML = '<div class="flag-icon"><span class="ic ic-ok"></span></div><div class="flag-label">DM Gerado</div>';
                             flagCard.classList.add('flag-completed');
                         }
                     }
@@ -4736,7 +4736,7 @@
                         currentCopies = campaign.generated_copies;
                         const flagCard = document.getElementById('flagCopy');
                         if (flagCard) {
-                            flagCard.innerHTML = '<div class="flag-icon"><span class='ic ic-ok'></span></div><div class="flag-label">Copy Gerado</div>';
+                            flagCard.innerHTML = '<div class="flag-icon"><span class="ic ic-ok"></span></div><div class="flag-label">Copy Gerado</div>';
                             flagCard.classList.add('flag-completed');
                         }
                     }
@@ -4887,7 +4887,7 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    btn.textContent = '<span class='ic ic-ok'></span> Salvo!';
+                    btn.textContent = '<span class="ic ic-ok"></span> Salvo!';
                     btn.style.background = '#10b981';
                     btn.style.borderColor = '#10b981';
                     btn.style.color = '#fff';
@@ -4991,12 +4991,12 @@
                 if (result.success) {
                     saveStatus.innerHTML = `
                         <div style="background: rgba(14, 204, 151, 0.15); border: 1px solid #10b981; padding: 15px; border-radius: 8px; color: var(--aic-green);">
-                            <span class='ic ic-ok'></span> <strong>${result.message}</strong><br>
+                            <span class="ic ic-ok"></span> <strong>${result.message}</strong><br>
                             <small>Projeto ID: ${result.data.project_id}</small><br>
                             <small>Campanha ID: ${result.data.campaign_id}</small>
                         </div>
                     `;
-                    saveBtn.textContent = '<span class='ic ic-ok'></span> Salvo!';
+                    saveBtn.textContent = '<span class="ic ic-ok"></span> Salvo!';
                     saveBtn.style.background = '#10b981';
                 } else {
                     throw new Error(result.message);
@@ -5211,7 +5211,7 @@
                     // Usar cohesion_centroid (KPI PRINCIPAL) com fallback
                     const cohesion = Number(result.data.cohesion_centroid || result.data.avg_intra_similarity || 0);
                     if (cohesion < 0.35) {
-                        alert('<span class='ic ic-warn'></span> Clustering com coesão baixa (' + (cohesion * 100).toFixed(1) + '%). Considere ajustar seeds/K ou refazer antes de gerar personas/DM.');
+                        alert('<span class="ic ic-warn"></span> Clustering com coesão baixa (' + (cohesion * 100).toFixed(1) + '%). Considere ajustar seeds/K ou refazer antes de gerar personas/DM.');
                     }
 
                     statusBadge.className = 'clustering-status done';
@@ -5295,7 +5295,7 @@
                 // Buscar subcluster correspondente para verificar status
                 const subcluster = currentSubclusters?.find(sc => sc.cluster_index === cluster.cluster_id);
                 const isBlocked = subcluster && (subcluster.status === 'in_outreach' || subcluster.status === 'completed');
-                const statusLabel = isBlocked ? (subcluster.status === 'completed' ? '<span class='ic ic-ok'></span> Concluído' : '🔒 Em Outreach') : '';
+                const statusLabel = isBlocked ? (subcluster.status === 'completed' ? '<span class="ic ic-ok"></span> Concluído' : '🔒 Em Outreach') : '';
                 const clusterId = Number.isFinite(Number(cluster.cluster_id)) ? Number(cluster.cluster_id) : idx;
                 const clusterNameRaw = cluster.cluster_name || `Cluster ${clusterId + 1}`;
                 const clusterNameSafe = escapeHTML(clusterNameRaw);
