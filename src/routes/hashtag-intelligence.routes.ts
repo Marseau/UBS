@@ -3912,12 +3912,97 @@ router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
 
     console.log(`   🎯 ${clustersToProcess.length} clusters serão processados`);
 
-    // Processar associações de leads
+    // Coletar todos os lead_ids que serão processados
+    const allLeadIds: string[] = [];
+    for (const assoc of leadAssociations) {
+      const clusterId = assoc.primary_cluster;
+      if (leadsByCluster[clusterId] !== undefined) {
+        if (only_with_contact && !assoc.has_contact) continue;
+        if (!limit_per_cluster || leadsByCluster[clusterId].length < limit_per_cluster) {
+          allLeadIds.push(assoc.lead_id);
+        }
+      }
+    }
+
+    // VALIDAÇÃO CRÍTICA: Verificar quais lead_ids ainda existem no banco
+    // Isso evita FK violation que faz o batch inteiro falhar
+    // Remover duplicatas antes de validar
+    const uniqueLeadIds = [...new Set(allLeadIds)];
+    console.log(`   🔍 Validando ${uniqueLeadIds.length} lead_ids únicos no banco...`);
+
+    // DEBUG: Verificar formato dos primeiros lead_ids
+    if (uniqueLeadIds.length > 0) {
+      console.log(`   🔍 Amostra lead_ids: [${uniqueLeadIds.slice(0, 3).join(', ')}]`);
+    }
+
+    const validLeadIds = new Set<string>();
+
+    // Verificar em batches menores para evitar rate limiting do Supabase
+    const BATCH_SIZE = 200;
+    for (let i = 0; i < uniqueLeadIds.length; i += BATCH_SIZE) {
+      // Pequeno delay entre batches para evitar rate limiting
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      const batch = uniqueLeadIds.slice(i, i + BATCH_SIZE);
+
+      // Filtrar IDs válidos (formato UUID)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const validUuidBatch = batch.filter(id => uuidRegex.test(String(id)));
+
+      if (validUuidBatch.length !== batch.length) {
+        console.warn(`   ⚠️ Batch ${Math.floor(i/BATCH_SIZE) + 1}: ${batch.length - validUuidBatch.length} IDs com formato inválido ignorados`);
+      }
+
+      if (validUuidBatch.length === 0) continue;
+
+      // Retry logic para lidar com falhas de conexão
+      let existingLeads: any[] | null = null;
+      let lastError: any = null;
+      const MAX_RETRIES = 3;
+
+      for (let retry = 0; retry < MAX_RETRIES; retry++) {
+        const { data, error: validationError } = await supabase
+          .from('instagram_leads')
+          .select('id')
+          .in('id', validUuidBatch);
+
+        if (!validationError && data) {
+          existingLeads = data;
+          break;
+        }
+
+        lastError = validationError;
+        if (retry < MAX_RETRIES - 1) {
+          console.log(`   🔄 Batch ${Math.floor(i/BATCH_SIZE) + 1}: retry ${retry + 1}/${MAX_RETRIES}...`);
+          await new Promise(resolve => setTimeout(resolve, 500 * (retry + 1))); // Backoff progressivo
+        }
+      }
+
+      if (lastError && !existingLeads) {
+        console.error(`   ⚠️ Erro ao validar leads batch ${Math.floor(i/BATCH_SIZE) + 1} após ${MAX_RETRIES} tentativas:`, lastError.message || lastError);
+      } else if (existingLeads) {
+        // Garantir que o ID seja tratado como string
+        existingLeads.forEach(l => validLeadIds.add(String(l.id)));
+        console.log(`   📦 Batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(uniqueLeadIds.length/BATCH_SIZE)}: ${existingLeads.length}/${validUuidBatch.length} encontrados`);
+      }
+    }
+
+    const invalidCount = uniqueLeadIds.length - validLeadIds.size;
+    if (invalidCount > 0) {
+      console.log(`   ⚠️ ${invalidCount} leads não existem mais no banco (serão ignorados)`);
+    }
+    console.log(`   ✅ ${validLeadIds.size} leads válidos encontrados`);
+
+    // Processar associações de leads (apenas os válidos)
     for (const assoc of leadAssociations) {
       const clusterId = assoc.primary_cluster;
       if (leadsByCluster[clusterId] !== undefined) {
         // Aplicar filtro de contato se solicitado
         if (only_with_contact && !assoc.has_contact) continue;
+
+        // FILTRAR: Só adicionar se o lead existe no banco (usando String para garantir comparação correta)
+        if (!validLeadIds.has(String(assoc.lead_id))) continue;
 
         // Aplicar limite por cluster apenas se especificado
         if (!limit_per_cluster || leadsByCluster[clusterId].length < limit_per_cluster) {
@@ -3926,10 +4011,9 @@ router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
       }
     }
 
-    // Preparar dados para inserção
-    const campaignLeadsData: any[] = [];
+    // Preparar dados para inserção (agrupados por subcluster para rastrear sucesso)
+    const leadsBySubcluster: Map<string, any[]> = new Map();
     const statsByCluster: Record<number, { name: string; count: number; subcluster_id: string | null; has_persona: boolean }> = {};
-    const subclusterIdsToBlock: string[] = [];
 
     for (const cluster of clustersToProcess) {
       const clusterLeads = leadsByCluster[cluster.cluster_id] || [];
@@ -3943,26 +4027,29 @@ router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
         has_persona: !!persona
       };
 
-      // Coletar subcluster IDs para bloquear após inserção
+      // Agrupar leads por subcluster_id para rastrear inserções
       if (subclusterId && clusterLeads.length > 0) {
-        subclusterIdsToBlock.push(subclusterId);
-      }
-
-      for (const lead of clusterLeads) {
-        campaignLeadsData.push({
-          campaign_id: campaignId,
-          lead_id: lead.lead_id,
-          subcluster_id: subclusterId, // IMPORTANTE: FK para campaign_subclusters
-          cluster_id: cluster.cluster_id,
-          cluster_name: cluster.cluster_name,
-          match_source: 'clustering',
-          match_hashtags: lead.clusters || [],
-          fit_score: Math.round(lead.score * 10), // Score já vem em escala adequada
-          fit_reasons: lead.clusters,
-          status: 'pending'
-        });
+        const leadsForSubcluster: any[] = [];
+        for (const lead of clusterLeads) {
+          leadsForSubcluster.push({
+            campaign_id: campaignId,
+            lead_id: lead.lead_id,
+            subcluster_id: subclusterId,
+            cluster_id: cluster.cluster_id,
+            cluster_name: cluster.cluster_name,
+            match_source: 'clustering',
+            match_hashtags: lead.clusters || [],
+            fit_score: Math.round(lead.score * 10),
+            fit_reasons: lead.clusters,
+            status: 'pending'
+          });
+        }
+        leadsBySubcluster.set(subclusterId, leadsForSubcluster);
       }
     }
+
+    // Flatten para contagem total
+    const campaignLeadsData = Array.from(leadsBySubcluster.values()).flat();
 
     console.log(`   ✅ ${campaignLeadsData.length} leads preparados para captura`);
 
@@ -3977,37 +4064,54 @@ router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
       });
     }
 
-    // Limpar leads anteriores da campanha (opcional - pode ser configurável)
-    // await supabase.from('campaign_leads').delete().eq('campaign_id', campaignId);
-
-    // Inserir em batches de 500
+    // Inserir por subcluster e rastrear quais tiveram sucesso
     let totalInserted = 0;
-    for (let i = 0; i < campaignLeadsData.length; i += 500) {
-      const batch = campaignLeadsData.slice(i, i + 500);
-      const { error: insertError } = await supabase
-        .from('campaign_leads')
-        .upsert(batch, { onConflict: 'campaign_id,lead_id' });
+    const successfulSubclusterIds: string[] = [];
+    const insertedBySubcluster: Record<string, number> = {};
 
-      if (insertError) {
-        console.error(`   ⚠️ Erro no batch ${i / 500 + 1}:`, insertError.message);
+    for (const [subclusterId, leads] of leadsBySubcluster.entries()) {
+      let subclusterInserted = 0;
+
+      // Inserir em batches de 500 para cada subcluster
+      for (let i = 0; i < leads.length; i += 500) {
+        const batch = leads.slice(i, i + 500);
+        const { error: insertError, data: insertedData } = await supabase
+          .from('campaign_leads')
+          .upsert(batch, { onConflict: 'campaign_id,lead_id' })
+          .select('id');
+
+        if (insertError) {
+          console.error(`   ⚠️ Erro no batch subcluster ${subclusterId}:`, insertError.message);
+        } else {
+          const insertedCount = insertedData?.length || batch.length;
+          subclusterInserted += insertedCount;
+          totalInserted += insertedCount;
+        }
+      }
+
+      // Só marcar subcluster como sucesso se REALMENTE inseriu leads
+      if (subclusterInserted > 0) {
+        successfulSubclusterIds.push(subclusterId);
+        insertedBySubcluster[subclusterId] = subclusterInserted;
+        console.log(`   ✅ Subcluster ${subclusterId}: ${subclusterInserted} leads inseridos`);
       } else {
-        totalInserted += batch.length;
+        console.log(`   ⚠️ Subcluster ${subclusterId}: 0 leads inseridos (NÃO será bloqueado)`);
       }
     }
 
     console.log(`   💾 ${totalInserted} leads capturados e associados aos subnichos`);
 
-    // Bloquear subclusters capturados (status → in_outreach)
-    if (subclusterIdsToBlock.length > 0 && totalInserted > 0) {
+    // Bloquear APENAS subclusters que realmente tiveram inserções bem-sucedidas
+    if (successfulSubclusterIds.length > 0) {
       const { error: blockError } = await supabase
         .from('campaign_subclusters')
         .update({ status: 'in_outreach', updated_at: new Date().toISOString() })
-        .in('id', subclusterIdsToBlock);
+        .in('id', successfulSubclusterIds);
 
       if (blockError) {
         console.error('   ⚠️ Erro ao bloquear subclusters:', blockError.message);
       } else {
-        console.log(`   🔒 ${subclusterIdsToBlock.length} subclusters bloqueados (status: in_outreach)`);
+        console.log(`   🔒 ${successfulSubclusterIds.length} subclusters bloqueados (com leads inseridos)`);
       }
     }
 
@@ -4017,7 +4121,8 @@ router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
       data: {
         captured: totalInserted,
         by_cluster: statsByCluster,
-        blocked_subclusters: subclusterIdsToBlock,
+        inserted_by_subcluster: insertedBySubcluster,
+        blocked_subclusters: successfulSubclusterIds,
         campaign_id: campaignId
       }
     });

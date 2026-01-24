@@ -2310,41 +2310,44 @@ router.get('/campaigns/:id/analytics', async (req: Request, res: Response): Prom
 });
 
 // ============================================================================
-// CLIENT CONTACT INFORMATION (Destino dos Leads Quentes)
+// CONSULTANT INFO (Quem assume leads quentes)
 // ============================================================================
 
 /**
  * PUT /api/campaigns/:campaignId/client-contact
- * Salva informações de contato do cliente (número WhatsApp de destino para leads quentes)
+ * Salva dados do consultor (quem recebe notificação e assume leads quentes)
+ * Aceita tanto os nomes antigos (clientContactName) quanto novos (consultantName) para compatibilidade
  */
 router.put('/campaigns/:campaignId/client-contact', async (req: Request, res: Response): Promise<void> => {
   try {
     const { campaignId } = req.params;
-    const { clientContactName, clientWhatsappNumber } = req.body;
+    // Aceita tanto nomes antigos quanto novos para compatibilidade
+    const consultantName = req.body.consultantName || req.body.clientContactName;
+    const consultantPhone = req.body.consultantPhone || req.body.clientWhatsappNumber;
 
     if (!campaignId) {
       res.status(400).json({ error: 'campaignId is required' });
       return;
     }
 
-    if (!clientContactName || !clientWhatsappNumber) {
-      res.status(400).json({ error: 'clientContactName and clientWhatsappNumber are required' });
+    if (!consultantName || !consultantPhone) {
+      res.status(400).json({ error: 'consultantName and consultantPhone are required' });
       return;
     }
 
     // Validar formato do número de WhatsApp
     const phoneRegex = /^[\+]?[0-9\s\-\(\)]+$/;
-    if (!phoneRegex.test(clientWhatsappNumber)) {
+    if (!phoneRegex.test(consultantPhone)) {
       res.status(400).json({ error: 'Invalid WhatsApp number format' });
       return;
     }
 
-    // Atualizar campanha com informações de contato do cliente
+    // Atualizar campanha com dados do consultor
     const { data, error } = await supabase
       .from('cluster_campaigns')
       .update({
-        client_contact_name: clientContactName,
-        client_whatsapp_number: clientWhatsappNumber,
+        consultant_name: consultantName,
+        consultant_phone: consultantPhone,
         updated_at: new Date().toISOString()
       })
       .eq('id', campaignId)
@@ -2352,8 +2355,8 @@ router.put('/campaigns/:campaignId/client-contact', async (req: Request, res: Re
       .single();
 
     if (error) {
-      console.error('[Client Contact] Update error:', error);
-      res.status(500).json({ error: 'Failed to save client contact information' });
+      console.error('[Consultant Info] Update error:', error);
+      res.status(500).json({ error: 'Failed to save consultant information' });
       return;
     }
 
@@ -2364,15 +2367,18 @@ router.put('/campaigns/:campaignId/client-contact', async (req: Request, res: Re
 
     res.json({
       success: true,
-      message: 'Client contact information saved successfully',
+      message: 'Consultant information saved successfully',
       data: {
-        clientContactName: data.client_contact_name,
-        clientWhatsappNumber: data.client_whatsapp_number
+        consultantName: data.consultant_name,
+        consultantPhone: data.consultant_phone,
+        // Manter compatibilidade com UI antiga
+        clientContactName: data.consultant_name,
+        clientWhatsappNumber: data.consultant_phone
       }
     });
 
   } catch (error: any) {
-    console.error('[Client Contact] Error:', error);
+    console.error('[Consultant Info] Error:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -1025,22 +1025,22 @@
                 <!-- Flags de Geração -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px;">
                     <div class="flag-card" id="flagPersonaDemo" onclick="generateContentDemo('persona')" style="background: var(--aic-navy); border: 2px solid var(--aic-border); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s;">
-                        <div style="font-size: 2em; margin-bottom: 8px;">👤</div>
+                        <div style="font-size: 2em; margin-bottom: 8px;"></div>
                         <div style="font-weight: 600; color: var(--aic-white);">Gerar Personas</div>
                         <div style="font-size: 0.8em; color: var(--aic-gray);">por cluster</div>
                     </div>
                     <div class="flag-card" id="flagDMDemo" onclick="generateContentDemo('dm')" style="background: var(--aic-navy); border: 2px solid var(--aic-border); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s;">
-                        <div style="font-size: 2em; margin-bottom: 8px;">✉️</div>
+                        <div style="font-size: 2em; margin-bottom: 8px;"></div>
                         <div style="font-weight: 600; color: var(--aic-white);">Gerar DMs</div>
                         <div style="font-size: 0.8em; color: var(--aic-gray);">scripts personalizados</div>
                     </div>
                     <div class="flag-card" id="flagCopyDemo" onclick="generateContentDemo('copy')" style="background: var(--aic-navy); border: 2px solid var(--aic-border); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s;">
-                        <div style="font-size: 2em; margin-bottom: 8px;">📝</div>
+                        <div style="font-size: 2em; margin-bottom: 8px;"></div>
                         <div style="font-weight: 600; color: var(--aic-white);">Gerar Copies</div>
                         <div style="font-size: 0.8em; color: var(--aic-gray);">landing + ads</div>
                     </div>
                     <div class="flag-card" id="flagAllDemo" onclick="generateContentDemo('all')" style="background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark)); border: 2px solid var(--aic-green); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s;">
-                        <div style="font-size: 2em; margin-bottom: 8px;">🚀</div>
+                        <div style="font-size: 2em; margin-bottom: 8px;"></div>
                         <div style="font-weight: 600; color: var(--aic-navy);">Gerar Tudo</div>
                         <div style="font-size: 0.8em; color: var(--aic-navy); opacity: 0.8;">completo</div>
                     </div>
@@ -1058,13 +1058,13 @@
                 <!-- Tabs -->
                 <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
                     <button class="content-tab active" data-tab="personas" onclick="showContentTabDemo('personas')" style="padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; background: var(--aic-green); color: var(--aic-navy);">
-                        👤 Personas
+                         Personas
                     </button>
                     <button class="content-tab" data-tab="dms" onclick="showContentTabDemo('dms')" style="padding: 10px 20px; border: 1px solid var(--aic-border); border-radius: 8px; cursor: pointer; font-weight: 600; background: var(--aic-navy); color: var(--aic-white);">
-                        ✉️ DMs
+                         DMs
                     </button>
                     <button class="content-tab" data-tab="copies" onclick="showContentTabDemo('copies')" style="padding: 10px 20px; border: 1px solid var(--aic-border); border-radius: 8px; cursor: pointer; font-weight: 600; background: var(--aic-navy); color: var(--aic-white);">
-                        📝 Copies
+                         Copies
                     </button>
                 </div>
 
@@ -1667,7 +1667,7 @@
 
             if (data?.success && data.data?.id) {
                 const action = data.created ? 'criada' : 'encontrada';
-                console.log(`📦 Campanha Platform Demo ${action}:`, data.data.id);
+                console.log(` Campanha Platform Demo ${action}:`, data.data.id);
                 return data.data.id;
             }
 
@@ -1714,7 +1714,7 @@
                     console.log('🌱 Seeds:', result.data.total_seeds, result.data.seeds_por_categoria);
 
                     // Feedback visual
-                    btn.innerHTML = `✅ ${result.data.total_seeds}`;
+                    btn.innerHTML = `[OK] ${result.data.total_seeds}`;
                     setTimeout(() => {
                         btn.innerHTML = '🤖 Gerar';
                         btn.disabled = false;
@@ -1762,7 +1762,7 @@
 
             status.innerHTML = `
                 <span style="color: var(--aic-yellow);">
-                    ⚠️ Análise semântica em andamento - pode levar alguns minutos dependendo do volume de dados...
+                    [Atencao] Análise semântica em andamento - pode levar alguns minutos dependendo do volume de dados...
                 </span>
             `;
 
@@ -1791,14 +1791,14 @@
                     lastNicheValidation = result.data;
                     renderNicheValidation(result.data);
                     const timeStr = elapsed >= 60 ? `${Math.floor(elapsed/60)}m ${elapsed%60}s` : `${elapsed}s`;
-                    status.textContent = (result.data.isViable ? '✅ Nicho viável!' : '⚠️ Nicho com baixa viabilidade') + ` (${timeStr})`;
+                    status.textContent = (result.data.isViable ? '[OK] Nicho viável!' : '[Atencao] Nicho com baixa viabilidade') + ` (${timeStr})`;
                     status.style.color = result.data.isViable ? 'var(--aic-green)' : 'var(--aic-yellow)';
                 } else {
                     throw new Error(result.message || 'Erro na validação');
                 }
             } catch (error) {
                 console.error('Erro ao validar nicho:', error);
-                status.textContent = `❌ Erro: ${error.message}`;
+                status.textContent = `[Erro] Erro: ${error.message}`;
                 status.style.color = '#ef4444';
                 lastNicheValidation = null;
                 resultDiv.style.display = 'none';
@@ -1835,7 +1835,7 @@
                 resultDiv.style.background = 'rgba(16, 185, 129, 0.1)';
                 resultDiv.style.border = '1px solid rgba(16, 185, 129, 0.3)';
                 titleEl.style.color = '#10b981';
-                titleEl.textContent = '✅ Nicho Viável para Clustering';
+                titleEl.textContent = '[OK] Nicho Viável para Clustering';
                 badgeEl.textContent = 'APROVADO';
                 badgeEl.style.background = 'rgba(16, 185, 129, 0.2)';
                 badgeEl.style.color = '#10b981';
@@ -1843,7 +1843,7 @@
                 resultDiv.style.background = 'rgba(251, 191, 36, 0.1)';
                 resultDiv.style.border = '1px solid rgba(251, 191, 36, 0.3)';
                 titleEl.style.color = '#fbbf24';
-                titleEl.textContent = '⚠️ Nicho com Baixa Viabilidade';
+                titleEl.textContent = '[Atencao] Nicho com Baixa Viabilidade';
                 badgeEl.textContent = 'ATENÇÃO';
                 badgeEl.style.background = 'rgba(251, 191, 36, 0.2)';
                 badgeEl.style.color = '#fbbf24';
@@ -1872,12 +1872,12 @@
             if (isViable) {
                 messageEl.style.background = 'rgba(16, 185, 129, 0.1)';
                 messageEl.style.color = '#10b981';
-                messageEl.innerHTML = '🚀 <strong>Pronto para clustering!</strong> O nicho possui dados suficientes.';
+                messageEl.innerHTML = ' <strong>Pronto para clustering!</strong> O nicho possui dados suficientes.';
             } else {
                 const failedCount = Object.values(passedCriteria).filter(v => !v).length;
                 messageEl.style.background = 'rgba(251, 191, 36, 0.1)';
                 messageEl.style.color = '#fbbf24';
-                messageEl.innerHTML = `⚠️ <strong>${failedCount} critério(s) não atingido(s).</strong> O clustering pode gerar resultados menos precisos.`;
+                messageEl.innerHTML = `[Atencao] <strong>${failedCount} critério(s) não atingido(s).</strong> O clustering pode gerar resultados menos precisos.`;
             }
 
             resultDiv.style.display = 'block';
@@ -1945,7 +1945,7 @@
                     hashtag_max_age_days: hashtagMaxAgeDays
                 };
 
-                console.log('🎯 [Generic Clustering] Payload:', payload);
+                console.log(' [Generic Clustering] Payload:', payload);
 
                 const response = await fetch(`${API_BASE}/hashtag-intelligence/execute-clustering`, {
                     method: 'POST',
@@ -1962,7 +1962,7 @@
                     // Usar cohesion_centroid (KPI PRINCIPAL) com fallback para avg_intra_similarity (deprecated)
                     const cohesion = data.cohesion_centroid || data.avg_intra_similarity || 0;
 
-                    status.innerHTML = `✅ ${clustersCount} clusters, ${leadsCount} leads | <a href="#" onclick="loadClusters(); loadClusterDistribution(); loadContactRateByCluster(); return false;" style="color: var(--aic-green);">Atualizar gráficos</a>`;
+                    status.innerHTML = `[OK] ${clustersCount} clusters, ${leadsCount} leads | <a href="#" onclick="loadClusters(); loadClusterDistribution(); loadContactRateByCluster(); return false;" style="color: var(--aic-green);">Atualizar gráficos</a>`;
 
                     // Atualizar resumo visual (sincronizado do CID)
                     const summaryDiv = document.getElementById('clusteringResultSummary');
@@ -2007,7 +2007,7 @@
                 }
             } catch (error) {
                 console.error('Erro no clustering genérico:', error);
-                status.textContent = `❌ Erro: ${error.message}`;
+                status.textContent = `[Erro] Erro: ${error.message}`;
                 status.style.color = '#ef4444';
                 alert(`Erro: ${error.message}`);
             } finally {
@@ -2054,7 +2054,7 @@
             const topHashtags = (cluster.top_hashtags || cluster.theme_keywords || []).slice(0, 10);
 
             container.innerHTML = `
-                <h3>📊 Detalhes: ${cluster.cluster_name}</h3>
+                <h3> Detalhes: ${cluster.cluster_name}</h3>
 
                 <div class="insight-section">
                     <h4>Métricas do Cluster</h4>
@@ -2082,7 +2082,7 @@
                 </div>
 
                 <div class="insight-section" style="margin-top: 20px;">
-                    <h4>🚀 Ações - Versão PRO</h4>
+                    <h4> Ações - Versão PRO</h4>
                     <p style="color: var(--aic-gray); margin: 10px 0;">Para gerar Personas, DMs e Copies personalizados para cada cluster, acesse a versão PRO:</p>
                     <a href="/cluster-intention-dashboard" class="btn" style="display: inline-block; margin-top: 10px; text-decoration: none;">
                         Acessar Dashboard PRO →
@@ -2586,13 +2586,13 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    statusDiv.innerHTML = `✅ Conteudo gerado com sucesso! Tokens usados: ${result.data.total_tokens || 'N/A'}`;
+                    statusDiv.innerHTML = `[OK] Conteudo gerado com sucesso! Tokens usados: ${result.data.total_tokens || 'N/A'}`;
 
                     // Atualizar flags com sucesso
                     contentTypes.forEach(type => {
                         if (flags[type]) {
-                            const icon = type === 'persona' ? '👤' : type === 'dm' ? '✉️' : '📝';
-                            flags[type].innerHTML = `<div style="font-size: 2em; margin-bottom: 8px;">${icon}</div><div style="font-weight: 600; color: var(--aic-white);">✅ ${typeLabels[type]}</div><div style="font-size: 0.8em; color: var(--aic-gray);">Gerado</div>`;
+                            const icon = type === 'persona' ? '' : type === 'dm' ? '' : '';
+                            flags[type].innerHTML = `<div style="font-size: 2em; margin-bottom: 8px;">${icon}</div><div style="font-weight: 600; color: var(--aic-white);">[OK] ${typeLabels[type]}</div><div style="font-size: 0.8em; color: var(--aic-gray);">Gerado</div>`;
                             flags[type].classList.add('flag-completed');
                         }
                     });
@@ -2608,12 +2608,12 @@
                 console.error('Erro ao gerar conteudo demo:', error);
                 statusDiv.style.background = 'rgba(239, 68, 68, 0.1)';
                 statusDiv.style.color = '#ef4444';
-                statusDiv.innerHTML = `❌ Erro: ${error.message}`;
+                statusDiv.innerHTML = `[Erro] Erro: ${error.message}`;
 
                 // Restaurar flags
                 contentTypes.forEach(type => {
                     if (flags[type]) {
-                        const icon = type === 'persona' ? '👤' : type === 'dm' ? '✉️' : '📝';
+                        const icon = type === 'persona' ? '' : type === 'dm' ? '' : '';
                         const label = typeLabels[type];
                         flags[type].innerHTML = `<div style="font-size: 2em; margin-bottom: 8px;">${icon}</div><div style="font-weight: 600; color: var(--aic-white);">Gerar ${label}</div>`;
                     }
@@ -2687,7 +2687,7 @@
                     if (scripts.length > 0) {
                         dmsHtml += `
                             <div style="background: var(--aic-navy); border: 1px solid var(--aic-border); border-radius: 12px; padding: 20px;">
-                                <h4 style="color: var(--aic-green); margin-bottom: 15px;">✉️ ${cluster.cluster_name || 'Cluster ' + (idx+1)}</h4>
+                                <h4 style="color: var(--aic-green); margin-bottom: 15px;"> ${cluster.cluster_name || 'Cluster ' + (idx+1)}</h4>
                                 ${scripts.map((dm, dmIdx) => {
                                     // Suportar formato {abertura, follow_up, proposta} ou {message} ou string
                                     let content = '';
@@ -2721,7 +2721,7 @@
             if (contentTypes.includes('copy') && campaignCopy) {
                 let copiesHtml = `
                     <div style="background: var(--aic-navy); border: 1px solid var(--aic-border); border-radius: 12px; padding: 25px;">
-                        <h4 style="color: var(--aic-green); margin-bottom: 20px;">📝 Copy da Campanha</h4>
+                        <h4 style="color: var(--aic-green); margin-bottom: 20px;"> Copy da Campanha</h4>
                         ${campaignCopy.headline ? `<div style="margin-bottom: 15px;"><strong style="color: var(--aic-green);">Headline:</strong><p style="color: var(--aic-white); font-size: 1.2em; margin-top: 5px;">${campaignCopy.headline}</p></div>` : ''}
                         ${campaignCopy.subheadline ? `<div style="margin-bottom: 15px;"><strong style="color: var(--aic-green);">Subheadline:</strong><p style="color: var(--aic-gray); margin-top: 5px;">${campaignCopy.subheadline}</p></div>` : ''}
                         ${campaignCopy.body ? `<div style="margin-bottom: 15px;"><strong style="color: var(--aic-green);">Body:</strong><p style="color: var(--aic-white); margin-top: 5px; white-space: pre-wrap;">${campaignCopy.body}</p></div>` : ''}

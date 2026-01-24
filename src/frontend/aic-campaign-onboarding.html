@@ -841,7 +841,7 @@
               <div style="font-weight: 600; font-size: 18px; color: var(--aic-white);">@<span id="ig-connected-username"></span></div>
               <div style="color: var(--aic-gray); font-size: 14px;">Instagram Business conectado</div>
             </div>
-            <span style="font-size: 32px; color: var(--aic-green);">✓</span>
+            <span class="ic ic-ok" style="width: 32px; height: 32px;"></span>
           </div>
 
           <button class="btn btn-secondary" onclick="disconnectInstagram()" style="margin-top: 16px; width: 100%;">
@@ -862,47 +862,47 @@
         <div class="status-message" id="instagram-status"></div>
       </div>
 
-      <!-- Section 3: Cliente Contact Info (Destino dos Leads) -->
+      <!-- Section 3: Consultor (quem assume leads quentes) -->
       <div class="section-card" id="section-client-contact">
         <div class="section-header">
           <div class="section-number">3</div>
           <div class="section-title">
-            <h2>Informações de Contato do Cliente</h2>
-            <p>Para onde devemos direcionar os leads quentes (interessados)?</p>
+            <h2>Dados do Consultor</h2>
+            <p>Quem vai assumir as conversas quando o lead estiver pronto para fechar?</p>
           </div>
         </div>
 
         <div class="warning-box" style="margin-bottom: 24px; border-color: var(--aic-green); background: var(--aic-green-subtle);">
-          <div class="warning-title" style="color: var(--aic-green);"><span class="ic ic-phone"></span> Direcionamento de Leads Quentes</div>
-          <p>Quando um lead demonstrar interesse genuíno (responder positivamente às DMs, fazer perguntas sobre seus serviços), <strong>encaminharemos as informações dele para o WhatsApp informado abaixo</strong>.</p>
-          <p style="margin-top: 8px;"><span class="ic ic-warn"></span> <strong>Atenção:</strong> Este número pode ser diferente do número usado para conexão WhatsApp nas etapas anteriores. Aqui você informa para qual número <strong>VOCÊ quer receber os leads</strong>.</p>
+          <div class="warning-title" style="color: var(--aic-green);"><span class="ic ic-phone"></span> Handoff para Consultor</div>
+          <p>Quando o AI Agent identificar um <strong>lead quente</strong> (demonstrou interesse real, fez perguntas sobre preço/serviço), ele enviará uma notificação para o WhatsApp do consultor informando que há um lead pronto para assumir.</p>
+          <p style="margin-top: 8px;"><span class="ic ic-warn"></span> <strong>Importante:</strong> O consultor deve ter acesso ao WhatsApp da campanha (via WhatsApp Web ou app) para assumir a conversa diretamente.</p>
         </div>
 
         <form id="client-contact-form" onsubmit="return saveClientContact(event)">
           <div class="form-group">
-            <label class="form-label" for="client-contact-name">Nome do Responsável pelos Leads *</label>
+            <label class="form-label" for="client-contact-name">Nome do Consultor *</label>
             <input type="text" id="client-contact-name" class="form-input" placeholder="Ex: João Silva" required>
-            <p class="form-hint">Nome da pessoa que vai receber e gerenciar os leads</p>
+            <p class="form-hint">Nome de quem vai assumir e fechar as vendas</p>
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="client-whatsapp-number">WhatsApp para Receber Leads *</label>
+            <label class="form-label" for="client-whatsapp-number">WhatsApp do Consultor *</label>
             <input type="tel" id="client-whatsapp-number" class="form-input" placeholder="+55 11 99999-9999" required pattern="[\+]?[0-9\s\-\(\)]+">
-            <p class="form-hint">Número com DDI e DDD (ex: +55 11 99904-0605). Este é o número que receberá os contatos dos leads interessados.</p>
+            <p class="form-hint">Número que receberá a notificação de lead pronto (formato: +55 11 99999-9999)</p>
           </div>
 
           <div class="warning-box yellow" style="margin-top: 20px;">
-            <div class="warning-title">Como funciona o encaminhamento?</div>
-            <p>1. Nossos agentes IA identificam leads que demonstram interesse<br>
-            2. Validamos se o interesse é genuíno (não é spam ou resposta automática)<br>
-            3. Enviamos para você via WhatsApp: nome do lead, Instagram, contexto da conversa<br>
-            4. Você assume o contato e fecha a venda!</p>
+            <div class="warning-title">Como funciona o handoff?</div>
+            <p>1. AI Agent qualifica o lead via conversa no WhatsApp da campanha<br>
+            2. Quando o lead demonstra interesse real, o AI para de responder automaticamente<br>
+            3. O consultor recebe uma mensagem no WhatsApp dele: "Lead pronto: [Nome] - assumir conversa"<br>
+            4. O consultor acessa o WhatsApp da campanha e continua a conversa pessoalmente</p>
           </div>
 
           <div class="status-message" id="client-contact-status"></div>
 
           <button type="submit" class="btn btn-primary btn-full" id="btn-save-client-contact" style="margin-top: 20px;">
-            Salvar Informações de Contato
+            Salvar Dados do Consultor
           </button>
         </form>
       </div>
@@ -1043,7 +1043,7 @@
               bannerTitle.textContent = 'Briefing Completo';
               bannerDesc.textContent = 'O agente de IA já possui contexto completo sobre seu negócio e diferencial.';
               bannerBtn.textContent = 'Ver Briefing';
-              document.querySelector('.briefing-banner-icon').textContent = '<span class="ic ic-ok"></span>';
+              document.querySelector('.briefing-banner-icon').innerHTML = '<span class="ic ic-ok"></span>';
             } else if (completion >= 30) {
               // In progress
               bannerTitle.textContent = 'Continue o Briefing';
@@ -1495,7 +1495,7 @@
         // Disable form
         document.getElementById('client-contact-name').disabled = true;
         document.getElementById('client-whatsapp-number').disabled = true;
-        btn.textContent = 'Informações Salvas ✓';
+        btn.textContent = 'Informacoes Salvas';
 
       } catch (error) {
         console.error('Erro:', error);

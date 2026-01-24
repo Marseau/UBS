@@ -105,66 +105,69 @@ const SAFETY_CONFIG = {
 | POST | `/api/aic/outreach/add-phone` | Adiciona telefone a um lead |
 | POST | `/api/aic/outreach/opt-out` | Marca lead como opt-out |
 
-### 5. Sistema de Agendamento Automático
+### 5. Sistema de Handoff para Consultor
 
-**Arquivos:**
-- `src/services/google-oauth.service.ts` - Gerenciamento OAuth 2.0
-- `src/services/google-calendar.service.ts` - Integração Google Calendar API
-- `src/services/encryption.service.ts` - Criptografia AES-256-GCM
-- `src/services/meeting-reminders.service.ts` - Lembretes automáticos
-- `src/routes/google-calendar-oauth.routes.ts` - Endpoints OAuth
-
-**Funcionalidades:**
-- **Detecção Inteligente:** AI Agent detecta quando lead está pronto para reunião (interest_score 0.6-0.8)
-- **Busca de Slots:** Consulta Google Calendar e retorna 3 horários disponíveis
-- **Oferta Automatizada:** Envia slots via WhatsApp formatados naturalmente
-- **Confirmação:** Lead escolhe número (1, 2 ou 3) e sistema agenda automaticamente
-- **Criação de Evento:** Insere compromisso no Google Calendar com dados do lead
-- **Convite por Email:** Lead recebe convite do Google Calendar automaticamente
-- **Lembretes:** Sistema envia lembretes 24h e 1h antes via WhatsApp
+O sistema de handoff permite que a IA transfira leads qualificados para consultores humanos de forma transparente.
 
 **Configuração por Campanha:**
-```typescript
-// Tabela: campaign_google_calendar
+```sql
+-- Tabela: cluster_campaigns
 {
-  campaign_id: UUID,
-  google_calendar_id: 'primary',
-  calendar_timezone: 'America/Sao_Paulo',
-  working_hours_start: 9,
-  working_hours_end: 18,
-  working_days: [1,2,3,4,5],  // Seg-Sex
-  slot_duration_minutes: 15,
-  buffer_between_meetings_minutes: 5,
-  max_meetings_per_day: 10,
-  send_calendar_invites: true,
-  send_reminder_24h: true,
-  send_reminder_1h: true
+  consultant_name: 'Marseau',           -- Nome do consultor
+  consultant_phone: '5511999040605'     -- WhatsApp do consultor
 }
 ```
 
-**OAuth 2.0 por Campanha:**
-- Credenciais criptografadas com AES-256-GCM
-- Refresh token automático antes de expirar
-- RLS policies isolam credenciais por campanha
-- UI de onboarding em `/google-calendar-onboarding.html`
+**Comportamento por Canal:**
 
-**Fluxo de Agendamento:**
+| Canal | Handoff | Ação |
+|-------|---------|------|
+| **WhatsApp** | Mesma conversa | Consultor assume o chat diretamente |
+| **Instagram** | Redireciona para WhatsApp | AI envia link wa.me/{phone} |
+
+**Fluxo WhatsApp:**
 ```
-1. Lead demonstra interesse → AI detecta interest_score = 0.7
-2. AI busca 3 slots disponíveis no Google Calendar
-3. AI envia: "📅 Tenho estes horários: 1️⃣ Amanhã 10h 2️⃣ Amanhã 14h30 3️⃣ Sexta 9h"
-4. Lead responde: "2"
-5. Sistema valida escolha → Cria evento no Google Calendar
-6. Sistema envia confirmação + convite por email
-7. Sistema agenda lembretes (24h e 1h antes)
-8. Atualiza conversa: last_topic = 'scheduling_confirmed'
+1. Lead demonstra interesse real (pergunta preço, pede proposta)
+2. AI informa: "Perfeito! Vou passar você para o Marseau que vai continuar seu atendimento aqui mesmo."
+3. AI usa tool notificar_consultor → Envia WhatsApp para celular do consultor
+4. Consultor recebe notificação com contexto da conversa
+5. Consultor assume A MESMA conversa no WhatsApp
 ```
 
-**Segurança:**
-- Tokens OAuth criptografados em repouso (PBKDF2 + AES-256-GCM)
-- Acesso via RLS policies (somente dono da campanha)
-- Revogação de acesso a qualquer momento
-- Logs de consentimento OAuth
+**Fluxo Instagram:**
+```
+1. Lead demonstra interesse real no Instagram DM
+2. AI informa: "Perfeito! Vou passar você para o Marseau que vai continuar seu atendimento pelo WhatsApp."
+3. AI envia: "Pode continuar por aqui: wa.me/5511999040605"
+4. Lead clica no link e inicia conversa no WhatsApp
+5. Consultor recebe notificação e atende no WhatsApp
+```
+
+**Funções SQL:**
+
+| Function | Descrição |
+|----------|-----------|
+| `resolve_campaign_from_contact()` | Retorna `consultant_name` e `consultant_phone` |
+| `resolve_campaign_by_recipient_id()` | Retorna `consultant_name` e `consultant_phone` (Instagram) |
+
+**Tool de Notificação:**
+```
+Tool: notificar_consultor
+- Envia WhatsApp para consultant_phone
+- Inclui nome do lead, campanha e resumo da conversa
+- Marca conversa como handoff_status = 'pending'
+```
+
+**Sinais de Lead Quente (trigger handoff):**
+- Pergunta sobre preço/valor
+- Pede proposta comercial
+- Quer saber como começar
+- Demonstra urgência
+
+**Importante:**
+- AI NÃO menciona agendamento de reunião (consultor fará isso)
+- AI NÃO inventa informações sobre preços
+- Handoff é irreversível na sessão (consultor assume até o fim)
 
 ---
 
@@ -413,6 +416,12 @@ docs/
 
 ## Changelog
 
+- **2026-01-24**: Sistema de Handoff para Consultor
+  - WhatsApp: Consultor assume mesma conversa
+  - Instagram: Redireciona para WhatsApp do consultor via wa.me/
+  - Funções SQL atualizadas: `resolve_campaign_from_contact()`, `resolve_campaign_by_recipient_id()`
+  - Campos `consultant_name` e `consultant_phone` em cluster_campaigns
+  - Removidas referências a agendamento de reunião (consultor fará isso)
 - **2025-12-05**: Separação REPLY (Whapi direto) vs OUTBOUND (Puppeteer fila)
 - **2025-12-05**: Implementação de detecção de números inválidos via popup
 - **2025-12-05**: Sistema de fallback WhatsApp → Instagram DM

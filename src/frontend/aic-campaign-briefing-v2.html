@@ -1028,7 +1028,7 @@
           <div class="form-section-title">Concorrentes</div>
 
           <div class="info-box warning" style="margin-bottom: 16px;">
-            <span class="info-box-icon">⚔️</span>
+            <span class="info-box-icon"><span class="ic ic-warn"></span></span>
             <div class="info-box-content">
               <div class="info-box-title">Por que isso e importante?</div>
               <p>O agente precisa saber quem sao seus concorrentes para posicionar voce como a melhor opcao quando o lead comparar.</p>
@@ -1125,7 +1125,7 @@
         </div>
 
         <div class="info-box">
-          <span class="info-box-icon">📚</span>
+          <span class="info-box-icon"><span class="ic ic-doc"></span></span>
           <div class="info-box-content">
             <div class="info-box-title">Esta etapa e opcional</div>
             <p>Se voce ja enviou um documento na etapa 1 e preencheu os dados da campanha, pode pular esta etapa.</p>
@@ -1440,7 +1440,7 @@
       const statusEl = document.getElementById('ai-extract-status');
 
       btn.disabled = true;
-      btnText.textContent = '<span class="ic ic-load"></span> Analisando documentos...';
+      btnText.innerHTML = '<span class="ic ic-load"></span> Analisando documentos...';
       statusEl.style.display = 'none';
 
       try {
@@ -1453,7 +1453,7 @@
         if (!response.ok || !result.success) {
           showAIExtractStatus('error', result.error || 'Erro ao extrair campos');
           btn.disabled = false;
-          btnText.textContent = '<span class="ic ic-ai"></span> Preencher com IA';
+          btnText.innerHTML = '<span class="ic ic-ai"></span> Preencher com IA';
           return;
         }
 
@@ -1560,7 +1560,7 @@
       }
 
       btn.disabled = false;
-      btnText.textContent = '<span class="ic ic-ai"></span> Preencher com IA';
+      btnText.innerHTML = '<span class="ic ic-ai"></span> Preencher com IA';
     }
 
     /**
@@ -2045,11 +2045,11 @@
       const icons = {
         'briefing': '[B]',
         'landing_page': '<span class="ic ic-web"></span>',
-        'knowledge': '📚',
-        'faq': '❓',
-        'product': '📦',
-        'policy': '📜',
-        'script': '[S]',
+        'knowledge': '<span class="ic ic-doc"></span>',
+        'faq': '<span class="ic ic-doc"></span>',
+        'product': '<span class="ic ic-doc"></span>',
+        'policy': '<span class="ic ic-doc"></span>',
+        'script': '<span class="ic ic-doc"></span>',
         'other': '<span class="ic ic-doc"></span>'
       };
       return icons[type] || '<span class="ic ic-doc"></span>';

@@ -557,10 +557,76 @@ class ClientJourneyService {
   }
 
   /**
-   * Ativar campanha
+   * Ativar campanha - Fluxo completo:
+   * 1. Busca campaign_id da journey
+   * 2. Ativa outreach_enabled e ai_responses_enabled na campanha
+   * 3. Conta total de leads capturados
+   * 4. Popula fila de outreach com TODOS os leads
+   * 5. Muda step para 'campanha_ativa'
    */
   async activateCampaign(journeyId: string): Promise<StepTransitionResult> {
-    return this.setStep(journeyId, 'campanha_ativa');
+    try {
+      // 1. Buscar journey para obter campaign_id
+      const { data: journey, error: journeyError } = await supabaseAdmin
+        .from('aic_client_journeys')
+        .select('campaign_id')
+        .eq('id', journeyId)
+        .single();
+
+      if (journeyError || !journey?.campaign_id) {
+        console.error('[ClientJourney] Erro ao buscar campaign_id:', journeyError);
+        return { success: false, message: 'Campanha não encontrada na jornada' };
+      }
+
+      const campaignId = journey.campaign_id;
+      console.log(`[ClientJourney] Ativando campanha ${campaignId} para journey ${journeyId}`);
+
+      // 2. Ativar outreach_enabled e ai_responses_enabled na campanha
+      const { error: updateError } = await supabaseAdmin
+        .from('cluster_campaigns')
+        .update({
+          outreach_enabled: true,
+          ai_responses_enabled: true
+        })
+        .eq('id', campaignId);
+
+      if (updateError) {
+        console.error('[ClientJourney] Erro ao ativar outreach:', updateError);
+        return { success: false, message: 'Erro ao ativar outreach na campanha' };
+      }
+      console.log(`[ClientJourney] outreach_enabled = true para campanha ${campaignId}`);
+
+      // 3. Buscar total de leads capturados na campanha
+      const { count: totalLeads } = await supabaseAdmin
+        .from('campaign_leads')
+        .select('*', { count: 'exact', head: true })
+        .eq('campaign_id', campaignId);
+
+      const leadsToQueue = totalLeads || 10000; // Fallback alto se não conseguir contar
+      console.log(`[ClientJourney] Total de leads na campanha: ${totalLeads}`);
+
+      // 4. Popular fila de outreach com TODOS os leads da campanha
+      const { data: queueResult, error: queueError } = await supabaseAdmin.rpc('populate_outreach_queue', {
+        p_campaign_id: campaignId,
+        p_limit: leadsToQueue,
+        p_min_fit_score: 0  // Sem filtro de score
+      });
+
+      if (queueError) {
+        console.error('[ClientJourney] Erro ao popular fila de outreach:', queueError);
+        // Não falha a ativação, apenas loga o erro
+        console.warn('[ClientJourney] Campanha ativada mas fila não foi populada automaticamente');
+      } else {
+        console.log(`[ClientJourney] Fila de outreach populada:`, queueResult);
+      }
+
+      // 5. Mudar step para 'campanha_ativa'
+      return this.setStep(journeyId, 'campanha_ativa');
+
+    } catch (error) {
+      console.error('[ClientJourney] Exception ao ativar campanha:', error);
+      return { success: false, message: 'Erro interno ao ativar campanha', error: String(error) };
+    }
   }
 
   /**
