@@ -134,35 +134,81 @@ SELECT * FROM instagram_leads WHERE phone IS NOT NULL; -- DEPRECADO
 
 ## 5. WORKFLOWS N8N
 
-### 5.1 Workflows Ativos (MANTER)
+### 5.1 Workflows OFICIAIS AIC (MANTER ATIVOS)
 
-| Workflow | ID | Funcao |
-|----------|-----|--------|
-| AIC WhatsApp AI Agent v15 | `2WRfnvReul8k7LEu` | Inbound WhatsApp |
-| AIC Instagram AI Agent v15 | `msXwN1pEc23RuZmu` | Inbound Instagram |
-| AIC - Message Queue Worker | `fqrC0gRcJs8R26Xg` | Processa fila de envio |
-| Sub WhatsApp Inbound Lead Handler | `GzjJR2TZvBYARP4z` | Cria leads inbound |
-| Sub Instagram Inbound Lead Handler v18 | `Ew4BuwfuPqgQHQxo` | Cria leads inbound IG |
-| AIC - Tool RAG | `BSUkoynjiYpjjQFT` | Busca conhecimento |
-| AIC - Generate Conversation Embedding | `GU57XIe0UKa4pkD8` | Embeddings |
+| Categoria | Workflow | ID | Status |
+|-----------|----------|-----|--------|
+| **INBOUND WhatsApp** | AIC WhatsApp AI Agent v15 | `2WRfnvReul8k7LEu` | ATIVO |
+| **INBOUND Instagram** | AIC Instagram AI Agent v15 | `msXwN1pEc23RuZmu` | ATIVO |
+| **INBOUND Landing** | AIC WhatsApp NoIG Agent v1 | `jeThTHI2TKrVKZLq` | ATIVO |
+| **OUTBOUND Unified** | Cold Outreach Unified v1 | `H8MHjPU9AHNu1ZhF` | ATIVAR |
+| **FILA** | Message Queue Worker | `fqrC0gRcJs8R26Xg` | ATIVO |
+| **SUB WA** | Sub WhatsApp Inbound Handler v16 | `GzjJR2TZvBYARP4z` | ATIVO |
+| **SUB IG** | Sub Instagram Inbound Handler v18 | `Ew4BuwfuPqgQHQxo` | ATIVO |
+| **RAG** | AIC - Tool RAG | `BSUkoynjiYpjjQFT` | ATIVO |
+| **EMBEDDING** | Generate Conversation Embedding | `GU57XIe0UKa4pkD8` | ATIVO |
+| **RAG Search** | AIC - RAG Search (Multi-Campanha) | `v5EAyxM65y55kiVz` | ATIVO |
 
-### 5.2 Workflows DEPRECADOS (DESATIVAR)
+### 5.2 Workflows OUTBOUND DEPRECADOS (NAO USAR)
 
-| Workflow | ID | Motivo |
-|----------|-----|--------|
-| AIC - Validar Numeros WhatsApp | `9AsVuewEnxkrHins` | `whatsapp_number` ja e confiavel |
-| AIC - Cold Outreach WhatsApp | `9UG4OVwWQ3th4Nx3` | Substituido pelo Unified |
-| AIC - Cold Outreach Unified v1 | `H8MHjPU9AHNu1ZhF` | Usa validacao antiga |
+| Workflow | ID | Motivo | Substituido por |
+|----------|-----|--------|-----------------|
+| AIC - Cold Outreach WhatsApp | `9UG4OVwWQ3th4Nx3` | Usa `phones_normalized` | Cold Outreach Unified v1 |
+| Cold Outreach Instagram DM | `Y4HRHYIqkXADHk8Z` | Hardcoded, antigo | Cold Outreach Unified v1 |
+| Instagram DM Outreach - 2/hora | `7VpgPOzgm1MpUnIc` | Query direta, antigo | Cold Outreach Unified v1 |
+| Outreach Inteligente | `POPWjaDgbwoCNvqX` | API diferente | Cold Outreach Unified v1 |
 
-### 5.3 Workflows UBS (DEPRECADOS)
+### 5.3 Workflows UBS DEPRECADOS (DESATIVAR MANUALMENTE)
 
-Todos os workflows com prefixo UBS, WhatsAppSalon, ou relacionados a multi-tenant booking:
-- `WhatsAppSalonOriginal`
-- `WhatsAppSalon V1`
-- `WABA Inbound -> Booking E2E`
-- `Human-Escalation-Management`
-- `Appointment-Confirmation-Reminders`
-- `Business-Analytics-Metrics`
+> **ACAO NECESSARIA**: Desativar estes workflows manualmente no N8N
+
+| Workflow | ID | Status Atual |
+|----------|-----|--------------|
+| WhatsAppSalonOriginal | `2JiMustQofSujglu` | ATIVO - DESATIVAR |
+| WhatsAppSalon V1 | `GJno3Afkq0jHMwl4` | ATIVO - DESATIVAR |
+| WABA Inbound -> Booking E2E | `emxzi66gOVEkljLL` | ATIVO - DESATIVAR |
+| Human-Escalation-Management | `jMbu2yAcYDh05C5L` | ATIVO - DESATIVAR |
+| Appointment-Confirmation-Reminders | `2QnBgl6WR2nqiYQL` | ATIVO - DESATIVAR |
+| Business-Analytics-Metrics | `0R9D6dNyG8RlXfB6` | ATIVO - DESATIVAR |
+| WharsAppSalonV2 | `CKj2mYnRVWNG0sTh` | ATIVO - DESATIVAR |
+
+### 5.4 Arquitetura de Workflows
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        FLUXO DE WORKFLOWS AIC                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  INBOUND WHATSAPP                                                           │
+│  ┌─────────────────┐    ┌──────────────────────┐    ┌─────────────────┐   │
+│  │ Whapi Webhook   │───>│ WA AI Agent v15      │───>│ Sub WA Handler  │   │
+│  └─────────────────┘    │ (2WRfnvReul8k7LEu)   │    │ (GzjJR2TZvBYARP4z)│ │
+│                         └──────────────────────┘    └─────────────────┘   │
+│                                    │                                        │
+│                                    v                                        │
+│  INBOUND INSTAGRAM               ┌──────────────────────┐                  │
+│  ┌─────────────────┐    ┌───────>│ aic_message_queue    │                  │
+│  │ Meta Webhook    │───>│ IG AI  └──────────────────────┘                  │
+│  └─────────────────┘    │ Agent               │                            │
+│                         │ v15                 v                            │
+│                         │        ┌──────────────────────┐                  │
+│                         │        │ Message Queue Worker │                  │
+│                         │        │ (fqrC0gRcJs8R26Xg)   │                  │
+│                         │        └──────────────────────┘                  │
+│                         │                     │                            │
+│  OUTBOUND               │                     v                            │
+│  ┌─────────────────┐    │        ┌──────────────────────┐                  │
+│  │ Cron Trigger    │───>│        │ Whapi / Meta API     │                  │
+│  └─────────────────┘    │        │ (Envio real)         │                  │
+│         │               │        └──────────────────────┘                  │
+│         v               │                                                   │
+│  ┌─────────────────────────┐                                               │
+│  │ Cold Outreach Unified v1│                                               │
+│  │ (H8MHjPU9AHNu1ZhF)      │                                               │
+│  └─────────────────────────┘                                               │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -405,14 +451,16 @@ TELEGRAM_CHAT_ID=your_chat_id
 ## 12. PROXIMOS PASSOS (ROADMAP)
 
 ### Fase 1: Limpeza (Prioridade Alta)
-- [ ] Atualizar funcoes SQL para usar `whatsapp_number`
-- [ ] Desativar workflows deprecados
-- [ ] Remover referencias a tabelas deprecadas
+- [x] Atualizar funcoes SQL para usar `whatsapp_number` (PARCIAL - workflows corrigidos)
+- [ ] Desativar workflows UBS deprecados (7 workflows - fazer manualmente no N8N)
+- [x] Corrigir Cold Outreach Unified v1 para usar `whatsapp_number`
+- [x] Corrigir Sub WhatsApp Inbound Handler para usar `whatsapp_number`
+- [ ] Ativar Cold Outreach Unified v1 (fazer manualmente no N8N)
 
 ### Fase 2: Consolidacao
 - [ ] Unificar tabelas duplicadas
-- [ ] Criar workflow Outreach Unified v2
-- [ ] Implementar ratio 60/40 configuravel
+- [ ] Implementar ratio 60/40 configuravel no Cold Outreach Unified
+- [ ] Remover workflows outbound redundantes (4 workflows)
 
 ### Fase 3: Escala (10 campanhas)
 - [ ] Dashboard multi-campanha
@@ -421,7 +469,47 @@ TELEGRAM_CHAT_ID=your_chat_id
 
 ---
 
-## 13. CONTATO E SUPORTE
+## 13. HISTORICO DE CORRECOES
+
+### 2026-01-24 - Auditoria e Correcao de Workflows
+
+**Analise Realizada:**
+- Identificados 100 workflows no N8N
+- Categorizados em: INBOUND, OUTBOUND, FILA, SUB-WORKFLOWS, UBS DEPRECADOS
+- Encontrados 7 workflows UBS ainda ativos que devem ser desativados
+- Encontrados 4 workflows outbound redundantes
+
+**Correcoes Aplicadas:**
+
+1. **Cold Outreach Unified v1** (`H8MHjPU9AHNu1ZhF`)
+   - ANTES: Usava `phones_normalized` (DEPRECADO)
+   - DEPOIS: Usa `whatsapp_number` diretamente
+   - Query SQL corrigida no no "Buscar Leads Elegiveis"
+   - No "Verificar WhatsApp Valido" atualizado
+
+2. **Sub WhatsApp Inbound Handler** (`GzjJR2TZvBYARP4z`)
+   - ANTES: Buscava perfil via `phones_normalized` com jsonb_array_elements
+   - DEPOIS: Busca via `whatsapp_number` com LIKE simples
+   - Versao atualizada: v15 → v16
+   - Query SQL no no "Buscar Perfil Lead":
+   ```sql
+   -- ANTES (DEPRECADO)
+   WHERE EXISTS (
+     SELECT 1 FROM jsonb_array_elements(COALESCE(il.phones_normalized, '[]'::jsonb)) AS elem
+     WHERE elem->>'number' LIKE '%...'
+   )
+
+   -- DEPOIS (CORRETO)
+   WHERE il.whatsapp_number LIKE '%...'
+   ```
+
+**Pendencias (Fazer Manualmente no N8N):**
+- Ativar: Cold Outreach Unified v1 (`H8MHjPU9AHNu1ZhF`)
+- Desativar: 7 workflows UBS (ver secao 5.3)
+
+---
+
+## 14. CONTATO E SUPORTE
 
 - **Projeto**: AIC - Applied Intelligence Clustering
 - **Supabase**: `qsdfyffuonywmtnlycri` (Universal Booking System - nome legado)
@@ -429,5 +517,5 @@ TELEGRAM_CHAT_ID=your_chat_id
 
 ---
 
-**Ultima atualizacao**: 2024-12-28
-**Versao**: 2.0 (Foco AIC)
+**Ultima atualizacao**: 2026-01-24
+**Versao**: 2.1 (Auditoria Workflows + Correcoes whatsapp_number)
