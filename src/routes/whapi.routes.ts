@@ -22,9 +22,13 @@ const supabase = createClient(
 // WEBHOOK ENDPOINT
 // ============================================================================
 
+// N8N Webhook URL para encaminhar eventos WhatsApp
+const N8N_WHATSAPP_WEBHOOK_URL = process.env.N8N_WHATSAPP_WEBHOOK_URL || 'https://n8n.ubs.app.br/webhook/whapi-inbound-handler';
+
 /**
  * POST /api/whapi/webhook
  * Recebe eventos do Whapi.cloud (mensagens, status, etc.)
+ * Encaminha para N8N workflow para processamento pelo AI Agent
  */
 router.post('/webhook', async (req: Request, res: Response) => {
   try {
@@ -34,17 +38,39 @@ router.post('/webhook', async (req: Request, res: Response) => {
     console.log('[Whapi Webhook] Evento recebido:', {
       event: payload.event,
       channel: payload.channel_id,
-      timestamp: new Date(payload.timestamp * 1000).toISOString()
+      timestamp: payload.timestamp ? new Date(payload.timestamp * 1000).toISOString() : 'N/A'
     });
 
-    // Processar webhook de forma assíncrona
+    // Responder imediatamente para não bloquear o Whapi
+    res.status(200).json({ received: true });
+
+    // Encaminhar para N8N de forma assíncrona (AI Agent processa lá)
+    try {
+      console.log(`[Whapi Webhook] 🚀 Encaminhando para N8N: ${N8N_WHATSAPP_WEBHOOK_URL}`);
+
+      const n8nResponse = await fetch(N8N_WHATSAPP_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!n8nResponse.ok) {
+        console.error(`[Whapi Webhook] ❌ N8N retornou status ${n8nResponse.status}`);
+      } else {
+        console.log('[Whapi Webhook] ✅ Encaminhado para N8N com sucesso');
+      }
+    } catch (n8nError: any) {
+      console.error('[Whapi Webhook] ❌ Erro ao encaminhar para N8N:', n8nError.message);
+    }
+
+    // Processar localmente também (backup/logging)
     const whapiClient = getWhapiClient();
     whapiClient.processWebhook(payload).catch(err => {
-      console.error('[Whapi Webhook] Erro no processamento:', err);
+      console.error('[Whapi Webhook] Erro no processamento local:', err);
     });
 
-    // Responder imediatamente para não bloquear
-    res.status(200).json({ received: true });
   } catch (error: any) {
     console.error('[Whapi Webhook] Erro:', error);
     res.status(500).json({ error: error.message });
