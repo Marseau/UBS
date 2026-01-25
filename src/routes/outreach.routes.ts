@@ -33,6 +33,7 @@ import {
 import {
   credentialsVault
 } from '../services/credentials-vault.service';
+import * as InstagramAutomationRefactored from '../services/instagram-automation-refactored.service';
 
 const router = express.Router();
 
@@ -2790,6 +2791,89 @@ router.get('/instagram-accounts/:account_id/access-log', async (req, res) => {
     return res.status(500).json({
       success: false,
       message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/outreach/instagram/send-direct
+ * Envia DM Instagram com mensagem já pronta (para uso pelo Message Queue Worker)
+ *
+ * Body:
+ * {
+ *   instagram_username: "@username",
+ *   message_text: "Mensagem a enviar",
+ *   queue_id?: "uuid" (opcional, para atualizar status)
+ * }
+ */
+router.post('/instagram/send-direct', async (req, res) => {
+  try {
+    const { instagram_username, message_text, queue_id } = req.body;
+
+    if (!instagram_username || !message_text) {
+      return res.status(400).json({
+        success: false,
+        error: 'instagram_username e message_text são obrigatórios'
+      });
+    }
+
+    // Remover @ se presente
+    const username = instagram_username.replace(/^@/, '');
+
+    console.log(`📤 [INSTAGRAM-DIRECT] Enviando DM para @${username}...`);
+
+    // Enviar via Puppeteer
+    const result = await InstagramAutomationRefactored.sendDirectMessageShared(
+      username,
+      message_text
+    );
+
+    if (!result.success) {
+      console.error(`❌ Erro ao enviar DM: ${result.error_message}`);
+
+      // Atualizar fila se queue_id fornecido
+      if (queue_id) {
+        await supabase
+          .from('aic_message_queue')
+          .update({
+            status: 'failed',
+            error_message: result.error_message,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', queue_id);
+      }
+
+      return res.status(400).json({
+        success: false,
+        error: result.error_message
+      });
+    }
+
+    console.log(`✅ DM enviado para @${username}`);
+
+    // Atualizar fila se queue_id fornecido
+    if (queue_id) {
+      await supabase
+        .from('aic_message_queue')
+        .update({
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', queue_id);
+    }
+
+    return res.json({
+      success: true,
+      sent_at: result.sent_at,
+      username: username
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro em /instagram/send-direct:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });

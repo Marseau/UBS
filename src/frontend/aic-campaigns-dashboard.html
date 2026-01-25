@@ -233,6 +233,10 @@
       background: rgba(148, 163, 184, 0.1);
       color: var(--aic-gray);
     }
+    .campaign-status.test {
+      background: var(--aic-blue-subtle);
+      color: var(--aic-blue);
+    }
     .status-dot {
       width: 6px;
       height: 6px;
@@ -401,6 +405,19 @@
     .btn-toggle.pause:hover {
       background: var(--aic-yellow);
       color: var(--aic-navy);
+    }
+    .btn-toggle.test {
+      border-color: var(--aic-blue);
+      color: var(--aic-blue);
+    }
+    .btn-toggle.test:hover {
+      background: var(--aic-blue);
+      color: var(--aic-white);
+    }
+    .btn-toggle.test.active {
+      background: var(--aic-blue);
+      border-color: var(--aic-blue);
+      color: var(--aic-white);
     }
 
     /* Mini Chart */
@@ -626,6 +643,7 @@
         <div class="filter-tabs">
           <button class="filter-tab active" data-filter="all">Todas</button>
           <button class="filter-tab" data-filter="active">Ativas</button>
+          <button class="filter-tab" data-filter="test">Teste</button>
           <button class="filter-tab" data-filter="paused">Pausadas</button>
           <button class="filter-tab" data-filter="draft">Rascunhos</button>
         </div>
@@ -846,6 +864,7 @@
       const statusClass = campaign.status || 'draft';
       const statusLabel = {
         active: 'Ativa',
+        test: 'Teste',
         paused: 'Pausada',
         draft: 'Rascunho'
       }[statusClass] || 'Rascunho';
@@ -891,12 +910,17 @@
           <!-- Status Toggle -->
           <div class="status-toggle">
             <button class="btn-toggle ${statusClass === 'active' ? 'active' : ''}"
-                    onclick="toggleCampaignStatus('${campaign.id}', 'active')"
+                    onclick="toggleCampaignStatus('${campaign.id}', 'active', event)"
                     ${statusClass === 'active' ? 'disabled' : ''}>
               Ativar
             </button>
+            <button class="btn-toggle test ${statusClass === 'test' ? 'active' : ''}"
+                    onclick="toggleCampaignStatus('${campaign.id}', 'test', event)"
+                    ${statusClass === 'test' ? 'disabled' : ''}>
+              Teste
+            </button>
             <button class="btn-toggle pause ${statusClass === 'paused' ? 'active' : ''}"
-                    onclick="toggleCampaignStatus('${campaign.id}', 'paused')"
+                    onclick="toggleCampaignStatus('${campaign.id}', 'paused', event)"
                     ${statusClass === 'paused' ? 'disabled' : ''}>
               Pausar
             </button>
@@ -986,9 +1010,14 @@
 
     // Render empty state
     function renderEmptyState() {
-      const message = currentFilter === 'all'
-        ? 'Nenhuma campanha encontrada'
-        : `Nenhuma campanha ${currentFilter === 'active' ? 'ativa' : currentFilter === 'paused' ? 'pausada' : 'em rascunho'}`;
+      const filterMessages = {
+        all: 'Nenhuma campanha encontrada',
+        active: 'Nenhuma campanha ativa',
+        test: 'Nenhuma campanha em modo teste',
+        paused: 'Nenhuma campanha pausada',
+        draft: 'Nenhuma campanha em rascunho'
+      };
+      const message = filterMessages[currentFilter] || 'Nenhuma campanha encontrada';
 
       return `
         <div class="empty-state">
@@ -1035,7 +1064,12 @@
     // STATUS TOGGLE FUNCTION
     // ============================================================================
 
-    async function toggleCampaignStatus(campaignId, newStatus) {
+    async function toggleCampaignStatus(campaignId, newStatus, event) {
+      // Prevent click from propagating to card (which navigates)
+      if (event) {
+        event.stopPropagation();
+      }
+
       try {
         const response = await fetch(`/api/campaigns/${campaignId}/status`, {
           method: 'PATCH',
@@ -1057,7 +1091,13 @@
         renderCampaigns();
 
         // Show feedback
-        const statusLabel = newStatus === 'active' ? 'ativada' : 'pausada';
+        const statusLabels = {
+          active: 'ativada',
+          test: 'em modo teste',
+          paused: 'pausada',
+          draft: 'em rascunho'
+        };
+        const statusLabel = statusLabels[newStatus] || newStatus;
         console.log(`Campanha ${statusLabel} com sucesso`);
       } catch (error) {
         console.error('[Toggle Status] Error:', error);

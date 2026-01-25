@@ -125,18 +125,29 @@ O sistema de handoff permite que a IA transfira leads qualificados para consulto
 | **WhatsApp** | Mesma conversa | Consultor assume o chat diretamente |
 | **Instagram** | Redireciona para WhatsApp | AI envia link wa.me/{phone} |
 
-**Fluxo WhatsApp:**
+**Quando Lead Pergunta Preço (AI responde):**
 ```
-1. Lead demonstra interesse real (pergunta preço, pede proposta)
+1. Lead pergunta sobre preço/valor
+2. AI RESPONDE com:
+   - Preço real (do briefing/landing page)
+   - Argumentação de valor (retorno vs investimento)
+   - Destaca ofertas/oportunidades se houver
+3. AI aguarda reação do lead
+4. Se lead continuar interessado → Lead Quente → Handoff
+```
+
+**Fluxo WhatsApp (Handoff):**
+```
+1. Lead demonstra interesse APÓS saber o preço
 2. AI informa: "Perfeito! Vou passar você para o Marseau que vai continuar seu atendimento aqui mesmo."
 3. AI usa tool notificar_consultor → Envia WhatsApp para celular do consultor
 4. Consultor recebe notificação com contexto da conversa
 5. Consultor assume A MESMA conversa no WhatsApp
 ```
 
-**Fluxo Instagram:**
+**Fluxo Instagram (Handoff):**
 ```
-1. Lead demonstra interesse real no Instagram DM
+1. Lead demonstra interesse APÓS saber o preço no Instagram DM
 2. AI informa: "Perfeito! Vou passar você para o Marseau que vai continuar seu atendimento pelo WhatsApp."
 3. AI envia: "Pode continuar por aqui: wa.me/5511999040605"
 4. Lead clica no link e inicia conversa no WhatsApp
@@ -159,14 +170,21 @@ Tool: notificar_consultor
 ```
 
 **Sinais de Lead Quente (trigger handoff):**
-- Pergunta sobre preço/valor
-- Pede proposta comercial
-- Quer saber como começar
-- Demonstra urgência
+- Continua interessado APÓS saber o preço
+- Quer saber como começar/contratar APÓS o preço
+- Pede proposta formal APÓS o preço
+- Demonstra urgência para fechar
+
+**NÃO são sinais de lead quente (AI deve responder):**
+- Perguntar preço/valor (AI responde com preço + argumentação)
+- Perguntas sobre funcionalidades (AI responde)
+- Dúvidas sobre o serviço (AI responde)
 
 **Importante:**
+- AI DEVE informar preços (do briefing da campanha)
+- AI argumenta valor e destaca ofertas
 - AI NÃO menciona agendamento de reunião (consultor fará isso)
-- AI NÃO inventa informações sobre preços
+- Handoff só após lead demonstrar interesse PÓS-PREÇO
 - Handoff é irreversível na sessão (consultor assume até o fim)
 
 ---

@@ -1843,6 +1843,7 @@ router.get('/aic/my-campaigns', optionalAuthAIC, async (req: AuthenticatedReques
         id,
         campaign_name,
         project_id,
+        status,
         pipeline_status,
         onboarding_status,
         nicho_principal,
@@ -1911,12 +1912,28 @@ router.get('/aic/my-campaigns', optionalAuthAIC, async (req: AuthenticatedReques
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-+|-+$/g, '');
 
+        // Normalizar status para o frontend
+        // Prioridade: usar a nova coluna 'status' se existir, senão derivar de pipeline_status
+        const normalizeStatus = (status: string | null, pipelineStatus: string | null): string => {
+          // Se temos a nova coluna status, usar diretamente
+          if (status && ['draft', 'test', 'active', 'paused'].includes(status)) {
+            return status;
+          }
+          // Fallback para derivar de pipeline_status (legado)
+          if (!pipelineStatus) return 'draft';
+          const activeStatuses = ['active', 'outreach_in_progress', 'ready_for_outreach', 'completed'];
+          const pausedStatuses = ['paused', 'on_hold'];
+          if (activeStatuses.includes(pipelineStatus)) return 'active';
+          if (pausedStatuses.includes(pipelineStatus)) return 'paused';
+          return 'draft';
+        };
+
         return {
           id: campaign.id,
           campaign_name: campaign.campaign_name,
           client_name: clientName,
           project_id: campaign.project_id,
-          status: campaign.pipeline_status || 'draft',
+          status: normalizeStatus((campaign as any).status, campaign.pipeline_status),
           onboarding_status: campaign.onboarding_status || 'pending',
           nicho: campaign.nicho_principal || 'A definir',
           outreach_enabled: campaign.outreach_enabled || false,
@@ -2199,7 +2216,13 @@ router.post('/campaigns/create', optionalAuthAIC, async (req: AuthenticatedReque
 
 /**
  * PATCH /api/campaigns/:id/status
- * Atualiza o status de uma campanha AIC (active/paused/draft)
+ * Atualiza o status de uma campanha AIC (active/test/paused/draft)
+ *
+ * Status disponíveis:
+ * - draft: Campanha em rascunho, não processa mensagens
+ * - test: Modo teste - redireciona mensagens para contas de teste hardcoded
+ * - active: Campanha ativa em produção
+ * - paused: Campanha pausada temporariamente
  */
 router.patch('/campaigns/:id/status', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -2211,17 +2234,22 @@ router.patch('/campaigns/:id/status', async (req: Request, res: Response): Promi
       return;
     }
 
-    if (!status || !['active', 'paused', 'draft'].includes(status)) {
-      res.status(400).json({ error: 'Valid status is required (active, paused, draft)' });
+    const validStatuses = ['active', 'test', 'paused', 'draft'];
+    if (!status || !validStatuses.includes(status)) {
+      res.status(400).json({ error: `Valid status is required: ${validStatuses.join(', ')}` });
       return;
     }
 
-    // Update campaign status using correct AIC field
+    // Update campaign status using the new unified status column
+    // - status: new enum column (draft, test, active, paused)
+    // - pipeline_status: legacy field (kept for backwards compatibility)
+    // - outreach_enabled: derived from status (active or test)
     const { data: campaign, error } = await supabase
       .from('cluster_campaigns')
       .update({
-        pipeline_status: status,
-        outreach_enabled: status === 'active',
+        status: status,
+        pipeline_status: status === 'test' ? 'active' : status, // test maps to active for legacy
+        outreach_enabled: status === 'active' || status === 'test',
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
@@ -2234,12 +2262,19 @@ router.patch('/campaigns/:id/status', async (req: Request, res: Response): Promi
       return;
     }
 
-    console.log(`[Update Status] Campaign ${id} -> ${status}`);
+    const statusLabels: Record<string, string> = {
+      active: 'ativa',
+      test: 'em modo teste',
+      paused: 'pausada',
+      draft: 'em rascunho'
+    };
+    console.log(`[Update Status] Campaign ${id} -> ${status} (${statusLabels[status]})`);
 
     res.json({
       success: true,
       campaign: campaign,
-      message: `Campaign status updated to ${status}`
+      message: `Campaign status updated to ${status}`,
+      test_mode: status === 'test'
     });
   } catch (error: any) {
     console.error('[Update Status] Error:', error);
