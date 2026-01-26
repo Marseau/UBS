@@ -7,7 +7,7 @@
   // =====================================================
   // CONFIGURAÇÃO DA CAMPANHA
   // =====================================================
-  const CAMPAIGN_ID = window.AIC_CAMPAIGN_ID || 'e14454d3-9c58-4607-9592-a590a5c807c7';
+  const CAMPAIGN_ID = window.AIC_CAMPAIGN_ID || 'fc171ccf-db60-4e1c-9d61-118458a48712';
   const SESSION_STORAGE_KEY = 'aic-session-uuid';
   const CONSENT_STORAGE_KEY = 'aic-tracking-consent';
 
