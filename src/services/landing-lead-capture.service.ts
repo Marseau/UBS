@@ -147,7 +147,7 @@ export class LandingLeadCaptureService {
         }
 
         // Disparar pipeline completo via N8N (scraping + enrichment + url scrape + embeddings)
-        fetch('http://192.168.15.5:3005/webhook/new-lead-pipeline', {
+        fetch('https://n8n.ubs.app.br/webhook/new-lead-pipeline', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username })
