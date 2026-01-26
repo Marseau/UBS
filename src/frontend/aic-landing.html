@@ -2079,9 +2079,24 @@
       // =====================================================
       // CONFIGURAÇÃO DA CAMPANHA
       // =====================================================
-      const CAMPAIGN_ID = 'fc171ccf-db60-4e1c-9d61-118458a48712'; // AIC - Teste de Validação
+      const DEFAULT_CAMPAIGN_SLUG = 'aic-teste-de-validacao';
+      let CAMPAIGN_ID = null; // Será carregado dinamicamente
       const API_ENDPOINT = '/api/aic/outreach/landing-page-click';
       const LEAD_DATA_KEY = 'aic-lead-data';
+
+      // Carregar campanha pelo slug
+      async function loadCampaign() {
+        try {
+          const response = await fetch(`/api/campaign/${DEFAULT_CAMPAIGN_SLUG}`);
+          if (!response.ok) throw new Error('Campaign not found');
+          const data = await response.json();
+          CAMPAIGN_ID = data.campaign?.id || data.id;
+          console.log(`[AIC] Campanha carregada: ${CAMPAIGN_ID}`);
+        } catch (err) {
+          console.error('[AIC] Erro ao carregar campanha:', err);
+        }
+      }
+      loadCampaign();
 
       // =====================================================
       // UTILITÁRIOS
@@ -2252,6 +2267,15 @@
           if (!name || !email || !phone) {
             alert('Por favor, preencha todos os campos obrigatórios');
             return;
+          }
+
+          if (!CAMPAIGN_ID) {
+            console.error('[AIC] Campanha não carregada, tentando novamente...');
+            await loadCampaign();
+            if (!CAMPAIGN_ID) {
+              alert('Erro ao carregar campanha. Tente novamente.');
+              return;
+            }
           }
 
           // Desabilitar botão durante processamento

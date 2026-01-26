@@ -3245,7 +3245,8 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
  *   "username": "perfil_alvo",
  *   "target_segment": "coworking" (opcional),
  *   "engagement_data": { "commented": true, ... } (opcional),
- *   "force": true (opcional - processa mesmo se lead já existe)
+ *   "force": true (opcional - processa mesmo se lead já existe),
+ *   "source": "landing" (opcional - pula validação de idioma/score se lead veio da LP)
  * }
  *
  * Response:
@@ -3482,7 +3483,10 @@ router.post('/scrape-input-newusers', async (req: Request, res: Response) => {
       const activityScore = calculateActivityScore(profile);
       console.log(`   📊 Activity Score: ${activityScore.score}/100`);
 
-      if (!activityScore.isActive) {
+      // Skip validation se source='landing' (lead nos procurou)
+      const skipValidation = req.body.source === 'landing';
+
+      if (!activityScore.isActive && !skipValidation) {
         console.log(`   🚫 REJEITADO: Activity score ${activityScore.score} < 50`);
         await cleanup();
         return res.status(200).json({
@@ -3492,13 +3496,17 @@ router.post('/scrape-input-newusers', async (req: Request, res: Response) => {
         });
       }
 
+      if (skipValidation && !activityScore.isActive) {
+        console.log(`   ⚡ Activity score ${activityScore.score} < 50, mas source=landing - APROVADO`);
+      }
+
       // ========================================
       // 5. VALIDAÇÃO IDIOMA
       // ========================================
       const languageDetection = await detectLanguage(profile.bio || '', username);
       console.log(`   🌍 Idioma: ${languageDetection.language}`);
 
-      if (languageDetection.language !== 'pt') {
+      if (languageDetection.language !== 'pt' && !skipValidation) {
         console.log(`   🚫 REJEITADO: Idioma ${languageDetection.language} != pt`);
         await cleanup();
         return res.status(200).json({
@@ -3506,6 +3514,10 @@ router.post('/scrape-input-newusers', async (req: Request, res: Response) => {
           action: 'skipped_language',
           reason: `Idioma ${languageDetection.language || 'unknown'} != pt`
         });
+      }
+
+      if (skipValidation && languageDetection.language !== 'pt') {
+        console.log(`   ⚡ Idioma ${languageDetection.language} != pt, mas source=landing - APROVADO`);
       }
 
       // ========================================
