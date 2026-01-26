@@ -1446,9 +1446,6 @@
     }
   </style>
 
-  <!-- Google Identity Services -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-
   <!-- Supabase Auth - Pre-cadastro -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -1475,7 +1472,7 @@
      * @param {string} name - Nome completo
      * @param {string} email - Email
      * @param {string} phone - Telefone/WhatsApp
-     * @param {string} origin - Origem: 'aic' ou 'google'
+     * @param {string} origin - Origem do lead (sempre 'aic')
      * @returns {Promise<{success: boolean, userId?: string, error?: string}>}
      */
     async function createAICPreRegistration(name, email, phone, origin = 'aic') {
@@ -1531,7 +1528,7 @@
               phone: phone,
               tipo_user: 'client',
               account_type: 'real',
-              user_origin: origin, // 'aic' ou 'google'
+              user_origin: origin,
               user_app: 'aic',
               created_at: new Date().toISOString()
             }, { onConflict: 'id' });
@@ -2124,7 +2121,6 @@
       let modal, form, cancelBtn;
       let pendingAction = null;
       let pendingElement = null;
-      let isGoogleSignIn = false; // Flag para rastrear origem Google
 
       function getStoredLeadData() {
         try {
@@ -2157,17 +2153,6 @@
         modal.classList.remove('show');
         document.body.style.overflow = '';
         form.reset();
-
-        // Resetar estado do modal
-        document.getElementById('googleSignInContainer').style.display = 'flex';
-        form.style.display = 'none';
-
-        // Remover readonly dos campos
-        document.getElementById('leadName').readOnly = false;
-        document.getElementById('leadEmail').readOnly = false;
-
-        // Resetar flag Google
-        isGoogleSignIn = false;
       }
 
       function sendTracking(leadData, ctaName, ctaHref) {
@@ -2247,47 +2232,6 @@
       }
 
       // =====================================================
-      // GOOGLE SIGN-IN HANDLER
-      // =====================================================
-      window.handleGoogleSignIn = function(response) {
-        try {
-          // Decodificar JWT token
-          const payload = JSON.parse(atob(response.credential.split('.')[1]));
-
-          const googleData = {
-            name: payload.name,
-            email: payload.email,
-            picture: payload.picture,
-            sub: payload.sub
-          };
-
-          console.log('[Google Sign-In] Dados capturados:', googleData.name, googleData.email);
-
-          // Marcar como login via Google
-          isGoogleSignIn = true;
-
-          // Ocultar botão Google e mostrar apenas campo de telefone
-          const googleContainer = document.getElementById('googleSignInContainer');
-          googleContainer.style.display = 'none';
-
-          form.style.display = 'flex';
-
-          // Preencher nome e email (read-only)
-          document.getElementById('leadName').value = googleData.name;
-          document.getElementById('leadName').readOnly = true;
-          document.getElementById('leadEmail').value = googleData.email;
-          document.getElementById('leadEmail').readOnly = true;
-
-          // Focar no campo de telefone
-          document.getElementById('leadPhone').focus();
-
-        } catch (error) {
-          console.error('[Google Sign-In] Erro ao processar:', error);
-          alert('Erro ao conectar com Google. Tente preencher manualmente.');
-        }
-      };
-
-      // =====================================================
       // INICIALIZAÇÃO
       // =====================================================
       function init() {
@@ -2295,14 +2239,6 @@
         modal = document.getElementById('leadCaptureModal');
         form = document.getElementById('leadCaptureForm');
         cancelBtn = document.getElementById('modalCancelBtn');
-
-        // Botão preencher manualmente
-        const manualFormBtn = document.getElementById('manualFormBtn');
-        manualFormBtn.addEventListener('click', function() {
-          document.getElementById('googleSignInContainer').style.display = 'none';
-          form.style.display = 'flex';
-          document.getElementById('leadName').focus();
-        });
 
         // Event listener do formulário
         form.addEventListener('submit', async function(e) {
@@ -2357,8 +2293,8 @@
             if (result.success && result.redirectUrl) {
               console.log('[AIC Lead Capture] Lead capturado:', result.isExistingLead ? 'existente' : 'novo');
 
-              // Determinar origem para tracking
-              const leadOrigin = isGoogleSignIn ? 'google' : 'aic';
+              // Origem do lead
+              const leadOrigin = 'aic';
 
               // Criar pre-cadastro no Supabase Auth (não bloqueia fluxo)
               createAICPreRegistration(name, email, phone, leadOrigin)
@@ -2465,34 +2401,8 @@
         <p>Identifique-se para continuar</p>
       </div>
 
-      <!-- Botão Google Sign-In -->
-      <div id="googleSignInContainer" class="google-signin-container">
-        <div id="g_id_onload"
-             data-client_id="1082639244907-chsj9dgjp39oei8r46pab3d2o5muhpal.apps.googleusercontent.com"
-             data-callback="handleGoogleSignIn"
-             data-auto_prompt="false">
-        </div>
-        <div class="g_id_signin"
-             data-type="standard"
-             data-size="large"
-             data-theme="outline"
-             data-text="continue_with"
-             data-shape="rectangular"
-             data-logo_alignment="left"
-             data-width="400">
-        </div>
-
-        <div class="divider">
-          <span>ou</span>
-        </div>
-
-        <button type="button" id="manualFormBtn" class="btn-manual">
-          Preencher manualmente
-        </button>
-      </div>
-
-      <!-- Formulário Manual (inicialmente oculto) -->
-      <form id="leadCaptureForm" class="lead-form" style="display: none;">
+      <!-- Formulário de Captura -->
+      <form id="leadCaptureForm" class="lead-form">
         <div class="form-group">
           <label for="leadName">Nome Completo *</label>
           <input
@@ -2596,56 +2506,6 @@
     .lead-modal-header p {
       color: var(--aic-gray);
       font-size: 16px;
-    }
-
-    .google-signin-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 20px;
-    }
-
-    .divider {
-      width: 100%;
-      text-align: center;
-      position: relative;
-      margin: 10px 0;
-    }
-
-    .divider::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 50%;
-      width: 100%;
-      height: 1px;
-      background: var(--aic-border);
-    }
-
-    .divider span {
-      position: relative;
-      background: var(--aic-navy);
-      padding: 0 15px;
-      color: var(--aic-gray);
-      font-size: 14px;
-    }
-
-    .btn-manual {
-      width: 100%;
-      padding: 16px 32px;
-      border-radius: 12px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      border: 1px solid var(--aic-border);
-      background: transparent;
-      color: var(--aic-white);
-    }
-
-    .btn-manual:hover {
-      border-color: var(--aic-green);
-      background: var(--aic-green-subtle);
     }
 
     .lead-form {
