@@ -508,8 +508,8 @@ router.post('/noig/convert', async (req: Request, res: Response): Promise<void> 
 
     console.log(`[Landing Lead Route] Lead noig ${lead_id} convertido -> instagram_lead ${newLeadId}`);
 
-    // Disparar pipeline de enriquecimento para o novo lead
-    fetch('https://n8n.ubs.app.br/webhook/new-lead-pipeline', {
+    // Disparar pipeline de enriquecimento para o novo lead (IP interno do N8N)
+    fetch('http://192.168.15.6:5678/webhook/new-lead-pipeline', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username })

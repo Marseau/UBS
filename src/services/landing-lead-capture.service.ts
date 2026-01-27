@@ -147,11 +147,10 @@ export class LandingLeadCaptureService {
         }
 
         // Disparar pipeline completo via N8N (scraping + enrichment + url scrape + embeddings)
-        fetch('https://n8n.ubs.app.br/webhook/new-lead-pipeline', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username })
-        }).catch(err => console.error(`[LandingLeadCapture] Erro ao disparar pipeline N8N:`, err.message));
+        console.log(`[LandingLeadCapture] Disparando pipeline N8N para @${username}...`);
+        this.triggerPipeline(username).catch((err: Error) =>
+          console.error(`[LandingLeadCapture] Pipeline async error:`, err.message)
+        );
       } else {
         // Atualizar dados de contato se necessário
         await this.updateInstagramLeadContact(instagramLead.id, { email, whatsappNumber: whatsapp, fullName: name });
@@ -449,6 +448,35 @@ export class LandingLeadCaptureService {
    */
   private buildWhatsappMessageWithoutIG(name: string, campaignName: string): string {
     return `Olá! Sou ${name}, conheci a ${campaignName} pela landing page e gostaria de saber mais!`;
+  }
+
+  /**
+   * Dispara pipeline de enriquecimento no N8N
+   * Usa domínio público n8n.ubs.app.br (igual whapi.routes.ts)
+   */
+  private async triggerPipeline(username: string): Promise<void> {
+    const webhookUrl = 'https://n8n.stratfin.tec.br/webhook/new-lead-pipeline';
+    const payload = JSON.stringify({ username });
+
+    console.log(`[LandingLeadCapture] Chamando webhook: ${webhookUrl}`);
+    console.log(`[LandingLeadCapture] Payload: ${payload}`);
+
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      console.log(`[LandingLeadCapture] Pipeline disparado com sucesso para @${username}`);
+    } catch (err: any) {
+      console.error(`[LandingLeadCapture] Erro ao chamar webhook:`, err.message);
+      throw err;
+    }
   }
 }
 

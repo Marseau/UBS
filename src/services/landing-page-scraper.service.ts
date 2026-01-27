@@ -10,6 +10,12 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { campaignDocumentProcessor } from './campaign-document-processor.service';
+import { createClient } from '@supabase/supabase-js';
+
+// Supabase client para atualizar briefing
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // =====================================================
 // TIPOS
@@ -87,6 +93,11 @@ export class LandingPageScraperService {
       }
 
       console.log(`[LandingPageScraper] Landing page embedada: ${result.chunksCreated} chunks`);
+
+      // 5. NOVO: Extrair campos do briefing automaticamente (em background)
+      this.autoExtractBriefingFields(campaignId).catch(err => {
+        console.error('[LandingPageScraper] Erro ao extrair briefing (background):', err.message);
+      });
 
       return {
         success: true,
@@ -280,6 +291,119 @@ export class LandingPageScraperService {
       ctas: ctas.slice(0, 10),
       fullText
     };
+  }
+
+  /**
+   * Extrai campos do briefing via IA e preenche automaticamente
+   * Apenas preenche campos que estão NULL (não sobrescreve dados manuais)
+   */
+  private async autoExtractBriefingFields(campaignId: string): Promise<void> {
+    try {
+      console.log(`[LandingPageScraper] Extraindo campos do briefing para campanha: ${campaignId}`);
+
+      // 1. Verificar se briefing existe e quais campos estão vazios
+      const { data: existingBriefing, error: fetchError } = await supabase
+        .from('campaign_briefing')
+        .select('*')
+        .eq('campaign_id', campaignId)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError;
+      }
+
+      // 2. Extrair campos via IA
+      const extractResult = await campaignDocumentProcessor.extractBriefingFields(campaignId);
+
+      if (!extractResult.success || !extractResult.fields) {
+        console.log(`[LandingPageScraper] Nenhum campo extraido para campanha: ${campaignId}`);
+        return;
+      }
+
+      const extracted = extractResult.fields;
+      console.log(`[LandingPageScraper] Campos extraidos:`, Object.keys(extracted));
+
+      // 3. Mapear campos extraidos para campos do campaign_briefing
+      // Apenas campos que estão NULL serão atualizados
+      const fieldsToUpdate: Record<string, any> = {};
+
+      // Mapeamento: campo extraído -> campo do briefing
+      const fieldMapping: Record<string, string> = {
+        'campaign_offer': 'campaign_offer',
+        'target_audience': 'icp_description',
+        'main_pain': 'icp_main_pain',
+        'why_choose_us': 'why_choose_us',
+        'call_to_action': 'call_to_action',
+        'tone_of_voice': 'tone_of_voice',
+        'price_range': 'price_range',
+        'product_name': 'product_service_name',
+        'product_description': 'product_service_description',
+        'main_differentiator': 'main_differentiator',
+        'company_name': 'company_name',
+      };
+
+      // Para cada campo extraído, verificar se deve atualizar
+      for (const [extractedKey, briefingKey] of Object.entries(fieldMapping)) {
+        const extractedValue = (extracted as any)[extractedKey];
+        const existingValue = existingBriefing?.[briefingKey];
+
+        // Só atualizar se: tem valor extraído E campo está vazio no briefing
+        if (extractedValue && (!existingValue || existingValue === '')) {
+          fieldsToUpdate[briefingKey] = extractedValue;
+        }
+      }
+
+      // Campos de array
+      if (extracted.objections && extracted.objections.length > 0) {
+        const existingObjections = existingBriefing?.icp_objections;
+        if (!existingObjections || existingObjections.length === 0) {
+          fieldsToUpdate['icp_objections'] = extracted.objections;
+        }
+      }
+
+      if (extracted.competitors && extracted.competitors.length > 0) {
+        const existingCompetitors = existingBriefing?.competitors_names;
+        if (!existingCompetitors || existingCompetitors.length === 0) {
+          fieldsToUpdate['competitors_names'] = extracted.competitors;
+        }
+      }
+
+      // 4. Se há campos para atualizar, fazer update
+      if (Object.keys(fieldsToUpdate).length === 0) {
+        console.log(`[LandingPageScraper] Nenhum campo para atualizar (todos já preenchidos)`);
+        return;
+      }
+
+      if (existingBriefing) {
+        // Update
+        const { error: updateError } = await supabase
+          .from('campaign_briefing')
+          .update({
+            ...fieldsToUpdate,
+            updated_at: new Date().toISOString()
+          })
+          .eq('campaign_id', campaignId);
+
+        if (updateError) throw updateError;
+      } else {
+        // Insert
+        const { error: insertError } = await supabase
+          .from('campaign_briefing')
+          .insert({
+            campaign_id: campaignId,
+            ...fieldsToUpdate,
+            briefing_status: 'draft'
+          });
+
+        if (insertError) throw insertError;
+      }
+
+      console.log(`[LandingPageScraper] Briefing auto-preenchido com ${Object.keys(fieldsToUpdate).length} campos:`, Object.keys(fieldsToUpdate));
+
+    } catch (error: any) {
+      console.error(`[LandingPageScraper] Erro ao auto-preencher briefing:`, error.message);
+      // Não propagar erro - é operação em background
+    }
   }
 
   private formatContent(extracted: ExtractedContent): string {
