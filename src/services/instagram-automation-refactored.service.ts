@@ -1548,6 +1548,115 @@ export async function checkAllNotifications(): Promise<{
 }
 
 /**
+ * Segue um usuário no Instagram
+ * USANDO PÁGINA COMPARTILHADA (não cria browser isolado)
+ *
+ * Usado pelo workflow "Follow After DM" para seguir leads
+ * após envio de DM outbound
+ */
+export async function followUserShared(username: string): Promise<{
+  success: boolean;
+  error_message: string | null;
+  already_following: boolean;
+}> {
+  try {
+    console.log(`\n👥 [FOLLOW] Seguindo @${username}...`);
+
+    // Reutilizar página compartilhada ou criar nova se necessário
+    if (!sharedPage || sharedPage.isClosed()) {
+      console.log('📄 Criando nova página compartilhada...');
+      sharedPage = await createOfficialAuthenticatedPage();
+    } else {
+      console.log('♻️  Reutilizando página compartilhada existente');
+    }
+
+    const page = sharedPage;
+
+    // Navegar para perfil
+    await navigateToProfile(page, username);
+    await humanDelay();
+
+    // Aguardar botões carregarem
+    await page.waitForSelector('button', { timeout: 10000 });
+
+    // Procurar botões para verificar se já segue
+    const buttons = await page.$$('button');
+    let alreadyFollowing = false;
+
+    for (const button of buttons) {
+      const text = await page.evaluate(el => el.textContent, button);
+
+      if (text && (text.includes('Seguindo') || text.includes('Following'))) {
+        alreadyFollowing = true;
+        console.log(`✅ Já está seguindo @${username}`);
+        break;
+      }
+    }
+
+    if (alreadyFollowing) {
+      return {
+        success: true,
+        error_message: null,
+        already_following: true
+      };
+    }
+
+    // Procurar botão Follow/Seguir
+    let foundFollowButton = false;
+    for (const button of buttons) {
+      const text = await page.evaluate(el => el.textContent, button);
+      // Garantir que é "Seguir" e não "Seguindo"
+      if (text && (text === 'Seguir' || text === 'Follow' || text.trim() === 'Seguir' || text.trim() === 'Follow')) {
+        await button.click();
+        foundFollowButton = true;
+        console.log(`   ✅ Clicou no botão Follow`);
+        break;
+      }
+    }
+
+    if (!foundFollowButton) {
+      // Tentar buscar via evaluate (mais robusto)
+      const clicked = await page.evaluate(() => {
+        // @ts-ignore - Código executado no browser context
+        const allButtons = Array.from(document.querySelectorAll('button'));
+        for (const btn of allButtons) {
+          // @ts-ignore
+          const text = btn.textContent?.trim() || '';
+          if (text === 'Seguir' || text === 'Follow') {
+            // @ts-ignore
+            btn.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (!clicked) {
+        throw new Error('Botão de Follow não encontrado');
+      }
+    }
+
+    console.log(`✅ Follow executado em @${username}`);
+    await humanDelay();
+
+    return {
+      success: true,
+      error_message: null,
+      already_following: false
+    };
+
+  } catch (error: any) {
+    console.error(`❌ Erro ao seguir @${username}:`, error.message);
+
+    return {
+      success: false,
+      error_message: error.message,
+      already_following: false
+    };
+  }
+}
+
+/**
  * Deixa de seguir um usuário
  * USANDO PÁGINA COMPARTILHADA (não cria browser isolado)
  */

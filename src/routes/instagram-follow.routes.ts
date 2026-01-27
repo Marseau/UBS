@@ -10,6 +10,8 @@ import {
 } from '../services/instagram-official-session.service';
 import { generatePersonalizedDM } from '../services/instagram-dm-personalization.service';
 import { supabase, supabaseAdmin } from '../config/database';
+import { instagramClientDMService } from '../services/instagram-client-dm.service';
+import { credentialsVault } from '../services/credentials-vault.service';
 
 const router = express.Router();
 
@@ -283,6 +285,605 @@ router.post('/unfollow-lead', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: 'Erro ao aplicar unfollow',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+/**
+ * POST /api/instagram/follow-lead
+ *
+ * Segue um lead no Instagram apos envio de DM outbound
+ * Registra na tabela campaign_instagram_follows para rastreamento
+ * Usado pelo workflow "AIC - Instagram Follow After DM"
+ */
+router.post('/follow-lead', async (req: Request, res: Response) => {
+  try {
+    const {
+      campaign_id,
+      lead_id,
+      username,
+      dm_message_id  // ID da mensagem que originou o follow (opcional)
+    } = req.body;
+
+    if (!campaign_id || !lead_id || !username) {
+      return res.status(400).json({
+        error: 'Campos obrigatorios faltando',
+        required: ['campaign_id', 'lead_id', 'username']
+      });
+    }
+
+    console.log(`\n👥 [FOLLOW-LEAD] Seguindo @${username} para campanha ${campaign_id}...`);
+
+    // Verificar status da campanha - APENAS campanhas ATIVAS podem executar follows
+    const { data: campaign, error: campaignError } = await supabaseAdmin
+      .from('cluster_campaigns')
+      .select('id, campaign_name, status, outreach_enabled')
+      .eq('id', campaign_id)
+      .single();
+
+    if (campaignError || !campaign) {
+      return res.status(404).json({
+        success: false,
+        error: 'Campanha nao encontrada',
+        campaign_id
+      });
+    }
+
+    if (campaign.status !== 'active') {
+      console.log(`   ⚠️ Campanha ${campaign.campaign_name} nao esta ativa (status: ${campaign.status})`);
+      return res.status(400).json({
+        success: false,
+        error: 'Campanha nao esta ativa',
+        campaign_status: campaign.status,
+        message: `Follow nao executado. Campanha deve estar com status 'active' (atual: '${campaign.status}')`
+      });
+    }
+
+    // Buscar conta Instagram da campanha
+    const instagramAccount = await credentialsVault.getAccountByCampaign(campaign_id);
+
+    if (!instagramAccount) {
+      console.error(`   ❌ Campanha ${campaign.campaign_name} nao tem conta Instagram configurada`);
+      return res.status(400).json({
+        success: false,
+        error: 'Campanha sem conta Instagram',
+        message: 'Configure uma conta Instagram para esta campanha antes de executar follows'
+      });
+    }
+
+    console.log(`   📱 Usando conta da campanha: @${instagramAccount.instagramUsername}`);
+
+    // Verificar rate limit
+    const rateLimit = await credentialsVault.checkRateLimit(instagramAccount.id);
+    if (!rateLimit.canFollow) {
+      console.log(`   ⚠️ Rate limit atingido: ${rateLimit.reason}`);
+      return res.status(429).json({
+        success: false,
+        error: 'Rate limit atingido',
+        reason: rateLimit.reason,
+        followsRemainingToday: rateLimit.followsRemainingToday,
+        followsRemainingHour: rateLimit.followsRemainingHour
+      });
+    }
+
+    // Obter sessao da conta da campanha
+    const session = await instagramClientDMService.getOrCreateSession(instagramAccount.id);
+    if (!session) {
+      return res.status(500).json({
+        success: false,
+        error: 'Falha ao criar sessao',
+        message: 'Nao foi possivel criar sessao para conta Instagram da campanha'
+      });
+    }
+
+    const { page } = session;
+
+    // Executar follow via Puppeteer
+    console.log(`   🔍 Navegando para perfil @${username}...`);
+    await page.goto(`https://www.instagram.com/${username}/`, {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    });
+
+    await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));
+
+    // Verificar se ja segue
+    const alreadyFollowing = await page.evaluate(() => {
+      // @ts-ignore
+      const buttons = Array.from(document.querySelectorAll('button'));
+      for (const btn of buttons) {
+        // @ts-ignore
+        const text = btn.textContent?.trim() || '';
+        if (text === 'Seguindo' || text === 'Following' || text === 'Solicitado' || text === 'Requested') {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (alreadyFollowing) {
+      console.log(`   ℹ️ Ja segue @${username}`);
+    } else {
+      // Clicar no botao Follow
+      const followClicked = await page.evaluate(() => {
+        // @ts-ignore
+        const buttons = Array.from(document.querySelectorAll('button'));
+        for (const btn of buttons) {
+          // @ts-ignore
+          const text = btn.textContent?.trim() || '';
+          if (text === 'Seguir' || text === 'Follow') {
+            // @ts-ignore
+            btn.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (!followClicked) {
+        throw new Error('Botao de Follow nao encontrado');
+      }
+
+      await new Promise(r => setTimeout(r, 2000 + Math.random() * 1000));
+      console.log(`   ✅ Follow executado em @${username}`);
+
+      // Incrementar contador de acoes
+      await credentialsVault.incrementAction(instagramAccount.id, 'follow');
+    }
+
+    // Registrar na tabela campaign_instagram_follows usando RPC
+    const { data: followId, error: rpcError } = await supabaseAdmin.rpc('register_instagram_follow', {
+      p_campaign_id: campaign_id,
+      p_lead_id: lead_id,
+      p_instagram_username: username,
+      p_dm_message_id: dm_message_id || null
+    });
+
+    if (rpcError) {
+      console.error(`   ⚠️  Erro ao registrar follow no banco: ${rpcError.message}`);
+    } else {
+      console.log(`   ✅ Follow registrado no banco: ${followId}`);
+    }
+
+    return res.status(200).json({
+      success: true,
+      campaign_id,
+      lead_id,
+      username,
+      action_type: 'follow',
+      already_following: alreadyFollowing,
+      instagram_account: instagramAccount.instagramUsername,
+      follow_record_id: followId || null,
+      executed_at: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao seguir lead:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao seguir lead',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+/**
+ * GET /api/instagram/dms-pending-follow
+ *
+ * Busca DMs Instagram enviados que ainda nao tiveram follow registrado
+ * Usado pelo workflow "AIC - Instagram Follow After DM"
+ */
+router.get('/dms-pending-follow', async (req: Request, res: Response) => {
+  try {
+    const {
+      limit = '3',
+      since_minutes = '30'
+    } = req.query;
+
+    console.log(`\n🔍 [PENDING-FOLLOW] Buscando DMs sem follow registrado...`);
+
+    const { data, error } = await supabaseAdmin.rpc('get_dms_pending_follow', {
+      p_limit: parseInt(limit as string),
+      p_since_minutes: parseInt(since_minutes as string)
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    console.log(`   ✅ Encontrados ${data?.length || 0} DMs pendentes de follow`);
+
+    return res.status(200).json({
+      success: true,
+      total: data?.length || 0,
+      dms: data || []
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar DMs pendentes:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao buscar DMs pendentes de follow',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+/**
+ * GET /api/instagram/campaigns-pending-unfollow
+ *
+ * Lista campanhas com leads elegíveis para unfollow
+ * Usado pelo workflow "AIC - Instagram Nightly Unfollow"
+ */
+router.get('/campaigns-pending-unfollow', async (_req: Request, res: Response) => {
+  try {
+    console.log(`\n🔍 [PENDING-UNFOLLOW] Buscando campanhas com unfollows pendentes...`);
+
+    const { data, error } = await supabaseAdmin.rpc('get_campaigns_with_active_outreach');
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    console.log(`   ✅ Encontradas ${data?.length || 0} campanhas com unfollows pendentes`);
+
+    return res.status(200).json({
+      success: true,
+      total: data?.length || 0,
+      campaigns: data || []
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar campanhas:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao buscar campanhas pendentes de unfollow',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+/**
+ * GET /api/instagram/unfollow-candidates-campaign/:campaign_id
+ *
+ * Busca candidatos para unfollow de uma campanha especifica
+ * Usado pelo workflow "AIC - Instagram Nightly Unfollow"
+ */
+router.get('/unfollow-candidates-campaign/:campaign_id', async (req: Request, res: Response) => {
+  try {
+    const { campaign_id } = req.params;
+    const { limit = '5' } = req.query;
+
+    console.log(`\n🔍 [UNFOLLOW-CANDIDATES] Buscando candidatos para campanha ${campaign_id}...`);
+
+    const { data, error } = await supabaseAdmin.rpc('get_unfollow_candidates', {
+      p_campaign_id: campaign_id,
+      p_limit: parseInt(limit as string)
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    console.log(`   ✅ Encontrados ${data?.length || 0} candidatos para unfollow`);
+
+    return res.status(200).json({
+      success: true,
+      campaign_id,
+      total: data?.length || 0,
+      candidates: data || []
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar candidatos:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao buscar candidatos para unfollow',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+/**
+ * POST /api/instagram/execute-unfollow
+ *
+ * Executa unfollow e registra na tabela campaign_instagram_follows
+ * Usado pelo workflow "AIC - Instagram Nightly Unfollow"
+ */
+router.post('/execute-unfollow', async (req: Request, res: Response) => {
+  try {
+    const {
+      follow_id,  // ID do registro em campaign_instagram_follows
+      lead_id,
+      username,
+      campaign_id,  // Opcional, mas necessario para validacao de status
+      reason = 'no_engagement'
+    } = req.body;
+
+    if (!follow_id || !username) {
+      return res.status(400).json({
+        error: 'Campos obrigatorios faltando',
+        required: ['follow_id', 'username']
+      });
+    }
+
+    console.log(`\n🗑️  [EXECUTE-UNFOLLOW] Aplicando unfollow em @${username}...`);
+
+    // Buscar campaign_id do follow_id se nao fornecido
+    let targetCampaignId = campaign_id;
+    if (!targetCampaignId) {
+      const { data: followRecord } = await supabaseAdmin
+        .from('campaign_instagram_follows')
+        .select('campaign_id')
+        .eq('id', follow_id)
+        .single();
+
+      if (followRecord) {
+        targetCampaignId = followRecord.campaign_id;
+      }
+    }
+
+    if (!targetCampaignId) {
+      return res.status(400).json({
+        success: false,
+        error: 'campaign_id nao encontrado',
+        message: 'Nao foi possivel determinar a campanha para este unfollow'
+      });
+    }
+
+    // Verificar status da campanha - APENAS campanhas ATIVAS podem executar unfollows
+    const { data: campaign } = await supabaseAdmin
+      .from('cluster_campaigns')
+      .select('id, campaign_name, status')
+      .eq('id', targetCampaignId)
+      .single();
+
+    if (!campaign) {
+      return res.status(404).json({
+        success: false,
+        error: 'Campanha nao encontrada',
+        campaign_id: targetCampaignId
+      });
+    }
+
+    if (campaign.status !== 'active') {
+      console.log(`   ⚠️ Campanha ${campaign.campaign_name} nao esta ativa (status: ${campaign.status})`);
+      return res.status(400).json({
+        success: false,
+        error: 'Campanha nao esta ativa',
+        campaign_status: campaign.status,
+        message: `Unfollow nao executado. Campanha deve estar com status 'active' (atual: '${campaign.status}')`
+      });
+    }
+
+    // Buscar conta Instagram da campanha
+    const instagramAccount = await credentialsVault.getAccountByCampaign(targetCampaignId);
+
+    if (!instagramAccount) {
+      console.error(`   ❌ Campanha ${campaign.campaign_name} nao tem conta Instagram configurada`);
+      return res.status(400).json({
+        success: false,
+        error: 'Campanha sem conta Instagram',
+        message: 'Configure uma conta Instagram para esta campanha antes de executar unfollows'
+      });
+    }
+
+    console.log(`   📱 Usando conta da campanha: @${instagramAccount.instagramUsername}`);
+
+    // Verificar rate limit
+    const rateLimit = await credentialsVault.checkRateLimit(instagramAccount.id);
+    if (!rateLimit.canUnfollow) {
+      console.log(`   ⚠️ Rate limit atingido: ${rateLimit.reason}`);
+      return res.status(429).json({
+        success: false,
+        error: 'Rate limit atingido',
+        reason: rateLimit.reason,
+        unfollowsRemainingToday: rateLimit.unfollowsRemainingToday
+      });
+    }
+
+    // Obter sessao da conta da campanha
+    const session = await instagramClientDMService.getOrCreateSession(instagramAccount.id);
+    if (!session) {
+      return res.status(500).json({
+        success: false,
+        error: 'Falha ao criar sessao',
+        message: 'Nao foi possivel criar sessao para conta Instagram da campanha'
+      });
+    }
+
+    const { page } = session;
+
+    // Executar unfollow via Puppeteer
+    console.log(`   🔍 Navegando para perfil @${username}...`);
+    await page.goto(`https://www.instagram.com/${username}/`, {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    });
+
+    await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));
+
+    // Verificar se esta seguindo
+    let wasNotFollowing = false;
+    const isFollowing = await page.evaluate(() => {
+      // @ts-ignore
+      const buttons = Array.from(document.querySelectorAll('button'));
+      for (const btn of buttons) {
+        // @ts-ignore
+        const text = btn.textContent?.trim() || '';
+        if (text === 'Seguindo' || text === 'Following') {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (!isFollowing) {
+      console.log(`   ℹ️ Nao estava seguindo @${username}`);
+      wasNotFollowing = true;
+    } else {
+      // Clicar no botao "Seguindo" para abrir menu
+      const menuOpened = await page.evaluate(() => {
+        // @ts-ignore
+        const buttons = Array.from(document.querySelectorAll('button'));
+        for (const btn of buttons) {
+          // @ts-ignore
+          const text = btn.textContent?.trim() || '';
+          if (text === 'Seguindo' || text === 'Following') {
+            // @ts-ignore
+            btn.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (!menuOpened) {
+        throw new Error('Botao Seguindo nao encontrado');
+      }
+
+      await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
+
+      // Clicar em "Deixar de seguir"
+      const unfollowClicked = await page.evaluate(() => {
+        // @ts-ignore
+        const elements = Array.from(document.querySelectorAll('button, div[role="button"], span'));
+        for (const el of elements) {
+          // @ts-ignore
+          const text = el.textContent?.trim() || '';
+          if (text === 'Deixar de seguir' || text === 'Unfollow') {
+            // @ts-ignore
+            el.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (!unfollowClicked) {
+        throw new Error('Opcao Deixar de seguir nao encontrada');
+      }
+
+      await new Promise(r => setTimeout(r, 2000 + Math.random() * 1000));
+      console.log(`   ✅ Unfollow executado em @${username}`);
+
+      // Incrementar contador de acoes
+      await credentialsVault.incrementAction(instagramAccount.id, 'unfollow');
+    }
+
+    // Registrar unfollow no banco
+    const { data: success, error: rpcError } = await supabaseAdmin.rpc('register_instagram_unfollow', {
+      p_follow_id: follow_id,
+      p_reason: wasNotFollowing ? 'was_not_following' : reason
+    });
+
+    if (rpcError) {
+      console.error(`   ⚠️  Erro ao registrar unfollow no banco: ${rpcError.message}`);
+    } else {
+      console.log(`   ✅ Unfollow registrado no banco`);
+    }
+
+    return res.status(200).json({
+      success: true,
+      follow_id,
+      lead_id,
+      username,
+      action_type: 'unfollow',
+      was_not_following: wasNotFollowing,
+      instagram_account: instagramAccount.instagramUsername,
+      reason: wasNotFollowing ? 'was_not_following' : reason,
+      executed_at: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao executar unfollow:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao executar unfollow',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+/**
+ * POST /api/instagram/mark-engagement
+ *
+ * Marca engajamento de um lead (previne unfollow)
+ * Chamado pelos workflows de inbound quando lead responde
+ */
+router.post('/mark-engagement', async (req: Request, res: Response) => {
+  try {
+    const {
+      lead_id,
+      engagement_type  // 'followed_back', 'dm_replied', 'liked', 'commented'
+    } = req.body;
+
+    if (!lead_id || !engagement_type) {
+      return res.status(400).json({
+        error: 'Campos obrigatorios faltando',
+        required: ['lead_id', 'engagement_type']
+      });
+    }
+
+    console.log(`\n✅ [MARK-ENGAGEMENT] Registrando ${engagement_type} para lead ${lead_id}...`);
+
+    const { data: success, error } = await supabaseAdmin.rpc('mark_follow_engagement', {
+      p_lead_id: lead_id,
+      p_engagement_type: engagement_type
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    console.log(`   ✅ Engajamento registrado: ${success}`);
+
+    return res.status(200).json({
+      success: true,
+      lead_id,
+      engagement_type,
+      updated: success,
+      marked_at: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao marcar engajamento:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao marcar engajamento',
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    });
+  }
+});
+
+/**
+ * GET /api/instagram/follow-stats
+ *
+ * Retorna estatisticas de follow/unfollow por campanha
+ */
+router.get('/follow-stats', async (_req: Request, res: Response) => {
+  try {
+    console.log(`\n📊 [FOLLOW-STATS] Buscando estatisticas...`);
+
+    const { data, error } = await supabaseAdmin
+      .from('campaign_follow_stats')
+      .select('*');
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      stats: data || []
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar estatisticas:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erro ao buscar estatisticas',
       message: error instanceof Error ? error.message : 'Erro desconhecido'
     });
   }
