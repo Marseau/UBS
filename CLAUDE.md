@@ -89,6 +89,56 @@ WHERE captured_at >= CURRENT_DATE - INTERVAL '45 days'
 - **Silhouette score minimo**: 0.65
 - **Leads por cluster**: Distribuidos uniformemente
 
+### 3.5 Modo Teste (Status de Campanha)
+
+Campanhas possuem status que controla o comportamento dos AI Agents:
+
+| Status | Comportamento |
+|--------|---------------|
+| `draft` | Mensagens NAO processadas (campanha em configuracao) |
+| `test` | Mensagens processadas, mas redirecionadas para contas de TESTE |
+| `active` | Mensagens processadas e enviadas para leads REAIS |
+| `paused` | Mensagens NAO processadas (campanha pausada) |
+
+**Contas de Teste Oficiais**:
+
+| Canal | Conta | Campo no BD | Uso |
+|-------|-------|-------------|-----|
+| **WhatsApp** | `5511999040605` | `test_whatsapp_number` | Replies WA em modo teste |
+| **Instagram** | `@marseaufranco` | `test_instagram_username` | Replies IG em modo teste |
+
+**Configuracao no Banco de Dados** (`cluster_campaigns`):
+```sql
+-- Campos de teste por campanha
+test_whatsapp_number VARCHAR(20) DEFAULT '5511999040605',
+test_instagram_username VARCHAR(50) DEFAULT 'marseaufranco',
+test_instagram_user_id VARCHAR(50)  -- Preenchido automaticamente via trigger
+```
+
+**Auto-preenchimento do Instagram User ID**:
+- Trigger `trg_propagate_test_instagram_user_id` em `aic_conversations`
+- Quando conta de teste envia mensagem, captura o `instagram_user_id`
+- Propaga automaticamente para `cluster_campaigns.test_instagram_user_id`
+- Necessario: @marseaufranco deve enviar msg para @ubs.sistemas uma vez
+
+**Comportamento dos Workflows em Modo Teste**:
+
+| Workflow | Comportamento Test Mode |
+|----------|------------------------|
+| WA Agent v22 | Envia reply para `5511999040605` |
+| IG Agent v23 | Se `test_instagram_user_id` existe: envia DM para conta teste. Se nao: apenas log Telegram |
+| NoIG Agent v7 | Envia reply para `5511999040605` |
+
+**Fluxo de Validacao**:
+1. AI Agent processa a mensagem normalmente (gera resposta)
+2. Em vez de enviar para o lead real, envia para conta de teste
+3. Log no Telegram indica `🧪 TESTE`
+4. Permite validar fluxo completo sem impactar leads reais
+
+**Funcoes SQL com Test Mode**:
+- `resolve_campaign_from_contact()` → retorna `test_mode`, `test_whatsapp_number`
+- `resolve_campaign_by_recipient_id()` → retorna `test_mode`, `test_instagram_username`, `test_instagram_user_id`
+
 ---
 
 ## 4. ESTRUTURA DE BANCO DE DADOS
@@ -136,18 +186,18 @@ SELECT * FROM instagram_leads WHERE phone IS NOT NULL; -- DEPRECADO
 
 ### 5.1 Workflows OFICIAIS AIC (MANTER ATIVOS)
 
-| Categoria | Workflow | ID | Status |
-|-----------|----------|-----|--------|
-| **INBOUND WhatsApp** | AIC WhatsApp AI Agent v15 | `2WRfnvReul8k7LEu` | ATIVO |
-| **INBOUND Instagram** | AIC Instagram AI Agent v15 | `msXwN1pEc23RuZmu` | ATIVO |
-| **INBOUND Landing** | AIC WhatsApp NoIG Agent v1 | `jeThTHI2TKrVKZLq` | ATIVO |
-| **OUTBOUND Unified** | Cold Outreach Unified v1 | `H8MHjPU9AHNu1ZhF` | ATIVAR |
-| **FILA** | Message Queue Worker | `fqrC0gRcJs8R26Xg` | ATIVO |
-| **SUB WA** | Sub WhatsApp Inbound Handler v16 | `GzjJR2TZvBYARP4z` | ATIVO |
-| **SUB IG** | Sub Instagram Inbound Handler v18 | `Ew4BuwfuPqgQHQxo` | ATIVO |
-| **RAG** | AIC - Tool RAG | `BSUkoynjiYpjjQFT` | ATIVO |
-| **EMBEDDING** | Generate Conversation Embedding | `GU57XIe0UKa4pkD8` | ATIVO |
-| **RAG Search** | AIC - RAG Search (Multi-Campanha) | `v5EAyxM65y55kiVz` | ATIVO |
+| Categoria | Workflow | ID | Status | Test Mode |
+|-----------|----------|-----|--------|-----------|
+| **INBOUND WhatsApp** | AIC WhatsApp AI Agent v22 | `2WRfnvReul8k7LEu` | ATIVO | ✅ `5511999040605` |
+| **INBOUND Instagram** | AIC Instagram AI Agent v23 | `msXwN1pEc23RuZmu` | ATIVO | ✅ `test_instagram_user_id` |
+| **INBOUND Landing** | AIC WhatsApp NoIG Agent v7 | `jeThTHI2TKrVKZLq` | ATIVO | ✅ `5511999040605` |
+| **OUTBOUND Unified** | Cold Outreach Unified v1 | `H8MHjPU9AHNu1ZhF` | ATIVAR | - |
+| **FILA** | Message Queue Worker | `fqrC0gRcJs8R26Xg` | ATIVO | - |
+| **SUB WA** | Sub WhatsApp Inbound Handler v16 | `GzjJR2TZvBYARP4z` | ATIVO | - |
+| **SUB IG** | Sub Instagram Inbound Handler v18 | `Ew4BuwfuPqgQHQxo` | ATIVO | - |
+| **RAG** | AIC - Tool RAG | `BSUkoynjiYpjjQFT` | ATIVO | - |
+| **EMBEDDING** | Generate Conversation Embedding | `GU57XIe0UKa4pkD8` | ATIVO | - |
+| **RAG Search** | AIC - RAG Search (Multi-Campanha) | `v5EAyxM65y55kiVz` | ATIVO | - |
 
 ### 5.2 Workflows OUTBOUND DEPRECADOS (NAO USAR)
 
@@ -181,31 +231,30 @@ SELECT * FROM instagram_leads WHERE phone IS NOT NULL; -- DEPRECADO
 │                                                                             │
 │  INBOUND WHATSAPP                                                           │
 │  ┌─────────────────┐    ┌──────────────────────┐    ┌─────────────────┐   │
-│  │ Whapi Webhook   │───>│ WA AI Agent v15      │───>│ Sub WA Handler  │   │
+│  │ Whapi Webhook   │───>│ WA AI Agent v22      │───>│ Sub WA Handler  │   │
 │  └─────────────────┘    │ (2WRfnvReul8k7LEu)   │    │ (GzjJR2TZvBYARP4z)│ │
-│                         └──────────────────────┘    └─────────────────┘   │
-│                                    │                                        │
-│                                    v                                        │
-│  INBOUND INSTAGRAM               ┌──────────────────────┐                  │
-│  ┌─────────────────┐    ┌───────>│ aic_message_queue    │                  │
-│  │ Meta Webhook    │───>│ IG AI  └──────────────────────┘                  │
-│  └─────────────────┘    │ Agent               │                            │
-│                         │ v15                 v                            │
-│                         │        ┌──────────────────────┐                  │
-│                         │        │ Message Queue Worker │                  │
-│                         │        │ (fqrC0gRcJs8R26Xg)   │                  │
-│                         │        └──────────────────────┘                  │
-│                         │                     │                            │
-│  OUTBOUND               │                     v                            │
-│  ┌─────────────────┐    │        ┌──────────────────────┐                  │
-│  │ Cron Trigger    │───>│        │ Whapi / Meta API     │                  │
-│  └─────────────────┘    │        │ (Envio real)         │                  │
-│         │               │        └──────────────────────┘                  │
-│         v               │                                                   │
-│  ┌─────────────────────────┐                                               │
-│  │ Cold Outreach Unified v1│                                               │
-│  │ (H8MHjPU9AHNu1ZhF)      │                                               │
-│  └─────────────────────────┘                                               │
+│                         │ [Test Mode: ✅]      │    └─────────────────┘   │
+│                         └──────────────────────┘                           │
+│                                                                             │
+│  INBOUND INSTAGRAM                                                          │
+│  ┌─────────────────┐    ┌──────────────────────┐                           │
+│  │ Meta Webhook    │───>│ IG AI Agent v23      │───> Meta API / Telegram   │
+│  └─────────────────┘    │ (msXwN1pEc23RuZmu)   │                           │
+│                         │ [Test Mode: ✅]      │                           │
+│                         └──────────────────────┘                           │
+│                                                                             │
+│  INBOUND LANDING (SEM INSTAGRAM)                                            │
+│  ┌─────────────────┐    ┌──────────────────────┐                           │
+│  │ Webhook NoIG    │───>│ NoIG Agent v7        │───> Whapi API             │
+│  └─────────────────┘    │ (jeThTHI2TKrVKZLq)   │                           │
+│                         │ [Test Mode: ✅]      │                           │
+│                         └──────────────────────┘                           │
+│                                                                             │
+│  OUTBOUND                                                                   │
+│  ┌─────────────────┐    ┌──────────────────────┐                           │
+│  │ Cron Trigger    │───>│ Cold Outreach v1     │───> Whapi / Puppeteer     │
+│  └─────────────────┘    │ (H8MHjPU9AHNu1ZhF)   │                           │
+│                         └──────────────────────┘                           │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -507,6 +556,50 @@ TELEGRAM_CHAT_ID=your_chat_id
 - Ativar: Cold Outreach Unified v1 (`H8MHjPU9AHNu1ZhF`)
 - Desativar: 7 workflows UBS (ver secao 5.3)
 
+### 2026-01-27 - Implementacao Completa de Test Mode
+
+**Objetivo:** Permitir validar fluxo completo de campanhas sem impactar leads reais.
+
+**Implementacoes Realizadas:**
+
+1. **AIC WhatsApp AI Agent v22** (`2WRfnvReul8k7LEu`)
+   - Validacao de status de campanha (só processa `active` ou `test`)
+   - Test mode: redireciona replies para `5511999040605`
+   - Log Telegram indica `🧪 TESTE`
+
+2. **AIC Instagram AI Agent v23** (`msXwN1pEc23RuZmu`)
+   - Validacao de status de campanha
+   - Test mode com fallback:
+     - Se `test_instagram_user_id` configurado → envia DM para conta teste
+     - Se nao configurado → apenas log Telegram
+   - Campos de teste vem da funcao SQL `resolve_campaign_by_recipient_id`
+
+3. **AIC WhatsApp NoIG Agent v7** (`jeThTHI2TKrVKZLq`)
+   - Validacao de status de campanha
+   - Test mode: redireciona replies para `5511999040605`
+   - Log Telegram indica `🧪 TESTE`
+
+4. **Funcoes SQL Atualizadas:**
+   - `resolve_campaign_from_contact()` → retorna `test_whatsapp_number`
+   - `resolve_campaign_by_recipient_id()` → retorna `test_instagram_username`, `test_instagram_user_id`
+
+5. **Trigger Automatico** (`trg_propagate_test_instagram_user_id`):
+   - Dispara em INSERT/UPDATE de `instagram_user_id` em `aic_conversations`
+   - Propaga automaticamente para `cluster_campaigns.test_instagram_user_id`
+   - Quando @marseaufranco enviar msg para @ubs.sistemas, user_id sera capturado
+
+**Campos Adicionados em `cluster_campaigns`:**
+```sql
+test_whatsapp_number VARCHAR(20) DEFAULT '5511999040605'
+test_instagram_username VARCHAR(50) DEFAULT 'marseaufranco'
+test_instagram_user_id VARCHAR(50) -- auto-preenchido via trigger
+```
+
+**Para Ativar Test Mode:**
+1. Alterar status da campanha para `test` no banco
+2. Para Instagram: @marseaufranco deve enviar uma msg para @ubs.sistemas (captura user_id)
+3. Todas as respostas serao redirecionadas para contas de teste
+
 ---
 
 ## 14. CONTATO E SUPORTE
@@ -517,5 +610,5 @@ TELEGRAM_CHAT_ID=your_chat_id
 
 ---
 
-**Ultima atualizacao**: 2026-01-24
-**Versao**: 2.1 (Auditoria Workflows + Correcoes whatsapp_number)
+**Ultima atualizacao**: 2026-01-27
+**Versao**: 2.2 (Test Mode Completo + Trigger Auto Instagram)
