@@ -23,7 +23,7 @@ const supabase = createClient(
 // ============================================================================
 
 // N8N Webhook URL para encaminhar eventos WhatsApp
-const N8N_WHATSAPP_WEBHOOK_URL = process.env.N8N_WHATSAPP_WEBHOOK_URL || 'https://n8n.ubs.app.br/webhook/whapi-inbound-handler';
+const N8N_WHATSAPP_WEBHOOK_URL = process.env.N8N_WHATSAPP_WEBHOOK_URL || 'https://n8n.stratfin.tec.br/webhook/whapi-inbound';
 
 /**
  * POST /api/whapi/webhook

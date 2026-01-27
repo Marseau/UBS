@@ -42,6 +42,22 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Busca o instagram_account_id de uma campanha
+ */
+async function getInstagramAccountId(campaignId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('cluster_campaigns')
+    .select('instagram_account_id')
+    .eq('id', campaignId)
+    .single();
+  return data?.instagram_account_id || null;
+}
+
+// ============================================================================
 // FILA DE OUTREACH
 // ============================================================================
 
@@ -2853,6 +2869,14 @@ router.post('/instagram/send-direct', async (req, res) => {
 
     // Atualizar fila se queue_id fornecido
     if (queue_id) {
+      // Buscar campaign_id da fila
+      const { data: queueData } = await supabase
+        .from('aic_message_queue')
+        .select('campaign_id')
+        .eq('id', queue_id)
+        .single();
+
+      // Atualizar status da mensagem
       await supabase
         .from('aic_message_queue')
         .update({
@@ -2861,6 +2885,19 @@ router.post('/instagram/send-direct', async (req, res) => {
           updated_at: new Date().toISOString()
         })
         .eq('id', queue_id);
+
+      // Incrementar contador de DMs da conta Instagram
+      if (queueData?.campaign_id) {
+        const { error: rateError } = await supabase.rpc('increment_instagram_action', {
+          p_account_id: await getInstagramAccountId(queueData.campaign_id),
+          p_action_type: 'dm'
+        });
+        if (rateError) {
+          console.warn(`⚠️ Erro ao incrementar rate limit IG: ${rateError.message}`);
+        } else {
+          console.log(`📊 Rate limit IG incrementado para campanha ${queueData.campaign_id}`);
+        }
+      }
     }
 
     return res.json({

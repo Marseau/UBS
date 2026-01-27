@@ -2244,11 +2244,18 @@ router.patch('/campaigns/:id/status', async (req: Request, res: Response): Promi
     // - status: new enum column (draft, test, active, paused)
     // - pipeline_status: legacy field (kept for backwards compatibility)
     // - outreach_enabled: derived from status (active or test)
+    // Mapping: active/test → outreach_in_progress, paused → outreach_paused, draft → draft
+    const pipelineStatusMap: Record<string, string> = {
+      active: 'outreach_in_progress',
+      test: 'outreach_in_progress',
+      paused: 'outreach_paused',
+      draft: 'draft'
+    };
     const { data: campaign, error } = await supabase
       .from('cluster_campaigns')
       .update({
         status: status,
-        pipeline_status: status === 'test' ? 'active' : status, // test maps to active for legacy
+        pipeline_status: pipelineStatusMap[status] || 'draft',
         outreach_enabled: status === 'active' || status === 'test',
         updated_at: new Date().toISOString()
       })
