@@ -129,7 +129,7 @@ module.exports = {
     // ========================================
     // WORKER DEV - Porta 3004
     // Testes e desenvolvimento (não reinicia auto)
-    // Cloudflared aponta aic.ubs.app.br para 3004
+    // NOTA: aic.ubs.app.br aponta para 3005 (ubs-dm)
     // ========================================
     {
       name: 'ubs-dev',

@@ -48,7 +48,9 @@
     "**/*.spec.ts",
     "src/demo-*.ts",
     "src/test-*.ts",
-    "src/examples/**/*"
+    "src/examples/**/*",
+    "cleanup-backup-*/**/*",
+    "scripts/**/*"
   ],
   "ts-node": {
     "require": ["tsconfig-paths/register"]
