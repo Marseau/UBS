@@ -722,6 +722,63 @@ try {
   console.error("❌ Failed to load Unified Intelligence routes:", error);
 }
 
+// Demand Search Routes - Busca semântica por demandas de mercado
+try {
+  const demandSearchRoutes = require('./routes/demand-search.routes');
+  const router = 'default' in demandSearchRoutes ? demandSearchRoutes.default : demandSearchRoutes;
+  app.use('/api/demand', router);
+  console.log('✅ Demand Search routes loaded - SEMANTIC DEMAND SEARCH READY');
+} catch (error) {
+  console.error("❌ Failed to load Demand Search routes:", error);
+}
+
+// Market Trends Routes - Descoberta de demandas do mercado
+try {
+  const marketTrendsRoutes = require('./routes/market-trends.routes');
+  const router = 'default' in marketTrendsRoutes ? marketTrendsRoutes.default : marketTrendsRoutes;
+  app.use('/api/market', router);
+  console.log('✅ Market Trends routes loaded - MARKET DEMAND DISCOVERY READY');
+} catch (error) {
+  console.error("❌ Failed to load Market Trends routes:", error);
+}
+
+// BERTopic Results Routes - Resultados da análise Python BERTopic
+try {
+  const bertopicRoutes = require('./routes/bertopic-results.routes');
+  const router = 'default' in bertopicRoutes ? bertopicRoutes.default : bertopicRoutes;
+  app.use('/api/bertopic', router);
+  console.log('✅ BERTopic Results routes loaded - CLUSTERING ANALYSIS READY');
+} catch (error) {
+  console.error("❌ Failed to load BERTopic Results routes:", error);
+}
+
+// Market Demand Analysis Routes - Análise de dores de mercado (WORKAROUND → DOR → DECISÃO → PRODUTO)
+// DEPRECATED: Use /api/d2p/* instead for BERTopic + pgvector analysis
+try {
+  const marketDemandRoutes = require('./routes/market-demand-analysis.routes');
+  const router = 'default' in marketDemandRoutes ? marketDemandRoutes.default : marketDemandRoutes;
+  app.use('/api/market-demand', router);
+  console.log('✅ Market Demand Analysis routes loaded - PAIN ANALYSIS READY (DEPRECATED - use /api/d2p)');
+} catch (error) {
+  console.error("❌ Failed to load Market Demand Analysis routes:", error);
+}
+
+// D2P Unified Routes - BERTopic + pgvector versioned analysis
+try {
+  const d2pRoutes = require('./routes/d2p.routes');
+  const d2pRouter = 'default' in d2pRoutes ? d2pRoutes.default : d2pRoutes;
+  app.use('/api/d2p', d2pRouter);
+  console.log('✅ D2P Unified routes loaded - BERTOPIC + PGVECTOR ANALYSIS READY');
+} catch (error) {
+  console.error("❌ Failed to load D2P routes:", error);
+}
+
+// Demand Intelligence Dashboard - Visualização de demandas de mercado
+app.get('/demand-intelligence', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'demand-intelligence-dashboard.html'));
+});
+console.log('✅ Demand Intelligence Dashboard loaded at /demand-intelligence');
+
 // Dynamic Intelligence Dashboard 2.0 - Auto-evolutivo com análise comportamental
 app.get('/dynamic-intelligence-dashboard', (_req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'dynamic-intelligence-dashboard.html'));

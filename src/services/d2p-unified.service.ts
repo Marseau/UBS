@@ -1,0 +1,612 @@
+/**
+ * D2P Unified Service - Decision-to-Product Framework
+ *
+ * Architecture:
+ * - Node.js generates market embedding (OpenAI) and searches pgvector (RPC)
+ * - Python does BERTopic clustering + friction detection + D2P scoring
+ *
+ * Pipeline:
+ *   API Request → OpenAI embedding → pgvector RPC → Python (BERTopic) → Save to DB
+ */
+
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { spawn } from 'child_process';
+import * as path from 'path';
+
+const supabase: SupabaseClient = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+// ==============================================================================
+// TYPES
+// ==============================================================================
+
+export interface AnalysisParams {
+  minSimilarity?: number;  // Default: 0.65
+  minLeads?: number;       // Default: 100
+  maxResults?: number;     // Default: 2000
+}
+
+interface PgvectorLead {
+  lead_id: string;
+  username: string;
+  bio: string;
+  profession: string;
+  business_category: string;
+  similarity: number;
+}
+
+export interface FrictionUnit {
+  topic_id: number;
+  label: string;
+  count: number;
+  percentage: number;
+  keywords: string[];
+  representative_bios: string[];
+  decision: string;
+  friction: string;
+  product_type: string;
+  friction_score: number;
+  is_friction: boolean;
+  detected_workarounds: string[];
+  detected_professions: string[];
+  has_volume_signal: boolean;
+  has_frequency_signal: boolean;
+}
+
+export interface D2PScore {
+  frequency: boolean;
+  volume: boolean;
+  manual: boolean;
+  cost: boolean;
+  rule: boolean;
+  total: number;
+}
+
+export interface D2PProduct {
+  suggested_name: string;
+  product_definition: string;
+  tagline: string;
+  one_liner: string;
+  type: string;
+  type_name: string;
+  type_description: string;
+  value_proposition: string;
+  mvp_does: string[];
+  mvp_does_not: string[];
+  target_market: string;
+  core_decision: string;
+  core_friction: string;
+  replaced_tools: string[];
+  d2p_score: number;
+  d2p_verdict: string;
+  is_viable: boolean;
+}
+
+export interface D2PAnalysis {
+  id: string;
+  market_name: string;
+  market_slug: string;
+  version_id: string;
+  version_number: number;
+  parent_version_id: string | null;
+  is_latest: boolean;
+  search_params: AnalysisParams;
+  leads_searched: number;
+  leads_selected: number;
+  leads_with_embedding: number;
+  embedding_coverage: number;
+  min_similarity: number;
+  similarity_threshold: number;
+  avg_similarity: number;
+  topics_discovered: number;
+  topics_detail: { topic_id: number; label: string; count: number; keywords: string[] }[];
+  coverage_percentage: number;
+  friction_units: FrictionUnit[];
+  friction_count: number;
+  total_friction_score: number;
+  avg_friction_score: number;
+  friction_density: number;
+  dominant_pain: string | null;
+  dominant_decision: string | null;
+  product_type: string | null;
+  product_type_name: string | null;
+  product_definition: string | null;
+  product_tagline: string | null;
+  mvp_does: string[] | null;
+  mvp_does_not: string[] | null;
+  d2p_score: D2PScore | null;
+  d2p_binary_score: any | null;
+  product_potential_score: number | null;
+  product: D2PProduct | null;
+  workaround_tools: string[] | null;
+  detected_workarounds: string[] | null;
+  detected_professions: string[] | null;
+  status: string;
+  error_message: string | null;
+  analysis_duration_ms: number | null;
+  created_at: string;
+}
+
+export interface MarketSummary {
+  market_slug: string;
+  market_name: string;
+  latest_version_id: string;
+  version_count: number;
+  latest_analysis_at: string;
+  latest_leads_searched: number;
+  latest_topics_discovered: number | null;
+  latest_product_potential: number | null;
+}
+
+export interface VersionComparison {
+  v1: D2PAnalysis;
+  v2: D2PAnalysis;
+  changes: {
+    leads_delta: number;
+    topics_delta: number;
+    friction_delta: number;
+    potential_delta: number;
+    new_frictions: string[];
+    removed_frictions: string[];
+  };
+}
+
+// ==============================================================================
+// HELPER FUNCTIONS
+// ==============================================================================
+
+function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+}
+
+function addCompatibilityFields(data: any): D2PAnalysis {
+  const d2pScore = data.d2p_score || {};
+  const isBinaryScore = typeof d2pScore.frequency !== 'undefined';
+
+  return {
+    ...data,
+    leads_with_embedding: data.leads_selected || 0,
+    embedding_coverage: data.leads_selected > 0 ? 100 : 0,
+    detected_workarounds: data.workarounds || [],
+    detected_professions: data.pain_signals || [],
+    dominant_decision: isBinaryScore
+      ? (data.friction_units?.[0]?.decision || data.dominant_pain)
+      : null,
+    product_type_name: isBinaryScore
+      ? { gatekeeper: 'Gatekeeper', triage: 'Triage', operational_decision: 'Decisao Operacional' }[data.product_type as string] || data.product_type
+      : null,
+    d2p_binary_score: isBinaryScore ? {
+      scores: d2pScore,
+      total: d2pScore.total || 0,
+      max_score: 5,
+      is_product_candidate: (d2pScore.total || 0) >= 4,
+      verdict: (d2pScore.total || 0) >= 4 ? 'EXCELENTE' : (d2pScore.total || 0) >= 3 ? 'MODERADO' : 'FRACO'
+    } : null,
+    product: data.product_definition ? {
+      suggested_name: `${data.product_type === 'gatekeeper' ? 'Gate' : data.product_type === 'triage' ? 'Sort' : 'Auto'}${(data.market_name || '').split(' ')[0]?.slice(0,4) || 'Biz'}`,
+      product_definition: data.product_definition,
+      tagline: data.product_tagline,
+      one_liner: `${data.product_type === 'gatekeeper' ? 'Decide automaticamente quem/o que passa' : data.product_type === 'triage' ? 'Prioriza automaticamente por criterios' : 'Responde perguntas operacionais'} para ${(data.market_name || '').toLowerCase()}`,
+      type: data.product_type,
+      type_name: { gatekeeper: 'Gatekeeper', triage: 'Triage', operational_decision: 'Decisao Operacional' }[data.product_type as string] || data.product_type,
+      type_description: data.product_type === 'gatekeeper' ? 'Protege recursos escassos' : data.product_type === 'triage' ? 'Classifica entradas caoticas' : 'Decide acoes operacionais',
+      value_proposition: data.product_type === 'gatekeeper' ? 'Decide automaticamente quem/o que passa' : data.product_type === 'triage' ? 'Prioriza automaticamente por criterios definidos' : 'Responde "posso/nao posso" automaticamente',
+      mvp_does: data.mvp_does || [],
+      mvp_does_not: data.mvp_does_not || [],
+      target_market: data.market_name,
+      core_decision: data.friction_units?.[0]?.decision || data.dominant_pain || '',
+      core_friction: data.dominant_pain || '',
+      replaced_tools: data.workaround_tools || [],
+      d2p_score: d2pScore.total || 0,
+      d2p_verdict: (d2pScore.total || 0) >= 4 ? 'EXCELENTE' : (d2pScore.total || 0) >= 3 ? 'MODERADO' : 'FRACO',
+      is_viable: (d2pScore.total || 0) >= 4
+    } : null
+  } as D2PAnalysis;
+}
+
+// ==============================================================================
+// PGVECTOR SEARCH (NEW)
+// ==============================================================================
+
+/**
+ * Generate embedding for market name via OpenAI
+ */
+async function generateMarketEmbedding(marketName: string): Promise<number[]> {
+  const OpenAI = (await import('openai')).default;
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const response = await client.embeddings.create({
+    model: 'text-embedding-3-small',
+    input: marketName
+  });
+
+  return response.data[0]!.embedding;
+}
+
+/**
+ * Search leads using pgvector RPC with embedding_d2p
+ */
+async function searchLeadsForD2P(
+  queryEmbedding: number[],
+  minSimilarity: number,
+  maxResults: number
+): Promise<PgvectorLead[]> {
+  const embeddingStr = `[${queryEmbedding.join(',')}]`;
+
+  const { data, error } = await supabase.rpc('search_leads_for_d2p', {
+    query_embedding: embeddingStr,
+    min_similarity: minSimilarity,
+    max_results: maxResults
+  });
+
+  if (error) {
+    throw new Error(`pgvector search failed: ${error.message}`);
+  }
+
+  return data || [];
+}
+
+/**
+ * Run Python D2P analysis engine with pre-filtered leads
+ */
+async function runPythonAnalysis(
+  marketName: string,
+  versionId: string,
+  leads: PgvectorLead[]
+): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const pythonScript = path.join(process.cwd(), 'scripts', 'd2p_analysis_engine.py');
+    const pythonPath = path.join(process.cwd(), 'scripts', '.venv', 'bin', 'python3');
+
+    console.log(`[D2P] Starting Python analysis for "${marketName}" with ${leads.length} leads...`);
+
+    const python = spawn(pythonPath, [pythonScript], {
+      cwd: process.cwd(),
+      env: { ...process.env }
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    python.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    python.stderr.on('data', (data) => {
+      stderr += data.toString();
+      console.log(data.toString().trim());
+    });
+
+    python.on('close', (code) => {
+      if (code !== 0) {
+        console.error(`[D2P] Python exited with code ${code}`);
+        reject(new Error(`Python failed: ${stderr || 'Unknown error'}`));
+        return;
+      }
+
+      try {
+        const result = JSON.parse(stdout);
+        if (!result.success) {
+          reject(new Error(result.error || 'Python returned error'));
+          return;
+        }
+        console.log(`[D2P] Python completed in ${result.analysis_duration_ms}ms`);
+        resolve(result);
+      } catch (e) {
+        reject(new Error(`Failed to parse Python output: ${e}`));
+      }
+    });
+
+    python.on('error', (err) => {
+      reject(new Error(`Failed to start Python: ${err.message}`));
+    });
+
+    // Send pre-filtered leads to Python
+    const inputData = JSON.stringify({
+      market_name: marketName,
+      version_id: versionId,
+      leads: leads.map(l => ({
+        lead_id: l.lead_id,
+        username: l.username,
+        bio: l.bio,
+        profession: l.profession,
+        business_category: l.business_category,
+        similarity: l.similarity
+      }))
+    });
+
+    python.stdin.write(inputData);
+    python.stdin.end();
+  });
+}
+
+async function getNextVersionNumber(marketSlug: string): Promise<number> {
+  const { data } = await supabase
+    .from('d2p_analyses')
+    .select('version_number')
+    .eq('market_slug', marketSlug)
+    .order('version_number', { ascending: false })
+    .limit(1);
+
+  return (data?.[0]?.version_number || 0) + 1;
+}
+
+async function getParentVersionId(marketSlug: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('d2p_analyses')
+    .select('version_id')
+    .eq('market_slug', marketSlug)
+    .eq('is_latest', true)
+    .limit(1)
+    .single();
+
+  return data?.version_id || null;
+}
+
+// ==============================================================================
+// MAIN EXPORTED FUNCTIONS
+// ==============================================================================
+
+/**
+ * Analyze a market using pgvector D2P search + BERTopic
+ */
+export async function analyzeMarket(
+  marketName: string,
+  params: AnalysisParams = {}
+): Promise<D2PAnalysis> {
+  const startTime = Date.now();
+  const marketSlug = generateSlug(marketName);
+  const minSimilarity = params.minSimilarity ?? 0.65;
+  const maxResults = params.maxResults ?? 2000;
+  const minLeads = params.minLeads ?? 100;
+
+  console.log('[D2P] ========================================');
+  console.log(`[D2P] Analyzing: ${marketName}`);
+  console.log(`[D2P] Params: minSimilarity=${minSimilarity}, minLeads=${minLeads}, maxResults=${maxResults}`);
+  console.log('[D2P] ========================================');
+
+  // Version info
+  const versionNumber = await getNextVersionNumber(marketSlug);
+  const parentVersionId = await getParentVersionId(marketSlug);
+  const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
+  const versionId = `${marketSlug}_v${versionNumber}_${timestamp}`;
+
+  console.log(`[D2P] Version: ${versionId}`);
+
+  // Create pending record
+  const { data: inserted, error: insertError } = await supabase
+    .from('d2p_analyses')
+    .insert({
+      market_name: marketName,
+      market_slug: marketSlug,
+      version_id: versionId,
+      version_number: versionNumber,
+      parent_version_id: parentVersionId,
+      is_latest: true,
+      search_params: params,
+      status: 'running'
+    })
+    .select()
+    .single();
+
+  if (insertError) {
+    throw new Error(`Database error: ${insertError.message}`);
+  }
+
+  try {
+    // Step 1: Generate market embedding via OpenAI
+    console.log('[D2P] Generating market embedding via OpenAI...');
+    const marketEmbedding = await generateMarketEmbedding(marketName);
+
+    // Step 2: Search pgvector for matching leads
+    console.log(`[D2P] Searching pgvector (embedding_d2p, threshold=${minSimilarity})...`);
+    const leads = await searchLeadsForD2P(marketEmbedding, minSimilarity, maxResults);
+    console.log(`[D2P] pgvector returned ${leads.length} leads`);
+
+    if (leads.length < minLeads) {
+      const errorMsg = `Insufficient leads: ${leads.length} (minimum: ${minLeads}). Try lowering similarity threshold.`;
+      await supabase
+        .from('d2p_analyses')
+        .update({
+          status: 'error',
+          error_message: errorMsg,
+          leads_selected: leads.length,
+          analysis_duration_ms: Date.now() - startTime
+        })
+        .eq('id', inserted.id);
+
+      throw new Error(errorMsg);
+    }
+
+    // Save market embedding for future reference
+    await supabase
+      .from('d2p_analyses')
+      .update({ market_embedding: `[${marketEmbedding.join(',')}]` })
+      .eq('id', inserted.id);
+
+    // Step 3: Send pre-filtered leads to Python for BERTopic + D2P
+    const pythonResult = await runPythonAnalysis(marketName, versionId, leads);
+
+    // Step 4: Save results
+    const updateData: Record<string, any> = {
+      leads_searched: leads.length,
+      leads_selected: pythonResult.leads_selected,
+      min_similarity: minSimilarity,
+      avg_similarity: pythonResult.avg_similarity,
+      topics_discovered: pythonResult.topics_discovered,
+      topics_detail: pythonResult.topics_detail,
+      coverage_percentage: pythonResult.coverage_percentage,
+      friction_units: pythonResult.friction_units,
+      friction_count: pythonResult.friction_count,
+      total_friction_score: pythonResult.total_friction_score,
+      avg_friction_score: pythonResult.avg_friction_score,
+      friction_density: pythonResult.friction_density,
+      dominant_pain: pythonResult.dominant_pain,
+      product_type: pythonResult.product_type,
+      product_definition: pythonResult.product_definition,
+      product_tagline: pythonResult.product_tagline,
+      mvp_does: pythonResult.mvp_does,
+      mvp_does_not: pythonResult.mvp_does_not,
+      d2p_score: pythonResult.d2p_score,
+      product_potential_score: pythonResult.product_potential_score,
+      workaround_tools: pythonResult.workaround_tools,
+      workarounds: pythonResult.detected_workarounds || [],
+      pain_signals: pythonResult.detected_professions || [],
+      status: 'completed',
+      analysis_duration_ms: Date.now() - startTime
+    };
+
+    const { data: updated, error: updateError } = await supabase
+      .from('d2p_analyses')
+      .update(updateData)
+      .eq('id', inserted.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw new Error(`Failed to save results: ${updateError.message}`);
+    }
+
+    console.log(`[D2P] Analysis complete in ${Date.now() - startTime}ms`);
+    return addCompatibilityFields(updated);
+
+  } catch (error: any) {
+    await supabase
+      .from('d2p_analyses')
+      .update({
+        status: 'error',
+        error_message: error.message,
+        analysis_duration_ms: Date.now() - startTime
+      })
+      .eq('id', inserted.id);
+
+    throw error;
+  }
+}
+
+export async function reanalyzeMarket(
+  marketSlug: string,
+  params: AnalysisParams = {}
+): Promise<D2PAnalysis> {
+  const { data: existing } = await supabase
+    .from('d2p_analyses')
+    .select('market_name')
+    .eq('market_slug', marketSlug)
+    .limit(1)
+    .single();
+
+  if (!existing) {
+    throw new Error(`Market not found: ${marketSlug}`);
+  }
+
+  return analyzeMarket(existing.market_name, params);
+}
+
+export async function getLatestAnalysis(marketSlug: string): Promise<D2PAnalysis | null> {
+  const { data, error } = await supabase
+    .from('d2p_analyses')
+    .select('*')
+    .eq('market_slug', marketSlug)
+    .eq('is_latest', true)
+    .single();
+
+  if (error || !data) return null;
+  return addCompatibilityFields(data);
+}
+
+export async function getAnalysisByVersion(versionId: string): Promise<D2PAnalysis | null> {
+  const { data, error } = await supabase
+    .from('d2p_analyses')
+    .select('*')
+    .eq('version_id', versionId)
+    .single();
+
+  if (error || !data) return null;
+  return addCompatibilityFields(data);
+}
+
+export async function getAnalysisHistory(marketSlug: string, limit: number = 10): Promise<D2PAnalysis[]> {
+  const { data, error } = await supabase
+    .from('d2p_analyses')
+    .select('*')
+    .eq('market_slug', marketSlug)
+    .order('version_number', { ascending: false })
+    .limit(limit);
+
+  if (error) return [];
+  return (data || []).map(addCompatibilityFields);
+}
+
+export async function compareVersions(versionId1: string, versionId2: string): Promise<VersionComparison | null> {
+  const [v1, v2] = await Promise.all([
+    getAnalysisByVersion(versionId1),
+    getAnalysisByVersion(versionId2)
+  ]);
+
+  if (!v1 || !v2) return null;
+
+  const v1Frictions = new Set((v1.friction_units || []).map(f => f.label));
+  const v2Frictions = new Set((v2.friction_units || []).map(f => f.label));
+
+  const newFrictions = (v2.friction_units || [])
+    .filter(f => !v1Frictions.has(f.label))
+    .map(f => f.label);
+
+  const removedFrictions = (v1.friction_units || [])
+    .filter(f => !v2Frictions.has(f.label))
+    .map(f => f.label);
+
+  return {
+    v1,
+    v2,
+    changes: {
+      leads_delta: v2.leads_selected - v1.leads_selected,
+      topics_delta: v2.topics_discovered - v1.topics_discovered,
+      friction_delta: v2.friction_count - v1.friction_count,
+      potential_delta: (v2.product_potential_score || 0) - (v1.product_potential_score || 0),
+      new_frictions: newFrictions,
+      removed_frictions: removedFrictions
+    }
+  };
+}
+
+export async function listAnalyzedMarkets(): Promise<MarketSummary[]> {
+  const { data, error } = await supabase
+    .from('d2p_analyses')
+    .select('market_slug, market_name, version_id, version_number, created_at, leads_selected, topics_discovered, product_potential_score')
+    .eq('is_latest', true)
+    .order('created_at', { ascending: false });
+
+  if (error) return [];
+
+  return (data || []).map(row => ({
+    market_slug: row.market_slug,
+    market_name: row.market_name,
+    latest_version_id: row.version_id,
+    version_count: row.version_number,
+    latest_analysis_at: row.created_at,
+    latest_leads_searched: row.leads_selected,
+    latest_topics_discovered: row.topics_discovered,
+    latest_product_potential: row.product_potential_score
+  }));
+}
+
+export async function deleteMarketAnalyses(marketSlug: string): Promise<void> {
+  const { error } = await supabase
+    .from('d2p_analyses')
+    .delete()
+    .eq('market_slug', marketSlug);
+
+  if (error) {
+    throw new Error(`Failed to delete: ${error.message}`);
+  }
+
+  console.log(`[D2P] Deleted all analyses for ${marketSlug}`);
+}
