@@ -1,3 +1,70 @@
+<!--
+================================================================================
+  D2P Unified Dashboard — Decision-to-Product Framework
+================================================================================
+
+  OBJETIVO
+  --------
+  Identificar oportunidades reais de produto/serviço digital a partir da base
+  de leads do Instagram. Em vez de perguntar "o que as pessoas querem?", o
+  framework analisa o que elas JÁ FAZEM de forma manual e repetitiva
+  (workarounds) e transforma essas fricções em decisões automatizáveis.
+
+  MÉTODO (Pipeline em 5 Etapas)
+  -----------------------------
+  0. BUSCA PGVECTOR (embedding_d2p)
+     - Usuário digita o nome do mercado (ex: "Dentistas", "Beleza").
+     - Node.js gera um embedding via OpenAI (text-embedding-3-small).
+     - Busca leads similares em lead_embeddings.embedding_d2p usando a
+       RPC search_leads_for_d2p (cosine similarity com HNSW index).
+     - embedding_d2p contém APENAS dados profissionais limpos:
+       profession + business_category + primeira frase da bio (sem CTAs,
+       URLs, emojis, hashtags ou marketing).
+     - O threshold de similaridade é configurável (padrão 0.65).
+
+  1. BERTOPIC CLUSTERING
+     - As bios dos leads filtrados são clusterizadas via BERTopic
+       (sentence-transformers → UMAP → HDBSCAN → c-TF-IDF).
+     - Descobre tópicos de comportamento sem keywords pré-definidas.
+     - 100% semântico — deixa os dados revelarem os padrões.
+
+  2. WORKAROUNDS → DECISÕES
+     - Para cada tópico, detecta workarounds (ações manuais repetitivas).
+     - Mapeia cada workaround em uma DECISÃO — a dor real não é o
+       workaround, é a decisão que o humano toma repetidamente.
+     - Gera friction_score por tópico.
+
+  3. SCORE D2P (5 critérios binários)
+     - Frequência: acontece todo dia?
+     - Volume: várias vezes por dia?
+     - Manual: depende de humano?
+     - Custo: erro custa dinheiro?
+     - Regra: dá pra automatizar?
+     - Score >= 4/5 = produto candidato forte.
+
+  4. PRODUTO / SERVIÇO
+     - Define o produto: nome, tagline, one-liner, tipo, value proposition.
+     - Lista o que o MVP faz e o que NÃO faz.
+     - Calcula product_potential_score (0-100).
+
+  MANUTENÇÃO DOS EMBEDDINGS
+  -------------------------
+  - Novos leads: trigger automático (pg_net → Edge Function) gera
+    embedding_d2p ao inserir/atualizar profession ou business_category.
+  - Backfill: scripts/generate_d2p_embeddings.py para leads existentes.
+
+  STACK
+  -----
+  - Frontend: HTML/CSS/JS vanilla (esta página)
+  - Backend: Node.js + TypeScript (src/services/d2p-unified.service.ts)
+  - Python: BERTopic + sentence-transformers (scripts/d2p_analysis_engine.py)
+  - Banco: Supabase PostgreSQL + pgvector (HNSW index)
+  - Embeddings: OpenAI text-embedding-3-small (1536 dimensões)
+  - API: POST /api/d2p/analyze, GET /api/d2p/markets, etc.
+
+  ROTA: /demand-intelligence-dashboard.html
+================================================================================
+-->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -743,10 +810,10 @@
     <div class="container">
         <div class="header">
             <h1>D2P <span>Unified</span></h1>
-            <p>BERTopic + pgvector: Analise de friccoes de mercado via clustering de embeddings com versionamento completo.</p>
+            <p>BERTopic + pgvector: Análise de fricções de mercado via clustering de embeddings com versionamento completo.</p>
             <div class="method-badge">
                 <span class="dot"></span>
-                <span>Pipeline: MERCADO &rarr; EMBEDDING &rarr; VECTOR SEARCH &rarr; BERTOPIC &rarr; FRICCOES &rarr; PRODUTO</span>
+                <span>Pipeline: MERCADO &rarr; EMBEDDING &rarr; VECTOR SEARCH &rarr; BERTOPIC &rarr; FRICÇÕES &rarr; PRODUTO</span>
             </div>
         </div>
 
