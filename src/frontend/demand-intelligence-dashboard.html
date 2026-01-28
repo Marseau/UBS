@@ -689,6 +689,18 @@
 
         .form-group input:focus { outline: none; border-color: var(--aic-green); }
 
+        .form-group select {
+            width: 100%;
+            background: var(--aic-navy);
+            border: 1px solid var(--aic-border);
+            border-radius: 8px;
+            padding: 12px;
+            color: var(--aic-white);
+            font-size: 1em;
+        }
+        .form-group select:focus { outline: none; border-color: var(--aic-green); }
+        .form-group select option { background: var(--aic-navy); color: var(--aic-white); }
+
         .form-row {
             display: grid;
             grid-template-columns: 1fr auto auto;
@@ -721,6 +733,10 @@
             outline: none;
             border-color: var(--aic-green);
         }
+        .similarity-selector select option {
+            background: var(--aic-navy);
+            color: var(--aic-white);
+        }
     </style>
 </head>
 <body>
@@ -737,28 +753,28 @@
         <!-- Loading State -->
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p>Carregando analises de mercado...</p>
+            <p>Carregando análises de mercado...</p>
         </div>
 
         <!-- No Data State -->
         <div class="no-data" id="noData" style="display: none;">
             <div class="no-data-icon">🔬</div>
-            <h3 style="color: var(--aic-white); margin-bottom: 12px;">Nenhuma Analise Encontrada</h3>
+            <h3 style="color: var(--aic-white); margin-bottom: 12px;">Nenhuma Análise Encontrada</h3>
             <p style="color: var(--aic-gray); max-width: 600px; margin: 0 auto 20px;">
-                Digite o nome de um mercado. O sistema gera embedding, busca leads similares via pgvector e executa BERTopic para descobrir friccoes.
+                Digite o nome de um mercado. O sistema gera embedding, busca leads similares via pgvector e executa BERTopic para descobrir fricções.
             </p>
 
             <div class="custom-form">
                 <h3 style="color: var(--aic-green);">🔬 D2P Framework - BERTopic + pgvector</h3>
                 <p style="font-size: 0.85em; color: var(--aic-gray); margin-bottom: 20px;">
-                    Clustering de friccoes via embeddings. Sem keywords - 100% semantico.
+                    Clustering de fricções via embeddings. Sem keywords - 100% semântico.
                 </p>
                 <div class="form-group">
                     <label>Nome do Mercado</label>
                     <input type="text" id="customName" placeholder="Ex: Confeitarias, Advogados, Personal Trainers">
                 </div>
                 <div class="form-group">
-                    <label>Similaridade Minima</label>
+                    <label>Similaridade Mínima</label>
                     <select id="customSimilarity">
                         <option value="0.80">0.80 (muito restrito)</option>
                         <option value="0.75">0.75 (restrito)</option>
@@ -778,7 +794,7 @@
         <div id="resultsOverview" style="display: none;">
             <!-- New Analysis Form -->
             <div class="custom-form" style="margin-bottom: 30px;">
-                <h3 style="color: var(--aic-green); margin-bottom: 16px;">🔬 Nova Analise D2P (BERTopic + pgvector)</h3>
+                <h3 style="color: var(--aic-green); margin-bottom: 16px;">🔬 Nova Análise D2P (BERTopic + pgvector)</h3>
                 <div class="form-row">
                     <div class="form-group" style="margin-bottom: 0;">
                         <label>Nome do Mercado</label>
@@ -813,7 +829,7 @@
 
             <!-- Version Selector -->
             <div class="version-selector">
-                <label>Versao:</label>
+                <label>Versão:</label>
                 <select id="versionSelect" onchange="loadVersion(this.value)"></select>
                 <span id="versionInfo" style="color: var(--aic-gray); font-size: 0.85em;"></span>
             </div>
@@ -846,11 +862,11 @@
                         <span class="metric-value" id="step0Leads">-</span>
                     </div>
                     <div class="step-metric">
-                        <span class="metric-label">Similaridade media:</span>
+                        <span class="metric-label">Similaridade média:</span>
                         <span class="metric-value" id="step0AvgSimilarity" style="color: var(--aic-green);">-</span>
                     </div>
                     <div class="step-metric">
-                        <span class="metric-label">Threshold minimo:</span>
+                        <span class="metric-label">Threshold mínimo:</span>
                         <span class="metric-value" id="step0Threshold">-</span>
                     </div>
                 </div>
@@ -861,12 +877,12 @@
                 <div class="step-header">
                     <span class="step-number">1</span>
                     <span class="step-title">BERTOPIC CLUSTERING</span>
-                    <span class="step-badge" id="topicsCount">0 topicos</span>
+                    <span class="step-badge" id="topicsCount">0 tópicos</span>
                 </div>
                 <div class="step-content">
                     <p class="step-description">UMAP (1536 &rarr; 10 dim) + HDBSCAN clustering em bios de leads</p>
                     <div class="step-metric">
-                        <span class="metric-label">Topicos descobertos:</span>
+                        <span class="metric-label">Tópicos descobertos:</span>
                         <span class="metric-value" id="step1Topics">-</span>
                     </div>
                     <div class="step-metric">
@@ -880,12 +896,12 @@
             <div class="pipeline-step dominant">
                 <div class="step-header">
                     <span class="step-number">2</span>
-                    <span class="step-title">WORKAROUNDS &rarr; DECISOES</span>
-                    <span class="step-badge" id="frictionsCount">0 friccoes</span>
+                    <span class="step-title">WORKAROUNDS &rarr; DECISÕES</span>
+                    <span class="step-badge" id="frictionsCount">0 fricções</span>
                 </div>
                 <div class="step-content">
                     <p class="step-description">
-                        Workaround NAO e a dor. A dor e a DECISAO que o humano toma repetidamente.
+                        Workaround NÃO é a dor. A dor é a DECISÃO que o humano toma repetidamente.
                     </p>
                     <div id="decisionBox" class="decision-box" style="display:none;">
                         <div class="question" id="coreDecision">-</div>
@@ -903,7 +919,7 @@
                     <span class="step-badge large" id="d2pBadge">0/5</span>
                 </div>
                 <div class="step-content">
-                    <p class="step-description">5 criterios binarios: Score >= 4 = produto candidato forte</p>
+                    <p class="step-description">5 critérios binários: Score >= 4 = produto candidato forte</p>
                     <div class="d2p-criteria" id="d2pScoreGrid"></div>
                     <div class="d2p-verdict" id="d2pVerdict"></div>
                 </div>
@@ -913,7 +929,7 @@
             <div class="pipeline-step product-step">
                 <div class="step-header">
                     <span class="step-number">4</span>
-                    <span class="step-title">PRODUTO / SERVICO</span>
+                    <span class="step-title">PRODUTO / SERVIÇO</span>
                 </div>
                 <div class="step-content">
                     <div id="productCard" class="product-card" style="display:none;">
@@ -940,7 +956,7 @@
                             <div id="mvpDoesList"></div>
                         </div>
                         <div class="mvp-column doesnt">
-                            <h4>O que o MVP NAO FAZ:</h4>
+                            <h4>O que o MVP NÃO FAZ:</h4>
                             <div id="mvpDoesntList"></div>
                         </div>
                     </div>
@@ -959,11 +975,11 @@
                         <span class="metric-value" id="workaroundTools">-</span>
                     </div>
                     <div class="step-metric">
-                        <span class="metric-label">Duracao da analise:</span>
+                        <span class="metric-label">Duração da análise:</span>
                         <span class="metric-value" id="analysisDuration">-</span>
                     </div>
                     <div class="step-metric">
-                        <span class="metric-label">Parametros BERTopic:</span>
+                        <span class="metric-label">Parâmetros BERTopic:</span>
                         <span class="metric-value" id="bertopicParams">-</span>
                     </div>
                 </div>
@@ -1017,14 +1033,14 @@
 
                 return `
                     <div class="market-card" onclick="showDetail('${market.market_slug}')">
-                        <button class="delete-btn" onclick="deleteAnalysis('${market.market_slug}', event)" title="Excluir analise">✕</button>
+                        <button class="delete-btn" onclick="deleteAnalysis('${market.market_slug}', event)" title="Excluir análise">✕</button>
                         <div class="market-header">
                             <div class="market-name">${market.market_name}</div>
                             <div class="market-score ${scoreClass}">${score.toFixed(1)}</div>
                         </div>
                         <div class="market-leads">
                             ${(market.latest_leads_searched || 0).toLocaleString()} leads |
-                            ${market.latest_topics_discovered || 0} topicos |
+                            ${market.latest_topics_discovered || 0} tópicos |
                             <span class="version-badge">v${market.version_count || 1}</span>
                         </div>
                         <div class="market-dominant" style="font-size: 0.85em; color: var(--aic-gray);">
@@ -1085,12 +1101,12 @@
             const productTypeLabels = {
                 'gatekeeper': 'Gatekeeper',
                 'triage': 'Triage',
-                'operational_decision': 'Decisao Operacional',
+                'operational_decision': 'Decisão Operacional',
                 'scheduling': 'Agendamento',
                 'crm': 'CRM',
-                'communication': 'Comunicacao',
-                'order_management': 'Gestao de Pedidos',
-                'automation': 'Automacao',
+                'communication': 'Comunicação',
+                'order_management': 'Gestão de Pedidos',
+                'automation': 'Automação',
                 'generic': 'Generico'
             };
 
@@ -1106,7 +1122,7 @@
             document.getElementById('productTypeLabel').textContent = analysis.product_type_name || productTypeLabels[analysis.product_type] || analysis.product_type || '-';
 
             // Version info
-            document.getElementById('versionInfo').textContent = analysis.is_latest ? '(versao atual)' : '';
+            document.getElementById('versionInfo').textContent = analysis.is_latest ? '(versão atual)' : '';
 
             // Step 0: pgvector Search
             document.getElementById('step0Market').textContent = analysis.market_name;
@@ -1115,14 +1131,14 @@
             document.getElementById('step0Threshold').textContent = analysis.min_similarity ? `${(analysis.min_similarity * 100).toFixed(0)}%` : '-';
 
             // Step 1: BERTopic
-            document.getElementById('topicsCount').textContent = `${analysis.topics_discovered || 0} topicos`;
+            document.getElementById('topicsCount').textContent = `${analysis.topics_discovered || 0} tópicos`;
             document.getElementById('step1Topics').textContent = analysis.topics_discovered || 0;
             document.getElementById('step1Coverage').textContent = `${analysis.coverage_percentage || 0}%`;
 
             // Step 2: Workarounds → Decisions
             const frictions = analysis.friction_units || [];
             const realFrictions = frictions.filter(f => f.is_friction);
-            document.getElementById('frictionsCount').textContent = `${realFrictions.length} friccoes`;
+            document.getElementById('frictionsCount').textContent = `${realFrictions.length} fricções`;
 
             // Core decision box
             const coreDecision = analysis.dominant_decision || analysis.dominant_pain;
@@ -1159,16 +1175,16 @@
                     </div>
                 </div>
             `).join('');
-            document.getElementById('frictionsList').innerHTML = frictionsHtml || '<p style="color: var(--aic-gray);">Nenhuma friccao detectada</p>';
+            document.getElementById('frictionsList').innerHTML = frictionsHtml || '<p style="color: var(--aic-gray);">Nenhuma fricção detectada</p>';
 
             // Step 3: D2P Binary Score
             if (isBinaryScore) {
                 const criteria = [
-                    { key: 'frequency', label: 'Frequencia: Acontece todo dia?', icon: '&#x1F504;' },
-                    { key: 'volume', label: 'Volume: Varias vezes por dia?', icon: '&#x1F4CA;' },
+                    { key: 'frequency', label: 'Frequência: Acontece todo dia?', icon: '&#x1F504;' },
+                    { key: 'volume', label: 'Volume: Várias vezes por dia?', icon: '&#x1F4CA;' },
                     { key: 'manual', label: 'Manual: Depende de humano?', icon: '&#x270B;' },
                     { key: 'cost', label: 'Custo: Erro custa dinheiro?', icon: '&#x1F4B0;' },
-                    { key: 'rule', label: 'Regra: Da pra automatizar?', icon: '&#x2699;' }
+                    { key: 'rule', label: 'Regra: Dá pra automatizar?', icon: '&#x2699;' }
                 ];
                 const d2pHtml = criteria.map(c => {
                     const val = d2pScore[c.key];
@@ -1194,15 +1210,15 @@
                 const d2pHtml = `
                     <div class="d2p-item">
                         <span class="score">${d2pScore.friction_density_score?.toFixed(1) || 0}</span>
-                        <span class="label">Densidade de Friccao (30%)</span>
+                        <span class="label">Densidade de Fricção (30%)</span>
                     </div>
                     <div class="d2p-item">
                         <span class="score">${d2pScore.avg_friction_score?.toFixed(1) || 0}</span>
-                        <span class="label">Score Medio (25%)</span>
+                        <span class="label">Score Médio (25%)</span>
                     </div>
                     <div class="d2p-item">
                         <span class="score">${d2pScore.dominance_score?.toFixed(1) || 0}</span>
-                        <span class="label">Dominancia (25%)</span>
+                        <span class="label">Dominância (25%)</span>
                     </div>
                     <div class="d2p-item">
                         <span class="score">${d2pScore.workaround_score?.toFixed(1) || 0}</span>
@@ -1229,10 +1245,10 @@
                 document.getElementById('productTypeBadge').textContent = product.type_name || productTypeLabels[product.type] || product.type || '-';
                 document.getElementById('productOneLiner').textContent = product.one_liner || '-';
                 document.getElementById('productValueProp').textContent = product.value_proposition || '-';
-                document.getElementById('dominantPain').textContent = `Decisao core: ${product.core_decision || analysis.dominant_decision || '-'}`;
+                document.getElementById('dominantPain').textContent = `Decisão core: ${product.core_decision || analysis.dominant_decision || '-'}`;
             } else {
                 document.getElementById('productCard').style.display = 'none';
-                document.getElementById('dominantPain').textContent = analysis.dominant_pain || 'Nao identificado';
+                document.getElementById('dominantPain').textContent = analysis.dominant_pain || 'Não identificado';
             }
 
             document.getElementById('productTagline').textContent = analysis.product_tagline || product.tagline || '-';
@@ -1247,7 +1263,7 @@
             // Metadata
             const detectedInfo = [];
             if (analysis.detected_workarounds?.length) detectedInfo.push(`Workarounds: ${analysis.detected_workarounds.join(', ')}`);
-            if (analysis.detected_professions?.length) detectedInfo.push(`Profissoes: ${analysis.detected_professions.join(', ')}`);
+            if (analysis.detected_professions?.length) detectedInfo.push(`Profissões: ${analysis.detected_professions.join(', ')}`);
             document.getElementById('workaroundTools').textContent = detectedInfo.join(' | ') || (analysis.workaround_tools || []).join(', ') || '-';
             document.getElementById('analysisDuration').textContent = analysis.analysis_duration_ms ? `${analysis.analysis_duration_ms}ms` : '-';
 
@@ -1284,7 +1300,7 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    alert(`Analise concluida: ${name}\n\nLeads: ${data.analysis.leads_searched}\nTopicos: ${data.analysis.topics_discovered}\nFriccoes: ${data.analysis.friction_count}\nScore: ${data.analysis.product_potential_score?.toFixed(1)}/100`);
+                    alert(`Analise concluida: ${name}\n\nLeads: ${data.analysis.leads_searched}\nTópicos: ${data.analysis.topics_discovered}\nFricções: ${data.analysis.friction_count}\nScore: ${data.analysis.product_potential_score?.toFixed(1)}/100`);
                     document.getElementById('customName').value = '';
                     loadData();
                 } else {
@@ -1317,7 +1333,7 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    alert(`Analise concluida: ${name}\n\nLeads: ${data.analysis.leads_searched}\nTopicos: ${data.analysis.topics_discovered}\nFriccoes: ${data.analysis.friction_count}\nScore: ${data.analysis.product_potential_score?.toFixed(1)}/100`);
+                    alert(`Analise concluida: ${name}\n\nLeads: ${data.analysis.leads_searched}\nTópicos: ${data.analysis.topics_discovered}\nFricções: ${data.analysis.friction_count}\nScore: ${data.analysis.product_potential_score?.toFixed(1)}/100`);
                     document.getElementById('newMarketName').value = '';
                     loadData();
                 } else {
@@ -1333,7 +1349,7 @@
 
         async function deleteAnalysis(slug, event) {
             event.stopPropagation();
-            if (!confirm(`Deseja excluir TODAS as versoes da analise "${slug}"?`)) return;
+            if (!confirm(`Deseja excluir TODAS as versões da análise "${slug}"?`)) return;
 
             try {
                 const response = await fetch(`/api/d2p/market/${slug}`, { method: 'DELETE' });
