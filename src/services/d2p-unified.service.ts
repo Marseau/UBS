@@ -610,3 +610,21 @@ export async function deleteMarketAnalyses(marketSlug: string): Promise<void> {
 
   console.log(`[D2P] Deleted all analyses for ${marketSlug}`);
 }
+
+export async function getEmbeddingStatus(): Promise<{
+  embedded: number;
+  eligible: number;
+  percentage: number;
+  complete: boolean;
+}> {
+  const { data } = await supabase.rpc('get_d2p_embedding_status' as any);
+  const row = data?.[0] || { embedded: 0, eligible: 0 };
+  const pct = row.eligible > 0 ? Math.round((row.embedded / row.eligible) * 100) : 0;
+
+  return {
+    embedded: row.embedded,
+    eligible: row.eligible,
+    percentage: pct,
+    complete: pct >= 99
+  };
+}

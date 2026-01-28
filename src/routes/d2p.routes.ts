@@ -328,4 +328,18 @@ router.get('/health', (_req: Request, res: Response): void => {
   });
 });
 
+/**
+ * GET /api/d2p/embedding-status
+ * Returns current embedding_d2p generation progress
+ */
+router.get('/embedding-status', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const { getEmbeddingStatus } = await import('../services/d2p-unified.service');
+    const status = await getEmbeddingStatus();
+    res.json({ success: true, ...status });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;

@@ -817,6 +817,23 @@
             </div>
         </div>
 
+        <!-- Embedding Status Banner -->
+        <div id="embeddingStatus" style="display: none; background: var(--aic-navy-light); border: 1px solid var(--aic-border); border-radius: 10px; padding: 14px 20px; margin-bottom: 20px; display: none;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span id="embeddingIcon" style="font-size: 1.3em;">&#9203;</span>
+                <div style="flex: 1;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 0.85em; color: var(--aic-gray-light);" id="embeddingLabel">Gerando embeddings D2P...</span>
+                        <span style="font-size: 0.85em; color: var(--aic-green); font-weight: 600;" id="embeddingPct">0%</span>
+                    </div>
+                    <div style="background: var(--aic-navy); border-radius: 4px; height: 6px; overflow: hidden;">
+                        <div id="embeddingBar" style="height: 100%; background: var(--aic-green); border-radius: 4px; transition: width 0.5s ease; width: 0%;"></div>
+                    </div>
+                    <div style="font-size: 0.75em; color: var(--aic-gray); margin-top: 4px;" id="embeddingDetail">0 / 0 leads</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Loading State -->
         <div class="loading" id="loading">
             <div class="spinner"></div>
@@ -1431,7 +1448,55 @@
             }
         }
 
-        document.addEventListener('DOMContentLoaded', loadData);
+        // --- Embedding Status Polling ---
+        let embeddingPollTimer = null;
+
+        async function checkEmbeddingStatus() {
+            try {
+                const res = await fetch('/api/d2p/embedding-status');
+                const data = await res.json();
+                if (!data.success) return;
+
+                const banner = document.getElementById('embeddingStatus');
+                const pct = data.percentage;
+
+                if (data.complete) {
+                    document.getElementById('embeddingIcon').innerHTML = '&#9989;';
+                    document.getElementById('embeddingLabel').textContent = 'Embeddings D2P completos';
+                    document.getElementById('embeddingPct').textContent = '100%';
+                    document.getElementById('embeddingBar').style.width = '100%';
+                    document.getElementById('embeddingBar').style.background = 'var(--aic-green)';
+                    document.getElementById('embeddingDetail').textContent =
+                        `${data.embedded.toLocaleString()} / ${data.eligible.toLocaleString()} leads`;
+                    banner.style.display = 'block';
+                    banner.style.borderColor = 'var(--aic-green)';
+
+                    // Para de fazer polling
+                    if (embeddingPollTimer) {
+                        clearInterval(embeddingPollTimer);
+                        embeddingPollTimer = null;
+                    }
+                    // Esconde após 10s
+                    setTimeout(() => { banner.style.display = 'none'; }, 10000);
+                } else {
+                    document.getElementById('embeddingIcon').innerHTML = '&#9203;';
+                    document.getElementById('embeddingLabel').textContent = 'Gerando embeddings D2P...';
+                    document.getElementById('embeddingPct').textContent = pct + '%';
+                    document.getElementById('embeddingBar').style.width = pct + '%';
+                    document.getElementById('embeddingDetail').textContent =
+                        `${data.embedded.toLocaleString()} / ${data.eligible.toLocaleString()} leads`;
+                    banner.style.display = 'block';
+                }
+            } catch (e) {
+                // Silently ignore - status is informational
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            checkEmbeddingStatus();
+            embeddingPollTimer = setInterval(checkEmbeddingStatus, 30000);
+        });
     </script>
 
     <!-- AIC Sidebar Navigation -->
