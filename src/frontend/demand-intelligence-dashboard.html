@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demandas de Mercado - AIC Intelligence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --aic-green: #0ECC97;
+            --aic-green-dark: #0BA578;
+            --aic-green-glow: rgba(14, 204, 151, 0.15);
+            --aic-navy: #0C1B33;
+            --aic-navy-light: #122444;
+            --aic-navy-lighter: #1a3055;
+            --aic-white: #FDFDFD;
+            --aic-gray: #94a3b8;
+            --aic-gray-light: #cbd5e1;
+            --aic-border: #1e3a5f;
+            --aic-yellow: #f59e0b;
+            --aic-red: #ef4444;
+            --aic-blue: #3b82f6;
+            --aic-purple: #8b5cf6;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--aic-navy);
+            color: var(--aic-white);
+            padding: 20px;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: var(--aic-white);
+            font-size: 2.5em;
+            font-weight: 800;
+            margin-bottom: 12px;
+        }
+
+        .header h1 span { color: var(--aic-green); }
+
+        .header p {
+            color: var(--aic-gray);
+            font-size: 1.1em;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .method-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--aic-green-glow);
+            border: 1px solid var(--aic-green);
+            border-radius: 20px;
+            padding: 8px 16px;
+            margin-top: 16px;
+            font-size: 0.85em;
+        }
+
+        .method-badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--aic-green);
+        }
+
+        /* Market Cards Grid */
+        .markets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .market-card {
+            background: var(--aic-navy-light);
+            border: 1px solid var(--aic-border);
+            border-radius: 16px;
+            padding: 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .delete-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 1px solid var(--aic-border);
+            background: var(--aic-navy);
+            color: var(--aic-gray);
+            font-size: 0.85em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: all 0.2s;
+        }
+
+        .market-card:hover .delete-btn {
+            opacity: 1;
+        }
+
+        .delete-btn:hover {
+            background: var(--aic-red);
+            border-color: var(--aic-red);
+            color: white;
+        }
+
+        .market-card:hover {
+            border-color: var(--aic-green);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(14, 204, 151, 0.15);
+        }
+
+        .market-card.active {
+            border-color: var(--aic-green);
+            box-shadow: 0 0 0 3px var(--aic-green-glow);
+        }
+
+        .market-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+
+        .market-name {
+            font-size: 1.3em;
+            font-weight: 700;
+        }
+
+        .market-score {
+            background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+            color: var(--aic-navy);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 1.1em;
+        }
+
+        .market-score.low { background: linear-gradient(135deg, var(--aic-red), #dc2626); color: white; }
+        .market-score.medium { background: linear-gradient(135deg, var(--aic-yellow), #d97706); }
+
+        .market-leads {
+            font-size: 0.85em;
+            color: var(--aic-gray);
+            margin-bottom: 12px;
+        }
+
+        .market-dominant {
+            font-size: 0.9em;
+            color: var(--aic-gray-light);
+            padding: 12px;
+            background: var(--aic-navy);
+            border-radius: 8px;
+            border-left: 3px solid var(--aic-green);
+        }
+
+        .market-tagline {
+            margin-top: 12px;
+            font-size: 1em;
+            font-weight: 600;
+            color: var(--aic-green);
+        }
+
+        /* Detail Panel */
+        .detail-panel {
+            background: var(--aic-navy-light);
+            border: 1px solid var(--aic-border);
+            border-radius: 16px;
+            padding: 30px;
+            display: none;
+        }
+
+        .detail-panel.visible { display: block; }
+
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--aic-border);
+        }
+
+        .detail-title {
+            font-size: 1.8em;
+            font-weight: 800;
+        }
+
+        .detail-score {
+            font-size: 2em;
+            font-weight: 800;
+            color: var(--aic-green);
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 900px) {
+            .detail-grid { grid-template-columns: 1fr; }
+        }
+
+        .detail-section {
+            background: var(--aic-navy);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .section-title {
+            font-size: 0.85em;
+            font-weight: 600;
+            color: var(--aic-gray);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-content {
+            color: var(--aic-gray-light);
+            font-size: 0.95em;
+        }
+
+        /* Pattern Tags */
+        .pattern-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .pattern-tag {
+            background: var(--aic-navy-lighter);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pattern-count {
+            background: var(--aic-green-glow);
+            color: var(--aic-green);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: 600;
+        }
+
+        /* Frictions */
+        .friction-item {
+            background: var(--aic-navy-lighter);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .friction-item.dominant {
+            border-left: 3px solid var(--aic-green);
+            background: var(--aic-green-glow);
+        }
+
+        .friction-name {
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .friction-decision {
+            font-size: 0.9em;
+            color: var(--aic-gray-light);
+            font-style: italic;
+        }
+
+        .friction-sources {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .source-chip {
+            background: var(--aic-navy);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            color: var(--aic-gray);
+        }
+
+        /* MVP Lists */
+        .mvp-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .mvp-list h4 {
+            font-size: 0.9em;
+            margin-bottom: 12px;
+            color: var(--aic-gray-light);
+        }
+
+        .mvp-list.does h4 { color: var(--aic-green); }
+        .mvp-list.doesnt h4 { color: var(--aic-red); }
+
+        .mvp-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            font-size: 0.9em;
+            color: var(--aic-gray-light);
+            margin-bottom: 8px;
+        }
+
+        .mvp-item .icon { font-size: 0.8em; }
+        .mvp-list.does .mvp-item .icon { color: var(--aic-green); }
+        .mvp-list.doesnt .mvp-item .icon { color: var(--aic-red); }
+
+        /* Checklist */
+        .checklist-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+
+        .check-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85em;
+        }
+
+        .check-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7em;
+            flex-shrink: 0;
+        }
+
+        .check-icon.pass { background: var(--aic-green-glow); color: var(--aic-green); }
+        .check-icon.fail { background: rgba(239, 68, 68, 0.15); color: var(--aic-red); }
+
+        /* Pipeline Steps */
+        .pipeline-step {
+            background: var(--aic-navy-light);
+            border: 1px solid var(--aic-border);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .pipeline-step.highlight {
+            border-color: var(--aic-yellow);
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, var(--aic-navy-light) 100%);
+        }
+
+        .pipeline-step.dominant {
+            border-color: var(--aic-green);
+            background: linear-gradient(135deg, var(--aic-green-glow) 0%, var(--aic-navy-light) 100%);
+        }
+
+        .pipeline-step.score-step {
+            border-color: var(--aic-purple);
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, var(--aic-navy-light) 100%);
+        }
+
+        .pipeline-step.product-step {
+            border-color: var(--aic-green);
+            border-width: 2px;
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid var(--aic-border);
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            background: var(--aic-navy);
+            border: 2px solid var(--aic-border);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.85em;
+            color: var(--aic-gray);
+        }
+
+        .pipeline-step.highlight .step-number { border-color: var(--aic-yellow); color: var(--aic-yellow); }
+        .pipeline-step.dominant .step-number { border-color: var(--aic-green); color: var(--aic-green); }
+        .pipeline-step.score-step .step-number { border-color: var(--aic-purple); color: var(--aic-purple); }
+        .pipeline-step.product-step .step-number { border-color: var(--aic-green); color: var(--aic-green); background: var(--aic-green); color: var(--aic-navy); }
+
+        .step-title {
+            font-weight: 600;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--aic-gray-light);
+            flex: 1;
+        }
+
+        .step-badge {
+            background: var(--aic-navy);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+            color: var(--aic-gray);
+        }
+
+        .step-badge.large {
+            font-size: 1.1em;
+            padding: 6px 14px;
+            background: var(--aic-purple);
+            color: white;
+        }
+
+        .step-content {
+            padding: 20px;
+        }
+
+        .step-description {
+            font-size: 0.85em;
+            color: var(--aic-gray);
+            margin-bottom: 16px;
+        }
+
+        .step-metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--aic-border);
+        }
+
+        .step-metric:last-child { border-bottom: none; }
+
+        .metric-label { color: var(--aic-gray); font-size: 0.9em; }
+        .metric-value { color: var(--aic-white); font-weight: 600; }
+
+        .dominant-pain-box {
+            background: var(--aic-navy);
+            border-left: 4px solid var(--aic-green);
+            padding: 20px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            color: var(--aic-white);
+            line-height: 1.6;
+        }
+
+        .d2p-criteria {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .d2p-verdict {
+            text-align: center;
+            padding: 12px;
+            background: var(--aic-navy);
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .mvp-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 700px) {
+            .mvp-section { grid-template-columns: 1fr; }
+        }
+
+        .mvp-column {
+            background: var(--aic-navy);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .mvp-column h4 {
+            font-size: 0.9em;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--aic-border);
+        }
+
+        .mvp-column.does h4 { color: var(--aic-green); }
+        .mvp-column.doesnt h4 { color: var(--aic-red); }
+
+        .mvp-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            font-size: 0.9em;
+            color: var(--aic-gray-light);
+            margin-bottom: 8px;
+        }
+
+        .mvp-column.does .mvp-item::before { content: "✓"; color: var(--aic-green); }
+        .mvp-column.doesnt .mvp-item::before { content: "✗"; color: var(--aic-red); }
+
+        /* Product Box */
+        .product-box {
+            background: linear-gradient(135deg, var(--aic-green-glow) 0%, rgba(14, 204, 151, 0.05) 100%);
+            border: 1px solid rgba(14, 204, 151, 0.3);
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .product-tagline {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: var(--aic-green);
+            margin-bottom: 16px;
+        }
+
+        .product-definition {
+            font-size: 1.1em;
+            color: var(--aic-gray-light);
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 100px 20px;
+            color: var(--aic-gray);
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid var(--aic-border);
+            border-top-color: var(--aic-green);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 24px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* No Data */
+        .no-data {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .no-data-icon { font-size: 4em; margin-bottom: 20px; }
+
+        .analyze-btn {
+            background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+            color: var(--aic-navy);
+            border: none;
+            border-radius: 12px;
+            padding: 16px 32px;
+            font-size: 1em;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+            transition: all 0.2s;
+        }
+
+        .analyze-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 30px rgba(14, 204, 151, 0.4);
+        }
+
+        .analyze-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Market selector */
+        .market-selector {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .market-btn {
+            background: var(--aic-navy-light);
+            border: 1px solid var(--aic-border);
+            color: var(--aic-gray-light);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .market-btn:hover {
+            border-color: var(--aic-green);
+            color: var(--aic-white);
+        }
+
+        .market-btn.active {
+            background: var(--aic-green);
+            color: var(--aic-navy);
+            border-color: var(--aic-green);
+            font-weight: 600;
+        }
+
+        .back-btn {
+            background: transparent;
+            border: 1px solid var(--aic-border);
+            color: var(--aic-gray-light);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 20px;
+        }
+
+        .back-btn:hover {
+            border-color: var(--aic-green);
+            color: var(--aic-white);
+        }
+
+        .timestamp {
+            text-align: center;
+            color: var(--aic-gray);
+            font-size: 0.85em;
+            margin-top: 30px;
+        }
+
+        /* Custom analysis form */
+        .custom-form {
+            background: var(--aic-navy-light);
+            border: 1px solid var(--aic-border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 24px;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .custom-form h3 {
+            margin-bottom: 16px;
+            color: var(--aic-gray-light);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85em;
+            color: var(--aic-gray);
+            margin-bottom: 6px;
+        }
+
+        .form-group input {
+            width: 100%;
+            background: var(--aic-navy);
+            border: 1px solid var(--aic-border);
+            border-radius: 8px;
+            padding: 12px;
+            color: var(--aic-white);
+            font-size: 1em;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--aic-green);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Demandas de <span>Mercado</span></h1>
+            <p>Metodologia: WORKAROUND &rarr; DOR &rarr; DECISAO &rarr; PRODUTO. Analise dores reais de mercado e descubra oportunidades de produto SaaS.</p>
+            <div class="method-badge">
+                <span class="dot"></span>
+                <span>Dor SaaS = Decisao humana repetitiva + Impacto financeiro</span>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Carregando analises de mercado...</p>
+        </div>
+
+        <!-- No Data State -->
+        <div class="no-data" id="noData" style="display: none;">
+            <div class="no-data-icon">📊</div>
+            <h3 style="color: var(--aic-white); margin-bottom: 12px;">Nenhuma Analise Encontrada</h3>
+            <p style="color: var(--aic-gray); max-width: 600px; margin: 0 auto 20px;">
+                Digite o nome de um mercado e o sistema encontra leads similares via embedding, extrai keywords automaticamente e executa a analise D2P completa.
+            </p>
+
+            <div class="custom-form" style="max-width: 500px;">
+                <h3 style="color: var(--aic-green);">🔬 D2P Framework - Analise por Embedding</h3>
+                <p style="font-size: 0.85em; color: var(--aic-gray); margin-bottom: 20px;">
+                    Pipeline: MERCADO &rarr; EMBEDDING &rarr; LEADS &rarr; KEYWORDS &rarr; WORKAROUNDS &rarr; PRODUTO
+                </p>
+                <div class="form-group">
+                    <label>Nome do Mercado</label>
+                    <input type="text" id="customName" placeholder="Ex: Confeitarias, Advogados, Personal Trainers">
+                    <p style="font-size: 0.75em; color: var(--aic-gray); margin-top: 6px;">
+                        O sistema busca leads similares e extrai keywords automaticamente
+                    </p>
+                </div>
+                <button class="analyze-btn" style="width: 100%;" onclick="analyzeMarket()">
+                    🚀 Analisar Mercado
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Overview -->
+        <div id="resultsOverview" style="display: none;">
+            <!-- New Analysis Form -->
+            <div class="custom-form" style="max-width: 600px; margin-bottom: 30px;">
+                <h3 style="color: var(--aic-green); margin-bottom: 16px;">🔬 Nova Analise D2P (via Embedding)</h3>
+                <div style="display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>Nome do Mercado</label>
+                        <input type="text" id="newMarketName" placeholder="Ex: Confeitarias, Pet Shops, Dentistas...">
+                    </div>
+                    <button class="analyze-btn" style="margin: 0; padding: 12px 24px;" onclick="analyzeNewMarket()">
+                        🚀 Analisar
+                    </button>
+                </div>
+                <p style="font-size: 0.75em; color: var(--aic-gray); margin-top: 8px;">
+                    Sistema busca leads similares via embedding e extrai keywords automaticamente
+                </p>
+            </div>
+
+            <div class="markets-grid" id="marketsGrid"></div>
+        </div>
+
+        <!-- Detail Panel - Pipeline D2P Completo -->
+        <div class="detail-panel" id="detailPanel">
+            <button class="back-btn" onclick="showOverview()">
+                &larr; Voltar para lista
+            </button>
+
+            <!-- Header com Score -->
+            <div class="detail-header">
+                <div>
+                    <div class="detail-title" id="detailMarket">-</div>
+                    <div style="color: var(--aic-gray); font-size: 0.9em;" id="detailLeads">-</div>
+                </div>
+                <div>
+                    <div class="detail-score" id="detailScore">-</div>
+                    <div style="font-size: 0.8em; color: var(--aic-gray); text-align: center; margin-top: 4px;" id="productTypeLabel">-</div>
+                </div>
+            </div>
+
+            <!-- ========== PIPELINE D2P ========== -->
+
+            <!-- ETAPA 0: Definicao do Mercado -->
+            <div class="pipeline-step">
+                <div class="step-header">
+                    <span class="step-number">0</span>
+                    <span class="step-title">DEFINICAO DO MERCADO</span>
+                </div>
+                <div class="step-content" id="step0Content">
+                    <div class="step-metric">
+                        <span class="metric-label">Mercado:</span>
+                        <span class="metric-value" id="step0Market">-</span>
+                    </div>
+                    <div class="step-metric">
+                        <span class="metric-label">Keywords usadas:</span>
+                        <span class="metric-value" id="step0Keywords" style="color: var(--aic-green);">-</span>
+                    </div>
+                    <div class="step-metric">
+                        <span class="metric-label">Base filtrada:</span>
+                        <span class="metric-value" id="step0Leads">-</span>
+                    </div>
+                    <div class="step-metric">
+                        <span class="metric-label">Com embedding:</span>
+                        <span class="metric-value" id="step0Embedding">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ETAPA 1-2: Extracao de Workarounds -->
+            <div class="pipeline-step">
+                <div class="step-header">
+                    <span class="step-number">1-2</span>
+                    <span class="step-title">EXTRACAO DE WORKAROUNDS</span>
+                    <span class="step-badge" id="workaroundsCount">0</span>
+                </div>
+                <div class="step-content">
+                    <p class="step-description">Muletas usadas pelo mercado (canais, ferramentas, processos improvisados)</p>
+                    <div class="pattern-list" id="workaroundsList"></div>
+                </div>
+            </div>
+
+            <!-- ETAPA 2b: Sinais de Dor -->
+            <div class="pipeline-step">
+                <div class="step-header">
+                    <span class="step-number">2b</span>
+                    <span class="step-title">SINAIS DE DOR</span>
+                    <span class="step-badge" id="painSignalsCount">0</span>
+                </div>
+                <div class="step-content">
+                    <p class="step-description">Padroes comportamentais que indicam fricao</p>
+                    <div class="pattern-list" id="painSignalsList"></div>
+                </div>
+            </div>
+
+            <!-- ETAPA 3: Traducao Processo -> Decisao -->
+            <div class="pipeline-step highlight">
+                <div class="step-header">
+                    <span class="step-number">3</span>
+                    <span class="step-title">TRADUCAO: PROCESSO &rarr; DECISAO</span>
+                </div>
+                <div class="step-content">
+                    <p class="step-description">
+                        <strong>Regra de Ouro:</strong> Workaround NAO e a dor. A dor e a DECISAO humana repetitiva.
+                    </p>
+                    <div id="frictionsList"></div>
+                </div>
+            </div>
+
+            <!-- ETAPA 4: Score D2P -->
+            <div class="pipeline-step score-step">
+                <div class="step-header">
+                    <span class="step-number">4</span>
+                    <span class="step-title">SCORE D2P</span>
+                    <span class="step-badge large" id="d2pBadge">0/5</span>
+                </div>
+                <div class="step-content">
+                    <p class="step-description">Criterios: Score &ge; 4 = produto candidato forte</p>
+                    <div class="d2p-criteria" id="d2pScoreGrid"></div>
+                    <div class="d2p-verdict" id="d2pVerdict"></div>
+                </div>
+            </div>
+
+            <!-- ETAPA 5: Dor Dominante -->
+            <div class="pipeline-step dominant">
+                <div class="step-header">
+                    <span class="step-number">5</span>
+                    <span class="step-title">DOR DOMINANTE IDENTIFICADA</span>
+                </div>
+                <div class="step-content">
+                    <div class="dominant-pain-box" id="dominantPain">-</div>
+                </div>
+            </div>
+
+            <!-- ETAPA 6: Definicao do Produto -->
+            <div class="pipeline-step product-step">
+                <div class="step-header">
+                    <span class="step-number">6</span>
+                    <span class="step-title">DEFINICAO DO PRODUTO</span>
+                </div>
+                <div class="step-content">
+                    <div class="product-tagline" id="productTagline">-</div>
+                    <div class="product-definition" id="productDefinition">-</div>
+
+                    <div class="mvp-section">
+                        <div class="mvp-column does">
+                            <h4>O que o MVP FAZ:</h4>
+                            <div id="mvpDoesList"></div>
+                        </div>
+                        <div class="mvp-column doesnt">
+                            <h4>O que o MVP NAO FAZ:</h4>
+                            <div id="mvpDoesntList"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ETAPA 7: Checklist de Validacao -->
+            <div class="pipeline-step">
+                <div class="step-header">
+                    <span class="step-number">7</span>
+                    <span class="step-title">CHECKLIST DE VALIDACAO</span>
+                </div>
+                <div class="step-content">
+                    <div class="checklist-grid" id="checklistGrid"></div>
+                </div>
+            </div>
+
+            <div class="timestamp" id="detailTimestamp"></div>
+        </div>
+    </div>
+
+    <script>
+        let allAnalyses = [];
+
+        async function loadData() {
+            document.getElementById('loading').style.display = 'flex';
+            document.getElementById('resultsOverview').style.display = 'none';
+            document.getElementById('noData').style.display = 'none';
+            document.getElementById('detailPanel').classList.remove('visible');
+
+            try {
+                // Load existing analyses
+                const response = await fetch('/api/market-demand/analyses');
+                const data = await response.json();
+
+                if (data.success && data.analyses && data.analyses.length > 0) {
+                    allAnalyses = data.analyses;
+                    renderOverview();
+                } else {
+                    showNoData();
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                showNoData();
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function showNoData() {
+            document.getElementById('noData').style.display = 'block';
+            document.getElementById('resultsOverview').style.display = 'none';
+        }
+
+        function renderOverview() {
+            document.getElementById('resultsOverview').style.display = 'block';
+            const grid = document.getElementById('marketsGrid');
+
+            grid.innerHTML = allAnalyses.map((analysis, index) => {
+                const scoreClass = analysis.potential_score >= 70 ? '' :
+                                   analysis.potential_score >= 40 ? 'medium' : 'low';
+                const d2pTotal = analysis.d2p_score?.total || 0;
+                const productTypeLabel = {
+                    'gatekeeper': 'Gatekeeper',
+                    'triage': 'Triagem',
+                    'operational_decision': 'Decisao Operacional'
+                }[analysis.product_type] || analysis.product_type;
+                const keywords = (analysis.keywords_used || []).join(', ');
+
+                return `
+                    <div class="market-card" onclick="showDetail(${index})">
+                        <button class="delete-btn" onclick="deleteAnalysis('${analysis.market_slug}', event)" title="Excluir analise">✕</button>
+                        <div class="market-header">
+                            <div class="market-name">${analysis.market_name}</div>
+                            <div class="market-score ${scoreClass}">${analysis.potential_score}</div>
+                        </div>
+                        <div class="market-leads">
+                            ${(analysis.total_leads || 0).toLocaleString()} leads |
+                            Embedding: ${analysis.embedding_coverage || 0}% |
+                            D2P: ${d2pTotal}/5 |
+                            <span style="color: var(--aic-purple);">${productTypeLabel}</span>
+                        </div>
+                        ${keywords ? `<div style="font-size: 0.8em; color: var(--aic-gray); margin-bottom: 8px;">Keywords: ${keywords}</div>` : ''}
+                        <div class="market-dominant">${truncate(analysis.dominant_pain, 150)}</div>
+                        <div class="market-tagline">${analysis.product_tagline || '-'}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showDetail(index) {
+            const analysis = allAnalyses[index];
+            if (!analysis) return;
+
+            document.getElementById('resultsOverview').style.display = 'none';
+            document.getElementById('detailPanel').classList.add('visible');
+
+            const productTypeLabels = {
+                'gatekeeper': 'Gatekeeper',
+                'triage': 'Triagem',
+                'operational_decision': 'Decisao Operacional'
+            };
+
+            // === HEADER ===
+            document.getElementById('detailMarket').textContent = analysis.market_name;
+            document.getElementById('detailLeads').textContent = `Pipeline D2P completo`;
+            document.getElementById('detailScore').textContent = analysis.potential_score;
+            document.getElementById('productTypeLabel').textContent = productTypeLabels[analysis.product_type] || analysis.product_type;
+
+            // === ETAPA 0: Definicao do Mercado ===
+            document.getElementById('step0Market').textContent = analysis.market_name;
+            document.getElementById('step0Keywords').textContent = (analysis.keywords_used || []).join(', ') || '-';
+            document.getElementById('step0Leads').textContent = `${(analysis.total_leads || 0).toLocaleString()} leads`;
+            document.getElementById('step0Embedding').textContent = `${(analysis.leads_with_embedding || 0).toLocaleString()} (${analysis.embedding_coverage || 0}%)`;
+
+            // === ETAPA 1-2: Workarounds ===
+            const workarounds = analysis.workarounds || [];
+            document.getElementById('workaroundsCount').textContent = `${workarounds.length} padroes`;
+            const workaroundsHtml = workarounds.map(w => `
+                <div class="pattern-tag">
+                    ${w.pattern}
+                    <span class="pattern-count">${w.count.toLocaleString()} (${w.percentage}%)</span>
+                </div>
+            `).join('');
+            document.getElementById('workaroundsList').innerHTML = workaroundsHtml;
+
+            // === ETAPA 2b: Sinais de Dor ===
+            const painSignals = analysis.pain_signals || [];
+            document.getElementById('painSignalsCount').textContent = `${painSignals.length} padroes`;
+            const painHtml = painSignals.map(p => `
+                <div class="pattern-tag">
+                    ${p.pattern}
+                    <span class="pattern-count">${p.count.toLocaleString()} (${p.percentage}%)</span>
+                </div>
+            `).join('');
+            document.getElementById('painSignalsList').innerHTML = painHtml;
+
+            // === ETAPA 3: Traducao Processo -> Decisao ===
+            const frictionsHtml = (analysis.frictions || []).map(f => `
+                <div class="friction-item ${f.is_dominant ? 'dominant' : ''}">
+                    <div class="friction-name">
+                        ${f.name}
+                        ${f.product_type ? `<span class="source-chip" style="margin-left: 8px;">${productTypeLabels[f.product_type] || f.product_type}</span>` : ''}
+                    </div>
+                    <div class="friction-decision">"${f.decision}"</div>
+                    <div class="friction-sources">
+                        <span style="color: var(--aic-gray); font-size: 0.8em; margin-right: 6px;">Fontes:</span>
+                        ${(f.sources || []).map(s => `<span class="source-chip">${s}</span>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('frictionsList').innerHTML = frictionsHtml;
+
+            // === ETAPA 4: Score D2P ===
+            const d2pLabels = {
+                frequency: 'Frequencia (acontece todo dia)',
+                volume: 'Volume (varias vezes por dia)',
+                manual: 'Manual (depende de humano)',
+                cost: 'Custo (erro custa dinheiro)',
+                rule: 'Regra (vira regra simples)'
+            };
+
+            const d2pScore = analysis.d2p_score || {};
+            const d2pHtml = Object.entries(d2pLabels).map(([key, label]) => {
+                const passed = d2pScore[key] === true;
+                return `
+                    <div class="check-item">
+                        <div class="check-icon ${passed ? 'pass' : 'fail'}">${passed ? '✓' : '✗'}</div>
+                        <span>${label}</span>
+                    </div>
+                `;
+            }).join('');
+            document.getElementById('d2pScoreGrid').innerHTML = d2pHtml;
+            document.getElementById('d2pBadge').textContent = `${d2pScore.total || 0}/5`;
+
+            const d2pVerdict = d2pScore.total >= 4
+                ? '<span style="color: var(--aic-green); font-size: 1.1em;">✓ PRODUTO CANDIDATO FORTE</span>'
+                : d2pScore.total >= 3
+                ? '<span style="color: var(--aic-yellow);">⚠ Potencial moderado - validar mais</span>'
+                : '<span style="color: var(--aic-red);">✗ Baixo potencial - mercado fraco</span>';
+            document.getElementById('d2pVerdict').innerHTML = d2pVerdict;
+
+            // === ETAPA 5: Dor Dominante ===
+            document.getElementById('dominantPain').textContent = analysis.dominant_pain || '-';
+
+            // === ETAPA 6: Definicao do Produto ===
+            document.getElementById('productTagline').textContent = analysis.product_tagline || '-';
+            document.getElementById('productDefinition').textContent = analysis.product_definition || '-';
+
+            const mvpDoes = (analysis.mvp_does || []).map(item => `
+                <div class="mvp-item">${item}</div>
+            `).join('');
+            document.getElementById('mvpDoesList').innerHTML = mvpDoes;
+
+            const mvpDoesnt = (analysis.mvp_does_not || []).map(item => `
+                <div class="mvp-item">${item}</div>
+            `).join('');
+            document.getElementById('mvpDoesntList').innerHTML = mvpDoesnt;
+
+            // Checklist
+            const checklistLabels = {
+                recurring_decision: 'Decisao recorrente',
+                daily_occurrence: 'Ocorre diariamente',
+                manual_today: 'Manual hoje',
+                clear_workaround: 'Workaround claro',
+                financial_impact: 'Impacto financeiro'
+            };
+
+            const checklist = analysis.checklist || {};
+            const checklistHtml = Object.entries(checklistLabels).map(([key, label]) => {
+                const passed = checklist[key] === true;
+                return `
+                    <div class="check-item">
+                        <div class="check-icon ${passed ? 'pass' : 'fail'}">${passed ? '✓' : '✗'}</div>
+                        <span>${label}</span>
+                    </div>
+                `;
+            }).join('');
+            document.getElementById('checklistGrid').innerHTML = checklistHtml;
+
+            // Timestamp
+            if (analysis.analysis_date) {
+                document.getElementById('detailTimestamp').textContent =
+                    'Analise gerada em: ' + new Date(analysis.analysis_date).toLocaleString('pt-BR');
+            }
+        }
+
+        function showOverview() {
+            document.getElementById('detailPanel').classList.remove('visible');
+            document.getElementById('resultsOverview').style.display = 'block';
+        }
+
+        async function analyzeMarket() {
+            const name = document.getElementById('customName').value.trim();
+
+            if (!name) {
+                alert('Preencha o nome do mercado');
+                return;
+            }
+
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '🔄 Buscando leads via embedding...';
+
+            try {
+                const response = await fetch('/api/market-demand/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    const keywords = (data.analysis.keywords_used || []).slice(0, 5).join(', ');
+                    alert(`Analise concluida: ${name}\n\nLeads encontrados: ${data.analysis.total_leads}\nKeywords extraidas: ${keywords}...\nScore: ${data.analysis.potential_score}\nD2P: ${data.analysis.d2p_score?.total || 0}/5`);
+                    document.getElementById('customName').value = '';
+                    loadData();
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro ao analisar: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        async function deleteAnalysis(slug, event) {
+            event.stopPropagation();
+            if (!confirm(`Deseja realmente excluir a analise "${slug}"?`)) return;
+
+            try {
+                const response = await fetch(`/api/market-demand/analysis/${slug}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    loadData();
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro ao excluir: ' + error.message);
+            }
+        }
+
+        async function analyzeNewMarket() {
+            const name = document.getElementById('newMarketName').value.trim();
+
+            if (!name) {
+                alert('Preencha o nome do mercado');
+                return;
+            }
+
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '🔄 Buscando via embedding...';
+
+            try {
+                const response = await fetch('/api/market-demand/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    const keywords = (data.analysis.keywords_used || []).slice(0, 5).join(', ');
+                    alert(`Analise concluida: ${name}\n\nLeads: ${data.analysis.total_leads}\nKeywords extraidas: ${keywords}...\nScore: ${data.analysis.potential_score}\nD2P: ${data.analysis.d2p_score?.total || 0}/5`);
+                    document.getElementById('newMarketName').value = '';
+                    loadData();
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro ao analisar: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        function truncate(str, len) {
+            if (!str) return '';
+            return str.length > len ? str.substring(0, len) + '...' : str;
+        }
+
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+
+    <!-- AIC Sidebar Navigation -->
+    <script src="/components/aic-sidebar.js"></script>
+</body>
+</html>
