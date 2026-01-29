@@ -880,6 +880,27 @@ router.post('/campaigns/:campaignId/activate', optionalAuthAIC, async (req: Auth
       return;
     }
 
+    // Validar que briefing existe e tem preenchimento minimo
+    const { data: briefing } = await supabase
+      .from('campaign_briefing')
+      .select('completion_percentage')
+      .eq('campaign_id', campaignId)
+      .single();
+
+    if (!briefing || (briefing.completion_percentage || 0) < 30) {
+      res.status(400).json({ error: 'Briefing must be at least 30% complete before activation' });
+      return;
+    }
+
+    // Buscar canal WhatsApp da campanha (whapi_channel_uuid)
+    const { data: campaignChannels } = await supabase
+      .from('cluster_campaigns')
+      .select('whapi_channel_uuid')
+      .eq('id', campaignId)
+      .single();
+
+    const hasWhatsapp = !!campaignChannels?.whapi_channel_uuid;
+
     // Buscar instagram_account_id se existir para esta campanha
     const { data: instagramAccount } = await supabase
       .from('instagram_accounts')
@@ -887,6 +908,17 @@ router.post('/campaigns/:campaignId/activate', optionalAuthAIC, async (req: Auth
       .eq('campaign_id', campaignId)
       .not('status', 'in', '("disabled","permanently_blocked")')
       .single();
+
+    const hasInstagram = !!instagramAccount?.id;
+
+    const missingChannels: string[] = [];
+    if (!hasWhatsapp) missingChannels.push('WhatsApp');
+    if (!hasInstagram) missingChannels.push('Instagram');
+
+    if (missingChannels.length > 0) {
+      res.status(400).json({ error: `Missing required channels: ${missingChannels.join(', ')}` });
+      return;
+    }
 
     // Usar funcao SQL que atualiza os FKs corretamente
     const { data: result, error: rpcError } = await supabase.rpc('activate_campaign_after_onboarding', {

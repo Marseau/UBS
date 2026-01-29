@@ -976,6 +976,7 @@
     let whatsappConnected = false;
     let instagramSaved = false;
     let clientContactSaved = false;
+    let briefingCompletion = 0;
     let whatsappChannelId = null; // Partner API channel ID
     let availableCampaigns = [];
 
@@ -1031,6 +1032,7 @@
 
           if (briefing && briefing.completion_percentage !== undefined) {
             const completion = briefing.completion_percentage || 0;
+            briefingCompletion = completion;
 
             // Show progress
             progressContainer.style.display = 'flex';
@@ -1544,9 +1546,26 @@
     // Finalize setup
     async function finalizeSetup() {
       const btn = document.getElementById('btn-finalize');
+      const missing = [];
 
-      if (!whatsappConnected && !instagramSaved) {
-        showStatus('final-status', 'Configure pelo menos um canal (WhatsApp ou Instagram) antes de finalizar.', 'error');
+      if (!whatsappConnected) {
+        missing.push('Conecte o WhatsApp');
+      }
+
+      if (!instagramSaved) {
+        missing.push('Conecte o Instagram');
+      }
+
+      if (!clientContactSaved) {
+        missing.push('Preencha as informacoes de contato do consultor');
+      }
+
+      if (briefingCompletion < 30) {
+        missing.push('Preencha o briefing da campanha (minimo 30%)');
+      }
+
+      if (missing.length > 0) {
+        showStatus('final-status', missing.join('. ') + '.', 'error');
         return;
       }
 
