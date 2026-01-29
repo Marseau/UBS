@@ -416,23 +416,40 @@ router.get('/:id/stats', async (req: Request, res: Response) => {
       });
     }
 
-    // Buscar total de leads na campanha
-    const { count: leadsCount } = await supabaseAdmin
+    // Buscar leads da campanha com status
+    const { data: campaignLeads } = await supabaseAdmin
       .from('campaign_leads')
-      .select('*', { count: 'exact', head: true })
+      .select('status')
       .eq('campaign_id', campaignId);
+
+    const leadsCount = campaignLeads?.length || 0;
+
+    // Lead status breakdown
+    const leadStatuses = {
+      pending: campaignLeads?.filter(l => !l.status || l.status === 'pending')?.length || 0,
+      contacted: campaignLeads?.filter(l => l.status === 'contacted')?.length || 0,
+      replied: campaignLeads?.filter(l => l.status === 'replied')?.length || 0,
+      qualified: campaignLeads?.filter(l => l.status === 'qualified')?.length || 0,
+      failed: campaignLeads?.filter(l => l.status === 'failed')?.length || 0
+    };
 
     // Buscar conversas
     const { data: conversations } = await supabaseAdmin
       .from('aic_conversations')
-      .select('id, status, qualification_status, lead_messages_count, channel')
+      .select('id, status, qualification_status, handoff_status, lead_messages_count, channel')
       .eq('campaign_id', campaignId);
 
-    // Buscar entregas de leads (reunioes)
-    const { data: deliveries } = await supabaseAdmin
-      .from('aic_lead_deliveries')
-      .select('id, meeting_scheduled_at, status')
-      .eq('campaign_id', campaignId);
+    // Qualification breakdown
+    const qualification = {
+      neutral: conversations?.filter(c => !c.qualification_status || c.qualification_status === 'neutral')?.length || 0,
+      interested: conversations?.filter(c => c.qualification_status === 'interested')?.length || 0,
+      warm: conversations?.filter(c => c.qualification_status === 'warm')?.length || 0,
+      hot: conversations?.filter(c => c.qualification_status === 'hot')?.length || 0
+    };
+
+    // Handoff stats
+    const handoffs = conversations?.filter(c => c.handoff_status === 'active')?.length || 0;
+    const needsReview = conversations?.filter(c => c.handoff_status === 'needs_review')?.length || 0;
 
     // Buscar mensagens da fila
     const { data: messages } = await supabaseAdmin
@@ -444,13 +461,11 @@ router.get('/:id/stats', async (req: Request, res: Response) => {
     // Calcular estatisticas
     const totalConversations = conversations?.length || 0;
     const respondedConversations = conversations?.filter(c => c.lead_messages_count && c.lead_messages_count > 0)?.length || 0;
-    const qualifiedConversations = conversations?.filter(c =>
-      c.qualification_status === 'qualified' ||
-      c.qualification_status === 'hot' ||
-      c.qualification_status === 'interested'
-    )?.length || 0;
 
-    const meetings = deliveries?.filter(d => d.meeting_scheduled_at)?.length || 0;
+    // Funnel baseado em campaign_leads.status
+    const funnelContacted = leadStatuses.contacted + leadStatuses.replied + leadStatuses.qualified;
+    const funnelResponded = leadStatuses.replied + leadStatuses.qualified;
+    const funnelQualified = leadStatuses.qualified;
 
     // Por canal
     const whatsappMessages = messages?.filter(m => m.channel === 'whatsapp')?.length || 0;
@@ -475,15 +490,18 @@ router.get('/:id/stats', async (req: Request, res: Response) => {
         status: campaign.pipeline_status || campaign.cluster_status || 'setup',
         created_at: campaign.created_at
       },
-      leads: leadsCount || 0,
+      leads: leadsCount,
       conversations: totalConversations,
       responses: respondedConversations,
-      meetings: meetings,
+      handoffs: handoffs,
+      needs_review: needsReview,
+      qualification: qualification,
+      lead_statuses: leadStatuses,
       funnel: {
-        leads: leadsCount || 0,
-        contacted: totalConversations,
-        responded: respondedConversations,
-        qualified: qualifiedConversations
+        leads: leadsCount,
+        contacted: funnelContacted,
+        responded: funnelResponded,
+        qualified: funnelQualified
       },
       channels: {
         whatsapp: whatsappMessages,
