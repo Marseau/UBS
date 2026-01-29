@@ -1150,9 +1150,10 @@
 
     // Carrega o sidebar correto baseado no contexto (admin ou cliente)
     (function() {
-      const isAdminPath = window.location.pathname.startsWith('/aic/');
+      const role = localStorage.getItem('aic_user_role');
+      const isAdmin = role === 'admin' || window.location.pathname.startsWith('/aic/');
       const sidebarScript = document.createElement('script');
-      sidebarScript.src = isAdminPath ? '/components/aic-sidebar.js' : '/components/aic-client-sidebar.js';
+      sidebarScript.src = isAdmin ? '/components/aic-sidebar.js' : '/components/aic-client-sidebar.js';
       document.body.appendChild(sidebarScript);
     })();
   </script>
