@@ -317,6 +317,7 @@ Gerar um JSON com os campos:
 
 #### 2. profession
 - Qualificação profissional específica (ex: Cardiologista, Personal Trainer, Nutricionista Esportiva)
+- Use SEMPRE a forma masculina e Title Case (ex: "Advogado", não "Advogada"; "Psicólogo", não "Psicóloga"; "Fotógrafo", não "Fotógrafa"; "Confeiteiro", não "Confeiteira")
 - Pode vir de qualquer fonte
 - Se múltiplas, escolha a mais específica | Senão, null
 
@@ -339,7 +340,7 @@ Gerar um JSON com os campos:
   * "Av. Paulista, 1000 - São Paulo/SP CEP: 01310-100" → address: "Av. Paulista, 1000", city: "São Paulo", state: "SP", zip_code: "01310100"
 
 #### 6. business_category
-- Classifique por domínio: saude, beleza, fitness, odontologia, veterinaria, educacao, juridico, consultoria, tecnologia, outros
+- Classifique por domínio: beleza, saude, fitness, alimentacao, juridico, consultoria, educacao, tecnologia, financeiro, imobiliario, moda, pet, automotivo, construcao, eventos, comunicacao, agricultura, industria, varejo, servicos, outros
 - Baseie-se em profession e bio
 - Ex: "Personal Trainer" → fitness | Se não identificar → null
 
