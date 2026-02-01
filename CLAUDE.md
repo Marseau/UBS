@@ -148,6 +148,9 @@ test_instagram_user_id VARCHAR(50)  -- Preenchido automaticamente via trigger
 | Tabela | Proposito | Colunas Chave |
 |--------|-----------|---------------|
 | `instagram_leads` | Base de leads | `whatsapp_number`, `captured_at`, `updated_at` |
+| `lead_embedding_components` | Embeddings bio/website/hashtags | `embedding_bio`, `embedding_website`, `embedding_hashtags`, `needs_final_recompute` |
+| `lead_embedding_final` | Embedding final (clustering/search) | `embedding_final` (HNSW indexed), `computed_at` |
+| `lead_embedding_d2p` | Embedding D2P (profissao) | `embedding_d2p`, `embedding_d2p_text` |
 | `cluster_campaigns` | Campanhas | `campaign_name`, `outreach_enabled`, `whapi_channel_uuid` |
 | `campaign_leads` | Leads por campanha | `campaign_id`, `lead_id`, `fit_score`, `outreach_channel` |
 | `campaign_subclusters` | Clusters/personas | `cluster_name`, `persona`, `dm_scripts` |
@@ -164,8 +167,56 @@ test_instagram_user_id VARCHAR(50)  -- Preenchido automaticamente via trigger
 | `aic_instagram_conversations` | Migrada | `aic_conversations` com `channel='instagram'` |
 | `aic_instagram_dm_queue` | Migrada | `aic_message_queue` com `channel='instagram'` |
 | `campaign_outreach_queue` | Duplicada | `aic_message_queue` |
+| `lead_embeddings` | Splitada em 3 tabelas (2026-02-01) | `lead_embedding_components` + `lead_embedding_final` + `lead_embedding_d2p` |
+| `lead_embeddings_old` | Tabela original renomeada (dropar apos 2026-02-15) | Substituida pelas 3 tabelas acima |
 
-### 4.3 Funcoes SQL Criticas
+### 4.3 Arquitetura de Embeddings (3 Tabelas)
+
+A tabela monolitica `lead_embeddings` foi splitada em 3 tabelas especializadas para eliminar TOAST bloat (~30KB/row → ~6KB/row por operacao).
+
+```
+lead_embedding_components (bio, website, hashtags)
+  - fillfactor=70 para HOT updates
+  - Trigger: IS DISTINCT FROM seta needs_final_recompute=TRUE
+  - embedded_at para logica de TTL
+
+lead_embedding_final (embedding_final)
+  - HNSW index (vector_cosine_ops, m=16, ef_construction=64)
+  - Write-once (so reescrito pelo worker async)
+  - Trigger: sync para instagram_leads.embedding (temporario)
+
+lead_embedding_d2p (embedding_d2p + texto)
+  - HNSW index (vector_cosine_ops)
+  - Ciclo de vida independente
+```
+
+**Formula do embedding_final (4 componentes, pesos normalizados):**
+
+```
+embedding_final = normalize_L2(
+    0.40 * embedding_d2p       -- profissao + categoria + bio limpa
+  + 0.25 * embedding_bio       -- bio completa
+  + 0.20 * embedding_website   -- texto do website
+  + 0.15 * embedding_hashtags  -- hashtags bio + posts
+)
+```
+
+Quando componentes sao NULL, pesos sao redistribuidos proporcionalmente (soma sempre = 1.0).
+
+**Worker async:** `recompute_final_embeddings_batch()` processa leads com `needs_final_recompute=TRUE` usando `FOR UPDATE SKIP LOCKED`.
+
+**View de compatibilidade:** `lead_embeddings` e agora uma VIEW read-only (JOIN das 3 tabelas). INSERT/UPDATE nela falhara. Todo codigo deve usar as tabelas individuais.
+
+**IMPORTANTE - Deletes em scrapers:** Ao deletar embeddings de um lead, deletar das 3 tabelas (nao ha cascade entre elas):
+```typescript
+await Promise.all([
+  supabase.from('lead_embedding_components').delete().eq('lead_id', id),
+  supabase.from('lead_embedding_final').delete().eq('lead_id', id),
+  supabase.from('lead_embedding_d2p').delete().eq('lead_id', id),
+]);
+```
+
+### 4.4 Funcoes SQL Criticas
 
 ```sql
 -- Usar whatsapp_number (CORRETO)
@@ -600,6 +651,43 @@ test_instagram_user_id VARCHAR(50) -- auto-preenchido via trigger
 2. Para Instagram: @marseaufranco deve enviar uma msg para @ubs.sistemas (captura user_id)
 3. Todas as respostas serao redirecionadas para contas de teste
 
+### 2026-02-01 - Split lead_embeddings em 3 Tabelas
+
+**Problema:** Tabela `lead_embeddings` com 5 colunas VECTOR(1536) (~30KB TOAST por row) causava upserts lentos (3.6s/lead), VACUUM de 23+ min, e 3.3GB de storage.
+
+**Solucao:** Split em 3 tabelas especializadas com ciclos de vida independentes.
+
+**Migracoes Executadas (Fases 0-7):**
+
+1. **Fase 0:** Criacao de `lead_embedding_components`, `lead_embedding_final`, `lead_embedding_d2p` com indexes parciais e HNSW
+2. **Fase 1:** Triggers — `trg_components_changed` (flag recompute via IS DISTINCT FROM), `trg_sync_final` (sync para instagram_leads.embedding)
+3. **Fase 2:** Migracao de 73.5k+ rows em batches, HNSW indexes construidos (595MB final, 298MB d2p)
+4. **Fase 3:** 26 funcoes SQL atualizadas (6 grupos: D2P, Clustering/Search, Calculo Final, Export, Hashtags, Legacy)
+5. **Fase 4:** 4 views atualizadas (`v_embedding_stats`, `v_leads_embedding_queue`, `v_leads_needing_final_embedding`, `v_leads_ready_for_embedding`)
+6. **Fase 5:** Worker async `recompute_final_embeddings_batch()` com FOR UPDATE SKIP LOCKED
+7. **Fase 6:** Codigo atualizado — 5 servicos TS, 5 scripts Python, 2 workflows N8N (SQL inline), 1 Edge Function, 2 scripts JS
+8. **Fase 7:** Cutover — `lead_embeddings` renomeada para `lead_embeddings_old`, view read-only criada
+
+**Arquivos TypeScript Modificados:**
+- `src/services/embedding-calculator.service.ts` — formula 4 componentes, le de components + d2p
+- `src/services/vector-clustering.service.ts` — JOINs com final + components
+- `src/services/instagram-scraper.service.ts` — delete das 3 tabelas
+- `src/services/instagram-scraper-single.service.ts` — delete das 3 tabelas
+- `src/services/instagram-scraper-user-search.service.ts` — delete das 3 tabelas
+
+**N8N Workflows Modificados:**
+- D2P Lead Enrichment Pipeline (`UkrFIYSpe9Eqifba`) — SQL inline → `lead_embedding_d2p`
+- Bulk Upsert D2P (`6FbulZ82ImfITehh`) — SQL inline → `lead_embedding_d2p`
+
+**Edge Function:** `generate-d2p-embedding` v3 — escreve em `lead_embedding_d2p`
+
+**Fase 8 (Cleanup - apos 2026-02-15):**
+- [ ] DROP VIEW lead_embeddings (compatibilidade)
+- [ ] DROP TABLE lead_embeddings_old (~2.7 GB)
+- [ ] Remover trigger trg_sync_final de lead_embedding_final
+- [ ] Avaliar remocao de instagram_leads.embedding
+- [ ] VACUUM FULL nas 3 novas tabelas
+
 ---
 
 ## 14. CONTATO E SUPORTE
@@ -610,5 +698,5 @@ test_instagram_user_id VARCHAR(50) -- auto-preenchido via trigger
 
 ---
 
-**Ultima atualizacao**: 2026-01-27
-**Versao**: 2.2 (Test Mode Completo + Trigger Auto Instagram)
+**Ultima atualizacao**: 2026-02-01
+**Versao**: 2.3 (Split lead_embeddings em 3 Tabelas)

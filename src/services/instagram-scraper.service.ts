@@ -186,8 +186,12 @@ export async function executarScrapingInstagram(
               totalLeads++;
               if (leadData && leadData.length > 0) {
                 newLeads++;
-                // 🗑️ Deletar embedding antigo para reprocessar (caso seja update)
-                await supabase.from('lead_embeddings').delete().eq('lead_id', leadData[0].id);
+                // 🗑️ Deletar embeddings antigos para reprocessar
+                await Promise.all([
+                  supabase.from('lead_embedding_components').delete().eq('lead_id', leadData[0].id),
+                  supabase.from('lead_embedding_final').delete().eq('lead_id', leadData[0].id),
+                  supabase.from('lead_embedding_d2p').delete().eq('lead_id', leadData[0].id),
+                ]);
                 console.log(`   ✅ Lead salvo: @${username} (${followersCount} seguidores)`);
               } else {
                 duplicateLeads++;

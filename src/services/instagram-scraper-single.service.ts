@@ -2222,7 +2222,6 @@ export async function scrapeInstagramTag(
       const attemptedPositionsInCycle = new Set<string>(); // 🆕 Rastrear posições tentadas no ciclo atual (reseta quando perfil aprovado)
       let attemptsWithoutNewPost = 0;
       let consecutiveDuplicates = 0; // Contador de duplicatas consecutivas
-      let consecutiveModalFailures = 0; // 🔄 Contador de falhas consecutivas no modal (trigger rotação em 3)
       let languageRejections = 0; // 🆕 Contador de rejeições por idioma não-português (não precisa ser consecutivo)
       let totalHashtagFeedClicks = 0; // 🆕 Contador de clicks no MURAL (NUNCA reseta, acumulativo)
 
@@ -2727,14 +2726,16 @@ export async function scrapeInstagramTag(
           console.log(`   📋 Username do autor extraído: ${username || 'FALHOU'}`);
 
           if (!username) {
-            // 🔄 Modal não renderizou conteúdo - contar como falha (sem contornar)
-            consecutiveModalFailures++;
+            // 🔄 Modal não renderizou conteúdo - registrar falha no sistema de rotação
+            const rotation = getAccountRotation();
+            await rotation.recordFailure('MODAL_CONTENT_BLOCKED', 'Modal não renderizou conteúdo');
+            const account = rotation.getCurrentAccount();
             console.log(`   ❌ Owner não encontrado no modal (conteúdo não renderizado)`);
-            console.log(`   📊 Modal failures consecutivos: ${consecutiveModalFailures}/3`);
+            console.log(`   📊 Falha registrada: ${account.username} (${account.failureCount}/3)`);
 
-            // 🔄 ROTAÇÃO: Se 3 falhas consecutivas, Instagram está bloqueando conteúdo
-            if (consecutiveModalFailures >= 3) {
-              console.log(`\n🚨 ========== MODAL CONTENT BLOCKED (${consecutiveModalFailures}x) ==========`);
+            // 🔄 Verificar se deve rotacionar (3 falhas atingidas pelo sistema de rotação)
+            if (rotation.shouldRotate()) {
+              console.log(`\n🚨 ========== MODAL CONTENT BLOCKED (3x) ==========`);
               console.log(`   Instagram não está renderizando conteúdo nos modais`);
               console.log(`   Provável soft-ban/detecção - acionando rotação de conta`);
               console.log(`========================================================\n`);
@@ -2747,7 +2748,6 @@ export async function scrapeInstagramTag(
                   page = await createAuthenticatedPage();
                   await page.goto(hashtagUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
                   await waitHuman(2700, 3500);
-                  consecutiveModalFailures = 0;
                   continue;
                 } catch (recreateError: any) {
                   console.log(`❌ Erro ao recriar página após rotação: ${recreateError.message}`);
@@ -2759,11 +2759,9 @@ export async function scrapeInstagramTag(
               }
             }
           } else {
-            // ✅ Modal renderizou corretamente - resetar contador de falhas
-            if (consecutiveModalFailures > 0) {
-              console.log(`   ✅ Modal renderizou OK - resetando contador de falhas (era ${consecutiveModalFailures})`);
-              consecutiveModalFailures = 0;
-            }
+            // ✅ Modal renderizou corretamente - registrar sucesso (decrementa falhas)
+            const rotation = getAccountRotation();
+            rotation.recordSuccess();
           }
 
           // Se ainda sem username após todas as tentativas, voltar ao mural
@@ -3700,8 +3698,12 @@ export async function scrapeInstagramTag(
                   console.log(`   ⚠️  Erro ao atualizar @${username}: ${updateError.message}`);
                 } else {
                   console.log(`   ✅ Perfil @${username} ATUALIZADO NO BANCO`);
-                  // 🗑️ Deletar embedding antigo para reprocessar
-                  await supabase.from('lead_embeddings').delete().eq('lead_id', existingLeadData.id);
+                  // 🗑️ Deletar embeddings antigos para reprocessar
+                  await Promise.all([
+                    supabase.from('lead_embedding_components').delete().eq('lead_id', existingLeadData.id),
+                    supabase.from('lead_embedding_final').delete().eq('lead_id', existingLeadData.id),
+                    supabase.from('lead_embedding_d2p').delete().eq('lead_id', existingLeadData.id),
+                  ]);
                   // Embedding será feito pelo workflow n8n após enriquecimento completo
                 }
               } else {
@@ -6202,8 +6204,12 @@ export async function scrapeInstagramExplore(
                 // NÃO ATUALIZA: search_term_used, captured_at, contact_status, etc.
               })
               .eq('id', existing.id);
-            // 🗑️ Deletar embedding antigo para reprocessar
-            await supabase.from('lead_embeddings').delete().eq('lead_id', existing.id);
+            // 🗑️ Deletar embeddings antigos para reprocessar
+            await Promise.all([
+              supabase.from('lead_embedding_components').delete().eq('lead_id', existing.id),
+              supabase.from('lead_embedding_final').delete().eq('lead_id', existing.id),
+              supabase.from('lead_embedding_d2p').delete().eq('lead_id', existing.id),
+            ]);
             console.log(`   ✅ @${ownerUsername} ATUALIZADO`);
           } else {
             // 🔧 FIX: Usar UPSERT para evitar race condition (duplicate key)

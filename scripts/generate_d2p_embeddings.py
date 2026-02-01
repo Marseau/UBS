@@ -103,7 +103,7 @@ def fetch_already_embedded_ids(supabase: Client) -> Set[str]:
     ids = set()
     offset = 0
     while True:
-        result = supabase.from_("lead_embeddings").select(
+        result = supabase.from_("lead_embedding_d2p").select(
             "lead_id"
         ).not_.is_(
             "embedding_d2p", "null"
@@ -142,19 +142,21 @@ def generate_embeddings_batch(openai_client: OpenAI, texts: List[str]) -> List[L
 
 
 def upsert_embeddings(supabase: Client, records: List[Dict[str, Any]]):
-    """Upsert embedding_d2p into lead_embeddings in small chunks to avoid timeout."""
-    CHUNK_SIZE = 5
-    for i in range(0, len(records), CHUNK_SIZE):
-        chunk = records[i:i + CHUNK_SIZE]
-        rows = [
-            {
-                "lead_id": r["lead_id"],
-                "embedding_d2p": r["embedding"],
-                "embedding_d2p_text": r["d2p_text"],
-            }
-            for r in chunk
-        ]
-        supabase.from_("lead_embeddings").upsert(rows, on_conflict="lead_id").execute()
+    """Upsert embedding_d2p into lead_embedding_d2p one at a time with retry."""
+    for r in records:
+        for attempt in range(3):
+            try:
+                supabase.from_("lead_embedding_d2p").upsert({
+                    "lead_id": r["lead_id"],
+                    "embedding_d2p": r["embedding"],
+                    "embedding_d2p_text": r["d2p_text"],
+                }, on_conflict="lead_id").execute()
+                break
+            except Exception:
+                if attempt < 2:
+                    time.sleep(1)
+                else:
+                    raise
 
 
 def main():

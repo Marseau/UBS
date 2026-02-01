@@ -3,27 +3,31 @@
  *
  * Calcula embedding_final com pesos + normalização L2
  *
- * Fórmula:
- * 1. E_raw = (bio × 0.5) + (website × 0.3) + (hashtags × 0.2)
+ * Fórmula (4 componentes):
+ * 1. E_raw = (d2p × 0.40) + (bio × 0.25) + (website × 0.20) + (hashtags × 0.15)
+ *    Pesos normalizados quando componentes são NULL
  * 2. E_final = E_raw / ||E_raw||
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Pesos padrão
+// Pesos padrão (4 componentes, soma = 1.00)
 export const DEFAULT_WEIGHTS = {
-  bio: 0.5,
-  website: 0.3,
-  hashtags: 0.2
+  d2p: 0.40,
+  bio: 0.25,
+  website: 0.20,
+  hashtags: 0.15
 };
 
 export interface EmbeddingWeights {
+  d2p: number;
   bio: number;
   website: number;
   hashtags: number;
 }
 
 export interface EmbeddingComponents {
+  d2p?: number[];
   bio?: number[];
   website?: number[];
   hashtags?: number[];
@@ -52,29 +56,34 @@ export function computeFinalEmbedding(
   const result = new Array(VECTOR_SIZE).fill(0);
   const componentsUsed: string[] = [];
 
-  // PASSO 1: Soma ponderada (E_raw)
-  const bioVec = components.bio;
-  if (bioVec && bioVec.length === VECTOR_SIZE) {
-    for (let i = 0; i < VECTOR_SIZE; i++) {
-      result[i] += (bioVec[i] ?? 0) * weights.bio;
-    }
-    componentsUsed.push('bio');
+  // Calcular total de pesos dos componentes presentes (para normalização)
+  let totalWeight = 0;
+  const entries: { vec: number[]; weight: number; name: string }[] = [];
+
+  if (components.d2p && components.d2p.length === VECTOR_SIZE) {
+    entries.push({ vec: components.d2p, weight: weights.d2p, name: 'd2p' });
+    totalWeight += weights.d2p;
+  }
+  if (components.bio && components.bio.length === VECTOR_SIZE) {
+    entries.push({ vec: components.bio, weight: weights.bio, name: 'bio' });
+    totalWeight += weights.bio;
+  }
+  if (components.website && components.website.length === VECTOR_SIZE) {
+    entries.push({ vec: components.website, weight: weights.website, name: 'website' });
+    totalWeight += weights.website;
+  }
+  if (components.hashtags && components.hashtags.length === VECTOR_SIZE) {
+    entries.push({ vec: components.hashtags, weight: weights.hashtags, name: 'hashtags' });
+    totalWeight += weights.hashtags;
   }
 
-  const websiteVec = components.website;
-  if (websiteVec && websiteVec.length === VECTOR_SIZE) {
+  // PASSO 1: Soma ponderada com pesos normalizados (E_raw)
+  for (const entry of entries) {
+    const normalizedWeight = entry.weight / totalWeight;
     for (let i = 0; i < VECTOR_SIZE; i++) {
-      result[i] += (websiteVec[i] ?? 0) * weights.website;
+      result[i] += (entry.vec[i] ?? 0) * normalizedWeight;
     }
-    componentsUsed.push('website');
-  }
-
-  const hashtagsVec = components.hashtags;
-  if (hashtagsVec && hashtagsVec.length === VECTOR_SIZE) {
-    for (let i = 0; i < VECTOR_SIZE; i++) {
-      result[i] += (hashtagsVec[i] ?? 0) * weights.hashtags;
-    }
-    componentsUsed.push('hashtags');
+    componentsUsed.push(entry.name);
   }
 
   // Se não há componentes, retornar null
@@ -139,14 +148,21 @@ export class EmbeddingCalculatorService {
     leadId: string,
     weights: EmbeddingWeights = DEFAULT_WEIGHTS
   ): Promise<ComputeResult> {
-    // Buscar embeddings existentes
-    const { data, error } = await this.supabase
-      .from('lead_embeddings')
+    // Buscar embeddings de components
+    const { data: compData, error: compError } = await this.supabase
+      .from('lead_embedding_components')
       .select('embedding_bio, embedding_website, embedding_hashtags')
       .eq('lead_id', leadId)
       .single();
 
-    if (error || !data) {
+    // Buscar embedding D2P
+    const { data: d2pData } = await this.supabase
+      .from('lead_embedding_d2p')
+      .select('embedding_d2p')
+      .eq('lead_id', leadId)
+      .single();
+
+    if ((compError || !compData) && !d2pData) {
       return {
         success: false,
         leadId,
@@ -158,22 +174,28 @@ export class EmbeddingCalculatorService {
     // Converter strings para arrays
     const components: EmbeddingComponents = {};
 
-    if (data.embedding_bio) {
-      components.bio = typeof data.embedding_bio === 'string'
-        ? postgresStringToVector(data.embedding_bio)
-        : data.embedding_bio;
+    if (d2pData?.embedding_d2p) {
+      components.d2p = typeof d2pData.embedding_d2p === 'string'
+        ? postgresStringToVector(d2pData.embedding_d2p)
+        : d2pData.embedding_d2p;
     }
 
-    if (data.embedding_website) {
-      components.website = typeof data.embedding_website === 'string'
-        ? postgresStringToVector(data.embedding_website)
-        : data.embedding_website;
+    if (compData?.embedding_bio) {
+      components.bio = typeof compData.embedding_bio === 'string'
+        ? postgresStringToVector(compData.embedding_bio)
+        : compData.embedding_bio;
     }
 
-    if (data.embedding_hashtags) {
-      components.hashtags = typeof data.embedding_hashtags === 'string'
-        ? postgresStringToVector(data.embedding_hashtags)
-        : data.embedding_hashtags;
+    if (compData?.embedding_website) {
+      components.website = typeof compData.embedding_website === 'string'
+        ? postgresStringToVector(compData.embedding_website)
+        : compData.embedding_website;
+    }
+
+    if (compData?.embedding_hashtags) {
+      components.hashtags = typeof compData.embedding_hashtags === 'string'
+        ? postgresStringToVector(compData.embedding_hashtags)
+        : compData.embedding_hashtags;
     }
 
     // Calcular embedding final
@@ -252,9 +274,9 @@ export class EmbeddingCalculatorService {
    */
   async getLeadsNeedingRecompute(limit = 100): Promise<string[]> {
     const { data, error } = await this.supabase
-      .from('lead_embeddings')
+      .from('lead_embedding_components')
       .select('lead_id')
-      .or('embedding_final.is.null,embedded_at.is.null')
+      .eq('needs_final_recompute', true)
       .limit(limit);
 
     if (error || !data) {

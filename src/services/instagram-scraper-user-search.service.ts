@@ -817,8 +817,12 @@ export async function scrapeInstagramUserSearch(
               console.log(`   ⚠️  Erro ao atualizar @${username}: ${updateError.message}`);
             } else {
               console.log(`   ✅ Perfil @${username} ATUALIZADO NO BANCO`);
-              // 🗑️ Deletar embedding antigo para reprocessar
-              await supabase.from('lead_embeddings').delete().eq('lead_id', existingLeadData.id);
+              // 🗑️ Deletar embeddings antigos para reprocessar
+              await Promise.all([
+                supabase.from('lead_embedding_components').delete().eq('lead_id', existingLeadData.id),
+                supabase.from('lead_embedding_final').delete().eq('lead_id', existingLeadData.id),
+                supabase.from('lead_embedding_d2p').delete().eq('lead_id', existingLeadData.id),
+              ]);
               // Embedding será feito pelo workflow n8n após enriquecimento completo
             }
           } else {

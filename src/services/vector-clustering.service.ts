@@ -321,7 +321,7 @@ export async function findSimilarLeads(
 
 /**
  * Query inline para busca de similaridade (fallback)
- * Usa tabela separada lead_embeddings
+ * Usa tabelas lead_embedding_components + lead_embedding_final
  * SEGURANÇA: Inputs validados antes de uso em SQL
  */
 async function findSimilarLeadsInline(
@@ -337,9 +337,10 @@ async function findSimilarLeadsInline(
   const { data, error } = await supabase.rpc('execute_sql', {
     query_text: `
       WITH reference AS (
-        SELECT COALESCE(embedding_final, embedding_bio) AS embedding
-        FROM lead_embeddings
-        WHERE lead_id = '${safeLeadId}'::uuid
+        SELECT COALESCE(lef.embedding_final, lec.embedding_bio) AS embedding
+        FROM lead_embedding_components lec
+        LEFT JOIN lead_embedding_final lef ON lef.lead_id = lec.lead_id
+        WHERE lec.lead_id = '${safeLeadId}'::uuid
       )
       SELECT
         il.id,
@@ -347,14 +348,15 @@ async function findSimilarLeadsInline(
         il.full_name,
         il.profession,
         il.city,
-        1 - (COALESCE(le.embedding_final, le.embedding_bio) <=> ref.embedding) as similarity,
-        le.embedding_bio_text as embedding_text
+        1 - (COALESCE(lef.embedding_final, lec.embedding_bio) <=> ref.embedding) as similarity,
+        lec.embedding_bio_text as embedding_text
       FROM instagram_leads il
-      INNER JOIN lead_embeddings le ON le.lead_id = il.id, reference ref
-      WHERE COALESCE(le.embedding_final, le.embedding_bio) IS NOT NULL
+      INNER JOIN lead_embedding_components lec ON lec.lead_id = il.id
+      LEFT JOIN lead_embedding_final lef ON lef.lead_id = il.id, reference ref
+      WHERE COALESCE(lef.embedding_final, lec.embedding_bio) IS NOT NULL
         AND il.id != '${safeLeadId}'::uuid
-        AND 1 - (COALESCE(le.embedding_final, le.embedding_bio) <=> ref.embedding) >= ${safeSimilarity}
-      ORDER BY COALESCE(le.embedding_final, le.embedding_bio) <=> ref.embedding
+        AND 1 - (COALESCE(lef.embedding_final, lec.embedding_bio) <=> ref.embedding) >= ${safeSimilarity}
+      ORDER BY COALESCE(lef.embedding_final, lec.embedding_bio) <=> ref.embedding
       LIMIT ${safeLimit}
     `
   });
@@ -369,7 +371,7 @@ async function findSimilarLeadsInline(
 
 /**
  * Busca leads similares a um texto/query usando embedding
- * Usa tabela separada lead_embeddings
+ * Usa tabelas lead_embedding_components + lead_embedding_final
  * SEGURANÇA: Embedding validado antes de uso em SQL
  */
 export async function findLeadsByQuery(
@@ -393,13 +395,14 @@ export async function findLeadsByQuery(
         il.full_name,
         il.profession,
         il.city,
-        1 - (COALESCE(le.embedding_final, le.embedding_bio) <=> '${embeddingStr}'::vector) as similarity,
-        le.embedding_bio_text as embedding_text
+        1 - (COALESCE(lef.embedding_final, lec.embedding_bio) <=> '${embeddingStr}'::vector) as similarity,
+        lec.embedding_bio_text as embedding_text
       FROM instagram_leads il
-      INNER JOIN lead_embeddings le ON le.lead_id = il.id
-      WHERE COALESCE(le.embedding_final, le.embedding_bio) IS NOT NULL
-        AND 1 - (COALESCE(le.embedding_final, le.embedding_bio) <=> '${embeddingStr}'::vector) >= ${safeSimilarity}
-      ORDER BY COALESCE(le.embedding_final, le.embedding_bio) <=> '${embeddingStr}'::vector
+      INNER JOIN lead_embedding_components lec ON lec.lead_id = il.id
+      LEFT JOIN lead_embedding_final lef ON lef.lead_id = il.id
+      WHERE COALESCE(lef.embedding_final, lec.embedding_bio) IS NOT NULL
+        AND 1 - (COALESCE(lef.embedding_final, lec.embedding_bio) <=> '${embeddingStr}'::vector) >= ${safeSimilarity}
+      ORDER BY COALESCE(lef.embedding_final, lec.embedding_bio) <=> '${embeddingStr}'::vector
       LIMIT ${safeLimit}
     `
   });
@@ -551,19 +554,31 @@ export async function clusterBySimilarity(
     for (let i = 0; i < leadIdsWithData.length; i += embBatchSize) {
       const batch = leadIdsWithData.slice(i, i + embBatchSize);
 
-      const { data: embBatch, error: embError } = await supabase
-        .from('lead_embeddings')
-        .select('lead_id, embedding_bio_text, embedding_final, embedding_bio')
-        .in('lead_id', batch);
+      const [compRes, finalRes] = await Promise.all([
+        supabase
+          .from('lead_embedding_components')
+          .select('lead_id, embedding_bio_text, embedding_bio')
+          .in('lead_id', batch),
+        supabase
+          .from('lead_embedding_final')
+          .select('lead_id, embedding_final')
+          .in('lead_id', batch)
+      ]);
 
-      if (embError) {
-        console.error(`⚠️ Erro ao buscar embeddings batch ${Math.floor(i / embBatchSize) + 1}:`, embError);
+      if (compRes.error) {
+        console.error(`⚠️ Erro ao buscar embeddings batch ${Math.floor(i / embBatchSize) + 1}:`, compRes.error);
         continue;
       }
 
-      if (embBatch) {
-        allEmbeddings.push(...embBatch);
-      }
+      // Merge components + final by lead_id
+      const finalMap = new Map((finalRes.data || []).map(f => [f.lead_id, f.embedding_final]));
+      const merged = (compRes.data || []).map(c => ({
+        lead_id: c.lead_id,
+        embedding_bio_text: c.embedding_bio_text,
+        embedding_bio: c.embedding_bio,
+        embedding_final: finalMap.get(c.lead_id) || null
+      }));
+      allEmbeddings.push(...merged);
     }
 
     const embeddings = allEmbeddings;
@@ -1944,10 +1959,11 @@ export async function clusterByGraph(
     query_text: `
       CREATE TEMP TABLE ${tempTableName} AS
       SELECT
-        le.lead_id,
-        COALESCE(le.embedding_final, le.embedding_bio) as embedding
-      FROM lead_embeddings le
-      WHERE le.lead_id IN (${leadIdsArray})
+        lec.lead_id,
+        COALESCE(lef.embedding_final, lec.embedding_bio) as embedding
+      FROM lead_embedding_components lec
+      LEFT JOIN lead_embedding_final lef ON lef.lead_id = lec.lead_id
+      WHERE lec.lead_id IN (${leadIdsArray})
     `
   });
 

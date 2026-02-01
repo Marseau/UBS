@@ -55,9 +55,9 @@ async function checkPendingLeads() {
   const enrichedIds = enrichedLeads.map(l => l.id);
   console.log('Total leads com flags de enriquecimento true:', enrichedIds.length);
 
-  // Get IDs of leads with embedding_final NOT NULL
+  // Get IDs of leads with embedding_final NOT NULL (from lead_embedding_final)
   const embeddedLeads = await fetchAllPaginated(
-    'lead_embeddings',
+    'lead_embedding_final',
     'lead_id',
     { embedding_final: 'NOT_NULL' }
   );
@@ -65,27 +65,35 @@ async function checkPendingLeads() {
   const embeddedIds = new Set(embeddedLeads.map(l => l.lead_id));
   console.log('Leads com embedding_final:', embeddedIds.size);
 
-  // Get IDs of leads with embedding_final = NULL
-  const nullEmbeddings = await fetchAllPaginated(
-    'lead_embeddings',
+  // Get IDs of leads with components but needing recompute
+  const needsRecompute = await fetchAllPaginated(
+    'lead_embedding_components',
     'lead_id',
-    { embedding_final: null }
+    { needs_final_recompute: true }
   );
 
-  const nullFinalIds = new Set(nullEmbeddings.map(l => l.lead_id));
-  console.log('Leads com embedding_final NULL (em lead_embeddings):', nullFinalIds.size);
+  const needsRecomputeIds = new Set(needsRecompute.map(l => l.lead_id));
+  console.log('Leads com needs_final_recompute = true:', needsRecomputeIds.size);
 
-  // Calculate pending (sem registro)
-  const pendingNoRecord = enrichedIds.filter(id => !embeddedIds.has(id) && !nullFinalIds.has(id));
+  // Get all component records
+  const componentLeads = await fetchAllPaginated(
+    'lead_embedding_components',
+    'lead_id',
+    {}
+  );
+  const componentIds = new Set(componentLeads.map(l => l.lead_id));
+
+  // Calculate pending (sem registro em components)
+  const pendingNoRecord = enrichedIds.filter(id => !componentIds.has(id));
   console.log('');
   console.log('=== LEADS PENDENTES PARA EMBEDDING ===');
-  console.log('Sem registro em lead_embeddings:', pendingNoRecord.length);
+  console.log('Sem registro em lead_embedding_components:', pendingNoRecord.length);
 
-  // Leads with NULL embedding_final
-  const enrichedWithNullFinal = enrichedIds.filter(id => nullFinalIds.has(id));
-  console.log('Com embedding_final = NULL:', enrichedWithNullFinal.length);
+  // Leads with components but no final
+  const enrichedNoFinal = enrichedIds.filter(id => componentIds.has(id) && !embeddedIds.has(id));
+  console.log('Com componentes mas sem embedding_final:', enrichedNoFinal.length);
 
-  // Total needing embedding (no record OR null embedding_final)
+  // Total needing embedding
   const allPending = enrichedIds.filter(id => !embeddedIds.has(id));
   console.log('');
   console.log('=== TOTAL QUE PRECISA EMBEDDING ===');
@@ -95,7 +103,6 @@ async function checkPendingLeads() {
   if (allPending.length > 0) {
     const sampleIds = allPending.slice(0, 500);
 
-    // Fetch in batches of 100 due to IN clause limits
     let sampleLeads = [];
     for (let i = 0; i < sampleIds.length; i += 100) {
       const batch = sampleIds.slice(i, i + 100);

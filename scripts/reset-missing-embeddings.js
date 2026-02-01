@@ -7,9 +7,9 @@ const supabase = createClient(
 );
 
 async function resetMissingLeads() {
-  console.log('Buscando leads que precisam reset...');
+  console.log('Buscando leads que precisam reset (bio sem website)...');
 
-  // Fetch all in pages
+  // Find leads in components that have bio but no website
   let allLeads = [];
   let offset = 0;
   const pageSize = 1000;
@@ -17,11 +17,10 @@ async function resetMissingLeads() {
 
   while (hasMore) {
     const { data, error } = await supabase
-      .from('lead_embeddings')
-      .select('id, lead_id')
+      .from('lead_embedding_components')
+      .select('lead_id')
       .not('embedding_bio', 'is', null)
       .is('embedding_website', null)
-      .not('embedding_final', 'is', null)
       .range(offset, offset + pageSize - 1);
 
     if (error) {
@@ -45,18 +44,18 @@ async function resetMissingLeads() {
     return;
   }
 
-  // Update in batches of 100
+  // Set needs_final_recompute flag (the async worker will recalculate)
   const batchSize = 100;
   let updated = 0;
 
   for (let i = 0; i < allLeads.length; i += batchSize) {
     const batch = allLeads.slice(i, i + batchSize);
-    const ids = batch.map(l => l.id);
+    const leadIds = batch.map(l => l.lead_id);
 
     const { error: updateError } = await supabase
-      .from('lead_embeddings')
-      .update({ embedding_final: null })
-      .in('id', ids);
+      .from('lead_embedding_components')
+      .update({ needs_final_recompute: true })
+      .in('lead_id', leadIds);
 
     if (updateError) {
       console.error('Erro ao atualizar batch:', updateError);
@@ -66,7 +65,7 @@ async function resetMissingLeads() {
     }
   }
 
-  console.log('\n\nLeads resetados com sucesso:', updated);
+  console.log('\n\nLeads marcados para recompute:', updated);
 }
 
 resetMissingLeads().catch(console.error);
