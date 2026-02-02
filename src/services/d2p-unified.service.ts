@@ -25,7 +25,6 @@ const supabase: SupabaseClient = createClient(
 export interface AnalysisParams {
   minSimilarity?: number;  // Default: 0.65
   minLeads?: number;       // Default: 100
-  maxResults?: number;     // Default: 2000
 }
 
 interface PgvectorLead {
@@ -218,7 +217,33 @@ function addCompatibilityFields(data: any): D2PAnalysis {
 /**
  * Generate embedding for market name via OpenAI
  */
-async function generateMarketEmbedding(marketName: string): Promise<number[]> {
+/**
+ * Generate embedding for market search.
+ * Strategy: find a reference lead whose d2p_text starts with the market name
+ * and use its actual embedding_d2p (same vector space as stored embeddings).
+ * Fallback: generate via OpenAI.
+ */
+async function generateMarketEmbedding(
+  marketName: string
+): Promise<number[]> {
+  // Use a real embedding_d2p from a matching lead as reference vector.
+  // This ensures the query is in the same vector space as stored D2P embeddings
+  // (which encode "profession. category. bio snippet").
+  const { data: refData } = await supabase.rpc('get_reference_d2p_embedding' as any, {
+    market_query: marketName
+  });
+
+  if (refData && refData.length > 0 && refData[0].embedding) {
+    console.log(`[D2P] Using reference embedding from DB (d2p_text match for "${marketName}")`);
+    const raw = refData[0].embedding;
+    if (typeof raw === 'string') {
+      return JSON.parse(raw);
+    }
+    return raw as number[];
+  }
+
+  // Fallback: Generate via OpenAI (for brand-new markets not in DB)
+  console.log(`[D2P] No reference lead found, generating embedding via OpenAI`);
   const OpenAI = (await import('openai')).default;
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -235,22 +260,63 @@ async function generateMarketEmbedding(marketName: string): Promise<number[]> {
  */
 async function searchLeadsForD2P(
   queryEmbedding: number[],
-  minSimilarity: number,
-  maxResults: number
+  minSimilarity: number
 ): Promise<PgvectorLead[]> {
   const embeddingStr = `[${queryEmbedding.join(',')}]`;
+  const pageSize = 1000;
 
-  const { data, error } = await supabase.rpc('search_leads_for_d2p', {
+  // Step 1: Run full vector search and store results in staging table.
+  // This bypasses PostgREST's 1000 row cap — the INSERT happens server-side.
+  console.log(`[D2P] Running d2p_search_and_store (SECURITY DEFINER, 60s timeout)...`);
+
+  const { data: storeResult, error: storeError } = await supabase.rpc('d2p_search_and_store', {
     query_embedding: embeddingStr,
-    min_similarity: minSimilarity,
-    max_results: maxResults
+    min_similarity: minSimilarity
   });
 
-  if (error) {
-    throw new Error(`pgvector search failed: ${error.message}`);
+  if (storeError) {
+    throw new Error(`d2p_search_and_store failed: ${storeError.message}`);
   }
 
-  return data || [];
+  const sessionId = storeResult?.[0]?.session_id;
+  const totalCount = storeResult?.[0]?.total_count ?? 0;
+
+  if (!sessionId || totalCount === 0) {
+    console.log(`[D2P] No leads found above similarity threshold ${minSimilarity}`);
+    return [];
+  }
+
+  console.log(`[D2P] Stored ${totalCount} leads in session ${sessionId}. Reading pages...`);
+
+  // Step 2: Read results from staging table in pages (PostgREST caps at 1000 per request).
+  const allResults: PgvectorLead[] = [];
+  let offset = 0;
+
+  while (offset < totalCount) {
+    const { data: page, error: pageError } = await supabase
+      .from('d2p_search_results')
+      .select('lead_id, username, bio, profession, business_category, similarity')
+      .eq('session_id', sessionId)
+      .order('similarity', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (pageError) {
+      throw new Error(`Failed to read d2p_search_results page: ${pageError.message}`);
+    }
+
+    if (!page || page.length === 0) break;
+    allResults.push(...(page as PgvectorLead[]));
+
+    console.log(`[D2P] Page ${Math.floor(offset / pageSize) + 1}: ${page.length} rows (total: ${allResults.length})`);
+
+    offset += pageSize;
+  }
+
+  // Step 3: Cleanup session
+  await supabase.from('d2p_search_results').delete().eq('session_id', sessionId);
+
+  console.log(`[D2P] Total leads fetched: ${allResults.length}`);
+  return allResults;
 }
 
 /**
@@ -298,6 +364,9 @@ async function runPythonAnalysis(
           return;
         }
         console.log(`[D2P] Python completed in ${result.analysis_duration_ms}ms`);
+        console.log(`[D2P] Python owner_analysis: ${JSON.stringify(result.owner_analysis)?.substring(0, 200)}`);
+        console.log(`[D2P] Python micro_decisions: ${JSON.stringify(result.micro_decisions)}`);
+        console.log(`[D2P] Python dominant_decision: ${result.dominant_decision}`);
         resolve(result);
       } catch (e) {
         reject(new Error(`Failed to parse Python output: ${e}`));
@@ -364,12 +433,11 @@ export async function analyzeMarket(
   const startTime = Date.now();
   const marketSlug = generateSlug(marketName);
   const minSimilarity = params.minSimilarity ?? 0.65;
-  const maxResults = params.maxResults ?? 2000;
   const minLeads = params.minLeads ?? 100;
 
   console.log('[D2P] ========================================');
   console.log(`[D2P] Analyzing: ${marketName}`);
-  console.log(`[D2P] Params: minSimilarity=${minSimilarity}, minLeads=${minLeads}, maxResults=${maxResults}`);
+  console.log(`[D2P] Params: minSimilarity=${minSimilarity}, minLeads=${minLeads}`);
   console.log('[D2P] ========================================');
 
   // Version info
@@ -390,7 +458,7 @@ export async function analyzeMarket(
       version_number: versionNumber,
       parent_version_id: parentVersionId,
       is_latest: true,
-      search_params: params,
+      search_params: { ...params },
       status: 'running'
     })
     .select()
@@ -401,13 +469,13 @@ export async function analyzeMarket(
   }
 
   try {
-    // Step 1: Generate market embedding via OpenAI
-    console.log('[D2P] Generating market embedding via OpenAI...');
+    // Step 1: Generate market embedding
+    console.log(`[D2P] Generating market embedding...`);
     const marketEmbedding = await generateMarketEmbedding(marketName);
 
-    // Step 2: Search pgvector for matching leads
+    // Step 2: Search pgvector for matching leads (embedding_d2p)
     console.log(`[D2P] Searching pgvector (embedding_d2p, threshold=${minSimilarity})...`);
-    const leads = await searchLeadsForD2P(marketEmbedding, minSimilarity, maxResults);
+    const leads = await searchLeadsForD2P(marketEmbedding, minSimilarity);
     console.log(`[D2P] pgvector returned ${leads.length} leads`);
 
     if (leads.length < minLeads) {
@@ -459,6 +527,8 @@ export async function analyzeMarket(
       workaround_tools: pythonResult.workaround_tools,
       workarounds: pythonResult.detected_workarounds || [],
       pain_signals: pythonResult.detected_professions || [],
+      owner_analysis: pythonResult.owner_analysis || null,
+      micro_decisions: pythonResult.micro_decisions || [],
       status: 'completed',
       analysis_duration_ms: Date.now() - startTime
     };

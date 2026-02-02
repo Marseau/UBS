@@ -40,7 +40,7 @@ const router = express.Router();
  */
 router.post('/analyze', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { market_name, min_similarity, min_leads, max_results } = req.body;
+    const { market_name, min_similarity, min_leads } = req.body;
 
     if (!market_name) {
       res.status(400).json({
@@ -50,12 +50,11 @@ router.post('/analyze', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    console.log(`[D2P API] Starting analysis: ${market_name} (threshold: ${min_similarity ?? 0.7})`);
+    console.log(`[D2P API] Starting analysis: ${market_name} (threshold: ${min_similarity ?? 0.65})`);
 
     const analysis = await analyzeMarket(market_name, {
       minSimilarity: min_similarity,
-      minLeads: min_leads,
-      maxResults: max_results
+      minLeads: min_leads
     });
 
     res.json({

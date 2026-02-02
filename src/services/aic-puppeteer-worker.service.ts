@@ -72,6 +72,7 @@ interface QueueMessage {
   message_text: string;
   message_type: string;
   include_typos: boolean;
+  channel?: string;
 }
 
 // Configurações de segurança para evitar detecção
@@ -588,7 +589,9 @@ export class AICPuppeteerWorkerService {
     this.isRunning = true;
     console.log(`[Puppeteer] Iniciando processamento da fila para ${this.config.channelId}`);
 
+    let msg: QueueMessage | null = null;
     while (this.isRunning) {
+      msg = null;
       try {
         // === VERIFICAÇÕES DE SEGURANÇA ===
 
@@ -630,7 +633,7 @@ export class AICPuppeteerWorkerService {
           continue;
         }
 
-        const msg = messages[0] as QueueMessage;
+        msg = messages[0] as QueueMessage;
 
         // === CONTROLE DE HORÁRIO PARA OUTBOUND ===
         // Outbound DM: APENAS dias úteis, horário comercial (9h-18h)
@@ -651,8 +654,29 @@ export class AICPuppeteerWorkerService {
           this.dailyStats.newNumbersAttempted++;
         }
 
-        console.log(`[Puppeteer] Processando mensagem ${msg.id} para ${msg.phone} (tipo: ${msg.message_type})`);
+        console.log(`[Puppeteer] Processando mensagem ${msg.id} para ${msg.phone} (tipo: ${msg.message_type}, canal: ${msg.channel})`);
         console.log(`[Puppeteer] 📊 Stats: ${this.dailyStats.totalMessagesSent}/${SAFETY_CONFIG.maxTotalMessagesPerDay} msgs, ${this.dailyStats.invalidNumbersFound} inválidos`);
+
+        // Skip non-WhatsApp messages - devolver para fila
+        if (msg.channel && msg.channel !== 'whatsapp') {
+          console.log(`[Puppeteer] ⏭️ Canal ${msg.channel} não suportado pelo Puppeteer, devolvendo para fila`);
+          await this.supabase
+            .from('aic_message_queue')
+            .update({ status: 'pending', updated_at: new Date().toISOString() })
+            .eq('id', msg.id);
+          await this.delay(1000);
+          continue;
+        }
+
+        // Skip messages sem phone
+        if (!msg.phone) {
+          console.log(`[Puppeteer] ❌ Mensagem ${msg.id} sem phone, marcando como failed`);
+          await this.supabase.rpc('mark_aic_message_failed', {
+            p_queue_id: msg.id,
+            p_error_message: 'Phone is null - cannot send via WhatsApp'
+          });
+          continue;
+        }
 
         // Enviar mensagem (inclui validação do número)
         const result = await this.sendMessage(
@@ -734,8 +758,20 @@ export class AICPuppeteerWorkerService {
         // Heartbeat
         await this.sendHeartbeat();
 
-      } catch (error) {
+      } catch (error: any) {
         console.error('[Puppeteer] Erro no processamento:', error);
+        // Marcar mensagem como failed para não travar a fila
+        if (msg?.id) {
+          try {
+            await this.supabase.rpc('mark_aic_message_failed', {
+              p_queue_id: msg.id,
+              p_error_message: `Erro inesperado: ${error?.message || 'unknown'}`
+            });
+            console.log(`[Puppeteer] Mensagem ${msg.id} marcada como failed após erro`);
+          } catch (rpcError) {
+            console.error('[Puppeteer] Falha ao marcar mensagem como failed:', rpcError);
+          }
+        }
         await this.delay(10000);
       }
     }

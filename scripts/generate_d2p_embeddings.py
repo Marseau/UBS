@@ -107,28 +107,32 @@ def fetch_already_embedded_ids(supabase: Client) -> Set[str]:
             "lead_id"
         ).not_.is_(
             "embedding_d2p", "null"
-        ).range(offset, offset + 4999).execute()
+        ).range(offset, offset + PAGE_SIZE - 1).execute()
 
         if not result.data:
             break
         for row in result.data:
             ids.add(row['lead_id'])
-        offset += 5000
-        if len(result.data) < 5000:
+        offset += PAGE_SIZE
+        if len(result.data) < PAGE_SIZE:
             break
 
     print(f"[D2P-Embed] {len(ids)} leads already have embedding_d2p")
     return ids
 
 
-def fetch_leads_page(supabase: Client, offset: int) -> List[Dict[str, Any]]:
-    """Fetch a page of leads with profession or business_category."""
-    result = supabase.from_("instagram_leads").select(
+def fetch_leads_page(supabase: Client, after_id: str = '') -> List[Dict[str, Any]]:
+    """Fetch a page of leads with profession or business_category using cursor pagination."""
+    query = supabase.from_("instagram_leads").select(
         "id, username, profession, business_category, bio"
     ).or_(
         "profession.not.is.null,business_category.not.is.null"
-    ).order("id").range(offset, offset + PAGE_SIZE - 1).execute()
+    ).order("id")
 
+    if after_id:
+        query = query.gt("id", after_id)
+
+    result = query.limit(PAGE_SIZE).execute()
     return result.data or []
 
 
@@ -175,18 +179,18 @@ def main():
     processed = 0
     errors = 0
     batch_num = 0
-    offset = args.offset
     skipped = 0
+    last_id = ''
     pending_leads: List[Dict[str, Any]] = []
 
-    print(f"[D2P-Embed] Starting (batch={args.batch_size}, limit={args.limit or 'all'}, offset={offset})")
+    print(f"[D2P-Embed] Starting (batch={args.batch_size}, limit={args.limit or 'all'})")
 
     while True:
-        # Fetch page
-        raw_leads = fetch_leads_page(supabase, offset)
+        # Fetch page using cursor pagination (no OFFSET timeout)
+        raw_leads = fetch_leads_page(supabase, last_id)
         if not raw_leads:
             break
-        offset += PAGE_SIZE
+        last_id = raw_leads[-1]['id']
 
         # Filter and build text
         for lead in raw_leads:

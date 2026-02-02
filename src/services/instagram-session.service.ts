@@ -718,18 +718,43 @@ export async function createAuthenticatedPage(): Promise<Page> {
 
 export async function closeBrowser(options: { clearCookies?: boolean } = {}): Promise<void> {
   if (browserInstance) {
+    const browserRef = browserInstance;
+    const pid = browserRef.process()?.pid;
+
+    // Timeout forçado: se close() travar (CDP morto), mata o processo
+    const killTimer = setTimeout(() => {
+      console.warn(`⚠️  Browser close travou (10s timeout) — forçando kill${pid ? ` (PID ${pid})` : ''}`);
+      try {
+        browserRef.process()?.kill('SIGKILL');
+      } catch {}
+    }, 10000);
+
     try {
-      const pages = await browserInstance.pages();
+      const pages = await Promise.race([
+        browserRef.pages(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('pages() timeout')), 5000))
+      ]).catch(() => [] as any[]);
+
       for (const page of pages) {
         if (!page.isClosed()) {
-          await page.close().catch(() => {});
+          await Promise.race([
+            page.close(),
+            new Promise<void>((resolve) => setTimeout(resolve, 3000))
+          ]).catch(() => {});
         }
       }
-    } catch (error: any) {
-      console.warn(`⚠️  Erro ao fechar páginas: ${error.message}`);
-    }
 
-    await browserInstance.close().catch(() => {});
+      await Promise.race([
+        browserRef.close(),
+        new Promise<void>((resolve) => setTimeout(resolve, 5000))
+      ]).catch(() => {});
+    } catch (error: any) {
+      console.warn(`⚠️  Erro ao fechar browser: ${error.message}`);
+      // Fallback: kill forçado se close falhou
+      try { browserRef.process()?.kill('SIGKILL'); } catch {}
+    } finally {
+      clearTimeout(killTimer);
+    }
   }
 
   browserInstance = null;

@@ -688,6 +688,46 @@ test_instagram_user_id VARCHAR(50) -- auto-preenchido via trigger
 - [ ] Avaliar remocao de instagram_leads.embedding
 - [ ] VACUUM FULL nas 3 novas tabelas
 
+### 2026-02-02 - Criacao de HNSW Index em lead_embedding_final
+
+**Problema:** Apos o split das 3 tabelas (2026-02-01), o index HNSW em `lead_embedding_final` nao existia. Buscas por similaridade vetorial faziam sequential scan em 75k+ rows.
+
+**Tentativa 1 (falhou):** `CREATE INDEX CONCURRENTLY` com `maintenance_work_mem = 1GB` em instancia Micro (1GB RAM total). O index build consumiu toda a RAM e I/O burst (30 min/dia a 2 Gbps), deixando o BD completamente inacessivel. Necessario restart do projeto via Supabase Dashboard.
+
+**Tentativa 2 (falhou):** Apos restart, o `statement_timeout` default do Supabase cancelou o CREATE INDEX antes de completar, deixando index invalido.
+
+**Tentativa 3 (sucesso):**
+1. `ALTER DATABASE postgres SET statement_timeout = 0;` — desabilitar timeout
+2. `ALTER DATABASE postgres SET maintenance_work_mem = '512MB';` — metade da RAM
+3. `CREATE INDEX CONCURRENTLY idx_lef_hnsw ON public.lead_embedding_final USING hnsw (embedding_final vector_cosine_ops) WITH (m = 16, ef_construction = 64);`
+4. `ALTER DATABASE postgres RESET maintenance_work_mem;` — resetar
+5. `ALTER DATABASE postgres RESET statement_timeout;` — resetar
+
+**Resultado:** Index `idx_lef_hnsw` criado com 587 MB, valido, 75,087 vetores.
+
+**Licoes aprendidas para instancia Micro (1GB RAM):**
+- **NUNCA** usar `maintenance_work_mem = 1GB` — nao deixa margem para o Postgres operar
+- **Maximo seguro**: `512MB` para index builds
+- **SEMPRE** desabilitar `statement_timeout` antes de CREATE INDEX grandes (via `ALTER DATABASE`, nao `SET`, pois CONCURRENTLY nao roda em transacao)
+- **SEMPRE** resetar os settings apos o index build (`ALTER DATABASE ... RESET`)
+- Burst de I/O da Micro: 2 Gbps por 30 min/dia, depois throttle a 87 Mbps
+- Index HNSW de 75k vetores 1536d leva ~10-15 min com burst disponivel
+
+**Estado final das 3 tabelas (validado):**
+
+| Tabela | Rows | HNSW Index | Tamanho Index |
+|--------|------|------------|---------------|
+| `lead_embedding_components` | 75,545 | N/A (sem vetores de busca) | — |
+| `lead_embedding_final` | 75,087 | `idx_lef_hnsw` ✅ | 587 MB |
+| `lead_embedding_d2p` | 75,131 | `idx_led2p_hnsw` ✅ | 574 MB |
+
+**Consistencia entre tabelas:**
+- 470 leads em components sem final (`needs_final_recompute=true`, worker async resolve)
+- 367 leads em final sem d2p (leads sem profissao classificada — esperado)
+- 0 orphans (todas as embeddings tem lead correspondente em instagram_leads)
+
+**Triggers ativos:** `trg_components_changed`, `trg_sync_final`, `trg_d2p_changed` — todos operacionais.
+
 ---
 
 ## 14. CONTATO E SUPORTE
@@ -698,5 +738,5 @@ test_instagram_user_id VARCHAR(50) -- auto-preenchido via trigger
 
 ---
 
-**Ultima atualizacao**: 2026-02-01
-**Versao**: 2.3 (Split lead_embeddings em 3 Tabelas)
+**Ultima atualizacao**: 2026-02-02
+**Versao**: 2.4 (HNSW Index em lead_embedding_final)

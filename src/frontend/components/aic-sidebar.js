@@ -223,6 +223,7 @@
       'leads-entregues': ['leads-entregues'],
       'reunioes-fechamento': ['reunioes-fechamento'],
       'clusters': ['clusters', 'cluster-intention'],
+      'demand-intelligence': ['demand-intelligence'],
       'inteligencia': ['inteligencia', 'dynamic-intelligence'],
       'docs': ['docs', 'aic-docs'],
       'proposta': ['proposta']
@@ -332,6 +333,7 @@
         navContent += '<div class="aic-sidebar-section">';
         navContent += '<div class="aic-sidebar-section-title">Inteligência</div>';
         navContent += '<a href="/aic/clusters" class="aic-sidebar-link' + (isActive('clusters') ? ' active' : '') + '">Clusters</a>';
+        navContent += '<a href="/demand-intelligence" class="aic-sidebar-link' + (isActive('demand-intelligence') ? ' active' : '') + '">Demandas de Mercado</a>';
         navContent += '<a href="/aic/inteligencia" class="aic-sidebar-link' + (isActive('inteligencia') ? ' active' : '') + '">Dynamic Intelligence</a>';
         navContent += '</div>';
 

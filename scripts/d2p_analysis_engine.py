@@ -41,8 +41,10 @@ Output:
 
 import sys
 import json
+import re
+import os
 from datetime import datetime
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 
 try:
     from bertopic import BERTopic
@@ -53,6 +55,12 @@ try:
 except ImportError as e:
     print(json.dumps({"success": False, "error": f"Missing dependency: {e}"}))
     sys.exit(1)
+
+try:
+    from openai import OpenAI
+    _openai_available = True
+except ImportError:
+    _openai_available = False
 
 # ==============================================================================
 # CONFIGURATION
@@ -201,203 +209,6 @@ WORKAROUND_TO_DECISION = {
     }
 }
 
-# Profissões → Fricções operacionais conhecidas
-PROFESSION_DECISIONS = {
-    # Saúde
-    'dentista': {
-        'decision': 'Encaixo esse paciente de urgência?',
-        'friction': 'Gestão de agenda com imprevistos',
-        'product_type': 'gatekeeper',
-        'category': 'health'
-    },
-    'médico': {
-        'decision': 'Esse paciente precisa de retorno?',
-        'friction': 'Acompanhamento de pacientes',
-        'product_type': 'operational_decision',
-        'category': 'health'
-    },
-    'nutricionista': {
-        'decision': 'O paciente está seguindo o plano?',
-        'friction': 'Monitoramento de aderência',
-        'product_type': 'operational_decision',
-        'category': 'health'
-    },
-    'psicólogo': {
-        'decision': 'Remarco essa sessão?',
-        'friction': 'Gestão de faltas e remarcações',
-        'product_type': 'gatekeeper',
-        'category': 'health'
-    },
-    'fisioterapeuta': {
-        'decision': 'Quantas sessões esse paciente precisa?',
-        'friction': 'Planejamento de tratamento',
-        'product_type': 'operational_decision',
-        'category': 'health'
-    },
-
-    # Beleza
-    'cabeleireiro': {
-        'decision': 'Tenho horário para esse procedimento?',
-        'friction': 'Encaixe de serviços com durações diferentes',
-        'product_type': 'gatekeeper',
-        'category': 'beauty'
-    },
-    'esteticista': {
-        'decision': 'Qual protocolo indicar?',
-        'friction': 'Personalização de tratamentos',
-        'product_type': 'operational_decision',
-        'category': 'beauty'
-    },
-    'manicure': {
-        'decision': 'Confirmo esse horário?',
-        'friction': 'Confirmação e no-shows',
-        'product_type': 'gatekeeper',
-        'category': 'beauty'
-    },
-    'maquiador': {
-        'decision': 'Aceito esse job?',
-        'friction': 'Avaliação de oportunidades',
-        'product_type': 'gatekeeper',
-        'category': 'beauty'
-    },
-
-    # Fitness
-    'personal': {
-        'decision': 'Ajusto o treino desse aluno?',
-        'friction': 'Personalização contínua',
-        'product_type': 'operational_decision',
-        'category': 'fitness'
-    },
-
-    # Educação/Coaching
-    'professor': {
-        'decision': 'Esse aluno precisa de reforço?',
-        'friction': 'Identificação de dificuldades',
-        'product_type': 'triage',
-        'category': 'education'
-    },
-    'coach': {
-        'decision': 'Esse coachee está progredindo?',
-        'friction': 'Monitoramento de evolução',
-        'product_type': 'operational_decision',
-        'category': 'coaching'
-    },
-    'mentor': {
-        'decision': 'Aceito esse mentorado?',
-        'friction': 'Seleção de clientes',
-        'product_type': 'gatekeeper',
-        'category': 'coaching'
-    },
-
-    # Criativos
-    'fotógrafo': {
-        'decision': 'Aceito esse ensaio?',
-        'friction': 'Avaliação de jobs',
-        'product_type': 'gatekeeper',
-        'category': 'creative'
-    },
-    'designer': {
-        'decision': 'Esse briefing está claro?',
-        'friction': 'Validação de escopo',
-        'product_type': 'triage',
-        'category': 'creative'
-    },
-    'tatuador': {
-        'decision': 'Faço esse desenho?',
-        'friction': 'Aceitação de projetos',
-        'product_type': 'gatekeeper',
-        'category': 'creative'
-    },
-
-    # Jurídico
-    'advogado': {
-        'decision': 'Aceito esse caso?',
-        'friction': 'Avaliação de viabilidade jurídica',
-        'product_type': 'gatekeeper',
-        'category': 'legal'
-    },
-
-    # Alimentação
-    'confeiteiro': {
-        'decision': 'Consigo entregar essa encomenda?',
-        'friction': 'Gestão de capacidade produtiva',
-        'product_type': 'gatekeeper',
-        'category': 'food'
-    },
-    'chef': {
-        'decision': 'Aceito esse evento?',
-        'friction': 'Avaliação de oportunidades',
-        'product_type': 'gatekeeper',
-        'category': 'food'
-    },
-
-    # Imóveis
-    'corretor': {
-        'decision': 'Esse cliente é qualificado?',
-        'friction': 'Qualificação de compradores',
-        'product_type': 'triage',
-        'category': 'real_estate'
-    },
-
-    # Contabilidade
-    'contador': {
-        'decision': 'Aceito esse cliente?',
-        'friction': 'Avaliação de complexidade',
-        'product_type': 'gatekeeper',
-        'category': 'accounting'
-    },
-
-    # Consultoria/Marketing
-    'consultor': {
-        'decision': 'Esse projeto cabe no meu modelo?',
-        'friction': 'Fit de projeto',
-        'product_type': 'triage',
-        'category': 'consulting'
-    },
-    'gestor de tráfego': {
-        'decision': 'Essa conta tem potencial?',
-        'friction': 'Qualificação de clientes',
-        'product_type': 'triage',
-        'category': 'marketing'
-    },
-    'social media': {
-        'decision': 'Produzo conteúdo sobre isso?',
-        'friction': 'Priorização de pautas',
-        'product_type': 'operational_decision',
-        'category': 'marketing'
-    },
-
-    # Tech
-    'programador': {
-        'decision': 'Aceito esse freela?',
-        'friction': 'Avaliação de projetos',
-        'product_type': 'gatekeeper',
-        'category': 'tech'
-    },
-    'desenvolvedor': {
-        'decision': 'Esse escopo está viável?',
-        'friction': 'Estimativa de esforço',
-        'product_type': 'operational_decision',
-        'category': 'tech'
-    },
-
-    # Pets
-    'veterinário': {
-        'decision': 'Esse caso é urgência?',
-        'friction': 'Triagem de atendimentos',
-        'product_type': 'triage',
-        'category': 'veterinary'
-    },
-
-    # Varejo
-    'lojista': {
-        'decision': 'Reponho esse produto?',
-        'friction': 'Gestão de estoque',
-        'product_type': 'operational_decision',
-        'category': 'retail'
-    }
-}
-
 # Sinais de frequência/volume nas bios
 FREQUENCY_SIGNALS = [
     'diário', 'diariamente', 'todo dia', 'todos os dias', 'sempre',
@@ -414,6 +225,309 @@ MANUAL_SIGNALS = [
     'sob medida', 'feito à mão', 'one by one', 'um a um'
 ]
 
+# ==============================================================================
+# BUSINESS OWNER PAIN — Sinais de dor do DONO (não do cliente final)
+# ==============================================================================
+
+# Terms that signal BUSINESS pain (margin, churn, ops) — not service delivery pain
+BUSINESS_OWNER_SIGNALS = [
+    # Margem e precificação
+    'margem', 'lucro', 'lucrativo', 'rentável', 'rentabilidade',
+    'precificação', 'preço', 'valor', 'fee', 'ticket',
+    'custo', 'investimento', 'roi', 'retorno',
+    # Escopo e retrabalho
+    'escopo', 'retrabalho', 'refação', 'refazer', 'ajuste',
+    'briefing', 'escopo aberto', 'scope creep',
+    # Contratos e clientes
+    'contrato', 'proposta', 'sla', 'prazo', 'deadline',
+    'churn', 'cancelamento', 'cancelar', 'reter', 'retenção',
+    # Time e capacidade
+    'time', 'equipe', 'colaborador', 'freelancer', 'terceirizar',
+    'capacidade', 'escalar', 'escala', 'crescer', 'crescimento',
+    'delegar', 'contratar', 'demanda interna',
+    # Gestão operacional
+    'processo', 'workflow', 'fluxo', 'operação', 'gestão',
+    'indicador', 'kpi', 'meta', 'resultado', 'performance',
+    'eficiência', 'produtividade',
+]
+
+
+def infer_business_owner_decisions(
+    market_name: str,
+    bio_business_signals: Dict[str, int],
+    n_leads: int,
+    topic_keywords: List[List[str]] = None,
+    representative_bios: List[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    Infer the BUSINESS OWNER's decisions using GPT-4o-mini.
+    Returns empty if LLM unavailable — no heuristic fallback.
+    """
+    market_lower = market_name.lower()
+    intermediary_signals = ['agência', 'agencia', 'consultoria', 'assessoria',
+                           'marketing digital', 'social media', 'gestão de']
+    is_intermediary = any(sig in market_lower for sig in intermediary_signals)
+
+    # Collect business signal summary for context
+    signal_summary = _summarize_business_signals(bio_business_signals, n_leads)
+
+    # Try LLM
+    llm_result = _infer_via_llm(market_name, signal_summary, is_intermediary, topic_keywords, representative_bios)
+
+    if llm_result:
+        return {
+            'owner_decisions': llm_result['decisions'],
+            'evidence': llm_result['evidence'],
+            'is_intermediary': is_intermediary,
+            'business_signal_counts': _count_signal_groups(bio_business_signals),
+            'source': 'llm',
+        }
+
+    # No fallback — better to return empty than to invent wrong decisions
+    print(f"[D2P] LLM inference failed, no owner decisions available", file=sys.stderr)
+    return {
+        'owner_decisions': [],
+        'evidence': ['LLM indisponível — owner decisions não geradas'],
+        'is_intermediary': is_intermediary,
+        'business_signal_counts': _count_signal_groups(bio_business_signals),
+        'source': 'none',
+    }
+
+
+def _summarize_business_signals(signals: Dict[str, int], n_leads: int) -> str:
+    """Create a human-readable summary of business signals found in bios."""
+    if not signals:
+        return "Nenhum sinal de dor operacional encontrado diretamente nas bios."
+
+    parts = []
+    sorted_signals = sorted(signals.items(), key=lambda x: -x[1])[:10]
+    for term, count in sorted_signals:
+        pct = count / n_leads * 100
+        parts.append(f'"{term}" em {count} bios ({pct:.0f}%)')
+    return "Termos de negócio encontrados nas bios: " + ", ".join(parts)
+
+
+def _count_signal_groups(bio_business_signals: Dict[str, int]) -> Dict[str, int]:
+    margin_terms = ['margem', 'lucro', 'lucrativo', 'rentável', 'rentabilidade',
+                    'precificação', 'preço', 'fee', 'ticket', 'custo', 'roi']
+    scope_terms = ['escopo', 'retrabalho', 'refação', 'refazer', 'ajuste',
+                   'briefing', 'scope creep']
+    team_terms = ['time', 'equipe', 'colaborador', 'freelancer', 'terceirizar',
+                  'capacidade', 'escalar', 'delegar', 'contratar']
+    churn_terms = ['churn', 'cancelamento', 'cancelar', 'reter', 'retenção',
+                   'contrato', 'proposta', 'sla']
+
+    return {
+        'margin': sum(bio_business_signals.get(s, 0) for s in margin_terms),
+        'scope': sum(bio_business_signals.get(s, 0) for s in scope_terms),
+        'team': sum(bio_business_signals.get(s, 0) for s in team_terms),
+        'churn': sum(bio_business_signals.get(s, 0) for s in churn_terms),
+    }
+
+
+def _infer_via_llm(
+    market_name: str,
+    signal_summary: str,
+    is_intermediary: bool,
+    topic_keywords: List[List[str]] = None,
+    representative_bios: List[List[str]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Call GPT-4o-mini to infer business owner decisions."""
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key or not _openai_available:
+        print(f"[D2P] OpenAI not available (key={'set' if api_key else 'missing'}, "
+              f"lib={'ok' if _openai_available else 'missing'})", file=sys.stderr)
+        return None
+
+    if is_intermediary:
+        intermediary_ctx = (
+            "ATENÇÃO: Este é um negócio INTERMEDIÁRIO (agência/consultoria). "
+            "A dor é do DONO do negócio, não dos clientes que ele atende."
+        )
+    else:
+        intermediary_ctx = ""
+
+    # Collect BERTopic topic keywords for grounding
+    topic_keywords_str = ""
+    if topic_keywords:
+        topics_formatted = []
+        for i, kws in enumerate(topic_keywords):
+            if not kws:
+                continue
+            topic_line = f"Tópico {i}: palavras-chave=[{', '.join(kws[:6])}]"
+            # Attach representative bios if available
+            if representative_bios and i < len(representative_bios) and representative_bios[i]:
+                bios_sample = representative_bios[i][:2]  # max 2 bios per topic
+                bios_text = " | ".join(b[:150] for b in bios_sample)
+                topic_line += f" — exemplos de bios: \"{bios_text}\""
+            topics_formatted.append(topic_line)
+        topic_keywords_str = "- Tópicos BERTopic descobertos nos dados:\n  " + "\n  ".join(topics_formatted)
+
+    prompt = f"""Analise os DADOS ABAIXO e identifique as decisões operacionais repetitivas do DONO deste negócio.
+
+REGRA FUNDAMENTAL:
+O dado só pode afirmar o que ele LITERALMENTE contém.
+Qualquer explicação causal é hipótese, não fricção.
+Se os dados são insuficientes, retorne {{"decisions": []}}.
+
+ESPECIFICIDADE DE MERCADO — REGRA OBRIGATÓRIA:
+- As decisões devem ser ESPECÍFICAS para {market_name}.
+- Se a decisão serve para qualquer mercado, está ERRADA. DESCARTE.
+- TESTE DE SUBSTITUIÇÃO: substitua "{market_name}" por "Padaria", "Advogado", "Personal Trainer". Se a decisão continua fazendo sentido para esses mercados, ela é genérica demais — DESCARTE.
+- Use os tópicos BERTopic como evidência obrigatória — cada decisão DEVE citar qual tópico a fundamenta.
+
+EXEMPLOS DE DECISÕES GENÉRICAS PROIBIDAS (servem para QUALQUER mercado):
+- "Esse contato merece minha atenção agora?" — qualquer dono de negócio se pergunta isso
+- "Respondo agora ou depois?" — qualquer pessoa com inbox cheia se pergunta isso
+- "Esse cliente vale meu tempo?" — genérico demais
+- "Priorizo esse atendimento?" — genérico demais
+
+EXEMPLOS DE DECISÕES ESPECÍFICAS BOAS:
+- Para Agência de Marketing: "Aceito esse job com prazo apertado ou recuso?" (específico: agências lidam com jobs e prazos)
+- Para Agência de Marketing: "Pego esse cliente mesmo sem budget definido?" (específico: agências negociam budget)
+- Para Advogado: "Assumo essa causa mesmo com chance baixa?" (específico: advogados avaliam viabilidade jurídica)
+- Para Personal Trainer: "Aceito esse aluno com restrição médica?" (específico: trainers lidam com saúde)
+
+DECISÃO — REGRAS:
+- Binária: sim/não, agora/depois, aceito/recuso, passa/não passa.
+- Linguagem do DONO no dia a dia. Ele fala de "cliente", "mensagem", "pedido", "proposta", "job".
+- NÃO usar termos técnicos de sistema: "bio", "lead", "funil", "scraping", "embedding", "tópico".
+- A decisão deve ser CEGA: descreve O QUE o dono decide, sem eleger QUAL critério usar.
+- A primeira decisão do array deve ser a PRINCIPAL (maior peso).
+
+DECISÃO — EXEMPLO CORRETO vs ERRADO:
+- ERRADO: "Essa bio passa ou não passa pelo filtro?" (linguagem de sistema, dono não fala "bio")
+- ERRADO: "Esse contato merece minha atenção agora?" (genérico — serve para qualquer mercado)
+- ERRADO: "Respondo agora ou depois?" (genérico — qualquer pessoa com inbox se pergunta isso)
+- ERRADO: "Aceito clientes que mencionam 'resultado'?" (elege um sinal específico)
+- ERRADO: "Priorizo leads com urgência?" (linguagem de sistema + elege critério)
+- CORRETO: "Aceito esse job com prazo apertado ou recuso?" (específico para agência: linguagem do dono, decisão real)
+- CORRETO: "Pego esse cliente mesmo sem budget definido?" (específico para agência: reflete dor real do mercado)
+
+FRICÇÃO — O QUE É PERMITIDO:
+- Comportamento observável: "Alta carga cognitiva para decidir quais mensagens merecem atenção"
+- Frequência: "Decisão que se repete muitas vezes por dia"
+- Incerteza: "Sem critério claro, depende de julgamento manual cada vez"
+- Volume: "Grande quantidade de entradas para filtrar manualmente"
+
+FRICÇÃO — O QUE É PROIBIDO:
+- NÃO eleger termos específicos como critério ("resultado", "urgência", "tipo de cliente")
+- NÃO mencionar margem, conversão, ROI, faturamento, oportunidade perdida
+- NÃO racionalizar por que uma opção é melhor que outra
+- NÃO citar percentuais ou números que não estejam nos dados
+- NÃO usar linguagem de consultor ("otimizar", "maximizar", "alavancar")
+- NÃO usar linguagem técnica de sistema ("bio", "lead", "funil", "scraping", "embedding")
+
+TESTE DE SANIDADE: Se amanhã o modelo descobrir que outro padrão é mais relevante, a decisão e a fricção continuam válidas? Se não, está enviesada.
+
+DADOS:
+- Mercado analisado: {market_name}
+- {intermediary_ctx}
+- {signal_summary}
+{topic_keywords_str}
+
+Responda EXCLUSIVAMENTE em JSON válido (sem markdown, sem ```):
+{{
+  "decisions": [
+    {{
+      "decision": "Pergunta binária CEGA que o dono se faz todo dia — ESPECÍFICA para {market_name} (NÃO pode servir para outro mercado)",
+      "friction": "Comportamento observável, sem eleger critério ou sinal — ESPECÍFICO para {market_name}",
+      "product_type": "gatekeeper|triage|operational_decision",
+      "weight": 0.0 a 1.0,
+      "grounded_in": "Tópico N + evidência dos dados. Explique por que esta decisão NÃO se aplica a uma padaria ou advogado."
+    }}
+  ]
+}}"""
+
+    try:
+        client = OpenAI(api_key=api_key)
+        print(f"[D2P] Calling GPT-4o-mini for owner pain inference...", file=sys.stderr)
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Você responde exclusivamente em JSON válido. Sem markdown. Você descreve COMPORTAMENTO OBSERVÁVEL. NUNCA elege um sinal específico como critério. NUNCA racionaliza estratégia. Proibido: margem, ROI, conversão, oportunidade perdida, percentuais inventados, termos específicos como critério de decisão. REGRA CRÍTICA: Decisões genéricas que servem para qualquer mercado são PROIBIDAS. 'Respondo agora ou depois?' e 'Esse contato merece minha atenção?' são exemplos de decisões PROIBIDAS por serem genéricas."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=1000,
+        )
+
+        raw = response.choices[0].message.content.strip()
+        # Clean potential markdown wrapping
+        if raw.startswith('```'):
+            raw = re.sub(r'^```\w*\n?', '', raw)
+            raw = re.sub(r'\n?```$', '', raw)
+
+        result = json.loads(raw)
+
+        decisions = result.get('decisions', [])
+        evidence = result.get('evidence', [])
+
+        if not decisions:
+            print(f"[D2P] LLM returned empty decisions", file=sys.stderr)
+            return None
+
+        # Filter out generic decisions that apply to any market
+        GENERIC_PATTERNS = [
+            "merece minha atenção",
+            "respondo agora ou depois",
+            "vale meu tempo",
+            "priorizo esse atendimento",
+            "devo atender agora",
+            "dou atenção a esse",
+            "merece atenção agora",
+            "esse contato merece",
+            "esse cliente merece",
+        ]
+        original_count = len(decisions)
+        decisions = [
+            d for d in decisions
+            if not any(pattern in d.get('decision', '').lower() for pattern in GENERIC_PATTERNS)
+        ]
+        filtered_count = original_count - len(decisions)
+        if filtered_count > 0:
+            print(f"[D2P] Filtered {filtered_count} generic decisions (applied to any market)", file=sys.stderr)
+
+        # Validate and normalize
+        valid_types = {'gatekeeper', 'triage', 'operational_decision'}
+        for d in decisions:
+            if d.get('product_type') not in valid_types:
+                d['product_type'] = 'operational_decision'
+            d['weight'] = max(0.0, min(1.0, float(d.get('weight', 0.5))))
+
+        # Extract grounding evidence from each decision
+        evidence = []
+        for d in decisions:
+            grounded = d.pop('grounded_in', None)
+            if grounded:
+                evidence.append(f"{d['decision'][:40]}... → {grounded}")
+
+        print(f"[D2P] LLM returned {len(decisions)} owner decisions (grounded)", file=sys.stderr)
+        for d in decisions[:3]:
+            print(f"[D2P]   → {d['decision']}", file=sys.stderr)
+
+        return {'decisions': decisions, 'evidence': evidence}
+
+    except json.JSONDecodeError as e:
+        print(f"[D2P] LLM returned invalid JSON: {e}", file=sys.stderr)
+        return None
+    except Exception as e:
+        print(f"[D2P] LLM call failed: {e}", file=sys.stderr)
+        return None
+
+
+
+
+def count_business_signals_per_bio(bios: List[str]) -> Dict[str, int]:
+    """Count how many bios contain each business owner signal."""
+    counts = {}
+    for signal in BUSINESS_OWNER_SIGNALS:
+        count = sum(1 for bio in bios if signal in bio.lower())
+        if count > 0:
+            counts[signal] = count
+    return counts
+
 
 # ==============================================================================
 # D2P SCORE - 5 CRITÉRIOS BINÁRIOS
@@ -421,11 +535,14 @@ MANUAL_SIGNALS = [
 
 def calculate_d2p_binary_score(
     detected_workarounds: List[Dict],
-    detected_professions: List[Dict],
-    all_text: str
+    lead_bios: List[str],
+    n_leads: int
 ) -> Dict[str, Any]:
     """
     Score D2P com 5 critérios binários.
+    Uses proportional signals from individual bios instead of concatenated text
+    to avoid inflation (603 bios concatenated will match everything).
+    No profession templates — only workarounds and bio signals.
 
     Critérios:
     1. frequency: Acontece todo dia?
@@ -436,48 +553,44 @@ def calculate_d2p_binary_score(
 
     Score >= 4 = produto candidato forte
     """
-    text_lower = all_text.lower()
+    # Count signals across individual bios (proportional, not concatenated)
+    frequency_count = 0
+    volume_count = 0
+    manual_count = 0
+    for bio in lead_bios:
+        bio_lower = bio.lower()
+        if any(s in bio_lower for s in FREQUENCY_SIGNALS):
+            frequency_count += 1
+        if any(s in bio_lower for s in VOLUME_SIGNALS):
+            volume_count += 1
+        if any(s in bio_lower for s in MANUAL_SIGNALS):
+            manual_count += 1
 
-    # 1. FREQUENCY: Detectar sinais de frequência diária
-    frequency = any(signal in text_lower for signal in FREQUENCY_SIGNALS)
-    # Também considerar se tem profissões que tipicamente têm demanda diária
-    if detected_professions:
-        daily_professions = ['dentista', 'cabeleireiro', 'personal', 'veterinário']
-        if any(p['profession'] in daily_professions for p in detected_professions):
-            frequency = True
+    # Proportional thresholds: signal must appear in >= 5% of bios to count
+    min_proportion = 0.05
+    freq_proportion = frequency_count / n_leads if n_leads else 0
+    vol_proportion = volume_count / n_leads if n_leads else 0
+    manual_proportion = manual_count / n_leads if n_leads else 0
 
-    # 2. VOLUME: Detectar sinais de alto volume
-    volume = any(signal in text_lower for signal in VOLUME_SIGNALS)
-    # Workarounds de triage indicam volume
+    # 1. FREQUENCY
+    frequency = freq_proportion >= min_proportion
+
+    # 2. VOLUME
+    volume = vol_proportion >= min_proportion
     if any(w['product_type'] == 'triage' for w in detected_workarounds):
         volume = True
 
-    # 3. MANUAL: Detectar sinais de processo manual
-    manual = any(signal in text_lower for signal in MANUAL_SIGNALS)
-    # Qualquer workaround detectado indica processo manual
+    # 3. MANUAL
+    manual = manual_proportion >= min_proportion
     if detected_workarounds:
         manual = True
 
     # 4. COST: Erro custa tempo ou dinheiro?
-    # Gatekeepers têm custo alto de erro (aceitar cliente errado)
     cost = any(w['product_type'] == 'gatekeeper' for w in detected_workarounds)
-    # Profissões de serviço têm custo de oportunidade
-    if detected_professions:
-        high_cost_categories = ['health', 'legal', 'consulting', 'coaching']
-        if any(p.get('category') in high_cost_categories for p in detected_professions):
-            cost = True
 
     # 5. RULE: Dá pra transformar em regra simples?
-    # Se tem workaround de triage ou gatekeeper, provavelmente sim
     rule = any(w['product_type'] in ['triage', 'gatekeeper'] for w in detected_workarounds)
-    # Se a decisão é binária (aceito/não aceito), sim
-    if detected_professions:
-        for p in detected_professions:
-            if 'aceito' in p.get('decision', '').lower():
-                rule = True
-                break
 
-    # Calcular total
     scores = {
         'frequency': frequency,
         'volume': volume,
@@ -487,7 +600,6 @@ def calculate_d2p_binary_score(
     }
     total = sum(1 for v in scores.values() if v)
 
-    # Determinar se é produto candidato
     is_product_candidate = total >= 4
     verdict = "EXCELENTE" if total >= 4 else "MODERADO" if total >= 3 else "FRACO"
 
@@ -497,9 +609,14 @@ def calculate_d2p_binary_score(
         'max_score': 5,
         'is_product_candidate': is_product_candidate,
         'verdict': verdict,
+        'signal_proportions': {
+            'frequency': round(freq_proportion, 3),
+            'volume': round(vol_proportion, 3),
+            'manual': round(manual_proportion, 3),
+        },
         'explanation': {
-            'frequency': "Acontece diariamente" if frequency else "Não é diário",
-            'volume': "Alto volume de ocorrências" if volume else "Volume baixo/moderado",
+            'frequency': f"Acontece diariamente ({frequency_count}/{n_leads} bios)" if frequency else f"Não é diário ({frequency_count}/{n_leads} bios)",
+            'volume': f"Alto volume de ocorrências ({volume_count}/{n_leads} bios)" if volume else f"Volume baixo/moderado ({volume_count}/{n_leads} bios)",
             'manual': "Depende de decisão humana" if manual else "Já automatizado",
             'cost': "Erro tem custo significativo" if cost else "Erro tem baixo impacto",
             'rule': "Pode ser regra simples" if rule else "Requer análise complexa"
@@ -511,9 +628,10 @@ def calculate_d2p_binary_score(
 # PRODUCT DEFINITION
 # ==============================================================================
 
-def determine_product_type(workarounds: List[Dict], professions: List[Dict]) -> Dict[str, Any]:
+def determine_product_type(workarounds: List[Dict]) -> Dict[str, Any]:
     """
-    Determina tipo de produto:
+    Determina tipo de produto baseado apenas em workarounds detectados.
+    No profession templates — pipeline is blind.
     - GATEKEEPER: Protege recursos escassos (agenda, estoque, capacidade)
     - TRIAGE: Classifica entradas caóticas (leads, pedidos, mensagens)
     - OPERATIONAL_DECISION: Decide ações operacionais (aceitar, recusar, priorizar)
@@ -522,10 +640,6 @@ def determine_product_type(workarounds: List[Dict], professions: List[Dict]) -> 
 
     for w in workarounds:
         ptype = w.get('product_type', 'operational_decision')
-        type_counts[ptype] = type_counts.get(ptype, 0) + 1
-
-    for p in professions:
-        ptype = p.get('product_type', 'operational_decision')
         type_counts[ptype] = type_counts.get(ptype, 0) + 1
 
     # Tipo dominante
@@ -565,63 +679,70 @@ def generate_product_definition(
     dominant_friction: str,
     product_type: Dict,
     workaround_tools: List[str],
-    d2p_score: Dict
+    d2p_score: Dict,
+    micro_decisions: List[str] = None,
 ) -> Dict[str, Any]:
     """
     Gera definição estruturada do produto.
 
+    AJUSTE 3: Produto é um "motor de decisão binária operacional",
+    não um "sistema que decide tudo". Responde: faça/não faça, agora/depois.
+
+    AJUSTE 4: MVP NÃO promete substituir CRM/Excel/Agenda.
+    Entra por UMA fresta dolorida específica.
+
     Template:
-    - Produto: Sistema que decide [DECISÃO] automaticamente
+    - Motor que responde: [DECISÃO] → faça / não faça / agora / depois
     - Foco: Eliminar [FRICÇÃO]
-    - MVP faz / não faz
+    - MVP faz UMA coisa bem
     """
     # Nome do produto (sugestão baseada no tipo)
     type_prefixes = {
         'gatekeeper': 'Gate',
         'triage': 'Sort',
-        'operational_decision': 'Auto'
+        'operational_decision': 'Decide'
     }
     prefix = type_prefixes.get(product_type['type'], 'Smart')
 
-    # Extrair palavra-chave do mercado
-    market_words = market_name.lower().split()
+    # Extrair palavra-chave do mercado (skip articles)
+    skip_words = {'de', 'da', 'do', 'das', 'dos', 'a', 'o', 'as', 'os', 'e', 'em', 'para'}
+    market_words = [w for w in market_name.lower().split() if w not in skip_words]
     market_key = market_words[0][:4].title() if market_words else 'Biz'
 
     suggested_name = f"{prefix}{market_key}"
 
-    # Definição formal
-    product_definition = f"Sistema que decide automaticamente: {dominant_decision}"
+    # Product definition — only if LLM provided a decision
+    if dominant_decision:
+        product_definition = f"Motor de decisão que responde: {dominant_decision} → faça / não faça"
+        one_liner = f"{suggested_name}: motor de decisão operacional para {market_name.lower()}"
+        mvp_does = [
+            f"Responde automaticamente: {dominant_decision}",
+            f"Saída binária: faça / não faça / agora / depois",
+        ]
+        if dominant_friction:
+            mvp_does.append(f"Elimina a fricção: {dominant_friction}")
+    else:
+        product_definition = "Dados insuficientes para definir produto"
+        one_liner = f"Análise inconclusiva para {market_name.lower()}"
+        mvp_does = []
 
     # Tagline
-    decision_verb = dominant_decision.split()[0].lower() if dominant_decision else "decidir"
-    tagline = f"Pare de {decision_verb} manualmente"
+    tagline_options = {
+        'gatekeeper': "Menos erro ao aceitar. Mais margem ao recusar.",
+        'triage': "Priorize sem pensar. Decida sem duvidar.",
+        'operational_decision': "Pergunte. Ele responde: faça / não faça / agora / depois."
+    }
+    tagline = tagline_options.get(product_type['type'],
+        "Pergunte. Ele responde: faça / não faça / agora / depois.") if dominant_decision else "Dados insuficientes"
 
-    # One-liner
-    one_liner = f"{suggested_name}: {product_type['value_prop']} para {market_name.lower()}"
-
-    # MVP FAZ
-    mvp_does = [
-        f"Automatiza a decisão: {dominant_decision}",
-        f"Elimina fricção: {dominant_friction}",
-        f"Substitui: {', '.join(workaround_tools[:2]) if workaround_tools else 'processo manual'}"
-    ]
-
-    # Adicionar capacidade específica por tipo
-    if product_type['type'] == 'gatekeeper':
-        mvp_does.append("Protege seu recurso mais escasso automaticamente")
-    elif product_type['type'] == 'triage':
-        mvp_does.append("Classifica e prioriza entradas por critérios definidos")
-    else:
-        mvp_does.append("Responde perguntas operacionais rotineiras")
-
-    # MVP NÃO FAZ
     mvp_does_not = [
-        "Não substitui decisões estratégicas do negócio",
-        "Não requer integração complexa para começar",
-        "Não precisa de treinamento extenso",
-        "Não toma decisões que só humano pode tomar"
-    ]
+        "Não substitui CRM, planilha ou agenda — entra por uma fresta só",
+        "Não toma decisões estratégicas do negócio",
+        "Não precisa de integração para começar (funciona standalone)",
+        "Não tenta resolver tudo — resolve UMA decisão muito bem"
+    ] if dominant_decision else []
 
+    # AJUSTE 2: Incluir micro-decisions no output
     return {
         'suggested_name': suggested_name,
         'product_definition': product_definition,
@@ -630,9 +751,10 @@ def generate_product_definition(
         'type': product_type['type'],
         'type_name': product_type['name'],
         'type_description': product_type['description'],
-        'value_proposition': product_type['value_prop'],
+        'value_proposition': tagline,  # Use the new tagline as value prop
         'mvp_does': mvp_does,
         'mvp_does_not': mvp_does_not,
+        'micro_decisions': micro_decisions or [],  # AJUSTE 2
         'target_market': market_name,
         'core_decision': dominant_decision,
         'core_friction': dominant_friction,
@@ -647,13 +769,17 @@ def generate_product_definition(
 # FRICTION DETECTION
 # ==============================================================================
 
-def detect_workarounds_and_decisions(text: str) -> Tuple[List[Dict], List[Dict]]:
+def detect_workarounds_and_decisions(
+    text: str,
+    market_name: str = ''
+) -> List[Dict]:
     """
-    Detecta workarounds e traduz para decisões.
+    Detecta workarounds (ferramentas reais) nas bios.
+    Professions are no longer detected here — pipeline is blind.
+    LLM is the only source of decisions.
     """
     text_lower = text.lower()
     detected_workarounds = []
-    detected_professions = []
 
     # Detectar workarounds
     for tool, data in WORKAROUND_TO_DECISION.items():
@@ -663,51 +789,31 @@ def detect_workarounds_and_decisions(text: str) -> Tuple[List[Dict], List[Dict]]
                 **data
             })
 
-    # Detectar profissões
-    for profession, data in PROFESSION_DECISIONS.items():
-        if profession in text_lower:
-            detected_professions.append({
-                'profession': profession,
-                **data
-            })
-
-    return detected_workarounds, detected_professions
+    return detected_workarounds
 
 
-def analyze_friction_unit(keywords: List[str], docs: List[str]) -> Dict[str, Any]:
+def analyze_friction_unit(
+    keywords: List[str],
+    docs: List[str],
+    market_name: str = ''
+) -> Dict[str, Any]:
     """
     Analisa um tópico BERTopic e extrai informações de fricção D2P.
+    Pipeline is blind: decision is always None here — only LLM generates decisions.
+    Workarounds contribute to friction_score as metadata.
     """
     combined_text = ' '.join(keywords + docs)
 
-    # Detectar workarounds e profissões
-    workarounds, professions = detect_workarounds_and_decisions(combined_text)
+    # Detectar workarounds only (no profession matching)
+    workarounds = detect_workarounds_and_decisions(combined_text, market_name)
 
-    # Determinar decisão dominante
+    # decision stays None — LLM is the only source of decisions
     dominant_decision = None
     dominant_friction = None
     dominant_type = 'operational_decision'
 
-    # Priorizar profissões (mais específicas)
-    if professions:
-        top_prof = professions[0]
-        dominant_decision = top_prof['decision']
-        dominant_friction = top_prof['friction']
-        dominant_type = top_prof['product_type']
-    elif workarounds:
-        top_work = workarounds[0]
-        dominant_decision = top_work['decision']
-        dominant_friction = top_work['friction']
-        dominant_type = top_work['product_type']
-    else:
-        # Fallback genérico
-        dominant_decision = "Como priorizo essa atividade?"
-        dominant_friction = "Falta de critério de priorização"
-
-    # Calcular score de fricção
+    # Calcular score de fricção (workarounds as metadata only)
     friction_score = 0.0
-    if professions:
-        friction_score += 0.5
     if workarounds:
         friction_score += 0.3 * min(len(workarounds), 3)
 
@@ -730,10 +836,111 @@ def analyze_friction_unit(keywords: List[str], docs: List[str]) -> Dict[str, Any
         'friction_score': round(friction_score, 3),
         'is_friction': is_friction,
         'detected_workarounds': [w['tool'] for w in workarounds],
-        'detected_professions': [p['profession'] for p in professions],
         'has_volume_signal': volume_detected,
         'has_frequency_signal': frequency_detected
     }
+
+
+# ==============================================================================
+# AJUSTE 1 — BIO PREPROCESSING: EXTRACT OPERATIONAL PHRASES
+# ==============================================================================
+
+# Operational verbs that signal decision-making in bios
+OPERATIONAL_VERBS = [
+    'respondo', 'atendo', 'decido', 'fecho', 'aceito', 'recuso',
+    'priorizo', 'organizo', 'gerencio', 'administro', 'controlo',
+    'agendo', 'confirmo', 'cancelo', 'remarco', 'encaixo',
+    'avalio', 'qualifico', 'seleciono', 'filtro', 'classifico',
+    'cobro', 'negocio', 'orço', 'preciso', 'calculo',
+    'envio', 'entrego', 'despacho', 'redireciono',
+    'produzo', 'crio', 'desenvolvo', 'executo', 'implemento',
+    'monitoro', 'acompanho', 'verifico', 'checo', 'valido',
+    # Infinitives (common in bios: "ajudo a decidir", "preciso atender")
+    'responder', 'atender', 'decidir', 'fechar', 'aceitar',
+    'priorizar', 'organizar', 'gerenciar', 'agendar', 'confirmar',
+    'avaliar', 'qualificar', 'selecionar', 'filtrar',
+    'cobrar', 'negociar', 'produzir', 'criar', 'monitorar',
+]
+
+# Context nouns that give meaning to operational verbs
+DECISION_CONTEXT_NOUNS = [
+    'cliente', 'clientes', 'lead', 'leads', 'prospect', 'prospects',
+    'paciente', 'pacientes', 'aluno', 'alunos',
+    'projeto', 'projetos', 'job', 'jobs', 'trabalho',
+    'proposta', 'propostas', 'orçamento', 'orçamentos',
+    'agenda', 'horário', 'horários', 'prazo', 'prazos',
+    'pedido', 'pedidos', 'encomenda', 'encomendas',
+    'campanha', 'campanhas', 'conteúdo', 'conteúdos',
+    'mensagem', 'mensagens', 'demanda', 'demandas',
+    'estratégia', 'resultado', 'resultados', 'meta', 'metas',
+    'equipe', 'time', 'colaborador', 'freelancer',
+]
+
+
+def extract_operational_phrases(bio: str) -> List[str]:
+    """
+    Extract operational phrases from a bio that signal decision-making.
+
+    Instead of feeding the full bio to BERTopic (which is full of
+    marketing fluff: "transformo negócios", "levo sua marca ao próximo nível"),
+    extract only fragments containing operational verbs + context nouns.
+
+    This gives BERTopic actual decision-making content to cluster,
+    producing topics like "qualificar leads" vs "agendar clientes"
+    instead of 2 identical generic clusters.
+    """
+    bio_lower = bio.lower()
+    phrases = []
+
+    # Split into sentences (rough: by punctuation and line breaks)
+    sentences = re.split(r'[.!?\n|•⚡🔥✨💡🚀📲📱💼🎯✅❌➡️▶️🔸🔹]+', bio_lower)
+
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if len(sentence) < 5:
+            continue
+
+        has_verb = any(verb in sentence for verb in OPERATIONAL_VERBS)
+        has_context = any(noun in sentence for noun in DECISION_CONTEXT_NOUNS)
+
+        if has_verb and has_context:
+            # High-value: operational verb + business context
+            phrases.append(sentence.strip())
+        elif has_verb:
+            # Medium-value: operational verb alone
+            phrases.append(sentence.strip())
+
+    return phrases
+
+
+def prepare_bertopic_docs(bios: List[str], market_name: str) -> List[str]:
+    """
+    Prepare documents for BERTopic by extracting operational phrases.
+
+    Strategy:
+    - For each bio, extract operational phrases
+    - If a bio has operational phrases, use them (joined)
+    - If not, fall back to the full bio (some signal is better than none)
+    - This transforms BERTopic input from generic marketing bios
+      to decision-focused text, enabling meaningful clustering.
+    """
+    docs = []
+    extracted_count = 0
+
+    for bio in bios:
+        phrases = extract_operational_phrases(bio)
+        if phrases:
+            # Join operational phrases as the document
+            docs.append(' | '.join(phrases))
+            extracted_count += 1
+        else:
+            # Fallback: use full bio but trimmed
+            docs.append(bio[:300] if len(bio) > 300 else bio)
+
+    print(f"[D2P] Bio preprocessing: {extracted_count}/{len(bios)} bios had operational phrases extracted",
+          file=sys.stderr)
+
+    return docs
 
 
 # ==============================================================================
@@ -762,13 +969,22 @@ def get_portuguese_stopwords() -> List[str]:
 
 
 def create_bertopic_model(n_docs: int) -> BERTopic:
-    adjusted_min_cluster = max(15, min(MIN_CLUSTER_SIZE, n_docs // 20))
-    adjusted_min_samples = max(5, min(MIN_SAMPLES, adjusted_min_cluster // 2))
+    # More aggressive clustering for homogeneous datasets
+    # For 603 docs: min_cluster=10, min_samples=3 → more granular topics
+    # For 2000 docs: min_cluster=25, min_samples=8
+    adjusted_min_cluster = max(10, min(MIN_CLUSTER_SIZE, n_docs // 40))
+    adjusted_min_samples = max(3, min(MIN_SAMPLES, adjusted_min_cluster // 3))
+
+    # Lower n_components for smaller datasets to avoid overfitting UMAP
+    adjusted_n_components = min(N_COMPONENTS, max(3, n_docs // 100))
+
+    print(f"[D2P] BERTopic params: min_cluster={adjusted_min_cluster}, min_samples={adjusted_min_samples}, "
+          f"n_components={adjusted_n_components}, n_docs={n_docs}", file=sys.stderr)
 
     umap_model = UMAP(
         n_neighbors=min(N_NEIGHBORS, max(2, n_docs // 10)),
-        n_components=N_COMPONENTS,
-        min_dist=0.0,
+        n_components=adjusted_n_components,
+        min_dist=0.05,  # slightly > 0 to spread clusters apart
         metric='cosine',
         random_state=42,
         low_memory=True,
@@ -779,14 +995,14 @@ def create_bertopic_model(n_docs: int) -> BERTopic:
         min_cluster_size=adjusted_min_cluster,
         min_samples=adjusted_min_samples,
         metric='euclidean',
-        cluster_selection_method='eom',
+        cluster_selection_method='leaf',  # 'leaf' finds more fine-grained clusters than 'eom'
         prediction_data=True
     )
 
     vectorizer_model = CountVectorizer(
         stop_words=get_portuguese_stopwords(),
         min_df=2,
-        max_df=0.95,
+        max_df=1.0,
         ngram_range=(1, 2)
     )
 
@@ -849,18 +1065,28 @@ def run_analysis(input_data: Dict) -> Dict[str, Any]:
         bios.append(bio)
         all_text_combined += " " + bio
 
-    # Step 2: Detect global workarounds and professions
-    print(f"[D2P] Detecting workarounds and decisions...", file=sys.stderr)
-    global_workarounds, global_professions = detect_workarounds_and_decisions(all_text_combined)
+    # Step 2: Detect global workarounds (no profession matching — pipeline is blind)
+    print(f"[D2P] Detecting workarounds (market: {market_name})...", file=sys.stderr)
+    global_workarounds = detect_workarounds_and_decisions(all_text_combined, market_name)
 
-    # Step 3: BERTopic clustering
-    print(f"[D2P] Running BERTopic on {n_selected} leads...", file=sys.stderr)
+    # Step 3: Collect real professions from lead data (not hardcoded templates)
+    detected_professions = list(set(
+        lead.get('profession', '') for lead in leads
+        if lead.get('profession')
+    ))
+    print(f"[D2P] Real professions from lead data: {detected_professions[:10]}", file=sys.stderr)
+
+    # Step 4: BERTopic clustering on OPERATIONAL PHRASES (not raw bios)
+    print(f"[D2P] Preprocessing bios → extracting operational phrases...", file=sys.stderr)
+    bertopic_docs = prepare_bertopic_docs(bios, market_name)
+
+    print(f"[D2P] Running BERTopic on {n_selected} preprocessed docs...", file=sys.stderr)
     model = get_sentence_model()
-    bertopic_embeddings = model.encode(bios, show_progress_bar=False, convert_to_numpy=True)
+    bertopic_embeddings = model.encode(bertopic_docs, show_progress_bar=False, convert_to_numpy=True)
 
     try:
         topic_model = create_bertopic_model(n_selected)
-        topics, _ = topic_model.fit_transform(bios, bertopic_embeddings)
+        topics, _ = topic_model.fit_transform(bertopic_docs, bertopic_embeddings)
     except Exception as e:
         return {'success': False, 'error': f'BERTopic error: {e}'}
 
@@ -871,7 +1097,7 @@ def run_analysis(input_data: Dict) -> Dict[str, Any]:
     outliers = sum(1 for t in topics if t == -1)
     coverage = (n_selected - outliers) / n_selected * 100
 
-    # Step 4: Analyze each topic for friction
+    # Step 5: Analyze each topic for friction
     friction_units = []
     for _, row in valid_topics.iterrows():
         topic_id = row['Topic']
@@ -881,7 +1107,7 @@ def run_analysis(input_data: Dict) -> Dict[str, Any]:
         keywords = [word for word, score in topic_words[:12]] if topic_words else []
         representative_docs = topic_model.get_representative_docs(topic_id) or []
 
-        friction_analysis = analyze_friction_unit(keywords, representative_docs[:10])
+        friction_analysis = analyze_friction_unit(keywords, representative_docs[:10], market_name)
 
         friction_unit = {
             'topic_id': int(topic_id),
@@ -897,43 +1123,73 @@ def run_analysis(input_data: Dict) -> Dict[str, Any]:
 
     friction_units.sort(key=lambda x: x['friction_score'], reverse=True)
 
-    # Step 5: Calculate D2P Binary Score
-    print(f"[D2P] Calculating D2P score...", file=sys.stderr)
+    # Step 6: BUSINESS OWNER PAIN INFERENCE
+    # 1. Count business-owner signals in individual bios
+    # 2. Pass BERTopic topics + representative bios to LLM
+    # 3. LLM infers decisions grounded in actual data
+    print(f"[D2P] Scanning for business owner pain signals...", file=sys.stderr)
+    bio_business_signals = count_business_signals_per_bio(bios)
+    total_biz_signals = sum(bio_business_signals.values())
+    print(f"[D2P] Business signals found: {total_biz_signals} total across "
+          f"{len(bio_business_signals)} distinct terms", file=sys.stderr)
+    if bio_business_signals:
+        top_signals = sorted(bio_business_signals.items(), key=lambda x: -x[1])[:5]
+        print(f"[D2P] Top business signals: {top_signals}", file=sys.stderr)
+
+    # Collect topic keywords AND representative bios for LLM grounding
+    all_topic_keywords = [fu.get('keywords', []) for fu in friction_units]
+    all_representative_bios = [fu.get('representative_bios', []) for fu in friction_units]
+
+    # Run business owner inference (LLM-powered, grounded in data)
+    owner_analysis = infer_business_owner_decisions(
+        market_name=market_name,
+        bio_business_signals=bio_business_signals,
+        n_leads=n_selected,
+        topic_keywords=all_topic_keywords,
+        representative_bios=all_representative_bios,
+    )
+    owner_decisions = owner_analysis['owner_decisions']
+    print(f"[D2P] Owner decisions inferred: {len(owner_decisions)}", file=sys.stderr)
+    for i, od in enumerate(owner_decisions[:3]):
+        print(f"[D2P]   #{i+1}: {od['decision']} (weight={od['weight']:.1f})", file=sys.stderr)
+
+    # Step 7: Calculate D2P Binary Score (proportional, not concatenated)
+    print(f"[D2P] Calculating D2P score (proportional across {n_selected} bios)...", file=sys.stderr)
     d2p_score = calculate_d2p_binary_score(
         global_workarounds,
-        global_professions,
-        all_text_combined
+        bios,
+        n_selected
     )
 
-    # Step 6: Determine product type
-    product_type = determine_product_type(global_workarounds, global_professions)
+    # Step 8: Determine product type (workarounds only, no profession templates)
+    product_type = determine_product_type(global_workarounds)
 
-    # Step 7: Get dominant decision and friction
+    # Step 9: Get dominant decision and friction — ONLY from LLM
     dominant_decision = None
     dominant_friction = None
 
-    for fu in friction_units:
-        if fu.get('decision'):
-            dominant_decision = fu['decision']
-            dominant_friction = fu['friction']
-            break
+    if owner_decisions:
+        top_owner = owner_decisions[0]
+        dominant_decision = top_owner['decision']
+        dominant_friction = top_owner['friction']
+        product_type_override = top_owner.get('product_type')
+        if product_type_override:
+            product_type['type'] = product_type_override
 
+    # No fallback. If LLM didn't find decisions, output stays None.
     if not dominant_decision:
-        if global_professions:
-            dominant_decision = global_professions[0]['decision']
-            dominant_friction = global_professions[0]['friction']
-        elif global_workarounds:
-            dominant_decision = global_workarounds[0]['decision']
-            dominant_friction = global_workarounds[0]['friction']
-        else:
-            dominant_decision = "Como priorizo minhas atividades?"
-            dominant_friction = "Falta de critério de priorização"
+        print(f"[D2P] No dominant decision — insufficient data for this market", file=sys.stderr)
 
     workaround_tools = list(set(
         w['tool'] for w in global_workarounds
     ))[:5]
 
-    # Step 8: Generate product definition
+    # Step 10: Micro-decisions — ONLY from LLM owner decisions (no hardcoded templates)
+    micro_decisions = [od['decision'] for od in owner_decisions[1:]][:6]
+
+    print(f"[D2P] Micro-decisions: {len(micro_decisions)} (all from LLM)", file=sys.stderr)
+
+    # Step 11: Generate product definition
     print(f"[D2P] Generating product definition...", file=sys.stderr)
     product = generate_product_definition(
         market_name=market_name,
@@ -941,7 +1197,8 @@ def run_analysis(input_data: Dict) -> Dict[str, Any]:
         dominant_friction=dominant_friction,
         product_type=product_type,
         workaround_tools=workaround_tools,
-        d2p_score=d2p_score
+        d2p_score=d2p_score,
+        micro_decisions=micro_decisions,
     )
 
     # Metrics
@@ -960,6 +1217,7 @@ def run_analysis(input_data: Dict) -> Dict[str, Any]:
         'success': True,
         'market_name': market_name,
         'version_id': version_id,
+        'search_mode': 'identity',
 
         # Search stats (from pgvector, passed through)
         'leads_selected': n_selected,
@@ -1011,7 +1269,22 @@ def run_analysis(input_data: Dict) -> Dict[str, Any]:
 
         # Detected
         'detected_workarounds': [w['tool'] for w in global_workarounds],
-        'detected_professions': [p['profession'] for p in global_professions],
+        'detected_professions': detected_professions,
+
+        # Business Owner Analysis (the real pain)
+        'owner_analysis': {
+            'decisions': [
+                {'decision': od['decision'], 'friction': od['friction'],
+                 'type': od['product_type'], 'weight': round(od['weight'], 2)}
+                for od in owner_decisions
+            ],
+            'evidence': owner_analysis['evidence'],
+            'is_intermediary': owner_analysis['is_intermediary'],
+            'business_signals': owner_analysis['business_signal_counts'],
+        },
+
+        # Micro-decisions (LLM only, no templates)
+        'micro_decisions': micro_decisions,
 
         # Meta
         'analysis_duration_ms': duration_ms

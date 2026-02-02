@@ -4082,10 +4082,19 @@ export async function scrapeInstagramTag(
             allFoundProfiles.push(...foundProfiles);
 
             try {
-              // 1. Fechar page atual (se possível)
-              try { await cleanup(); } catch {}
+              // 1. Invalidar página persistente ANTES de fechar browser
+              // (evita referência órfã no context-manager)
+              resetPersistentPageState();
 
-              // 2. Fechar browser completamente (usando session service, não o local)
+              // 2. Fechar page atual (se possível, com timeout)
+              try {
+                await Promise.race([
+                  cleanup(),
+                  new Promise<void>(resolve => setTimeout(resolve, 3000))
+                ]);
+              } catch {}
+
+              // 3. Fechar browser completamente (com kill forçado se travar)
               console.log(`🔒 Fechando browser travado...`);
               await closeSessionBrowser();
 

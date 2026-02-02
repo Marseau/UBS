@@ -151,37 +151,135 @@ async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * ETAPA 1 - Busca leads similares por embedding (busca vetorial)
+ * ETAPA 0 - GPT gera keywords para encontrar leads do mercado
  */
-async function getLeadsByEmbedding(
-  marketName: string,
-  limit: number = 2000
-): Promise<{ id: string; bio: string; profession?: string; similarity: number }[]> {
-  console.log(`[D2P] Gerando embedding para: "${marketName}"`);
+async function generateKeywordsForMarket(marketName: string): Promise<string[]> {
+  console.log(`[D2P] Gerando keywords para: "${marketName}"`);
 
-  // Gerar embedding do nome do mercado
-  const marketEmbedding = await generateEmbedding(marketName);
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{
+      role: 'user',
+      content: `Voce e um especialista em mercados brasileiros. Dado o mercado "${marketName}", liste 15-25 keywords que profissionais desse mercado usam em suas bios do Instagram.
 
-  if (marketEmbedding.length !== EMBEDDING_DIMENSION) {
-    throw new Error(`Embedding invalido: esperado ${EMBEDDING_DIMENSION} dimensoes, recebido ${marketEmbedding.length}`);
-  }
+Inclua:
+- Raiz da palavra principal (ex: "advogad" pega advogado, advogada, advogados)
+- Termos em portugues E ingles
+- Siglas oficiais da profissao (OAB, CRM, CREA, etc)
+- Especializacoes comuns
+- Termos tecnicos da area
 
-  console.log(`[D2P] Buscando leads similares via pgvector...`);
-
-  // Busca vetorial usando pgvector (cosine similarity)
-  const { data, error } = await supabase.rpc('match_leads_by_embedding', {
-    query_embedding: marketEmbedding,
-    match_threshold: 0.3, // Similaridade minima (0.3 = 30%)
-    match_count: limit
+Responda APENAS com JSON: {"keywords": ["termo1", "termo2", ...]}`
+    }],
+    temperature: 0.3,
+    response_format: { type: 'json_object' }
   });
 
-  if (error) {
-    console.error('[D2P] Erro na busca vetorial:', error);
-    throw error;
+  const content = response.choices[0]?.message?.content || '{"keywords":[]}';
+  const parsed = JSON.parse(content);
+  const keywords = parsed.keywords || [];
+
+  console.log(`[D2P] Keywords geradas (${keywords.length}): ${keywords.join(', ')}`);
+  return keywords;
+}
+
+/**
+ * ETAPA 1 - Busca leads por keywords na bio/profession (via SQL direto para evitar limite de 1000)
+ */
+async function getLeadsByKeywords(
+  keywords: string[]
+): Promise<{ id: string; bio: string; profession?: string; has_embedding: boolean }[]> {
+  if (!keywords || keywords.length === 0) {
+    throw new Error('Keywords sao obrigatorias');
   }
 
-  console.log(`[D2P] Encontrados ${data?.length || 0} leads similares`);
-  return data || [];
+  console.log(`[D2P] Buscando leads com keywords: ${keywords.slice(0, 5).join(', ')}...`);
+
+  // Construir condicoes ILIKE para SQL
+  const likeConditions = keywords.map(kw => {
+    const clean = kw.trim().toLowerCase().replace(/'/g, "''"); // Escape quotes
+    return `LOWER(bio) LIKE '%${clean}%' OR LOWER(profession) LIKE '%${clean}%'`;
+  }).join(' OR ');
+
+  const query = `
+    SELECT id, bio, profession, (embedding IS NOT NULL) as has_embedding
+    FROM instagram_leads
+    WHERE bio IS NOT NULL
+      AND (${likeConditions})
+  `;
+
+  const { data, error } = await supabase.rpc('exec_sql', { query_text: query });
+
+  // Se a funcao exec_sql nao existir, usar query direta com paginacao
+  if (error) {
+    console.log(`[D2P] Usando busca paginada...`);
+    return await getLeadsByKeywordsPaginated(keywords);
+  }
+
+  const leads = (data || []).map((lead: any) => ({
+    id: lead.id,
+    bio: lead.bio,
+    profession: lead.profession,
+    has_embedding: lead.has_embedding === true
+  }));
+
+  console.log(`[D2P] Encontrados ${leads.length} leads`);
+  return leads;
+}
+
+/**
+ * Busca paginada para contornar limite de 1000 do Supabase
+ * Sem limite maximo - busca todos os leads que matcham
+ */
+async function getLeadsByKeywordsPaginated(
+  keywords: string[],
+  maxLeads: number = 100000
+): Promise<{ id: string; bio: string; profession?: string; has_embedding: boolean }[]> {
+  const allLeads: { id: string; bio: string; profession?: string; has_embedding: boolean }[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+
+  // Construir query OR para cada keyword
+  const conditions = keywords.map(kw => {
+    const clean = kw.trim().toLowerCase();
+    return `bio.ilike.%${clean}%,profession.ilike.%${clean}%`;
+  }).join(',');
+
+  while (allLeads.length < maxLeads) {
+    const { data, error } = await supabase
+      .from('instagram_leads')
+      .select('id, bio, profession, embedding')
+      .or(conditions)
+      .not('bio', 'is', null)
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      console.error('[D2P] Erro na busca paginada:', error);
+      break;
+    }
+
+    if (!data || data.length === 0) {
+      break; // Sem mais dados
+    }
+
+    const leads = data.map(lead => ({
+      id: lead.id,
+      bio: lead.bio,
+      profession: lead.profession,
+      has_embedding: lead.embedding !== null
+    }));
+
+    allLeads.push(...leads);
+    offset += pageSize;
+
+    console.log(`[D2P] Pagina ${offset / pageSize}: +${data.length} leads (total: ${allLeads.length})`);
+
+    if (data.length < pageSize) {
+      break; // Ultima pagina
+    }
+  }
+
+  return allLeads;
 }
 
 /**
@@ -387,12 +485,12 @@ Responda APENAS com o JSON valido.`;
 // =============================================================================
 
 /**
- * Analisa mercado por nome (100% dinamico via embedding)
+ * Analisa mercado por nome (100% dinamico)
  *
  * Pipeline:
- * 1. Gera embedding do nome do mercado
- * 2. Busca leads similares via pgvector
- * 3. Extrai keywords das bios dos leads encontrados
+ * 1. GPT gera keywords relevantes para o mercado
+ * 2. Busca leads que contenham essas keywords
+ * 3. Extrai keywords adicionais das bios encontradas
  * 4. Analisa workarounds e sinais de dor
  * 5. GPT traduz em decisoes e define produto
  */
@@ -403,33 +501,35 @@ export async function analyzeMarket(marketName: string): Promise<MarketAnalysis>
   console.log(`[D2P] Iniciando analise: ${marketName}`);
   console.log(`[D2P] ========================================`);
 
-  // ETAPA 1 - Buscar leads similares via embedding
-  console.log(`[D2P] ETAPA 1: Busca vetorial por similaridade...`);
-  const leadsWithSimilarity = await getLeadsByEmbedding(marketName, 2000);
+  // ETAPA 0 - GPT gera keywords para o mercado
+  console.log(`[D2P] ETAPA 0: Gerando keywords via GPT...`);
+  const generatedKeywords = await generateKeywordsForMarket(marketName);
 
-  if (leadsWithSimilarity.length < 30) {
-    throw new Error(`Base insuficiente: ${leadsWithSimilarity.length} leads similares. Tente um nome de mercado mais generico.`);
+  if (generatedKeywords.length === 0) {
+    throw new Error(`Nao foi possivel gerar keywords para o mercado "${marketName}"`);
   }
 
-  // Converter para formato esperado
-  const leads = leadsWithSimilarity.map(l => ({
-    id: l.id,
-    bio: l.bio,
-    profession: l.profession,
-    has_embedding: true // Todos tem embedding (vieram da busca vetorial)
-  }));
+  // ETAPA 1 - Buscar leads por keywords
+  console.log(`[D2P] ETAPA 1: Buscando leads por keywords...`);
+  const leads = await getLeadsByKeywords(generatedKeywords);
 
-  const avgSimilarity = leadsWithSimilarity.reduce((sum, l) => sum + l.similarity, 0) / leadsWithSimilarity.length;
-  console.log(`[D2P] Etapa 1: ${leads.length} leads (similaridade media: ${(avgSimilarity * 100).toFixed(1)}%)`);
+  if (leads.length < 30) {
+    throw new Error(`Base insuficiente: ${leads.length} leads. Tente um nome de mercado mais abrangente.`);
+  }
 
-  // ETAPA 1b - Extrair keywords das bios
+  console.log(`[D2P] Etapa 1: ${leads.length} leads encontrados`);
+
+  // ETAPA 1b - Extrair keywords adicionais das bios dos leads encontrados
   console.log(`[D2P] ETAPA 1b: Extraindo keywords das bios...`);
-  const extractedKeywords = extractKeywordsFromLeads(leads, 20);
+  const extractedKeywords = extractKeywordsFromLeads(leads, 30);
   console.log(`[D2P] Keywords extraidas: ${extractedKeywords.slice(0, 10).join(', ')}...`);
 
-  // Metricas de embedding (todos tem embedding neste fluxo)
-  const leadsWithEmbedding = leads.length;
-  const embeddingCoverage = 100;
+  // Combinar keywords (GPT + extraidas das bios reais)
+  const allKeywords = [...new Set([...generatedKeywords, ...extractedKeywords])];
+
+  // Metricas de embedding
+  const leadsWithEmbedding = leads.filter(l => l.has_embedding).length;
+  const embeddingCoverage = leads.length > 0 ? Math.round((leadsWithEmbedding / leads.length) * 100) : 0;
 
   // ETAPA 2 - Workarounds
   console.log(`[D2P] ETAPA 2: Detectando workarounds...`);
@@ -449,7 +549,7 @@ export async function analyzeMarket(marketName: string): Promise<MarketAnalysis>
   const analysis: MarketAnalysis = {
     market_name: marketName,
     market_slug: marketSlug,
-    keywords_used: extractedKeywords,
+    keywords_used: allKeywords,
     total_leads: leads.length,
     leads_with_embedding: leadsWithEmbedding,
     embedding_coverage: embeddingCoverage,
