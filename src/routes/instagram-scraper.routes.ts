@@ -703,7 +703,7 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
     console.log(`🔧 [${reqId}] Usernames recebidos: ${usernames.length} (max: ${max_profiles})`);
 
     // Importar funções necessárias (MESMAS do scrape-users)
-    const { createRefreshContext, closeRefreshBrowser } = await import('../services/instagram-context-manager.service');
+    const { createRefreshContext, closeRefreshBrowser, clearRefreshCookies } = await import('../services/instagram-context-manager.service');
     const { scrapeProfileWithExistingPage } = await import('../services/instagram-scraper-single.service');
     const { calculateActivityScore, extractHashtagsFromPosts, retryWithBackoff } = await import('../services/instagram-profile.utils');
     const { detectLanguage } = await import('../services/language-country-detector.service');
@@ -736,6 +736,9 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
     // Limitar ao máximo configurado
     const usernamesToProcess = usernames.slice(0, max_profiles);
     const results: { username: string; action: 'inserted' | 'updated' | 'skipped' | 'error' | 'deleted'; lead_id?: string; reason?: string }[] = [];
+    let consecutiveEmptyProfiles = 0; // Contador de perfis vazios consecutivos
+    const MAX_CONSECUTIVE_EMPTY = 3; // Se 3 seguidos falharem, sessão provavelmente está inválida
+    let recoveryAttempted = false; // Flag para não tentar recovery mais de 1 vez
 
     try {
       // Processar cada username
@@ -745,6 +748,85 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
         if (!username) continue;
 
         console.log(`\n[${i + 1}/${usernamesToProcess.length}] Processando @${username}...`);
+
+        // 🛑 CIRCUIT BREAKER: Se muitos perfis vazios consecutivos, sessão está inválida
+        if (consecutiveEmptyProfiles >= MAX_CONSECUTIVE_EMPTY) {
+          // Se já tentou recovery, abortar de vez
+          if (recoveryAttempted) {
+            console.log(`\n🚨 ========================================`);
+            console.log(`🚨 CIRCUIT BREAKER: ${consecutiveEmptyProfiles} perfis consecutivos com dados vazios`);
+            console.log(`🚨 Recovery já foi tentado - credenciais provavelmente inválidas`);
+            console.log(`🚨 ABORTANDO para proteger leads restantes`);
+            console.log(`🚨 ========================================\n`);
+            for (let j = i; j < usernamesToProcess.length; j++) {
+              const remaining = usernamesToProcess[j].replace('@', '').trim();
+              if (remaining) {
+                results.push({ username: remaining, action: 'error', reason: 'Abortado: sessão inválida após recovery (circuit breaker)' });
+              }
+            }
+            break;
+          }
+
+          // 🔄 SESSION RECOVERY: Tentar recuperar sessão
+          console.log(`\n🔄 ========================================`);
+          console.log(`🔄 SESSION RECOVERY: ${consecutiveEmptyProfiles} perfis consecutivos vazios`);
+          console.log(`🔄 Tentando recuperar sessão (fechar browser + deletar cookies + re-login)`);
+          console.log(`🔄 ========================================\n`);
+          recoveryAttempted = true;
+
+          try {
+            // 1. Fechar browser atual
+            console.log(`   🔄 [RECOVERY] 1/4 Fechando browser...`);
+            await closeRefreshBrowser();
+
+            // 2. Deletar cookies e user-data para forçar re-login
+            console.log(`   🔄 [RECOVERY] 2/4 Deletando cookies e user-data...`);
+            clearRefreshCookies();
+
+            // 3. Recriar contexto (faz login automático)
+            console.log(`   🔄 [RECOVERY] 3/4 Recriando contexto (login automático)...`);
+            currentContext = await createRefreshContext();
+            page = currentContext.page;
+            cleanup = currentContext.cleanup;
+            console.log(`   ✅ [RECOVERY] Novo contexto criado: ${currentContext.requestId}`);
+
+            // 4. Testar com o perfil atual
+            console.log(`   🔄 [RECOVERY] 4/4 Testando com @${username}...`);
+            await page.goto(`https://www.instagram.com/${username}/`, {
+              waitUntil: 'networkidle2',
+              timeout: 30000
+            });
+            await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+
+            const testData = await scrapeProfileWithExistingPage(page, username, true);
+
+            // Validar dados REAIS (username é preenchido do input, não do DOM)
+            const hasRealData = testData &&
+              (testData.bio || testData.full_name ||
+               testData.followers_count > 0 ||
+               testData.posts_count > 0);
+
+            if (hasRealData) {
+              console.log(`   ✅ [RECOVERY] Sessão recuperada! @${username} retornou dados válidos (bio: ${!!testData.bio}, name: ${!!testData.full_name}, followers: ${testData.followers_count})`);
+              consecutiveEmptyProfiles = 0;
+              // Decrementar i para reprocessar este perfil no loop normal
+              i--;
+              continue;
+            } else {
+              console.log(`   ❌ [RECOVERY] Sessão ainda inválida após recovery - perfil teste retornou vazio`);
+              console.log(`   ❌ [RECOVERY] Dados: bio=${!!testData?.bio}, name=${!!testData?.full_name}, followers=${testData?.followers_count}`);
+              // Não break aqui — o loop vai voltar, bater no check novamente,
+              // e como recoveryAttempted=true, vai abortar
+            }
+          } catch (recoveryErr: any) {
+            console.log(`   ❌ [RECOVERY] Erro durante recovery: ${recoveryErr.message}`);
+            // Vai voltar ao loop e abortar no próximo check
+          }
+
+          // Se chegou aqui, recovery falhou mas não deu break.
+          // Na próxima iteração consecutiveEmptyProfiles >= MAX e recoveryAttempted = true → abort
+          continue;
+        }
 
         // Verificar se página ainda é válida antes de cada perfil
         await ensureValidPage();
@@ -771,20 +853,102 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
           });
           await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
 
+          // 🔒 VERIFICAR SE INSTAGRAM REDIRECIONOU (login wall / challenge)
+          const currentUrl = page.url();
+          const isLoginPage = currentUrl.includes('/accounts/login');
+          const isChallengePage = currentUrl.includes('/challenge') || currentUrl.includes('/checkpoint');
+
+          if (isLoginPage || isChallengePage) {
+            const reason = isLoginPage ? 'LOGIN_REDIRECT' : 'CHALLENGE_REDIRECT';
+            console.log(`\n🚨 ========================================`);
+            console.log(`🚨 ${reason}: Instagram redirecionou para ${currentUrl}`);
+            console.log(`🚨 Sessão inválida - ABORTANDO batch para não deletar leads válidos`);
+            console.log(`🚨 ========================================\n`);
+
+            // Tentar recriar contexto uma vez
+            console.log(`   🔄 Tentando recriar contexto...`);
+            try {
+              await closeRefreshBrowser();
+            } catch {}
+            currentContext = await createRefreshContext();
+            page = currentContext.page;
+            cleanup = currentContext.cleanup;
+
+            // Verificar novamente com um perfil teste
+            await page.goto(`https://www.instagram.com/${username}/`, {
+              waitUntil: 'networkidle2',
+              timeout: 30000
+            });
+            await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+
+            const retryUrl = page.url();
+            if (retryUrl.includes('/accounts/login') || retryUrl.includes('/challenge') || retryUrl.includes('/checkpoint')) {
+              console.log(`   ❌ Novo contexto também foi redirecionado - sessão/cookies expirados`);
+              console.log(`   🛑 ABORTANDO rescue para proteger leads existentes`);
+              // Retornar erro sem deletar nenhum lead
+              results.push({ username, action: 'error', reason: `Sessão inválida: ${reason}` });
+              break; // Sai do loop - não processa mais nenhum lead
+            }
+            console.log(`   ✅ Novo contexto funcionou, continuando...`);
+          }
+
+          // 🔍 VERIFICAR CONTEÚDO DA PÁGINA (login wall sem redirect)
+          const pageBodyText = await page.evaluate('document.body?.innerText?.substring(0, 1000) || ""').catch(() => '') as string;
+          const hasLoginForm = pageBodyText.includes('Log in') && pageBodyText.includes('password') && !pageBodyText.includes('followers');
+          if (hasLoginForm) {
+            console.log(`\n🚨 Login wall detectado (sem redirect) - ABORTANDO batch`);
+            results.push({ username, action: 'error', reason: 'Login wall detectado' });
+            break; // Sai do loop
+          }
+
+          // 🪦 VERIFICAR SE PERFIL NÃO EXISTE (404 real do Instagram)
+          const isProfileNotFound = pageBodyText.includes("Sorry, this page isn't available") ||
+            pageBodyText.includes('Página não encontrada') ||
+            pageBodyText.includes("Esta página não está disponível") ||
+            pageBodyText.includes("The link you followed may be broken");
+
+          if (isProfileNotFound) {
+            console.log(`   🪦 Perfil @${username} NÃO EXISTE (404 do Instagram) - deletando lead`);
+            // NÃO incrementar consecutiveEmptyProfiles - isso é um 404 real, não sessão inválida
+            try {
+              await supabase.from('instagram_leads').delete().eq('username', username);
+              // Deletar embeddings associados
+              if (existingLeadData?.id) {
+                await Promise.all([
+                  supabase.from('lead_embedding_components').delete().eq('lead_id', existingLeadData.id),
+                  supabase.from('lead_embedding_final').delete().eq('lead_id', existingLeadData.id),
+                  supabase.from('lead_embedding_d2p').delete().eq('lead_id', existingLeadData.id),
+                ]);
+              }
+              console.log(`   ✅ Lead e embeddings removidos`);
+            } catch (delErr: any) {
+              console.log(`   ⚠️  Erro ao remover: ${delErr.message}`);
+            }
+            results.push({ username, action: 'deleted', reason: 'Perfil não existe (404 Instagram)' });
+            continue;
+          }
+
           // Scrape do perfil (MESMA função do scrape-users)
           const profileData = await scrapeProfileWithExistingPage(page, username, true);
 
           if (!profileData || !profileData.username) {
-            console.log(`   ❌ Perfil não encontrado ou privado`);
-            // DELETAR lead do banco (rescue = limpeza de leads que não existem mais)
-            try {
-              console.log(`   🗑️  Removendo lead do banco (perfil inexistente)...`);
-              await supabase.from('instagram_leads').delete().eq('username', username);
-              console.log(`   ✅ Lead removido`);
-            } catch (delErr: any) {
-              console.log(`   ⚠️  Erro ao remover: ${delErr.message}`);
+            consecutiveEmptyProfiles++;
+            console.log(`   ❌ Perfil não encontrado ou privado (consecutivos vazios: ${consecutiveEmptyProfiles}/${MAX_CONSECUTIVE_EMPTY})`);
+
+            // Só deletar se NÃO estamos num padrão de falhas consecutivas
+            if (consecutiveEmptyProfiles <= 1) {
+              try {
+                console.log(`   🗑️  Removendo lead do banco (perfil inexistente)...`);
+                await supabase.from('instagram_leads').delete().eq('username', username);
+                console.log(`   ✅ Lead removido`);
+              } catch (delErr: any) {
+                console.log(`   ⚠️  Erro ao remover: ${delErr.message}`);
+              }
+              results.push({ username, action: 'deleted', reason: 'Perfil não encontrado ou privado' });
+            } else {
+              console.log(`   ⏭️  PULANDO delete - padrão de falhas sugere sessão inválida`);
+              results.push({ username, action: 'skipped', reason: 'Possível sessão inválida (perfil vazio consecutivo)' });
             }
-            results.push({ username, action: 'deleted', reason: 'Perfil não encontrado ou privado' });
             continue;
           }
 
@@ -797,6 +961,22 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
           const activityScore = calculateActivityScore(profileData);
           console.log(`   📊 Activity Score: ${activityScore.score}/100`);
           if (!activityScore.isActive) {
+            // 🔒 PROTEÇÃO: Score 0 com dados vazios = provável sessão inválida
+            const isCompletelyEmpty = activityScore.score === 0 &&
+              !profileData.bio &&
+              !profileData.full_name &&
+              profileData.followers === '0';
+
+            if (isCompletelyEmpty) {
+              consecutiveEmptyProfiles++;
+              console.log(`   ⚠️  Perfil COMPLETAMENTE vazio (consecutivos: ${consecutiveEmptyProfiles}/${MAX_CONSECUTIVE_EMPTY})`);
+              console.log(`   ⏭️  PULANDO (não deletando) - pode ser sessão inválida`);
+              results.push({ username, action: 'skipped', reason: `Perfil vazio (possível sessão inválida) - score ${activityScore.score}` });
+              continue;
+            }
+
+            // Score > 0 mas < 50 = perfil real mas inativo → pode deletar
+            consecutiveEmptyProfiles = 0; // Reset - conseguiu ler dados do perfil
             console.log(`   🚫 REJEITADO: Activity score ${activityScore.score} < 50`);
             // DELETAR lead do banco (rescue = limpeza de leads inválidos)
             try {
@@ -809,6 +989,8 @@ router.post('/scrape-users-rescue', async (req: Request, res: Response) => {
             results.push({ username, action: 'deleted', reason: `Activity score ${activityScore.score} < 50` });
             continue;
           }
+          // Perfil com dados válidos - reset do counter
+          consecutiveEmptyProfiles = 0;
 
           // VALIDAÇÃO 2: IDIOMA (MESMA do scrape-users)
           const languageDetection = await detectLanguage(profileData.bio || '', username);
@@ -2775,7 +2957,6 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
     // Contadores de resultado
     const results: { username: string; action: 'inserted' | 'updated' | 'skipped_complete' | 'skipped_activity' | 'skipped_language' | 'skipped_not_found' | 'error'; reason?: string; lead_id?: string }[] = [];
     const errors: any[] = [];
-
     try {
       // Processar cada username
       for (let i = 0; i < usernames.length; i++) {
@@ -2814,6 +2995,7 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
               console.log(`   🔄 @${username} existe mas falta: ${missingFields.join(', ')} - vamos ENRIQUECER`);
             } else {
               console.log(`   ✅ @${username} já está completo - pulando`);
+              await supabase.from('google_leads').update({ instagram_verified: true, updated_at: new Date().toISOString() }).eq('instagram_username', username);
               results.push({ username, action: 'skipped_complete', reason: 'Lead já possui todos os dados', lead_id: existing.id });
               continue;
             }
@@ -2844,11 +3026,43 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
           });
           await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
 
+          // 🔒 VERIFICAR SE INSTAGRAM REDIRECIONOU (login wall / challenge)
+          const navUrl = page.url();
+          if (navUrl.includes('/accounts/login') || navUrl.includes('/challenge') || navUrl.includes('/checkpoint')) {
+            const reason = navUrl.includes('/accounts/login') ? 'LOGIN_REDIRECT' : 'CHALLENGE_REDIRECT';
+            console.log(`   ⚠️  ${reason}: Instagram redirecionou para ${navUrl}`);
+            results.push({ username, action: 'error', reason: `Sessão inválida: ${reason}` });
+            continue;
+          }
+
+          // 🔍 VERIFICAR CONTEÚDO DA PÁGINA (login wall sem redirect)
+          const pageBodyText = await page.evaluate('document.body?.innerText?.substring(0, 1000) || ""').catch(() => '') as string;
+          const hasLoginForm = pageBodyText.includes('Log in') && pageBodyText.includes('password') && !pageBodyText.includes('followers');
+          if (hasLoginForm) {
+            console.log(`   ⚠️  Login wall detectado (sem redirect)`);
+            results.push({ username, action: 'error', reason: 'Login wall detectado' });
+            continue;
+          }
+
+          // 🪦 VERIFICAR SE PERFIL NÃO EXISTE (404 real do Instagram)
+          const isProfileNotFound = pageBodyText.includes("Sorry, this page isn't available") ||
+            pageBodyText.includes('Página não encontrada') ||
+            pageBodyText.includes("Esta página não está disponível") ||
+            pageBodyText.includes("The link you followed may be broken");
+
+          if (isProfileNotFound) {
+            console.log(`   🪦 Perfil @${username} NÃO EXISTE (404 do Instagram) - marcando como verificado`);
+            await supabase.from('google_leads').update({ instagram_verified: true, updated_at: new Date().toISOString() }).eq('instagram_username', username);
+            results.push({ username, action: 'skipped_not_found', reason: 'Perfil não existe (404 Instagram)' });
+            continue;
+          }
+
           // Scrape do perfil (mesma função da rescue)
           const profile = await scrapeProfileWithExistingPage(page, username, true);
 
           if (!profile || !profile.username) {
-            console.log(`   ⚠️  Perfil @${username} não encontrado ou privado`);
+            console.log(`   ⚠️  Perfil @${username} não encontrado ou privado - marcando como verificado`);
+            await supabase.from('google_leads').update({ instagram_verified: true, updated_at: new Date().toISOString() }).eq('instagram_username', username);
             results.push({ username, action: 'skipped_not_found', reason: 'Perfil não encontrado ou privado' });
             continue;
           }
@@ -2856,8 +3070,9 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
           // Verificar se dados foram extraídos (evitar falso positivo de activity 0)
           const hasData = profile.followers_count > 0 || profile.bio || profile.full_name;
           if (!hasData) {
-            console.log(`   ⚠️  Perfil @${username} - dados não extraídos (página bloqueada ou estrutura diferente)`);
-            results.push({ username, action: 'skipped_not_found', reason: 'Dados não extraídos - continuar para próximo' });
+            console.log(`   ⚠️  Perfil @${username} - dados não extraídos (sessão inválida?) - marcando como verificado`);
+            await supabase.from('google_leads').update({ instagram_verified: true, updated_at: new Date().toISOString() }).eq('instagram_username', username);
+            results.push({ username, action: 'skipped_not_found', reason: 'Dados não extraídos - possível sessão inválida' });
             continue;
           }
 
@@ -2871,6 +3086,7 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
 
         if (!activityScore.isActive) {
           console.log(`   🚫 REJEITADO: Activity score ${activityScore.score} < 50`);
+          await supabase.from('google_leads').update({ instagram_verified: true, updated_at: new Date().toISOString() }).eq('instagram_username', username);
           results.push({ username, action: 'skipped_activity', reason: `Activity score ${activityScore.score} < 50` });
           continue;
         }
@@ -2883,6 +3099,7 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
 
         if (languageDetection.language !== 'pt') {
           console.log(`   🚫 REJEITADO: Idioma ${languageDetection.language} != pt`);
+          await supabase.from('google_leads').update({ instagram_verified: true, updated_at: new Date().toISOString() }).eq('instagram_username', username);
           results.push({ username, action: 'skipped_language', reason: `Idioma ${languageDetection.language} != pt` });
           continue;
         }
@@ -3024,6 +3241,7 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
           } else {
             const fieldsUpdated = Object.keys(updateData).filter(k => k !== 'updated_at').join(', ');
             console.log(`   ✅ Atualizado: ${fieldsUpdated}`);
+            await supabase.from('google_leads').update({ instagram_verified: true, instagram_lead_id: existingLeadData.id, updated_at: new Date().toISOString() }).eq('instagram_username', username);
             results.push({ username, action: 'updated', lead_id: existingLeadData.id, reason: `Campos: ${fieldsUpdated}` });
           }
         } else {
@@ -3124,6 +3342,7 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
             console.log(`   ✅ Salvo com ID: ${newLead?.id}`);
             console.log(`   🏷️  Hashtags bio: ${hashtagsBio?.length || 0}`);
             console.log(`   🏷️  Hashtags posts: ${hashtagsPosts?.length || 0}`);
+            await supabase.from('google_leads').update({ instagram_verified: true, instagram_lead_id: newLead?.id, updated_at: new Date().toISOString() }).eq('instagram_username', username);
             results.push({ username, action: 'inserted', lead_id: newLead?.id });
           }
         }
@@ -3162,20 +3381,8 @@ router.post('/scrape-input-users', async (req: Request, res: Response) => {
             }
           }
 
-          // 🗑️ DELETAR do google_leads - perfil não existe ou deu erro
-          try {
-            console.log(`   🗑️  Removendo @${username} do google_leads...`);
-            await supabase
-              .from('google_leads')
-              .delete()
-              .eq('instagram_username', username);
-            console.log(`   ✅ Removido do google_leads`);
-          } catch (delErr: any) {
-            console.log(`   ⚠️  Erro ao remover: ${delErr.message}`);
-          }
-
           errors.push({ username, error: profileError.message });
-          results.push({ username, action: 'error', reason: `Removido do google_leads: ${profileError.message}` });
+          results.push({ username, action: 'error', reason: profileError.message });
         }
 
         // Delay entre perfis (como rescue)

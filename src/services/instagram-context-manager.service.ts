@@ -718,6 +718,21 @@ export async function createRefreshContext(): Promise<{
 }
 
 /**
+ * Limpa cookies e user-data da conta de refresh
+ * Usado para forçar re-login quando a sessão está inválida
+ */
+export function clearRefreshCookies(): void {
+  if (fs.existsSync(REFRESH_COOKIES_FILE)) {
+    fs.unlinkSync(REFRESH_COOKIES_FILE);
+    console.log(`🗑️  [REFRESH] Cookies deletados: ${REFRESH_COOKIES_FILE}`);
+  }
+  if (fs.existsSync(REFRESH_USER_DATA_DIR)) {
+    fs.rmSync(REFRESH_USER_DATA_DIR, { recursive: true, force: true });
+    console.log(`🗑️  [REFRESH] User-data deletado: ${REFRESH_USER_DATA_DIR}`);
+  }
+}
+
+/**
  * Fecha o browser de refresh completamente
  */
 export async function closeRefreshBrowser(): Promise<void> {
