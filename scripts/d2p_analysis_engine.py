@@ -258,9 +258,12 @@ def infer_business_owner_decisions(
     n_leads: int,
     topic_keywords: List[List[str]] = None,
     representative_bios: List[List[str]] = None,
+    view_mode: str = 'empresa',
 ) -> Dict[str, Any]:
     """
-    Infer the BUSINESS OWNER's decisions using GPT-4o-mini.
+    Infer decisions using GPT-4o-mini.
+    view_mode='empresa': business owner decisions (default).
+    view_mode='cliente': client/buyer decisions.
     Returns empty if LLM unavailable — no heuristic fallback.
     """
     market_lower = market_name.lower()
@@ -272,7 +275,7 @@ def infer_business_owner_decisions(
     signal_summary = _summarize_business_signals(bio_business_signals, n_leads)
 
     # Try LLM
-    llm_result = _infer_via_llm(market_name, signal_summary, is_intermediary, topic_keywords, representative_bios)
+    llm_result = _infer_via_llm(market_name, signal_summary, is_intermediary, topic_keywords, representative_bios, view_mode)
 
     if llm_result:
         return {
@@ -331,8 +334,9 @@ def _infer_via_llm(
     is_intermediary: bool,
     topic_keywords: List[List[str]] = None,
     representative_bios: List[List[str]] = None,
+    view_mode: str = 'empresa',
 ) -> Optional[Dict[str, Any]]:
-    """Call GPT-4o-mini to infer business owner decisions."""
+    """Call GPT-4o-mini to infer decisions. view_mode='cliente' adapts prompt for client perspective."""
     api_key = os.environ.get('OPENAI_API_KEY')
     if not api_key or not _openai_available:
         print(f"[D2P] OpenAI not available (key={'set' if api_key else 'missing'}, "
@@ -363,7 +367,58 @@ def _infer_via_llm(
             topics_formatted.append(topic_line)
         topic_keywords_str = "- Tópicos BERTopic descobertos nos dados:\n  " + "\n  ".join(topics_formatted)
 
-    prompt = f"""Analise os DADOS ABAIXO e identifique as decisões operacionais repetitivas do DONO deste negócio.
+    # CLIENT MODE: different prompt perspective
+    if view_mode == 'cliente':
+        prompt = f"""Analise os DADOS ABAIXO e identifique as decisões que o CLIENTE de {market_name} toma ANTES de contratar o serviço.
+
+REGRA FUNDAMENTAL:
+O dado só pode afirmar o que ele LITERALMENTE contém.
+Qualquer explicação causal é hipótese, não fricção.
+Se os dados são insuficientes, retorne {{"decisions": []}}.
+
+PERSPECTIVA: CLIENTE (não o dono do negócio)
+- Estas são pessoas que PRECISAM de serviços de {market_name}
+- As decisões são do ponto de vista de quem CONTRATA, não de quem oferece
+- Exemplos para Advogado-Cliente: "Contrato esse advogado ou busco outro?" / "Pago consulta particular ou busco gratuita?"
+- Exemplos para Agência-Cliente: "Terceirizo meu marketing ou faço in-house?" / "Invisto em agência ou contrato freelancer?"
+
+ESPECIFICIDADE DE MERCADO — REGRA OBRIGATÓRIA:
+- As decisões devem ser ESPECÍFICAS para clientes de {market_name}.
+- TESTE DE SUBSTITUIÇÃO: substitua "{market_name}" por outro mercado. Se a decisão continua fazendo sentido, está genérica demais — DESCARTE.
+- Use os tópicos BERTopic como evidência obrigatória.
+
+DECISÃO — REGRAS:
+- Binária: sim/não, contrato/não contrato, pago/não pago, agora/depois.
+- Linguagem do CLIENTE no dia a dia.
+- NÃO usar termos técnicos: "bio", "lead", "funil", "scraping", "embedding".
+- A decisão deve ser CEGA: descreve O QUE o cliente decide, sem eleger critério.
+- A primeira decisão do array deve ser a PRINCIPAL (maior peso).
+
+FRICÇÃO — O QUE É PERMITIDO:
+- Incerteza do cliente ao escolher prestador
+- Dificuldade em comparar opções
+- Falta de informação para decidir
+- Medo de fazer escolha errada
+
+DADOS:
+- Mercado analisado: {market_name} (perspectiva CLIENTE)
+- {signal_summary}
+{topic_keywords_str}
+
+Responda EXCLUSIVAMENTE em JSON válido (sem markdown, sem ```):
+{{
+  "decisions": [
+    {{
+      "decision": "Pergunta binária que o CLIENTE de {market_name} se faz — ESPECÍFICA para este mercado",
+      "friction": "Comportamento observável do cliente ao tentar decidir — ESPECÍFICO para {market_name}",
+      "product_type": "gatekeeper|triage|operational_decision",
+      "weight": 0.0 a 1.0,
+      "grounded_in": "Tópico N + evidência dos dados."
+    }}
+  ]
+}}"""
+    else:
+        prompt = f"""Analise os DADOS ABAIXO e identifique as decisões operacionais repetitivas do DONO deste negócio.
 
 REGRA FUNDAMENTAL:
 O dado só pode afirmar o que ele LITERALMENTE contém.
@@ -1036,9 +1091,10 @@ def run_analysis(input_data: Dict) -> Dict[str, Any]:
 
     market_name = input_data.get('market_name', 'Unknown')
     version_id = input_data.get('version_id', 'unknown')
+    view_mode = input_data.get('view_mode', 'empresa')
     leads = input_data.get('leads', [])
 
-    print(f"[D2P] === D2P Analysis: {market_name} ===", file=sys.stderr)
+    print(f"[D2P] === D2P Analysis: {market_name} [{view_mode.upper()}] ===", file=sys.stderr)
     print(f"[D2P] Received {len(leads)} pre-filtered leads from pgvector", file=sys.stderr)
 
     n_selected = len(leads)
@@ -1147,6 +1203,7 @@ def run_analysis(input_data: Dict) -> Dict[str, Any]:
         n_leads=n_selected,
         topic_keywords=all_topic_keywords,
         representative_bios=all_representative_bios,
+        view_mode=view_mode,
     )
     owner_decisions = owner_analysis['owner_decisions']
     print(f"[D2P] Owner decisions inferred: {len(owner_decisions)}", file=sys.stderr)
@@ -1217,7 +1274,7 @@ def run_analysis(input_data: Dict) -> Dict[str, Any]:
         'success': True,
         'market_name': market_name,
         'version_id': version_id,
-        'search_mode': 'identity',
+        'search_mode': 'demand' if view_mode == 'cliente' else 'identity',
 
         # Search stats (from pgvector, passed through)
         'leads_selected': n_selected,

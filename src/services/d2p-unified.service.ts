@@ -25,6 +25,7 @@ const supabase: SupabaseClient = createClient(
 export interface AnalysisParams {
   minSimilarity?: number;  // Default: 0.65
   minLeads?: number;       // Default: 100
+  viewMode?: 'empresa' | 'cliente';  // Default: 'empresa'
 }
 
 interface PgvectorLead {
@@ -137,6 +138,7 @@ export interface MarketSummary {
   latest_leads_searched: number;
   latest_topics_discovered: number | null;
   latest_product_potential: number | null;
+  view_mode: string;
 }
 
 export interface VersionComparison {
@@ -320,12 +322,107 @@ async function searchLeadsForD2P(
 }
 
 /**
+ * Generate embedding for client/demand search (embedding_bio space).
+ * Uses a real embedding_bio from a lead whose profession matches the market,
+ * ensuring the query vector is in the same vector space as stored bio embeddings.
+ */
+async function generateClientEmbedding(marketName: string): Promise<number[]> {
+  const { data: refData } = await supabase.rpc('get_reference_bio_embedding' as any, {
+    market_query: marketName
+  });
+
+  if (refData && refData.length > 0 && refData[0].embedding) {
+    console.log(`[D2P] Using reference BIO embedding from DB (d2p_text match for "${marketName}")`);
+    const raw = refData[0].embedding;
+    if (typeof raw === 'string') {
+      return JSON.parse(raw);
+    }
+    return raw as number[];
+  }
+
+  // Fallback: Generate via OpenAI (for markets with no leads in DB)
+  console.log(`[D2P] No reference bio lead found, generating demand embedding via OpenAI`);
+  const OpenAI = (await import('openai')).default;
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const demandText = `Preciso de ${marketName}. Busco serviços de ${marketName}. Procurando ${marketName} para me ajudar.`;
+
+  const response = await client.embeddings.create({
+    model: 'text-embedding-3-small',
+    input: demandText
+  });
+
+  return response.data[0]!.embedding;
+}
+
+/**
+ * Search leads using pgvector RPC with embedding_bio (client/demand perspective)
+ */
+async function searchClientsForD2P(
+  queryEmbedding: number[],
+  minSimilarity: number
+): Promise<PgvectorLead[]> {
+  const embeddingStr = `[${queryEmbedding.join(',')}]`;
+  const pageSize = 1000;
+
+  console.log(`[D2P] Running d2p_client_search_and_store (embedding_bio, SECURITY DEFINER, 60s timeout)...`);
+
+  const { data: storeResult, error: storeError } = await supabase.rpc('d2p_client_search_and_store', {
+    query_embedding: embeddingStr,
+    min_similarity: minSimilarity
+  });
+
+  if (storeError) {
+    throw new Error(`d2p_client_search_and_store failed: ${storeError.message}`);
+  }
+
+  const sessionId = storeResult?.[0]?.session_id;
+  const totalCount = storeResult?.[0]?.total_count ?? 0;
+
+  if (!sessionId || totalCount === 0) {
+    console.log(`[D2P] No client leads found above similarity threshold ${minSimilarity}`);
+    return [];
+  }
+
+  console.log(`[D2P] Stored ${totalCount} client leads in session ${sessionId}. Reading pages...`);
+
+  const allResults: PgvectorLead[] = [];
+  let offset = 0;
+
+  while (offset < totalCount) {
+    const { data: page, error: pageError } = await supabase
+      .from('d2p_search_results')
+      .select('lead_id, username, bio, profession, business_category, similarity')
+      .eq('session_id', sessionId)
+      .order('similarity', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (pageError) {
+      throw new Error(`Failed to read d2p_search_results page: ${pageError.message}`);
+    }
+
+    if (!page || page.length === 0) break;
+    allResults.push(...(page as PgvectorLead[]));
+
+    console.log(`[D2P] Page ${Math.floor(offset / pageSize) + 1}: ${page.length} rows (total: ${allResults.length})`);
+
+    offset += pageSize;
+  }
+
+  await supabase.from('d2p_search_results').delete().eq('session_id', sessionId);
+
+  console.log(`[D2P] Total client leads fetched: ${allResults.length}`);
+  return allResults;
+}
+
+/**
  * Run Python D2P analysis engine with pre-filtered leads
  */
 async function runPythonAnalysis(
   marketName: string,
   versionId: string,
-  leads: PgvectorLead[]
+  leads: PgvectorLead[],
+  viewMode: 'empresa' | 'cliente' = 'empresa'
 ): Promise<any> {
   return new Promise((resolve, reject) => {
     const pythonScript = path.join(process.cwd(), 'scripts', 'd2p_analysis_engine.py');
@@ -381,6 +478,7 @@ async function runPythonAnalysis(
     const inputData = JSON.stringify({
       market_name: marketName,
       version_id: versionId,
+      view_mode: viewMode,
       leads: leads.map(l => ({
         lead_id: l.lead_id,
         username: l.username,
@@ -396,22 +494,24 @@ async function runPythonAnalysis(
   });
 }
 
-async function getNextVersionNumber(marketSlug: string): Promise<number> {
+async function getNextVersionNumber(marketSlug: string, viewMode: string = 'empresa'): Promise<number> {
   const { data } = await supabase
     .from('d2p_analyses')
     .select('version_number')
     .eq('market_slug', marketSlug)
+    .eq('view_mode', viewMode)
     .order('version_number', { ascending: false })
     .limit(1);
 
   return (data?.[0]?.version_number || 0) + 1;
 }
 
-async function getParentVersionId(marketSlug: string): Promise<string | null> {
+async function getParentVersionId(marketSlug: string, viewMode: string = 'empresa'): Promise<string | null> {
   const { data } = await supabase
     .from('d2p_analyses')
     .select('version_id')
     .eq('market_slug', marketSlug)
+    .eq('view_mode', viewMode)
     .eq('is_latest', true)
     .limit(1)
     .single();
@@ -432,17 +532,19 @@ export async function analyzeMarket(
 ): Promise<D2PAnalysis> {
   const startTime = Date.now();
   const marketSlug = generateSlug(marketName);
-  const minSimilarity = params.minSimilarity ?? 0.65;
+  const viewMode = params.viewMode ?? 'empresa';
+  const defaultThreshold = viewMode === 'cliente' ? 0.55 : 0.65;
+  const minSimilarity = params.minSimilarity ?? defaultThreshold;
   const minLeads = params.minLeads ?? 100;
 
   console.log('[D2P] ========================================');
-  console.log(`[D2P] Analyzing: ${marketName}`);
-  console.log(`[D2P] Params: minSimilarity=${minSimilarity}, minLeads=${minLeads}`);
+  console.log(`[D2P] Analyzing: ${marketName} [${viewMode.toUpperCase()}]`);
+  console.log(`[D2P] Params: minSimilarity=${minSimilarity}, minLeads=${minLeads}, viewMode=${viewMode}`);
   console.log('[D2P] ========================================');
 
-  // Version info
-  const versionNumber = await getNextVersionNumber(marketSlug);
-  const parentVersionId = await getParentVersionId(marketSlug);
+  // Version info (scoped by view_mode)
+  const versionNumber = await getNextVersionNumber(marketSlug, viewMode);
+  const parentVersionId = await getParentVersionId(marketSlug, viewMode);
   const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
   const versionId = `${marketSlug}_v${versionNumber}_${timestamp}`;
 
@@ -458,6 +560,7 @@ export async function analyzeMarket(
       version_number: versionNumber,
       parent_version_id: parentVersionId,
       is_latest: true,
+      view_mode: viewMode,
       search_params: { ...params },
       status: 'running'
     })
@@ -469,13 +572,23 @@ export async function analyzeMarket(
   }
 
   try {
-    // Step 1: Generate market embedding
-    console.log(`[D2P] Generating market embedding...`);
-    const marketEmbedding = await generateMarketEmbedding(marketName);
+    // Step 1: Generate embedding (different strategy per view mode)
+    let marketEmbedding: number[];
+    let leads: PgvectorLead[];
 
-    // Step 2: Search pgvector for matching leads (embedding_d2p)
-    console.log(`[D2P] Searching pgvector (embedding_d2p, threshold=${minSimilarity})...`);
-    const leads = await searchLeadsForD2P(marketEmbedding, minSimilarity);
+    if (viewMode === 'cliente') {
+      console.log(`[D2P] Generating CLIENT embedding (demand-oriented)...`);
+      marketEmbedding = await generateClientEmbedding(marketName);
+
+      console.log(`[D2P] Searching pgvector (embedding_bio, threshold=${minSimilarity})...`);
+      leads = await searchClientsForD2P(marketEmbedding, minSimilarity);
+    } else {
+      console.log(`[D2P] Generating EMPRESA embedding (identity-oriented)...`);
+      marketEmbedding = await generateMarketEmbedding(marketName);
+
+      console.log(`[D2P] Searching pgvector (embedding_d2p, threshold=${minSimilarity})...`);
+      leads = await searchLeadsForD2P(marketEmbedding, minSimilarity);
+    }
     console.log(`[D2P] pgvector returned ${leads.length} leads`);
 
     if (leads.length < minLeads) {
@@ -500,7 +613,7 @@ export async function analyzeMarket(
       .eq('id', inserted.id);
 
     // Step 3: Send pre-filtered leads to Python for BERTopic + D2P
-    const pythonResult = await runPythonAnalysis(marketName, versionId, leads);
+    const pythonResult = await runPythonAnalysis(marketName, versionId, leads, viewMode);
 
     // Step 4: Save results
     const updateData: Record<string, any> = {
@@ -565,15 +678,17 @@ export async function reanalyzeMarket(
   marketSlug: string,
   params: AnalysisParams = {}
 ): Promise<D2PAnalysis> {
+  const viewMode = params.viewMode ?? 'empresa';
   const { data: existing } = await supabase
     .from('d2p_analyses')
     .select('market_name')
     .eq('market_slug', marketSlug)
+    .eq('view_mode', viewMode)
     .limit(1)
     .single();
 
   if (!existing) {
-    throw new Error(`Market not found: ${marketSlug}`);
+    throw new Error(`Market not found: ${marketSlug} (view_mode=${viewMode})`);
   }
 
   return analyzeMarket(existing.market_name, params);
@@ -602,11 +717,17 @@ export async function getAnalysisByVersion(versionId: string): Promise<D2PAnalys
   return addCompatibilityFields(data);
 }
 
-export async function getAnalysisHistory(marketSlug: string, limit: number = 10): Promise<D2PAnalysis[]> {
-  const { data, error } = await supabase
+export async function getAnalysisHistory(marketSlug: string, limit: number = 10, viewMode?: string): Promise<D2PAnalysis[]> {
+  let query = supabase
     .from('d2p_analyses')
     .select('*')
-    .eq('market_slug', marketSlug)
+    .eq('market_slug', marketSlug);
+
+  if (viewMode) {
+    query = query.eq('view_mode', viewMode);
+  }
+
+  const { data, error } = await query
     .order('version_number', { ascending: false })
     .limit(limit);
 
@@ -650,7 +771,7 @@ export async function compareVersions(versionId1: string, versionId2: string): P
 export async function listAnalyzedMarkets(): Promise<MarketSummary[]> {
   const { data, error } = await supabase
     .from('d2p_analyses')
-    .select('market_slug, market_name, version_id, version_number, created_at, leads_selected, topics_discovered, product_potential_score')
+    .select('market_slug, market_name, version_id, version_number, created_at, leads_selected, topics_discovered, product_potential_score, view_mode')
     .eq('is_latest', true)
     .order('created_at', { ascending: false });
 
@@ -664,21 +785,28 @@ export async function listAnalyzedMarkets(): Promise<MarketSummary[]> {
     latest_analysis_at: row.created_at,
     latest_leads_searched: row.leads_selected,
     latest_topics_discovered: row.topics_discovered,
-    latest_product_potential: row.product_potential_score
+    latest_product_potential: row.product_potential_score,
+    view_mode: row.view_mode || 'empresa'
   }));
 }
 
-export async function deleteMarketAnalyses(marketSlug: string): Promise<void> {
-  const { error } = await supabase
+export async function deleteMarketAnalyses(marketSlug: string, viewMode?: string): Promise<void> {
+  let query = supabase
     .from('d2p_analyses')
     .delete()
     .eq('market_slug', marketSlug);
+
+  if (viewMode) {
+    query = query.eq('view_mode', viewMode);
+  }
+
+  const { error } = await query;
 
   if (error) {
     throw new Error(`Failed to delete: ${error.message}`);
   }
 
-  console.log(`[D2P] Deleted all analyses for ${marketSlug}`);
+  console.log(`[D2P] Deleted analyses for ${marketSlug}${viewMode ? ` (${viewMode})` : ''}`);
 }
 
 export async function getEmbeddingStatus(): Promise<{

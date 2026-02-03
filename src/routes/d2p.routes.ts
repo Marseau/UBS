@@ -40,7 +40,7 @@ const router = express.Router();
  */
 router.post('/analyze', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { market_name, min_similarity, min_leads } = req.body;
+    const { market_name, min_similarity, min_leads, view_mode } = req.body;
 
     if (!market_name) {
       res.status(400).json({
@@ -50,11 +50,13 @@ router.post('/analyze', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    console.log(`[D2P API] Starting analysis: ${market_name} (threshold: ${min_similarity ?? 0.65})`);
+    const viewMode = view_mode === 'cliente' ? 'cliente' : 'empresa';
+    console.log(`[D2P API] Starting analysis: ${market_name} [${viewMode}] (threshold: ${min_similarity ?? 0.65})`);
 
     const analysis = await analyzeMarket(market_name, {
       minSimilarity: min_similarity,
-      minLeads: min_leads
+      minLeads: min_leads,
+      viewMode
     });
 
     res.json({
@@ -142,8 +144,9 @@ router.get('/market/:slug/history', async (req: Request, res: Response): Promise
     }
 
     const limit = parseInt(req.query.limit as string) || 10;
+    const viewMode = req.query.view_mode as string | undefined;
 
-    const history = await getAnalysisHistory(slug, limit);
+    const history = await getAnalysisHistory(slug, limit, viewMode);
 
     if (history.length === 0) {
       res.status(404).json({
@@ -298,11 +301,12 @@ router.delete('/market/:slug', async (req: Request, res: Response): Promise<void
       return;
     }
 
-    await deleteMarketAnalyses(slug);
+    const viewMode = req.query.view_mode as string | undefined;
+    await deleteMarketAnalyses(slug, viewMode);
 
     res.json({
       success: true,
-      message: `All analyses deleted for market: ${slug}`
+      message: `All analyses deleted for market: ${slug}${viewMode ? ` (${viewMode})` : ''}`
     });
   } catch (error: any) {
     console.error('[D2P API] Delete error:', error);

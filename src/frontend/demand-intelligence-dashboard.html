@@ -804,6 +804,50 @@
             background: var(--aic-navy);
             color: var(--aic-white);
         }
+
+        /* View Mode Toggle */
+        .toggle-group {
+            display: flex;
+            gap: 0;
+            border: 1px solid var(--aic-border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            background: var(--aic-navy);
+            color: var(--aic-gray);
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .toggle-btn:first-child { border-right: 1px solid var(--aic-border); }
+
+        .toggle-btn.active {
+            background: var(--aic-green);
+            color: var(--aic-navy);
+        }
+
+        .toggle-btn:hover:not(.active) {
+            background: var(--aic-navy-lighter);
+            color: var(--aic-white);
+        }
+
+        .view-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: 600;
+        }
+
+        .view-badge.empresa { background: var(--aic-blue); color: white; }
+        .view-badge.cliente { background: var(--aic-yellow); color: var(--aic-navy); }
     </style>
 </head>
 <body>
@@ -858,6 +902,14 @@
                     <input type="text" id="customName" placeholder="Ex: Confeitarias, Advogados, Personal Trainers">
                 </div>
                 <div class="form-group">
+                    <label>Perspectiva</label>
+                    <div class="toggle-group">
+                        <button type="button" class="toggle-btn active" data-mode="empresa" onclick="setViewMode(this, 'customViewMode')">Empresa</button>
+                        <button type="button" class="toggle-btn" data-mode="cliente" onclick="setViewMode(this, 'customViewMode')">Cliente</button>
+                    </div>
+                    <input type="hidden" id="customViewMode" value="empresa">
+                </div>
+                <div class="form-group">
                     <label>Similaridade Mínima</label>
                     <select id="customSimilarity">
                         <option value="0.80">0.80 (muito restrito)</option>
@@ -879,7 +931,15 @@
             <!-- New Analysis Form -->
             <div class="custom-form" style="margin-bottom: 30px;">
                 <h3 style="color: var(--aic-green); margin-bottom: 16px;">🔬 Nova Análise D2P (BERTopic + pgvector)</h3>
-                <div class="form-row" style="grid-template-columns: 1fr auto auto auto;">
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label>Perspectiva</label>
+                    <div class="toggle-group" style="max-width: 300px;">
+                        <button type="button" class="toggle-btn active" data-mode="empresa" onclick="setViewMode(this, 'newViewMode')">Empresa</button>
+                        <button type="button" class="toggle-btn" data-mode="cliente" onclick="setViewMode(this, 'newViewMode')">Cliente</button>
+                    </div>
+                    <input type="hidden" id="newViewMode" value="empresa">
+                </div>
+                <div class="form-row" style="grid-template-columns: 1fr auto auto;">
                     <div class="form-group" style="margin-bottom: 0;">
                         <label>Nome do Mercado</label>
                         <input type="text" id="newMarketName" placeholder="Ex: Confeitarias, Pet Shops, Dentistas...">
@@ -900,7 +960,7 @@
                     </button>
                 </div>
                 <p style="font-size: 0.75em; color: var(--aic-gray); margin-top: 8px;">
-                    Empresa: busca por identidade profissional (embedding_d2p) | Cliente: busca por demanda/intenção (embedding_final)
+                    Empresa: busca por identidade profissional (embedding_d2p) | Cliente: busca por demanda/necessidade (embedding_bio)
                 </p>
             </div>
 
@@ -1036,7 +1096,7 @@
 
                     <!-- Owner Analysis: the REAL pain (business owner, not clients) -->
                     <div id="ownerAnalysisSection" style="display:none; margin: 16px 0; padding: 16px; background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.25); border-radius: 12px;">
-                        <h4 style="color: #fbbf24; margin-bottom: 10px;">Dor do DONO do negócio (não do cliente final):</h4>
+                        <h4 id="ownerAnalysisTitle" style="color: #fbbf24; margin-bottom: 10px;">Dor do DONO do negócio (não do cliente final):</h4>
                         <div id="ownerDecisionsList" style="margin-bottom: 12px;"></div>
                         <div id="ownerEvidenceList" style="font-size: 12px; color: #94a3b8;"></div>
                     </div>
@@ -1127,12 +1187,15 @@
             grid.innerHTML = allMarkets.map((market) => {
                 const score = market.latest_product_potential || 0;
                 const scoreClass = score >= 70 ? '' : score >= 40 ? 'medium' : 'low';
+                const vm = market.view_mode || 'empresa';
+                const vmLabel = vm === 'cliente' ? 'Cliente' : 'Empresa';
+                const vmClass = vm === 'cliente' ? 'cliente' : 'empresa';
 
                 return `
-                    <div class="market-card" onclick="showDetail('${market.market_slug}')">
-                        <button class="delete-btn" onclick="deleteAnalysis('${market.market_slug}', event)" title="Excluir análise">✕</button>
+                    <div class="market-card" onclick="showDetail('${market.market_slug}', '${market.latest_version_id}', '${vm}')">
+                        <button class="delete-btn" onclick="deleteAnalysis('${market.market_slug}', '${vm}', event)" title="Excluir análise">✕</button>
                         <div class="market-header">
-                            <div class="market-name">${market.market_name}</div>
+                            <div class="market-name">${market.market_name} <span class="view-badge ${vmClass}">${vmLabel}</span></div>
                             <div class="market-score ${scoreClass}">${score.toFixed(1)}</div>
                         </div>
                         <div class="market-leads">
@@ -1148,12 +1211,13 @@
             }).join('');
         }
 
-        async function showDetail(slug) {
+        async function showDetail(slug, versionId, viewMode) {
             document.getElementById('loading').style.display = 'flex';
 
             try {
-                // Load history
-                const historyRes = await fetch(`/api/d2p/market/${slug}/history`);
+                // Load history (scoped by view_mode)
+                const vmParam = viewMode ? `?view_mode=${viewMode}` : '';
+                const historyRes = await fetch(`/api/d2p/market/${slug}/history${vmParam}`);
                 const historyData = await historyRes.json();
 
                 if (historyData.success) {
@@ -1223,7 +1287,9 @@
 
             // Step 0: pgvector Search
             const searchParams = analysis.search_params || {};
-            document.getElementById('step0Title').textContent = 'BUSCA PGVECTOR (embedding_d2p)';
+            const viewMode = analysis.view_mode || searchParams.viewMode || 'empresa';
+            const embeddingType = viewMode === 'cliente' ? 'embedding_bio' : 'embedding_d2p';
+            document.getElementById('step0Title').textContent = `BUSCA PGVECTOR (${embeddingType}) — ${viewMode.toUpperCase()}`;
             document.getElementById('step0Market').textContent = analysis.market_name;
             document.getElementById('step0Leads').textContent = `${(analysis.leads_searched || analysis.leads_selected || 0).toLocaleString()} leads`;
             document.getElementById('step0AvgSimilarity').textContent = analysis.avg_similarity ? `${(analysis.avg_similarity * 100).toFixed(1)}%` : '-';
@@ -1353,9 +1419,13 @@
             document.getElementById('productTagline').textContent = analysis.product_tagline || product.tagline || '-';
             document.getElementById('productDefinition').textContent = analysis.product_definition || product.product_definition || '-';
 
-            // Owner Analysis — the REAL business pain
+            // Owner/Client Analysis — depends on view_mode
             const ownerSection = document.getElementById('ownerAnalysisSection');
             const ownerAnalysis = analysis.owner_analysis;
+            const isClientMode = (analysis.view_mode === 'cliente');
+            document.getElementById('ownerAnalysisTitle').textContent = isClientMode
+                ? 'Dor do CLIENTE (quem precisa do serviço):'
+                : 'Dor do DONO do negócio (não do cliente final):';
             if (ownerAnalysis && ownerAnalysis.decisions && ownerAnalysis.decisions.length > 0) {
                 ownerSection.style.display = 'block';
                 document.getElementById('ownerDecisionsList').innerHTML = ownerAnalysis.decisions.map((d, i) =>
@@ -1412,9 +1482,17 @@
             document.getElementById('resultsOverview').style.display = 'block';
         }
 
+        function setViewMode(btn, hiddenId) {
+            const group = btn.parentElement;
+            group.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(hiddenId).value = btn.dataset.mode;
+        }
+
         async function analyzeMarket() {
             const name = document.getElementById('customName').value.trim();
             const similarity = parseFloat(document.getElementById('customSimilarity').value);
+            const viewMode = document.getElementById('customViewMode').value;
             if (!name) { alert('Preencha o nome do mercado'); return; }
 
             const btn = event.target;
@@ -1426,7 +1504,7 @@
                 const response = await fetch('/api/d2p/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ market_name: name, min_similarity: similarity })
+                    body: JSON.stringify({ market_name: name, min_similarity: similarity, view_mode: viewMode })
                 });
 
                 const data = await response.json();
@@ -1448,6 +1526,7 @@
         async function analyzeNewMarket() {
             const name = document.getElementById('newMarketName').value.trim();
             const similarity = parseFloat(document.getElementById('newSimilarity').value);
+            const viewMode = document.getElementById('newViewMode').value;
             if (!name) { alert('Preencha o nome do mercado'); return; }
 
             const btn = event.target;
@@ -1459,7 +1538,7 @@
                 const response = await fetch('/api/d2p/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ market_name: name, min_similarity: similarity })
+                    body: JSON.stringify({ market_name: name, min_similarity: similarity, view_mode: viewMode })
                 });
 
                 const data = await response.json();
@@ -1478,12 +1557,14 @@
             }
         }
 
-        async function deleteAnalysis(slug, event) {
+        async function deleteAnalysis(slug, viewMode, event) {
             event.stopPropagation();
-            if (!confirm(`Deseja excluir TODAS as versões da análise "${slug}"?`)) return;
+            const vmLabel = viewMode === 'cliente' ? ' (Cliente)' : ' (Empresa)';
+            if (!confirm(`Deseja excluir TODAS as versões da análise "${slug}${vmLabel}"?`)) return;
 
             try {
-                const response = await fetch(`/api/d2p/market/${slug}`, { method: 'DELETE' });
+                const vmParam = viewMode ? `?view_mode=${viewMode}` : '';
+                const response = await fetch(`/api/d2p/market/${slug}${vmParam}`, { method: 'DELETE' });
                 const data = await response.json();
                 if (data.success) {
                     loadData();
