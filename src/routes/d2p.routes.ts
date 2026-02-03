@@ -17,12 +17,14 @@ import * as express from 'express';
 import { Request, Response } from 'express';
 import {
   analyzeMarket,
+  createAnalysisRecord,
   getLatestAnalysis,
   getAnalysisByVersion,
   getAnalysisHistory,
   compareVersions,
   listAnalyzedMarkets,
   deleteMarketAnalyses,
+  deleteAnalysisVersion,
   reanalyzeMarket
 } from '../services/d2p-unified.service';
 
@@ -40,7 +42,7 @@ const router = express.Router();
  */
 router.post('/analyze', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { market_name, min_similarity, min_leads, view_mode } = req.body;
+    const { market_name, min_similarity, min_leads, view_mode, async: asyncMode } = req.body;
 
     if (!market_name) {
       res.status(400).json({
@@ -51,18 +53,25 @@ router.post('/analyze', async (req: Request, res: Response): Promise<void> => {
     }
 
     const viewMode = view_mode === 'cliente' ? 'cliente' : 'empresa';
-    console.log(`[D2P API] Starting analysis: ${market_name} [${viewMode}] (threshold: ${min_similarity ?? 0.65})`);
+    const analysisParams = { minSimilarity: min_similarity, minLeads: min_leads, viewMode: viewMode as 'empresa' | 'cliente' };
 
-    const analysis = await analyzeMarket(market_name, {
-      minSimilarity: min_similarity,
-      minLeads: min_leads,
-      viewMode
-    });
+    console.log(`[D2P API] Starting analysis: ${market_name} [${viewMode}] (threshold: ${min_similarity ?? 'default'})`);
 
+    // Step 1: Create the DB record synchronously (fast, <1s)
+    const preCreated = await createAnalysisRecord(market_name, analysisParams);
+
+    // Step 2: Respond immediately with version_id so frontend can poll
     res.json({
       success: true,
-      analysis
+      status: 'started',
+      version_id: preCreated.versionId
     });
+
+    // Step 3: Run heavy work in background
+    analyzeMarket(market_name, analysisParams, preCreated).catch(err => {
+      console.error(`[D2P API] Background analysis error for "${market_name}":`, err.message);
+    });
+
   } catch (error: any) {
     console.error('[D2P API] Analysis error:', error);
     res.status(500).json({
@@ -310,6 +319,34 @@ router.delete('/market/:slug', async (req: Request, res: Response): Promise<void
     });
   } catch (error: any) {
     console.error('[D2P API] Delete error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/d2p/version/:id
+ * Delete a single analysis version. Promotes previous version to is_latest if needed.
+ */
+router.delete('/version/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const versionId = req.params.id;
+    if (!versionId) {
+      res.status(400).json({ success: false, error: 'version id is required' });
+      return;
+    }
+
+    const result = await deleteAnalysisVersion(versionId);
+
+    res.json({
+      success: true,
+      ...result,
+      message: `Version ${versionId} deleted${result.promoted_version ? `. Promoted ${result.promoted_version} to latest.` : ''}`
+    });
+  } catch (error: any) {
+    console.error('[D2P API] Delete version error:', error);
     res.status(500).json({
       success: false,
       error: error.message

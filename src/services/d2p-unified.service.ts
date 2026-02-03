@@ -322,97 +322,117 @@ async function searchLeadsForD2P(
 }
 
 /**
- * Generate embedding for client/demand search (embedding_bio space).
- * Uses a real embedding_bio from a lead whose profession matches the market,
- * ensuring the query vector is in the same vector space as stored bio embeddings.
+ * Generate pain seeds for a market using GPT-4o-mini.
+ * Returns 8-12 pain/life-event strings that represent WHY someone
+ * would need the given market's services.
  */
-async function generateClientEmbedding(marketName: string): Promise<number[]> {
-  const { data: refData } = await supabase.rpc('get_reference_bio_embedding' as any, {
-    market_query: marketName
-  });
-
-  if (refData && refData.length > 0 && refData[0].embedding) {
-    console.log(`[D2P] Using reference BIO embedding from DB (d2p_text match for "${marketName}")`);
-    const raw = refData[0].embedding;
-    if (typeof raw === 'string') {
-      return JSON.parse(raw);
-    }
-    return raw as number[];
-  }
-
-  // Fallback: Generate via OpenAI (for markets with no leads in DB)
-  console.log(`[D2P] No reference bio lead found, generating demand embedding via OpenAI`);
+/**
+ * Generate B2B supplier/service seeds for client mode.
+ * Context: our lead base is 100% corporate (businesses/professionals on Instagram).
+ * "Cliente" mode = who would want to SELL TO or SERVE this market.
+ *
+ * Ex: "Advogado" → ["software jurídico", "consultoria tributária", "contabilidade escritórios"]
+ *     = businesses that sell to law firms
+ * Ex: "Restaurante" → ["fornecedor alimentos", "sistema delivery", "consultoria gastronômica"]
+ *     = businesses that sell to restaurants
+ */
+async function generateAdjacentSeeds(marketName: string): Promise<string[]> {
   const OpenAI = (await import('openai')).default;
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  const demandText = `Preciso de ${marketName}. Busco serviços de ${marketName}. Procurando ${marketName} para me ajudar.`;
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    temperature: 0.7,
+    max_tokens: 400,
+    messages: [
+      {
+        role: 'system',
+        content: `Você é um especialista em ecossistemas B2B no Brasil.
 
-  const response = await client.embeddings.create({
-    model: 'text-embedding-3-small',
-    input: demandText
+Contexto: temos uma base de leads corporativos (empresas e profissionais do Instagram).
+O objetivo é encontrar empresas/profissionais que VENDEM PARA ou PRESTAM SERVIÇO para um mercado-alvo.
+
+Sua tarefa: dado um mercado, listar profissões, nichos e tipos de empresa que são FORNECEDORES ou PRESTADORES DE SERVIÇO para esse mercado.
+
+Regras:
+- Cada item deve ser um tipo de negócio/profissão (1-5 palavras), como apareceria numa bio de Instagram
+- NÃO inclua o próprio mercado nem sinônimos dele
+- Pense: quem VENDE para ${'{'}mercado{'}'}, quem FORNECE insumos, quem presta CONSULTORIA, quem faz TECNOLOGIA para esse setor
+- Misture: fornecedores diretos + serviços especializados + tecnologia + consultoria + marketing setorial
+- Retorne apenas a lista, uma por linha, sem números, sem explicações.`
+      },
+      {
+        role: 'user',
+        content: `12 tipos de empresa/profissional que vendem para ou prestam serviço para ${marketName}:`
+      }
+    ]
   });
 
-  return response.data[0]!.embedding;
+  const text = response.choices[0]?.message?.content || '';
+  const seeds = text
+    .split('\n')
+    .map(s => s.replace(/^[-•*\d.)\s]+/, '').trim())
+    .filter(s => s.length > 2 && s.length < 60);
+
+  return seeds;
 }
 
 /**
- * Search leads using pgvector RPC with embedding_bio (client/demand perspective)
+ * Embed multiple seeds in a single OpenAI batch call.
  */
-async function searchClientsForD2P(
-  queryEmbedding: number[],
-  minSimilarity: number
-): Promise<PgvectorLead[]> {
-  const embeddingStr = `[${queryEmbedding.join(',')}]`;
-  const pageSize = 1000;
+async function embedSeeds(seeds: string[]): Promise<{ seed: string; embedding: number[] }[]> {
+  const OpenAI = (await import('openai')).default;
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  console.log(`[D2P] Running d2p_client_search_and_store (embedding_bio, SECURITY DEFINER, 60s timeout)...`);
-
-  const { data: storeResult, error: storeError } = await supabase.rpc('d2p_client_search_and_store', {
-    query_embedding: embeddingStr,
-    min_similarity: minSimilarity
+  const response = await client.embeddings.create({
+    model: 'text-embedding-3-small',
+    input: seeds
   });
 
-  if (storeError) {
-    throw new Error(`d2p_client_search_and_store failed: ${storeError.message}`);
-  }
+  return response.data.map((item, i) => ({
+    seed: seeds[i]!,
+    embedding: item.embedding
+  }));
+}
 
-  const sessionId = storeResult?.[0]?.session_id;
-  const totalCount = storeResult?.[0]?.total_count ?? 0;
+/**
+ * Client mode: generate adjacent niche seeds via LLM, embed them,
+ * multi-query search against embedding_d2p (professional identity).
+ * Reuses d2p_search_and_store (same RPC as empresa mode).
+ * Deduplicates by lead_id, keeping highest similarity.
+ */
+async function searchClientsBySeeds(
+  marketName: string,
+  minSimilarity: number
+): Promise<{ leads: PgvectorLead[]; seeds: string[] }> {
+  // 1. Generate adjacent niche seeds via LLM
+  const seeds = await generateAdjacentSeeds(marketName);
+  console.log(`[D2P] Generated ${seeds.length} adjacent seeds: ${seeds.join(', ')}`);
 
-  if (!sessionId || totalCount === 0) {
-    console.log(`[D2P] No client leads found above similarity threshold ${minSimilarity}`);
-    return [];
-  }
+  // 2. Embed seeds (single batch call)
+  const seedEmbeddings = await embedSeeds(seeds);
 
-  console.log(`[D2P] Stored ${totalCount} client leads in session ${sessionId}. Reading pages...`);
+  // 3. For each seed, search embedding_d2p via existing RPC
+  const allLeads = new Map<string, PgvectorLead>();
 
-  const allResults: PgvectorLead[] = [];
-  let offset = 0;
+  for (const { seed, embedding } of seedEmbeddings) {
+    const leads = await searchLeadsForD2P(embedding, minSimilarity);
+    console.log(`[D2P]   Seed "${seed}": ${leads.length} leads`);
 
-  while (offset < totalCount) {
-    const { data: page, error: pageError } = await supabase
-      .from('d2p_search_results')
-      .select('lead_id, username, bio, profession, business_category, similarity')
-      .eq('session_id', sessionId)
-      .order('similarity', { ascending: false })
-      .range(offset, offset + pageSize - 1);
-
-    if (pageError) {
-      throw new Error(`Failed to read d2p_search_results page: ${pageError.message}`);
+    for (const lead of leads) {
+      const existing = allLeads.get(lead.lead_id);
+      if (!existing || lead.similarity > existing.similarity) {
+        allLeads.set(lead.lead_id, lead);
+      }
     }
-
-    if (!page || page.length === 0) break;
-    allResults.push(...(page as PgvectorLead[]));
-
-    console.log(`[D2P] Page ${Math.floor(offset / pageSize) + 1}: ${page.length} rows (total: ${allResults.length})`);
-
-    offset += pageSize;
   }
 
-  await supabase.from('d2p_search_results').delete().eq('session_id', sessionId);
+  // 4. Return deduplicated, sorted by similarity
+  const deduplicated = Array.from(allLeads.values())
+    .sort((a, b) => b.similarity - a.similarity);
 
-  console.log(`[D2P] Total client leads fetched: ${allResults.length}`);
-  return allResults;
+  console.log(`[D2P] Total unique adjacent leads after dedup: ${deduplicated.length}`);
+  return { leads: deduplicated, seeds };
 }
 
 /**
@@ -524,33 +544,30 @@ async function getParentVersionId(marketSlug: string, viewMode: string = 'empres
 // ==============================================================================
 
 /**
- * Analyze a market using pgvector D2P search + BERTopic
+ * Create the pending analysis record in the DB.
+ * Returns the record + version_id so the caller can respond immediately
+ * and then run the heavy work in the background.
  */
-export async function analyzeMarket(
+export async function createAnalysisRecord(
   marketName: string,
   params: AnalysisParams = {}
-): Promise<D2PAnalysis> {
-  const startTime = Date.now();
+): Promise<{ record: any; versionId: string }> {
   const marketSlug = generateSlug(marketName);
   const viewMode = params.viewMode ?? 'empresa';
-  const defaultThreshold = viewMode === 'cliente' ? 0.55 : 0.65;
-  const minSimilarity = params.minSimilarity ?? defaultThreshold;
-  const minLeads = params.minLeads ?? 100;
 
-  console.log('[D2P] ========================================');
-  console.log(`[D2P] Analyzing: ${marketName} [${viewMode.toUpperCase()}]`);
-  console.log(`[D2P] Params: minSimilarity=${minSimilarity}, minLeads=${minLeads}, viewMode=${viewMode}`);
-  console.log('[D2P] ========================================');
-
-  // Version info (scoped by view_mode)
   const versionNumber = await getNextVersionNumber(marketSlug, viewMode);
   const parentVersionId = await getParentVersionId(marketSlug, viewMode);
   const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
   const versionId = `${marketSlug}_v${versionNumber}_${timestamp}`;
 
-  console.log(`[D2P] Version: ${versionId}`);
+  // Clear is_latest on previous versions for this market+viewMode
+  await supabase
+    .from('d2p_analyses')
+    .update({ is_latest: false })
+    .eq('market_slug', marketSlug)
+    .eq('view_mode', viewMode)
+    .eq('is_latest', true);
 
-  // Create pending record
   const { data: inserted, error: insertError } = await supabase
     .from('d2p_analyses')
     .insert({
@@ -571,17 +588,56 @@ export async function analyzeMarket(
     throw new Error(`Database error: ${insertError.message}`);
   }
 
+  return { record: inserted, versionId };
+}
+
+/**
+ * Analyze a market using pgvector D2P search + BERTopic.
+ * If a pre-created record is passed, uses it; otherwise creates one.
+ */
+export async function analyzeMarket(
+  marketName: string,
+  params: AnalysisParams = {},
+  preCreatedRecord?: { record: any; versionId: string }
+): Promise<D2PAnalysis> {
+  const startTime = Date.now();
+  const marketSlug = generateSlug(marketName);
+  const viewMode = params.viewMode ?? 'empresa';
+  const defaultThreshold = viewMode === 'cliente' ? 0.55 : 0.65;
+  const minSimilarity = params.minSimilarity ?? defaultThreshold;
+  const minLeads = params.minLeads ?? 100;
+
+  console.log('[D2P] ========================================');
+  console.log(`[D2P] Analyzing: ${marketName} [${viewMode.toUpperCase()}]`);
+  console.log(`[D2P] Params: minSimilarity=${minSimilarity}, minLeads=${minLeads}, viewMode=${viewMode}`);
+  console.log('[D2P] ========================================');
+
+  let inserted: any;
+  let versionId: string;
+
+  if (preCreatedRecord) {
+    inserted = preCreatedRecord.record;
+    versionId = preCreatedRecord.versionId;
+    console.log(`[D2P] Using pre-created record: ${versionId}`);
+  } else {
+    const created = await createAnalysisRecord(marketName, params);
+    inserted = created.record;
+    versionId = created.versionId;
+    console.log(`[D2P] Version: ${versionId}`);
+  }
+
   try {
     // Step 1: Generate embedding (different strategy per view mode)
     let marketEmbedding: number[];
     let leads: PgvectorLead[];
+    let painSeeds: string[] | null = null;
 
     if (viewMode === 'cliente') {
-      console.log(`[D2P] Generating CLIENT embedding (demand-oriented)...`);
-      marketEmbedding = await generateClientEmbedding(marketName);
-
-      console.log(`[D2P] Searching pgvector (embedding_bio, threshold=${minSimilarity})...`);
-      leads = await searchClientsForD2P(marketEmbedding, minSimilarity);
+      console.log(`[D2P] CLIENT mode: generating B2B supplier seeds + multi-query search in embedding_d2p...`);
+      const result = await searchClientsBySeeds(marketName, minSimilarity);
+      leads = result.leads;
+      painSeeds = result.seeds;
+      marketEmbedding = []; // not used for seeds mode
     } else {
       console.log(`[D2P] Generating EMPRESA embedding (identity-oriented)...`);
       marketEmbedding = await generateMarketEmbedding(marketName);
@@ -606,11 +662,20 @@ export async function analyzeMarket(
       throw new Error(errorMsg);
     }
 
-    // Save market embedding for future reference
-    await supabase
-      .from('d2p_analyses')
-      .update({ market_embedding: `[${marketEmbedding.join(',')}]` })
-      .eq('id', inserted.id);
+    // Save market embedding and pain seeds for future reference
+    const embeddingUpdate: Record<string, any> = {};
+    if (marketEmbedding.length > 0) {
+      embeddingUpdate.market_embedding = `[${marketEmbedding.join(',')}]`;
+    }
+    if (painSeeds) {
+      embeddingUpdate.pain_seeds = painSeeds;
+    }
+    if (Object.keys(embeddingUpdate).length > 0) {
+      await supabase
+        .from('d2p_analyses')
+        .update(embeddingUpdate)
+        .eq('id', inserted.id);
+    }
 
     // Step 3: Send pre-filtered leads to Python for BERTopic + D2P
     const pythonResult = await runPythonAnalysis(marketName, versionId, leads, viewMode);
@@ -807,6 +872,60 @@ export async function deleteMarketAnalyses(marketSlug: string, viewMode?: string
   }
 
   console.log(`[D2P] Deleted analyses for ${marketSlug}${viewMode ? ` (${viewMode})` : ''}`);
+}
+
+/**
+ * Delete a single analysis version by version_id.
+ * If the deleted version was is_latest, promotes the previous version.
+ */
+export async function deleteAnalysisVersion(versionId: string): Promise<{ deleted: boolean; promoted_version?: string }> {
+  // Fetch the record to know its context
+  const { data: record, error: fetchError } = await supabase
+    .from('d2p_analyses')
+    .select('id, market_slug, view_mode, is_latest, version_number')
+    .eq('version_id', versionId)
+    .single();
+
+  if (fetchError || !record) {
+    throw new Error(`Version not found: ${versionId}`);
+  }
+
+  // Delete the version
+  const { error: deleteError } = await supabase
+    .from('d2p_analyses')
+    .delete()
+    .eq('id', record.id);
+
+  if (deleteError) {
+    throw new Error(`Failed to delete version: ${deleteError.message}`);
+  }
+
+  console.log(`[D2P] Deleted version ${versionId}`);
+
+  // If it was the latest, promote the previous version
+  let promotedVersion: string | undefined;
+  if (record.is_latest) {
+    const { data: prev } = await supabase
+      .from('d2p_analyses')
+      .select('id, version_id')
+      .eq('market_slug', record.market_slug)
+      .eq('view_mode', record.view_mode)
+      .order('version_number', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (prev) {
+      await supabase
+        .from('d2p_analyses')
+        .update({ is_latest: true })
+        .eq('id', prev.id);
+
+      promotedVersion = prev.version_id;
+      console.log(`[D2P] Promoted ${promotedVersion} to is_latest`);
+    }
+  }
+
+  return { deleted: true, promoted_version: promotedVersion };
 }
 
 export async function getEmbeddingStatus(): Promise<{

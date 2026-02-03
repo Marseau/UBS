@@ -917,7 +917,8 @@
                         <option value="0.70">0.70 (moderado)</option>
                         <option value="0.65" selected>0.65 (recomendado)</option>
                         <option value="0.60">0.60 (amplo)</option>
-                        <option value="0.55">0.55 (muito amplo)</option>
+                        <option value="0.55">0.55 (amplo)</option>
+                        <option value="0.50">0.50 (muito amplo)</option>
                     </select>
                 </div>
                 <button class="analyze-btn" style="width: 100%;" onclick="analyzeMarket()">
@@ -960,7 +961,7 @@
                     </button>
                 </div>
                 <p style="font-size: 0.75em; color: var(--aic-gray); margin-top: 8px;">
-                    Empresa: busca por identidade profissional (embedding_d2p) | Cliente: busca por demanda/necessidade (embedding_bio)
+                    Empresa: quem É do mercado (identidade) | Cliente: quem VENDE PARA o mercado (fornecedores B2B)
                 </p>
             </div>
 
@@ -976,6 +977,7 @@
                 <label>Versão:</label>
                 <select id="versionSelect" onchange="loadVersion(this.value)"></select>
                 <span id="versionInfo" style="color: var(--aic-gray); font-size: 0.85em;"></span>
+                <button id="deleteVersionBtn" onclick="deleteCurrentVersion()" style="margin-left: auto; background: transparent; border: 1px solid var(--aic-border); color: var(--aic-gray); padding: 6px 12px; border-radius: 6px; font-size: 0.8em; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--aic-red)';this.style.color='var(--aic-red)'" onmouseout="this.style.borderColor='var(--aic-border)';this.style.color='var(--aic-gray)'">Excluir versão</button>
             </div>
 
             <!-- Header -->
@@ -1000,6 +1002,10 @@
                     <div class="step-metric">
                         <span class="metric-label">Mercado:</span>
                         <span class="metric-value" id="step0Market">-</span>
+                    </div>
+                    <div id="step0SeedsRow" style="display:none; margin-bottom: 12px;">
+                        <div style="font-size: 0.85em; color: var(--aic-gray); margin-bottom: 6px;">Fornecedores B2B (LLM):</div>
+                        <div id="step0Seeds" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
                     </div>
                     <div class="step-metric">
                         <span class="metric-label">Leads encontrados:</span>
@@ -1288,12 +1294,25 @@
             // Step 0: pgvector Search
             const searchParams = analysis.search_params || {};
             const viewMode = analysis.view_mode || searchParams.viewMode || 'empresa';
-            const embeddingType = viewMode === 'cliente' ? 'embedding_bio' : 'embedding_d2p';
+            const painSeeds = analysis.pain_seeds || [];
+            const isSeededSearch = viewMode === 'cliente' && painSeeds.length > 0;
+            const embeddingType = isSeededSearch ? 'embedding_d2p + fornecedores B2B' : 'embedding_d2p';
             document.getElementById('step0Title').textContent = `BUSCA PGVECTOR (${embeddingType}) — ${viewMode.toUpperCase()}`;
             document.getElementById('step0Market').textContent = analysis.market_name;
             document.getElementById('step0Leads').textContent = `${(analysis.leads_searched || analysis.leads_selected || 0).toLocaleString()} leads`;
             document.getElementById('step0AvgSimilarity').textContent = analysis.avg_similarity ? `${(analysis.avg_similarity * 100).toFixed(1)}%` : '-';
             document.getElementById('step0Threshold').textContent = analysis.min_similarity ? `${(analysis.min_similarity * 100).toFixed(0)}%` : '-';
+
+            // Pain seeds display
+            const seedsRow = document.getElementById('step0SeedsRow');
+            if (isSeededSearch) {
+                seedsRow.style.display = 'block';
+                document.getElementById('step0Seeds').innerHTML = painSeeds.map(s =>
+                    `<span style="background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); border-radius: 6px; padding: 4px 10px; font-size: 0.8em; color: #fbbf24;">${s}</span>`
+                ).join('');
+            } else {
+                seedsRow.style.display = 'none';
+            }
 
             // Step 1: BERTopic
             document.getElementById('topicsCount').textContent = `${analysis.topics_discovered || 0} tópicos`;
@@ -1487,6 +1506,92 @@
             group.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById(hiddenId).value = btn.dataset.mode;
+
+            // Auto-adjust similarity dropdown based on view mode
+            const isCliente = btn.dataset.mode === 'cliente';
+            const simId = hiddenId === 'customViewMode' ? 'customSimilarity' : 'newSimilarity';
+            const simSelect = document.getElementById(simId);
+            if (simSelect) {
+                simSelect.value = isCliente ? '0.55' : '0.65';
+            }
+        }
+
+        // Shared: fire analysis and poll specific version_id for completion
+        async function startAnalysisAndPoll(name, similarity, viewMode, btn, inputId) {
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '🔄 Iniciando análise...';
+
+            try {
+                const response = await fetch('/api/d2p/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ market_name: name, min_similarity: similarity, view_mode: viewMode })
+                });
+
+                const data = await response.json();
+                if (!data.success) {
+                    alert('Erro: ' + data.error);
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                    return;
+                }
+
+                const versionId = data.version_id;
+                btn.innerHTML = '🔄 Buscando leads...';
+                let attempts = 0;
+                const maxAttempts = 60; // 5 min max (every 5s)
+
+                const pollTimer = setInterval(async () => {
+                    attempts++;
+                    try {
+                        const vRes = await fetch(`/api/d2p/version/${encodeURIComponent(versionId)}`);
+                        const vData = await vRes.json();
+
+                        if (vData.success && vData.analysis) {
+                            const a = vData.analysis;
+
+                            if (a.status === 'completed') {
+                                clearInterval(pollTimer);
+                                btn.disabled = false;
+                                btn.innerHTML = originalText;
+                                if (inputId) document.getElementById(inputId).value = '';
+                                loadData();
+                                return;
+                            }
+
+                            if (a.status === 'error') {
+                                clearInterval(pollTimer);
+                                btn.disabled = false;
+                                btn.innerHTML = originalText;
+                                alert('Análise falhou: ' + (a.error_message || 'Erro desconhecido'));
+                                loadData();
+                                return;
+                            }
+                        }
+
+                        const elapsed = attempts * 5;
+                        const phase = elapsed < 15 ? 'Buscando leads' : elapsed < 60 ? 'BERTopic clustering' : 'Finalizando';
+                        btn.innerHTML = `🔄 ${phase}... (${elapsed}s)`;
+
+                    } catch (e) {
+                        // Polling error — keep trying
+                    }
+
+                    if (attempts >= maxAttempts) {
+                        clearInterval(pollTimer);
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                        alert('Análise está demorando mais que o esperado. Recarregue a página para ver o resultado.');
+                        loadData();
+                    }
+                }, 5000);
+
+            } catch (error) {
+                alert('Erro ao iniciar análise: ' + error.message);
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
         }
 
         async function analyzeMarket() {
@@ -1494,33 +1599,7 @@
             const similarity = parseFloat(document.getElementById('customSimilarity').value);
             const viewMode = document.getElementById('customViewMode').value;
             if (!name) { alert('Preencha o nome do mercado'); return; }
-
-            const btn = event.target;
-            const originalText = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '🔄 Gerando embedding e buscando leads...';
-
-            try {
-                const response = await fetch('/api/d2p/analyze', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ market_name: name, min_similarity: similarity, view_mode: viewMode })
-                });
-
-                const data = await response.json();
-                if (data.success) {
-                    alert(`Analise concluida: ${name}\n\nLeads: ${data.analysis.leads_searched}\nTópicos: ${data.analysis.topics_discovered}\nFricções: ${data.analysis.friction_count}\nScore: ${data.analysis.product_potential_score?.toFixed(1)}/100`);
-                    document.getElementById('customName').value = '';
-                    loadData();
-                } else {
-                    alert('Erro: ' + data.error);
-                }
-            } catch (error) {
-                alert('Erro ao analisar: ' + error.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-            }
+            await startAnalysisAndPoll(name, similarity, viewMode, event.target, 'customName');
         }
 
         async function analyzeNewMarket() {
@@ -1528,32 +1607,37 @@
             const similarity = parseFloat(document.getElementById('newSimilarity').value);
             const viewMode = document.getElementById('newViewMode').value;
             if (!name) { alert('Preencha o nome do mercado'); return; }
+            await startAnalysisAndPoll(name, similarity, viewMode, event.target, 'newMarketName');
+        }
 
-            const btn = event.target;
-            const originalText = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '🔄 Analisando...';
+        async function deleteCurrentVersion() {
+            if (!currentAnalysis) return;
+            const versionId = currentAnalysis.version_id;
+            const versionNum = currentAnalysis.version_number;
+
+            if (!confirm(`Excluir versão v${versionNum} (${versionId})?`)) return;
 
             try {
-                const response = await fetch('/api/d2p/analyze', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ market_name: name, min_similarity: similarity, view_mode: viewMode })
-                });
-
+                const response = await fetch(`/api/d2p/version/${encodeURIComponent(versionId)}`, { method: 'DELETE' });
                 const data = await response.json();
                 if (data.success) {
-                    alert(`Analise concluida: ${name}\n\nLeads: ${data.analysis.leads_searched}\nTópicos: ${data.analysis.topics_discovered}\nFricções: ${data.analysis.friction_count}\nScore: ${data.analysis.product_potential_score?.toFixed(1)}/100`);
-                    document.getElementById('newMarketName').value = '';
-                    loadData();
+                    // Remove from local history
+                    currentHistory = currentHistory.filter(h => h.version_id !== versionId);
+
+                    if (currentHistory.length > 0) {
+                        // Show next version
+                        populateVersionSelector(currentHistory);
+                        await renderDetail(currentHistory[0]);
+                    } else {
+                        // No versions left, go back to overview
+                        showOverview();
+                        loadData();
+                    }
                 } else {
                     alert('Erro: ' + data.error);
                 }
             } catch (error) {
-                alert('Erro ao analisar: ' + error.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
+                alert('Erro ao excluir versão: ' + error.message);
             }
         }
 
