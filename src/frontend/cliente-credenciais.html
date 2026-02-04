@@ -560,59 +560,6 @@
     }
 
     // Update ratio display
-    function updateRatioDisplay(waValue) {
-      const waEl = document.getElementById('wa-ratio-value');
-      const igEl = document.getElementById('ig-ratio-value');
-      if (waEl) waEl.textContent = `${waValue}%`;
-      if (igEl) igEl.textContent = `${100 - parseInt(waValue)}%`;
-    }
-
-    // Save outreach ratio to campaign
-    async function saveOutreachRatio() {
-      const btn = document.getElementById('ratio-btn');
-      const ratioInput = document.getElementById('outreach-ratio');
-      const waRatio = parseInt(ratioInput?.value || '60');
-
-      if (!journeyData?.campaign_id) {
-        showStatus('ratio-status', 'Erro: Campanha nao encontrada', 'error');
-        return;
-      }
-
-      btn.disabled = true;
-      btn.textContent = 'Salvando...';
-
-      try {
-        const token = localStorage.getItem('aic_access_token');
-        const response = await fetch('/api/aic/journey/credentials/outreach-ratio', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
-          },
-          body: JSON.stringify({
-            campaign_id: journeyData.campaign_id,
-            whatsapp_ratio: waRatio,
-            instagram_ratio: 100 - waRatio
-          })
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.message || 'Erro ao salvar');
-        }
-
-        credentialsData.outreach_ratio_whatsapp = waRatio;
-        showStatus('ratio-status', 'Proporcao salva com sucesso!', 'success');
-
-      } catch (error) {
-        showStatus('ratio-status', error.message || 'Erro ao salvar proporcao', 'error');
-      }
-
-      btn.disabled = false;
-      btn.textContent = 'Salvar Proporcao';
-    }
-
     async function init() {
       try {
         const isAdmin = localStorage.getItem('aic_user_role') === 'admin';
@@ -700,7 +647,9 @@
           credentialsData = {
             whatsapp: creds.whatsapp,
             instagram: creds.instagram,
-            outreach_ratio_whatsapp: creds.outreach_ratio_whatsapp ?? 60
+            outreach_ratio_whatsapp: creds.outreach_ratio_whatsapp ?? 60,
+            lp_confirmed: creds.lp_confirmed ?? false,
+            redirect_after_campaign: creds.redirect_after_campaign || ''
           };
         }
       } catch (err) {
@@ -715,7 +664,9 @@
 
       const hasWhatsapp = credentialsData.whatsapp && credentialsData.whatsapp.phone;
       const hasInstagram = credentialsData.instagram && credentialsData.instagram.username;
-      const progress = (hasWhatsapp ? 1 : 0) + (hasInstagram ? 1 : 0);
+      const hasLP = !!journeyData.campaign?.slug;
+      const lpConfirmed = credentialsData.lp_confirmed || false;
+      const progress = (hasWhatsapp ? 1 : 0) + (hasInstagram ? 1 : 0) + (lpConfirmed ? 1 : 0);
 
       document.getElementById('main-content').innerHTML = `
         <!-- Status Banner -->
@@ -858,7 +809,7 @@
             <div id="ig-status" class="status-message"></div>
           </div>
 
-          <!-- Outreach Ratio Configuration (shown when both are configured) -->
+          <!-- Outreach Ratio Info (shown when both are configured) -->
           ${hasWhatsapp || hasInstagram ? `
           <div class="card" style="margin-top: 16px;">
             <h2>
@@ -869,61 +820,68 @@
                   <path d="M6 20v-4"/>
                 </svg>
               </div>
-              Configuracao de Outreach
+              Estrategia de Outreach
             </h2>
-            <p class="subtitle">Defina a proporcao de envio entre WhatsApp e Instagram.</p>
 
-            <div class="form-group" style="margin-top: 16px;">
-              <label class="form-label">Proporcao de Envio</label>
-              <div style="display: flex; align-items: center; gap: 16px; margin-top: 8px;">
-                <div style="flex: 1;">
-                  <input type="range" id="outreach-ratio" min="0" max="100" value="${credentialsData.outreach_ratio_whatsapp || 60}"
-                         oninput="updateRatioDisplay(this.value)"
-                         style="width: 100%; accent-color: var(--aic-green);">
-                  <div style="display: flex; justify-content: space-between; margin-top: 8px;">
-                    <span style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--aic-green);">
-                      <span style="font-weight: 600;" id="wa-ratio-value">${credentialsData.outreach_ratio_whatsapp || 60}%</span> WhatsApp
-                    </span>
-                    <span style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #E4405F;">
-                      <span style="font-weight: 600;" id="ig-ratio-value">${100 - (credentialsData.outreach_ratio_whatsapp || 60)}%</span> Instagram
-                    </span>
-                  </div>
-                </div>
+            <!-- Ratio Display -->
+            <div style="display: flex; gap: 12px; margin-top: 16px;">
+              <div style="flex: 1; background: rgba(37, 211, 102, 0.1); border: 1px solid rgba(37, 211, 102, 0.3); border-radius: 12px; padding: 16px; text-align: center;">
+                <div style="font-size: 32px; font-weight: 700; color: #25D366;">60%</div>
+                <div style="font-size: 13px; color: #25D366; margin-top: 4px;">WhatsApp</div>
+                <div style="font-size: 11px; color: var(--aic-gray); margin-top: 4px;">120 msgs/dia</div>
               </div>
-              <p class="form-hint">Recomendado: 60% WhatsApp / 40% Instagram (WhatsApp tem maior taxa de resposta)</p>
+              <div style="flex: 1; background: rgba(228, 64, 95, 0.1); border: 1px solid rgba(228, 64, 95, 0.3); border-radius: 12px; padding: 16px; text-align: center;">
+                <div style="font-size: 32px; font-weight: 700; color: #E4405F;">40%</div>
+                <div style="font-size: 13px; color: #E4405F; margin-top: 4px;">Instagram</div>
+                <div style="font-size: 11px; color: var(--aic-gray); margin-top: 4px;">80 msgs/dia</div>
+              </div>
             </div>
 
-            <button type="button" class="btn btn-secondary btn-full" onclick="saveOutreachRatio()" id="ratio-btn" style="margin-top: 12px;">
-              Salvar Proporcao
-            </button>
-            <div id="ratio-status" class="status-message"></div>
+            <!-- Info Box -->
+            <div class="info-box" style="margin-top: 16px; background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3);">
+              <h4 style="color: #3b82f6; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 16v-4"/>
+                  <path d="M12 8h.01"/>
+                </svg>
+                Por que esta proporcao?
+              </h4>
+              <ul style="margin: 0; padding-left: 20px; color: var(--aic-gray); font-size: 13px; line-height: 1.8;">
+                <li><strong>WhatsApp tem maior taxa de resposta</strong> (+15% vs +8% no Instagram)</li>
+                <li><strong>Limites seguros</strong> evitam bloqueios e protegem suas contas</li>
+                <li><strong>Leads mais quentes</strong> (maior fit score) sao priorizados no WhatsApp</li>
+                <li><strong>Total diario:</strong> ate 200 mensagens de prospeccao por campanha</li>
+              </ul>
+            </div>
+
+            <!-- Daily Schedule -->
+            <div style="margin-top: 16px; padding: 12px 16px; background: var(--aic-navy); border-radius: 8px; display: flex; align-items: center; gap: 12px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--aic-gray)" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <span style="font-size: 13px; color: var(--aic-gray);">
+                <strong style="color: var(--aic-white);">Horario de envio:</strong> Segunda a Sexta, 09h as 18h (horario comercial)
+              </span>
+            </div>
           </div>
           ` : ''}
 
-          <!-- Continue Button -->
-          ${progress === 2 ? `
-            <button class="btn btn-primary btn-full" onclick="completeCredentials()" id="complete-btn" style="margin-top: 16px;">
-              Concluir e Ir para Briefing
-            </button>
-            <div id="complete-status" class="status-message"></div>
-          ` : `
-            <p style="text-align: center; color: var(--aic-gray); margin-top: 24px;">
-              Configure ambas as contas para prosseguir para o briefing.
-            </p>
-          `}
         `}
 
-        <!-- URL da Landing Page - Sempre visível se tiver campanha -->
-        ${journeyData.campaign?.slug ? `
-          <div class="card" style="margin-top: 24px; border-color: var(--aic-green);">
+        <!-- URL da Landing Page - Obrigatorio -->
+        ${hasLP ? `
+          <div class="card" style="margin-top: 24px; border-color: ${lpConfirmed ? 'var(--aic-green)' : 'var(--aic-border)'};">
             <h2>
-              <div class="icon" style="background: var(--aic-green-glow);">
+              <div class="icon" style="background: ${lpConfirmed ? 'var(--aic-green-glow)' : 'rgba(148, 163, 184, 0.1)'};">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
                   <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                 </svg>
               </div>
-              URL da sua Landing Page
+              Landing Page da Campanha
+              ${lpConfirmed ? '<span style="margin-left: auto; color: var(--aic-green); font-size: 14px;">Confirmada</span>' : '<span style="margin-left: auto; color: var(--aic-gray); font-size: 12px;">Pendente</span>'}
             </h2>
 
             <div class="info-box" style="background: var(--aic-green-glow); border-color: var(--aic-green);">
@@ -953,8 +911,7 @@
                   <span style="background: var(--aic-green); color: var(--aic-navy); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;">1</span>
                   <div>
                     <strong style="color: var(--aic-white);">Na sua Landing Page</strong>
-                    <p style="color: var(--aic-gray); font-size: 13px; margin: 4px 0 0 0;">Coloque um botao ou link apontando para esta URL. Exemplo:</p>
-                    <code style="display: block; background: var(--aic-navy); padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-top: 8px; color: var(--aic-gray-light); overflow-x: auto;">&lt;a href="https://aic.ubs.app.br/lp/${journeyData.campaign?.slug}"&gt;Falar com Especialista&lt;/a&gt;</code>
+                    <p style="color: var(--aic-gray); font-size: 13px; margin: 4px 0 0 0;">Coloque um botao ou link apontando para esta URL.</p>
                   </div>
                 </div>
 
@@ -962,8 +919,7 @@
                   <span style="background: var(--aic-green); color: var(--aic-navy); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;">2</span>
                   <div>
                     <strong style="color: var(--aic-white);">Em campanhas de anuncios</strong>
-                    <p style="color: var(--aic-gray); font-size: 13px; margin: 4px 0 0 0;">Use como URL de destino em Facebook Ads, Google Ads, etc. Adicione UTM para rastrear:</p>
-                    <code style="display: block; background: var(--aic-navy); padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-top: 8px; color: var(--aic-gray-light); overflow-x: auto; word-break: break-all;">https://aic.ubs.app.br/lp/${journeyData.campaign?.slug}?utm_source=facebook&utm_medium=ads</code>
+                    <p style="color: var(--aic-gray); font-size: 13px; margin: 4px 0 0 0;">Use como URL de destino em Facebook Ads, Google Ads, etc.</p>
                   </div>
                 </div>
 
@@ -971,23 +927,75 @@
                   <span style="background: var(--aic-green); color: var(--aic-navy); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;">3</span>
                   <div>
                     <strong style="color: var(--aic-white);">Em redes sociais</strong>
-                    <p style="color: var(--aic-gray); font-size: 13px; margin: 4px 0 0 0;">Compartilhe diretamente no Instagram, WhatsApp Status, LinkedIn, etc.</p>
+                    <p style="color: var(--aic-gray); font-size: 13px; margin: 4px 0 0 0;">Compartilhe no Instagram, WhatsApp Status, LinkedIn, etc.</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div class="warning-box" style="margin-top: 16px; background: rgba(59, 130, 246, 0.1); border-color: #3b82f6;">
-              <h4 style="color: #3b82f6;">O que acontece quando alguem acessa?</h4>
-              <ol style="margin: 8px 0 0 16px; line-height: 1.8; color: var(--aic-gray-light);">
-                <li>O visitante ve a landing page da AIC</li>
-                <li>Preenche nome, email, WhatsApp e Instagram (opcional)</li>
-                <li>E redirecionado automaticamente para o <strong>WhatsApp da sua campanha</strong></li>
-                <li>O AI Agent inicia a conversa de qualificacao</li>
-              </ol>
+            <!-- Redirect apos campanha -->
+            <div class="form-group" style="margin-top: 20px;">
+              <label class="form-label" style="display: flex; align-items: center; gap: 8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--aic-gray)" stroke-width="2">
+                  <polyline points="15 14 20 9 15 4"/>
+                  <path d="M4 20v-7a4 4 0 0 1 4-4h12"/>
+                </svg>
+                URL de redirecionamento apos campanha <span style="color: var(--aic-gray); font-weight: 400;">(opcional)</span>
+              </label>
+              <input type="url" id="redirect-url" class="form-input"
+                placeholder="https://meusite.com.br/contato"
+                value="${credentialsData.redirect_after_campaign || ''}"
+                style="margin-top: 4px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                <span class="form-hint">Quando a campanha encerrar, os leads serao redirecionados para esta URL em vez do formulario.</span>
+                <button type="button" onclick="saveRedirectUrl()" class="btn"
+                  style="padding: 6px 16px; font-size: 12px; background: var(--aic-navy-lighter); border: 1px solid var(--aic-border); color: var(--aic-gray-light); white-space: nowrap; margin-left: 8px;"
+                  id="save-redirect-btn">Salvar</button>
+              </div>
+              <div id="redirect-status" class="status-message"></div>
             </div>
+
+            <!-- Confirmacao LP -->
+            ${!lpConfirmed ? `
+            <div style="margin-top: 20px; padding: 16px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 10px;">
+              <label style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;">
+                <input type="checkbox" id="lp-confirm-checkbox" onchange="confirmLP(this.checked)"
+                  style="width: 20px; height: 20px; accent-color: var(--aic-green); margin-top: 2px; flex-shrink: 0;">
+                <div>
+                  <strong style="color: #f59e0b;">Confirmo que copiei e entendi como usar a URL da Landing Page</strong>
+                  <p style="color: var(--aic-gray); font-size: 13px; margin-top: 4px;">
+                    Esta URL sera usada para capturar leads que serao direcionados ao WhatsApp da campanha.
+                  </p>
+                </div>
+              </label>
+            </div>
+            ` : `
+            <div style="margin-top: 20px; padding: 16px; background: rgba(14, 204, 151, 0.1); border: 1px solid rgba(14, 204, 151, 0.3); border-radius: 10px; display: flex; align-items: center; gap: 12px;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0ecc97" stroke-width="2">
+                <path d="M20 6L9 17l-5-5"/>
+              </svg>
+              <span style="color: var(--aic-green);">Landing Page confirmada</span>
+            </div>
+            `}
           </div>
         ` : ''}
+
+          <!-- Continue Button -->
+          <div style="margin-top: 24px;">
+            ${progress === 3 ? `
+              <button class="btn btn-primary btn-full" onclick="completeCredentials()" id="complete-btn">
+                Concluir e Ir para Briefing
+              </button>
+              <div id="complete-status" class="status-message"></div>
+            ` : `
+              <button class="btn btn-full" disabled style="background: var(--aic-navy-lighter); color: var(--aic-gray); cursor: not-allowed;">
+                Concluir e Ir para Briefing
+              </button>
+              <p style="text-align: center; color: var(--aic-gray); margin-top: 12px; font-size: 13px;">
+                ${!hasWhatsapp ? 'Conecte o WhatsApp' : ''}${!hasWhatsapp && !hasInstagram ? ', ' : ''}${!hasInstagram ? 'Conecte o Instagram' : ''}${(!hasWhatsapp || !hasInstagram) && !lpConfirmed ? ' e ' : ''}${!lpConfirmed ? 'Confirme a Landing Page' : ''} para continuar.
+              </p>
+            `}
+          </div>
       `;
     }
 
@@ -1020,6 +1028,73 @@
           feedback.style.display = 'none';
         }, 2000);
       }
+    }
+
+    // Salvar URL de redirecionamento pos-campanha
+    async function saveRedirectUrl() {
+      const url = document.getElementById('redirect-url').value.trim();
+      const btn = document.getElementById('save-redirect-btn');
+
+      if (url && !url.startsWith('http')) {
+        showStatus('redirect-status', 'URL deve comecar com https://', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+
+      try {
+        const token = localStorage.getItem('aic_access_token');
+        const response = await fetch('/api/aic/journey/credentials/redirect-url', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({
+            campaign_id: journeyData.campaign_id,
+            redirect_url: url || null
+          })
+        });
+
+        if (!response.ok) throw new Error('Erro ao salvar');
+
+        credentialsData.redirect_after_campaign = url;
+        showStatus('redirect-status', url ? 'URL salva!' : 'URL removida', 'success');
+      } catch (err) {
+        showStatus('redirect-status', 'Erro ao salvar URL', 'error');
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Salvar';
+    }
+
+    // Confirmar LP
+    async function confirmLP(confirmed) {
+      if (!confirmed) return;
+
+      credentialsData.lp_confirmed = true;
+
+      // Salvar no backend
+      try {
+        const token = localStorage.getItem('aic_access_token');
+        await fetch('/api/aic/journey/credentials/lp-confirmed', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            campaign_id: journeyData.campaign_id,
+            confirmed: true
+          })
+        });
+      } catch (err) {
+        console.error('Erro ao salvar confirmacao LP:', err);
+      }
+
+      // Re-renderizar pagina
+      renderPage();
     }
 
     async function saveWhatsapp(event) {
@@ -1221,12 +1296,23 @@
 
       try {
         const token = localStorage.getItem('aic_access_token');
+        if (!token) {
+          window.location.href = '/aic/login?redirect=/cliente/credenciais';
+          return;
+        }
+
         const response = await fetch('/api/aic/journey/complete-credentials', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
+
+        if (response.status === 401) {
+          localStorage.removeItem('aic_access_token');
+          window.location.href = '/aic/login?redirect=/cliente/credenciais';
+          return;
+        }
 
         if (!response.ok) {
           const error = await response.json();

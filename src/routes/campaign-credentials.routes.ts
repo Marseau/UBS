@@ -21,6 +21,7 @@ import {
 import { clientJourneyService } from '../services/client-journey.service';
 import { getWhapiPartnerService } from '../services/whapi-partner.service';
 import { campaignDocumentProcessor, DocumentUpload } from '../services/campaign-document-processor.service';
+import { emailService } from '../services/email.service';
 
 const router = Router();
 
@@ -1033,10 +1034,10 @@ router.get('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: Authe
       return;
     }
 
-    // Verificar se campanha existe (permitir acesso sem auth para onboarding)
+    // Verificar se campanha existe e buscar dados de handoff
     const { data: campaign, error: campaignError } = await supabase
       .from('cluster_campaigns')
-      .select('id')
+      .select('id, client_contact_name, client_whatsapp_number')
       .eq('id', campaignId)
       .single();
 
@@ -1065,7 +1066,12 @@ router.get('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: Authe
       return;
     }
 
-    res.json(briefing);
+    // Injetar dados de handoff da campanha no briefing response
+    res.json({
+      ...briefing,
+      client_contact_name: campaign.client_contact_name || '',
+      client_whatsapp_number: campaign.client_whatsapp_number || ''
+    });
   } catch (error: any) {
     console.error('[Campaign Credentials] Error getting briefing:', error);
     res.status(500).json({ error: error.message });
@@ -1178,6 +1184,19 @@ router.post('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: Auth
       return;
     }
 
+    // Extrair campos de handoff (salvos em cluster_campaigns, não em campaign_briefing)
+    const { client_contact_name, client_whatsapp_number } = briefingData;
+    if (client_contact_name || client_whatsapp_number) {
+      const campaignUpdate: Record<string, any> = {};
+      if (client_contact_name) campaignUpdate.client_contact_name = client_contact_name;
+      if (client_whatsapp_number) campaignUpdate.client_whatsapp_number = client_whatsapp_number;
+
+      await supabase
+        .from('cluster_campaigns')
+        .update(campaignUpdate)
+        .eq('id', campaignId);
+    }
+
     // Remover campos que nao devem ser atualizados diretamente
     const {
       id,
@@ -1186,6 +1205,8 @@ router.post('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: Auth
       approved_at,
       approved_by,
       completion_percentage,
+      client_contact_name: _ccn,
+      client_whatsapp_number: _cwn,
       ...dataToSave
     } = briefingData;
 
@@ -2230,8 +2251,10 @@ router.delete('/campaigns/:campaignId', optionalAuthAIC, async (req: Authenticat
 
 /**
  * POST /api/campaigns/:campaignId/link-client
- * Vincula um cliente (por email) a uma campanha
- * Atualiza client_email na campanha e no projeto
+ * Vincula um cliente (por email) a uma campanha e envia convite
+ * - Atualiza client_email na campanha e projeto
+ * - Envia email convidando cliente a se cadastrar e ver proposta
+ * - Journey será criada quando cliente aceitar a proposta
  */
 router.post('/campaigns/:campaignId/link-client', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -2243,7 +2266,9 @@ router.post('/campaigns/:campaignId/link-client', optionalAuthAIC, async (req: A
       return;
     }
 
-    // Buscar campanha para obter project_id
+    const normalizedEmail = client_email.toLowerCase().trim();
+
+    // Buscar campanha
     const { data: campaign, error: fetchError } = await supabase
       .from('cluster_campaigns')
       .select('id, project_id, campaign_name')
@@ -2255,12 +2280,12 @@ router.post('/campaigns/:campaignId/link-client', optionalAuthAIC, async (req: A
       return;
     }
 
-    console.log(`[Link Client] Linking ${client_email} to campaign ${campaignId}`);
+    console.log(`[Link Client] Linking ${normalizedEmail} to campaign ${campaignId}`);
 
     // Atualizar client_email na campanha
     const { error: updateCampaignError } = await supabase
       .from('cluster_campaigns')
-      .update({ client_email: client_email.toLowerCase() })
+      .update({ client_email: normalizedEmail })
       .eq('id', campaignId);
 
     if (updateCampaignError) {
@@ -2268,17 +2293,28 @@ router.post('/campaigns/:campaignId/link-client', optionalAuthAIC, async (req: A
       return;
     }
 
-    // Atualizar client_email no projeto também (se existir)
+    // Atualizar client_email no projeto também
     if (campaign.project_id) {
       await supabase
         .from('cluster_projects')
-        .update({ client_email: client_email.toLowerCase() })
+        .update({ client_email: normalizedEmail })
         .eq('id', campaign.project_id);
     }
 
+    // Enviar email de convite
+    const baseUrl = process.env.BASE_URL || 'https://aic.ubs.app.br';
+    const emailSent = await emailService.sendCampaignInvitation({
+      clientEmail: normalizedEmail,
+      campaignName: campaign.campaign_name,
+      loginUrl: `${baseUrl}/cliente/login`
+    });
+
+    console.log(`[Link Client] Email sent: ${emailSent}`);
+
     res.json({
       success: true,
-      message: `Cliente ${client_email} vinculado à campanha "${campaign.campaign_name}"`
+      message: `Cliente ${normalizedEmail} vinculado à campanha "${campaign.campaign_name}"`,
+      email_sent: emailSent
     });
   } catch (error: any) {
     console.error('[Link Client] Error:', error);
@@ -2480,6 +2516,83 @@ router.patch('/campaigns/:id/status', async (req: Request, res: Response): Promi
     if (!status || !validStatuses.includes(status)) {
       res.status(400).json({ error: `Valid status is required: ${validStatuses.join(', ')}` });
       return;
+    }
+
+    // Verificar LP antes de ativar/testar (skip com force=true)
+    if ((status === 'active' || status === 'test') && !req.body.force) {
+      const { data: campaignCheck } = await supabase
+        .from('cluster_campaigns')
+        .select('landing_page_url, slug, status')
+        .eq('id', id)
+        .single();
+
+      if (!campaignCheck?.landing_page_url) {
+        res.status(400).json({
+          error: 'Landing page do cliente nao informada no briefing.',
+          lp_check: 'missing_url'
+        });
+        return;
+      }
+
+      if (!campaignCheck?.slug) {
+        res.status(400).json({
+          error: 'Slug da campanha nao encontrado.',
+          lp_check: 'missing_slug'
+        });
+        return;
+      }
+
+      // Fetch da landing page do cliente e verificar se contém o link AIC
+      const lpUrl = campaignCheck.landing_page_url;
+      const aicLpLink = `aic.ubs.app.br/lp/${campaignCheck.slug}`;
+
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+
+        const lpResponse = await fetch(lpUrl, {
+          signal: controller.signal,
+          headers: { 'User-Agent': 'AIC-LP-Checker/1.0' }
+        });
+        clearTimeout(timeout);
+
+        if (!lpResponse.ok) {
+          res.status(400).json({
+            error: `Landing page do cliente retornou erro ${lpResponse.status}. Verifique se a URL está correta: ${lpUrl}`,
+            lp_check: 'fetch_error',
+            landing_page_url: lpUrl
+          });
+          return;
+        }
+
+        const html = await lpResponse.text();
+        if (!html.includes(aicLpLink)) {
+          res.status(400).json({
+            error: `Link AIC nao encontrado na landing page do cliente. O site ${lpUrl} nao contém referência a "${aicLpLink}". O cliente precisa integrar o link antes da ativação.`,
+            lp_check: 'link_not_found',
+            landing_page_url: lpUrl,
+            expected_link: `https://${aicLpLink}`
+          });
+          return;
+        }
+
+        console.log(`[Update Status] LP verification passed: ${lpUrl} contains ${aicLpLink}`);
+      } catch (fetchError: any) {
+        if (fetchError.name === 'AbortError') {
+          res.status(400).json({
+            error: `Landing page do cliente não respondeu (timeout). Verifique se a URL está acessível: ${lpUrl}`,
+            lp_check: 'timeout',
+            landing_page_url: lpUrl
+          });
+          return;
+        }
+        res.status(400).json({
+          error: `Não foi possível acessar a landing page do cliente: ${fetchError.message}. URL: ${lpUrl}`,
+          lp_check: 'connection_error',
+          landing_page_url: lpUrl
+        });
+        return;
+      }
     }
 
     // Update campaign status using the new unified status column

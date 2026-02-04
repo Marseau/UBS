@@ -835,9 +835,9 @@
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label" for="campaign_whatsapp">Linha WhatsApp da Campanha *</label>
-              <input type="tel" id="campaign_whatsapp" class="form-input" placeholder="(11) 99999-9999" required>
-              <p class="form-hint">Número que será usado para enviar mensagens aos leads.</p>
+              <label class="form-label" for="campaign_whatsapp">Linha WhatsApp da Campanha</label>
+              <input type="tel" id="campaign_whatsapp" class="form-input" placeholder="(11) 99999-9999">
+              <p class="form-hint">Opcional. Número que será usado para enviar mensagens aos leads. Pode ser configurado depois.</p>
             </div>
           </div>
 
@@ -1182,21 +1182,19 @@
     }
 
     function populateForm() {
-      // Client data
-      document.getElementById('client-name').textContent = journeyData.client_name || 'Cliente';
-      document.getElementById('client_name').value = journeyData.client_name || '';
-      document.getElementById('client_email').value = journeyData.client_email || '';
-      document.getElementById('client_phone').value = journeyData.client_phone || '';
-
-      // Proposal data
+      // Dados da campanha vinculada (prioridade) ou fallback para proposal_data
+      const campaign = journeyData.campaign || {};
       const proposal = journeyData.proposal_data || {};
-      document.getElementById('campaign_name').value = proposal.campaign_name || proposal.project_name || '';
-      document.getElementById('project_name').value = proposal.project_name || '';
-      document.getElementById('target_niche').value = proposal.target_niche || '';
-      document.getElementById('service_description').value = proposal.service_description || '';
-      document.getElementById('target_audience').value = proposal.target_audience || '';
-      // Formatar telefone para input (sem +55)
-      const rawPhone = journeyData.client_phone || '';
+
+      // Client data - priorizar dados da campanha se existirem
+      const clientName = campaign.client_contact_name || journeyData.client_name || 'Cliente';
+      document.getElementById('client-name').textContent = clientName;
+      document.getElementById('client_name').value = clientName;
+      document.getElementById('client_email').value = campaign.client_email || journeyData.client_email || '';
+      document.getElementById('client_document').value = campaign.client_document || journeyData.client_document || '';
+
+      // Telefone - priorizar campanha
+      const rawPhone = campaign.client_whatsapp_number || journeyData.client_phone || '';
       let formattedPhone = rawPhone.replace(/\D/g, '');
       if (formattedPhone.startsWith('55') && formattedPhone.length > 11) {
         formattedPhone = formattedPhone.substring(2);
@@ -1204,6 +1202,24 @@
       if (formattedPhone.length === 11) {
         formattedPhone = formattedPhone.replace(/^(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
       }
+      document.getElementById('client_phone').value = formattedPhone;
+
+      // Endereco - da campanha
+      if (campaign.client_address) {
+        const addr = typeof campaign.client_address === 'object'
+          ? campaign.client_address.full_address || ''
+          : campaign.client_address;
+        document.getElementById('client_address').value = addr;
+      }
+
+      // Campaign data - priorizar dados da campanha vinculada
+      document.getElementById('campaign_name').value = campaign.campaign_name || proposal.campaign_name || proposal.project_name || '';
+      document.getElementById('project_name').value = campaign.project_name || proposal.project_name || '';
+      document.getElementById('target_niche').value = campaign.nicho_principal || proposal.target_niche || '';
+      document.getElementById('service_description').value = campaign.service_description || proposal.service_description || '';
+      document.getElementById('target_audience').value = campaign.target_audience || proposal.target_audience || '';
+
+      // WhatsApp da campanha (mesmo do cliente se nao tiver especifico)
       document.getElementById('campaign_whatsapp').value = formattedPhone;
 
       // Contract values
@@ -1367,7 +1383,7 @@
         // Validate form
         const requiredFields = [
           'client_name', 'client_document', 'client_address', 'client_email', 'client_phone',
-          'campaign_name', 'project_name', 'campaign_whatsapp', 'target_niche', 'service_description', 'target_audience'
+          'campaign_name', 'project_name', 'target_niche', 'service_description', 'target_audience'
         ];
 
         for (const field of requiredFields) {

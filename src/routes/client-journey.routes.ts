@@ -20,6 +20,82 @@ function getParam(req: Request, name: string): string {
 }
 
 // ============================================
+// ROTAS PUBLICAS (sem autenticacao)
+// ============================================
+
+/**
+ * POST /api/aic/user/profile
+ * Criar perfil do usuario na tabela public.users
+ * Chamado apos registro via Supabase Auth (evita problema de RLS)
+ */
+router.post('/user/profile', async (req: Request, res: Response) => {
+  try {
+    const { id, name, email, phone } = req.body;
+
+    if (!id || !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID e email sao obrigatorios'
+      });
+    }
+
+    const { supabaseAdmin } = await import('../config/database');
+
+    // Verificar se usuario ja existe
+    const { data: existing } = await supabaseAdmin
+      .from('users')
+      .select('id, name')
+      .eq('id', id)
+      .single();
+
+    if (existing) {
+      // Atualizar dados se ja existe
+      const { error } = await supabaseAdmin
+        .from('users')
+        .update({
+          name: name || (existing as { id: string; name: string }).name,
+          phone: phone || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) {
+        console.error('[Journey Routes] Error updating user profile:', error);
+        return res.status(500).json({ success: false, message: 'Erro ao atualizar perfil' });
+      }
+
+      return res.json({ success: true, message: 'Perfil atualizado' });
+    }
+
+    // Criar novo perfil
+    const { error } = await supabaseAdmin
+      .from('users')
+      .insert({
+        id,
+        name: name || email.split('@')[0],
+        email: email.toLowerCase(),
+        phone: phone || null,
+        tipo_user: 'client',
+        account_type: 'real',
+        user_origin: 'aic',
+        user_app: 'aic'
+      });
+
+    if (error) {
+      console.error('[Journey Routes] Error creating user profile:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao criar perfil' });
+    }
+
+    console.log(`[Journey Routes] User profile created for: ${email}`);
+
+    return res.json({ success: true, message: 'Perfil criado com sucesso' });
+  } catch (error) {
+    console.error('[Journey Routes] Error in user profile:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno' });
+  }
+});
+
+// ============================================
 // ROTAS PUBLICAS (com token de acesso)
 // ============================================
 
@@ -566,7 +642,7 @@ router.get('/credentials', authenticateClient, async (req: ClientRequest, res: R
     // Buscar credenciais WhatsApp via cluster_campaigns
     const { data: campaign } = await supabaseAdmin
       .from('cluster_campaigns')
-      .select('whapi_channel_uuid, outreach_ratio_whatsapp, outreach_ratio_instagram')
+      .select('whapi_channel_uuid, outreach_ratio_whatsapp, outreach_ratio_instagram, lp_confirmed, redirect_after_campaign, landing_page_url, slug')
       .eq('id', journey.campaign_id)
       .single();
 
@@ -606,7 +682,11 @@ router.get('/credentials', authenticateClient, async (req: ClientRequest, res: R
         whatsapp: whatsappData,
         instagram: instagramData,
         outreach_ratio_whatsapp: campaign?.outreach_ratio_whatsapp ?? 60,
-        outreach_ratio_instagram: campaign?.outreach_ratio_instagram ?? 40
+        outreach_ratio_instagram: campaign?.outreach_ratio_instagram ?? 40,
+        lp_confirmed: campaign?.lp_confirmed ?? false,
+        redirect_after_campaign: campaign?.redirect_after_campaign || '',
+        landing_page_url: campaign?.landing_page_url || '',
+        lp_verified: campaign?.lp_confirmed ?? false
       }
     });
 
@@ -1089,6 +1169,120 @@ router.post('/credentials/outreach-ratio', authenticateClient, async (req: Clien
   } catch (error) {
     console.error('[Journey Routes] Error saving outreach ratio:', error);
     return res.status(500).json({ success: false, message: 'Erro ao salvar proporcao' });
+  }
+});
+
+/**
+ * POST /api/aic/journey/credentials/lp-confirmed
+ * Confirmar que cliente viu e copiou a URL da Landing Page
+ */
+router.post('/credentials/lp-confirmed', authenticateClient, async (req: ClientRequest, res: Response) => {
+  try {
+    const userId = req.clientUser?.id;
+    const { campaign_id, confirmed } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Usuario nao autenticado' });
+    }
+
+    const { supabaseAdmin } = await import('../config/database');
+
+    // Get campaign ID from journey if not provided
+    let targetCampaignId = campaign_id;
+    if (!targetCampaignId) {
+      const { data: journey } = await supabaseAdmin
+        .from('aic_client_journeys')
+        .select('campaign_id')
+        .eq('auth_user_id', userId)
+        .not('campaign_id', 'is', null)
+        .single();
+
+      targetCampaignId = journey?.campaign_id;
+    }
+
+    if (!targetCampaignId) {
+      return res.status(404).json({ success: false, message: 'Campanha nao encontrada' });
+    }
+
+    // Update campaign with LP confirmed flag
+    const { error } = await supabaseAdmin
+      .from('cluster_campaigns')
+      .update({
+        lp_confirmed: confirmed,
+        lp_confirmed_at: confirmed ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', targetCampaignId);
+
+    if (error) {
+      console.error('[Journey Routes] Error saving LP confirmation:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao salvar confirmacao' });
+    }
+
+    console.log(`[Journey Routes] LP confirmed for campaign ${targetCampaignId}`);
+
+    return res.json({
+      success: true,
+      message: 'Landing Page confirmada'
+    });
+
+  } catch (error) {
+    console.error('[Journey Routes] Error saving LP confirmation:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao salvar confirmacao' });
+  }
+});
+
+/**
+ * POST /api/aic/journey/credentials/redirect-url
+ * Salvar URL de redirecionamento pos-campanha
+ */
+router.post('/credentials/redirect-url', authenticateClient, async (req: ClientRequest, res: Response) => {
+  try {
+    const userId = req.clientUser?.id;
+    const { campaign_id, redirect_url } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Usuario nao autenticado' });
+    }
+
+    const { supabaseAdmin } = await import('../config/database');
+
+    let targetCampaignId = campaign_id;
+    if (!targetCampaignId) {
+      const { data: journey } = await supabaseAdmin
+        .from('aic_client_journeys')
+        .select('campaign_id')
+        .eq('auth_user_id', userId)
+        .not('campaign_id', 'is', null)
+        .single();
+
+      targetCampaignId = journey?.campaign_id;
+    }
+
+    if (!targetCampaignId) {
+      return res.status(404).json({ success: false, message: 'Campanha nao encontrada' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('cluster_campaigns')
+      .update({
+        redirect_after_campaign: redirect_url,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', targetCampaignId);
+
+    if (error) {
+      console.error('[Journey Routes] Error saving redirect URL:', error);
+      return res.status(500).json({ success: false, message: 'Erro ao salvar URL' });
+    }
+
+    console.log(`[Journey Routes] Redirect URL saved for campaign ${targetCampaignId}: ${redirect_url || '(removed)'}`);
+
+    return res.json({ success: true, message: 'URL salva com sucesso' });
+
+  } catch (error) {
+    console.error('[Journey Routes] Error saving redirect URL:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao salvar URL' });
   }
 });
 

@@ -87,6 +87,7 @@
     .header-step {
       display: flex;
       align-items: center;
+      cursor: pointer;
       gap: 6px;
       padding: 6px 12px;
       border-radius: 20px;
@@ -823,15 +824,15 @@
     <div class="container header-content">
       <img src="/assets/AIC/Imagens%20Vetor%20/Logo%20Completo%20nome%20Branco%20sem%20fundo.png" alt="AIC" class="header-logo">
       <div class="header-steps">
-        <div class="header-step active" id="header-step-1">
+        <div class="header-step active" id="header-step-1" onclick="showStep(1)">
           <span class="header-step-number">1</span>
           Landing Page
         </div>
-        <div class="header-step" id="header-step-2">
+        <div class="header-step" id="header-step-2" onclick="showStep(2)">
           <span class="header-step-number">2</span>
           Campanha
         </div>
-        <div class="header-step" id="header-step-3">
+        <div class="header-step" id="header-step-3" onclick="showStep(3)">
           <span class="header-step-number">3</span>
           Documentos
         </div>
@@ -989,7 +990,25 @@
             <div class="form-group">
               <label class="form-label" for="calendar_link">Link de Auto-Agendamento<span class="optional">(opcional)</span></label>
               <input type="url" id="calendar_link" class="form-input" placeholder="https://calendly.com/sua-empresa">
-              <p class="form-hint">Opcional: Se voce usa Calendly, Cal.com ou similar, o agente pode compartilhar este link para o lead agendar direto. Caso contrario, o agente encaminha o lead para seu WhatsApp.</p>
+              <p class="form-hint">Opcional: Se voce usa Calendly, Cal.com ou similar, o agente pode compartilhar este link para o lead agendar direto.</p>
+            </div>
+          </div>
+
+          <!-- Responsavel pelo Handoff -->
+          <div style="background: rgba(14, 204, 151, 0.05); border: 1px solid rgba(14, 204, 151, 0.2); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+            <h4 style="color: var(--aic-green); margin: 0 0 4px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Responsavel pelo Atendimento</h4>
+            <p style="color: var(--aic-gray); font-size: 13px; margin: 0 0 16px 0;">Quando o agente identificar um lead quente, para quem deve encaminhar?</p>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="handoff_contact_name">Nome do responsavel<span class="required">*</span></label>
+                <input type="text" id="handoff_contact_name" class="form-input" placeholder="Ex: Joao Silva">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="handoff_whatsapp">WhatsApp do responsavel<span class="required">*</span></label>
+                <input type="tel" id="handoff_whatsapp" class="form-input" placeholder="Ex: 11999998888">
+                <p class="form-hint">Numero com DDD, sem espacos ou caracteres especiais.</p>
+              </div>
             </div>
           </div>
 
@@ -1550,7 +1569,7 @@
         // Mostrar status de sucesso
         const sources = result.sources || [];
         const sourcesText = sources.length > 0 ? ` (baseado em ${sources.length} documento${sources.length > 1 ? 's' : ''})` : '';
-        showAIExtractStatus('success', `<span class="ic ic-ok"></span> ${filledCount} campo${filledCount !== 1 ? 's' : ''} preenchido${filledCount !== 1 ? 's' : ''}${sourcesText}. Revise e ajuste conforme necessario.`);
+        showAIExtractStatus('success', `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ecc97" stroke-width="2" style="vertical-align: middle;"><path d="M20 6L9 17l-5-5"/></svg> ${filledCount} campo${filledCount !== 1 ? 's' : ''} preenchido${filledCount !== 1 ? 's' : ''}${sourcesText}. Revise e ajuste conforme necessario.`);
 
         console.log('[AI Extract] Campos preenchidos:', filledCount, 'de', Object.keys(fields).length);
 
@@ -1581,7 +1600,7 @@
     function showAIExtractStatus(type, message) {
       const statusEl = document.getElementById('ai-extract-status');
       statusEl.style.display = 'block';
-      statusEl.textContent = message;
+      statusEl.innerHTML = message;
 
       if (type === 'success') {
         statusEl.style.background = 'rgba(14, 204, 151, 0.1)';
@@ -1611,12 +1630,12 @@
       }
 
       const icons = {
-        processing: '<span class="ic ic-load"></span>',
-        success: '<span class="ic ic-ok"></span>',
-        error: '<span class="ic ic-x"></span>'
+        processing: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>',
+        success: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0ecc97" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>',
+        error: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>'
       };
 
-      iconEl.textContent = icons[type] || '';
+      iconEl.innerHTML = icons[type] || '';
       titleEl.textContent = title;
       textEl.textContent = text;
     }
@@ -2002,6 +2021,8 @@
       }
 
       if (briefing.calendar_link) document.getElementById('calendar_link').value = briefing.calendar_link;
+      if (briefing.client_contact_name) document.getElementById('handoff_contact_name').value = briefing.client_contact_name;
+      if (briefing.client_whatsapp_number) document.getElementById('handoff_whatsapp').value = briefing.client_whatsapp_number;
     }
 
     // =====================================================
@@ -2130,6 +2151,12 @@
       const calendarLink = document.getElementById('calendar_link').value.trim();
       if (calendarLink) data.calendar_link = calendarLink;
 
+      // Handoff - responsavel pelo lead quente
+      const handoffName = document.getElementById('handoff_contact_name').value.trim();
+      if (handoffName) data.client_contact_name = handoffName;
+      const handoffWa = document.getElementById('handoff_whatsapp').value.trim().replace(/\D/g, '');
+      if (handoffWa) data.client_whatsapp_number = handoffWa;
+
       const cta = document.getElementById('campaign_cta').value.trim();
       if (cta) data.call_to_action = cta;
 
@@ -2185,6 +2212,26 @@
 
       try {
         // Validate required fields
+        const lpUrl = document.getElementById('landing_page_url').value.trim();
+        if (!lpUrl) {
+          btn.disabled = false;
+          btn.textContent = 'Salvar e Concluir';
+          showStep(1);
+          alert('A URL da Landing Page e obrigatoria.');
+          return;
+        }
+
+        const handoffName = document.getElementById('handoff_contact_name').value.trim();
+        const handoffWa = document.getElementById('handoff_whatsapp').value.trim();
+
+        if (!handoffName || !handoffWa) {
+          btn.disabled = false;
+          btn.textContent = 'Salvar e Concluir';
+          showStep(2);
+          alert('Informe o nome e WhatsApp do responsavel pelo atendimento ao lead quente.');
+          return;
+        }
+
         const cta = document.getElementById('campaign_cta').value.trim();
         const audience = document.getElementById('target_audience').value.trim();
         const whyUs = document.getElementById('why_choose_us').value.trim();
@@ -2192,34 +2239,34 @@
         const hasObjections = objectionsList.some(o => o.objection && o.response);
 
         if (!cta) {
-          showStatus('save-status', 'O campo "Call to Action" e obrigatorio.', 'error');
           btn.disabled = false;
           btn.textContent = 'Salvar e Concluir';
           showStep(2);
+          alert('O campo "Call to Action" e obrigatorio.');
           return;
         }
 
         if (!audience) {
-          showStatus('save-status', 'O campo "Publico-alvo" e obrigatorio.', 'error');
           btn.disabled = false;
           btn.textContent = 'Salvar e Concluir';
           showStep(2);
+          alert('O campo "Publico-alvo" e obrigatorio.');
           return;
         }
 
         if (!whyUs) {
-          showStatus('save-status', 'O campo "Por que escolher voce" e obrigatorio.', 'error');
           btn.disabled = false;
           btn.textContent = 'Salvar e Concluir';
           showStep(2);
+          alert('O campo "Por que escolher voce" e obrigatorio.');
           return;
         }
 
         if (!hasObjections) {
-          showStatus('save-status', 'Adicione pelo menos uma objecao com resposta.', 'error');
           btn.disabled = false;
           btn.textContent = 'Salvar e Concluir';
           showStep(2);
+          alert('Adicione pelo menos uma objecao com resposta.');
           return;
         }
 

@@ -1078,8 +1078,33 @@
           body: JSON.stringify({ status: newStatus })
         });
 
+        const result = await response.json();
+
         if (!response.ok) {
-          throw new Error('Failed to update status');
+          // Verificação de LP falhou
+          if (result.lp_check) {
+            const forceActivate = confirm(
+              `⚠️ Verificação de Landing Page falhou:\n\n${result.error}\n\n` +
+              `Deseja forçar a ativação mesmo assim?`
+            );
+
+            if (forceActivate) {
+              // Tentar novamente com force=true
+              const forceResponse = await fetch(`/api/campaigns/${campaignId}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus, force: true })
+              });
+
+              if (!forceResponse.ok) {
+                throw new Error('Falha ao forçar ativação');
+              }
+            } else {
+              return; // Admin cancelou
+            }
+          } else {
+            throw new Error(result.error || 'Failed to update status');
+          }
         }
 
         // Update local campaign data

@@ -874,11 +874,11 @@ Responda EXATAMENTE neste formato JSON:
 Sua tarefa é extrair informações específicas dos documentos fornecidos para pré-preencher um formulário de briefing.
 
 REGRAS IMPORTANTES:
-- Extraia APENAS informações que estão EXPLICITAMENTE nos documentos
-- Se encontrar a informação, cite o trecho relevante
-- Se NÃO encontrar informação suficiente, deixe o campo como null (não invente)
+- Extraia informações baseadas nos documentos fornecidos
+- Para campos factuais (oferta, público-alvo, CTA), use apenas o que está nos documentos
+- Se NÃO encontrar informação suficiente para um campo factual, deixe como null
 - Seja específico e use linguagem de vendas/marketing quando apropriado
-- Para objeções, pense nas objeções COMUNS que clientes teriam ao considerar o produto/serviço`
+- Para OBJEÇÕES: esta é a exceção — você DEVE gerar objeções mesmo que não estejam explícitas. Analise o produto/serviço descrito e liste as objeções mais comuns que um potencial cliente teria. Procure também seções de FAQ, perguntas frequentes, garantias, ou textos defensivos/explicativos nos documentos — esses trechos geralmente respondem a objeções implícitas. SEMPRE retorne pelo menos 3-5 objeções com respostas.`
           },
           {
             role: "user",

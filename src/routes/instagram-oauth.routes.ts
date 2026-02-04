@@ -77,7 +77,7 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
 
     if (!result.success) {
       console.error('[Instagram OAuth] Erro no callback:', result.error);
-      res.redirect(`/cliente-credenciais.html?instagram_error=${encodeURIComponent(result.error || 'Erro desconhecido')}`);
+      res.redirect(`/cliente/credenciais?instagram_error=${encodeURIComponent(result.error || 'Erro desconhecido')}`);
       return;
     }
 
@@ -88,11 +88,11 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
     const campaignId = stateData?.campaignId || '';
 
     // Redirecionar de volta para a página de credenciais com sucesso
-    res.redirect(`/cliente-credenciais.html?campaign=${campaignId}&instagram_connected=true&instagram_username=${encodeURIComponent(result.account?.username || '')}`);
+    res.redirect(`/cliente/credenciais?campaign=${campaignId}&instagram_connected=true&instagram_username=${encodeURIComponent(result.account?.username || '')}`);
 
   } catch (error: any) {
     console.error('[Instagram OAuth] Erro no callback:', error);
-    res.redirect(`/cliente-credenciais.html?instagram_error=${encodeURIComponent('Erro interno ao processar autorização')}`);
+    res.redirect(`/cliente/credenciais?instagram_error=${encodeURIComponent('Erro interno ao processar autorização')}`);
   }
 });
 

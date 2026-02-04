@@ -1237,11 +1237,11 @@
                 <!-- Alerta de cliente não cadastrado + ações -->
                 <div id="clientNotRegisteredAlert" style="display: none; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.5); padding: 12px; border-radius: 8px; margin-bottom: 20px; color: #fbbf24;">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                        <div>
+                        <div id="clientAlertMessage">
                             <span class="ic ic-warn"></span> <strong>Cliente nao cadastrado.</strong> Este estudo so e visivel para admins.
                         </div>
                         <div style="display: flex; gap: 8px;">
-                            <button onclick="showLinkClientModal()" style="background: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 0.85em;">
+                            <button id="linkClientBtn" onclick="showLinkClientModal()" style="background: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 0.85em;">
                                 <span class="ic ic-edit"></span> Vincular Cliente
                             </button>
                             <button onclick="deleteStudy()" style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 0.85em;">
@@ -2198,7 +2198,7 @@
 
             if (!seedsList) return;
 
-            // Ordenar alfabeticamente
+            // Ordenar alfabeticamente mas manter referência ao índice original
             const sortedSeeds = [...currentSeeds].sort((a, b) => a.localeCompare(b));
 
             seedsCount.textContent = `(${currentSeeds.length})`;
@@ -2208,14 +2208,35 @@
             } else {
                 seedsList.innerHTML = sortedSeeds.map(tag => {
                     const safeTag = escapeHTML(tag);
-                    return `<div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--aic-navy); border-radius: 6px; border: 1px solid var(--aic-gray);">
+                    return `<div class="seed-item" data-seed="${safeTag}" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--aic-navy); border-radius: 6px; border: 1px solid var(--aic-gray);">
                         <span style="color: #10b981; font-size: 0.85em;">#${safeTag}</span>
                         <div style="display: flex; gap: 8px;">
-                            <span style="cursor: pointer; color: #3b82f6; font-size: 0.9em;" onclick="editSeed('${safeTag}')" title="Editar">Editar</span>
-                            <span style="cursor: pointer; color: #ef4444; font-size: 0.9em;" onclick="removeSeed('${safeTag}')" title="Excluir">X</span>
+                            <span class="seed-edit-btn" style="cursor: pointer; color: #3b82f6; font-size: 0.9em;" title="Editar">Editar</span>
+                            <span class="seed-remove-btn" style="cursor: pointer; color: #ef4444; font-size: 0.9em;" title="Excluir">X</span>
                         </div>
                     </div>`;
                 }).join('');
+
+                // Event delegation - adicionar listeners após renderizar
+                seedsList.querySelectorAll('.seed-edit-btn').forEach(btn => {
+                    btn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const seedItem = this.closest('.seed-item');
+                        const tag = seedItem.dataset.seed;
+                        console.log('[SEED] Edit clicked:', tag);
+                        editSeed(tag);
+                    });
+                });
+
+                seedsList.querySelectorAll('.seed-remove-btn').forEach(btn => {
+                    btn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const seedItem = this.closest('.seed-item');
+                        const tag = seedItem.dataset.seed;
+                        console.log('[SEED] Remove clicked:', tag);
+                        removeSeed(tag);
+                    });
+                });
             }
 
             // Atualizar input hidden para compatibilidade
@@ -2267,7 +2288,6 @@
                 currentSeeds.splice(index, 1);
                 renderSeeds();
                 persistSeeds();
-                console.log('X Seed removida:', tag, '| Restantes:', currentSeeds.length);
             }
         }
 
@@ -3098,6 +3118,12 @@
                     renderPersonasContent();
                     renderDmsContent();
                     renderCopiesContent();
+
+                    // CORREÇÃO UI: Scroll para mostrar conteúdo gerado
+                    const subclustersContainer = document.getElementById('subclustersContentContainer');
+                    if (subclustersContainer) {
+                        subclustersContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
 
                     const copyMsg = result.data.campaign_copy ? '\nCopy única da campanha: GERADA' : '';
                     alert(`Conteúdo gerado para ${numClusters} clusters!${copyMsg}\nTokens usados: ${result.data.total_tokens}`);
@@ -4709,7 +4735,7 @@
                         checkClientRegistration(clientEmail);
                     } else {
                         // Sem email = estudo sem cliente
-                        showClientNotRegisteredAlert(true);
+                        showClientNotRegisteredAlert(true, 'no_email');
                     }
 
                     // Se já tem resultado de análise, mostrar
@@ -4844,30 +4870,66 @@
             indicator.style.display = 'block';
         }
 
+        // Variável para armazenar email vinculado atual
+        let currentLinkedEmail = null;
+
         // Mostrar/ocultar alerta de cliente não cadastrado
-        function showClientNotRegisteredAlert(show) {
-            const alert = document.getElementById('clientNotRegisteredAlert');
-            if (alert) {
-                alert.style.display = show ? 'block' : 'none';
+        // Estados: 'no_email', 'email_not_registered', 'registered'
+        function showClientNotRegisteredAlert(show, state = 'no_email', email = null) {
+            const alertDiv = document.getElementById('clientNotRegisteredAlert');
+            const messageDiv = document.getElementById('clientAlertMessage');
+            const linkBtn = document.getElementById('linkClientBtn');
+
+            if (!alertDiv) return;
+
+            if (!show || state === 'registered') {
+                alertDiv.style.display = 'none';
+                return;
+            }
+
+            alertDiv.style.display = 'block';
+
+            if (state === 'email_not_registered' && email) {
+                // Email vinculado mas usuário não cadastrado
+                currentLinkedEmail = email;
+                messageDiv.innerHTML = `<span class="ic ic-mail"></span> <strong>Email vinculado:</strong> ${email} <span style="opacity: 0.7;">(aguardando cadastro)</span>`;
+                linkBtn.innerHTML = '<span class="ic ic-edit"></span> Alterar';
+                alertDiv.style.background = 'rgba(59, 130, 246, 0.15)';
+                alertDiv.style.borderColor = 'rgba(59, 130, 246, 0.5)';
+                alertDiv.style.color = '#60a5fa';
+            } else {
+                // Sem email vinculado
+                currentLinkedEmail = null;
+                messageDiv.innerHTML = '<span class="ic ic-warn"></span> <strong>Cliente nao cadastrado.</strong> Este estudo so e visivel para admins.';
+                linkBtn.innerHTML = '<span class="ic ic-edit"></span> Vincular Cliente';
+                alertDiv.style.background = 'rgba(245, 158, 11, 0.15)';
+                alertDiv.style.borderColor = 'rgba(245, 158, 11, 0.5)';
+                alertDiv.style.color = '#fbbf24';
             }
         }
 
         // Verificar se cliente tem usuário cadastrado no sistema
         async function checkClientRegistration(clientEmail) {
             if (!clientEmail) {
-                showClientNotRegisteredAlert(true);
+                showClientNotRegisteredAlert(true, 'no_email');
                 return;
             }
             try {
                 // Nota: check-user-exists está em /api, não em /api/hashtag-intelligence
                 const response = await fetch(`/api/check-user-exists?email=${encodeURIComponent(clientEmail)}`);
                 const result = await response.json();
-                // Se usuário não existe, mostrar alerta
-                showClientNotRegisteredAlert(!result.exists);
+
+                if (result.exists) {
+                    // Usuário cadastrado - esconder alerta
+                    showClientNotRegisteredAlert(false, 'registered');
+                } else {
+                    // Email vinculado mas não cadastrado
+                    showClientNotRegisteredAlert(true, 'email_not_registered', clientEmail);
+                }
             } catch (error) {
                 console.error('Erro ao verificar cliente:', error);
-                // Em caso de erro, assumir que não está cadastrado
-                showClientNotRegisteredAlert(true);
+                // Em caso de erro, mostrar como email vinculado
+                showClientNotRegisteredAlert(true, 'email_not_registered', clientEmail);
             }
         }
 
@@ -5237,6 +5299,10 @@
                 const result = await response.json();
 
                 if (result.success) {
+                    // IMPORTANTE: Atualizar currentCampaignId para permitir clustering
+                    currentCampaignId = result.data.campaign_id;
+                    console.log('[SAVE] currentCampaignId atualizado:', currentCampaignId);
+
                     saveStatus.innerHTML = `
                         <div style="background: rgba(14, 204, 151, 0.15); border: 1px solid #10b981; padding: 15px; border-radius: 8px; color: var(--aic-green);">
                             <span class="ic ic-ok"></span> <strong>${result.message}</strong><br>
@@ -5465,6 +5531,11 @@
                     statusBadge.className = 'clustering-status done';
                     statusBadge.innerHTML = 'Clustering concluido';
                     btn.innerHTML = 'Re-executar Clustering';
+
+                    // CORREÇÃO UI: Garantir que seções estejam visíveis e scroll para resultados
+                    document.getElementById('clusteringSection').style.display = 'block';
+                    document.getElementById('clusteringResults').style.display = 'block';
+                    document.getElementById('clusteringResults').scrollIntoView({ behavior: 'smooth', block: 'start' });
                 } else {
                     throw new Error(result.message || result.data?.error || 'Erro desconhecido');
                 }
