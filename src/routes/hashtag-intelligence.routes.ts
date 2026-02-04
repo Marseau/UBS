@@ -1520,6 +1520,7 @@ router.post('/save-analysis', async (req, res) => {
         .insert({
           project_id: projectId,
           campaign_name,
+          client_email: client_email || null,  // Email para vinculo com usuario
           nicho_principal: nicho,
           nicho_secundario: nicho_secundario || null,
           keywords,
@@ -1687,19 +1688,61 @@ router.get('/clients', async (_req, res) => {
   try {
     console.log('\n👤 [API] Listando clientes...');
 
-    const { data, error } = await supabase
+    // 1. Buscar clientes de projetos existentes (por nome)
+    const { data: projectClients, error: projectError } = await supabase
       .from('cluster_projects')
-      .select('client_name')
+      .select('client_name, client_email')
       .order('client_name', { ascending: true });
 
-    if (error) throw error;
+    if (projectError) throw projectError;
 
-    // Remover duplicatas
-    const uniqueClients = [...new Set((data || []).map(d => d.client_name))].filter(Boolean);
+    // 2. Buscar usuários cadastrados no sistema (para marcar quem tem conta)
+    const { data: registeredUsers, error: userError } = await supabase
+      .from('users')
+      .select('email')
+      .order('email', { ascending: true });
+
+    if (userError) throw userError;
+
+    const registeredEmails = new Set((registeredUsers || []).map(u => u.email?.toLowerCase()));
+
+    // 3. Criar mapa de clientes únicos por NOME (chave principal)
+    const clientMap = new Map<string, { name: string; email: string; registered: boolean }>();
+
+    (projectClients || []).forEach(p => {
+      if (p.client_name) {
+        const key = p.client_name.toLowerCase();
+        if (!clientMap.has(key)) {
+          const email = p.client_email || '';
+          const isRegistered = email ? registeredEmails.has(email.toLowerCase()) : false;
+          clientMap.set(key, {
+            name: p.client_name,
+            email: email,
+            registered: isRegistered
+          });
+        } else if (p.client_email && !clientMap.get(key)!.email) {
+          // Atualizar email se não tinha
+          const existing = clientMap.get(key)!;
+          existing.email = p.client_email;
+          existing.registered = registeredEmails.has(p.client_email.toLowerCase());
+        }
+      }
+    });
+
+    // 4. Converter para array e ordenar (cadastrados primeiro)
+    const clients = Array.from(clientMap.values())
+      .sort((a, b) => {
+        if (a.registered !== b.registered) return a.registered ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+
+    // 5. Formato legado (lista de nomes) + novo formato com detalhes
+    const legacyData = clients.map(c => c.name);
 
     return res.json({
       success: true,
-      data: uniqueClients
+      data: legacyData,  // Formato legado: lista de nomes
+      clients: clients   // Novo formato: {name, email, registered}
     });
   } catch (error: any) {
     console.error('❌ Erro em /clients:', error);

@@ -1864,11 +1864,14 @@ router.get('/campaigns/:campaignId/landing-page/preview', optionalAuthAIC, async
 /**
  * GET /api/aic/my-campaigns
  * Lista campanhas do usuario logado (ou todas para admin)
- * Filtrado por user_id para usuarios normais
+ * Filtrado por client_email para usuarios normais (vinculo natural cliente-campanha)
  */
 router.get('/aic/my-campaigns', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    // Construir query base
+    // Obter email do usuario logado
+    const userEmail = req.user?.email;
+
+    // Construir query base com LEFT JOIN para pegar client_email do projeto
     let query = supabase
       .from('cluster_campaigns')
       .select(`
@@ -1882,16 +1885,12 @@ router.get('/aic/my-campaigns', optionalAuthAIC, async (req: AuthenticatedReques
         outreach_enabled,
         created_at,
         updated_at,
-        user_id
+        client_email,
+        cluster_projects(client_email, client_name)
       `)
       .order('created_at', { ascending: false });
 
-    // Filtrar por user_id se nao for admin
-    if (req.userId && !req.isAdmin) {
-      query = query.eq('user_id', req.userId);
-    }
-
-    const { data: campaigns, error } = await query;
+    const { data: allCampaigns, error } = await query;
 
     if (error) {
       console.error('[My Campaigns] Error fetching campaigns:', error);
@@ -1899,18 +1898,34 @@ router.get('/aic/my-campaigns', optionalAuthAIC, async (req: AuthenticatedReques
       return;
     }
 
-    // Enriquecer com métricas e client_name
+    // Filtrar por client_email se nao for admin
+    // Cliente ve campanhas onde seu email esta em cluster_campaigns.client_email OU cluster_projects.client_email
+    let campaigns = allCampaigns || [];
+    if (userEmail && !req.isAdmin) {
+      const emailLower = userEmail.toLowerCase();
+      campaigns = campaigns.filter((c: any) => {
+        const campaignEmail = c.client_email?.toLowerCase();
+        const projectEmail = c.cluster_projects?.client_email?.toLowerCase();
+        return campaignEmail === emailLower || projectEmail === emailLower;
+      });
+    }
+
+    // Enriquecer com métricas
     const enrichedCampaigns = await Promise.all(
-      (campaigns || []).map(async (campaign) => {
-        // Buscar client_name do cluster_projects via project_id
-        let clientName = null;
-        if (campaign.project_id) {
-          const { data: project } = await supabase
-            .from('cluster_projects')
-            .select('client_name')
-            .eq('id', campaign.project_id)
+      (campaigns || []).map(async (campaign: any) => {
+        // client_name já vem do JOIN com cluster_projects
+        const clientName = campaign.cluster_projects?.client_name || null;
+
+        // Verificar se cliente tem usuário cadastrado (para notice no admin)
+        const effectiveClientEmail = campaign.client_email || campaign.cluster_projects?.client_email;
+        let clientHasUser = false;
+        if (effectiveClientEmail) {
+          const { data: userCheck } = await supabase
+            .from('users')
+            .select('id')
+            .eq('email', effectiveClientEmail)
             .single();
-          clientName = project?.client_name || null;
+          clientHasUser = !!userCheck;
         }
 
         // Count leads from campaign_leads (tabela correta AIC)
@@ -1964,6 +1979,8 @@ router.get('/aic/my-campaigns', optionalAuthAIC, async (req: AuthenticatedReques
           id: campaign.id,
           campaign_name: campaign.campaign_name,
           client_name: clientName,
+          client_email: effectiveClientEmail,
+          client_has_user: clientHasUser,
           project_id: campaign.project_id,
           status: normalizeStatus((campaign as any).status, campaign.pipeline_status),
           onboarding_status: campaign.onboarding_status || 'pending',
@@ -2072,6 +2089,199 @@ router.get('/campaign/:identifier', optionalAuthAIC, async (req: AuthenticatedRe
     });
   } catch (error: any) {
     console.error('[Campaign Lookup] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/check-user-exists
+ * Verifica se existe um usuario cadastrado com determinado email
+ * Usado para verificar se cliente de uma campanha tem acesso ao sistema
+ */
+router.get('/check-user-exists', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.query;
+
+    if (!email || typeof email !== 'string') {
+      res.status(400).json({ error: 'Email is required' });
+      return;
+    }
+
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .single();
+
+    res.json({
+      success: true,
+      exists: !!user && !error,
+      email: email
+    });
+  } catch (error: any) {
+    console.error('[Check User Exists] Error:', error);
+    res.status(500).json({ error: error.message, exists: false });
+  }
+});
+
+/**
+ * GET /api/users/registered
+ * Lista usuarios cadastrados no sistema (para vincular a campanhas)
+ */
+router.get('/users/registered', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('id, email, name')
+      .order('name', { ascending: true });
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    res.json({
+      success: true,
+      users: users || []
+    });
+  } catch (error: any) {
+    console.error('[Users Registered] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/campaigns/:campaignId
+ * Exclui uma campanha/estudo e todos os dados associados
+ * Apenas campanhas em status draft podem ser excluidas
+ */
+router.delete('/campaigns/:campaignId', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+
+    if (!campaignId) {
+      res.status(400).json({ error: 'Campaign ID is required' });
+      return;
+    }
+
+    // Verificar se campanha existe e está em draft
+    const { data: campaign, error: fetchError } = await supabase
+      .from('cluster_campaigns')
+      .select('id, campaign_name, status, pipeline_status')
+      .eq('id', campaignId)
+      .single();
+
+    if (fetchError || !campaign) {
+      res.status(404).json({ error: 'Campaign not found' });
+      return;
+    }
+
+    // Verificar se pode ser excluida (draft ou sem status)
+    const status = campaign.status || campaign.pipeline_status || 'draft';
+    if (status !== 'draft' && status !== 'analyzing' && status !== 'approved') {
+      res.status(400).json({
+        error: 'Cannot delete campaign',
+        message: `Campanhas em status "${status}" não podem ser excluídas. Apenas estudos (draft) podem ser removidos.`
+      });
+      return;
+    }
+
+    console.log(`[Delete Campaign] Deleting campaign ${campaignId} (${campaign.campaign_name})`);
+
+    // Excluir em cascata (ordem importa por foreign keys)
+    // 1. campaign_leads
+    await supabase.from('campaign_leads').delete().eq('campaign_id', campaignId);
+
+    // 2. campaign_subclusters
+    await supabase.from('campaign_subclusters').delete().eq('campaign_id', campaignId);
+
+    // 3. campaign_documents
+    await supabase.from('campaign_documents').delete().eq('campaign_id', campaignId);
+
+    // 4. aic_conversations
+    await supabase.from('aic_conversations').delete().eq('campaign_id', campaignId);
+
+    // 5. aic_message_queue
+    await supabase.from('aic_message_queue').delete().eq('campaign_id', campaignId);
+
+    // 6. Finalmente, a campanha
+    const { error: deleteError } = await supabase
+      .from('cluster_campaigns')
+      .delete()
+      .eq('id', campaignId);
+
+    if (deleteError) {
+      console.error('[Delete Campaign] Error deleting campaign:', deleteError);
+      res.status(500).json({ error: deleteError.message });
+      return;
+    }
+
+    console.log(`[Delete Campaign] Successfully deleted campaign ${campaignId}`);
+
+    res.json({
+      success: true,
+      message: `Campanha "${campaign.campaign_name}" excluída com sucesso`
+    });
+  } catch (error: any) {
+    console.error('[Delete Campaign] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/campaigns/:campaignId/link-client
+ * Vincula um cliente (por email) a uma campanha
+ * Atualiza client_email na campanha e no projeto
+ */
+router.post('/campaigns/:campaignId/link-client', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+    const { client_email } = req.body;
+
+    if (!campaignId || !client_email) {
+      res.status(400).json({ error: 'Campaign ID and client_email are required' });
+      return;
+    }
+
+    // Buscar campanha para obter project_id
+    const { data: campaign, error: fetchError } = await supabase
+      .from('cluster_campaigns')
+      .select('id, project_id, campaign_name')
+      .eq('id', campaignId)
+      .single();
+
+    if (fetchError || !campaign) {
+      res.status(404).json({ error: 'Campaign not found' });
+      return;
+    }
+
+    console.log(`[Link Client] Linking ${client_email} to campaign ${campaignId}`);
+
+    // Atualizar client_email na campanha
+    const { error: updateCampaignError } = await supabase
+      .from('cluster_campaigns')
+      .update({ client_email: client_email.toLowerCase() })
+      .eq('id', campaignId);
+
+    if (updateCampaignError) {
+      res.status(500).json({ error: updateCampaignError.message });
+      return;
+    }
+
+    // Atualizar client_email no projeto também (se existir)
+    if (campaign.project_id) {
+      await supabase
+        .from('cluster_projects')
+        .update({ client_email: client_email.toLowerCase() })
+        .eq('id', campaign.project_id);
+    }
+
+    res.json({
+      success: true,
+      message: `Cliente ${client_email} vinculado à campanha "${campaign.campaign_name}"`
+    });
+  } catch (error: any) {
+    console.error('[Link Client] Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -3540,134 +3750,6 @@ router.post('/whapi/partner/sync', async (req: Request, res: Response): Promise<
   } catch (error: any) {
     console.error('[Partner API] Error syncing channels:', error);
     res.status(500).json({ error: error.message });
-  }
-});
-
-// ============================================================================
-// DELETE CAMPAIGN - Exclusão completa de campanha
-// ============================================================================
-
-/**
- * DELETE /api/campaigns/:campaignId
- * Exclui completamente uma campanha e todos os dados relacionados
- * CUIDADO: Esta ação é irreversível!
- */
-router.delete('/campaigns/:campaignId', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { campaignId } = req.params;
-
-    console.log(`\n🗑️ [DELETE CAMPAIGN] Iniciando exclusão da campanha ${campaignId}`);
-
-    // Verificar se campanha existe
-    const { data: campaign, error: fetchError } = await supabase
-      .from('cluster_campaigns')
-      .select('id, campaign_name')
-      .eq('id', campaignId)
-      .single();
-
-    if (fetchError || !campaign) {
-      res.status(404).json({
-        success: false,
-        message: 'Campanha não encontrada'
-      });
-      return;
-    }
-
-    console.log(`📋 Campanha encontrada: ${campaign.campaign_name}`);
-
-    // Deletar em ordem para respeitar foreign keys
-    // 1. campaign_documents (documentos embedados)
-    const { error: docsError } = await supabase
-      .from('campaign_documents')
-      .delete()
-      .eq('campaign_id', campaignId);
-    if (docsError) console.warn('⚠️ Erro ao deletar documents:', docsError.message);
-    else console.log('✓ campaign_documents deletados');
-
-    // 2. campaign_briefing
-    const { error: briefingError } = await supabase
-      .from('campaign_briefing')
-      .delete()
-      .eq('campaign_id', campaignId);
-    if (briefingError) console.warn('⚠️ Erro ao deletar briefing:', briefingError.message);
-    else console.log('✓ campaign_briefing deletado');
-
-    // 3. campaign_leads (leads alocados na campanha)
-    const { error: leadsError } = await supabase
-      .from('campaign_leads')
-      .delete()
-      .eq('campaign_id', campaignId);
-    if (leadsError) console.warn('⚠️ Erro ao deletar campaign_leads:', leadsError.message);
-    else console.log('✓ campaign_leads deletados');
-
-    // 4. campaign_subclusters
-    const { error: subclustersError } = await supabase
-      .from('campaign_subclusters')
-      .delete()
-      .eq('campaign_id', campaignId);
-    if (subclustersError) console.warn('⚠️ Erro ao deletar subclusters:', subclustersError.message);
-    else console.log('✓ campaign_subclusters deletados');
-
-    // 5. aic_conversations (conversas da campanha)
-    const { error: convsError } = await supabase
-      .from('aic_conversations')
-      .delete()
-      .eq('campaign_id', campaignId);
-    if (convsError) console.warn('⚠️ Erro ao deletar conversations:', convsError.message);
-    else console.log('✓ aic_conversations deletadas');
-
-    // 6. aic_message_queue (mensagens na fila)
-    const { error: queueError } = await supabase
-      .from('aic_message_queue')
-      .delete()
-      .eq('campaign_id', campaignId);
-    if (queueError) console.warn('⚠️ Erro ao deletar message_queue:', queueError.message);
-    else console.log('✓ aic_message_queue deletada');
-
-    // 7. aic_client_journeys (jornadas do cliente)
-    const { error: journeysError } = await supabase
-      .from('aic_client_journeys')
-      .delete()
-      .eq('campaign_id', campaignId);
-    if (journeysError) console.warn('⚠️ Erro ao deletar journeys:', journeysError.message);
-    else console.log('✓ aic_client_journeys deletadas');
-
-    // 8. instagram_accounts (contas IG vinculadas)
-    const { error: igError } = await supabase
-      .from('instagram_accounts')
-      .delete()
-      .eq('campaign_id', campaignId);
-    if (igError) console.warn('⚠️ Erro ao deletar instagram_accounts:', igError.message);
-    else console.log('✓ instagram_accounts deletadas');
-
-    // 9. Finalmente, deletar a campanha principal
-    const { error: campaignError } = await supabase
-      .from('cluster_campaigns')
-      .delete()
-      .eq('id', campaignId);
-
-    if (campaignError) {
-      console.error('❌ Erro ao deletar campanha:', campaignError);
-      res.status(500).json({
-        success: false,
-        message: 'Erro ao excluir campanha: ' + campaignError.message
-      });
-      return;
-    }
-
-    console.log(`✅ Campanha "${campaign.campaign_name}" excluída com sucesso!\n`);
-
-    res.json({
-      success: true,
-      message: `Campanha "${campaign.campaign_name}" excluída com sucesso`
-    });
-
-  } catch (error: any) {
-    console.error('❌ [DELETE CAMPAIGN] Error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
   }
 });
 

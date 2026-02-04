@@ -1182,6 +1182,13 @@
                             placeholder="Nome do novo cliente..."
                             style="display: none; margin-top: 8px;"
                         >
+                        <input
+                            type="email"
+                            id="clientEmailInput"
+                            class="input-field"
+                            placeholder="Email do cliente (opcional)..."
+                            style="display: none; margin-top: 8px;"
+                        >
                     </div>
 
                     <div class="input-group">
@@ -1225,6 +1232,44 @@
                 <div id="editModeIndicator" style="display: none; background: rgba(14, 204, 151, 0.1); border: 1px solid var(--aic-green); padding: 12px; border-radius: 8px; margin-bottom: 20px; color: var(--aic-green);">
                     <strong>Modo Edicao:</strong> <span id="editingCampaignName"></span>
                     <button onclick="clearSelection()" style="float: right; background: var(--aic-green); color: var(--aic-navy); border: none; padding: 5px 15px; border-radius: 5px; cursor: pointer; font-weight: 600;">Limpar Selecao</button>
+                </div>
+
+                <!-- Alerta de cliente não cadastrado + ações -->
+                <div id="clientNotRegisteredAlert" style="display: none; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.5); padding: 12px; border-radius: 8px; margin-bottom: 20px; color: #fbbf24;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <span class="ic ic-warn"></span> <strong>Cliente nao cadastrado.</strong> Este estudo so e visivel para admins.
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button onclick="showLinkClientModal()" style="background: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 0.85em;">
+                                <span class="ic ic-edit"></span> Vincular Cliente
+                            </button>
+                            <button onclick="deleteStudy()" style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 0.85em;">
+                                <span class="ic ic-x"></span> Excluir Estudo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal para vincular cliente -->
+                <div id="linkClientModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+                    <div style="background: var(--aic-navy-light); border: 1px solid var(--aic-border); border-radius: 12px; padding: 25px; max-width: 450px; width: 90%;">
+                        <h3 style="color: var(--aic-green); margin-bottom: 20px;">Vincular Cliente ao Estudo</h3>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; color: var(--aic-gray);">Selecione um cliente cadastrado:</label>
+                            <select id="linkClientSelect" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--aic-border); background: var(--aic-navy); color: white;">
+                                <option value="">-- Selecione --</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 5px; color: var(--aic-gray);">Ou digite o email do cliente:</label>
+                            <input type="email" id="linkClientEmail" placeholder="email@cliente.com" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--aic-border); background: var(--aic-navy); color: white;">
+                        </div>
+                        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                            <button onclick="closeLinkClientModal()" style="background: #6b7280; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">Cancelar</button>
+                            <button onclick="linkClient()" style="background: var(--aic-green); color: var(--aic-navy); border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600;">Vincular</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Status da Campanha (Pipeline) -->
@@ -3401,9 +3446,7 @@
             html += `
                     </div>
                     <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #10b981;">
-                        <button onclick="startOutreach()" style="background: #7c3aed; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                             Iniciar Outreach
-                        </button>
+                        <span style="color: #64748b; font-size: 0.9em;"><span class="ic ic-warn"></span> Outreach ativado via portal do cliente</span>
                     </div>
                 </div>
             `;
@@ -3858,26 +3901,10 @@
             // Mostrar/ocultar alerta de bloqueio
             lockedAlert.style.display = statusData.editable ? 'none' : 'block';
 
-            // Gerar botões de ação baseado no status
-            let actionsHtml = '';
-            if (statusData.status === 'draft' && statusData.has_clustering && statusData.has_leads) {
-                actionsHtml = `<button onclick="changeCampaignStatus('ready')" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600;"><span class="ic ic-warn"></span> Finalizar Preparação</button>`;
-            } else if (statusData.status === 'ready' || statusData.status === 'ready_for_outreach') {
-                actionsHtml = `
-                    <button onclick="changeCampaignStatus('draft')" style="background: #6b7280; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-right: 8px;">Voltar p/ Edicao</button>
-                    <button onclick="changeCampaignStatus('active')" style="background: #7c3aed; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600;">Iniciar Outreach</button>
-                `;
-            } else if (statusData.status === 'active') {
-                actionsHtml = `
-                    <button onclick="changeCampaignStatus('paused')" style="background: #f59e0b; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-right: 8px;">Pausar</button>
-                    <button onclick="changeCampaignStatus('completed')" style="background: #6b7280; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;">Finalizar</button>
-                `;
-            } else if (statusData.status === 'paused') {
-                actionsHtml = `
-                    <button onclick="changeCampaignStatus('active')" style="background: #10b981; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-right: 8px;">Retomar</button>
-                    <button onclick="changeCampaignStatus('completed')" style="background: #6b7280; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;">Finalizar</button>
-                `;
-            }
+            // Botões de ação REMOVIDOS - Esta página é apenas para estudos/testes
+            // Ações de produção (Finalizar Preparação, Iniciar Outreach, etc.)
+            // devem ser feitas via portal do cliente após jornada completa
+            let actionsHtml = '<span style="color: #64748b; font-size: 0.85em;">Ativação via portal do cliente</span>';
             actions.innerHTML = actionsHtml;
         }
 
@@ -4386,13 +4413,34 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    clientsData = result.data || [];
+                    // Usar novo formato com detalhes se disponível
+                    const clients = result.clients || [];
+                    // Formato legado para compatibilidade (lista de nomes)
+                    clientsData = result.data || clients.map(c => c.name);
+
                     const clientSelect = document.getElementById('clientSelect');
-                    clientSelect.innerHTML = `
-                        <option value="">-- Selecione ou crie novo --</option>
-                        <option value="__NEW__">+ Novo Cliente</option>
-                        ${clientsData.map(client => `<option value="${client}">${client}</option>`).join('')}
-                    `;
+
+                    if (clients.length > 0) {
+                        // Novo formato: mostrar nome + email se disponível
+                        clientSelect.innerHTML = `
+                            <option value="">-- Selecione ou crie novo --</option>
+                            <option value="__NEW__">+ Novo Cliente</option>
+                            ${clients.map(client => {
+                                const value = client.name;
+                                const emailPart = client.email ? ` (${client.email})` : '';
+                                const badge = client.registered ? ' ✓' : '';
+                                const label = client.name + emailPart + badge;
+                                return `<option value="${value}" data-email="${client.email || ''}" data-registered="${client.registered}">${label}</option>`;
+                            }).join('')}
+                        `;
+                    } else {
+                        // Fallback para formato legado
+                        clientSelect.innerHTML = `
+                            <option value="">-- Selecione ou crie novo --</option>
+                            <option value="__NEW__">+ Novo Cliente</option>
+                            ${clientsData.map(client => `<option value="${client}">${client}</option>`).join('')}
+                        `;
+                    }
                 }
             } catch (error) {
                 console.error('Erro ao carregar clientes:', error);
@@ -4422,6 +4470,7 @@
         async function onClientChange() {
             const clientSelect = document.getElementById('clientSelect');
             const clientNameInput = document.getElementById('clientNameInput');
+            const clientEmailInput = document.getElementById('clientEmailInput');
             const projectSelect = document.getElementById('projectSelect');
             const projectNameInput = document.getElementById('projectNameInput');
             const campaignSelect = document.getElementById('campaignSelect');
@@ -4444,6 +4493,7 @@
 
             if (selectedClient === '__NEW__') {
                 clientNameInput.style.display = 'block';
+                clientEmailInput.style.display = 'block';
                 clientNameInput.focus();
                 projectSelect.disabled = false;
                 projectSelect.innerHTML = `
@@ -4453,10 +4503,14 @@
             } else if (selectedClient) {
                 clientNameInput.style.display = 'none';
                 clientNameInput.value = '';
+                clientEmailInput.style.display = 'none';
+                clientEmailInput.value = '';
                 await loadProjects(selectedClient);
             } else {
                 clientNameInput.style.display = 'none';
                 clientNameInput.value = '';
+                clientEmailInput.style.display = 'none';
+                clientEmailInput.value = '';
             }
         }
 
@@ -4647,6 +4701,17 @@
 
                     showEditMode(campaign.campaign_name);
 
+                    // Verificar se cliente tem usuário cadastrado
+                    // Se não tem, mostrar alerta de que é apenas estudo (visível só para admins)
+                    const clientEmail = campaign.client_email || result.data.project?.client_email;
+                    if (clientEmail) {
+                        // Verificar se existe usuário com esse email
+                        checkClientRegistration(clientEmail);
+                    } else {
+                        // Sem email = estudo sem cliente
+                        showClientNotRegisteredAlert(true);
+                    }
+
                     // Se já tem resultado de análise, mostrar
                     if (campaign.analysis_result) {
                         // Verificar se é formato antigo ou novo
@@ -4779,11 +4844,165 @@
             indicator.style.display = 'block';
         }
 
+        // Mostrar/ocultar alerta de cliente não cadastrado
+        function showClientNotRegisteredAlert(show) {
+            const alert = document.getElementById('clientNotRegisteredAlert');
+            if (alert) {
+                alert.style.display = show ? 'block' : 'none';
+            }
+        }
+
+        // Verificar se cliente tem usuário cadastrado no sistema
+        async function checkClientRegistration(clientEmail) {
+            if (!clientEmail) {
+                showClientNotRegisteredAlert(true);
+                return;
+            }
+            try {
+                // Nota: check-user-exists está em /api, não em /api/hashtag-intelligence
+                const response = await fetch(`/api/check-user-exists?email=${encodeURIComponent(clientEmail)}`);
+                const result = await response.json();
+                // Se usuário não existe, mostrar alerta
+                showClientNotRegisteredAlert(!result.exists);
+            } catch (error) {
+                console.error('Erro ao verificar cliente:', error);
+                // Em caso de erro, assumir que não está cadastrado
+                showClientNotRegisteredAlert(true);
+            }
+        }
+
         function hideEditMode() {
             document.getElementById('editModeIndicator').style.display = 'none';
+            showClientNotRegisteredAlert(false);
+            closeLinkClientModal();
             currentCampaignId = null;
             // Ocultar nichos salvos quando sair do modo de edição
             hideSavedNiches();
+        }
+
+        // ==========================================
+        // EXCLUIR ESTUDO
+        // ==========================================
+        async function deleteStudy() {
+            if (!currentCampaignId) {
+                alert('Nenhuma campanha selecionada');
+                return;
+            }
+
+            const confirmMsg = `ATENÇÃO: Esta ação irá excluir permanentemente o estudo "${loadedCampaignName}" e todos os dados associados:\n\n` +
+                `- Subclusters e personas\n` +
+                `- Leads capturados\n` +
+                `- Scripts de DM\n` +
+                `- Documentos\n\n` +
+                `Digite "EXCLUIR" para confirmar:`;
+
+            const confirmation = prompt(confirmMsg);
+            if (confirmation !== 'EXCLUIR') {
+                alert('Exclusão cancelada');
+                return;
+            }
+
+            try {
+                // Nota: DELETE está em /api/campaigns, não em /api/hashtag-intelligence
+                const response = await fetch(`/api/campaigns/${currentCampaignId}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('Estudo excluído com sucesso');
+                    clearSelection();
+                    // Recarregar lista de campanhas
+                    const projectSelect = document.getElementById('projectSelect');
+                    if (projectSelect.value && projectSelect.value !== '__NEW__') {
+                        await loadCampaigns(projectSelect.value);
+                    }
+                } else {
+                    alert(`Erro ao excluir: ${result.message || result.error}`);
+                }
+            } catch (error) {
+                console.error('Erro ao excluir estudo:', error);
+                alert(`Erro ao excluir: ${error.message}`);
+            }
+        }
+
+        // ==========================================
+        // VINCULAR CLIENTE
+        // ==========================================
+        async function showLinkClientModal() {
+            const modal = document.getElementById('linkClientModal');
+            const select = document.getElementById('linkClientSelect');
+
+            // Carregar usuários cadastrados (endpoint em /api, não /api/hashtag-intelligence)
+            try {
+                const response = await fetch(`/api/users/registered`);
+                const result = await response.json();
+
+                select.innerHTML = '<option value="">-- Selecione um cliente cadastrado --</option>';
+                if (result.success && result.users) {
+                    result.users.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.email;
+                        option.textContent = `${user.email}${user.name ? ' (' + user.name + ')' : ''}`;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Erro ao carregar usuários:', error);
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        function closeLinkClientModal() {
+            document.getElementById('linkClientModal').style.display = 'none';
+            document.getElementById('linkClientSelect').value = '';
+            document.getElementById('linkClientEmail').value = '';
+        }
+
+        async function linkClient() {
+            if (!currentCampaignId) {
+                alert('Nenhuma campanha selecionada');
+                return;
+            }
+
+            const selectEmail = document.getElementById('linkClientSelect').value;
+            const inputEmail = document.getElementById('linkClientEmail').value.trim();
+            const clientEmail = selectEmail || inputEmail;
+
+            if (!clientEmail) {
+                alert('Selecione ou digite um email de cliente');
+                return;
+            }
+
+            // Validar formato de email
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(clientEmail)) {
+                alert('Email inválido');
+                return;
+            }
+
+            try {
+                // Nota: link-client está em /api/campaigns, não em /api/hashtag-intelligence
+                const response = await fetch(`/api/campaigns/${currentCampaignId}/link-client`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ client_email: clientEmail })
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(`Cliente vinculado com sucesso: ${clientEmail}`);
+                    closeLinkClientModal();
+                    // Verificar novamente se cliente está cadastrado
+                    await checkClientRegistration(clientEmail);
+                } else {
+                    alert(`Erro ao vincular: ${result.message || result.error}`);
+                }
+            } catch (error) {
+                console.error('Erro ao vincular cliente:', error);
+                alert(`Erro ao vincular: ${error.message}`);
+            }
         }
 
         function clearSelection() {
@@ -4795,6 +5014,8 @@
 
             document.getElementById('clientNameInput').style.display = 'none';
             document.getElementById('clientNameInput').value = '';
+            document.getElementById('clientEmailInput').style.display = 'none';
+            document.getElementById('clientEmailInput').value = '';
             document.getElementById('projectNameInput').style.display = 'none';
             document.getElementById('projectNameInput').value = '';
             document.getElementById('campaignNameInput').style.display = 'none';
@@ -4833,6 +5054,18 @@
             }
             // Usar valor do select ou fallback para campanha carregada
             return select.value || loadedClientName || '';
+        }
+
+        // Obter email do cliente (do input ou data attribute do option selecionado)
+        function getClientEmail() {
+            const select = document.getElementById('clientSelect');
+            const emailInput = document.getElementById('clientEmailInput');
+            if (select.value === '__NEW__') {
+                // Novo cliente - pegar do input de email
+                return emailInput?.value?.trim() || '';
+            }
+            const selectedOption = select.options[select.selectedIndex];
+            return selectedOption?.dataset?.email || '';
         }
 
         // Obter nome do projeto (do select ou input ou campanha carregada)
@@ -4976,6 +5209,7 @@
             try {
                 const payload = {
                     client_name: clientName,
+                    client_email: getClientEmail(),  // Email do cliente para vinculo
                     project_name: projectName,
                     campaign_name: campaignName,
                     nicho: document.getElementById('nichoInput').value.trim(),
