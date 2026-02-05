@@ -12,6 +12,7 @@ import {
   waitHuman,
   typeHuman
 } from './instagram-stealth.service';
+import { resetPersistentPageState } from './instagram-context-manager.service';
 
 // 🥷 STEALTH MODE: Esconde que é Puppeteer do Instagram
 puppeteer.use(StealthPlugin());
@@ -761,6 +762,9 @@ export async function closeBrowser(options: { clearCookies?: boolean } = {}): Pr
   sessionPage = null;
   sessionInitialization = null;
   loggedUsername = null;
+
+  // 🔧 FIX: Invalidar página persistente no context manager para que callers detectem via generation
+  resetPersistentPageState();
 
   if (options.clearCookies) {
     try {

@@ -40,6 +40,18 @@ let pageCounter = 0;
 let persistentPage: Page | null = null;
 let persistentRequestId: string | null = null;
 
+// 🆕 GENERATION COUNTER - detecta quando página persistente foi invalidada externamente
+let persistentPageGeneration: number = 0;
+
+/**
+ * 🆕 Retorna a geração atual da página persistente.
+ * Callers capturam o valor na aquisição e comparam antes de usar —
+ * se mudou, a página foi invalidada externamente (ex: scrape-users fechou o browser).
+ */
+export function getPersistentPageGeneration(): number {
+  return persistentPageGeneration;
+}
+
 /**
  * Gera ID único para tracking de requisição
  */
@@ -61,6 +73,7 @@ export async function createIsolatedContext(): Promise<{
   page: Page;
   requestId: string;
   cleanup: () => Promise<void>;
+  generation: number;
 }> {
   // 🔧 FIX: Capturar referência do browser ANTES de ensureLoggedSession
   // Se o browser mudar após a chamada, sabemos que foi recriado
@@ -85,6 +98,7 @@ export async function createIsolatedContext(): Promise<{
     }
     persistentPage = null;
     persistentRequestId = null;
+    persistentPageGeneration++;
   }
 
   // 🆕 VERIFICAR SE PÁGINA PERSISTENTE EXISTE E ESTÁ VÁLIDA
@@ -111,7 +125,8 @@ export async function createIsolatedContext(): Promise<{
         cleanup: async () => {
           // 🆕 NÃO fechar a página - apenas log
           console.log(`   ℹ️  Página ${persistentRequestId} mantida aberta para próxima operação`);
-        }
+        },
+        generation: persistentPageGeneration
       };
     } catch (frameError: any) {
       console.log(`⚠️  Página existente inválida (${frameError.message}). Criando nova...`);
@@ -125,6 +140,7 @@ export async function createIsolatedContext(): Promise<{
       }
       persistentPage = null;
       persistentRequestId = null;
+      persistentPageGeneration++;
     }
   }
 
@@ -179,7 +195,8 @@ export async function createIsolatedContext(): Promise<{
   // 🆕 SALVAR COMO PÁGINA PERSISTENTE
   persistentPage = page;
   persistentRequestId = requestId;
-  console.log(`   ✅ Página ${requestId} salva como persistente (será reutilizada)`);
+  persistentPageGeneration++;
+  console.log(`   ✅ Página ${requestId} salva como persistente (generation: ${persistentPageGeneration})`);
 
   // Função de cleanup que NÃO fecha a página persistente
   const cleanup = async () => {
@@ -187,7 +204,7 @@ export async function createIsolatedContext(): Promise<{
     console.log(`   ℹ️  Página ${requestId} mantida aberta para próxima operação`);
   };
 
-  return { page, requestId, cleanup };
+  return { page, requestId, cleanup, generation: persistentPageGeneration };
 }
 
 /**
@@ -320,6 +337,7 @@ export async function forceClosePersistentPage(): Promise<void> {
     }
     persistentPage = null;
     persistentRequestId = null;
+    persistentPageGeneration++;
   }
 }
 
@@ -337,6 +355,7 @@ export function resetPersistentPageState(): void {
     }
     persistentPage = null;
     persistentRequestId = null;
+    persistentPageGeneration++;
   }
 }
 
@@ -404,6 +423,7 @@ export async function syncContextsWithBrowser(): Promise<number> {
       if (id === persistentRequestId) {
         persistentPage = null;
         persistentRequestId = null;
+        persistentPageGeneration++;
       }
     }
   }

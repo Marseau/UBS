@@ -9,7 +9,7 @@ import {
   parseInstagramCount,
   extractHashtagsFromPosts
 } from './instagram-profile.utils';
-import { createIsolatedContext } from './instagram-context-manager.service';
+import { createIsolatedContext, resetPersistentPageState } from './instagram-context-manager.service';
 import { extractWhatsAppForPersistence } from '../utils/whatsapp-extractor.util';
 import { createClient } from '@supabase/supabase-js';
 
@@ -876,12 +876,16 @@ export async function scrapeInstagramUserSearch(
       } catch (profileError: any) {
         console.log(`   ⚠️  Erro ao processar @${username}: ${profileError.message}`);
 
-        // Se for detached frame, é CRASH DO BROWSER (não detecção do Instagram) → ENCERRAR
-        // 🔧 FIX: Detached Frame = browser crash (servidor caiu, memória, etc), não Instagram
-        if (profileError.message.includes('detached Frame')) {
-          console.log(`\n🔧 DETACHED FRAME DETECTADO - CRASH DO BROWSER (não detecção)`);
+        // Se for browser morto, é CRASH (servidor caiu, memória, etc), não detecção do Instagram → ENCERRAR
+        const isBrowserDead = profileError.message.includes('detached Frame') ||
+                              profileError.message.includes('Page is closed') ||
+                              profileError.message.includes('Target closed') ||
+                              profileError.message.includes('Execution context was destroyed');
+
+        if (isBrowserDead) {
+          console.log(`\n🔧 BROWSER DEAD: ${profileError.message.substring(0, 60)}`);
           console.log(`   💾 Perfis já salvos: ${validatedProfiles.length}`);
-          console.log(`   🛑 Browser caiu - encerrando sessão e retornando perfis salvos`);
+          resetPersistentPageState();  // Invalida página global para que callers detectem via generation
           break; // Sai do loop, retorna perfis salvos
         }
 

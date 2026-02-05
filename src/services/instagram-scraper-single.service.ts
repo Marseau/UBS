@@ -11,7 +11,7 @@ import {
   extractHashtagsFromPosts,
   retryWithBackoff
 } from './instagram-profile.utils';
-import { createIsolatedContext, createDedicatedPage, forceClosePersistentPage, resetPersistentPageState } from './instagram-context-manager.service';
+import { createIsolatedContext, createDedicatedPage, forceClosePersistentPage, resetPersistentPageState, getPersistentPageGeneration } from './instagram-context-manager.service';
 import { closeBrowser as closeSessionBrowser } from './instagram-session.service';
 import { discoverHashtagVariations, HashtagVariation } from './instagram-hashtag-discovery.service';
 import { getAccountRotation } from './instagram-account-rotation.service';
@@ -1649,6 +1649,7 @@ export async function scrapeInstagramTag(
   let page = context.page;
   const requestId = context.requestId;
   let cleanup = context.cleanup;
+  let pageGeneration = context.generation;
   console.log(`🔒 Request ${requestId} iniciada para discovery + scrape-tag: "${searchTerm}"`);
 
   let variations: any[] = [];
@@ -1748,6 +1749,19 @@ export async function scrapeInstagramTag(
         try {
           retryCount++;
 
+      // 🆕 GENERATION CHECK: Detecta se página foi invalidada externamente (ex: scrape-users fechou browser)
+      if (pageGeneration !== getPersistentPageGeneration()) {
+        console.log(`\n🔄 [GENERATION MISMATCH] Página invalidada externamente (gen ${pageGeneration} → ${getPersistentPageGeneration()})`);
+        console.log(`   🔧 Refreshing contexto SEM contar como retry...`);
+        try { await cleanup(); } catch {}
+        const newContext = await createIsolatedContext();
+        page = newContext.page;
+        cleanup = newContext.cleanup;
+        pageGeneration = newContext.generation;
+        retryCount--;  // NÃO contar como falha nossa
+        console.log(`   ✅ Contexto refreshed (generation: ${pageGeneration})`);
+      }
+
       // 🆕 VERIFICAR SE BROWSER/PÁGINA PRECISA SER RECRIADO (após SESSION_INVALID)
       if (!browserInstance || page.isClosed()) {
         console.log('🔄 [SESSION RECOVERY] Recriando sessão do Instagram...');
@@ -1771,6 +1785,7 @@ export async function scrapeInstagramTag(
         // Reassignar página e cleanup
         page = newContext.page;
         cleanup = newContext.cleanup;
+        pageGeneration = newContext.generation;
 
         console.log('✅ [SESSION RECOVERY] Nova sessão criada com sucesso!');
 
@@ -1841,6 +1856,7 @@ export async function scrapeInstagramTag(
             const newContext = await createIsolatedContext();
             page = newContext.page;
             cleanup = newContext.cleanup;
+            pageGeneration = newContext.generation;
             continue; // Retry com nova conta
           }
           // Não conseguiu rotacionar - sair do loop
@@ -1864,6 +1880,7 @@ export async function scrapeInstagramTag(
             const newContext = await createIsolatedContext();
             page = newContext.page;
             cleanup = newContext.cleanup;
+            pageGeneration = newContext.generation;
             continue; // Retry com nova conta
           }
           // Não conseguiu rotacionar - sair do loop
@@ -1887,6 +1904,7 @@ export async function scrapeInstagramTag(
             const newContext = await createIsolatedContext();
             page = newContext.page;
             cleanup = newContext.cleanup;
+            pageGeneration = newContext.generation;
             continue; // Retry com nova conta
           }
           // Não conseguiu rotacionar - sair do loop
@@ -1927,6 +1945,7 @@ export async function scrapeInstagramTag(
               const newContext = await createIsolatedContext();
               page = newContext.page;
               cleanup = newContext.cleanup;
+              pageGeneration = newContext.generation;
               continue; // Retry com nova conta
             }
             // Não conseguiu rotacionar - sair do loop
@@ -1981,6 +2000,7 @@ export async function scrapeInstagramTag(
           const newContext = await createIsolatedContext();
           page = newContext.page;
           cleanup = newContext.cleanup;
+          pageGeneration = newContext.generation;
 
           // Navegar novamente para a hashtag
           console.log(`   📍 Navegando para #${hashtagToScrape}...`);
@@ -2029,6 +2049,7 @@ export async function scrapeInstagramTag(
           const newContext = await createIsolatedContext();
           page = newContext.page;
           cleanup = newContext.cleanup;
+          pageGeneration = newContext.generation;
           // Tentar novamente esta hashtag (continue vai para próximo retry)
           continue;
         } else {
@@ -4069,7 +4090,9 @@ export async function scrapeInstagramTag(
                                      hashtagError.message.includes('Target closed') ||
                                      hashtagError.message.includes('Execution context was destroyed') ||
                                      hashtagError.message.includes('BLANK_PAGE_DETECTED') ||
-                                     hashtagError.message.includes('detached Frame');
+                                     hashtagError.message.includes('detached Frame') ||
+                                     hashtagError.message.includes('Page is closed') ||
+                                     hashtagError.message.includes('Page invalidated');
 
           if (isProtocolTimeout) {
             console.log(`\n🔧 ========================================`);
@@ -4108,6 +4131,7 @@ export async function scrapeInstagramTag(
               const newContext = await createIsolatedContext();
               page = newContext.page;
               cleanup = newContext.cleanup;
+              pageGeneration = newContext.generation;
 
               // 5. Verificar se página está responsiva
               const isResponsive = await page.evaluate(() => {
