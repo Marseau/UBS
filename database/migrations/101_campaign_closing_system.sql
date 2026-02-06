@@ -36,6 +36,12 @@ COMMENT ON COLUMN cluster_campaigns.final_metrics_snapshot IS 'Snapshot JSON das
 COMMENT ON COLUMN cluster_campaigns.final_report_pdf_url IS 'URL do PDF do relatório final';
 COMMENT ON COLUMN cluster_campaigns.final_report_generated_at IS 'Data/hora da geração do relatório final';
 
+-- Campo para marcar quando outreach completou
+ALTER TABLE cluster_campaigns
+ADD COLUMN IF NOT EXISTS outreach_completed_at TIMESTAMPTZ;
+
+COMMENT ON COLUMN cluster_campaigns.outreach_completed_at IS 'Timestamp quando 100% dos leads foram contatados (DMs enviadas)';
+
 -- =====================================================
 -- 3. VIEW DE MÉTRICAS DE CAMPANHA EM TEMPO REAL
 -- =====================================================

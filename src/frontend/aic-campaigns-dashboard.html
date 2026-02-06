@@ -314,6 +314,115 @@
       background: #ef4444;
       color: white;
     }
+    .btn-action.report {
+      background: var(--aic-blue-subtle);
+      color: var(--aic-blue);
+      border-color: var(--aic-blue);
+    }
+    .btn-action.report:hover {
+      background: var(--aic-blue);
+      color: white;
+    }
+    .btn-action.close-campaign {
+      background: var(--aic-yellow-subtle);
+      color: var(--aic-yellow);
+      border-color: var(--aic-yellow);
+    }
+    .btn-action.close-campaign:hover {
+      background: var(--aic-yellow);
+      color: var(--aic-navy);
+    }
+
+    /* Progress Bar */
+    .campaign-progress {
+      margin: 12px 0;
+      padding: 12px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+    }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+    .progress-label {
+      color: var(--aic-gray);
+    }
+    .progress-value {
+      color: var(--aic-green);
+      font-weight: 600;
+    }
+    .progress-bar-container {
+      height: 8px;
+      background: var(--aic-navy);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--aic-green), var(--aic-green-dark));
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+    .progress-bar-fill.complete {
+      background: linear-gradient(90deg, var(--aic-yellow), #d97706);
+    }
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--aic-gray);
+    }
+    .progress-info .estimated {
+      color: var(--aic-green);
+    }
+
+    /* Outreach Complete Alert */
+    .outreach-complete-alert {
+      margin: 12px 0;
+      padding: 12px;
+      background: var(--aic-yellow-subtle);
+      border: 1px solid var(--aic-yellow);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .outreach-complete-alert .alert-icon {
+      font-size: 20px;
+    }
+    .outreach-complete-alert .alert-text {
+      flex: 1;
+    }
+    .outreach-complete-alert .alert-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--aic-yellow);
+    }
+    .outreach-complete-alert .alert-subtitle {
+      font-size: 11px;
+      color: var(--aic-gray);
+      margin-top: 2px;
+    }
+    .outreach-complete-alert.ready-to-close {
+      background: var(--aic-green-subtle);
+      border-color: var(--aic-green);
+    }
+    .outreach-complete-alert.ready-to-close .alert-title {
+      color: var(--aic-green);
+    }
+
+    /* Campaign Status completed */
+    .campaign-status.completed {
+      background: rgba(148, 163, 184, 0.1);
+      color: #94a3b8;
+    }
+    .campaign-status.completed .status-dot {
+      background: #94a3b8;
+    }
 
     /* Empty State */
     .empty-state {
@@ -647,6 +756,7 @@
           <button class="filter-tab" data-filter="test">Teste</button>
           <button class="filter-tab" data-filter="paused">Pausadas</button>
           <button class="filter-tab" data-filter="draft">Rascunhos</button>
+          <button class="filter-tab" data-filter="completed">Encerradas</button>
         </div>
         <div class="search-wrapper">
           <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -794,17 +904,32 @@
       }
     }
 
-    // Load campaigns
+    // Load campaigns with progress data
     async function loadCampaigns() {
       try {
-        const response = await fetch('/api/aic/my-campaigns');
+        // Fetch campaigns and progress in parallel
+        const [campaignsRes, progressRes] = await Promise.all([
+          fetch('/api/aic/my-campaigns'),
+          fetch('/api/campaigns/all-progress')
+        ]);
 
-        if (!response.ok) {
+        if (!campaignsRes.ok) {
           throw new Error('Failed to load campaigns');
         }
 
-        const data = await response.json();
-        campaigns = data.campaigns || [];
+        const campaignsData = await campaignsRes.json();
+        const progressData = progressRes.ok ? await progressRes.json() : { campaigns: [] };
+
+        // Merge progress data into campaigns
+        const progressMap = new Map();
+        (progressData.campaigns || []).forEach(p => {
+          progressMap.set(p.campaign_id, p);
+        });
+
+        campaigns = (campaignsData.campaigns || []).map(campaign => ({
+          ...campaign,
+          progress: progressMap.get(campaign.id) || {}
+        }));
 
         renderCampaigns();
       } catch (error) {
@@ -867,11 +992,31 @@
         active: 'Ativa',
         test: 'Teste',
         paused: 'Pausada',
-        draft: 'Rascunho'
+        draft: 'Rascunho',
+        completed: 'Encerrada'
       }[statusClass] || 'Rascunho';
 
       const chartId = `chart-${campaign.id}`;
       const clientName = campaign.client_name || 'Cliente não atribuído';
+
+      // Progress data
+      const progress = campaign.progress || {};
+      const progressPct = progress.progress_pct || 0;
+      const leadsContacted = progress.leads_contacted || 0;
+      const totalLeads = progress.total_leads || campaign.leads_count || 0;
+      const estimatedDate = progress.estimated_completion_date;
+      const avgDailyRate = progress.avg_daily_rate || 0;
+      const outreachComplete = progress.outreach_complete || false;
+      const readyToClose = progress.ready_to_close || false;
+      const activeConversations = progress.active_conversations || 0;
+      const isCompleted = statusClass === 'completed';
+
+      // Format estimated date
+      const formatDate = (dateStr) => {
+        if (!dateStr) return null;
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      };
 
       return `
         <div class="campaign-card" data-campaign-id="${campaign.id}" onclick="navigateToCampaign('${campaign.id}', event)" style="cursor: pointer;">
@@ -888,6 +1033,35 @@
             </span>
           </div>
 
+          ${!isCompleted ? `
+          <!-- Progress Bar -->
+          <div class="campaign-progress">
+            <div class="progress-header">
+              <span class="progress-label">Progresso do Outreach</span>
+              <span class="progress-value">${progressPct}%</span>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar-fill ${outreachComplete ? 'complete' : ''}" style="width: ${progressPct}%"></div>
+            </div>
+            <div class="progress-info">
+              <span>${leadsContacted.toLocaleString()} / ${totalLeads.toLocaleString()} leads</span>
+              ${estimatedDate && !outreachComplete ? `<span class="estimated">Previsão: ${formatDate(estimatedDate)}</span>` : ''}
+              ${avgDailyRate > 0 && !outreachComplete ? `<span>${avgDailyRate}/dia</span>` : ''}
+            </div>
+          </div>
+          ` : ''}
+
+          ${outreachComplete && !isCompleted ? `
+          <!-- Outreach Complete Alert -->
+          <div class="outreach-complete-alert ${readyToClose ? 'ready-to-close' : ''}">
+            <span class="alert-icon">${readyToClose ? '✅' : '⚠️'}</span>
+            <div class="alert-text">
+              <div class="alert-title">${readyToClose ? 'Pronto para encerrar' : 'Outreach Finalizado'}</div>
+              <div class="alert-subtitle">${readyToClose ? 'Sem conversas ativas' : `${activeConversations} conversa(s) ativa(s)`}</div>
+            </div>
+          </div>
+          ` : ''}
+
           <!-- Mini Chart -->
           <div class="mini-chart-container">
             <canvas id="${chartId}"></canvas>
@@ -895,19 +1069,20 @@
 
           <div class="campaign-metrics">
             <div class="metric">
-              <span class="metric-value">${campaign.leads_count || 0}</span>
+              <span class="metric-value">${totalLeads.toLocaleString()}</span>
               <span class="metric-label">Leads</span>
             </div>
             <div class="metric">
-              <span class="metric-value">${campaign.docs_count || 0}</span>
-              <span class="metric-label">Docs</span>
+              <span class="metric-value">${leadsContacted.toLocaleString()}</span>
+              <span class="metric-label">Contatados</span>
             </div>
             <div class="metric">
-              <span class="metric-value">${campaign.whatsapp_rate || '0'}%</span>
-              <span class="metric-label">Taxa WhatsApp</span>
+              <span class="metric-value">${progress.leads_replied || 0}</span>
+              <span class="metric-label">Respostas</span>
             </div>
           </div>
 
+          ${!isCompleted ? `
           <!-- Status Toggle -->
           <div class="status-toggle">
             <button class="btn-toggle ${statusClass === 'active' ? 'active' : ''}"
@@ -926,20 +1101,33 @@
               Pausar
             </button>
           </div>
+          ` : ''}
 
           <div class="campaign-actions">
-            <a href="/cluster-intention-dashboard.html?campaign=${campaign.id}" class="btn-action primary">
+            ${isCompleted || outreachComplete ? `
+            <button class="btn-action report" onclick="downloadReport('${campaign.id}', event)">
+              📄 Relatório
+            </button>
+            ` : ''}
+            ${outreachComplete && !isCompleted ? `
+            <button class="btn-action close-campaign" onclick="closeCampaign('${campaign.id}', '${campaign.campaign_name.replace(/'/g, "\\'")}', event)">
+              ✓ Encerrar
+            </button>
+            ` : ''}
+            <a href="/cluster-intention-dashboard.html?campaign=${campaign.id}" class="btn-action primary" onclick="event.stopPropagation()">
               Clusters
             </a>
-            <a href="/campaign/${campaign.slug || campaign.id}/briefing" class="btn-action">
+            <a href="/campaign/${campaign.slug || campaign.id}/briefing" class="btn-action" onclick="event.stopPropagation()">
               Briefing
             </a>
-            <a href="/aic/campaign-analytics?campaign=${campaign.id}" class="btn-action">
+            <a href="/aic/campaign-analytics?campaign=${campaign.id}" class="btn-action" onclick="event.stopPropagation()">
               Dashboard
             </a>
+            ${!isCompleted ? `
             <button class="btn-action danger" onclick="deleteCampaign('${campaign.id}', '${campaign.campaign_name.replace(/'/g, "\\'")}')">
               Excluir
             </button>
+            ` : ''}
           </div>
         </div>
       `;
@@ -1166,6 +1354,84 @@
       } catch (error) {
         console.error('[Delete Campaign] Error:', error);
         alert('Erro ao excluir campanha: ' + error.message);
+      }
+    }
+
+    // ============================================================================
+    // CLOSE CAMPAIGN FUNCTION
+    // ============================================================================
+
+    async function closeCampaign(campaignId, campaignName, event) {
+      if (event) event.stopPropagation();
+
+      const confirmed = confirm(
+        `Encerrar campanha "${campaignName}"?\n\n` +
+        `Isso irá:\n` +
+        `• Mudar status para "Encerrada"\n` +
+        `• Desativar outreach\n` +
+        `• Gerar relatório final em PDF\n\n` +
+        `Continuar?`
+      );
+
+      if (!confirmed) return;
+
+      try {
+        const response = await fetch(`/api/campaigns/${campaignId}/close`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            end_reason: 'completed',
+            generate_report: true
+          })
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Erro ao encerrar campanha');
+        }
+
+        const result = await response.json();
+
+        // Update local campaign data
+        const campaign = campaigns.find(c => c.id === campaignId);
+        if (campaign) {
+          campaign.status = 'completed';
+        }
+
+        // Re-render
+        renderCampaigns();
+
+        // Show success with PDF link
+        if (result.pdf_url) {
+          const openPdf = confirm(
+            `Campanha "${campaignName}" encerrada com sucesso!\n\n` +
+            `Relatório PDF gerado. Deseja abrir agora?`
+          );
+          if (openPdf) {
+            window.open(result.pdf_url, '_blank');
+          }
+        } else {
+          alert(`Campanha "${campaignName}" encerrada com sucesso!`);
+        }
+      } catch (error) {
+        console.error('[Close Campaign] Error:', error);
+        alert('Erro ao encerrar campanha: ' + error.message);
+      }
+    }
+
+    // ============================================================================
+    // DOWNLOAD REPORT FUNCTION
+    // ============================================================================
+
+    async function downloadReport(campaignId, event) {
+      if (event) event.stopPropagation();
+
+      try {
+        // Open PDF in new tab
+        window.open(`/api/campaigns/${campaignId}/report/pdf?download=true`, '_blank');
+      } catch (error) {
+        console.error('[Download Report] Error:', error);
+        alert('Erro ao baixar relatório');
       }
     }
 

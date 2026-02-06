@@ -10,9 +10,151 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { createClient } from '@supabase/supabase-js';
 import { campaignReportService } from '../services/campaign-report.service';
 
 const router = Router();
+
+const supabase = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
+
+// ============================================================================
+// PROGRESSO DE CAMPANHA
+// ============================================================================
+
+/**
+ * GET /api/campaigns/:id/progress
+ * Retorna progresso de execução da campanha com previsão de encerramento
+ */
+router.get('/:id/progress', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from('v_campaign_progress')
+      .select('*')
+      .eq('campaign_id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        res.status(404).json({ error: 'Campanha não encontrada' });
+        return;
+      }
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      progress: {
+        campaign_id: data.campaign_id,
+        campaign_name: data.campaign_name,
+        status: data.status,
+        status_label: data.status_label,
+        // Progresso
+        total_leads: data.total_leads,
+        leads_contacted: data.leads_contacted,
+        leads_remaining: data.leads_remaining,
+        progress_pct: data.progress_pct,
+        // Previsão
+        avg_daily_rate: data.avg_daily_rate,
+        estimated_days_remaining: data.estimated_days_remaining,
+        estimated_completion_date: data.estimated_completion_date,
+        days_since_start: data.days_since_start,
+        // Status de outreach
+        outreach_complete: data.outreach_complete,
+        outreach_completed_at: data.outreach_completed_at,
+        // Conversas ativas
+        active_conversations: data.active_conversations,
+        pending_handoffs: data.pending_handoffs,
+        ready_to_close: data.ready_to_close
+      }
+    });
+  } catch (error: any) {
+    console.error('[CampaignReport] Erro ao buscar progresso:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/campaigns/pending-closure
+ * Lista campanhas com outreach completo aguardando encerramento
+ */
+router.get('/pending-closure', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { data, error } = await supabase.rpc('get_campaigns_pending_closure');
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      count: data?.length || 0,
+      campaigns: data || []
+    });
+  } catch (error: any) {
+    console.error('[CampaignReport] Erro ao buscar campanhas pendentes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/campaigns/check-outreach-complete
+ * Verifica e marca campanhas que completaram outreach (para job)
+ */
+router.post('/check-outreach-complete', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { data, error } = await supabase.rpc('check_and_mark_outreach_complete');
+
+    if (error) throw error;
+
+    const newlyMarked = data?.filter((c: any) => c.newly_marked) || [];
+
+    res.json({
+      success: true,
+      newly_marked_count: newlyMarked.length,
+      campaigns: newlyMarked
+    });
+  } catch (error: any) {
+    console.error('[CampaignReport] Erro ao verificar outreach:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/campaigns/all-progress
+ * Lista progresso de todas as campanhas ativas
+ */
+router.get('/all-progress', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { status } = req.query;
+
+    let query = supabase
+      .from('v_campaign_progress')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    // Filtrar por status se especificado
+    if (status) {
+      const statuses = (status as string).split(',');
+      query = query.in('status', statuses);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      count: data?.length || 0,
+      campaigns: data || []
+    });
+  } catch (error: any) {
+    console.error('[CampaignReport] Erro ao buscar progresso:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // ============================================================================
 // MÉTRICAS EM TEMPO REAL
