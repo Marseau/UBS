@@ -546,7 +546,7 @@ class ContractPDFService {
     </table>
 
     <div class="highlight">
-      <strong>OFERTA DE LANÇAMENTO:</strong> O valor promocional de R$ 10,00 por lead qualificado é válido exclusivamente para a primeira campanha da CONTRATANTE e para contratos firmados até 31 de março de 2026. Campanhas subsequentes serão precificadas conforme tabela vigente.
+      <strong>OFERTA DE LANÇAMENTO:</strong> O valor promocional de R$ 10,00 por lead qualificado é válido exclusivamente para a primeira campanha da CONTRATANTE e para contratos firmados até 13 de março de 2026. Campanhas subsequentes serão precificadas conforme tabela vigente.
     </div>
 
     <p><span class="clause-number">4.2.</span> Condições de Pagamento:</p>

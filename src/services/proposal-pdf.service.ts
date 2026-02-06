@@ -590,7 +590,7 @@ class ProposalPDFService {
       </div>
 
       <p style="font-size: 9pt; color: #666; margin: 10px 0 0 0;">
-        * Preco promocional valido apenas para a primeira campanha (ate 31/03/2026)
+        * Preco promocional valido apenas para a primeira campanha (ate 13/03/2026)
       </p>
 
       <p style="margin-top: 15px; font-size: 11pt; color: #0C1B33;">
