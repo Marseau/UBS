@@ -1,5 +1,5 @@
 /**
- * AIC ENGINE - Análise de Intenção do Cliente + Audience Intelligence Cluster
+ * AIC ENGINE - Análise de Intenção do Cliente + Applied Intelligence Clustering
  *
  * Sistema de análise inteligente de clusters usando IA (OpenAI GPT-4)
  * com Vector Store + Parquet para processar 1M+ hashtags de forma escalável.
@@ -186,7 +186,7 @@ export class AICEngineService {
     return `🧠 PROMPT — AIC ENGINE V2.0 (Cluster Validator com Vector Store)
 
 Contexto:
-Você é o mecanismo central do AIC (Análise de Intenção do Cliente + Audience Intelligence Cluster).
+Você é o mecanismo central do AIC (Applied Intelligence Clustering).
 Sua função é analisar a intenção do cliente e usar a ferramenta file_search para buscar hashtags relacionadas na base de dados Parquet.
 ${contextExtra}
 
@@ -291,7 +291,7 @@ Responda APENAS com JSON válido neste formato exato:
     return `🧠 PROMPT — AIC ENGINE (Cluster Validator)
 
 Contexto:
-Você é o mecanismo central do AIC (Análise de Intenção do Cliente + Audience Intelligence Cluster).
+Você é o mecanismo central do AIC (Applied Intelligence Clustering).
 Sua função é analisar a intenção do cliente, cruzar com a base de hashtags fornecida e determinar se é possível construir um cluster forte, médio ou fraco — e quais ações são necessárias.
 ${contextExtra}
 

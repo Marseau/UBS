@@ -449,7 +449,7 @@ class ProposalPDFService {
     <!-- O que e AIC -->
     <h2>O que e a AIC?</h2>
     <p>
-      A <strong>AIC (Audience Intelligence Cluster)</strong> e uma plataforma inovadora desenvolvida para transformar dados publicos em agrupamentos inteligentes e acionaveis.
+      A <strong>AIC (Applied Intelligence Clustering)</strong> e uma plataforma inovadora desenvolvida para transformar dados publicos em agrupamentos inteligentes e acionaveis.
     </p>
     <p>
       Utilizando algoritmos avancados de analise de dados e machine learning, a AIC identifica grupos de individuos com comportamentos e caracteristicas semelhantes, permitindo que empresas obtenham insights estrategicos para suas acoes de marketing e negocios.
