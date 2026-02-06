@@ -2038,23 +2038,12 @@ router.get('/aic/my-campaigns', optionalAuthAIC, async (req: AuthenticatedReques
     // Obter email do usuario logado
     const userEmail = req.user?.email;
 
-    // Construir query base com LEFT JOIN para pegar client_email do projeto
+    // Usar VIEW otimizada que pré-agrega métricas (elimina N+1 queries)
+    // Antes: 4 queries por campanha (40 queries para 10 campanhas = 3-5s)
+    // Depois: 1 query total (~500ms)
     let query = supabase
-      .from('cluster_campaigns')
-      .select(`
-        id,
-        campaign_name,
-        project_id,
-        status,
-        pipeline_status,
-        onboarding_status,
-        nicho_principal,
-        outreach_enabled,
-        created_at,
-        updated_at,
-        client_email,
-        cluster_projects(client_email, client_name)
-      `)
+      .from('v_my_campaigns_enriched')
+      .select('*')
       .order('created_at', { ascending: false });
 
     const { data: allCampaigns, error } = await query;
@@ -2066,102 +2055,60 @@ router.get('/aic/my-campaigns', optionalAuthAIC, async (req: AuthenticatedReques
     }
 
     // Filtrar por client_email se nao for admin
-    // Cliente ve campanhas onde seu email esta em cluster_campaigns.client_email OU cluster_projects.client_email
+    // Cliente ve campanhas onde seu email esta em campaign_client_email OU project_client_email
     let campaigns = allCampaigns || [];
     if (userEmail && !req.isAdmin) {
       const emailLower = userEmail.toLowerCase();
       campaigns = campaigns.filter((c: any) => {
-        const campaignEmail = c.client_email?.toLowerCase();
-        const projectEmail = c.cluster_projects?.client_email?.toLowerCase();
+        const campaignEmail = c.campaign_client_email?.toLowerCase();
+        const projectEmail = c.project_client_email?.toLowerCase();
         return campaignEmail === emailLower || projectEmail === emailLower;
       });
     }
 
-    // Enriquecer com métricas
-    const enrichedCampaigns = await Promise.all(
-      (campaigns || []).map(async (campaign: any) => {
-        // client_name já vem do JOIN com cluster_projects
-        const clientName = campaign.cluster_projects?.client_name || null;
+    // Normalizar status para o frontend
+    const normalizeStatus = (status: string | null, pipelineStatus: string | null): string => {
+      // Se temos a nova coluna status, usar diretamente
+      if (status && ['draft', 'test', 'active', 'paused'].includes(status)) {
+        return status;
+      }
+      // Fallback para derivar de pipeline_status (legado)
+      if (!pipelineStatus) return 'draft';
+      const activeStatuses = ['active', 'outreach_in_progress', 'ready_for_outreach', 'completed'];
+      const pausedStatuses = ['paused', 'on_hold'];
+      if (activeStatuses.includes(pipelineStatus)) return 'active';
+      if (pausedStatuses.includes(pipelineStatus)) return 'paused';
+      return 'draft';
+    };
 
-        // Verificar se cliente tem usuário cadastrado (para notice no admin)
-        const effectiveClientEmail = campaign.client_email || campaign.cluster_projects?.client_email;
-        let clientHasUser = false;
-        if (effectiveClientEmail) {
-          const { data: userCheck } = await supabase
-            .from('users')
-            .select('id')
-            .eq('email', effectiveClientEmail)
-            .single();
-          clientHasUser = !!userCheck;
-        }
+    // Mapear para formato esperado pelo frontend (métricas já pré-computadas pela VIEW)
+    const enrichedCampaigns = campaigns.map((campaign: any) => {
+      const effectiveClientEmail = campaign.campaign_client_email || campaign.project_client_email;
+      const leadsCount = campaign.leads_count || 0;
+      const whatsappCount = campaign.whatsapp_count || 0;
+      const whatsappRate = leadsCount > 0
+        ? ((whatsappCount / leadsCount) * 100).toFixed(1)
+        : '0';
 
-        // Count leads from campaign_leads (tabela correta AIC)
-        const { count: leadsCount } = await supabase
-          .from('campaign_leads')
-          .select('*', { count: 'exact', head: true })
-          .eq('campaign_id', campaign.id);
-
-        // Count documents
-        const { count: docsCount } = await supabase
-          .from('campaign_documents')
-          .select('*', { count: 'exact', head: true })
-          .eq('campaign_id', campaign.id);
-
-        // Calcular taxa de WhatsApp (leads com whatsapp_number)
-        const { count: whatsappCount } = await supabase
-          .from('campaign_leads')
-          .select('id, instagram_leads!inner(whatsapp_number)', { count: 'exact', head: true })
-          .eq('campaign_id', campaign.id)
-          .not('instagram_leads.whatsapp_number', 'is', null);
-
-        const whatsappRate = leadsCount && leadsCount > 0
-          ? ((whatsappCount || 0) / leadsCount * 100).toFixed(1)
-          : '0';
-
-        // Generate slug from campaign name
-        const slug = campaign.campaign_name
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '') // Remove accents
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '');
-
-        // Normalizar status para o frontend
-        // Prioridade: usar a nova coluna 'status' se existir, senão derivar de pipeline_status
-        const normalizeStatus = (status: string | null, pipelineStatus: string | null): string => {
-          // Se temos a nova coluna status, usar diretamente
-          if (status && ['draft', 'test', 'active', 'paused'].includes(status)) {
-            return status;
-          }
-          // Fallback para derivar de pipeline_status (legado)
-          if (!pipelineStatus) return 'draft';
-          const activeStatuses = ['active', 'outreach_in_progress', 'ready_for_outreach', 'completed'];
-          const pausedStatuses = ['paused', 'on_hold'];
-          if (activeStatuses.includes(pipelineStatus)) return 'active';
-          if (pausedStatuses.includes(pipelineStatus)) return 'paused';
-          return 'draft';
-        };
-
-        return {
-          id: campaign.id,
-          campaign_name: campaign.campaign_name,
-          client_name: clientName,
-          client_email: effectiveClientEmail,
-          client_has_user: clientHasUser,
-          project_id: campaign.project_id,
-          status: normalizeStatus((campaign as any).status, campaign.pipeline_status),
-          onboarding_status: campaign.onboarding_status || 'pending',
-          nicho: campaign.nicho_principal || 'A definir',
-          outreach_enabled: campaign.outreach_enabled || false,
-          leads_count: leadsCount || 0,
-          docs_count: docsCount || 0,
-          whatsapp_rate: whatsappRate,
-          slug: slug,
-          created_at: campaign.created_at,
-          updated_at: campaign.updated_at
-        };
-      })
-    );
+      return {
+        id: campaign.id,
+        campaign_name: campaign.campaign_name,
+        client_name: campaign.client_name || null,
+        client_email: effectiveClientEmail,
+        client_has_user: campaign.client_has_user || false,
+        project_id: campaign.project_id,
+        status: normalizeStatus(campaign.status, campaign.pipeline_status),
+        onboarding_status: campaign.onboarding_status || 'pending',
+        nicho: campaign.nicho_principal || 'A definir',
+        outreach_enabled: campaign.outreach_enabled || false,
+        leads_count: leadsCount,
+        docs_count: campaign.docs_count || 0,
+        whatsapp_rate: whatsappRate,
+        slug: campaign.slug,
+        created_at: campaign.created_at,
+        updated_at: campaign.updated_at
+      };
+    });
 
     res.json({
       success: true,

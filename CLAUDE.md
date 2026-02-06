@@ -157,6 +157,7 @@ test_instagram_user_id VARCHAR(50)  -- Preenchido automaticamente via trigger
 | `aic_conversations` | Conversas unificadas | `channel` ('whatsapp' ou 'instagram') |
 | `aic_message_queue` | Fila de mensagens | `channel`, `status`, `priority` |
 | `instagram_accounts` | Contas IG por campanha | `instagram_username`, `campaign_id` |
+| `v_my_campaigns_enriched` | VIEW otimizada para dashboard | Pre-agrega leads_count, whatsapp_count, docs_count |
 
 ### 4.2 Tabelas DEPRECADAS (NAO USAR)
 
@@ -259,19 +260,19 @@ SELECT * FROM instagram_leads WHERE phone IS NOT NULL; -- DEPRECADO
 | Instagram DM Outreach - 2/hora | `7VpgPOzgm1MpUnIc` | Query direta, antigo | Cold Outreach Unified v1 |
 | Outreach Inteligente | `POPWjaDgbwoCNvqX` | API diferente | Cold Outreach Unified v1 |
 
-### 5.3 Workflows UBS DEPRECADOS (DESATIVAR MANUALMENTE)
+### 5.3 Workflows UBS DEPRECADOS (DESATIVADOS)
 
-> **ACAO NECESSARIA**: Desativar estes workflows manualmente no N8N
+> **STATUS**: Todos os workflows UBS foram desativados em 2026-02-06
 
-| Workflow | ID | Status Atual |
-|----------|-----|--------------|
-| WhatsAppSalonOriginal | `2JiMustQofSujglu` | ATIVO - DESATIVAR |
-| WhatsAppSalon V1 | `GJno3Afkq0jHMwl4` | ATIVO - DESATIVAR |
-| WABA Inbound -> Booking E2E | `emxzi66gOVEkljLL` | ATIVO - DESATIVAR |
-| Human-Escalation-Management | `jMbu2yAcYDh05C5L` | ATIVO - DESATIVAR |
-| Appointment-Confirmation-Reminders | `2QnBgl6WR2nqiYQL` | ATIVO - DESATIVAR |
-| Business-Analytics-Metrics | `0R9D6dNyG8RlXfB6` | ATIVO - DESATIVAR |
-| WharsAppSalonV2 | `CKj2mYnRVWNG0sTh` | ATIVO - DESATIVAR |
+| Workflow | ID | Status |
+|----------|-----|--------|
+| WhatsAppSalonOriginal | `2JiMustQofSujglu` | ✅ DESATIVADO |
+| WhatsAppSalon V1 | `GJno3Afkq0jHMwl4` | ✅ DESATIVADO |
+| WABA Inbound -> Booking E2E | `emxzi66gOVEkljLL` | ✅ DESATIVADO |
+| Human-Escalation-Management | `jMbu2yAcYDh05C5L` | ✅ DESATIVADO |
+| Appointment-Confirmation-Reminders | `2QnBgl6WR2nqiYQL` | ✅ DESATIVADO |
+| Business-Analytics-Metrics | `0R9D6dNyG8RlXfB6` | ✅ DESATIVADO |
+| WharsAppSalonV2 | `CKj2mYnRVWNG0sTh` | ✅ DESATIVADO |
 
 ### 5.4 Arquitetura de Workflows
 
@@ -552,7 +553,7 @@ TELEGRAM_CHAT_ID=your_chat_id
 
 ### Fase 1: Limpeza (Prioridade Alta)
 - [x] Atualizar funcoes SQL para usar `whatsapp_number` (PARCIAL - workflows corrigidos)
-- [ ] Desativar workflows UBS deprecados (7 workflows - fazer manualmente no N8N)
+- [x] Desativar workflows UBS deprecados (7 workflows) ✅ 2026-02-06
 - [x] Corrigir Cold Outreach Unified v1 para usar `whatsapp_number`
 - [x] Corrigir Sub WhatsApp Inbound Handler para usar `whatsapp_number`
 - [ ] Ativar Cold Outreach Unified v1 (fazer manualmente no N8N)
@@ -563,7 +564,10 @@ TELEGRAM_CHAT_ID=your_chat_id
 - [ ] Remover workflows outbound redundantes (4 workflows)
 
 ### Fase 3: Escala (10 campanhas)
-- [ ] Dashboard multi-campanha
+- [x] Dashboard multi-campanha ✅ 2026-02-06
+  - VIEW `v_my_campaigns_enriched` elimina N+1 queries (40 → 1)
+  - Lazy loading de charts com Intersection Observer
+  - Debounce de 300ms na busca
 - [ ] Monitoramento de rate limiting
 - [ ] Alertas automaticos
 

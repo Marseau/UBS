@@ -416,21 +416,32 @@ router.get('/:id/stats', async (req: Request, res: Response) => {
       });
     }
 
-    // Buscar leads da campanha com status
-    const { data: campaignLeads } = await supabaseAdmin
+    // Buscar contagem total de leads (usar count: exact para evitar limite de 1000 rows)
+    const { count: leadsCount } = await supabaseAdmin
       .from('campaign_leads')
-      .select('status')
+      .select('*', { count: 'exact', head: true })
       .eq('campaign_id', campaignId);
 
-    const leadsCount = campaignLeads?.length || 0;
+    // Lead status breakdown usando queries separadas com count (evita limite de 1000)
+    const [pendingRes, contactedRes, repliedRes, qualifiedRes, failedRes] = await Promise.all([
+      supabaseAdmin.from('campaign_leads').select('*', { count: 'exact', head: true })
+        .eq('campaign_id', campaignId).or('status.is.null,status.eq.pending'),
+      supabaseAdmin.from('campaign_leads').select('*', { count: 'exact', head: true })
+        .eq('campaign_id', campaignId).eq('status', 'contacted'),
+      supabaseAdmin.from('campaign_leads').select('*', { count: 'exact', head: true })
+        .eq('campaign_id', campaignId).eq('status', 'replied'),
+      supabaseAdmin.from('campaign_leads').select('*', { count: 'exact', head: true })
+        .eq('campaign_id', campaignId).eq('status', 'qualified'),
+      supabaseAdmin.from('campaign_leads').select('*', { count: 'exact', head: true })
+        .eq('campaign_id', campaignId).eq('status', 'failed')
+    ]);
 
-    // Lead status breakdown
     const leadStatuses = {
-      pending: campaignLeads?.filter(l => !l.status || l.status === 'pending')?.length || 0,
-      contacted: campaignLeads?.filter(l => l.status === 'contacted')?.length || 0,
-      replied: campaignLeads?.filter(l => l.status === 'replied')?.length || 0,
-      qualified: campaignLeads?.filter(l => l.status === 'qualified')?.length || 0,
-      failed: campaignLeads?.filter(l => l.status === 'failed')?.length || 0
+      pending: pendingRes.count || 0,
+      contacted: contactedRes.count || 0,
+      replied: repliedRes.count || 0,
+      qualified: qualifiedRes.count || 0,
+      failed: failedRes.count || 0
     };
 
     // Buscar conversas
