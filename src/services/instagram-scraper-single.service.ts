@@ -2,6 +2,7 @@
 import puppeteer, { Browser, Page, ElementHandle } from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { detectLanguage } from './language-country-detector.service';
 import {
   calculateActivityScore,
@@ -4121,19 +4122,43 @@ export async function scrapeInstagramTag(
               console.log(`🔒 Fechando browser travado...`);
               await closeSessionBrowser();
 
-              // 3. Aguardar 5-10 segundos para limpeza completa
+              // 3.1 🔪 KILL FORÇADO: Eliminar processos Chrome órfãos que podem ter sobrevivido
+              // Isso resolve o problema de browser que não fecha corretamente após CDP timeout
+              try {
+                const platform = process.platform;
+                if (platform === 'darwin' || platform === 'linux') {
+                  // macOS/Linux: pkill com pattern específico para sessões Instagram
+                  execSync('pkill -9 -f "chrome.*user-data-dir.*instagram-sessions" 2>/dev/null || true', {
+                    stdio: 'ignore',
+                    timeout: 5000
+                  });
+                  console.log(`🔪 Processos Chrome órfãos eliminados (${platform})`);
+                } else if (platform === 'win32') {
+                  // Windows: taskkill
+                  execSync('taskkill /F /IM chrome.exe /T 2>nul || exit 0', {
+                    stdio: 'ignore',
+                    timeout: 5000
+                  });
+                  console.log(`🔪 Processos Chrome órfãos eliminados (win32)`);
+                }
+              } catch (killError: any) {
+                // Ignorar erros - pode não haver processos para matar
+                console.log(`   ℹ️  Kill de processos órfãos: ${killError.message || 'nenhum encontrado'}`);
+              }
+
+              // 4. Aguardar 5-10 segundos para limpeza completa
               const cooldownMs = 5000 + Math.random() * 5000;
               console.log(`⏳ Aguardando ${Math.round(cooldownMs/1000)}s para limpeza...`);
               await new Promise(resolve => setTimeout(resolve, cooldownMs));
 
-              // 4. Recriar contexto com nova sessão
+              // 5. Recriar contexto com nova sessão
               console.log(`🔄 Recriando browser e sessão...`);
               const newContext = await createIsolatedContext();
               page = newContext.page;
               cleanup = newContext.cleanup;
               pageGeneration = newContext.generation;
 
-              // 5. Verificar se página está responsiva
+              // 6. Verificar se página está responsiva
               const isResponsive = await page.evaluate(() => {
                 return document.body && document.body.innerText !== undefined;
               }).catch(() => false);
