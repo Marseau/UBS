@@ -773,6 +773,16 @@ try {
   console.error("❌ Failed to load D2P routes:", error);
 }
 
+// Campaign Report Routes - Relatórios e encerramento de campanhas
+try {
+  const campaignReportRoutes = require('./routes/campaign-report.routes');
+  const campaignReportRouter = 'default' in campaignReportRoutes ? campaignReportRoutes.default : campaignReportRoutes;
+  app.use('/api/campaigns', campaignReportRouter);
+  console.log('✅ Campaign Report routes loaded - METRICS + PDF REPORTS READY');
+} catch (error) {
+  console.error("❌ Failed to load Campaign Report routes:", error);
+}
+
 // Demand Intelligence Dashboard - Visualização de demandas de mercado
 app.get('/demand-intelligence', (_req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'demand-intelligence-dashboard.html'));
@@ -1165,50 +1175,9 @@ app.get('/', async (req, res) => {
   // ubs.app.br → landingTM.html (Taylor Made)
   const hostname = req.hostname;
 
-  // Para aic.ubs.app.br, tentar servir LP de captura automaticamente
+  // aic.ubs.app.br → sempre landing institucional (LP de captura só via /lp/:slug)
   if (hostname === 'aic.ubs.app.br') {
-    try {
-      const { createClient } = require('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.SUPABASE_URL || '',
-        process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-      );
-
-      // Buscar campanha ativa ou em teste (prioriza 'active' sobre 'test')
-      const { data: campaigns, error } = await supabase
-        .from('cluster_campaigns')
-        .select('id, campaign_name, business_name, slug, status')
-        .in('status', ['active', 'test'])
-        .order('status', { ascending: true }) // 'active' vem antes de 'test'
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (!error && campaigns && campaigns.length > 0) {
-        const campaign = campaigns[0];
-        console.log(`🎯 [${hostname}] Auto-detectada campanha: ${campaign.campaign_name} (${campaign.status})`);
-
-        // Servir LP de captura com dados da campanha injetados
-        const capturePath = path.join(frontendPath, 'aic-lead-capture.html');
-        let html = fs.readFileSync(capturePath, 'utf8');
-
-        html = html.replace(/\{\{CAMPAIGN_ID\}\}/g, campaign.id);
-        html = html.replace(/\{\{CAMPAIGN_NAME\}\}/g, campaign.campaign_name || '');
-        html = html.replace(/\{\{BUSINESS_NAME\}\}/g, campaign.business_name || campaign.campaign_name || '');
-
-        const pageTitle = campaign.business_name || campaign.campaign_name || 'Fale Conosco';
-        html = html.replace('<title>Fale Conosco</title>', `<title>Fale Conosco | ${pageTitle}</title>`);
-
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        return res.send(html);
-      }
-
-      // Nenhuma campanha ativa/test → fallback para página institucional
-      console.log(`🏠 [${hostname}] Nenhuma campanha ativa, servindo institucional`);
-    } catch (err) {
-      console.error(`[${hostname}] Erro ao buscar campanha:`, err);
-    }
-
-    // Fallback: página institucional
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     return res.sendFile(path.join(frontendPath, 'aic-landing.html'));
   }
 
@@ -1349,6 +1318,20 @@ app.get('/lp/:slug', async (req, res) => {
         <style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0C1B33;color:#fff;margin:0;}
         .box{text-align:center;padding:40px;}.box h1{font-size:48px;margin:0 0 16px;color:#ef4444;}.box p{color:#94a3b8;}</style>
         </head><body><div class="box"><h1>404</h1><p>Página não encontrada</p></div></body></html>
+      `);
+    }
+
+    // Se campanha em draft → página ainda não disponível
+    if (campaign.status === 'draft') {
+      console.log(`[LP Capture] Campanha ${slug} em draft, página não disponível`);
+      return res.send(`
+        <!DOCTYPE html>
+        <html><head><title>Página não disponível</title>
+        <style>body{font-family:'Inter',system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0C1B33;color:#fff;margin:0;padding:20px;}
+        .box{text-align:center;padding:48px;background:#122444;border-radius:20px;border:1px solid #1e3a5f;max-width:440px;}
+        .box h1{font-size:24px;margin:0 0 12px;color:#3b82f6;}
+        .box p{color:#94a3b8;line-height:1.6;margin:0;}</style>
+        </head><body><div class="box"><h1>Em breve</h1><p>Esta página ainda não está disponível. Tente novamente em alguns dias.</p></div></body></html>
       `);
     }
 

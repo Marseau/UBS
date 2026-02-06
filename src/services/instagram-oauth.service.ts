@@ -629,22 +629,26 @@ export class InstagramOAuthService {
 
   /**
    * Atualiza métricas de todas as contas ativas
+   * Filtra apenas campanhas com status 'active' ou 'test'
    * Retorna resumo das atualizações
    */
   async refreshAllAccountsMetrics(): Promise<{
     total: number;
     success: number;
     failed: number;
+    skipped: number;
     results: Array<{
       campaign_id: string;
       campaign_name: string;
+      campaign_status: string;
       username: string;
       followers_count?: number;
       followers_delta?: number;
       error?: string;
+      skipped?: boolean;
     }>;
   }> {
-    // Buscar todas as contas ativas
+    // Buscar todas as contas ativas com campanhas ativas ou em teste
     const { data: accounts, error } = await this.supabase
       .from('instagram_accounts')
       .select(`
@@ -656,33 +660,38 @@ export class InstagramOAuthService {
         )
       `)
       .eq('status', 'active')
-      .not('access_token_encrypted', 'is', null);
+      .not('access_token_encrypted', 'is', null)
+      .in('cluster_campaigns.status', ['active', 'test']);
 
     if (error || !accounts) {
       console.error('[InstagramOAuth] Erro ao buscar contas:', error);
-      return { total: 0, success: 0, failed: 0, results: [] };
+      return { total: 0, success: 0, failed: 0, skipped: 0, results: [] };
     }
 
     const results: Array<{
       campaign_id: string;
       campaign_name: string;
+      campaign_status: string;
       username: string;
       followers_count?: number;
       followers_delta?: number;
       error?: string;
+      skipped?: boolean;
     }> = [];
 
     let successCount = 0;
     let failedCount = 0;
 
     for (const account of accounts) {
-      const refreshResult = await this.refreshAccountMetrics(account.campaign_id);
-
       const campaignData = account.cluster_campaigns as any;
+      const campaignStatus = campaignData?.status || 'unknown';
+
+      const refreshResult = await this.refreshAccountMetrics(account.campaign_id);
 
       results.push({
         campaign_id: account.campaign_id,
         campaign_name: campaignData?.campaign_name || 'Unknown',
+        campaign_status: campaignStatus,
         username: account.instagram_username,
         followers_count: refreshResult.followers_count,
         followers_delta: refreshResult.followers_delta,
@@ -699,12 +708,13 @@ export class InstagramOAuthService {
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    console.log(`[InstagramOAuth] Refresh completo: ${successCount}/${accounts.length} contas atualizadas`);
+    console.log(`[InstagramOAuth] Refresh completo: ${successCount}/${accounts.length} contas atualizadas (campanhas ativas/teste)`);
 
     return {
       total: accounts.length,
       success: successCount,
       failed: failedCount,
+      skipped: 0, // Todas as contas retornadas já são de campanhas ativas/teste
       results
     };
   }
