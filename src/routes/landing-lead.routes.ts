@@ -106,6 +106,39 @@ router.post('/capture', async (req: Request, res: Response): Promise<void> => {
 });
 
 /**
+ * GET /api/landing/active-campaign
+ * Retorna a campanha ativa/test mais recente (para LP institucional)
+ */
+router.get('/active-campaign', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    );
+
+    const { data, error } = await supabase
+      .from('cluster_campaigns')
+      .select('id')
+      .in('status', ['active', 'test'])
+      .order('status', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !data) {
+      res.json({ success: false, campaignId: null });
+      return;
+    }
+
+    res.json({ success: true, campaignId: data.id });
+  } catch (error: any) {
+    console.error('[Landing Lead Route] Erro ao buscar campanha ativa:', error);
+    res.json({ success: false, campaignId: null });
+  }
+});
+
+/**
  * GET /api/landing/campaign/:campaignId
  * Retorna info pública da campanha para configurar o widget
  *

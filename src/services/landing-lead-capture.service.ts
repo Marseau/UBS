@@ -54,6 +54,7 @@ export interface LandingLeadResult {
 export interface CampaignInfo {
   id: string;
   campaignName: string;
+  displayName: string;
   whatsappNumber: string;
   whapiChannelId: string;
 }
@@ -106,7 +107,7 @@ export class LandingLeadCaptureService {
           isExistingLead: false,
           noigLeadId: noigLead?.id,
           redirectWhatsapp: campaign.whatsappNumber,
-          whatsappMessage: this.buildWhatsappMessageWithoutIG(name, campaign.campaignName)
+          whatsappMessage: this.buildWhatsappMessageWithoutIG(name, campaign.displayName)
         };
       }
 
@@ -199,8 +200,10 @@ export class LandingLeadCaptureService {
         .select(`
           id,
           campaign_name,
+          landing_page_url,
           whapi_channel_uuid,
-          whapi_channels!inner(phone_number)
+          whapi_channels!inner(phone_number),
+          instagram_accounts!instagram_accounts_campaign_id_fkey(instagram_username)
         `)
         .eq('id', campaignId)
         .single();
@@ -210,9 +213,23 @@ export class LandingLeadCaptureService {
         return null;
       }
 
+      // Prioridade: @instagram da empresa > raiz da LP > campaign_name
+      const igAccounts = data.instagram_accounts as any;
+      const igUsername = Array.isArray(igAccounts) && igAccounts.length > 0
+        ? `@${igAccounts[0].instagram_username}`
+        : null;
+
+      let lpDomain: string | null = null;
+      if (data.landing_page_url) {
+        try {
+          lpDomain = new URL(data.landing_page_url).hostname;
+        } catch {}
+      }
+
       return {
         id: data.id,
         campaignName: data.campaign_name,
+        displayName: igUsername || lpDomain || '',
         whatsappNumber: (data.whapi_channels as any)?.phone_number || '',
         whapiChannelId: data.whapi_channel_uuid
       };
@@ -435,19 +452,21 @@ export class LandingLeadCaptureService {
   /**
    * Monta mensagem para WhatsApp (com Instagram)
    */
-  private buildWhatsappMessage(name: string, username: string, campaignName: string, isExisting: boolean): string {
+  private buildWhatsappMessage(name: string, username: string, displayName: string, isExisting: boolean): string {
     if (isExisting) {
       return `Olá! Sou ${name} (@${username}), já estávamos conversando e visitei a landing page. Gostaria de continuar!`;
     }
-    return `Olá! Sou ${name} (@${username}), conheci a ${campaignName} pela landing page e gostaria de saber mais!`;
+    const ref = displayName ? ` conheci vocês pela ${displayName} e` : '';
+    return `Olá! Sou ${name} (@${username}),${ref} gostaria de saber mais!`;
   }
 
   /**
    * Monta mensagem para WhatsApp (sem Instagram)
    * O AI Agent vai solicitar o Instagram durante a conversa
    */
-  private buildWhatsappMessageWithoutIG(name: string, campaignName: string): string {
-    return `Olá! Sou ${name}, conheci a ${campaignName} pela landing page e gostaria de saber mais!`;
+  private buildWhatsappMessageWithoutIG(name: string, displayName: string): string {
+    const ref = displayName ? ` conheci vocês pela ${displayName} e` : '';
+    return `Olá! Sou ${name},${ref} gostaria de saber mais!`;
   }
 
   /**
