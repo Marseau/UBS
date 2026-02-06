@@ -256,10 +256,8 @@ class CampaignReportService {
       await page.setContent(html, { waitUntil: 'networkidle0' });
 
       // Aguardar gráficos renderizarem
-      await page.waitForFunction(() => {
-        const charts = document.querySelectorAll('canvas');
-        return charts.length > 0;
-      }, { timeout: 10000 }).catch(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await page.waitForFunction('document.querySelectorAll("canvas").length > 0', { timeout: 10000 }).catch(() => {
         // Se não há gráficos, continua
       });
 

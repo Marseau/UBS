@@ -167,6 +167,10 @@ router.get('/all-progress', async (req: Request, res: Response): Promise<void> =
 router.get('/:id/metrics', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'ID da campanha é obrigatório' });
+      return;
+    }
 
     const metrics = await campaignReportService.getCampaignMetrics(id);
 
@@ -192,6 +196,10 @@ router.get('/:id/metrics', async (req: Request, res: Response): Promise<void> =>
 router.get('/:id/metrics/daily', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'ID da campanha é obrigatório' });
+      return;
+    }
 
     const dailyMetrics = await campaignReportService.getDailyMetrics(id);
 
@@ -217,6 +225,10 @@ router.get('/:id/metrics/daily', async (req: Request, res: Response): Promise<vo
 router.get('/:id/report', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'ID da campanha é obrigatório' });
+      return;
+    }
 
     const report = await campaignReportService.generateReport(id);
 
@@ -242,6 +254,10 @@ router.get('/:id/report', async (req: Request, res: Response): Promise<void> => 
 router.get('/:id/report/pdf', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'ID da campanha é obrigatório' });
+      return;
+    }
     const { download } = req.query;
 
     const result = await campaignReportService.generatePDF(id);
@@ -278,6 +294,10 @@ router.get('/:id/report/pdf', async (req: Request, res: Response): Promise<void>
 router.post('/:id/report/generate', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'ID da campanha é obrigatório' });
+      return;
+    }
 
     const result = await campaignReportService.generateAndSaveFinalReport(id);
 
@@ -308,6 +328,10 @@ router.post('/:id/report/generate', async (req: Request, res: Response): Promise
 router.post('/:id/close', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'ID da campanha é obrigatório' });
+      return;
+    }
     const { end_reason, generate_report } = req.body;
 
     // 1. Encerrar campanha
@@ -321,7 +345,7 @@ router.post('/:id/close', async (req: Request, res: Response): Promise<void> => 
     let pdfUrl: string | undefined;
 
     // 2. Gerar relatório se solicitado
-    if (generate_report !== false) {
+    if (generate_report !== false && id) {
       const reportResult = await campaignReportService.generateAndSaveFinalReport(id);
       pdfUrl = reportResult.pdfUrl;
     }

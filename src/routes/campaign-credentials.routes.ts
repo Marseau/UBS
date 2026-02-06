@@ -727,6 +727,10 @@ router.patch('/instagram/accounts/:accountId/status', async (req: Request, res: 
 router.post('/instagram/metrics/refresh/:campaignId', async (req: Request, res: Response): Promise<void> => {
   try {
     const { campaignId } = req.params;
+    if (!campaignId) {
+      res.status(400).json({ error: 'ID da campanha é obrigatório' });
+      return;
+    }
 
     // Import dinamico para evitar circular dependency
     const { getInstagramOAuthService } = await import('../services/instagram-oauth.service');
@@ -782,6 +786,10 @@ router.post('/instagram/metrics/refresh-all', async (req: Request, res: Response
 router.get('/instagram/metrics/history/:campaignId', async (req: Request, res: Response): Promise<void> => {
   try {
     const { campaignId } = req.params;
+    if (!campaignId) {
+      res.status(400).json({ error: 'ID da campanha é obrigatório' });
+      return;
+    }
     const days = parseInt(req.query.days as string) || 30;
 
     const { getInstagramOAuthService } = await import('../services/instagram-oauth.service');
