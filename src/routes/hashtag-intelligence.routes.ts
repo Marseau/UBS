@@ -1586,6 +1586,21 @@ router.post('/save-analysis', async (req, res) => {
       }
 
       console.log(`   ✅ ${insertedCount} leads persistidos em campaign_leads`);
+
+      // 3.1. Distribuir canais de outreach (60% WA dos que tem WA, resto IG)
+      console.log(`   📱 Distribuindo canais de outreach...`);
+      const { data: channelDistribution, error: distError } = await supabase
+        .rpc('distribute_outreach_channels', { p_campaign_id: campaignId });
+
+      if (distError) {
+        console.error(`   ⚠️ Erro ao distribuir canais: ${distError.message}`);
+      } else if (channelDistribution && channelDistribution[0]) {
+        const dist = channelDistribution[0];
+        const waPct = dist.total_leads > 0 ? Math.round(dist.whatsapp_count / dist.total_leads * 100) : 0;
+        const igPct = dist.total_leads > 0 ? Math.round(dist.instagram_count / dist.total_leads * 100) : 0;
+        console.log(`   ✅ WhatsApp: ${dist.whatsapp_count} leads (${waPct}%)`);
+        console.log(`   ✅ Instagram: ${dist.instagram_count} leads (${igPct}%)`);
+      }
     } else {
       console.log(`   ⚠️ Nenhum lead_id fornecido para persistir`);
     }
@@ -4155,6 +4170,23 @@ router.post('/campaign/:campaignId/capture-leads', async (req, res) => {
         console.error('   ⚠️ Erro ao bloquear subclusters:', blockError.message);
       } else {
         console.log(`   🔒 ${successfulSubclusterIds.length} subclusters bloqueados (com leads inseridos)`);
+      }
+    }
+
+    // Distribuir canais de outreach apos inserir leads
+    if (totalInserted > 0) {
+      console.log(`   📱 Distribuindo canais de outreach...`);
+      const { data: channelDistribution, error: distError } = await supabase
+        .rpc('distribute_outreach_channels', { p_campaign_id: campaignId });
+
+      if (distError) {
+        console.error(`   ⚠️ Erro ao distribuir canais: ${distError.message}`);
+      } else if (channelDistribution && channelDistribution[0]) {
+        const dist = channelDistribution[0];
+        const waPct = dist.total_leads > 0 ? Math.round(dist.whatsapp_count / dist.total_leads * 100) : 0;
+        const igPct = dist.total_leads > 0 ? Math.round(dist.instagram_count / dist.total_leads * 100) : 0;
+        console.log(`   ✅ WhatsApp: ${dist.whatsapp_count} leads (${waPct}%)`);
+        console.log(`   ✅ Instagram: ${dist.instagram_count} leads (${igPct}%)`);
       }
     }
 
