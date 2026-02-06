@@ -41,6 +41,10 @@ export interface InstagramAccount {
   page_name: string;
   access_token: string;
   token_expires_at?: Date;
+  // Métricas (opcional, populado durante OAuth)
+  followers_count?: number;
+  follows_count?: number;
+  media_count?: number;
 }
 
 export interface OAuthTokenResponse {
@@ -320,9 +324,9 @@ export class InstagramOAuthService {
       return { success: false, error: 'Erro ao obter perfil do Instagram' };
     }
 
-    console.log(`[InstagramOAuth] Perfil obtido: @${profile.username}`);
+    console.log(`[InstagramOAuth] Perfil obtido: @${profile.username} (${profile.followers_count || 0} seguidores)`);
 
-    // 5. Montar objeto da conta
+    // 5. Montar objeto da conta (incluindo métricas)
     const account: InstagramAccount = {
       id: profile.id,
       instagram_business_account_id: profile.id,
@@ -332,7 +336,11 @@ export class InstagramOAuthService {
       page_id: profile.id, // Para Instagram Business Login, não há Facebook Page
       page_name: profile.name || profile.username,
       access_token: finalToken,
-      token_expires_at: new Date(Date.now() + expiresIn * 1000)
+      token_expires_at: new Date(Date.now() + expiresIn * 1000),
+      // Métricas do perfil
+      followers_count: profile.followers_count,
+      follows_count: profile.follows_count,
+      media_count: profile.media_count
     };
 
     // 6. Salvar conta no banco
@@ -375,7 +383,14 @@ export class InstagramOAuthService {
         token_expires_at: account.token_expires_at?.toISOString(),
         status: 'active',
         auth_method: 'instagram_business_login', // Novo método
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        // Métricas iniciais (baseline)
+        followers_count: account.followers_count,
+        follows_count: account.follows_count,
+        media_count: account.media_count,
+        metrics_updated_at: new Date().toISOString(),
+        followers_count_baseline: account.followers_count,
+        baseline_recorded_at: new Date().toISOString()
       };
 
       if (existing) {
@@ -399,6 +414,32 @@ export class InstagramOAuthService {
       }
 
       console.log(`[InstagramOAuth] Conta @${account.username} salva para campanha ${campaignId}`);
+
+      // Registrar métrica inicial se temos followers_count
+      if (account.followers_count !== undefined) {
+        // Buscar ID da conta recém-salva
+        const { data: savedAccount } = await this.supabase
+          .from('instagram_accounts')
+          .select('id')
+          .eq('campaign_id', campaignId)
+          .single();
+
+        if (savedAccount) {
+          const { error: metricError } = await this.supabase.rpc('record_instagram_metrics', {
+            p_account_id: savedAccount.id,
+            p_followers_count: account.followers_count,
+            p_follows_count: account.follows_count || null,
+            p_media_count: account.media_count || null,
+            p_source: 'oauth_callback'
+          });
+
+          if (metricError) {
+            console.warn(`[InstagramOAuth] Erro ao registrar métrica inicial: ${metricError.message}`);
+          } else {
+            console.log(`[InstagramOAuth] Métrica inicial registrada: ${account.followers_count} seguidores`);
+          }
+        }
+      }
 
       return { success: true };
     } catch (error: any) {
@@ -512,6 +553,187 @@ export class InstagramOAuthService {
       if (error) throw error;
 
       return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // ==========================================================================
+  // MÉTRICAS E TRACKING DE FOLLOWERS
+  // ==========================================================================
+
+  /**
+   * Atualiza métricas de uma conta Instagram via API
+   * Chamado por job periódico (ex: diário via N8N)
+   */
+  async refreshAccountMetrics(campaignId: string): Promise<{
+    success: boolean;
+    followers_count?: number;
+    followers_delta?: number;
+    error?: string;
+  }> {
+    try {
+      // 1. Obter conta com token
+      const account = await this.getInstagramAccount(campaignId);
+      if (!account) {
+        return { success: false, error: 'Conta Instagram não encontrada' };
+      }
+
+      // 2. Buscar perfil atualizado da API
+      const profile = await this.getUserProfile(account.access_token);
+      if (!profile) {
+        return { success: false, error: 'Erro ao obter perfil da API' };
+      }
+
+      // 3. Buscar ID da conta no banco
+      const { data: dbAccount } = await this.supabase
+        .from('instagram_accounts')
+        .select('id, followers_count')
+        .eq('campaign_id', campaignId)
+        .single();
+
+      if (!dbAccount) {
+        return { success: false, error: 'Conta não encontrada no banco' };
+      }
+
+      const previousCount = dbAccount.followers_count || 0;
+      const currentCount = profile.followers_count || 0;
+      const delta = currentCount - previousCount;
+
+      // 4. Registrar métrica via RPC
+      const { error: metricError } = await this.supabase.rpc('record_instagram_metrics', {
+        p_account_id: dbAccount.id,
+        p_followers_count: currentCount,
+        p_follows_count: profile.follows_count || null,
+        p_media_count: profile.media_count || null,
+        p_source: 'api_refresh'
+      });
+
+      if (metricError) {
+        console.error(`[InstagramOAuth] Erro ao registrar métrica: ${metricError.message}`);
+        return { success: false, error: metricError.message };
+      }
+
+      console.log(`[InstagramOAuth] Métricas atualizadas para @${account.username}: ${currentCount} seguidores (${delta >= 0 ? '+' : ''}${delta})`);
+
+      return {
+        success: true,
+        followers_count: currentCount,
+        followers_delta: delta
+      };
+    } catch (error: any) {
+      console.error('[InstagramOAuth] Erro ao atualizar métricas:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Atualiza métricas de todas as contas ativas
+   * Retorna resumo das atualizações
+   */
+  async refreshAllAccountsMetrics(): Promise<{
+    total: number;
+    success: number;
+    failed: number;
+    results: Array<{
+      campaign_id: string;
+      campaign_name: string;
+      username: string;
+      followers_count?: number;
+      followers_delta?: number;
+      error?: string;
+    }>;
+  }> {
+    // Buscar todas as contas ativas
+    const { data: accounts, error } = await this.supabase
+      .from('instagram_accounts')
+      .select(`
+        campaign_id,
+        instagram_username,
+        cluster_campaigns!inner (
+          campaign_name,
+          status
+        )
+      `)
+      .eq('status', 'active')
+      .not('access_token_encrypted', 'is', null);
+
+    if (error || !accounts) {
+      console.error('[InstagramOAuth] Erro ao buscar contas:', error);
+      return { total: 0, success: 0, failed: 0, results: [] };
+    }
+
+    const results: Array<{
+      campaign_id: string;
+      campaign_name: string;
+      username: string;
+      followers_count?: number;
+      followers_delta?: number;
+      error?: string;
+    }> = [];
+
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (const account of accounts) {
+      const refreshResult = await this.refreshAccountMetrics(account.campaign_id);
+
+      const campaignData = account.cluster_campaigns as any;
+
+      results.push({
+        campaign_id: account.campaign_id,
+        campaign_name: campaignData?.campaign_name || 'Unknown',
+        username: account.instagram_username,
+        followers_count: refreshResult.followers_count,
+        followers_delta: refreshResult.followers_delta,
+        error: refreshResult.error
+      });
+
+      if (refreshResult.success) {
+        successCount++;
+      } else {
+        failedCount++;
+      }
+
+      // Rate limit: esperar 1s entre requests
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    console.log(`[InstagramOAuth] Refresh completo: ${successCount}/${accounts.length} contas atualizadas`);
+
+    return {
+      total: accounts.length,
+      success: successCount,
+      failed: failedCount,
+      results
+    };
+  }
+
+  /**
+   * Obtém histórico de métricas de uma campanha
+   */
+  async getMetricsHistory(campaignId: string, days: number = 30): Promise<{
+    success: boolean;
+    history?: Array<{
+      recorded_date: string;
+      followers_count: number;
+      follows_count: number;
+      followers_delta: number;
+      cumulative_followers_delta: number;
+    }>;
+    error?: string;
+  }> {
+    try {
+      const { data, error } = await this.supabase.rpc('get_instagram_metrics_history', {
+        p_campaign_id: campaignId,
+        p_days: days
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, history: data || [] };
     } catch (error: any) {
       return { success: false, error: error.message };
     }

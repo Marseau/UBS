@@ -717,6 +717,144 @@ router.patch('/instagram/accounts/:accountId/status', async (req: Request, res: 
 });
 
 // ============================================================================
+// INSTAGRAM METRICS TRACKING
+// ============================================================================
+
+/**
+ * POST /api/instagram/metrics/refresh/:campaignId
+ * Atualiza métricas de uma conta Instagram específica via Meta API
+ */
+router.post('/instagram/metrics/refresh/:campaignId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+
+    // Import dinamico para evitar circular dependency
+    const { getInstagramOAuthService } = await import('../services/instagram-oauth.service');
+    const oauthService = getInstagramOAuthService();
+
+    const result = await oauthService.refreshAccountMetrics(campaignId);
+
+    if (!result.success) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+
+    res.json({
+      success: true,
+      followers_count: result.followers_count,
+      followers_delta: result.followers_delta
+    });
+  } catch (error: any) {
+    console.error('[Campaign Credentials] Error refreshing metrics:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/instagram/metrics/refresh-all
+ * Atualiza métricas de todas as contas Instagram ativas
+ * Para ser chamado por job periódico (N8N cron)
+ */
+router.post('/instagram/metrics/refresh-all', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { getInstagramOAuthService } = await import('../services/instagram-oauth.service');
+    const oauthService = getInstagramOAuthService();
+
+    const result = await oauthService.refreshAllAccountsMetrics();
+
+    res.json({
+      success: true,
+      total: result.total,
+      success_count: result.success,
+      failed_count: result.failed,
+      results: result.results
+    });
+  } catch (error: any) {
+    console.error('[Campaign Credentials] Error refreshing all metrics:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/instagram/metrics/history/:campaignId
+ * Obtém histórico de métricas de uma campanha
+ */
+router.get('/instagram/metrics/history/:campaignId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+    const days = parseInt(req.query.days as string) || 30;
+
+    const { getInstagramOAuthService } = await import('../services/instagram-oauth.service');
+    const oauthService = getInstagramOAuthService();
+
+    const result = await oauthService.getMetricsHistory(campaignId, days);
+
+    if (!result.success) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+
+    res.json({
+      success: true,
+      campaign_id: campaignId,
+      days: days,
+      history: result.history
+    });
+  } catch (error: any) {
+    console.error('[Campaign Credentials] Error getting metrics history:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/instagram/metrics/summary/:campaignId
+ * Obtém resumo de métricas de uma campanha (atual + delta)
+ */
+router.get('/instagram/metrics/summary/:campaignId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+
+    // Buscar dados da view de métricas
+    const { data, error } = await supabase
+      .from('v_campaign_instagram_metrics')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .single();
+
+    if (error) {
+      // Se não encontrou, pode ser que a campanha não tenha conta IG
+      if (error.code === 'PGRST116') {
+        res.json({
+          success: true,
+          campaign_id: campaignId,
+          connected: false,
+          message: 'Campanha não possui conta Instagram conectada'
+        });
+        return;
+      }
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      campaign_id: campaignId,
+      connected: true,
+      username: data.instagram_username,
+      current_followers: data.current_followers,
+      baseline_followers: data.baseline_followers,
+      followers_delta_total: data.followers_delta_total,
+      followers_growth_pct: data.followers_growth_pct,
+      baseline_recorded_at: data.baseline_recorded_at,
+      metrics_updated_at: data.metrics_updated_at,
+      total_metric_records: data.total_metric_records
+    });
+  } catch (error: any) {
+    console.error('[Campaign Credentials] Error getting metrics summary:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
 // CAMPAIGNS
 // ============================================================================
 
