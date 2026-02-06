@@ -628,6 +628,15 @@ try {
   console.error("❌ Failed to load canva to instagram routes:", error);
 }
 
+// Instagram Scheduled Publisher Routes - Schedule and publish posts from campaigns
+try {
+  const instagramPublishRoutes = require('./routes/instagram-publish.routes');
+  app.use('/api', 'default' in instagramPublishRoutes ? instagramPublishRoutes.default : instagramPublishRoutes);
+  console.log('✅ Instagram Publish routes loaded - CAMPAIGN SCHEDULED POSTS READY');
+} catch (error) {
+  console.error("❌ Failed to load instagram publish routes:", error);
+}
+
 // Instagram Scraper Routes - Execute Puppeteer scraping on Mac, save to Supabase
 try {
   console.log('🔍 [DEBUG] Attempting to load instagram-scraper.routes...');
@@ -1486,6 +1495,9 @@ app.get('/cliente/dashboard', (_req, res) => {
 // Portal do Cliente - Leads entregues
 app.get('/cliente/leads', serveClientPage('cliente-leads.html'));
 
+// Portal do Cliente - Publicações Instagram
+app.get('/cliente/publicacoes', serveClientPage('aic-instagram-publisher.html'));
+
 // Portal do Cliente - Faturas
 app.get('/cliente/faturas', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -1531,6 +1543,9 @@ app.get('/aic/onboarding', serveAICPage('aic-campaign-onboarding.html'));
 
 // AIC Admin - Dashboard da Campanha
 app.get('/aic/dashboard', serveAICPage('aic-dashboard-campaign.html'));
+
+// AIC Admin - Publicações Instagram
+app.get('/aic/publicacoes', serveAICPage('aic-instagram-publisher.html'));
 
 // AIC Admin - Financeiro
 app.get('/aic/financeiro', serveAICPage('aic-financial-dashboard.html'));

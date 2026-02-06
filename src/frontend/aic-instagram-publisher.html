@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Publicações Instagram | AIC</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" type="image/png" href="/assets/AIC/Imagens%20Vetor%20/AIC%20Icone%20Cheio.png">
+  <meta name="theme-color" content="#0C1B33">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --aic-green: #0ECC97;
+      --aic-green-dark: #0BA578;
+      --aic-green-glow: rgba(14, 204, 151, 0.25);
+      --aic-green-subtle: rgba(14, 204, 151, 0.1);
+      --aic-navy: #0C1B33;
+      --aic-navy-light: #122444;
+      --aic-navy-lighter: #1a3055;
+      --aic-white: #FDFDFD;
+      --aic-gray: #94a3b8;
+      --aic-gray-light: #cbd5e1;
+      --aic-border: #1e3a5f;
+      --aic-red: #ef4444;
+      --aic-red-subtle: rgba(239, 68, 68, 0.1);
+      --aic-yellow: #f59e0b;
+      --aic-yellow-subtle: rgba(245, 158, 11, 0.1);
+      --aic-blue: #3b82f6;
+      --aic-blue-subtle: rgba(59, 130, 246, 0.1);
+      --aic-purple: #8b5cf6;
+      --aic-purple-subtle: rgba(139, 92, 246, 0.1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--aic-navy);
+      color: var(--aic-white);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    /* Ajuste para sidebar */
+    body.aic-sidebar-open { margin-left: 260px; }
+    @media (max-width: 1024px) { body.aic-sidebar-open { margin-left: 0; } }
+
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+    /* Header - escondido quando sidebar ativa */
+    .header {
+      display: none;
+    }
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .header-logo { height: 36px; }
+    .header-divider {
+      width: 1px;
+      height: 24px;
+      background: var(--aic-border);
+    }
+    .header-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--aic-gray);
+    }
+    .back-link {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--aic-gray);
+      text-decoration: none;
+      font-size: 14px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    .back-link:hover {
+      background: var(--aic-navy-light);
+      color: var(--aic-white);
+    }
+
+    /* Main */
+    .main { padding: 32px 0 80px; }
+
+    /* Page Header */
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .page-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .page-header p {
+      color: var(--aic-gray);
+      font-size: 15px;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--aic-navy-light);
+      padding: 4px;
+      border-radius: 10px;
+      margin-bottom: 24px;
+    }
+    .tab {
+      padding: 10px 20px;
+      border: none;
+      background: transparent;
+      color: var(--aic-gray);
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab:hover { background: var(--aic-navy-lighter); color: var(--aic-white); }
+    .tab.active { background: var(--aic-green); color: var(--aic-navy); font-weight: 600; }
+
+    /* Cards */
+    .card {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    /* Button */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--aic-green), var(--aic-green-dark));
+      color: var(--aic-navy);
+      box-shadow: 0 4px 14px var(--aic-green-glow);
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px var(--aic-green-glow); }
+    .btn-secondary {
+      background: var(--aic-navy-lighter);
+      color: var(--aic-white);
+      border: 1px solid var(--aic-border);
+    }
+    .btn-secondary:hover { border-color: var(--aic-green); }
+    .btn-danger {
+      background: var(--aic-red-subtle);
+      color: var(--aic-red);
+      border: 1px solid transparent;
+    }
+    .btn-danger:hover { border-color: var(--aic-red); }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+
+    /* Form */
+    .form-group { margin-bottom: 20px; }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--aic-gray);
+      margin-bottom: 8px;
+    }
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 8px;
+      color: var(--aic-white);
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      outline: none;
+      border-color: var(--aic-green);
+    }
+    .form-textarea { resize: vertical; min-height: 100px; }
+    .form-hint {
+      font-size: 12px;
+      color: var(--aic-gray);
+      margin-top: 6px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 600px) {
+      .form-row { grid-template-columns: 1fr; }
+    }
+
+    /* Table */
+    .table-wrapper { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 14px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--aic-border);
+    }
+    th {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--aic-gray);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    td { font-size: 14px; }
+    tr:hover { background: rgba(255,255,255,0.02); }
+
+    /* Status Badge */
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .status-pending { background: var(--aic-yellow-subtle); color: var(--aic-yellow); }
+    .status-processing { background: var(--aic-blue-subtle); color: var(--aic-blue); }
+    .status-published { background: var(--aic-green-subtle); color: var(--aic-green); }
+    .status-failed { background: var(--aic-red-subtle); color: var(--aic-red); }
+    .status-cancelled { background: rgba(100,100,100,0.2); color: var(--aic-gray); }
+
+    /* Calendar Grid */
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+    .calendar-header {
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--aic-gray);
+      padding: 8px;
+      text-transform: uppercase;
+    }
+    .calendar-day {
+      aspect-ratio: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 6px;
+      background: var(--aic-navy);
+      border-radius: 8px;
+      font-size: 13px;
+      min-height: 80px;
+    }
+    .calendar-day.other-month { opacity: 0.4; }
+    .calendar-day.today { border: 2px solid var(--aic-green); }
+    .calendar-day.selected {
+      border: 2px solid var(--aic-blue);
+      background: var(--aic-blue-subtle);
+    }
+    .calendar-day:hover:not(.other-month) {
+      background: var(--aic-navy-lighter);
+      transform: scale(1.02);
+      transition: all 0.15s ease;
+    }
+    .calendar-day-number { font-weight: 600; margin-bottom: 4px; }
+    .calendar-post {
+      width: 100%;
+      padding: 2px 4px;
+      background: var(--aic-green-subtle);
+      border-left: 2px solid var(--aic-green);
+      border-radius: 2px;
+      font-size: 10px;
+      color: var(--aic-green);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+      margin-top: 2px;
+    }
+    .calendar-post.reel { background: var(--aic-purple-subtle); border-color: var(--aic-purple); color: var(--aic-purple); }
+    .calendar-post.published { opacity: 0.6; }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--aic-border);
+    }
+    .modal-title { font-size: 18px; font-weight: 600; }
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--aic-gray);
+      font-size: 24px;
+      cursor: pointer;
+      padding: 4px;
+    }
+    .modal-close:hover { color: var(--aic-white); }
+    .modal-body { padding: 24px; }
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 20px 24px;
+      border-top: 1px solid var(--aic-border);
+    }
+
+    /* Loading */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 60px;
+      color: var(--aic-gray);
+    }
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--aic-border);
+      border-top-color: var(--aic-green);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--aic-gray);
+    }
+    .empty-state-icon { font-size: 48px; margin-bottom: 16px; }
+    .empty-state h3 { color: var(--aic-white); margin-bottom: 8px; }
+
+    /* Design Preview */
+    .design-preview {
+      display: flex;
+      gap: 16px;
+      padding: 12px;
+      background: var(--aic-navy);
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    .design-preview img {
+      width: 80px;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 6px;
+    }
+    .design-preview-info { flex: 1; }
+    .design-preview-name { font-weight: 600; margin-bottom: 4px; }
+    .design-preview-meta { font-size: 12px; color: var(--aic-gray); }
+
+    /* Canva Search */
+    .canva-search-results {
+      max-height: 200px;
+      overflow-y: auto;
+      background: var(--aic-navy);
+      border: 1px solid var(--aic-border);
+      border-radius: 8px;
+      margin-top: 8px;
+    }
+    .canva-result {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .canva-result:hover { background: var(--aic-navy-lighter); }
+    .canva-result img {
+      width: 48px;
+      height: 48px;
+      object-fit: cover;
+      border-radius: 4px;
+    }
+    .canva-result-name { font-size: 14px; }
+    .canva-result-meta { font-size: 11px; color: var(--aic-gray); }
+
+    /* Actions */
+    .actions { display: flex; gap: 8px; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 14px 20px;
+      background: var(--aic-navy-light);
+      border: 1px solid var(--aic-border);
+      border-radius: 10px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+      z-index: 2000;
+      display: none;
+    }
+    .toast.success { border-color: var(--aic-green); }
+    .toast.error { border-color: var(--aic-red); }
+    .toast.show { display: block; animation: slideIn 0.3s ease; }
+    @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <div class="header-left">
+          <a href="/aic-campaigns-dashboard.html">
+            <img src="/assets/AIC/Imagens%20Vetor%20/AIC%20H%20Branco.png" alt="AIC" class="header-logo">
+          </a>
+          <div class="header-divider"></div>
+          <span class="header-title" id="campaign-name">Publicações Instagram</span>
+        </div>
+        <a href="#" class="back-link" id="back-link">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 12L6 8l4-4"/></svg>
+          Voltar
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="container">
+      <!-- Page Header -->
+      <div class="page-header">
+        <div>
+          <h1>Publicações Instagram</h1>
+          <p id="ig-account">Gerencie suas publicações agendadas</p>
+        </div>
+        <button class="btn btn-primary" onclick="openScheduleModal()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Agendar Publicação
+        </button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" data-tab="calendar" onclick="switchTab('calendar')">Calendário</button>
+        <button class="tab" data-tab="list" onclick="switchTab('list')">Lista</button>
+      </div>
+
+      <!-- Calendar View -->
+      <div class="card" id="calendar-view">
+        <div class="card-header">
+          <div style="display:flex;align-items:center;gap:16px;">
+            <button class="btn btn-secondary btn-sm" onclick="changeMonth(-1)">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12L5 8l4-4"/></svg>
+            </button>
+            <span class="card-title" id="calendar-month">Fevereiro 2026</span>
+            <button class="btn btn-secondary btn-sm" onclick="changeMonth(1)">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l4-4-4-4"/></svg>
+            </button>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="goToToday()">Hoje</button>
+        </div>
+        <div class="calendar-grid" id="calendar-grid">
+          <!-- Generated by JS -->
+        </div>
+      </div>
+
+      <!-- List View -->
+      <div class="card" id="list-view" style="display:none;">
+        <div class="card-header">
+          <span class="card-title">Publicações</span>
+          <select class="form-select" style="width:auto;" id="filter-status" onchange="loadPosts()">
+            <option value="">Todos</option>
+            <option value="pending">Pendentes</option>
+            <option value="published">Publicados</option>
+            <option value="failed">Com Erro</option>
+          </select>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Design</th>
+                <th>Tipo</th>
+                <th>Agendado para</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="posts-table">
+              <!-- Generated by JS -->
+            </tbody>
+          </table>
+        </div>
+        <div class="loading" id="loading-posts" style="display:none;">
+          <div class="spinner"></div> Carregando...
+        </div>
+        <div class="empty-state" id="empty-posts" style="display:none;">
+          <div class="empty-state-icon">📅</div>
+          <h3>Nenhuma publicação</h3>
+          <p>Agende sua primeira publicação clicando no botão acima.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Schedule Modal -->
+  <div class="modal-overlay" id="schedule-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-title">Agendar Publicação</h2>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="schedule-form">
+          <input type="hidden" id="edit-post-id">
+
+          <!-- Design Canva -->
+          <div class="form-group">
+            <label class="form-label">Design do Canva *</label>
+            <input type="text" class="form-input" id="canva-design-name" placeholder="Digite o nome do design..." oninput="searchCanvaDesigns(this.value)" autocomplete="off" required>
+            <input type="hidden" id="canva-design-id">
+            <div class="canva-search-results" id="canva-results" style="display:none;"></div>
+            <div class="design-preview" id="selected-design" style="display:none;">
+              <img src="" alt="" id="design-thumbnail">
+              <div class="design-preview-info">
+                <div class="design-preview-name" id="design-name"></div>
+                <div class="design-preview-meta" id="design-meta"></div>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="clearDesign()">Trocar</button>
+            </div>
+            <p class="form-hint">Busque pelo nome exato do design no Canva</p>
+          </div>
+
+          <!-- Tipo -->
+          <div class="form-group">
+            <label class="form-label">Tipo de Conteúdo *</label>
+            <select class="form-select" id="content-type" required>
+              <option value="post">Imagem (Post)</option>
+              <option value="reel">Vídeo (Reel)</option>
+              <option value="carousel">Carrossel</option>
+            </select>
+          </div>
+
+          <!-- Data/Hora -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Data *</label>
+              <input type="date" class="form-input" id="schedule-date" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Horário *</label>
+              <input type="time" class="form-input" id="schedule-time" value="12:00" required>
+            </div>
+          </div>
+
+          <!-- Legenda -->
+          <div class="form-group">
+            <label class="form-label">Legenda</label>
+            <textarea class="form-textarea" id="caption" placeholder="Escreva a legenda do post..."></textarea>
+            <p class="form-hint"><span id="caption-count">0</span>/2200 caracteres</p>
+          </div>
+
+          <!-- Hashtags -->
+          <div class="form-group">
+            <label class="form-label">Hashtags</label>
+            <input type="text" class="form-input" id="hashtags" placeholder="aic, marketing, vendas (separadas por vírgula)">
+            <p class="form-hint">Sem o # - serão adicionadas automaticamente</p>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="savePost()">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg>
+          Agendar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // Config
+    const params = new URLSearchParams(window.location.search);
+    const campaignId = params.get('campaign');
+    const API_BASE = '';
+
+    let currentMonth = new Date();
+    let posts = [];
+    let canvaDesigns = [];
+    let searchTimeout = null;
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!campaignId) {
+        showToast('Campaign ID não fornecido', 'error');
+        return;
+      }
+      loadCampaignInfo();
+      loadPosts();
+      loadCanvaDesigns();
+      renderCalendar();
+      setupCaptionCounter();
+      setDefaultDate();
+    });
+
+    // Load campaign info
+    async function loadCampaignInfo() {
+      try {
+        const res = await fetch(`${API_BASE}/api/campaigns/${campaignId}/instagram/posts?limit=1`);
+        const data = await res.json();
+        if (data.success && data.data.campaign) {
+          document.getElementById('campaign-name').textContent = data.data.campaign.name;
+          document.getElementById('back-link').href = `/aic-campaigns-dashboard.html?campaign=${campaignId}`;
+          if (data.data.campaign.instagramAccount) {
+            document.getElementById('ig-account').textContent = `@${data.data.campaign.instagramAccount}`;
+          }
+        }
+      } catch (e) {
+        console.error('Error loading campaign:', e);
+      }
+    }
+
+    // Load posts
+    async function loadPosts() {
+      const status = document.getElementById('filter-status')?.value || '';
+      document.getElementById('loading-posts').style.display = 'flex';
+      document.getElementById('posts-table').innerHTML = '';
+      document.getElementById('empty-posts').style.display = 'none';
+
+      try {
+        const url = `${API_BASE}/api/campaigns/${campaignId}/instagram/posts?limit=100${status ? '&status=' + status : ''}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        document.getElementById('loading-posts').style.display = 'none';
+
+        if (data.success && data.data.posts.length > 0) {
+          posts = data.data.posts;
+          renderPostsTable();
+          renderCalendar();
+        } else {
+          posts = [];
+          document.getElementById('empty-posts').style.display = 'block';
+          renderCalendar();
+        }
+      } catch (e) {
+        console.error('Error loading posts:', e);
+        document.getElementById('loading-posts').style.display = 'none';
+        showToast('Erro ao carregar publicações', 'error');
+      }
+    }
+
+    // Render posts table
+    function renderPostsTable() {
+      const tbody = document.getElementById('posts-table');
+      tbody.innerHTML = posts.map(post => `
+        <tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:10px;">
+              ${post.thumbnail_url ? `<img src="${post.thumbnail_url}" style="width:40px;height:40px;border-radius:4px;object-fit:cover;">` : ''}
+              <div>
+                <div style="font-weight:500;">${escapeHtml(post.canva_design_name)}</div>
+                ${post.caption ? `<div style="font-size:12px;color:var(--aic-gray);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(post.caption.substring(0, 50))}...</div>` : ''}
+              </div>
+            </div>
+          </td>
+          <td><span style="text-transform:capitalize;">${post.content_type}</span></td>
+          <td>${formatDateTime(post.scheduled_at)}</td>
+          <td>${getStatusBadge(post.status)}</td>
+          <td>
+            <div class="actions">
+              ${post.status === 'pending' ? `
+                <button class="btn btn-secondary btn-sm" onclick="editPost('${post.id}')">Editar</button>
+                <button class="btn btn-danger btn-sm" onclick="cancelPost('${post.id}')">Cancelar</button>
+              ` : ''}
+              ${post.status === 'published' && post.instagram_permalink ? `
+                <a href="${post.instagram_permalink}" target="_blank" class="btn btn-secondary btn-sm">Ver Post</a>
+              ` : ''}
+              ${post.status === 'failed' ? `
+                <span style="font-size:12px;color:var(--aic-red);" title="${escapeHtml(post.error_message || '')}">
+                  ${escapeHtml((post.error_message || 'Erro').substring(0, 30))}...
+                </span>
+              ` : ''}
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // Calendar
+    function renderCalendar() {
+      const grid = document.getElementById('calendar-grid');
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth();
+
+      document.getElementById('calendar-month').textContent =
+        new Date(year, month).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const startDay = firstDay.getDay();
+      const daysInMonth = lastDay.getDate();
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      let html = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+        .map(d => `<div class="calendar-header">${d}</div>`).join('');
+
+      // Previous month days
+      const prevMonth = new Date(year, month, 0);
+      for (let i = startDay - 1; i >= 0; i--) {
+        html += `<div class="calendar-day other-month"><span class="calendar-day-number">${prevMonth.getDate() - i}</span></div>`;
+      }
+
+      // Current month days
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month, day);
+        const isToday = date.getTime() === today.getTime();
+        const dayPosts = posts.filter(p => {
+          const postDate = new Date(p.scheduled_at);
+          return postDate.getDate() === day && postDate.getMonth() === month && postDate.getFullYear() === year;
+        });
+
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        html += `<div class="calendar-day${isToday ? ' today' : ''}" onclick="openScheduleForDate('${dateStr}', event)" style="cursor:pointer;">
+          <span class="calendar-day-number">${day}</span>
+          ${dayPosts.slice(0, 3).map(p => `
+            <div class="calendar-post ${p.content_type}${p.status === 'published' ? ' published' : ''}"
+                 onclick="viewPost('${p.id}'); event.stopPropagation();" title="${escapeHtml(p.canva_design_name)}">
+              ${escapeHtml(p.canva_design_name.substring(0, 10))}
+            </div>
+          `).join('')}
+          ${dayPosts.length > 3 ? `<div style="font-size:10px;color:var(--aic-gray);">+${dayPosts.length - 3} mais</div>` : ''}
+        </div>`;
+      }
+
+      // Next month days
+      const remaining = 42 - (startDay + daysInMonth);
+      for (let i = 1; i <= remaining; i++) {
+        html += `<div class="calendar-day other-month"><span class="calendar-day-number">${i}</span></div>`;
+      }
+
+      grid.innerHTML = html;
+    }
+
+    function changeMonth(delta) {
+      currentMonth.setMonth(currentMonth.getMonth() + delta);
+      renderCalendar();
+    }
+
+    function goToToday() {
+      currentMonth = new Date();
+      renderCalendar();
+    }
+
+    // Tabs
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+      document.getElementById('calendar-view').style.display = tab === 'calendar' ? 'block' : 'none';
+      document.getElementById('list-view').style.display = tab === 'list' ? 'block' : 'none';
+    }
+
+    // Load Canva designs
+    async function loadCanvaDesigns() {
+      try {
+        // We'll search on-demand instead
+        canvaDesigns = [];
+      } catch (e) {
+        console.error('Error loading Canva designs:', e);
+      }
+    }
+
+    // Search Canva designs (debounced)
+    function searchCanvaDesigns(query) {
+      clearTimeout(searchTimeout);
+      const results = document.getElementById('canva-results');
+
+      if (!query || query.length < 2) {
+        results.style.display = 'none';
+        return;
+      }
+
+      searchTimeout = setTimeout(async () => {
+        // For now, just show a placeholder - the actual search happens on the backend
+        results.innerHTML = `<div class="canva-result" onclick="selectDesign('${escapeHtml(query)}', '', '')">
+          <div>
+            <div class="canva-result-name">Usar: "${escapeHtml(query)}"</div>
+            <div class="canva-result-meta">O design será buscado pelo nome exato no momento da publicação</div>
+          </div>
+        </div>`;
+        results.style.display = 'block';
+      }, 300);
+    }
+
+    function selectDesign(name, id, thumbnail) {
+      document.getElementById('canva-design-name').value = name;
+      document.getElementById('canva-design-id').value = id || '';
+      document.getElementById('canva-results').style.display = 'none';
+
+      if (name) {
+        document.getElementById('design-name').textContent = name;
+        document.getElementById('design-meta').textContent = id ? `ID: ${id}` : 'Será buscado pelo nome';
+        document.getElementById('design-thumbnail').src = thumbnail || '/assets/AIC/Imagens%20Vetor%20/AIC%20Icone%20Cheio.png';
+        document.getElementById('selected-design').style.display = 'flex';
+        document.getElementById('canva-design-name').style.display = 'none';
+      }
+    }
+
+    function clearDesign() {
+      document.getElementById('canva-design-name').value = '';
+      document.getElementById('canva-design-id').value = '';
+      document.getElementById('selected-design').style.display = 'none';
+      document.getElementById('canva-design-name').style.display = 'block';
+      document.getElementById('canva-design-name').focus();
+    }
+
+    // Modal
+    function openScheduleModal() {
+      document.getElementById('modal-title').textContent = 'Agendar Publicação';
+      document.getElementById('schedule-form').reset();
+      document.getElementById('edit-post-id').value = '';
+      clearDesign();
+      setDefaultDate();
+      document.getElementById('schedule-modal').classList.add('active');
+    }
+
+    // Abrir modal com data específica (clicando no calendário)
+    function openScheduleForDate(dateStr, event) {
+      // Remover seleção anterior
+      document.querySelectorAll('.calendar-day.selected').forEach(el => el.classList.remove('selected'));
+
+      // Adicionar seleção ao dia clicado
+      if (event && event.currentTarget) {
+        event.currentTarget.classList.add('selected');
+      }
+
+      document.getElementById('modal-title').textContent = 'Agendar Publicação';
+      document.getElementById('schedule-form').reset();
+      document.getElementById('edit-post-id').value = '';
+      clearDesign();
+      document.getElementById('schedule-date').value = dateStr;
+      document.getElementById('schedule-modal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('schedule-modal').classList.remove('active');
+    }
+
+    function setDefaultDate() {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      document.getElementById('schedule-date').value = tomorrow.toISOString().split('T')[0];
+    }
+
+    // Save post
+    async function savePost() {
+      const postId = document.getElementById('edit-post-id').value;
+      const designName = document.getElementById('canva-design-name').value ||
+                         document.getElementById('design-name').textContent;
+      const designId = document.getElementById('canva-design-id').value;
+      const contentType = document.getElementById('content-type').value;
+      const date = document.getElementById('schedule-date').value;
+      const time = document.getElementById('schedule-time').value;
+      const caption = document.getElementById('caption').value;
+      const hashtagsRaw = document.getElementById('hashtags').value;
+
+      if (!designName) {
+        showToast('Selecione um design do Canva', 'error');
+        return;
+      }
+
+      if (!date || !time) {
+        showToast('Selecione data e hora', 'error');
+        return;
+      }
+
+      const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
+      const hashtags = hashtagsRaw ? hashtagsRaw.split(',').map(h => h.trim().replace('#', '')).filter(h => h) : [];
+
+      const body = {
+        canvaDesignName: designName,
+        canvaDesignId: designId || undefined,
+        contentType,
+        scheduledAt,
+        caption: caption || undefined,
+        hashtags: hashtags.length > 0 ? hashtags : undefined
+      };
+
+      try {
+        const url = postId
+          ? `${API_BASE}/api/campaigns/${campaignId}/instagram/posts/${postId}`
+          : `${API_BASE}/api/campaigns/${campaignId}/instagram/schedule`;
+
+        const res = await fetch(url, {
+          method: postId ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          showToast(postId ? 'Publicação atualizada!' : 'Publicação agendada!', 'success');
+          closeModal();
+          loadPosts();
+        } else {
+          showToast(data.error || 'Erro ao salvar', 'error');
+        }
+      } catch (e) {
+        console.error('Error saving post:', e);
+        showToast('Erro ao salvar publicação', 'error');
+      }
+    }
+
+    // Edit post
+    async function editPost(postId) {
+      const post = posts.find(p => p.id === postId);
+      if (!post) return;
+
+      document.getElementById('modal-title').textContent = 'Editar Publicação';
+      document.getElementById('edit-post-id').value = postId;
+
+      selectDesign(post.canva_design_name, post.canva_design_id, post.thumbnail_url);
+      document.getElementById('content-type').value = post.content_type;
+
+      const scheduled = new Date(post.scheduled_at);
+      document.getElementById('schedule-date').value = scheduled.toISOString().split('T')[0];
+      document.getElementById('schedule-time').value = scheduled.toTimeString().substring(0, 5);
+
+      document.getElementById('caption').value = post.caption || '';
+      document.getElementById('hashtags').value = (post.hashtags || []).join(', ');
+
+      document.getElementById('schedule-modal').classList.add('active');
+    }
+
+    // Cancel post
+    async function cancelPost(postId) {
+      if (!confirm('Tem certeza que deseja cancelar esta publicação?')) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/campaigns/${campaignId}/instagram/posts/${postId}`, {
+          method: 'DELETE'
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          showToast('Publicação cancelada', 'success');
+          loadPosts();
+        } else {
+          showToast(data.error || 'Erro ao cancelar', 'error');
+        }
+      } catch (e) {
+        console.error('Error cancelling post:', e);
+        showToast('Erro ao cancelar publicação', 'error');
+      }
+    }
+
+    // View post
+    function viewPost(postId) {
+      const post = posts.find(p => p.id === postId);
+      if (post && post.instagram_permalink) {
+        window.open(post.instagram_permalink, '_blank');
+      } else {
+        editPost(postId);
+      }
+    }
+
+    // Helpers
+    function getStatusBadge(status) {
+      const labels = {
+        pending: 'Agendado',
+        processing: 'Publicando...',
+        published: 'Publicado',
+        failed: 'Erro',
+        cancelled: 'Cancelado'
+      };
+      return `<span class="status status-${status}">${labels[status] || status}</span>`;
+    }
+
+    function formatDateTime(isoString) {
+      const date = new Date(isoString);
+      return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text || '';
+      return div.innerHTML;
+    }
+
+    function setupCaptionCounter() {
+      const caption = document.getElementById('caption');
+      const counter = document.getElementById('caption-count');
+      caption.addEventListener('input', () => {
+        counter.textContent = caption.value.length;
+        if (caption.value.length > 2200) {
+          counter.style.color = 'var(--aic-red)';
+        } else {
+          counter.style.color = 'inherit';
+        }
+      });
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `toast ${type} show`;
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // Close modal on escape
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    // Close modal on overlay click
+    document.getElementById('schedule-modal').addEventListener('click', e => {
+      if (e.target.id === 'schedule-modal') closeModal();
+    });
+  </script>
+  <script src="/components/aic-sidebar.js"></script>
+</body>
+</html>

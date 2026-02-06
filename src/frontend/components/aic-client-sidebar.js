@@ -95,6 +95,12 @@
       label: 'Faturas',
       path: '/cliente/faturas',
       requiredSteps: ['contrato_assinado']
+    },
+    {
+      id: 'publicacoes',
+      label: 'Publicações IG',
+      path: '/cliente/publicacoes',
+      requiredSteps: ['briefing_completo']
     }
   ];
 
@@ -435,7 +441,7 @@
 
     for (var i = 0; i < MENU_ITEMS.length; i++) {
       var item = MENU_ITEMS[i];
-      if (item.id === 'faturas' || item.id === 'leads') continue; // Separar em outra secao
+      if (item.id === 'faturas' || item.id === 'leads' || item.id === 'publicacoes') continue; // Separar em outras secoes
 
       var accessible = item.alwaysVisible || isStepAccessible(item.requiredSteps, item.id);
       var completed = isStepCompleted(item.completedAt);
@@ -493,6 +499,32 @@
 
       html += '<a href="' + fhref + '" class="' + fclassName + '">' +
         '<span>' + fitem.label + '</span>' +
+      '</a>';
+    }
+
+    html += '</div>';
+
+    // Secao Conteudo
+    html += '<div class="aic-sidebar-section">';
+    html += '<div class="aic-sidebar-section-title">Conteúdo</div>';
+
+    var contentItems = MENU_ITEMS.filter(function(item) {
+      return item.id === 'publicacoes';
+    });
+
+    for (var k = 0; k < contentItems.length; k++) {
+      var citem = contentItems[k];
+      var caccessible = isStepAccessible(citem.requiredSteps, citem.id);
+      var cactive = isActivePage(citem.path);
+
+      var cclassName = 'aic-sidebar-link';
+      if (cactive) cclassName += ' active';
+      else if (!caccessible) cclassName += ' disabled';
+
+      var chref = caccessible ? buildUrl(citem.path) : '#';
+
+      html += '<a href="' + chref + '" class="' + cclassName + '">' +
+        '<span>' + citem.label + '</span>' +
       '</a>';
     }
 

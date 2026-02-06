@@ -310,6 +310,12 @@
       navContent += '<a href="' + baseUrl + '/onboarding?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('onboarding') ? ' active' : '') + '">Onboarding</a>';
       navContent += '</div>';
 
+      // Conteúdo - disponível para admin e cliente
+      navContent += '<div class="aic-sidebar-section">';
+      navContent += '<div class="aic-sidebar-section-title">Conteúdo</div>';
+      navContent += '<a href="' + baseUrl + '/publicacoes?campaign=' + campaignId + '" class="aic-sidebar-link' + (isActive('publicacoes') || currentPath.includes('instagram-publisher') ? ' active' : '') + '">Publicações IG</a>';
+      navContent += '</div>';
+
       // Admin extras dentro da campanha
       if (isAdmin) {
         navContent += '<div class="aic-sidebar-section">';
