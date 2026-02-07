@@ -2751,14 +2751,14 @@ router.patch('/campaigns/:id/status', async (req: Request, res: Response): Promi
       return;
     }
 
-    const validStatuses = ['active', 'test', 'paused', 'draft'];
+    const validStatuses = ['active', 'test', 'inbound_only', 'paused', 'draft'];
     if (!status || !validStatuses.includes(status)) {
       res.status(400).json({ error: `Valid status is required: ${validStatuses.join(', ')}` });
       return;
     }
 
     // Verificar LP antes de ativar/testar (skip com force=true)
-    if ((status === 'active' || status === 'test') && !req.body.force) {
+    if ((status === 'active' || status === 'test' || status === 'inbound_only') && !req.body.force) {
       const { data: campaignCheck } = await supabase
         .from('cluster_campaigns')
         .select('landing_page_url, slug, status')
@@ -2866,6 +2866,7 @@ router.patch('/campaigns/:id/status', async (req: Request, res: Response): Promi
     const statusLabels: Record<string, string> = {
       active: 'ativa',
       test: 'em modo teste',
+      inbound_only: 'apenas inbound',
       paused: 'pausada',
       draft: 'em rascunho'
     };

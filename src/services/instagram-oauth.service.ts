@@ -661,7 +661,7 @@ export class InstagramOAuthService {
       `)
       .eq('status', 'active')
       .not('access_token_encrypted', 'is', null)
-      .in('cluster_campaigns.status', ['active', 'test']);
+      .in('cluster_campaigns.status', ['active', 'test', 'inbound_only']);
 
     if (error || !accounts) {
       console.error('[InstagramOAuth] Erro ao buscar contas:', error);

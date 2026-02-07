@@ -241,7 +241,7 @@ export class AICPuppeteerManagerService {
       .eq('whapi_channel_id', channelId)
       .single();
 
-    if (campaign && campaign.status === 'active') {
+    if (campaign && ['active', 'test', 'inbound_only'].includes(campaign.status)) {
       // Aguardar um pouco antes de reconectar
       await new Promise(resolve => setTimeout(resolve, 5000));
 

@@ -107,7 +107,7 @@ router.post('/capture', async (req: Request, res: Response): Promise<void> => {
 
 /**
  * GET /api/landing/active-campaign
- * Retorna a campanha ativa/test mais recente (para LP institucional)
+ * Retorna a campanha ativa/test/inbound_only mais recente (para LP institucional)
  */
 router.get('/active-campaign', async (_req: Request, res: Response): Promise<void> => {
   try {
@@ -117,10 +117,11 @@ router.get('/active-campaign', async (_req: Request, res: Response): Promise<voi
       process.env.SUPABASE_SERVICE_ROLE_KEY || ''
     );
 
+    // inbound_only: campanha que responde inbound mas não faz outreach
     const { data, error } = await supabase
       .from('cluster_campaigns')
       .select('id')
-      .in('status', ['active', 'test'])
+      .in('status', ['active', 'test', 'inbound_only'])
       .order('status', { ascending: true })
       .order('created_at', { ascending: false })
       .limit(1)
@@ -237,7 +238,7 @@ router.post('/check-lead', async (req: Request, res: Response): Promise<void> =>
         cluster_campaigns!inner(campaign_name, status)
       `)
       .eq('instagram_leads.username', username)
-      .eq('cluster_campaigns.status', 'active');
+      .in('cluster_campaigns.status', ['active', 'test', 'inbound_only']);
 
     if (campaignId) {
       query = query.eq('campaign_id', campaignId);
