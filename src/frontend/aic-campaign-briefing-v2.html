@@ -1637,7 +1637,45 @@
 
       iconEl.innerHTML = icons[type] || '';
       titleEl.textContent = title;
-      textEl.textContent = text;
+
+      // Add reprocess button when success
+      if (type === 'success') {
+        textEl.innerHTML = `${text} <button type="button" onclick="reprocessAllDocuments()" style="margin-left: 12px; padding: 4px 12px; background: transparent; border: 1px solid #0ecc97; color: #0ecc97; border-radius: 4px; cursor: pointer; font-size: 12px;">Reprocessar</button>`;
+      } else {
+        textEl.textContent = text;
+      }
+    }
+
+    /**
+     * Reprocessa todos os documentos do briefing (LP, PDFs, URLs)
+     */
+    async function reprocessAllDocuments() {
+      const statusEl = document.getElementById('landing-status');
+      const textEl = document.getElementById('landing-status-text');
+
+      textEl.innerHTML = '<span style="color: #f59e0b;">Reprocessando todos os documentos...</span>';
+
+      try {
+        const response = await authFetch(`/api/campaigns/${campaignId}/process-all-documents`, {
+          method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          textEl.innerHTML = `<span style="color: #ef4444;">Erro: ${result.error || 'Falha ao reprocessar'}</span>`;
+          return;
+        }
+
+        textEl.innerHTML = `<span style="color: #0ecc97;">✓ ${result.documentsProcessed} documentos reprocessados (${result.totalChunks} blocos)</span> <button type="button" onclick="reprocessAllDocuments()" style="margin-left: 12px; padding: 4px 12px; background: transparent; border: 1px solid #0ecc97; color: #0ecc97; border-radius: 4px; cursor: pointer; font-size: 12px;">Reprocessar</button>`;
+
+        // Reload documents list
+        await loadDocuments();
+
+      } catch (error) {
+        console.error('Error reprocessing documents:', error);
+        textEl.innerHTML = `<span style="color: #ef4444;">Erro ao reprocessar: ${error.message}</span>`;
+      }
     }
 
     // =====================================================

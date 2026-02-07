@@ -1459,6 +1459,20 @@ router.post('/campaigns/:campaignId/briefing', optionalAuthAIC, async (req: Auth
             console.warn('[Campaign Credentials] Erro ao enviar notificacao Telegram:', telegramError);
           }
         }
+
+        // =========================================================
+        // PROCESSAR TODOS OS DOCUMENTOS DO BRIEFING (RAG)
+        // Quando briefing >= 80%, garantir que todos docs estão embedados
+        // =========================================================
+        try {
+          console.log(`[Briefing Complete] Processando documentos para RAG: ${campaignId}`);
+          const { getBriefingDocumentsScraperService } = await import('../services/briefing-documents-scraper.service');
+          const scraper = getBriefingDocumentsScraperService();
+          const docsResult = await scraper.processAllBriefingDocuments(campaignId);
+          console.log(`[Briefing Complete] Documentos processados: ${docsResult.documentsProcessed} docs, ${docsResult.totalChunks} chunks`);
+        } catch (docError: any) {
+          console.error(`[Briefing Complete] Erro ao processar documentos:`, docError.message);
+        }
       }
     }
 
@@ -1600,10 +1614,37 @@ router.patch('/campaigns/:campaignId/briefing/approve', optionalAuthAIC, async (
       throw error;
     }
 
+    // =========================================================
+    // PROCESSAR TODOS OS DOCUMENTOS DO BRIEFING (RAG)
+    // Isso garante que o AI Agent tenha acesso a todo conteúdo
+    // =========================================================
+    let documentsResult: { success: boolean; documentsProcessed: number; totalChunks: number; errors: string[] } | null = null;
+    try {
+      console.log(`[Briefing Approve] Processando documentos para RAG: ${campaignId}`);
+      const { getBriefingDocumentsScraperService } = await import('../services/briefing-documents-scraper.service');
+      const scraper = getBriefingDocumentsScraperService();
+      const result = await scraper.processAllBriefingDocuments(campaignId);
+      documentsResult = {
+        success: result.success,
+        documentsProcessed: result.documentsProcessed,
+        totalChunks: result.totalChunks,
+        errors: result.errors
+      };
+      console.log(`[Briefing Approve] Documentos processados: ${result.documentsProcessed} docs, ${result.totalChunks} chunks`);
+    } catch (docError: any) {
+      console.error(`[Briefing Approve] Erro ao processar documentos (não bloqueia aprovação):`, docError.message);
+      documentsResult = { success: false, documentsProcessed: 0, totalChunks: 0, errors: [docError.message] };
+    }
+
     res.json({
       success: true,
       briefing: data,
-      message: 'Briefing aprovado'
+      message: 'Briefing aprovado',
+      documents: documentsResult ? {
+        processed: documentsResult.documentsProcessed,
+        chunks: documentsResult.totalChunks,
+        errors: documentsResult.errors
+      } : null
     });
   } catch (error: any) {
     console.error('[Campaign Credentials] Error approving briefing:', error);
@@ -2020,6 +2061,111 @@ router.get('/campaigns/:campaignId/landing-page/preview', optionalAuthAIC, async
 
   } catch (error: any) {
     console.error('[Landing Page] Error previewing:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/campaigns/:campaignId/process-all-documents
+ * Processa TODOS os documentos do briefing (LP, website, portfólio, PDFs, etc.)
+ * Usa Puppeteer para renderizar JS e capturar conteúdo completo incluindo preços
+ */
+router.post('/campaigns/:campaignId/process-all-documents', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+
+    if (!campaignId) {
+      res.status(400).json({ error: 'campaignId is required' });
+      return;
+    }
+
+    // Verificar acesso a campanha
+    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess) {
+      res.status(404).json({ error: 'Campaign not found' });
+      return;
+    }
+
+    console.log(`[Documents] Processing ALL documents for campaign ${campaignId}`);
+
+    const { getBriefingDocumentsScraperService } = await import('../services/briefing-documents-scraper.service');
+    const scraper = getBriefingDocumentsScraperService();
+    const result = await scraper.processAllBriefingDocuments(campaignId);
+
+    if (!result.success) {
+      res.status(400).json({
+        error: 'Nenhum documento processado com sucesso',
+        errors: result.errors,
+        details: result.details
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      documentsProcessed: result.documentsProcessed,
+      totalChunks: result.totalChunks,
+      errors: result.errors,
+      details: result.details,
+      message: `${result.documentsProcessed} documentos processados, ${result.totalChunks} blocos criados para RAG`
+    });
+
+  } catch (error: any) {
+    console.error('[Documents] Error processing all documents:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/campaigns/:campaignId/process-document-url
+ * Processa uma URL específica de documento (qualquer tipo)
+ */
+router.post('/campaigns/:campaignId/process-document-url', optionalAuthAIC, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { campaignId } = req.params;
+    const { url, source, docType } = req.body;
+
+    if (!campaignId || !url) {
+      res.status(400).json({ error: 'campaignId and url are required' });
+      return;
+    }
+
+    // Verificar acesso a campanha
+    const { hasAccess } = await checkCampaignAccess(campaignId, req.userId, req.isAdmin || false);
+    if (!hasAccess) {
+      res.status(404).json({ error: 'Campaign not found' });
+      return;
+    }
+
+    console.log(`[Documents] Processing URL: ${url} for campaign ${campaignId}`);
+
+    const { getBriefingDocumentsScraperService } = await import('../services/briefing-documents-scraper.service');
+    const scraper = getBriefingDocumentsScraperService();
+    const result = await scraper.processUrl(
+      campaignId,
+      url,
+      source || 'Custom Document',
+      docType || 'knowledge'
+    );
+
+    if (!result.success) {
+      res.status(400).json({
+        error: result.error || 'Falha ao processar documento',
+        success: false
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      source: result.source,
+      url: result.url,
+      chunksCreated: result.chunksCreated,
+      message: `Documento processado: ${result.chunksCreated} blocos criados`
+    });
+
+  } catch (error: any) {
+    console.error('[Documents] Error processing URL:', error);
     res.status(500).json({ error: error.message });
   }
 });

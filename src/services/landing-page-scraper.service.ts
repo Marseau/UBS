@@ -2,12 +2,15 @@
  * Landing Page Scraper Service
  *
  * Extrai conteudo de landing pages para embedding no RAG
- * - Faz fetch da URL
- * - Extrai texto limpo (remove scripts, styles, etc)
+ * - Usa Puppeteer para renderizar JavaScript
+ * - Extrai TODO o conteudo visivel (inclusive precos, promoções)
  * - Processa e embeda via CampaignDocumentProcessor
+ *
+ * IMPORTANTE: A LP é a documentação principal da campanha AIC.
+ * Todo conteudo deve ser capturado para o RAG.
  */
 
-import axios from 'axios';
+import puppeteer, { Browser, Page } from 'puppeteer';
 import * as cheerio from 'cheerio';
 import { campaignDocumentProcessor } from './campaign-document-processor.service';
 import { createClient } from '@supabase/supabase-js';
@@ -16,6 +19,9 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Browser singleton para reutilização
+let browserInstance: Browser | null = null;
 
 // =====================================================
 // TIPOS
@@ -37,6 +43,11 @@ export interface ExtractedContent {
   paragraphs: string[];
   lists: string[];
   ctas: string[];
+  prices: string[];           // Preços e valores monetários
+  promotions: string[];       // Promoções, descontos, ofertas
+  testimonials: string[];     // Depoimentos e provas sociais
+  headerContent: string[];    // Conteúdo do header (não removido)
+  footerContent: string[];    // Conteúdo do footer (não removido)
   fullText: string;
 }
 
@@ -143,81 +154,325 @@ export class LandingPageScraperService {
     }
   }
 
+  /**
+   * Obter ou criar browser Puppeteer
+   */
+  private async getBrowser(): Promise<Browser> {
+    if (!browserInstance || !browserInstance.connected) {
+      console.log('[LandingPageScraper] Iniciando browser Puppeteer...');
+      browserInstance = await puppeteer.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-web-security',
+          '--disable-features=IsolateOrigins,site-per-process'
+        ]
+      });
+    }
+    return browserInstance;
+  }
+
+  /**
+   * Fetch página usando Puppeteer para renderizar JavaScript
+   */
   private async fetchPage(url: string): Promise<string | null> {
+    let page: Page | null = null;
     try {
-      const response = await axios.get(url, {
-        headers: {
-          'User-Agent': this.userAgent,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-        },
-        timeout: 30000,
-        maxRedirects: 5
+      const browser = await this.getBrowser();
+      page = await browser.newPage();
+
+      // Configurar user agent e viewport
+      await page.setUserAgent(this.userAgent);
+      await page.setViewport({ width: 1920, height: 1080 });
+
+      // Configurar headers em português
+      await page.setExtraHTTPHeaders({
+        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
       });
 
-      return response.data;
+      console.log(`[LandingPageScraper] Navegando para: ${url}`);
+
+      // Navegar com timeout generoso para páginas pesadas
+      await page.goto(url, {
+        waitUntil: 'networkidle2',
+        timeout: 60000
+      });
+
+      // Aguardar conteúdo dinâmico carregar
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Scroll para carregar lazy content
+      await this.autoScroll(page);
+
+      // Obter HTML renderizado
+      const html = await page.content();
+
+      console.log(`[LandingPageScraper] Página renderizada: ${html.length} caracteres`);
+
+      return html;
+
     } catch (error: any) {
-      console.error('[LandingPageScraper] Erro ao fazer fetch:', error.message);
+      console.error('[LandingPageScraper] Erro ao fazer fetch com Puppeteer:', error.message);
       return null;
+    } finally {
+      if (page) {
+        await page.close().catch(() => {});
+      }
     }
+  }
+
+  /**
+   * Auto-scroll para carregar conteúdo lazy-loaded
+   */
+  private async autoScroll(page: Page): Promise<void> {
+    // Usa string de função para evitar erros de TypeScript com DOM APIs
+    await page.evaluate(`
+      (async () => {
+        await new Promise((resolve) => {
+          let totalHeight = 0;
+          const distance = 300;
+          const timer = setInterval(() => {
+            const scrollHeight = document.body.scrollHeight;
+            window.scrollBy(0, distance);
+            totalHeight += distance;
+            if (totalHeight >= scrollHeight) {
+              clearInterval(timer);
+              window.scrollTo(0, 0);
+              resolve();
+            }
+          }, 100);
+          setTimeout(() => {
+            clearInterval(timer);
+            window.scrollTo(0, 0);
+            resolve();
+          }, 10000);
+        });
+      })()
+    `);
   }
 
   private extractContent(html: string, url: string): ExtractedContent {
     const $ = cheerio.load(html);
 
-    // Remover elementos que nao sao conteudo
+    // =====================================================
+    // EXTRAIR CONTEÚDO DO HEADER/FOOTER ANTES DE REMOVER
+    // =====================================================
+    const headerContent: string[] = [];
+    $('header, [role="banner"], nav').each((_, el) => {
+      const text = $(el).text().trim().replace(/\s+/g, ' ');
+      if (text && text.length > 5 && text.length < 500) {
+        headerContent.push(text);
+      }
+    });
+
+    const footerContent: string[] = [];
+    $('footer, [role="contentinfo"]').each((_, el) => {
+      const text = $(el).text().trim().replace(/\s+/g, ' ');
+      if (text && text.length > 5 && text.length < 1000) {
+        footerContent.push(text);
+      }
+    });
+
+    // =====================================================
+    // EXTRAIR PREÇOS E VALORES MONETÁRIOS (CRÍTICO!)
+    // =====================================================
+    const prices: string[] = [];
+    const pricePatterns = [
+      /R\$\s*[\d.,]+/gi,                           // R$ 10,00 / R$ 1.000
+      /[\d.,]+\s*reais/gi,                         // 10 reais
+      /de\s+R\$\s*[\d.,]+\s+por\s+R\$\s*[\d.,]+/gi, // de R$ 55 por R$ 10
+      /\d+%\s*(?:OFF|de desconto|desconto)/gi,    // 82% OFF
+      /apenas\s+R\$\s*[\d.,]+/gi,                  // apenas R$ 10
+      /somente\s+R\$\s*[\d.,]+/gi,                 // somente R$ 10
+      /por\s+R\$\s*[\d.,]+/gi,                     // por R$ 10
+      /a\s+partir\s+de\s+R\$\s*[\d.,]+/gi,         // a partir de R$ 10
+    ];
+
+    // Buscar preços em todo o HTML (texto visível)
+    const bodyText = $('body').text();
+    for (const pattern of pricePatterns) {
+      const matches = bodyText.match(pattern);
+      if (matches) {
+        matches.forEach(match => {
+          const normalized = match.trim();
+          if (!prices.includes(normalized)) {
+            prices.push(normalized);
+          }
+        });
+      }
+    }
+
+    // Buscar em elementos específicos de preço
+    const priceSelectors = [
+      '[class*="price"]', '[class*="preco"]', '[class*="valor"]',
+      '[class*="cost"]', '[class*="custo"]', '[class*="money"]',
+      '[class*="amount"]', '[class*="fee"]', '[class*="rate"]',
+      '[data-price]', '[data-value]', '[data-amount]',
+      '.price', '.preco', '.valor', '.custo',
+      '#price', '#preco', '#valor'
+    ];
+    $(priceSelectors.join(', ')).each((_, el) => {
+      const text = $(el).text().trim();
+      if (text && text.length > 1 && text.length < 200) {
+        const normalized = text.replace(/\s+/g, ' ');
+        if (!prices.includes(normalized)) {
+          prices.push(normalized);
+        }
+      }
+    });
+
+    // =====================================================
+    // EXTRAIR PROMOÇÕES E DESCONTOS
+    // =====================================================
+    const promotions: string[] = [];
+    const promoSelectors = [
+      '[class*="promo"]', '[class*="discount"]', '[class*="desconto"]',
+      '[class*="offer"]', '[class*="oferta"]', '[class*="sale"]',
+      '[class*="special"]', '[class*="lancamento"]', '[class*="launch"]',
+      '[class*="badge"]', '[class*="tag"]', '[class*="label"]',
+      '.promo', '.promocao', '.desconto', '.oferta',
+      '[class*="countdown"]', '[class*="timer"]', '[class*="urgency"]'
+    ];
+    $(promoSelectors.join(', ')).each((_, el) => {
+      const text = $(el).text().trim();
+      if (text && text.length > 3 && text.length < 300) {
+        const normalized = text.replace(/\s+/g, ' ');
+        if (!promotions.includes(normalized)) {
+          promotions.push(normalized);
+        }
+      }
+    });
+
+    // Buscar padrões de promoção no texto
+    const promoPatterns = [
+      /(?:promoção|oferta|desconto|lançamento).*?(?:\.|!|\n|$)/gi,
+      /(?:válido|valido)\s+até\s+[\d\/\-]+/gi,
+      /(?:só|somente|apenas)\s+(?:hoje|amanhã|esta semana)/gi,
+      /(?:últimas|ultimas)\s+(?:vagas|unidades)/gi,
+      /\d+%\s*(?:OFF|de desconto|desconto)/gi,
+      /economize\s+R\$\s*[\d.,]+/gi,
+      /de\s+R\$\s*[\d.,]+\s+por\s+R\$\s*[\d.,]+/gi,
+    ];
+    for (const pattern of promoPatterns) {
+      const matches = bodyText.match(pattern);
+      if (matches) {
+        matches.forEach(match => {
+          const normalized = match.trim();
+          if (normalized.length > 5 && !promotions.includes(normalized)) {
+            promotions.push(normalized);
+          }
+        });
+      }
+    }
+
+    // =====================================================
+    // EXTRAIR DEPOIMENTOS E PROVAS SOCIAIS
+    // =====================================================
+    const testimonials: string[] = [];
+    const testimonialSelectors = [
+      '[class*="testimonial"]', '[class*="depoimento"]',
+      '[class*="review"]', '[class*="avaliacao"]',
+      '[class*="quote"]', '[class*="citacao"]',
+      '[class*="feedback"]', '[class*="cliente"]',
+      'blockquote', '.testimonial', '.depoimento'
+    ];
+    $(testimonialSelectors.join(', ')).each((_, el) => {
+      const text = $(el).text().trim();
+      if (text && text.length > 20 && text.length < 1000) {
+        const normalized = text.replace(/\s+/g, ' ');
+        if (!testimonials.includes(normalized)) {
+          testimonials.push(normalized);
+        }
+      }
+    });
+
+    // =====================================================
+    // REMOVER APENAS SCRIPTS E STYLES (manter conteúdo visível)
+    // =====================================================
     $('script').remove();
     $('style').remove();
     $('noscript').remove();
     $('iframe').remove();
-    $('nav').remove();
-    $('header').remove();
-    $('footer').remove();
-    $('[role="navigation"]').remove();
-    $('[role="banner"]').remove();
-    $('[role="contentinfo"]').remove();
     $('.cookie-banner, .cookie-notice, .gdpr').remove();
     $('#cookie-banner, #cookie-notice').remove();
 
-    // Extrair titulo
+    // NÃO removemos mais header/footer/nav - apenas cookies
+
+    // =====================================================
+    // EXTRAIR TÍTULO E DESCRIÇÃO
+    // =====================================================
     const title = $('title').text().trim() ||
                   $('h1').first().text().trim() ||
                   $('meta[property="og:title"]').attr('content') ||
                   '';
 
-    // Extrair descricao
     const description = $('meta[name="description"]').attr('content') ||
                         $('meta[property="og:description"]').attr('content') ||
                         '';
 
-    // Extrair headings
+    // =====================================================
+    // EXTRAIR TODOS OS HEADINGS (h1-h6)
+    // =====================================================
     const headings: string[] = [];
-    $('h1, h2, h3, h4').each((_, el) => {
+    $('h1, h2, h3, h4, h5, h6').each((_, el) => {
       const text = $(el).text().trim();
-      if (text && text.length > 2 && text.length < 200) {
-        headings.push(text);
+      if (text && text.length > 2 && text.length < 300) {
+        const normalized = text.replace(/\s+/g, ' ');
+        if (!headings.includes(normalized)) {
+          headings.push(normalized);
+        }
       }
     });
 
-    // Extrair paragrafos
+    // =====================================================
+    // EXTRAIR PARÁGRAFOS E TEXTO
+    // =====================================================
     const paragraphs: string[] = [];
     $('p').each((_, el) => {
       const text = $(el).text().trim();
-      if (text && text.length > 20) {
-        paragraphs.push(text);
+      if (text && text.length > 10) {
+        const normalized = text.replace(/\s+/g, ' ');
+        if (!paragraphs.includes(normalized)) {
+          paragraphs.push(normalized);
+        }
       }
     });
 
-    // Extrair listas
+    // Extrair spans e divs com texto substancial
+    $('span, div').each((_, el) => {
+      const $el = $(el);
+      // Ignorar se tem filhos complexos (evitar duplicação)
+      if ($el.children('p, div, span, ul, ol').length > 0) return;
+
+      const text = $el.text().trim();
+      if (text && text.length > 30 && text.length < 500) {
+        const normalized = text.replace(/\s+/g, ' ');
+        if (!paragraphs.includes(normalized)) {
+          paragraphs.push(normalized);
+        }
+      }
+    });
+
+    // =====================================================
+    // EXTRAIR LISTAS
+    // =====================================================
     const lists: string[] = [];
     $('li').each((_, el) => {
       const text = $(el).text().trim();
-      if (text && text.length > 10 && text.length < 500) {
-        lists.push(`- ${text}`);
+      if (text && text.length > 5 && text.length < 500) {
+        const normalized = text.replace(/\s+/g, ' ');
+        if (!lists.some(l => l.includes(normalized))) {
+          lists.push(`- ${normalized}`);
+        }
       }
     });
 
-    // Extrair CTAs (botoes e links de acao)
+    // =====================================================
+    // EXTRAIR CTAs
+    // =====================================================
     const ctas: string[] = [];
     const ctaSelectors = [
       'button',
@@ -232,52 +487,74 @@ export class LandingPageScraperService {
     $(ctaSelectors.join(', ')).each((_, el) => {
       const text = $(el).text().trim();
       if (text && text.length >= 3 && text.length < 100) {
-        // Evitar duplicatas e textos genericos
         const normalized = text.replace(/\s+/g, ' ');
         if (!ctas.includes(normalized) &&
-            !['×', 'X', '✕', 'Menu', 'Toggle'].includes(normalized)) {
+            !['×', 'X', '✕', 'Menu', 'Toggle', 'Close'].includes(normalized)) {
           ctas.push(normalized);
         }
       }
     });
 
-    // Extrair texto de sections e divs principais
-    const mainContent: string[] = [];
-    $('main, article, section, [role="main"]').each((_, el) => {
-      const text = $(el).text().trim();
-      if (text && text.length > 50) {
-        // Limpar espacos extras
-        const cleaned = text.replace(/\s+/g, ' ').trim();
-        if (cleaned.length > 50 && !mainContent.includes(cleaned)) {
-          mainContent.push(cleaned);
-        }
-      }
-    });
-
-    // Montar texto completo
+    // =====================================================
+    // MONTAR TEXTO COMPLETO (ESTRUTURADO PARA RAG)
+    // =====================================================
     const fullTextParts: string[] = [];
 
     if (title) fullTextParts.push(`# ${title}`);
     if (description) fullTextParts.push(`\n${description}`);
 
+    // PREÇOS E VALORES (CRÍTICO PARA O AGENTE!)
+    if (prices.length > 0) {
+      fullTextParts.push('\n\n## PREÇOS E VALORES');
+      prices.slice(0, 30).forEach(p => fullTextParts.push(`- ${p}`));
+    }
+
+    // PROMOÇÕES E OFERTAS
+    if (promotions.length > 0) {
+      fullTextParts.push('\n\n## PROMOÇÕES E OFERTAS');
+      promotions.slice(0, 20).forEach(p => fullTextParts.push(`- ${p}`));
+    }
+
+    // Headings
     if (headings.length > 0) {
-      fullTextParts.push('\n\n## Principais Topicos');
-      headings.slice(0, 20).forEach(h => fullTextParts.push(`- ${h}`));
+      fullTextParts.push('\n\n## PRINCIPAIS TÓPICOS');
+      headings.slice(0, 30).forEach(h => fullTextParts.push(`- ${h}`));
     }
 
+    // Conteúdo principal
     if (paragraphs.length > 0) {
-      fullTextParts.push('\n\n## Conteudo');
-      paragraphs.slice(0, 50).forEach(p => fullTextParts.push(`\n${p}`));
+      fullTextParts.push('\n\n## CONTEÚDO');
+      paragraphs.slice(0, 80).forEach(p => fullTextParts.push(`\n${p}`));
     }
 
+    // Listas
     if (lists.length > 0) {
-      fullTextParts.push('\n\n## Caracteristicas e Beneficios');
-      lists.slice(0, 30).forEach(l => fullTextParts.push(l));
+      fullTextParts.push('\n\n## CARACTERÍSTICAS E BENEFÍCIOS');
+      lists.slice(0, 50).forEach(l => fullTextParts.push(l));
     }
 
+    // Depoimentos
+    if (testimonials.length > 0) {
+      fullTextParts.push('\n\n## DEPOIMENTOS');
+      testimonials.slice(0, 10).forEach(t => fullTextParts.push(`"${t}"`));
+    }
+
+    // CTAs
     if (ctas.length > 0) {
-      fullTextParts.push('\n\n## CTAs (Chamadas para Acao)');
-      ctas.slice(0, 10).forEach(c => fullTextParts.push(`- ${c}`));
+      fullTextParts.push('\n\n## CTAs (CHAMADAS PARA AÇÃO)');
+      ctas.slice(0, 15).forEach(c => fullTextParts.push(`- ${c}`));
+    }
+
+    // Header content (pode ter info importante)
+    if (headerContent.length > 0) {
+      fullTextParts.push('\n\n## HEADER');
+      headerContent.slice(0, 5).forEach(h => fullTextParts.push(h));
+    }
+
+    // Footer content (pode ter preços, condições)
+    if (footerContent.length > 0) {
+      fullTextParts.push('\n\n## FOOTER');
+      footerContent.slice(0, 5).forEach(f => fullTextParts.push(f));
     }
 
     const fullText = fullTextParts.join('\n').trim();
@@ -285,10 +562,15 @@ export class LandingPageScraperService {
     return {
       title,
       description,
-      headings: headings.slice(0, 20),
-      paragraphs: paragraphs.slice(0, 50),
-      lists: lists.slice(0, 30),
-      ctas: ctas.slice(0, 10),
+      headings: headings.slice(0, 30),
+      paragraphs: paragraphs.slice(0, 80),
+      lists: lists.slice(0, 50),
+      ctas: ctas.slice(0, 15),
+      prices: prices.slice(0, 30),
+      promotions: promotions.slice(0, 20),
+      testimonials: testimonials.slice(0, 10),
+      headerContent: headerContent.slice(0, 5),
+      footerContent: footerContent.slice(0, 5),
       fullText
     };
   }
@@ -419,6 +701,18 @@ export class LandingPageScraperService {
       parts.push(`DESCRICAO: ${extracted.description}\n`);
     }
 
+    // PREÇOS (CRÍTICO - colocar no início para o RAG priorizar)
+    if (extracted.prices && extracted.prices.length > 0) {
+      parts.push(`\n=== PREÇOS E VALORES ===`);
+      extracted.prices.forEach(p => parts.push(`- ${p}`));
+    }
+
+    // PROMOÇÕES E OFERTAS
+    if (extracted.promotions && extracted.promotions.length > 0) {
+      parts.push(`\n=== PROMOÇÕES E OFERTAS ===`);
+      extracted.promotions.forEach(p => parts.push(`- ${p}`));
+    }
+
     if (extracted.headings.length > 0) {
       parts.push(`\nPRINCIPAIS TOPICOS:`);
       extracted.headings.forEach(h => parts.push(`- ${h}`));
@@ -434,12 +728,41 @@ export class LandingPageScraperService {
       extracted.lists.forEach(l => parts.push(l));
     }
 
+    // DEPOIMENTOS
+    if (extracted.testimonials && extracted.testimonials.length > 0) {
+      parts.push(`\nDEPOIMENTOS:`);
+      extracted.testimonials.forEach(t => parts.push(`"${t}"`));
+    }
+
     if (extracted.ctas && extracted.ctas.length > 0) {
       parts.push(`\nCTAs (BOTOES DE ACAO):`);
       extracted.ctas.forEach(c => parts.push(`- ${c}`));
     }
 
+    // HEADER (pode conter info útil)
+    if (extracted.headerContent && extracted.headerContent.length > 0) {
+      parts.push(`\nHEADER:`);
+      extracted.headerContent.forEach(h => parts.push(h));
+    }
+
+    // FOOTER (pode conter condições, preços, info legal)
+    if (extracted.footerContent && extracted.footerContent.length > 0) {
+      parts.push(`\nFOOTER:`);
+      extracted.footerContent.forEach(f => parts.push(f));
+    }
+
     return parts.join('\n');
+  }
+
+  /**
+   * Fechar browser (cleanup)
+   */
+  async closeBrowser(): Promise<void> {
+    if (browserInstance && browserInstance.connected) {
+      console.log('[LandingPageScraper] Fechando browser Puppeteer...');
+      await browserInstance.close().catch(() => {});
+      browserInstance = null;
+    }
   }
 }
 
@@ -455,5 +778,12 @@ export function getLandingPageScraperService(): LandingPageScraperService {
   }
   return instance;
 }
+
+// Cleanup on process exit
+process.on('beforeExit', async () => {
+  if (instance) {
+    await instance.closeBrowser();
+  }
+});
 
 export default LandingPageScraperService;

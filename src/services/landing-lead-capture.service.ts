@@ -126,7 +126,7 @@ export class LandingLeadCaptureService {
           leadId: existingCampaignLead.leadId,
           campaignLeadId: existingCampaignLead.id,
           redirectWhatsapp: campaign.whatsappNumber,
-          whatsappMessage: this.buildWhatsappMessage(name, username, campaign.campaignName, true)
+          whatsappMessage: this.buildWhatsappMessage(name, username, campaign.displayName, true)
         };
       }
 
@@ -157,7 +157,10 @@ export class LandingLeadCaptureService {
         await this.updateInstagramLeadContact(instagramLead.id, { email, whatsappNumber: whatsapp, fullName: name });
       }
 
-      // 5. Adicionar à campanha
+      // 5. Marcar lead noig como convertido (se existir)
+      await this.markNoigAsConverted(whatsapp, instagramLead.id, username);
+
+      // 6. Adicionar à campanha
       const campaignLead = await this.addLeadToCampaign({
         campaignId,
         leadId: instagramLead.id,
@@ -169,7 +172,7 @@ export class LandingLeadCaptureService {
         return { success: false, isExistingLead: false, error: 'Erro ao adicionar lead à campanha' };
       }
 
-      console.log(`[LandingLeadCapture] Lead @${username} adicionado à campanha com sucesso`);
+      console.log(`[LandingLeadCapture] Lead @${username} adicionado à campanha com sucesso (noig convertido se existia)`);
 
       return {
         success: true,
@@ -177,7 +180,7 @@ export class LandingLeadCaptureService {
         leadId: instagramLead.id,
         campaignLeadId: campaignLead.id,
         redirectWhatsapp: campaign.whatsappNumber,
-        whatsappMessage: this.buildWhatsappMessage(name, username, campaign.campaignName, false)
+        whatsappMessage: this.buildWhatsappMessage(name, username, campaign.displayName, false)
       };
 
     } catch (error: any) {
@@ -412,6 +415,50 @@ export class LandingLeadCaptureService {
   }
 
   /**
+   * Marca lead noig como convertido quando o lead fornece Instagram
+   * Isso evita que is_noig_lead() retorne true e cause duplicação
+   */
+  private async markNoigAsConverted(whatsapp: string, instagramLeadId: string, username: string): Promise<void> {
+    try {
+      // Normalizar telefone para match
+      const phoneNormalized = whatsapp.replace(/\D/g, '');
+      const phoneSuffix = phoneNormalized.slice(-9);
+
+      // Buscar e atualizar qualquer registro em campaign_leads_noig com este telefone
+      const { data: noigRecords, error: findError } = await supabase
+        .from('campaign_leads_noig')
+        .select('id')
+        .or(`whatsapp.eq.${phoneNormalized},whatsapp.like.%${phoneSuffix}`)
+        .eq('instagram_acquired', false);
+
+      if (findError || !noigRecords || noigRecords.length === 0) {
+        return; // Nenhum registro noig para atualizar
+      }
+
+      // Atualizar todos os registros encontrados
+      const noigIds = noigRecords.map(r => r.id);
+      const { error: updateError } = await supabase
+        .from('campaign_leads_noig')
+        .update({
+          instagram_acquired: true,
+          instagram_username: username,
+          converted_to_lead_id: instagramLeadId,
+          converted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .in('id', noigIds);
+
+      if (updateError) {
+        console.error('[LandingLeadCapture] Erro ao marcar noig como convertido:', updateError);
+      } else {
+        console.log(`[LandingLeadCapture] ${noigIds.length} registro(s) noig marcado(s) como convertido para @${username}`);
+      }
+    } catch (error) {
+      console.error('[LandingLeadCapture] Erro ao marcar noig como convertido:', error);
+    }
+  }
+
+  /**
    * Cria lead sem Instagram na tabela campaign_leads_noig
    */
   private async createNoigLead(data: {
@@ -451,12 +498,23 @@ export class LandingLeadCaptureService {
 
   /**
    * Monta mensagem para WhatsApp (com Instagram)
+   * displayName pode ser @instagram ou domínio da LP - nunca nome interno da campanha
    */
   private buildWhatsappMessage(name: string, username: string, displayName: string, isExisting: boolean): string {
     if (isExisting) {
       return `Olá! Sou ${name} (@${username}), já estávamos conversando e visitei a landing page. Gostaria de continuar!`;
     }
-    const ref = displayName ? ` conheci vocês pela ${displayName} e` : '';
+
+    // Montar referência que o lead reconhece
+    let ref = '';
+    if (displayName) {
+      if (displayName.startsWith('@')) {
+        ref = ` conheci vocês pelo Instagram ${displayName} e`;
+      } else {
+        ref = ` conheci vocês pelo site e`;
+      }
+    }
+
     return `Olá! Sou ${name} (@${username}),${ref} gostaria de saber mais!`;
   }
 
@@ -465,7 +523,16 @@ export class LandingLeadCaptureService {
    * O AI Agent vai solicitar o Instagram durante a conversa
    */
   private buildWhatsappMessageWithoutIG(name: string, displayName: string): string {
-    const ref = displayName ? ` conheci vocês pela ${displayName} e` : '';
+    // Montar referência que o lead reconhece
+    let ref = '';
+    if (displayName) {
+      if (displayName.startsWith('@')) {
+        ref = ` conheci vocês pelo Instagram ${displayName} e`;
+      } else {
+        ref = ` conheci vocês pelo site e`;
+      }
+    }
+
     return `Olá! Sou ${name},${ref} gostaria de saber mais!`;
   }
 
